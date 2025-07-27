@@ -57,8 +57,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: workspace:*
-        version: link:../packages/rari
+        specifier: ^0.1.3
+        version: 0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: ^19.1.0
         version: 19.1.0
@@ -109,8 +109,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: workspace:*
-        version: link:../../packages/rari
+        specifier: ^0.1.3
+        version: 0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: ^19.1.0
         version: 19.1.0
@@ -219,6 +219,22 @@ importers:
       tsdown:
         specifier: ^0.12.9
         version: 0.12.9(@typescript/native-preview@7.0.0-dev.20250620.1)(typescript@5.8.3)
+    optionalDependencies:
+      rari-darwin-arm64:
+        specifier: 0.1.3
+        version: 0.1.3
+      rari-darwin-x64:
+        specifier: 0.1.3
+        version: 0.1.3
+      rari-linux-arm64:
+        specifier: 0.1.3
+        version: 0.1.3
+      rari-linux-x64:
+        specifier: 0.1.3
+        version: 0.1.3
+      rari-win32-x64:
+        specifier: 0.1.3
+        version: 0.1.3
 
   packages/rari-darwin-arm64: {}
 
@@ -2530,6 +2546,49 @@ packages:
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
+
+  rari-darwin-arm64@0.1.3:
+    resolution: {integrity: sha512-nGRytqUfE/qRWbykYCYwQ5CvSErYrwM9J9mZ1kzl1pdO3lpYEgGaq2/4/ekb3QGlyQGOUufS9kjGyhfKOBWDTQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  rari-darwin-x64@0.1.3:
+    resolution: {integrity: sha512-e+yndgxQWADPqA5FpxPLh20HbGiq0DIaFEdxpRFNWo+/O7MdDtbNhGnuORDda8hAo7nDQK4tTdVNsBalXjBTCQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  rari-linux-arm64@0.1.3:
+    resolution: {integrity: sha512-KjfqMbBBDFFovybQNiVVnRYI1BMey0yQ0TYVjJKe7iudSmu8i2y9X/nifG0dCepgASzycUHht2jSEMDHWpka0A==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  rari-linux-x64@0.1.3:
+    resolution: {integrity: sha512-OiXVEBc1Q2pxZNjJjKzU4DaJQj0/KSNcCYiGjpRZxvJYfmFeSqAye6K+4P0j9oQHC2pScDMQ30DX+nRilNIXSg==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  rari-win32-x64@0.1.3:
+    resolution: {integrity: sha512-ujAY+J9P9t8BBvlD2K/VT/5qO7efsj4G5NHxDRqWnU0BrQ4GS4iay+jFU5h/NwBnqSqGlorICgFld8cKUvyKNA==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  rari@0.1.3:
+    resolution: {integrity: sha512-U9Fl80mcqVqCSGHUo4fLovBp7FI+AO3hE1ERfurInS9fdLY0rkXl4kSiFMhQCAstgNYvYom4Lpuwtfw46Y779g==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+    peerDependencies:
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   react-dom@19.1.0:
     resolution: {integrity: sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==}
@@ -5484,6 +5543,35 @@ snapshots:
   quansync@0.2.10: {}
 
   queue-microtask@1.2.3: {}
+
+  rari-darwin-arm64@0.1.3:
+    optional: true
+
+  rari-darwin-x64@0.1.3:
+    optional: true
+
+  rari-linux-arm64@0.1.3:
+    optional: true
+
+  rari-linux-x64@0.1.3:
+    optional: true
+
+  rari-win32-x64@0.1.3:
+    optional: true
+
+  rari@0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+    dependencies:
+      acorn: 8.15.0
+      esbuild: 0.25.8
+      picocolors: 1.1.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+    optionalDependencies:
+      rari-darwin-arm64: 0.1.3
+      rari-darwin-x64: 0.1.3
+      rari-linux-arm64: 0.1.3
+      rari-linux-x64: 0.1.3
+      rari-win32-x64: 0.1.3
 
   react-dom@19.1.0(react@19.1.0):
     dependencies:
