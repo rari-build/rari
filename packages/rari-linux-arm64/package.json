@@ -1,0 +1,41 @@
+{
+  "name": "rari-linux-arm64",
+  "version": "0.1.3",
+  "description": "Runtime Accelerated Rendering Infrastructure (Linux ARM64 binary)",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git",
+    "directory": "packages/rari-linux-arm64"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "binary",
+    "linux",
+    "arm64",
+    "aarch64",
+    "rust",
+    "react",
+    "server-components"
+  ],
+  "bin": {
+    "rari": "./bin/rari"
+  },
+  "files": [
+    "bin/rari"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

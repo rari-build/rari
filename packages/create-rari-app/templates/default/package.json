@@ -1,0 +1,39 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Runtime Accelerated Rendering Infrastructure (Rari) application",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "{{PACKAGE_MANAGER}} clean && {{PACKAGE_MANAGER}} typecheck && vite build",
+    "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
+    "start": "rari start",
+    "start:local": "rari start",
+    "deploy:railway": "rari deploy railway",
+    "deploy:render": "rari deploy render",
+    "clean": "rm -rf dist",
+    "lint": "oxlint && eslint",
+    "lint:fix": "oxlint --fix && eslint --fix",
+    "typecheck": "tsgo"
+  },
+  "dependencies": {
+    "rari": "latest",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/node": "^24.1.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@typescript/native-preview": "7.0.0-dev.20250611.1",
+    "@vitejs/plugin-react-oxc": "^0.2.3",
+    "eslint": "^9.32.0",
+    "oxlint": "^1.8.0",
+    "rolldown-vite": "^7.0.11",
+    "tailwindcss": "^4.1.11"
+  }
+}

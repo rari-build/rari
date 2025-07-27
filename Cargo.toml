@@ -1,0 +1,9 @@
+[workspace]
+members = [ "crates/rari" ]
+resolver = "2"
+
+[workspace.package]
+authors = [ "Ryan Skinner" ]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/rari-build/rari"

@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+:root {
+  --rust-orange: #fd7e14;
+  --rust-orange-dark: #e8590c;
+  --github-dark-bg: #0d1117;
+  --github-dark-card: #161b22;
+  --github-dark-border: #30363d;
+  --github-text: #f0f6fc;
+}
+
+code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+pre {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+  background: var(--github-dark-bg);
+  border: 1px solid var(--github-dark-border);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 1rem 0;
+}
+
+.prose {
+  color: #c9d1d9;
+  max-width: none;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: var(--github-text);
+  font-weight: 600;
+  border-bottom: 1px solid var(--github-dark-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.prose h1 {
+  font-size: 2rem;
+  margin-top: 2rem;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.prose p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.prose ul, .prose ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.5rem;
+}
+
+.prose a {
+  color: var(--rust-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.prose a:hover {
+  color: var(--rust-orange-dark);
+  text-decoration: underline;
+}
+
+.prose blockquote {
+  border-left: 4px solid var(--rust-orange);
+  background: var(--github-dark-card);
+  margin: 1rem 0;
+  padding: 1rem 1.5rem;
+  border-radius: 0 6px 6px 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.prose th, .prose td {
+  border: 1px solid var(--github-dark-border);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.prose th {
+  background: var(--github-dark-card);
+  font-weight: 600;
+}
+
+.prose pre {
+  margin: 1.5rem 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--github-dark-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--github-dark-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+a:focus,
+button:focus {
+  outline: 2px solid var(--rust-orange);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--rust-orange);
+  color: white;
+}

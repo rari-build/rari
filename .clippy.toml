@@ -1,0 +1,8 @@
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
+  { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
+]
+disallowed-methods = [
+  { path = "std::result::Result::unwrap", reason = "Use proper error handling instead of unwrap(). Consider expect() with a descriptive message or proper error propagation." },
+  { path = "std::option::Option::unwrap", reason = "Use proper error handling instead of unwrap(). Consider expect() with a descriptive message or pattern matching." },
+]

@@ -1,0 +1,41 @@
+{
+  "name": "rari-win32-x64",
+  "version": "0.1.3",
+  "description": "Runtime Accelerated Rendering Infrastructure (Windows x64 binary)",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git",
+    "directory": "packages/rari-win32-x64"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "binary",
+    "win32",
+    "windows",
+    "x64",
+    "rust",
+    "react",
+    "server-components"
+  ],
+  "bin": {
+    "rari": "./bin/rari.exe"
+  },
+  "files": [
+    "bin/rari.exe"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

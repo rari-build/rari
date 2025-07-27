@@ -1,0 +1,200 @@
+name: Question / Help
+description: Ask a question or get help with using Rari
+title: '[Question]: '
+labels: [question, help-wanted]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out! We're here to help you get the most out of Rari. Please provide details about your question so we can give you the best possible answer.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission checklist
+      description: Please verify you have completed these steps before submitting
+      options:
+        - label: I have searched existing issues and discussions to see if this question has been asked before
+          required: true
+        - label: I have read the [README](https://github.com/rari-build/rari/blob/main/README.md) and relevant documentation
+          required: true
+        - label: I have tried the basic troubleshooting steps
+          required: true
+
+  - type: dropdown
+    id: question-type
+    attributes:
+      label: Question Type
+      description: What type of question do you have?
+      options:
+        - Getting started / Setup
+        - Server Components usage
+        - Client Components usage
+        - Build and deployment
+        - Performance optimization
+        - Configuration
+        - TypeScript integration
+        - Debugging and troubleshooting
+        - Best practices
+        - Migration from other frameworks
+        - Vite plugin usage
+        - CLI tool usage
+        - Architecture and design
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What is your question? Be as specific as possible
+      placeholder: |
+        Ask your question here...
+
+        For example:
+        - How do I handle authentication in Server Components?
+        - What's the best way to fetch data in Rari?
+        - How do I deploy a Rari app to production?
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to achieve?
+      description: Describe what you're trying to build or accomplish
+      placeholder: |
+        What's the end goal? What are you trying to build?
+
+        For example:
+        - I'm building a blog with dynamic content
+        - I want to add authentication to my app
+        - I'm trying to optimize my app's performance
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempts
+    attributes:
+      label: What have you tried?
+      description: Tell us what you've already attempted
+      placeholder: |
+        What approaches have you tried?
+        What didn't work as expected?
+        What error messages did you encounter?
+
+        For example:
+        - I tried using fetch in a Server Component but got an error
+        - I followed the documentation but the component isn't rendering
+        - I searched online but couldn't find examples for my use case
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code Sample
+      description: If relevant, share the code you're working with
+      render: tsx
+      placeholder: |
+        // Share your current code here
+        'use server'
+
+        export default async function MyComponent() {
+          // Your code here
+        }
+
+  - type: textarea
+    id: expected-outcome
+    attributes:
+      label: Expected Outcome
+      description: What do you expect to happen or what result are you looking for?
+      placeholder: |
+        What should happen when your code runs?
+        What's the ideal behavior you're looking for?
+
+  - type: input
+    id: rari-version
+    attributes:
+      label: Rari Version
+      description: Which version of Rari are you using?
+      placeholder: 0.9.0
+
+  - type: dropdown
+    id: experience-level
+    attributes:
+      label: Experience Level
+      description: How would you describe your experience with Rari and React?
+      options:
+        - 'New to Rari, experienced with React'
+        - New to both Rari and React
+        - 'Familiar with Rari, experienced with React'
+        - Experienced with both Rari and React
+        - Expert level
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: related-technologies
+    attributes:
+      label: Related Technologies
+      description: What other technologies are you using with Rari?
+      options:
+        - label: TypeScript
+        - label: Tailwind CSS
+        - label: Next.js (migrating from)
+        - label: Vite
+        - label: Node.js APIs
+        - label: Database (SQL/NoSQL)
+        - label: Authentication libraries
+        - label: State management
+        - label: Testing frameworks
+        - label: Docker
+        - label: Cloud deployment
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question for you?
+      options:
+        - Low (learning/exploring)
+        - Medium (working on a project)
+        - High (blocked on current work)
+        - Critical (production issue)
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information that might help us answer your question
+      placeholder: |
+        - Links to relevant documentation you've read
+        - Examples of what you're trying to achieve
+        - Screenshots or error messages
+        - Specific constraints or requirements
+        - Links to similar questions or issues
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: How would you like to contribute after getting help?
+      options:
+        - label: "I'm willing to help improve the documentation based on this question"
+        - label: "I'm willing to write a blog post or tutorial about the solution"
+        - label: I can help answer similar questions from other users
+        - label: I can contribute example code or demos
+
+  - type: textarea
+    id: documentation-feedback
+    attributes:
+      label: Documentation Feedback
+      description: How could our documentation be improved to answer questions like this?
+      placeholder: |
+        What sections of the documentation could be clearer?
+        What examples would have helped you?
+        What information was missing or hard to find?

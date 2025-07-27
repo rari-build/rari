@@ -1,0 +1,302 @@
+name: Performance Issue
+description: Report a performance regression or performance-related issue
+title: '[Performance]: '
+labels: [performance, needs-triage]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue! Performance is a core focus of Rari, and we take these reports seriously. Please provide detailed information to help us investigate and optimize.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission checklist
+      description: Please verify you have completed these steps before submitting
+      options:
+        - label: I have searched existing issues to make sure this performance issue hasn't been reported before
+          required: true
+        - label: I have read the [Contributing Guide](https://github.com/rari-build/rari/blob/main/.github/CONTRIBUTING.md)
+          required: true
+        - label: I have gathered performance measurements or profiling data
+          required: true
+
+  - type: dropdown
+    id: performance-type
+    attributes:
+      label: Performance Issue Type
+      description: What type of performance issue are you reporting?
+      options:
+        - Slow server-side rendering
+        - High memory usage
+        - Slow build times
+        - Poor development server performance
+        - Client-side hydration slowness
+        - Performance regression (it was faster before)
+        - High CPU usage
+        - Memory leaks
+        - Bundle size bloat
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance-description
+    attributes:
+      label: Performance Issue Description
+      description: Describe the performance problem you're experiencing
+      placeholder: |
+        What specific performance issue are you seeing?
+        When did you first notice this issue?
+        How does it impact your application?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the performance issue
+      placeholder: |
+        1. Create a new Rari app with `npm create rari-app my-app`
+        2. Add specific components or configuration
+        3. Run `npm run dev` or `npm run build`
+        4. Observe performance issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance-measurements
+    attributes:
+      label: Performance Measurements
+      description: Provide specific performance metrics, timings, or profiling data
+      placeholder: |
+        Before (if regression):
+        - Build time: 2.5s
+        - Memory usage: 150MB
+        - Component render time: 5ms
+
+        After:
+        - Build time: 12.3s
+        - Memory usage: 800MB
+        - Component render time: 45ms
+
+        Or provide profiling screenshots, flame graphs, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code Sample
+      description: Provide a minimal code sample that demonstrates the performance issue
+      render: tsx
+      placeholder: |
+        // Add your code sample that shows the performance issue
+        'use server'
+
+        export default async function SlowComponent() {
+          // Code that demonstrates the performance problem
+        }
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Share relevant configuration files that might affect performance
+      render: typescript
+      placeholder: |
+        // vite.config.ts
+        import { rari } from 'rari'
+        import { defineConfig } from 'vite'
+
+        export default defineConfig({
+          plugins: [rari({
+            // Your configuration
+          })]
+        })
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: In which environment does this performance issue occur?
+      options:
+        - Development (npm run dev)
+        - Production build (npm run build)
+        - Production runtime
+        - Both development and production
+        - CI/CD pipeline
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: rari-version
+    attributes:
+      label: Rari Version
+      description: Which version of Rari are you using?
+      placeholder: 0.9.0
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: What version of Node.js are you using?
+      placeholder: v22.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      options:
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (x64)
+        - Linux (ARM64)
+        - Windows (x64)
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-specs
+    attributes:
+      label: System Specifications
+      description: Provide your system specifications
+      placeholder: |
+        CPU: Intel i7-9750H / Apple M2 Pro / AMD Ryzen 7 5800X
+        RAM: 16GB / 32GB / 64GB
+        Storage: SSD / NVMe / HDD
+        Available RAM during issue: 8GB
+        CPU usage during issue: 80%
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: component-types
+    attributes:
+      label: Component Types Involved
+      description: What types of components are involved in this performance issue?
+      options:
+        - label: "Server Components ('use server')"
+        - label: Client Components
+        - label: Server Actions
+        - label: Static assets
+        - label: Large datasets
+        - label: Complex nested components
+        - label: Third-party components
+        - label: Custom hooks
+
+  - type: textarea
+    id: data-scale
+    attributes:
+      label: Data Scale
+      description: Describe the scale of data involved
+      placeholder: |
+        Number of components: 50 / 500 / 5000
+        Data size: 1MB / 10MB / 100MB
+        Number of items in lists: 100 / 1000 / 10000
+        Number of concurrent users: 1 / 10 / 100
+        File sizes: Small / Medium / Large
+
+  - type: textarea
+    id: expected-performance
+    attributes:
+      label: Expected Performance
+      description: What performance did you expect?
+      placeholder: |
+        Build time: under 5 seconds
+        Memory usage: under 200MB
+        Component render: under 10ms
+        Based on: similar frameworks, previous versions, documentation claims
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-performance
+    attributes:
+      label: Actual Performance
+      description: What performance are you actually seeing?
+      placeholder: |
+        Build time: 30 seconds
+        Memory usage: 1.2GB
+        Component render: 150ms
+        Additional symptoms: browser freezing, high CPU usage
+    validations:
+      required: true
+
+  - type: textarea
+    id: profiling-data
+    attributes:
+      label: Profiling Data
+      description: Share any profiling data, flame graphs, or performance traces
+      placeholder: |
+        Chrome DevTools performance traces
+        Node.js profiler output
+        Rust profiling data
+        Memory snapshots
+        Build analyzer output
+        Links to profiling files or screenshots
+
+  - type: textarea
+    id: workarounds
+    attributes:
+      label: Workarounds
+      description: Have you found any workarounds or optimizations?
+      placeholder: |
+        What have you tried to improve performance?
+        Any configuration changes that helped?
+        Code modifications that reduced the issue?
+
+  - type: checkboxes
+    id: regression-check
+    attributes:
+      label: Regression Check
+      description: Is this a performance regression?
+      options:
+        - label: This worked faster in a previous version
+        - label: This is slower than expected based on documentation
+        - label: This is slower than similar frameworks
+        - label: This is a new performance issue
+
+  - type: textarea
+    id: regression-details
+    attributes:
+      label: Regression Details
+      description: If this is a regression, provide details about when it started
+      placeholder: |
+        Last known good version: 0.8.5
+        First bad version: 0.9.0
+        Suspected cause: specific commit, feature addition, dependency update
+        Bisection results: if you've identified the problematic change
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: |
+        Related issues or discussions
+        Performance comparison with other frameworks
+        Business impact of this performance issue
+        Deadline or urgency information
+        Links to reproduction repository
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help optimize this performance issue?
+      options:
+        - label: "I'm willing to submit a pull request to fix this performance issue"
+        - label: "I'm willing to help with performance testing and benchmarking"
+        - label: I can provide additional profiling data
+        - label: I can help test performance improvements

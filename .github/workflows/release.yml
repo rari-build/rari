@@ -1,0 +1,177 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: rari-linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: rari-linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-13
+            name: rari-darwin-x64
+          - target: aarch64-apple-darwin
+            os: macos-15
+            name: rari-darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: rari-win32-x64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install additional Rust targets
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry/cache
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-build-
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo build --release --target ${{ matrix.target }} --bin rari
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+
+      - name: Build binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo build --release --target ${{ matrix.target }} --bin rari
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
+
+      - name: Prepare binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p binaries
+          cp target/${{ matrix.target }}/release/rari binaries/${{ matrix.name }}
+          chmod +x binaries/${{ matrix.name }}
+
+      - name: Prepare binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir binaries
+          copy target\${{ matrix.target }}\release\rari.exe binaries\${{ matrix.name }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: binaries/${{ matrix.name }}
+
+  npm-release-platform:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    strategy:
+      matrix:
+        include:
+          - platform: linux-x64
+            binary: rari-linux-x64
+          - platform: linux-arm64
+            binary: rari-linux-arm64
+          - platform: darwin-x64
+            binary: rari-darwin-x64
+          - platform: darwin-arm64
+            binary: rari-darwin-arm64
+          - platform: win32-x64
+            binary: rari-win32-x64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download platform binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: platform-binary
+
+      - name: Prepare platform package
+        run: |
+          PACKAGE_NAME="rari-${{ matrix.platform }}"
+          PACKAGE_DIR="packages/${PACKAGE_NAME}"
+
+          mkdir -p "${PACKAGE_DIR}/bin"
+
+          BINARY_FILE=$(find platform-binary -name "*rari*" -type f | head -1)
+
+          if [[ "${{ matrix.platform }}" == "win32-x64" ]]; then
+            cp "${BINARY_FILE}" "${PACKAGE_DIR}/bin/rari.exe"
+            chmod +x "${PACKAGE_DIR}/bin/rari.exe"
+          else
+            cp "${BINARY_FILE}" "${PACKAGE_DIR}/bin/rari"
+            chmod +x "${PACKAGE_DIR}/bin/rari"
+          fi
+
+          ls -la "${PACKAGE_DIR}/bin/"
+
+      - name: Publish platform package
+        run: |
+          PACKAGE_NAME="rari-${{ matrix.platform }}"
+          cd "packages/${PACKAGE_NAME}"
+          echo "Publishing ${PACKAGE_NAME}..."
+          npm publish --access public
+          echo "Successfully published ${PACKAGE_NAME}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

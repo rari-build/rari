@@ -1,0 +1,96 @@
+{
+  "name": "rari",
+  "type": "module",
+  "version": "0.1.3",
+  "description": "Runtime Accelerated Rendering Infrastructure (Rari)",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git",
+    "directory": "packages/rari"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "react",
+    "server-components",
+    "rsc",
+    "rust",
+    "vite",
+    "framework",
+    "performance",
+    "ssr",
+    "typescript",
+    "deno",
+    "v8",
+    "streaming",
+    "fast",
+    "zero-config",
+    "full-stack",
+    "web-framework"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "browser": "./dist/client.js",
+      "node": "./dist/server.js",
+      "default": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "dist/index.d.ts",
+  "bin": {
+    "rari": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "pnpm clean && pnpm typecheck && tsdown",
+    "typecheck": "tsgo",
+    "clean": "rm -rf dist",
+    "lint": "oxlint && eslint",
+    "lint:fix": "oxlint --fix && eslint --fix"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "acorn": "^8.15.0",
+    "esbuild": "^0.25.8",
+    "picocolors": "^1.1.1"
+  },
+  "optionalDependencies": {
+    "rari-darwin-arm64": "0.1.3",
+    "rari-darwin-x64": "0.1.3",
+    "rari-linux-arm64": "0.1.3",
+    "rari-linux-x64": "0.1.3",
+    "rari-win32-x64": "0.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "@types/react": "^19.1.8",
+    "@typescript/native-preview": "7.0.0-dev.20250620.1",
+    "chokidar": "^3.6.0",
+    "eslint": "^9.32.0",
+    "oxlint": "^1.8.0",
+    "rolldown-vite": "^7.0.11",
+    "tsdown": "^0.12.9"
+  }
+}

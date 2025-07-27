@@ -1,0 +1,42 @@
+{
+  "name": "rari-darwin-x64",
+  "version": "0.1.3",
+  "description": "Runtime Accelerated Rendering Infrastructure (macOS x64 binary)",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git",
+    "directory": "packages/rari-darwin-x64"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "binary",
+    "darwin",
+    "x64",
+    "macos",
+    "intel",
+    "rust",
+    "react",
+    "server-components"
+  ],
+  "bin": {
+    "rari": "./bin/rari"
+  },
+  "files": [
+    "bin/rari"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

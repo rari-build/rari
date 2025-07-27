@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rari — Runtime Accelerated Rendering Infrastructure</title>
+  <script>
+    (function () {
+      const createDebugLogger = () => {
+        const logger = document.createElement('div');
+        logger.id = 'network-debug-logger';
+        logger.className = 'fixed bottom-3 right-3 max-w-[450px] max-h-[250px] overflow-auto bg-black/80 text-white p-4 rounded-lg z-[10000] text-xs font-mono';
+
+        const title = document.createElement('div');
+        title.className = 'font-bold mb-2.5 border-b border-gray-600 pb-1.5';
+        title.textContent = 'RSC Network Monitor';
+        logger.appendChild(title);
+
+        const rscContainer = document.createElement('div');
+        rscContainer.id = 'rsc-requests';
+        logger.appendChild(rscContainer);
+
+        return logger;
+      };
+
+      let requestCounter = 0;
+      const getRequestId = () => `req_${++requestCounter}`;
+
+      const requests = {};
+
+      const originalFetch = window.fetch;
+      window.fetch = function () {
+        const url = arguments[0];
+        const options = arguments[1] || {};
+        const requestId = getRequestId();
+
+        if (typeof url === 'string' && (url.includes('/rsc/') || url.includes('/_rsc_'))) {
+          requests[requestId] = {
+            startTime: Date.now(),
+            url: url
+          };
+
+          let logger = document.getElementById('network-debug-logger');
+          if (!logger) {
+            logger = createDebugLogger();
+            document.body.appendChild(logger);
+          }
+
+          let rscContainer = document.getElementById('rsc-requests');
+          if (!rscContainer) {
+            rscContainer = document.createElement('div');
+            rscContainer.id = 'rsc-requests';
+            logger.appendChild(rscContainer);
+          }
+
+          const requestLine = document.createElement('div');
+          requestLine.id = `req-${requestId}`;
+          requestLine.className = 'mb-2';
+
+          const method = document.createElement('span');
+          method.className = 'inline-block bg-gray-700 px-1 py-0.5 rounded mr-1.5';
+          method.textContent = options.method || 'GET';
+          requestLine.appendChild(method);
+
+          const urlSpan = document.createElement('span');
+          urlSpan.className = 'text-blue-300';
+          urlSpan.textContent = url.substring(0, 30) + (url.length > 30 ? '...' : '');
+          requestLine.appendChild(urlSpan);
+
+          const pendingSpan = document.createElement('span');
+          pendingSpan.className = 'text-yellow-200 ml-1.5';
+          pendingSpan.textContent = '⏳';
+          pendingSpan.id = `pending-${requestId}`;
+          requestLine.appendChild(pendingSpan);
+
+          rscContainer.appendChild(requestLine);
+
+          logger.scrollTop = logger.scrollHeight;
+        }
+
+        return originalFetch.apply(this, arguments).then(response => {
+          if (typeof url === 'string' && (url.includes('/rsc/') || url.includes('/_rsc_'))) {
+            const timing = requests[requestId] ? Date.now() - requests[requestId].startTime : '?';
+            const clonedResponse = response.clone();
+
+            const logger = document.getElementById('network-debug-logger');
+            if (logger) {
+              const pendingSpan = document.getElementById(`pending-${requestId}`);
+              if (pendingSpan) {
+                pendingSpan.textContent = response.ok ? '✅' : '❌';
+                pendingSpan.className = response.ok ? 'text-green-300 ml-1.5' : 'text-red-300 ml-1.5';
+
+                const timingSpan = document.createElement('span');
+                timingSpan.className = 'ml-1.5 text-gray-400';
+                timingSpan.textContent = `${timing}ms`;
+                pendingSpan.parentNode.appendChild(timingSpan);
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = response.ok ? 'ml-1.5 text-green-300' : 'ml-1.5 text-red-300';
+                statusSpan.textContent = response.status;
+                pendingSpan.parentNode.appendChild(statusSpan);
+              }
+
+              logger.scrollTop = logger.scrollHeight;
+            }
+          }
+          return response;
+        }).catch(error => {
+          if (typeof url === 'string' && (url.includes('/rsc/') || url.includes('/_rsc_'))) {
+            const logger = document.getElementById('network-debug-logger');
+            if (logger) {
+              const pendingSpan = document.getElementById(`pending-${requestId}`);
+              if (pendingSpan) {
+                pendingSpan.textContent = '❌';
+                pendingSpan.className = 'text-red-500 ml-1.5';
+
+                const errorSpan = document.createElement('span');
+                errorSpan.className = 'ml-1.5 text-red-500';
+                errorSpan.textContent = error.message || 'Network Error';
+                pendingSpan.parentNode.appendChild(errorSpan);
+              }
+
+              logger.scrollTop = logger.scrollHeight;
+            }
+          }
+          throw error;
+        });
+      };
+
+      window.addEventListener('keydown', function (e) {
+        if (e.key === '`' && e.ctrlKey) {
+          const logger = document.getElementById('network-debug-logger');
+          if (logger) {
+            logger.style.display = logger.style.display === 'none' ? 'block' : 'none';
+          }
+        }
+      });
+
+      window.checkRscServer = async function () {
+        try {
+          const response = await fetch('/_rsc_status');
+          if (response.ok) {
+            const data = await response.json();
+            return data;
+          } else {
+            return { error: response.status };
+          }
+        } catch (e) {
+          return { error: e.message };
+        }
+      };
+    })();
+  </script>
+</head>
+
+<body class="min-h-full bg-gray-50">
+  <div id="root" class="min-h-full"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

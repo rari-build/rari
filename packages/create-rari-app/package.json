@@ -1,0 +1,59 @@
+{
+  "name": "create-rari-app",
+  "type": "module",
+  "version": "0.1.3",
+  "description": "Create Runtime Accelerated Rendering Infrastructure (Rari) applications with no build configuration",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git",
+    "directory": "packages/create-rari-app"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "react",
+    "scaffolding",
+    "cli",
+    "create-app",
+    "generator",
+    "boilerplate",
+    "template",
+    "server-components",
+    "rust",
+    "framework",
+    "zero-config",
+    "starter",
+    "project-template"
+  ],
+  "bin": {
+    "create-rari-app": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "pnpm clean && pnpm typecheck && tsdown",
+    "dev": "tsdown --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsgo",
+    "lint": "oxlint && eslint",
+    "lint:fix": "oxlint --fix && eslint --fix"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.8.2",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "@typescript/native-preview": "7.0.0-dev.20250611.1",
+    "eslint": "^9.32.0",
+    "oxlint": "^1.8.0",
+    "tsdown": "^0.12.9"
+  }
+}

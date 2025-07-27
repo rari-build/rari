@@ -1,0 +1,217 @@
+name: Bug Report
+description: Report a bug or issue with Rari
+title: '[Bug]: '
+labels: [bug, needs-triage]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this bug! Please fill out the information below to help us investigate and fix the issue.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission checklist
+      description: Please verify you have completed these steps before submitting
+      options:
+        - label: I have searched existing issues to make sure this bug hasn't been reported before
+          required: true
+        - label: I have read the [Contributing Guide](https://github.com/rari-build/rari/blob/main/.github/CONTRIBUTING.md)
+          required: true
+        - label: I can reproduce this bug consistently
+          required: true
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe the bug you encountered...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Run `npm create rari-app my-app`
+        2. Navigate to `my-app` directory
+        3. Run `npm run dev`
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: Describe what you expected to happen...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code Sample
+      description: If applicable, add a minimal code sample that reproduces the issue
+      render: tsx
+      placeholder: |
+        // Add your code sample here
+        'use server'
+
+        export default async function MyComponent() {
+          // Your code that causes the issue
+        }
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Logs
+      description: Please copy and paste any relevant error messages or stack traces
+      render: shell
+      placeholder: |
+        Paste your error logs here...
+
+  - type: input
+    id: rari-version
+    attributes:
+      label: Rari Version
+      description: Which version of Rari are you using?
+      placeholder: 0.9.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation Method
+      description: How did you install Rari?
+      options:
+        - npm create rari-app
+        - npm install rari
+        - pnpm create rari-app
+        - yarn create rari-app
+        - Built from source
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: What version of Node.js are you using?
+      placeholder: v22.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: npm-version
+    attributes:
+      label: Package Manager Version
+      description: What version of npm/pnpm/yarn are you using?
+      placeholder: npm 10.5.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      options:
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (x64)
+        - Linux (ARM64)
+        - Windows (x64)
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      description: What version of your operating system?
+      placeholder: 'macOS 14.2.1, Ubuntu 22.04, Windows 11'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: In which environment does this issue occur?
+      options:
+        - Development (npm run dev)
+        - Production build (npm run build)
+        - Production runtime
+        - Both development and production
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: component-type
+    attributes:
+      label: Component Type
+      description: What type of components are involved in this issue?
+      options:
+        - label: "Server Components ('use server')"
+        - label: Client Components
+        - label: Server Actions
+        - label: Static assets
+        - label: Vite plugin
+        - label: CLI tool
+        - label: Rust runtime
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here
+      placeholder: |
+        - Are you using any specific dependencies?
+        - Does this happen in a specific browser?
+        - Any workarounds you've found?
+        - Links to reproduction repository?
+
+  - type: textarea
+    id: config-files
+    attributes:
+      label: Configuration Files
+      description: Please share relevant configuration files (vite.config.ts, package.json, etc.)
+      render: typescript
+      placeholder: |
+        // vite.config.ts
+        import { rari } from 'rari'
+        import { defineConfig } from 'vite'
+
+        export default defineConfig({
+          plugins: [rari()]
+        })
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help fix this issue?
+      options:
+        - label: "I'm willing to submit a pull request to fix this issue"
+        - label: "I'm willing to help test a fix"
+        - label: I can provide additional information if needed

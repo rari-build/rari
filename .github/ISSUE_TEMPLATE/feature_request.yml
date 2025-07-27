@@ -1,0 +1,203 @@
+name: Feature Request
+description: Request a new feature or enhancement for Rari
+title: '[Feature]: '
+labels: [enhancement, needs-triage]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the information below to help us understand your request and evaluate its potential impact.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission checklist
+      description: Please verify you have completed these steps before submitting
+      options:
+        - label: I have searched existing issues and discussions to make sure this feature hasn't been requested before
+          required: true
+        - label: I have read the [Contributing Guide](https://github.com/rari-build/rari/blob/main/.github/CONTRIBUTING.md)
+          required: true
+        - label: I have considered whether this feature aligns with Rari's goals and philosophy
+          required: true
+
+  - type: textarea
+    id: feature-summary
+    attributes:
+      label: Feature Summary
+      description: A clear and concise description of the feature you'd like to see
+      placeholder: Briefly describe the feature you're requesting...
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and Use Case
+      description: Explain why this feature would be valuable and what problem it solves
+      placeholder: |
+        What problem does this feature solve?
+        How would it improve the developer experience?
+        What use cases would this enable?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe how you envision this feature working
+      placeholder: |
+        How should this feature work?
+        What would the API look like?
+        How would developers use it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-example
+    attributes:
+      label: Code Example
+      description: If applicable, provide a code example of how this feature would be used
+      render: tsx
+      placeholder: |
+        // Example of how the feature would be used
+        'use server'
+
+        export default async function MyComponent() {
+          // Your proposed feature usage here
+        }
+
+  - type: textarea
+    id: alternative-solutions
+    attributes:
+      label: Alternative Solutions
+      description: What other approaches have you considered?
+      placeholder: |
+        Are there alternative ways to solve this problem?
+        Have you tried any workarounds?
+        What are the pros and cons of different approaches?
+
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature Area
+      description: Which area of Rari would this feature primarily affect?
+      options:
+        - React Server Components
+        - Rust Runtime
+        - Vite Plugin
+        - CLI Tool
+        - Development Experience
+        - Performance
+        - TypeScript Support
+        - Build System
+        - Error Handling
+        - Documentation
+        - Testing
+        - Multiple Areas
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: impact-areas
+    attributes:
+      label: Impact Areas
+      description: What areas would this feature impact?
+      options:
+        - label: Server-side rendering performance
+        - label: Client-side hydration
+        - label: Development server (hot reload)
+        - label: Build process
+        - label: Bundle size
+        - label: Memory usage
+        - label: Developer experience
+        - label: Type safety
+        - label: Error messages
+        - label: Debugging capabilities
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - 'Low (small change, minimal impact)'
+        - 'Medium (moderate change, some impact)'
+        - 'High (significant change, major impact)'
+        - 'Very High (fundamental change, breaking)'
+        - "I'm not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low (nice to have)
+        - Medium (would be helpful)
+        - High (important for my use case)
+        - Critical (blocking my adoption)
+    validations:
+      required: true
+
+  - type: textarea
+    id: breaking-changes
+    attributes:
+      label: Breaking Changes
+      description: Would this feature require any breaking changes?
+      placeholder: |
+        Would this change any existing APIs?
+        Could it impact existing Rari applications?
+        How could migration be handled?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or examples
+      placeholder: |
+        - Links to similar features in other frameworks
+        - Screenshots or mockups
+        - Related issues or discussions
+        - Performance considerations
+        - Security implications
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research and References
+      description: Any research, articles, or examples that support this feature request
+      placeholder: |
+        - Links to relevant specifications
+        - Examples from other frameworks
+        - Community discussions
+        - Performance benchmarks
+        - Technical papers
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help implement this feature?
+      options:
+        - label: "I'm willing to submit a pull request to implement this feature"
+        - label: "I'm willing to help with design and planning"
+        - label: "I'm willing to help test this feature"
+        - label: I can provide additional research or examples
+        - label: I can help with documentation
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline
+      description: When would you need this feature?
+      placeholder: |
+        Is this needed for a specific project timeline?
+        Are there any deadlines or constraints?
+        Would a partial implementation be useful?

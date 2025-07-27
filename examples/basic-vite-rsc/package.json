@@ -1,0 +1,37 @@
+{
+  "name": "basic-vite-rsc",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Basic Vite RSC Example",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "scripts": {
+    "build": "pnpm clean && pnpm typecheck && vite build",
+    "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
+    "start": "rari start",
+    "clean": "rm -rf .rari && rm -rf dist",
+    "lint": "oxlint && eslint",
+    "lint:fix": "oxlint --fix && eslint --fix",
+    "typecheck": "tsgo"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "rari": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^24.1.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@typescript/native-preview": "7.0.0-dev.20250611.1",
+    "@vitejs/plugin-react-oxc": "^0.2.3",
+    "eslint": "^9.32.0",
+    "oxlint": "^1.8.0",
+    "rolldown-vite": "^7.0.11",
+    "tailwindcss": "^4.1.11"
+  }
+}
