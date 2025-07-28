@@ -170,7 +170,6 @@ async function copyTemplate(
     'src/components/ServerTime.tsx',
     'src/pages/index.tsx',
     'src/pages/about.tsx',
-    'src/pages/examples.tsx',
     'gitignore',
   ]
 
