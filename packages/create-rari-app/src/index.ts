@@ -1,10 +1,19 @@
 #!/usr/bin/env node
-// oxlint-disable no-console
+
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { cancel, confirm, intro, isCancel, outro, select, spinner, text } from '@clack/prompts'
+import {
+  cancel,
+  confirm,
+  intro,
+  isCancel,
+  outro,
+  select,
+  spinner,
+  text,
+} from '@clack/prompts'
 import pc from 'picocolors'
 
 interface ProjectOptions {
@@ -29,8 +38,6 @@ const packageManagers = {
 } as const
 
 async function main() {
-  console.clear()
-
   intro(pc.bgCyan(pc.black(' create-rari-app ')))
 
   const projectName = await text({
@@ -99,21 +106,26 @@ async function main() {
 
   outro(pc.green('🎉 Project created successfully!'))
 
-  console.log()
-  console.log(pc.cyan('Next steps:'))
-  console.log(pc.gray(`  cd ${options.name}`))
+  console.warn()
+  console.warn(pc.cyan('Next steps:'))
+  console.warn(pc.gray(`  cd ${options.name}`))
 
   if (!options.installDeps) {
-    console.log(pc.gray(`  ${options.packageManager} install`))
+    console.warn(pc.gray(`  ${options.packageManager} install`))
   }
 
-  console.log(pc.gray(`  ${options.packageManager} run dev`))
-  console.log()
+  console.warn(pc.gray(`  ${options.packageManager} run dev`))
+  console.warn()
 }
 
 async function createProject(options: ProjectOptions) {
   const projectPath = join(process.cwd(), options.name)
-  const templatePath = join(import.meta.dirname, '..', 'templates', options.template)
+  const templatePath = join(
+    import.meta.dirname,
+    '..',
+    'templates',
+    options.template,
+  )
 
   const s = spinner()
 
@@ -135,7 +147,11 @@ async function createProject(options: ProjectOptions) {
   }
 }
 
-async function copyTemplate(templatePath: string, projectPath: string, options: ProjectOptions) {
+async function copyTemplate(
+  templatePath: string,
+  projectPath: string,
+  options: ProjectOptions,
+) {
   const templateFiles = [
     'package.json',
     'vite.config.ts',
@@ -143,27 +159,33 @@ async function copyTemplate(templatePath: string, projectPath: string, options: 
     'tsconfig.app.json',
     'tsconfig.node.json',
     'index.html',
+    'README.md',
+    'railway.toml',
+    'render.yaml',
     'src/main.tsx',
     'src/App.tsx',
     'src/vite-env.d.ts',
     'src/styles/index.css',
     'src/components/Welcome.tsx',
     'src/components/ServerTime.tsx',
-    '.gitignore',
+    'src/pages/index.tsx',
+    'src/pages/about.tsx',
+    'src/pages/examples.tsx',
+    'gitignore',
   ]
 
-  // Create directories
   await mkdir(join(projectPath, 'src', 'components'), { recursive: true })
   await mkdir(join(projectPath, 'src', 'styles'), { recursive: true })
+  await mkdir(join(projectPath, 'src', 'pages'), { recursive: true })
 
   for (const file of templateFiles) {
     const sourcePath = join(templatePath, file)
-    const destPath = join(projectPath, file)
+    const destFile = file === 'gitignore' ? '.gitignore' : file
+    const destPath = join(projectPath, destFile)
 
     try {
       let content = await readFile(sourcePath, 'utf-8')
 
-      // Replace template variables
       content = content
         .replace(/\{\{PROJECT_NAME\}\}/g, options.name)
         .replace(/\{\{PACKAGE_MANAGER\}\}/g, options.packageManager)
@@ -177,7 +199,10 @@ async function copyTemplate(templatePath: string, projectPath: string, options: 
   }
 }
 
-async function installDependencies(projectPath: string, packageManager: string): Promise<void> {
+async function installDependencies(
+  projectPath: string,
+  packageManager: string,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(packageManager, ['install'], {
       cwd: projectPath,
