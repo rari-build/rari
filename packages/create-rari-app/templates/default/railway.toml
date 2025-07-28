@@ -1,0 +1,14 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm run build"
+nixpacksPlan = { phases = { setup = { nixPkgs = [
+  "nodejs_20",
+  "pnpm"
+] } } }
+
+[deploy]
+startCommand = "pnpm start"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
