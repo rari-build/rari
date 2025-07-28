@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { Link } from 'rari/client'
-import { Suspense } from 'react'
 import Version from './Version'
 
 interface LayoutProps {
@@ -30,7 +29,7 @@ export default function Layout({
                 rari
               </span>
               <div className="text-xs text-gray-400 font-mono">
-                <Suspense fallback="..."><Version /></Suspense>
+                <Version />
               </div>
             </div>
           </div>

@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import Version from '../components/Version'
 
 export default function HomePage() {
@@ -14,7 +13,7 @@ export default function HomePage() {
               rari
             </h1>
             <div className="text-lg text-gray-400 font-mono">
-              <Suspense fallback="..."><Version /></Suspense>
+              <Version />
             </div>
           </div>
         </div>
