@@ -25,11 +25,57 @@ pre {
   font-size: 0.875rem;
   line-height: 1.5;
   margin: 1rem 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .prose {
   color: #c9d1d9;
   max-width: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .prose {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .prose h1 {
+    font-size: 1.75rem;
+  }
+
+  .prose h2 {
+    font-size: 1.375rem;
+  }
+
+  .prose h3 {
+    font-size: 1.125rem;
+  }
+
+  .prose pre {
+    font-size: 0.8rem;
+    padding: 0.75rem;
+    margin: 1rem 0;
+  }
+
+  .prose table {
+    font-size: 0.8rem;
+  }
+
+  .prose th, .prose td {
+    padding: 0.5rem;
+  }
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {

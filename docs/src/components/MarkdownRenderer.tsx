@@ -87,9 +87,13 @@ export default async function MarkdownRenderer({
 
     return (
       <div
-        className={`prose prose-invert max-w-none ${className}`}
+        className={`prose prose-invert max-w-none overflow-hidden ${className}`}
         // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
         dangerouslySetInnerHTML={{ __html: html }}
+        style={{
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
+        }}
       />
     )
   }

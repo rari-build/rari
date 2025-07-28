@@ -9,7 +9,7 @@ export default function DocPage({ params }: PageProps) {
   }
 
   return (
-    <div className="prose prose-invert max-w-none">
+    <div className="prose prose-invert max-w-none overflow-hidden">
       <MarkdownRenderer filePath={`${slug}.md`} />
     </div>
   )
