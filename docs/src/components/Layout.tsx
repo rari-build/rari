@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'rari/client'
+import { Suspense } from 'react'
+import Version from './Version'
 
 interface LayoutProps {
   children: ReactNode
@@ -27,7 +29,9 @@ export default function Layout({
               <span className="text-xl font-semibold text-[#f0f6fc] font-mono">
                 rari
               </span>
-              <div className="text-xs text-gray-400 font-mono">v0.9.0</div>
+              <div className="text-xs text-gray-400 font-mono">
+                <Suspense fallback="..."><Version /></Suspense>
+              </div>
             </div>
           </div>
 
@@ -36,10 +40,9 @@ export default function Layout({
               <li key={item.id}>
                 <Link
                   to={item.href}
-                  className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                    currentPage === item.id
-                      ? 'bg-[#1f2937] text-[#fd7e14] border-l-2 border-[#fd7e14] shadow-sm'
-                      : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                  className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${currentPage === item.id
+                    ? 'bg-[#1f2937] text-[#fd7e14] border-l-2 border-[#fd7e14] shadow-sm'
+                    : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                   }`}
                 >
                   {item.label}
