@@ -15,9 +15,12 @@
 - **Hot module reloading** for instant development feedback
 - **Universal NPM package support** - use any npm package seamlessly
 - **TypeScript-first** with full type safety
-- **Streaming support** for better user experience
 - **Memory efficient** with automatic optimizations
 - **Cross-platform** - supports macOS, Linux, and Windows
+
+### In Progress
+- **React Suspense support** - Basic functionality implemented, full testing in progress
+- **Streaming RSC** - Framework support added, comprehensive testing needed
 
 ## Quick Start
 
@@ -61,7 +64,7 @@ The Rari binary is automatically downloaded and configured during installation. 
 ### Performance That Matters
 - **Rust-powered runtime** - 4.04x faster response times under load vs Next.js
 - **Memory efficient** - Superior garbage collection and resource management
-- **Streaming RSC** - Components render as they resolve, no waiting
+- **Streaming RSC** - Components render as they resolve, no waiting (in progress)
 
 ### Developer Experience
 - **Zero configuration** - Create projects instantly with `create-rari-app`
@@ -73,8 +76,9 @@ The Rari binary is automatically downloaded and configured during installation. 
 ### React Server Components Done Right
 - **True server-side rendering** with async/await support
 - **Automatic serialization** between server and client
-- **Streaming support** with React Suspense
 - **Error boundaries** for graceful error handling
+- **React Suspense support** (in progress - basic functionality implemented)
+- **Streaming RSC** (in progress - framework support added)
 
 ## Performance
 

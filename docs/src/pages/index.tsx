@@ -1,3 +1,6 @@
+import { Suspense } from 'react'
+import Version from '../components/Version'
+
 export default function HomePage() {
   return (
     <div className="space-y-12">
@@ -11,8 +14,7 @@ export default function HomePage() {
               rari
             </h1>
             <div className="text-lg text-gray-400 font-mono">
-              v
-              {__RARI_VERSION__}
+              <Suspense fallback="..."><Version /></Suspense>
             </div>
           </div>
         </div>
