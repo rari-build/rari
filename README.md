@@ -8,6 +8,10 @@
 
 **Rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 
+> **⚠️ Note: Rari is in active development**
+>
+> We're actively working on Rari and welcome contributions and issues! You may occasionally encounter an "Unknown Component" error during rendering, which is likely a race condition that we're aware of and investigating. Please report any issues you encounter on our [GitHub repository](https://github.com/rari-build/rari).
+
 ## Features
 
 - **Performance-optimized React Server Components** with Rust runtime
