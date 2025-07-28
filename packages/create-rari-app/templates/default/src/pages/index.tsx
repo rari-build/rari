@@ -43,7 +43,8 @@ export default function HomePage({ params, searchParams }: PageProps) {
               Client Interaction
             </h2>
             <p className="text-gray-600 mb-6">
-              This counter runs in the browser with React's client-side interactivity.
+              This counter runs in the browser with React's client-side
+              interactivity.
             </p>
             <div className="flex items-center gap-4">
               <button
@@ -101,23 +102,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
               <code className="bg-gray-100 px-2 py-1 rounded">/about</code>
             </div>
           </Link>
-
-          <Link
-            to="/examples"
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">
-              🧩 Server Components
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Explore React Server Components in action
-            </p>
-            <div className="text-sm text-gray-500">
-              Route:
-              {' '}
-              <code className="bg-gray-100 px-2 py-1 rounded">/examples</code>
-            </div>
-          </Link>
         </div>
 
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-8">
@@ -151,12 +135,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
                   </div>
                   <div className="text-gray-500">→ Routes to "/about"</div>
                 </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <div className="font-mono text-gray-700 mb-1">
-                    pages/examples.tsx
-                  </div>
-                  <div className="text-gray-500">→ Routes to "/examples"</div>
-                </div>
               </div>
             </div>
 
@@ -169,9 +147,7 @@ export default function HomePage({ params, searchParams }: PageProps) {
                   <div>
                     Path:
                     {' '}
-                    <code className="bg-blue-100 px-2 py-1 rounded">
-                      /
-                    </code>
+                    <code className="bg-blue-100 px-2 py-1 rounded">/</code>
                   </div>
                   {Object.keys(params).length > 0 && (
                     <div className="mt-1">
@@ -201,11 +177,15 @@ export default function HomePage({ params, searchParams }: PageProps) {
           <p className="text-gray-500 text-sm">
             Edit
             {' '}
-            <code className="bg-gray-100 px-2 py-1 rounded text-xs">src/pages/index.tsx</code>
+            <code className="bg-gray-100 px-2 py-1 rounded text-xs">
+              src/pages/index.tsx
+            </code>
             {' '}
             or create new files in
             {' '}
-            <code className="bg-gray-100 px-2 py-1 rounded text-xs">src/pages/</code>
+            <code className="bg-gray-100 px-2 py-1 rounded text-xs">
+              src/pages/
+            </code>
             {' '}
             to see file-based routing in action!
           </p>

@@ -38,9 +38,9 @@ export default function AboutPage({ params, searchParams }: PageProps) {
               🚀 What is Rari?
             </h2>
             <p className="text-gray-600 mb-4">
-              Rari is a next-generation React framework powered by a custom-built
-              Rust runtime. It provides performance-optimized server-side rendering with
-              seamless client-side hydration.
+              Rari is a next-generation React framework powered by a
+              custom-built Rust runtime. It provides performance-optimized
+              server-side rendering with seamless client-side hydration.
             </p>
             <ul className="space-y-2 text-gray-600">
               <li className="flex items-center">
@@ -165,9 +165,7 @@ export default function AboutPage({ params, searchParams }: PageProps) {
                   />
                 </svg>
               </div>
-              <h3 className="font-semibent text-gray-900 mb-2">
-                Zero Config
-              </h3>
+              <h3 className="font-semibent text-gray-900 mb-2">Zero Config</h3>
               <p className="text-sm text-gray-600">
                 Works out of the box with pre-built binaries
               </p>
@@ -184,7 +182,9 @@ export default function AboutPage({ params, searchParams }: PageProps) {
               <div className="mb-2">
                 <strong>File:</strong>
                 {' '}
-                <code className="bg-gray-200 px-2 py-1 rounded">src/pages/about.tsx</code>
+                <code className="bg-gray-200 px-2 py-1 rounded">
+                  src/pages/about.tsx
+                </code>
               </div>
               <div className="mb-2">
                 <strong>Route:</strong>
@@ -233,14 +233,6 @@ export default function AboutPage({ params, searchParams }: PageProps) {
             </svg>
             Back to Home
           </Link>
-          <div className="mt-4">
-            <Link
-              to="/examples"
-              className="text-blue-600 hover:text-blue-700 transition-colors"
-            >
-              Explore Server Components →
-            </Link>
-          </div>
         </div>
       </div>
     </div>
