@@ -62,7 +62,7 @@ impl ComponentRegistry {
         source: &str,
         transformed_source: String,
         dependencies: ComponentDependencies,
-    ) {
+    ) -> Result<(), String> {
         let component_id = id.to_string();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
@@ -72,7 +72,7 @@ impl ComponentRegistry {
                 id: component_id.clone(),
                 source: source.to_string(),
                 transformed_source,
-                dependencies,
+                dependencies: dependencies.clone(),
                 is_loaded: false,
                 module_specifier: None,
                 module_id: None,
@@ -81,6 +81,7 @@ impl ComponentRegistry {
                 client_reference_export: None,
             },
         );
+
         self.dependency_graph.insert(component_id.clone(), deps_set.clone());
 
         for dep in deps_set {
@@ -89,6 +90,8 @@ impl ComponentRegistry {
                 .or_default()
                 .insert(component_id.clone());
         }
+
+        Ok(())
     }
 
     pub fn mark_component_loaded(&mut self, id: &str) {
@@ -340,13 +343,15 @@ mod tests {
     fn test_component_registry() {
         let mut registry = ComponentRegistry::new();
 
-        registry.register_component(
-            "TestComponent",
-            "function TestComponent() { return <div>Test</div>; }",
-            "function TestComponent() { return React.createElement('div', null, 'Test'); }"
-                .to_string(),
-            smallvec![],
-        );
+        registry
+            .register_component(
+                "TestComponent",
+                "function TestComponent() { return <div>Test</div>; }",
+                "function TestComponent() { return React.createElement('div', null, 'Test'); }"
+                    .to_string(),
+                smallvec![],
+            )
+            .unwrap();
 
         let component = registry.get_component("TestComponent").unwrap();
         assert_eq!(component.id, "TestComponent");
@@ -362,26 +367,27 @@ mod tests {
     fn test_dependency_resolution() {
         let mut registry = ComponentRegistry::new();
 
-        registry.register_component(
-            "ComponentA",
-            "source A",
-            "transformed A".to_string(),
-            smallvec!["ComponentB".to_string(), "ComponentC".to_string()],
-        );
+        registry
+            .register_component(
+                "ComponentA",
+                "source A",
+                "transformed A".to_string(),
+                smallvec!["ComponentB".to_string(), "ComponentC".to_string()],
+            )
+            .unwrap();
 
-        registry.register_component(
-            "ComponentB",
-            "source B",
-            "transformed B".to_string(),
-            smallvec!["ComponentC".to_string()],
-        );
+        registry
+            .register_component(
+                "ComponentB",
+                "source B",
+                "transformed B".to_string(),
+                smallvec!["ComponentC".to_string()],
+            )
+            .unwrap();
 
-        registry.register_component(
-            "ComponentC",
-            "source C",
-            "transformed C".to_string(),
-            smallvec![],
-        );
+        registry
+            .register_component("ComponentC", "source C", "transformed C".to_string(), smallvec![])
+            .unwrap();
 
         let order = registry.get_unloaded_components_in_order();
 
@@ -400,26 +406,32 @@ mod tests {
     fn test_circular_dependency_resolution() {
         let mut registry = ComponentRegistry::new();
 
-        registry.register_component(
-            "ComponentX",
-            "source X",
-            "transformed X".to_string(),
-            smallvec!["ComponentY".to_string()],
-        );
+        registry
+            .register_component(
+                "ComponentX",
+                "source X",
+                "transformed X".to_string(),
+                smallvec!["ComponentY".to_string()],
+            )
+            .unwrap();
 
-        registry.register_component(
-            "ComponentY",
-            "source Y",
-            "transformed Y".to_string(),
-            smallvec!["ComponentZ".to_string()],
-        );
+        registry
+            .register_component(
+                "ComponentY",
+                "source Y",
+                "transformed Y".to_string(),
+                smallvec!["ComponentZ".to_string()],
+            )
+            .unwrap();
 
-        registry.register_component(
-            "ComponentZ",
-            "source Z",
-            "transformed Z".to_string(),
-            smallvec!["ComponentX".to_string()],
-        );
+        registry
+            .register_component(
+                "ComponentZ",
+                "source Z",
+                "transformed Z".to_string(),
+                smallvec!["ComponentX".to_string()],
+            )
+            .unwrap();
 
         let order = registry.get_unloaded_components_in_order();
 
@@ -443,12 +455,14 @@ mod tests {
     fn test_client_reference_functionality() {
         let mut registry = ComponentRegistry::new();
 
-        registry.register_component(
-            "MyComponent",
-            "function MyComponent() { return <div>Hello</div>; }",
-            "transformed code".to_string(),
-            SmallVec::new(),
-        );
+        registry
+            .register_component(
+                "MyComponent",
+                "function MyComponent() { return <div>Hello</div>; }",
+                "transformed code".to_string(),
+                SmallVec::new(),
+            )
+            .unwrap();
 
         assert!(!registry.is_client_reference("MyComponent"));
         assert!(registry.get_client_reference_info("MyComponent").is_none());

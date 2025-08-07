@@ -19,8 +19,33 @@
     globalThis.__rsc_registered_functions = new Set()
   }
 
-  globalThis.registerModule = function (module, moduleName) {
-    globalThis.__rsc_modules[moduleName] = module
+  globalThis.registerModule = function (
+    moduleKeyOrModule,
+    moduleNameOrMainExport,
+    exportedFunctions,
+  ) {
+    let module, moduleKey
+
+    if (arguments.length === 2 && typeof moduleKeyOrModule === 'object') {
+      module = moduleKeyOrModule
+      moduleKey = moduleNameOrMainExport
+    }
+    else if (arguments.length === 3) {
+      moduleKey = moduleKeyOrModule
+      const mainExport = moduleNameOrMainExport
+
+      module = { ...exportedFunctions }
+      if (mainExport) {
+        module.default = mainExport
+        module[moduleKey] = mainExport
+      }
+    }
+    else {
+      module = moduleKeyOrModule || {}
+      moduleKey = moduleNameOrMainExport || 'unknown'
+    }
+
+    globalThis.__rsc_modules[moduleKey] = module
 
     let exportCount = 0
     for (const key in module) {
