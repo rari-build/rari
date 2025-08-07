@@ -597,7 +597,7 @@ impl RscRenderer {
 
         {
             let mut registry = self.component_registry.lock();
-            registry.register_component(
+            let _ = registry.register_component(
                 component_id,
                 component_code,
                 transformed_module_code.clone(),
@@ -1370,7 +1370,7 @@ mod tests {
 
         {
             let mut registry = renderer.component_registry.lock();
-            registry.register_component(
+            let _ = registry.register_component(
                 "TestComponent",
                 "function TestComponent(props) { return { name: 'TestComponent', props }; }",
                 "function TestComponent(props) { return { name: 'TestComponent', props }; }"
@@ -1400,7 +1400,7 @@ mod tests {
 
         {
             let mut registry = renderer.component_registry.lock();
-            registry.register_component(
+            let _ = registry.register_component(
                 "MyJsxComponent",
                 "",
                 register_component_js.to_string(),

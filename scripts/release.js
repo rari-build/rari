@@ -89,15 +89,11 @@ async function releasePackage(pkg) {
   await fs.writeFile(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`)
 
   console.warn(colors.cyan('\nGenerating changelog...'))
+
   const changelogArgs = [
-    'conventional-changelog',
-    '-p',
-    'angular',
-    '-i',
+    'git-cliff',
+    '--output',
     'CHANGELOG.md',
-    '-s',
-    '--commit-path',
-    '.',
   ]
   await run('npx', changelogArgs, { cwd: pkgPath })
 
