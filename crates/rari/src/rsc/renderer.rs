@@ -31,10 +31,15 @@ pub struct ResourceLimits {
 
 impl Default for ResourceLimits {
     fn default() -> Self {
+        let script_timeout_ms = std::env::var("RARI_SCRIPT_TIMEOUT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(30000);
+
         Self {
             max_concurrent_renders: 10,
             max_render_time_ms: 5000,
-            max_script_execution_time_ms: 1000,
+            max_script_execution_time_ms: script_timeout_ms,
             max_memory_per_component_mb: 50,
             max_cache_size: 100,
         }
@@ -127,6 +132,7 @@ pub struct RscRenderer {
     pub(crate) resource_limits: ResourceLimits,
     pub(crate) resource_tracker: Arc<ResourceTracker>,
     pub(crate) serializer: Arc<Mutex<RscSerializer>>,
+    pub(crate) suspense_manager: Arc<Mutex<crate::rsc::suspense::SuspenseManager>>,
 }
 
 impl RscRenderer {
@@ -148,6 +154,7 @@ impl RscRenderer {
             resource_limits,
             resource_tracker: Arc::new(ResourceTracker::new()),
             serializer: Arc::new(Mutex::new(RscSerializer::new())),
+            suspense_manager: Arc::new(Mutex::new(crate::rsc::suspense::SuspenseManager::new())),
         }
     }
 
@@ -1338,6 +1345,124 @@ impl RscRenderer {
         let result = executor.execute(function_id, &validated_args).await.map_err(|e| {
             RariError::js_execution(format!("Server function execution failed: {e}"))
         })?;
+
+        Ok(result)
+    }
+
+    pub async fn create_suspense_boundary(
+        &self,
+        id: String,
+        fallback: ReactElement,
+        parent_id: Option<String>,
+        component_path: String,
+    ) -> Result<String, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let mut manager = suspense_manager.lock();
+
+        manager
+            .create_boundary(id, fallback, parent_id, component_path)
+            .map_err(|e| RariError::internal(format!("Failed to create suspense boundary: {e}")))
+    }
+
+    pub async fn register_suspense_promise(
+        &self,
+        component_id: String,
+        boundary_id: String,
+        cache_key: Option<String>,
+    ) -> Result<String, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let mut manager = suspense_manager.lock();
+
+        manager
+            .register_promise(component_id, boundary_id, cache_key)
+            .map_err(|e| RariError::internal(format!("Failed to register suspense promise: {e}")))
+    }
+
+    pub async fn resolve_suspense_promise(
+        &self,
+        promise_id: String,
+        resolved_value: serde_json::Value,
+    ) -> Result<Vec<String>, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let mut manager = suspense_manager.lock();
+
+        manager
+            .resolve_promise(promise_id, resolved_value)
+            .map_err(|e| RariError::internal(format!("Failed to resolve suspense promise: {e}")))
+    }
+
+    pub fn get_suspense_boundary_state(
+        &self,
+        boundary_id: &str,
+    ) -> Result<Option<crate::rsc::suspense::SuspenseBoundaryState>, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let manager = suspense_manager.lock();
+
+        Ok(manager.get_boundary_state(boundary_id))
+    }
+
+    pub fn has_pending_suspense(&self) -> Result<bool, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let manager = suspense_manager.lock();
+
+        Ok(manager.has_pending_boundaries())
+    }
+
+    pub fn get_suspense_stats(&self) -> Result<crate::rsc::suspense::SuspenseStats, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let manager = suspense_manager.lock();
+
+        Ok(manager.get_stats())
+    }
+
+    pub fn cleanup_suspense(&self, max_age_seconds: u64) -> Result<usize, RariError> {
+        let suspense_manager = self.suspense_manager.clone();
+        let mut manager = suspense_manager.lock();
+
+        Ok(manager.cleanup_resolved(max_age_seconds))
+    }
+
+    pub async fn render_with_suspense_support(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+    ) -> Result<String, RariError> {
+        let suspense_init_script = r#"
+            globalThis.__suspense_context = {
+                boundaries: new Map(),
+                promises: new Map(),
+                currentBoundary: null,
+                boundaryStack: []
+            };
+        "#;
+
+        self.runtime
+            .execute_script("<suspense_context_init>".to_string(), suspense_init_script.to_string())
+            .await
+            .map_err(|e| {
+                RariError::js_execution(format!("Failed to initialize suspense context: {e}"))
+            })?;
+
+        let result = self.internal_render_to_rsc(component_id, props).await?;
+
+        let check_suspense_script = r#"
+            globalThis.__suspense_context ? {
+                hasSuspense: globalThis.__suspense_context.boundaries.size > 0,
+                boundaryCount: globalThis.__suspense_context.boundaries.size,
+                promiseCount: globalThis.__suspense_context.promises.size
+            } : { hasSuspense: false, boundaryCount: 0, promiseCount: 0 }
+        "#;
+
+        let suspense_check = self
+            .runtime
+            .execute_script("<suspense_check>".to_string(), check_suspense_script.to_string())
+            .await
+            .map_err(|e| RariError::js_execution(format!("Failed to check suspense state: {e}")))?;
+
+        let suspense_info: serde_json::Value = serde_json::from_str(&suspense_check.to_string())
+            .map_err(|e| RariError::internal(format!("Failed to parse suspense check: {e}")))?;
+
+        let _has_suspense = suspense_info["hasSuspense"].as_bool().unwrap_or(false);
 
         Ok(result)
     }

@@ -17,6 +17,9 @@ function ExamplesPage() {
     { id: 'TestComponent', name: 'Test Component' },
     { id: 'Markdown', name: 'Markdown' },
     { id: 'StressTest', name: 'StressTest' },
+    { id: 'BasicSuspense', name: 'Basic Suspense' },
+    { id: 'StreamingSuspense', name: 'Streaming Suspense' },
+    { id: 'NestedSuspense', name: 'Nested Suspense' },
   ]
 
   return (

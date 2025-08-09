@@ -38,6 +38,7 @@ mod rsc_renderer;
 mod runtime;
 mod server_functions;
 mod streaming;
+mod suspense_handler;
 mod url;
 mod web;
 mod webgpu;
@@ -83,6 +84,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(server_functions::extensions(is_snapshot));
     extensions.extend(react::extensions(is_snapshot));
     extensions.extend(rsc_renderer::extensions(is_snapshot));
+    extensions.extend(suspense_handler::extensions(is_snapshot));
     extensions.extend(webidl::extensions(is_snapshot));
     extensions.extend(console::extensions(is_snapshot));
     extensions.extend(url::extensions(is_snapshot));

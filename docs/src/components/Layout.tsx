@@ -30,6 +30,7 @@ export default function Layout({
 
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        type="button"
         className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

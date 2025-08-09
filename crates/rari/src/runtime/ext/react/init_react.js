@@ -1,3 +1,5 @@
+/* eslint-disable node/prefer-global/process */
+
 globalThis.createElement = function (type, props, ...children) {
   const element = {
     type,
@@ -15,7 +17,21 @@ globalThis.createElement = function (type, props, ...children) {
 globalThis.Fragment = Symbol.for('react.fragment')
 
 globalThis.Suspense = function Suspense({ children, fallback }) {
-  return globalThis.createElement('suspense', { fallback }, children)
+  const suspenseId = `suspense-${Math.random().toString(36).substr(2, 9)}`
+
+  if (globalThis.__suspense_manager) {
+    globalThis.__suspense_manager.registerBoundary(suspenseId, fallback)
+  }
+
+  return globalThis.createElement(
+    'suspense',
+    {
+      fallback,
+      'data-suspense-id': suspenseId,
+      'data-suspense-boundary': true,
+    },
+    children,
+  )
 }
 
 globalThis.createContext = function (defaultValue) {
@@ -34,218 +50,245 @@ globalThis.createContext = function (defaultValue) {
   return context
 }
 
+globalThis.useState = function (initialValue) {
+  const value
+    = typeof initialValue === 'function' ? initialValue() : initialValue
+  const setState = function () {
+    throw new Error('setState called in server component')
+  }
+  return [value, setState]
+}
+
+globalThis.useEffect = function () {
+  // No-op in SSR
+}
+
+globalThis.useLayoutEffect = function () {
+  // No-op in SSR
+}
+
+globalThis.useCallback = function (callback) {
+  return callback
+}
+
+globalThis.useMemo = function (factory) {
+  return factory()
+}
+
+globalThis.useRef = function (initialValue) {
+  return { current: initialValue }
+}
+
+globalThis.useImperativeHandle = function () {
+  // No-op in SSR
+}
+
+globalThis.useDebugValue = function () {
+  // No-op in SSR
+}
+
 globalThis.useContext = function (context) {
+  if (!context || context.$$typeof !== Symbol.for('react.context')) {
+    throw new Error('useContext must be called with a valid context')
+  }
   return context._currentValue
 }
 
-globalThis.memo = function memo(Component, areEqual) {
+globalThis.use = function use(resource) {
+  if (resource && typeof resource.then === 'function') {
+    const cached = globalThis.__promise_cache?.get(resource)
+    if (cached?.resolved) {
+      return cached.value
+    }
+
+    resource.$$typeof = Symbol.for('react.suspense.pending')
+    resource.promise = resource
+
+    throw resource
+  }
+
+  if (resource && resource.$$typeof === Symbol.for('react.context')) {
+    return globalThis.use(resource)
+  }
+
+  throw new Error('use() called with unsupported resource type')
+}
+
+globalThis.forwardRef = function (render) {
+  const forwardRefComponent = function (props) {
+    return render(props, { current: null })
+  }
+  forwardRefComponent.$$typeof = Symbol.for('react.forward_ref')
+  forwardRefComponent.render = render
+  return forwardRefComponent
+}
+
+globalThis.memo = function (Component, compare) {
   const MemoComponent = function (props) {
     return Component(props)
   }
   MemoComponent.$$typeof = Symbol.for('react.memo')
   MemoComponent.type = Component
-  MemoComponent.compare = areEqual || null
+  MemoComponent.compare = compare
   return MemoComponent
 }
 
-globalThis.forwardRef = function forwardRef(render) {
-  const ForwardRef = function (props) {
-    return render(props, null)
+globalThis.lazy = function (factory) {
+  const LazyComponent = function () {
+    throw new Error('React.lazy not supported in SSR')
   }
-  ForwardRef.$$typeof = Symbol.for('react.forward_ref')
-  ForwardRef.render = render
-  return ForwardRef
+  LazyComponent.$$typeof = Symbol.for('react.lazy')
+  LazyComponent._payload = factory
+  LazyComponent._init = function (payload) {
+    return payload()
+  }
+  return LazyComponent
 }
 
-globalThis.createRef = function () {
-  return { current: null }
-}
-
-globalThis.use = function use(resource) {
-  if (resource && typeof resource.then === 'function') {
-    throw resource
-  }
-  if (resource && resource.$$typeof === Symbol.for('react.context')) {
-    return globalThis.use(resource)
-  }
-  throw new Error('use() can only be called with promises or context objects')
-}
-
-globalThis.lazy = function lazy(_loadComponent) {
-  return function LazyComponent(_props) {
-    throw new Error('Lazy components require client-side rendering in this RSC framework')
-  }
-}
-
-globalThis.StrictMode = function StrictMode({ children }) {
+globalThis.ErrorBoundary = function ErrorBoundary({ children }) {
   return children
 }
 
-function createClientOnlyHook(hookName) {
-  return function () {
-    throw new Error(
-      `${hookName} is a client-side only hook. `
-      + 'Use "use client" directive at the top of your component file to run this code on the client.',
-    )
-  }
-}
-
-globalThis.useState = createClientOnlyHook('useState')
-globalThis.useEffect = createClientOnlyHook('useEffect')
-globalThis.useRef = createClientOnlyHook('useRef')
-globalThis.useCallback = createClientOnlyHook('useCallback')
-globalThis.useMemo = createClientOnlyHook('useMemo')
-globalThis.useTransition = createClientOnlyHook('useTransition')
-globalThis.useDeferredValue = createClientOnlyHook('useDeferredValue')
-globalThis.useId = function () {
-  return `:r${Math.random().toString(36).substr(2, 9)}:`
-}
-
-globalThis.startTransition = createClientOnlyHook('startTransition')
-globalThis.flushSync = createClientOnlyHook('flushSync')
-globalThis.unstable_act = createClientOnlyHook('unstable_act')
-
-globalThis.ReactDOMServer = {
-  renderToString(element) {
-    return renderElementToString(element)
-  },
-  renderToStaticMarkup(element) {
-    return renderElementToString(element, true)
-  },
-}
-
-function renderElementToString(element, isStatic = false) {
-  if (element === null || element === undefined || typeof element === 'boolean') {
-    return ''
+globalThis.SuspenseManager = class SuspenseManager {
+  constructor() {
+    this.boundaries = new Map()
+    this.promises = new Map()
+    this.boundaryStack = []
+    this.promiseCounter = 0
   }
 
-  if (typeof element === 'string' || typeof element === 'number') {
-    return escapeHtml(String(element))
+  registerBoundary(id, fallback) {
+    if (!this.boundaries.has(id)) {
+      this.boundaries.set(id, {
+        id,
+        fallback,
+        pending: new Set(),
+        resolved: false,
+        error: null,
+        createdAt: Date.now(),
+      })
+    }
+    return id
   }
 
-  if (Array.isArray(element)) {
-    return element.map(child => renderElementToString(child, isStatic)).join('')
-  }
-
-  if (typeof element === 'object' && element.$$typeof === Symbol.for('react.element')) {
-    const { type, props } = element
-
-    if (typeof type === 'string') {
-      return renderHTMLElement(type, props, isStatic)
+  registerPromise(componentId, boundaryId, cacheKey) {
+    const promiseId = `promise-${++this.promiseCounter}`
+    const promiseInfo = {
+      id: promiseId,
+      componentId,
+      boundaryId,
+      cacheKey,
+      status: 'pending',
+      createdAt: Date.now(),
     }
 
-    if (typeof type === 'function') {
-      try {
-        const result = type(props)
-        return renderElementToString(result, isStatic)
-      }
-      catch (error) {
-        if (error && typeof error.then === 'function') {
-          throw error
-        }
-        throw error
+    this.promises.set(promiseId, promiseInfo)
+
+    if (boundaryId && this.boundaries.has(boundaryId)) {
+      this.boundaries.get(boundaryId).pending.add(promiseId)
+    }
+
+    return promiseId
+  }
+
+  resolvePromise(promiseId, value) {
+    const promiseInfo = this.promises.get(promiseId)
+    if (!promiseInfo)
+      return
+
+    promiseInfo.status = 'resolved'
+    promiseInfo.resolvedAt = Date.now()
+    promiseInfo.value = value
+
+    if (promiseInfo.boundaryId && this.boundaries.has(promiseInfo.boundaryId)) {
+      const boundary = this.boundaries.get(promiseInfo.boundaryId)
+      boundary.pending.delete(promiseId)
+
+      if (boundary.pending.size === 0) {
+        boundary.resolved = true
+        boundary.resolvedAt = Date.now()
       }
     }
+  }
 
-    if (type === globalThis.Fragment || type === Symbol.for('react.fragment')) {
-      return renderElementToString(props.children, isStatic)
+  rejectPromise(promiseId, error) {
+    const promiseInfo = this.promises.get(promiseId)
+    if (!promiseInfo)
+      return
+
+    promiseInfo.status = 'rejected'
+    promiseInfo.resolvedAt = Date.now()
+    promiseInfo.error = error
+
+    if (promiseInfo.boundaryId && this.boundaries.has(promiseInfo.boundaryId)) {
+      const boundary = this.boundaries.get(promiseInfo.boundaryId)
+      boundary.error = error
     }
   }
 
-  return ''
-}
-
-function renderHTMLElement(type, props, isStatic) {
-  const { children, dangerouslySetInnerHTML, ...attributes } = props || {}
-
-  if (dangerouslySetInnerHTML && dangerouslySetInnerHTML.__html) {
-    if (['img', 'br', 'hr', 'input', 'meta', 'link'].includes(type)) {
-      const attrs = renderAttributes(attributes, isStatic)
-      return `<${type}${attrs} />`
-    }
-
-    const attrs = renderAttributes(attributes, isStatic)
-    return `<${type}${attrs}>${dangerouslySetInnerHTML.__html}</${type}>`
+  getBoundaryState(boundaryId) {
+    return this.boundaries.get(boundaryId)
   }
 
-  if (['img', 'br', 'hr', 'input', 'meta', 'link'].includes(type)) {
-    const attrs = renderAttributes(attributes, isStatic)
-    return `<${type}${attrs} />`
+  getAllBoundaries() {
+    return Array.from(this.boundaries.values())
   }
 
-  const attrs = renderAttributes(attributes, isStatic)
-  const childrenString = renderElementToString(children, isStatic)
-
-  return `<${type}${attrs}>${childrenString}</${type}>`
+  reset() {
+    this.boundaries.clear()
+    this.promises.clear()
+    this.boundaryStack = []
+    this.promiseCounter = 0
+  }
 }
 
-function renderAttributes(attributes, _isStatic) {
-  if (!attributes)
-    return ''
-
-  return Object.entries(attributes)
-    .filter(([key, value]) => {
-      if (key === 'key' || key === 'ref')
-        return false
-      if (key.startsWith('__'))
-        return false
-      return value !== null && value !== undefined && value !== false
-    })
-    .map(([key, value]) => {
-      if (value === true)
-        return ` ${key}`
-      if (key === 'className')
-        key = 'class'
-      if (key === 'htmlFor')
-        key = 'for'
-      return ` ${key}="${escapeHtml(String(value))}"`
-    })
-    .join('')
+if (!globalThis.__suspense_manager) {
+  globalThis.__suspense_manager = new globalThis.SuspenseManager()
 }
 
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+if (!globalThis.__promise_cache) {
+  globalThis.__promise_cache = new Map()
 }
-
-if (typeof globalThis.__resolved_promises === 'undefined') {
-  globalThis.__resolved_promises = new Map()
-}
-globalThis.__current_suspense_depth = 0
 
 globalThis.React = {
   createElement: globalThis.createElement,
   Fragment: globalThis.Fragment,
   Suspense: globalThis.Suspense,
   createContext: globalThis.createContext,
-  useContext: globalThis.useContext,
-  memo: globalThis.memo,
-  forwardRef: globalThis.forwardRef,
-  createRef: globalThis.createRef,
-  use: globalThis.use,
-  lazy: globalThis.lazy,
-  StrictMode: globalThis.StrictMode,
   useState: globalThis.useState,
   useEffect: globalThis.useEffect,
-  useRef: globalThis.useRef,
+  useLayoutEffect: globalThis.useLayoutEffect,
   useCallback: globalThis.useCallback,
   useMemo: globalThis.useMemo,
-  useTransition: globalThis.useTransition,
-  useDeferredValue: globalThis.useDeferredValue,
-  useId: globalThis.useId,
-  startTransition: globalThis.startTransition,
-  flushSync: globalThis.flushSync,
-  unstable_act: globalThis.unstable_act,
+  useRef: globalThis.useRef,
+  useImperativeHandle: globalThis.useImperativeHandle,
+  useDebugValue: globalThis.useDebugValue,
+  useContext: globalThis.useContext,
+  use: globalThis.use,
+  forwardRef: globalThis.forwardRef,
+  memo: globalThis.memo,
+  lazy: globalThis.lazy,
+  ErrorBoundary: globalThis.ErrorBoundary,
 }
 
-if (!globalThis.createElement) {
-  throw new Error('createElement polyfill failed to initialize')
+globalThis.registerClientComponent = function (
+  id,
+  moduleRef,
+  exportName = 'default',
+) {
+  if (!globalThis.__client_components) {
+    globalThis.__client_components = new Map()
+  }
+  globalThis.__client_components.set(id, { moduleRef, exportName })
 }
 
-if (!globalThis.ReactDOMServer?.renderToString) {
-  throw new Error('ReactDOMServer.renderToString polyfill failed to initialize')
+globalThis.getClientComponent = function (id) {
+  return globalThis.__client_components?.get(id)
+}
+
+if (
+  typeof globalThis.process !== 'undefined'
+  && globalThis.process.env?.NODE_ENV === 'development'
+) {
+  globalThis.__dev_mode = true
 }

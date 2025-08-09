@@ -1,6 +1,4 @@
-export {
-  Link,
-} from './router'
+export { Link } from './router'
 
 export {
   buildSearchString,
@@ -51,11 +49,28 @@ export type {
   SearchParams,
 } from './router'
 
+export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
+
+export type { RuntimeClient } from './runtime-client'
+
 export {
-  createHttpRuntimeClient,
-  HttpRuntimeClient,
-} from './runtime-client'
+  ClientSuspenseBoundary,
+  createCacheKey,
+  createEnhancedResourceHook,
+  debugSuspenseState,
+  getGlobalSuspenseClient,
+  initializeSuspenseClient,
+  preloadSuspenseResource,
+  setGlobalSuspenseClient,
+  setupRSCStreamHandlers,
+  SuspenseCache,
+  SuspenseClient,
+  useSuspenseClient,
+} from './suspense-client'
 
 export type {
-  RuntimeClient,
-} from './runtime-client'
+  CacheEntry,
+  SuspenseBoundaryInfo,
+  SuspenseClientOptions,
+  SuspensePromiseInfo,
+} from './suspense-client'

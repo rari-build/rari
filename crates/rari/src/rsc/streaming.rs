@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 use crate::error::RariError;
 use futures::StreamExt;
 use futures::stream::Stream;
@@ -5,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::io::Write;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc::{Receiver, channel};
 use tracing::error;
@@ -233,6 +236,15 @@ pub trait RscStreamingExt {
         &mut self,
         component_id: &str,
         props: Option<&str>,
+    ) -> Result<RscStream, RariError>;
+
+    fn render_with_suspense_streaming(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        suspense_manager: Option<
+            std::sync::Arc<std::sync::Mutex<crate::rsc::suspense::SuspenseManager>>,
+        >,
     ) -> Result<RscStream, RariError>;
 
     fn invoke_server_component(
@@ -699,6 +711,326 @@ impl RscStreamingExt for super::renderer::RscRenderer {
         });
 
         Ok(result)
+    }
+
+    fn render_with_suspense_streaming(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        suspense_manager: Option<
+            std::sync::Arc<std::sync::Mutex<crate::rsc::suspense::SuspenseManager>>,
+        >,
+    ) -> Result<RscStream, RariError> {
+        if !self.initialized {
+            return Err(RariError::internal("RSC renderer not initialized"));
+        }
+
+        let (sender, receiver) = tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(64);
+        let component_id_string = component_id.to_string();
+        let props_string = props.map(|p| p.to_string());
+        let runtime_clone = Arc::clone(&self.runtime);
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let mut row_counter = 0u32;
+
+                // Send initial module reference
+                let module_row = RscStream::create_module_row(
+                    &row_counter.to_string(),
+                    &format!("rsc-component-{component_id_string}"),
+                    &["main"],
+                    "default",
+                );
+                row_counter += 1;
+
+                if sender.send(Ok(format!("{module_row}\n").into_bytes())).await.is_err() {
+                    error!("Failed to send module row");
+                    return;
+                }
+
+                match render_component_with_suspense(
+                    runtime_clone,
+                    &component_id_string,
+                    props_string.as_deref(),
+                    suspense_manager,
+                ).await {
+                    Ok(render_result) => {
+                        if render_result.has_suspense {
+                            if let Some(suspense_data) = render_result.suspense_boundaries {
+                                for boundary in suspense_data {
+                                    let boundary_row = format!(
+                                        "{}:[\"$\",\"react.suspense\",null,{{\"fallback\":{},\"children\":\"@{}\"}}]\n",
+                                        row_counter,
+                                        boundary.fallback_json,
+                                        boundary.id
+                                    );
+                                    row_counter += 1;
+
+                                    if sender.send(Ok(boundary_row.into_bytes())).await.is_err() {
+                                        error!("Failed to send suspense boundary");
+                                        return;
+                                    }
+                                }
+                            }
+
+                            if let Some(resolved_boundaries) = render_result.resolved_boundaries {
+                                for resolved in resolved_boundaries {
+                                    let resolution_row = format!(
+                                        "{}:[\"$\",\"${}\",null,{{\"children\":{}}}]\n",
+                                        resolved.boundary_id,
+                                        resolved.boundary_id,
+                                        resolved.content_json
+                                    );
+
+                                    if sender.send(Ok(resolution_row.into_bytes())).await.is_err() {
+                                        error!("Failed to send resolved suspense content");
+                                        return;
+                                    }
+                                }
+                            }
+                        } else {
+                            let element_data = serde_json::json!([
+                                "$",
+                                format!("${}", 0),
+                                null,
+                                render_result.rsc_data
+                            ]);
+
+                            let element_row = RscStream::create_element_row(&row_counter.to_string(), &element_data);
+
+                            if sender.send(Ok(format!("{element_row}\n").into_bytes())).await.is_err() {
+                                error!("Failed to send element row");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_row = RscStream::create_error_row(
+                            &row_counter.to_string(),
+                            &RscStreamError {
+                                message: e.to_string(),
+                                stack: None,
+                                digest: Some(format!("error-{row_counter}")),
+                            },
+                        );
+
+                        if sender.send(Ok(format!("{error_row}\n").into_bytes())).await.is_err() {
+                            error!("Failed to send error row");
+                        }
+                    }
+                }
+            });
+        } else {
+            return Err(RariError::internal("No async runtime available"));
+        }
+
+        Ok(RscStream { receiver })
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct SuspenseRenderResult {
+    pub rsc_data: serde_json::Value,
+    pub has_suspense: bool,
+    pub suspense_boundaries: Option<Vec<SuspenseBoundaryData>>,
+    pub resolved_boundaries: Option<Vec<ResolvedBoundaryData>>,
+}
+
+#[derive(Debug, Serialize)]
+struct SuspenseBoundaryData {
+    pub id: String,
+    pub fallback_json: String,
+    pub pending_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct ResolvedBoundaryData {
+    pub boundary_id: String,
+    pub content_json: String,
+}
+
+async fn render_component_with_suspense(
+    runtime: std::sync::Arc<crate::runtime::JsExecutionRuntime>,
+    component_id: &str,
+    props: Option<&str>,
+    _suspense_manager: Option<
+        std::sync::Arc<std::sync::Mutex<crate::rsc::suspense::SuspenseManager>>,
+    >,
+) -> Result<SuspenseRenderResult, Box<dyn std::error::Error + Send + Sync>> {
+    let init_suspense_script = r#"
+        globalThis.__suspense_streaming = true;
+        globalThis.__suspense_boundaries_discovered = [];
+        globalThis.__suspense_resolutions = [];
+    "#;
+
+    runtime
+        .execute_script("<suspense_init>".to_string(), init_suspense_script.to_string())
+        .await
+        .map_err(|e| {
+        Box::new(std::io::Error::other(format!("Suspense init failed: {e}")))
+            as Box<dyn std::error::Error + Send + Sync>
+    })?;
+
+    let render_script = format!(
+        r#"
+        (async function() {{
+            try {{
+                const Component = globalThis['{component_id}'] ||
+                                globalThis['Component_{component_id}'] ||
+                                (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default);
+
+                if (!Component) {{
+                    throw new Error('Component {component_id} not found');
+                }}
+
+                const props = {props};
+                const isAsync = Component.constructor.name === 'AsyncFunction';
+
+                let element;
+                if (isAsync) {{
+                    element = await Component(props);
+                }} else {{
+                    element = React.createElement(Component, props);
+                }}
+
+                // Convert to RSC format
+                const rscData = globalThis.renderToRSC ?
+                    await globalThis.renderToRSC(element, globalThis.__rsc_client_components || {{}}) :
+                    element;
+
+                return {{
+                    success: true,
+                    rsc_data: rscData,
+                    has_suspense: false,
+                    suspense_boundaries: globalThis.__suspense_boundaries_discovered,
+                    resolved_boundaries: globalThis.__suspense_resolutions
+                }};
+            }} catch (error) {{
+                if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {{
+                    // Handle Suspense promise
+                    const boundaryId = globalThis.__current_suspense_boundary || 'root-boundary';
+
+                    globalThis.__suspense_boundaries_discovered.push({{
+                        id: boundaryId,
+                        fallback_json: JSON.stringify(["$", "div", null, {{"children": "Loading..."}}]),
+                        pending_count: 1
+                    }});
+
+                    // Wait for promise resolution
+                    try {{
+                        const resolved = await error.promise;
+
+                        // Re-render with resolved data
+                        const resolvedElement = isAsync ? await Component(props) : React.createElement(Component, props);
+                        const resolvedRsc = globalThis.renderToRSC ?
+                            await globalThis.renderToRSC(resolvedElement, globalThis.__rsc_client_components || {{}}) :
+                            resolvedElement;
+
+                        globalThis.__suspense_resolutions.push({{
+                            boundary_id: boundaryId,
+                            content_json: JSON.stringify(resolvedRsc)
+                        }});
+
+                        return {{
+                            success: true,
+                            rsc_data: resolvedRsc,
+                            has_suspense: true,
+                            suspense_boundaries: globalThis.__suspense_boundaries_discovered,
+                            resolved_boundaries: globalThis.__suspense_resolutions
+                        }};
+                    }} catch (resolveError) {{
+                        return {{
+                            success: false,
+                            error: resolveError.message,
+                            has_suspense: true,
+                            suspense_error: {{
+                                boundary_id: boundaryId,
+                                message: resolveError.message
+                            }}
+                        }};
+                    }}
+                }}
+
+                return {{
+                    success: false,
+                    error: error.message,
+                    has_suspense: false
+                }};
+            }}
+        }})()
+        "#,
+        component_id = component_id,
+        props = props.unwrap_or("{}")
+    );
+
+    let result = runtime
+        .execute_script("<suspense_render>".to_string(), render_script.clone())
+        .await
+        .map_err(|e| {
+            Box::new(std::io::Error::other(format!("Component render failed: {e}")))
+                as Box<dyn std::error::Error + Send + Sync>
+        })?;
+
+    // Parse the result
+    let result_value: serde_json::Value =
+        serde_json::from_str(&result.to_string()).map_err(|e| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to parse render result: {e}"),
+            )) as Box<dyn std::error::Error + Send + Sync>
+        })?;
+
+    Ok(SuspenseRenderResult {
+        rsc_data: result_value["rsc_data"].clone(),
+        has_suspense: result_value["has_suspense"].as_bool().unwrap_or(false),
+        suspense_boundaries: result_value["suspense_boundaries"].as_array().map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    Some(SuspenseBoundaryData {
+                        id: item["id"].as_str()?.to_string(),
+                        fallback_json: item["fallback_json"].as_str()?.to_string(),
+                        pending_count: item["pending_count"].as_u64()? as usize,
+                    })
+                })
+                .collect()
+        }),
+        resolved_boundaries: result_value["resolved_boundaries"].as_array().map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    Some(ResolvedBoundaryData {
+                        boundary_id: item["boundary_id"].as_str()?.to_string(),
+                        content_json: item["content_json"].as_str()?.to_string(),
+                    })
+                })
+                .collect()
+        }),
+    })
+}
+
+fn _create_suspense_callback(
+    sender: tokio::sync::mpsc::Sender<Result<Vec<u8>, String>>,
+    boundary_id: String,
+) -> impl Fn(serde_json::Value) + Send + Sync + 'static {
+    move |resolved_content| {
+        let boundary_id = boundary_id.clone();
+        let sender = sender.clone();
+
+        tokio::spawn(async move {
+            let resolution_data = serde_json::json!([
+                "$",
+                format!("${}", boundary_id),
+                null,
+                {
+                    "children": resolved_content,
+                    "resolved_at": chrono::Utc::now().to_rfc3339()
+                }
+            ]);
+
+            let resolution_row = format!("{boundary_id}:{resolution_data}\n");
+
+            if sender.send(Ok(resolution_row.into_bytes())).await.is_err() {
+                tracing::error!("Failed to send Suspense resolution for boundary: {}", boundary_id);
+            }
+        });
     }
 }
 

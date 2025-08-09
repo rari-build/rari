@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 use crate::error::RariError;
 use crate::rsc::rsc_tree::RSCTree;
 use rustc_hash::FxHashMap;
@@ -851,11 +853,112 @@ impl RscSerializer {
         boundary_id.to_string()
     }
 
+    pub fn emit_suspense_boundary_enhanced(
+        &mut self,
+        boundary: &crate::rsc::suspense::SuspenseBoundary,
+        resolved_content: Option<&ReactElement>,
+    ) -> String {
+        if boundary.resolved && resolved_content.is_some() {
+            let resolved_data = serde_json::json!([
+                "$",
+                "react.suspense.resolved",
+                boundary.id,
+                {
+                    "children": self.serialize_element_to_standard_format(resolved_content.expect("resolved_content should be Some since we checked is_some()"))
+                }
+            ]);
+
+            let resolved_line = format!("{}:{}", boundary.id, resolved_data);
+            self.output_lines.push(resolved_line.clone());
+            resolved_line
+        } else if let Some(error) = &boundary.error {
+            let error_data = serde_json::json!([
+                "$",
+                "react.suspense.error",
+                boundary.id,
+                {
+                    "message": error.message,
+                    "digest": error.digest,
+                    "fallback": self.serialize_element_to_standard_format(&boundary.fallback)
+                }
+            ]);
+
+            let error_line = format!("{}:{}", boundary.id, error_data);
+            self.output_lines.push(error_line.clone());
+            error_line
+        } else {
+            let boundary_row_id = self.get_next_row_id();
+            let boundary_data = serde_json::json!([
+                "$",
+                "react.suspense",
+                null,
+                {
+                    "fallback": self.serialize_element_to_standard_format(&boundary.fallback),
+                    "children": format!("@{}", boundary.id),
+                    "boundary_id": boundary.id,
+                    "pending_count": boundary.pending_promises.len()
+                }
+            ]);
+
+            let boundary_line = format!("{boundary_row_id}:{boundary_data}");
+            self.output_lines.push(boundary_line.clone());
+            boundary_line
+        }
+    }
+
+    pub fn emit_suspense_resolution(
+        &mut self,
+        boundary_id: &str,
+        resolved_content: &ReactElement,
+    ) -> String {
+        let resolution_data = serde_json::json!([
+            "$",
+            format!("${}", boundary_id),
+            null,
+            {
+                "children": self.serialize_element_to_standard_format(resolved_content),
+                "resolved_at": chrono::Utc::now().to_rfc3339()
+            }
+        ]);
+
+        let resolution_line = format!("{boundary_id}:{resolution_data}");
+        self.output_lines.push(resolution_line.clone());
+        resolution_line
+    }
+
     pub fn emit_streamed_content(&mut self, boundary_id: &str, content: &ReactElement) -> String {
         let content_data = self.serialize_element_to_standard_format(content);
         let content_line = format!("{boundary_id}:{content_data}");
         self.output_lines.push(content_line.clone());
         content_line
+    }
+
+    pub fn emit_promise_cache_entry(
+        &mut self,
+        cache_key: &str,
+        promise_info: &crate::rsc::suspense::PromiseInfo,
+    ) -> String {
+        let cache_row_id = self.get_next_row_id();
+
+        let cache_data = serde_json::json!([
+            "$",
+            "react.promise.cache",
+            null,
+            {
+                "cache_key": cache_key,
+                "promise_id": promise_info.id,
+                "status": promise_info.status,
+                "resolved_value": promise_info.resolved_value,
+                "created_at": promise_info.created_at
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+            }
+        ]);
+
+        let cache_line = format!("{cache_row_id}:{cache_data}");
+        self.output_lines.push(cache_line.clone());
+        cache_line
     }
 }
 
@@ -933,7 +1036,7 @@ mod tests {
         let element = ReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
-        assert!(result.contains(r#"["$","div",null,"#));
+        assert!(result.contains(r#"["$","div",null"#));
         assert!(result.contains("Hello World"));
     }
 

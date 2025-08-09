@@ -1,10 +1,12 @@
 pub mod component;
 pub mod js_loader;
 pub mod jsx_transform;
+pub mod performance;
 pub mod renderer;
 pub mod rsc_tree;
 pub mod serializer;
 pub mod streaming;
+pub mod suspense;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -28,7 +30,15 @@ pub use renderer::RscRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
 
+pub use performance::{
+    CacheStats, GlobalPerformanceMetrics, PerformanceConfig, PerformanceRecommendation,
+    PreloadedResource, RenderMetrics, RenderTimer, SuspensePerformanceManager,
+};
 pub use streaming::{RscStream, RscStreamChunk, RscStreamChunkType, RscStreamError};
+pub use suspense::{
+    PromiseInfo, PromiseStatus, SuspenseBoundary, SuspenseBoundaryState, SuspenseError,
+    SuspenseManager, SuspenseRecoveryAction, SuspenseRecoveryStrategy, SuspenseStats,
+};
 
 #[cfg(test)]
 mod compliance_tests {

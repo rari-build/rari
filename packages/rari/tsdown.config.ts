@@ -6,6 +6,7 @@ export default defineConfig({
     client: 'src/client.ts',
     server: 'src/server.ts',
     cli: 'src/cli.ts',
+    vite: 'src/vite.ts',
   },
   external: ['fsevents'],
   dts: true,

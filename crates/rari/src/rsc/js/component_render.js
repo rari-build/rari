@@ -1,8 +1,11 @@
 /* eslint-disable no-undef */
 /* eslint-disable style/object-curly-spacing */
+
 (async function () {
   let Component
   let componentSource = 'not found'
+
+  globalThis.__current_component_id = '{component_id}'
 
   if (typeof globalThis['{component_id}'] === 'function') {
     Component = globalThis['{component_id}']
@@ -23,6 +26,38 @@
   }
   else {
     throw new Error('Component {component_id} not found in global scope')
+  }
+
+  const handleSuspensePromise = async (promise, _componentId, _boundaryId) => {
+    try {
+      const result = await promise
+
+      if (promise.__cacheKey && globalThis.__promise_cache) {
+        globalThis.__promise_cache.set(promise.__cacheKey, {
+          resolved: true,
+          value: result,
+          resolvedAt: Date.now(),
+        })
+      }
+
+      if (globalThis.__suspense_manager && promise.__promiseId) {
+        globalThis.__suspense_manager.resolvePromise(
+          promise.__promiseId,
+          result,
+        )
+      }
+
+      return result
+    }
+    catch (resolveError) {
+      if (globalThis.__suspense_manager && promise.__promiseId) {
+        globalThis.__suspense_manager.rejectPromise(
+          promise.__promiseId,
+          resolveError,
+        )
+      }
+      throw resolveError
+    }
   }
 
   const sanitizeComponentOutput = (html, componentId) => {
@@ -52,16 +87,16 @@
     return html
   }
 
-  const elementToRSC = (element, componentId) => {
+  const elementToRSC = async (element, componentId) => {
     try {
       const clientComponents = globalThis.__rsc_client_components || {}
 
       let rscResult
       if (typeof globalThis.renderToRSC === 'function') {
-        rscResult = globalThis.renderToRSC(element, clientComponents)
+        rscResult = await globalThis.renderToRSC(element, clientComponents)
       }
       else if (typeof globalThis.traverseToRSC === 'function') {
-        rscResult = globalThis.traverseToRSC(element, clientComponents)
+        rscResult = await globalThis.traverseToRSC(element, clientComponents)
       }
       else {
         rscResult = {
@@ -100,27 +135,44 @@
       element = result
     }
     catch (asyncError) {
+      if (
+        asyncError
+        && asyncError.$$typeof === Symbol.for('react.suspense.pending')
+      ) {
+        throw asyncError
+      }
+
       const errorResult = {
-        html: `<div><h2>Error Rendering {component_id}</h2><p>${asyncError.message}</p></div>`,
+        html: `<div><h2>Sync Error Rendering {component_id}</h2><p>${syncError.message}</p></div>`,
         rsc: null,
         hasSuspense: false,
         debug: {
           component_id: componentSource,
           success: false,
-          error: asyncError.message,
+          error: syncError.message,
         },
       }
       globalThis.__lastRenderResult = errorResult
-
       return errorResult
     }
   }
   else {
-    element = React.createElement(Component, props)
+    try {
+      element = React.createElement(Component, props)
+    }
+    catch (syncError) {
+      if (
+        syncError
+        && syncError.$$typeof === Symbol.for('react.suspense.pending')
+      ) {
+        throw syncError
+      }
+      throw syncError
+    }
   }
 
   try {
-    const rscResult = elementToRSC(element, '{component_id}')
+    const rscResult = await elementToRSC(element, '{component_id}')
 
     let htmlResult = null
     try {
@@ -128,6 +180,12 @@
       htmlResult = sanitizeComponentOutput(htmlResult, '{component_id}')
     }
     catch (htmlError) {
+      if (
+        htmlError
+        && htmlError.$$typeof === Symbol.for('react.suspense.pending')
+      ) {
+        throw htmlError
+      }
       console.warn('HTML generation failed, using RSC only:', htmlError)
       htmlResult = `<div data-rsc-component="{component_id}">RSC Component</div>`
     }
@@ -145,8 +203,8 @@
           reason: 'empty_rsc',
         },
       }
-      globalThis.__lastRenderResult = emptyResult
 
+      globalThis.__lastRenderResult = emptyResult
       return emptyResult
     }
 
@@ -170,11 +228,21 @@
     if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
       if (error.promise && typeof error.promise.then === 'function') {
         try {
-          await error.promise
+          const resolvedValue = await handleSuspensePromise(
+            error.promise,
+            '{component_id}',
+            error.__boundaryId,
+          )
 
-          const newElement = React.createElement(Component, props)
+          let newElement
+          if (isAsyncComponent) {
+            newElement = await Component(props)
+          }
+          else {
+            newElement = React.createElement(Component, props)
+          }
 
-          const rscResult = elementToRSC(newElement, '{component_id}')
+          const rscResult = await elementToRSC(newElement, '{component_id}')
 
           let htmlResult = null
           try {
@@ -193,6 +261,12 @@
             html: htmlResult,
             rsc: rscResult,
             hasSuspense: true,
+            suspenseResolution: {
+              boundaryId: error.__boundaryId,
+              promiseId: error.__promiseId,
+              cacheKey: error.__cacheKey,
+              resolvedValue,
+            },
             debug: {
               component_id: componentSource,
               success: true,
@@ -208,14 +282,31 @@
         catch (resolveError) {
           const finalError = resolveError
 
+          const withinSuspenseBoundary
+            = error.__boundaryId && globalThis.__suspense_manager
+          if (withinSuspenseBoundary) {
+            globalThis.__suspense_manager.rejectPromise(
+              error.__promiseId,
+              resolveError,
+            )
+          }
+
           const errorResult = {
-            html: `<div><h2>Error Rendering {component_id}</h2><p>${finalError.message}</p></div>`,
+            html: `<div><h2>Suspense Error in {component_id}</h2><p>${finalError.message}</p><details><summary>Stack</summary><pre>${finalError.stack || 'No stack available'}</pre></details></div>`,
             rsc: null,
-            hasSuspense: false,
+            hasSuspense: true,
+            suspenseError: {
+              boundaryId: error.__boundaryId,
+              promiseId: error.__promiseId,
+              cacheKey: error.__cacheKey,
+              error: finalError.message,
+              stack: finalError.stack,
+            },
             debug: {
               component_id: componentSource,
               success: false,
               error: finalError.message,
+              suspenseFailure: true,
             },
           }
 
@@ -223,21 +314,40 @@
           return errorResult
         }
       }
+      else {
+        const invalidSuspenseError = {
+          html: `<div><h2>Invalid Suspense Promise in {component_id}</h2><p>Suspense promise must have a .then method</p></div>`,
+          rsc: null,
+          hasSuspense: false,
+          debug: {
+            component_id: componentSource,
+            success: false,
+            error: 'Invalid Suspense promise: missing .then method',
+          },
+        }
+
+        globalThis.__lastRenderResult = invalidSuspenseError
+        return invalidSuspenseError
+      }
     }
 
     const errorResult = {
-      html: `<div><h2>Error Rendering {component_id}</h2><p>${error.message}</p></div>`,
+      html: `<div><h2>Error Rendering {component_id}</h2><p>${error.message}</p><details><summary>Stack</summary><pre>${error.stack || 'No stack available'}</pre></details></div>`,
       rsc: null,
       hasSuspense: false,
       debug: {
         component_id: componentSource,
         success: false,
         error: error.message,
+        stack: error.stack,
       },
     }
 
     globalThis.__lastRenderResult = errorResult
 
     return errorResult
+  }
+  finally {
+    globalThis.__current_component_id = null
   }
 })()

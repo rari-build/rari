@@ -1,8 +1,25 @@
 /* eslint-disable no-undef */
 
-function traverseToRSC(element, clientComponents = {}) {
+async function traverseToRSC(
+  element,
+  clientComponents = {},
+  suspenseContext = false,
+) {
   if (!element) {
     return null
+  }
+
+  if (
+    element
+    && typeof element === 'object'
+    && (element.type === React.Suspense
+      || (element.type && element.type.name === 'Suspense'))
+  ) {
+    return await handleSuspenseBoundary(
+      element.props,
+      `suspense-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      clientComponents,
+    )
   }
 
   if (
@@ -14,7 +31,11 @@ function traverseToRSC(element, clientComponents = {}) {
   }
 
   if (Array.isArray(element)) {
-    return element.map(child => traverseToRSC(child, clientComponents))
+    return await Promise.all(
+      element.map(child =>
+        traverseToRSC(child, clientComponents, suspenseContext),
+      ),
+    )
   }
 
   if (
@@ -22,7 +43,11 @@ function traverseToRSC(element, clientComponents = {}) {
     && typeof element === 'object'
     && element.$$typeof === Symbol.for('react.element')
   ) {
-    return traverseReactElement(element, clientComponents)
+    return await traverseReactElement(
+      element,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   if (
@@ -30,17 +55,32 @@ function traverseToRSC(element, clientComponents = {}) {
     && typeof element === 'object'
     && element.$$typeof === Symbol.for('react.fragment')
   ) {
-    return traverseToRSC(element.props.children, clientComponents)
+    return await traverseToRSC(
+      element.props.children,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
-    return traverseToRSC(element, clientComponents)
+    if (Array.isArray(element)) {
+      return await Promise.all(
+        element.map(child =>
+          traverseToRSC(child, clientComponents, suspenseContext),
+        ),
+      )
+    }
+    return element
   }
 
   return element
 }
 
-function traverseReactElement(element, clientComponents) {
+async function traverseReactElement(
+  element,
+  clientComponents,
+  suspenseContext = false,
+) {
   const { type, props, key } = element
 
   const uniqueKey
@@ -94,29 +134,51 @@ function traverseReactElement(element, clientComponents) {
   }
 
   if (isServerComponent(type)) {
-    const rendered = renderServerComponent(element)
-    return traverseToRSC(rendered, clientComponents)
+    const rendered = await renderServerComponent(element, suspenseContext)
+    return await traverseToRSC(rendered, clientComponents, suspenseContext)
+  }
+
+  if (type === React.Suspense || (type && type.name === 'Suspense')) {
+    return await handleSuspenseBoundary(props, uniqueKey, clientComponents)
   }
 
   if (typeof type === 'string') {
-    return createRSCHTMLElement(type, props, uniqueKey, clientComponents)
+    return createRSCHTMLElement(
+      type,
+      props,
+      uniqueKey,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   if (typeof type === 'function') {
     const rendered = type(props)
-    return traverseToRSC(rendered, clientComponents)
+    return await traverseToRSC(rendered, clientComponents, suspenseContext)
   }
 
   if (type === React.Fragment) {
-    return traverseToRSC(props.children, clientComponents)
+    return await traverseToRSC(
+      props.children,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   if (type && type.$$typeof === Symbol.for('react.provider')) {
-    return traverseToRSC(props.children, clientComponents)
+    return await traverseToRSC(
+      props.children,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   if (type && type.$$typeof === Symbol.for('react.consumer')) {
-    return traverseToRSC(props.children, clientComponents)
+    return await traverseToRSC(
+      props.children,
+      clientComponents,
+      suspenseContext,
+    )
   }
 
   return [
@@ -138,12 +200,20 @@ function traverseReactElement(element, clientComponents) {
   ]
 }
 
-function createRSCHTMLElement(tagName, props, key, clientComponents) {
+async function createRSCHTMLElement(
+  tagName,
+  props,
+  key,
+  clientComponents,
+  suspenseContext = false,
+) {
   const { children, ...otherProps } = props || {}
 
   const rscProps = {
     ...otherProps,
-    children: children ? traverseToRSC(children, clientComponents) : undefined,
+    children: children
+      ? await traverseToRSC(children, clientComponents, suspenseContext)
+      : undefined,
   }
 
   if (rscProps.children === undefined) {
@@ -156,19 +226,19 @@ function createRSCHTMLElement(tagName, props, key, clientComponents) {
   return ['$', tagName, uniqueKey, rscProps]
 }
 
-function renderServerComponent(element) {
+async function renderServerComponent(element) {
   const { type: Component, props } = element
 
   try {
-    if (Component.constructor.name === 'AsyncFunction') {
-      return Component(props)
+    const result = Component(props)
+
+    if (result && typeof result.then === 'function') {
+      return await result
     }
-    else {
-      return Component(props)
-    }
+
+    return result
   }
   catch (error) {
-    console.error('Error rendering server component:', error)
     return createErrorElement(
       error.message,
       Component.name || 'ServerComponent',
@@ -257,7 +327,9 @@ function getClientComponentId(componentType, clientComponents) {
     const globalComponents = globalThis.__clientComponents || {}
     const componentNames = globalThis.__clientComponentNames || {}
 
-    for (const [componentId, componentInfo] of Object.entries(globalComponents)) {
+    for (const [componentId, componentInfo] of Object.entries(
+      globalComponents,
+    )) {
       if (componentInfo.path && componentInfo.path.includes('Counter')) {
         return componentId
       }
@@ -270,7 +342,11 @@ function getClientComponentId(componentType, clientComponents) {
     }
 
     for (const [id, info] of Object.entries(globalComponents)) {
-      if (info.component && (info.component.name === 'Counter' || info.component.displayName === 'Counter')) {
+      if (
+        info.component
+        && (info.component.name === 'Counter'
+          || info.component.displayName === 'Counter')
+      ) {
         return id
       }
     }
@@ -352,13 +428,27 @@ function createErrorElement(message, componentName) {
   ]
 }
 
-function renderToRSC(element, clientComponents = {}) {
+async function renderToRSC(element, clientComponents = {}) {
   try {
-    return traverseToRSC(element, clientComponents)
+    return await traverseToRSC(element, clientComponents, false)
   }
   catch (error) {
     console.error('Error in RSC traversal:', error)
     return createErrorElement(error.message, 'RootComponent')
+  }
+}
+
+async function handleSuspenseBoundary(props, key, clientComponents) {
+  const { children, fallback } = props
+
+  try {
+    const result = await traverseToRSC(children, clientComponents, false)
+    return result
+  }
+  catch (error) {
+    return fallback
+      ? await traverseToRSC(fallback, clientComponents, false)
+      : createErrorElement(error.message, 'SuspenseBoundary')
   }
 }
 
@@ -368,4 +458,5 @@ if (typeof globalThis !== 'undefined') {
   globalThis.isClientComponent = isClientComponent
   globalThis.isServerComponent = isServerComponent
   globalThis.getClientComponentId = getClientComponentId
+  globalThis.handleSuspenseBoundary = handleSuspenseBoundary
 }
