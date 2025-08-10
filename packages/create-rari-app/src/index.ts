@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import path, { dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import {
@@ -122,7 +122,7 @@ async function main() {
 async function createProject(options: ProjectOptions) {
   const projectPath = join(process.cwd(), options.name)
   const templatePath = join(
-    path.dirname(fileURLToPath(import.meta.url)),
+    dirname(fileURLToPath(import.meta.url)),
     '..',
     'templates',
     options.template,
