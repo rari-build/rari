@@ -60,19 +60,20 @@ pub struct BackgroundPromiseResolver {
     runtime: Arc<JsExecutionRuntime>,
     active_promises: Arc<Mutex<FxHashMap<String, PendingSuspensePromise>>>,
     update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
-    row_counter: Arc<Mutex<u32>>,
+    shared_row_counter: Arc<Mutex<u32>>,
 }
 
 impl BackgroundPromiseResolver {
     pub fn new(
         runtime: Arc<JsExecutionRuntime>,
         update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
+        shared_row_counter: Arc<Mutex<u32>>,
     ) -> Self {
         Self {
             runtime,
             active_promises: Arc::new(Mutex::new(FxHashMap::default())),
             update_sender,
-            row_counter: Arc::new(Mutex::new(0)),
+            shared_row_counter,
         }
     }
 
@@ -87,7 +88,7 @@ impl BackgroundPromiseResolver {
 
         let runtime = Arc::clone(&self.runtime);
         let update_sender = self.update_sender.clone();
-        let row_counter = Arc::clone(&self.row_counter);
+        let shared_row_counter = Arc::clone(&self.shared_row_counter);
         let active_promises = Arc::clone(&self.active_promises);
 
         tokio::spawn(async move {
@@ -181,7 +182,7 @@ impl BackgroundPromiseResolver {
                         Ok(result_data) => {
                             if result_data["success"].as_bool().unwrap_or(false) {
                                 let row_id = {
-                                    let mut counter = row_counter.lock().await;
+                                    let mut counter = shared_row_counter.lock().await;
                                     *counter += 1;
                                     *counter
                                 };
@@ -302,11 +303,21 @@ pub struct StreamingRenderer {
     runtime: Arc<JsExecutionRuntime>,
     promise_resolver: Option<BackgroundPromiseResolver>,
     row_counter: u32,
+    module_path: Option<String>,
+    shared_row_counter: Arc<Mutex<u32>>,
+    boundary_row_ids: Arc<Mutex<FxHashMap<String, u32>>>,
 }
 
 impl StreamingRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
-        Self { runtime, promise_resolver: None, row_counter: 0 }
+        Self {
+            runtime,
+            promise_resolver: None,
+            row_counter: 0,
+            module_path: None,
+            shared_row_counter: Arc::new(Mutex::new(0)),
+            boundary_row_ids: Arc::new(Mutex::new(FxHashMap::default())),
+        }
     }
 
     pub async fn start_streaming(
@@ -317,8 +328,13 @@ impl StreamingRenderer {
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
         let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunkV2>(64);
 
-        self.promise_resolver =
-            Some(BackgroundPromiseResolver::new(Arc::clone(&self.runtime), update_sender));
+        self.promise_resolver = Some(BackgroundPromiseResolver::new(
+            Arc::clone(&self.runtime),
+            update_sender,
+            Arc::clone(&self.shared_row_counter),
+        ));
+
+        self.module_path = Some(format!("app/{component_id}.js"));
 
         let partial_result = self.render_partial(component_id, props).await?;
 
@@ -335,11 +351,17 @@ impl StreamingRenderer {
         }
 
         let chunk_sender_clone = chunk_sender.clone();
+        let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
 
             while let Some(update) = update_receiver.recv().await {
-                Self::send_boundary_update(&chunk_sender_clone, update).await;
+                Self::send_boundary_update_with_map(
+                    &chunk_sender_clone,
+                    update,
+                    Arc::clone(&boundary_rows_map),
+                )
+                .await;
             }
 
             let final_chunk = RscStreamChunkV2 {
@@ -380,42 +402,9 @@ impl StreamingRenderer {
                         if (typeof React !== 'undefined' && React.createElement && !globalThis.__react_patched) {
                             globalThis.__original_create_element = React.createElement;
 
-                            const createElementOverride = function(type, props, ...children) {
-                                const debugInfo = {
-                                    typeOf: typeof type,
-                                    typeName: type?.name || type?.displayName,
-                                    isSuspenseFunction: typeof React !== 'undefined' && React.Suspense && type === React.Suspense,
+                                const createElementOverride = function(type, props, ...children) {
+                                    return globalThis.__original_create_element(type, props, ...children);
                                 };
-
-                                const isSuspenseComponent = (type) => {
-                                    if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {
-                                        return true;
-                                    }
-                                    if (typeof type === 'function' && type.name === 'Suspense') {
-                                        return true;
-                                    }
-                                    return false;
-                                };
-
-                                if (isSuspenseComponent(type)) {
-                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                    const previousBoundaryId = globalThis.__current_boundary_id;
-                                    globalThis.__current_boundary_id = boundaryId;
-
-                                    const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
-                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-
-                                    globalThis.__discovered_boundaries.push({
-                                        id: boundaryId,
-                                        fallback: serializableFallback,
-                                        parentId: previousBoundaryId
-                                    });
-
-                                    globalThis.__current_boundary_id = previousBoundaryId;
-                                    return globalThis.__original_create_element('suspense', {...props, key: boundaryId}, ...children);
-                                }
-                                return globalThis.__original_create_element(type, props, ...children);
-                            };
 
                             Object.defineProperty(React, 'createElement', {
                                 value: createElementOverride,
@@ -431,40 +420,30 @@ impl StreamingRenderer {
                             React.__originalSuspense = React.Suspense;
 
                             React.Suspense = function SuspenseOverride(props) {
+                                if (!props) return null;
+                                const previousBoundaryId = globalThis.__current_boundary_id;
+                                const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                globalThis.__current_boundary_id = boundaryId;
                                 try {
-                                    if (!props) {
-                                        return null;
-                                    }
-
+                                    const safeFallback = props?.fallback || React.createElement('div', null, 'Loading...');
+                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
+                                    globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId });
                                     if (!props.children) {
-                                        return props.fallback || null;
+                                        return safeFallback;
                                     }
-
-                                    const previousDepth = globalThis.__current_suspense_depth || 0;
-                                    globalThis.__current_suspense_depth = previousDepth + 1;
-
-                                    try {
-                                        let result = props.children;
-
-                                        return result;
-
-                                    } finally {
-                                        globalThis.__current_suspense_depth = previousDepth;
-                                    }
-
+                                    return props.children;
                                 } catch (error) {
-                                    if (error.$$typeof === Symbol.for('react.suspense.pending')) {
-
-                                        if (error.promise) {
-                                            const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                            globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                                            globalThis.__suspense_promises[promiseId] = error.promise;
-                                        }
-
+                                    if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
+                                        const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
+                                        globalThis.__suspense_promises[promiseId] = error.promise;
+                                        globalThis.__pending_promises = globalThis.__pending_promises || [];
+                                        globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
                                         return props.fallback || React.createElement('div', null, 'Loading...');
                                     }
-
-                                    return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + error.message);
+                                    return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + (error && error.message ? error.message : 'Unknown'));
+                                } finally {
+                                    globalThis.__current_boundary_id = previousBoundaryId;
                                 }
                             };
                         }
@@ -925,14 +904,45 @@ impl StreamingRenderer {
         partial_result: &PartialRenderResult,
     ) -> Result<(), RariError> {
         self.row_counter += 1;
-        let module_chunk = self.create_module_chunk(&partial_result.initial_content)?;
+        let module_chunk = self.create_module_chunk()?;
         sender
             .send(module_chunk)
             .await
             .map_err(|e| RariError::internal(format!("Failed to send module chunk: {e}")))?;
 
+        if partial_result.has_suspense {
+            self.row_counter += 1;
+            let symbol_chunk = self.create_symbol_chunk("react.suspense")?;
+            sender
+                .send(symbol_chunk)
+                .await
+                .map_err(|e| RariError::internal(format!("Failed to send symbol chunk: {e}")))?;
+
+            for boundary in &partial_result.boundaries {
+                self.row_counter += 1;
+                {
+                    let mut map = self.boundary_row_ids.lock().await;
+                    map.insert(boundary.id.clone(), self.row_counter);
+                }
+                let boundary_chunk = Self::create_boundary_chunk_static(
+                    self.row_counter,
+                    &boundary.id,
+                    &boundary.fallback_content,
+                )?;
+                sender.send(boundary_chunk).await.map_err(|e| {
+                    RariError::internal(format!("Failed to send boundary chunk: {e}"))
+                })?;
+            }
+        }
+
         self.row_counter += 1;
-        let shell_chunk = self.create_shell_chunk(&partial_result.initial_content)?;
+        let module_row_id = if partial_result.has_suspense {
+            self.row_counter.saturating_sub(1 + 1 + (partial_result.boundaries.len() as u32))
+        } else {
+            self.row_counter.saturating_sub(1)
+        };
+        let shell_chunk =
+            self.create_shell_chunk_with_module(&partial_result.initial_content, module_row_id)?;
         sender
             .send(shell_chunk)
             .await
@@ -941,19 +951,35 @@ impl StreamingRenderer {
         Ok(())
     }
 
-    async fn send_boundary_update(sender: &mpsc::Sender<RscStreamChunkV2>, update: BoundaryUpdate) {
-        let mut inner_obj = serde_json::Map::new();
-        inner_obj.insert("resolved".to_string(), serde_json::Value::Bool(true));
-        inner_obj.insert("children".to_string(), update.content);
-
-        let update_data = serde_json::Value::Array(vec![
+    async fn send_boundary_update_with_map(
+        sender: &mpsc::Sender<RscStreamChunkV2>,
+        update: BoundaryUpdate,
+        boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
+    ) {
+        let id_value = {
+            let map = boundary_rows_map.lock().await;
+            if let Some(row) = map.get(&update.boundary_id) {
+                format!("$L{row}")
+            } else if update.boundary_id.starts_with("$L") {
+                update.boundary_id.clone()
+            } else if update.boundary_id.chars().all(|c| c.is_ascii_digit()) {
+                format!("$L{}", update.boundary_id)
+            } else {
+                update.boundary_id.clone()
+            }
+        };
+        let element = serde_json::Value::Array(vec![
             serde_json::Value::String("$".to_string()),
-            serde_json::Value::String(update.boundary_id),
+            serde_json::Value::String(id_value),
             serde_json::Value::Null,
-            serde_json::Value::Object(inner_obj),
+            serde_json::Value::Object({
+                let mut map = serde_json::Map::new();
+                map.insert("children".to_string(), update.content);
+                map
+            }),
         ]);
 
-        let update_row = format!("{}:{}\n", update.row_id, update_data);
+        let update_row = format!("{}:{}\n", update.row_id, element);
 
         let chunk = RscStreamChunkV2 {
             data: update_row.into_bytes(),
@@ -967,11 +993,13 @@ impl StreamingRenderer {
         }
     }
 
-    fn create_module_chunk(
-        &self,
-        _content: &serde_json::Value,
-    ) -> Result<RscStreamChunkV2, RariError> {
-        let module_data = format!("{}:I[[\"main\"],[\"default\"]]\n", self.row_counter);
+    fn create_module_chunk(&self) -> Result<RscStreamChunkV2, RariError> {
+        let path = self
+            .module_path
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| "app/UnknownComponent.js".to_string());
+        let module_data = format!("{}:I[\"{}\",[\"main\"],\"default\"]\n", self.row_counter, path);
 
         Ok(RscStreamChunkV2 {
             data: module_data.into_bytes(),
@@ -981,16 +1009,60 @@ impl StreamingRenderer {
         })
     }
 
-    fn create_shell_chunk(
+    fn create_shell_chunk_with_module(
         &self,
         content: &serde_json::Value,
+        module_row_id: u32,
     ) -> Result<RscStreamChunkV2, RariError> {
-        let shell_data = format!("{}:{}\n", self.row_counter, content);
+        let mut props = serde_json::Map::new();
+        props.insert("children".to_string(), content.clone());
+        let element = serde_json::Value::Array(vec![
+            serde_json::Value::String("$".to_string()),
+            serde_json::Value::String(format!("$L{module_row_id}")),
+            serde_json::Value::Null,
+            serde_json::Value::Object(props),
+        ]);
+        let row = format!("{}:{}\n", self.row_counter, element);
 
         Ok(RscStreamChunkV2 {
-            data: shell_data.into_bytes(),
+            data: row.into_bytes(),
             chunk_type: RscChunkTypeV2::InitialShell,
             row_id: self.row_counter,
+            is_final: false,
+        })
+    }
+
+    fn create_symbol_chunk(&self, symbol_ref: &str) -> Result<RscStreamChunkV2, RariError> {
+        let symbol_row = format!("{}:SSymbol.for(\"{}\")\n", self.row_counter, symbol_ref);
+
+        Ok(RscStreamChunkV2 {
+            data: symbol_row.into_bytes(),
+            chunk_type: RscChunkTypeV2::InitialShell,
+            row_id: self.row_counter,
+            is_final: false,
+        })
+    }
+
+    fn create_boundary_chunk_static(
+        row_id: u32,
+        boundary_id: &str,
+        fallback_content: &serde_json::Value,
+    ) -> Result<RscStreamChunkV2, RariError> {
+        let mut props = serde_json::Map::new();
+        props.insert("fallback".to_string(), fallback_content.clone());
+        props.insert("boundaryId".to_string(), serde_json::Value::String(boundary_id.to_string()));
+        let element = serde_json::Value::Array(vec![
+            serde_json::Value::String("$".to_string()),
+            serde_json::Value::String("react.suspense".to_string()),
+            serde_json::Value::Null,
+            serde_json::Value::Object(props),
+        ]);
+        let row = format!("{row_id}:{element}\n");
+
+        Ok(RscStreamChunkV2 {
+            data: row.into_bytes(),
+            chunk_type: RscChunkTypeV2::InitialShell,
+            row_id,
             is_final: false,
         })
     }
@@ -1080,5 +1152,32 @@ mod tests {
         assert_eq!(chunk.chunk_type, RscChunkTypeV2::InitialShell);
         assert_eq!(chunk.row_id, 1);
         assert!(!chunk.is_final);
+    }
+
+    #[test]
+    fn test_module_row_format_in_v2() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = StreamingRenderer::new(runtime);
+
+        let mut renderer = renderer;
+        renderer.row_counter = 1;
+        renderer.module_path = Some("app/MyComponent.js".to_string());
+
+        let module_chunk = renderer.create_module_chunk().expect("module chunk");
+        let s = String::from_utf8(module_chunk.data).expect("utf8");
+        assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
+    }
+
+    #[test]
+    fn test_symbol_row_format_in_v2() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let renderer = StreamingRenderer::new(runtime);
+
+        let mut renderer = renderer;
+        renderer.row_counter = 2;
+
+        let sym_chunk = renderer.create_symbol_chunk("react.suspense").expect("symbol chunk");
+        let s = String::from_utf8(sym_chunk.data).expect("utf8");
+        assert!(s.starts_with("2:SSymbol.for(\"react.suspense\")"));
     }
 }

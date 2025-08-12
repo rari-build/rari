@@ -136,6 +136,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
               }
             }
             break
+          case 'ExportAllDeclaration':
+            if (node.exported && node.exported.type === 'Identifier') {
+              exportedNames.push(node.exported.name)
+            }
+            break
         }
       }
 
@@ -146,8 +151,29 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
+  function hasTopLevelDirective(code: string, directive: 'use client' | 'use server'): boolean {
+    try {
+      const ast = acorn.parse(code, {
+        ecmaVersion: 2024,
+        sourceType: 'module',
+        locations: false,
+      }) as any
+
+      for (const node of ast.body) {
+        if (node.type !== 'ExpressionStatement' || !node.directive)
+          break
+        if (node.directive === directive)
+          return true
+      }
+      return false
+    }
+    catch {
+      return false
+    }
+  }
+
   function transformServerModule(code: string, id: string): string {
-    if (!code.includes('use server')) {
+    if (!hasTopLevelDirective(code, 'use server')) {
       return code
     }
 
@@ -209,7 +235,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string): string {
-    if (code.includes('use server')) {
+    if (hasTopLevelDirective(code, 'use server')) {
       const exportedNames = parseExportedNames(code)
       if (exportedNames.length === 0) {
         return ''
@@ -238,7 +264,7 @@ if (import.meta.hot) {
       return newCode
     }
 
-    if (!code.includes('use client')) {
+    if (!hasTopLevelDirective(code, 'use client')) {
       return code
     }
 
@@ -270,7 +296,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModuleForClient(code: string, id: string): string {
-    if (!code.includes('use client')) {
+    if (!hasTopLevelDirective(code, 'use client')) {
       return code
     }
 
@@ -496,7 +522,7 @@ if (import.meta.hot) {
 
       const environment = (this as any).environment
 
-      if (code.includes('\'use client\'') || code.includes('"use client"')) {
+      if (hasTopLevelDirective(code, 'use client')) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
@@ -511,7 +537,7 @@ if (import.meta.hot) {
         }
       }
 
-      if (code.includes('\'use server\'') || code.includes('"use server"')) {
+      if (hasTopLevelDirective(code, 'use server')) {
         componentTypeCache.set(id, 'server')
         serverComponents.add(id)
 
@@ -524,7 +550,7 @@ if (import.meta.hot) {
         else {
           let clientTransformedCode = transformClientModule(code, id)
 
-          if (code.includes('\'use server\'') || code.includes('"use server"')) {
+          if (hasTopLevelDirective(code, 'use server')) {
             clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -1504,6 +1530,8 @@ class RscClient {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let content = '';
+    const modules = new Map();
+    const boundaryRowMap = new Map();
 
     const convertRscToReact = (element) => {
       if (!React) {
@@ -1543,6 +1571,18 @@ class RscClient {
           }
 
           if (typeof type === 'string') {
+            if (type.startsWith('$L')) {
+              const mod = modules.get(type);
+              if (mod) {
+                const clientKey = mod.id + '#' + (mod.name || 'default');
+                const clientComponent = getClientComponent(clientKey);
+                if (clientComponent) {
+                  const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                  return reactElement;
+                }
+              }
+              return processedProps && processedProps.children ? processedProps.children : null;
+            }
             if (type.includes('.tsx#') || type.includes('.jsx#')) {
               const clientComponent = getClientComponent(type);
               if (clientComponent) {
@@ -1610,27 +1650,62 @@ class RscClient {
 
               if (content.includes('STREAM_COMPLETE')) {
                 isComplete = true;
-              } else {
+              } else if (content.startsWith('I[')) {
+                try {
+                  const importData = JSON.parse(content.substring(1));
+                  if (Array.isArray(importData) && importData.length >= 3) {
+                    const [path, chunks, exportName] = importData;
+                    modules.set('$L' + rowId, {
+                      id: path,
+                      chunks: Array.isArray(chunks) ? chunks : [chunks],
+                      name: exportName || 'default'
+                    });
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse import row:', content, e);
+                }
+              } else if (content.startsWith('E{')) {
+                try {
+                  const err = JSON.parse(content.substring(1));
+                  console.error('RSC stream error:', err);
+                } catch (e) {
+                  console.error('Failed to parse error row:', content, e);
+                }
+              } else if (content.startsWith('Symbol.for(')) {
+                continue;
+              } else if (content.startsWith('[')) {
                 const parsed = JSON.parse(content);
-
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, key, props] = parsed;
-
-                  if (marker === '$' && typeof selector === 'string' && selector.startsWith('boundary_') && props && props.resolved) {
-                    const resolvedContent = convertRscToReact(props.children);
-                    boundaryUpdates.set(selector, resolvedContent);
-
-                    if (streamingComponent) {
-                      streamingComponent.updateBoundary(selector, resolvedContent);
-                    } else {
-                      console.warn('No streamingComponent available for update');
+                  if (marker === '$' && selector === 'react.suspense' && props && props.boundaryId) {
+                    boundaryRowMap.set('$L' + rowId, props.boundaryId);
+                  }
+                  if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
+                    if (typeof selector === 'string' && selector.startsWith('$L')) {
+                      const target = boundaryRowMap.get(selector) || null;
+                      if (target) {
+                        const resolvedContent = convertRscToReact(props.children);
+                        boundaryUpdates.set(target, resolvedContent);
+                        if (streamingComponent) {
+                          streamingComponent.updateBoundary(target, resolvedContent);
+                        }
+                        continue;
+                      }
                     }
-                    continue;
                   }
                 }
-
-                if (rowId === '2') {
-                  initialContent = convertRscToReact(parsed);
+                if (!initialContent) {
+                  let canUseAsRoot = true;
+                  if (Array.isArray(parsed) && parsed.length >= 4 && parsed[0] === '$') {
+                    const sel = parsed[1];
+                    const p = parsed[3];
+                    if (typeof sel === 'string' && sel === 'react.suspense' && p && p.boundaryId) {
+                      canUseAsRoot = false;
+                    }
+                  }
+                  if (canUseAsRoot) {
+                    initialContent = convertRscToReact(parsed);
+                  }
                 }
               }
             } catch (e) {
@@ -1818,27 +1893,16 @@ class RscClient {
 
     let rootElement = null;
 
-    const elementKeys = Array.from(elements.keys());
-
+    const elementKeys = Array.from(elements.keys()).sort((a, b) => parseInt(a) - parseInt(b));
     for (const key of elementKeys) {
       const element = elements.get(key);
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
-        const [marker, type] = element;
-        if (typeof type === 'string' && (type === 'root_boundary' || type.startsWith('boundary_'))) {
-          rootElement = element;
-          break;
+        const [, type, , props] = element;
+        if (type === 'react.suspense' && props && props.boundaryId) {
+          continue;
         }
-      }
-    }
-
-    if (!rootElement) {
-      const sortedKeys = elementKeys.sort((a, b) => parseInt(b) - parseInt(a));
-      for (const key of sortedKeys) {
-        const element = elements.get(key);
-        if (Array.isArray(element) && element[0] === '$') {
-          rootElement = element;
-          break;
-        }
+        rootElement = element;
+        break;
       }
     }
 
@@ -1862,11 +1926,6 @@ class RscClient {
     if (Array.isArray(elementData)) {
       if (elementData.length >= 2 && elementData[0] === '$') {
         const [marker, type, key, props] = elementData;
-
-        if (typeof type === 'string' && (type === 'root_boundary' || type.startsWith('boundary_'))) {
-          const children = props && typeof props === 'object' ? props.children : null;
-          return this.reconstructElementFromRscData(children, modules);
-        }
 
         let actualType = type;
 

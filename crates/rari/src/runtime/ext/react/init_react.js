@@ -61,9 +61,7 @@ if (typeof globalThis.React === 'undefined') {
     },
     Fragment: Symbol.for('react.fragment'),
     Suspense: function Suspense(props) {
-      return props && Object.prototype.hasOwnProperty.call(props, 'children')
-        ? props.children
-        : null
+      return props?.children || null
     },
   }
 }
@@ -114,23 +112,14 @@ function renderElementToString(element, isStatic = false) {
           const suspenseError = new Error('Async component suspended')
           suspenseError.$$typeof = Symbol.for('react.suspense.pending')
           suspenseError.promise = result
-          suspenseError.componentName = type.name || 'anonymous'
-          suspenseError.asyncComponentDetected = true
-
           throw suspenseError
         }
 
-        const rendered = renderElementToString(result, isStatic)
-        return rendered
+        return renderElementToString(result, isStatic)
       }
       catch (error) {
         if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
-          if (
-            type.name === 'Suspense'
-            || type.displayName === 'Suspense'
-            || type.name === 'SuspenseOverride'
-            || type === globalThis.React?.Suspense
-          ) {
+          if (type === globalThis.React?.Suspense) {
             if (error.promise) {
               const promiseId = `suspense_${Date.now()}_${Math.random()
                 .toString(36)
@@ -141,12 +130,9 @@ function renderElementToString(element, isStatic = false) {
             }
 
             const fallback = elementProps?.fallback
-            if (fallback) {
-              return renderElementToString(fallback, isStatic)
-            }
-            else {
-              return '<div>Loading...</div>'
-            }
+            return fallback
+              ? renderElementToString(fallback, isStatic)
+              : '<div>Loading...</div>'
           }
         }
 

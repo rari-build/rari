@@ -90,7 +90,7 @@
     "chokidar": "^3.6.0",
     "eslint": "^9.33.0",
     "oxlint": "^1.11.2",
-    "rolldown-vite": "^7.1.1",
+    "rolldown-vite": "^7.1.2",
     "tsdown": "^0.12.9"
   }
 }
