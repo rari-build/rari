@@ -380,9 +380,7 @@ mod tests {
     fn create_test_fallback() -> serde_json::Value {
         serde_json::json!({
             "type": "div",
-            "props": {
-                "children": "Loading..."
-            }
+            "props": {}
         })
     }
 

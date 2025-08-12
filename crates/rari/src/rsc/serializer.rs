@@ -354,11 +354,10 @@ impl RscSerializer {
 
         if tag == "react.suspense" {
             if let Some(fallback_value) = element_props.get("fallback") {
-                return serde_json::to_string(fallback_value).unwrap_or_else(|_| {
-                    "[\"$\",\"div\",null,{\"children\":\"Loading...\"}]".to_string()
-                });
+                return serde_json::to_string(fallback_value)
+                    .unwrap_or_else(|_| "null".to_string());
             }
-            return "[\"$\",\"div\",null,{\"children\":\"Loading...\"}]".to_string();
+            return "null".to_string();
         }
 
         if let Some(children) = children {

@@ -13,7 +13,7 @@ globalThis.ReactDOMServer = {
           globalThis.__suspense_promises[promiseId] = error.promise
         }
 
-        return '<div>Loading...</div>'
+        return ''
       }
 
       throw error
@@ -25,7 +25,7 @@ globalThis.ReactDOMServer = {
     }
     catch (error) {
       if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
-        return '<div>Loading...</div>'
+        return ''
       }
 
       throw error
@@ -132,7 +132,7 @@ function renderElementToString(element, isStatic = false) {
             const fallback = elementProps?.fallback
             return fallback
               ? renderElementToString(fallback, isStatic)
-              : '<div>Loading...</div>'
+              : ''
           }
         }
 

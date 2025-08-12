@@ -425,7 +425,7 @@ impl StreamingRenderer {
                                 const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                                 globalThis.__current_boundary_id = boundaryId;
                                 try {
-                                    const safeFallback = props?.fallback || React.createElement('div', null, 'Loading...');
+                                    const safeFallback = props?.fallback || null;
                                     const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
                                     globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId });
                                     if (!props.children) {
@@ -439,7 +439,7 @@ impl StreamingRenderer {
                                         globalThis.__suspense_promises[promiseId] = error.promise;
                                         globalThis.__pending_promises = globalThis.__pending_promises || [];
                                         globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
-                                        return props.fallback || React.createElement('div', null, 'Loading...');
+                                        return props.fallback || null;
                                     }
                                     return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + (error && error.message ? error.message : 'Unknown'));
                                 } finally {
@@ -572,17 +572,17 @@ impl StreamingRenderer {
                             return {
                                 type: element.type || 'div',
                                 props: element.props ? {
-                                    children: element.props.children || 'Loading...',
+                                    children: (element.props.children === undefined ? null : element.props.children),
                                     ...(element.props.className && { className: element.props.className })
-                                } : { children: 'Loading...' },
+                                } : { children: null },
                                 key: null,
                                 ref: null
                             };
                         }
 
-                        return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
+                        return { type: 'div', props: { children: null }, key: null, ref: null };
                     } catch (e) {
-                        return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
+                        return { type: 'div', props: { children: null }, key: null, ref: null };
                     }
                 };
 
@@ -658,7 +658,7 @@ impl StreamingRenderer {
                                     const previousBoundaryId = globalThis.__current_boundary_id;
                                     globalThis.__current_boundary_id = boundaryId;
 
-                                    const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
+                                    const safeFallback = props?.fallback || null;
                                     const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
 
                                     globalThis.__discovered_boundaries.push({{
@@ -695,7 +695,7 @@ impl StreamingRenderer {
                                     const previousBoundaryId = globalThis.__current_boundary_id;
                                     globalThis.__current_boundary_id = boundaryId;
 
-                                    const safeFallback = el.props.fallback || {{'type': 'div', 'props': {{'children': ['Loading...']}}}};
+                                    const safeFallback = el.props.fallback || null;
                                     const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
 
                                     globalThis.__discovered_boundaries.push({{
@@ -783,8 +783,8 @@ impl StreamingRenderer {
                             }}
 
                             element = globalThis.__original_create_element ?
-                                globalThis.__original_create_element('div', null, 'Loading...') :
-                                {{'type': 'div', 'props': {{'children': 'Loading...'}}}};
+                                globalThis.__original_create_element('div', null, '') :
+                                {{'type': 'div', 'props': {{'children': ''}}}};
                         }} else {{
                             console.error('Non-suspense error during rendering:', suspenseError);
                             renderError = suspenseError;

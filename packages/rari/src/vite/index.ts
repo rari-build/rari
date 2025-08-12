@@ -2130,9 +2130,7 @@ function ServerComponentWrapper({
   }, [componentId, JSON.stringify(props)]);
 
   if (loading) {
-    return fallback || React.createElement('div', { className: 'rsc-loading' },
-      'Loading ' + componentId + '...'
-    );
+    return fallback || null;
   }
 
   if (error) {
@@ -2145,7 +2143,7 @@ function ServerComponentWrapper({
     if (data) {
     if (data._isRscResponse) {
       return React.createElement(Suspense,
-        { fallback: fallback || React.createElement('div', null, 'Loading...') },
+        { fallback: fallback || null },
         data.readRoot()
       );
     } else if (data) {
@@ -2193,7 +2191,7 @@ function createServerComponentWrapper(componentName, importPath) {
     }, []);
 
     return React.createElement(Suspense, {
-      fallback: React.createElement('div', null, 'Loading ' + componentName + '...')
+      fallback: null
     }, React.createElement(ServerComponentWrapper, {
       key: componentName + '-' + mountKey, // Force re-mount with key change
       componentId: componentName,

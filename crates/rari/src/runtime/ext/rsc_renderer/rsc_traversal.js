@@ -154,12 +154,7 @@ function traverseReactElement(element, clientComponents, depth = 0) {
     const previousBoundaryId = globalThis.__current_boundary_id
     globalThis.__current_boundary_id = boundaryId
 
-    const defaultFallback = [
-      '$',
-      'div',
-      null,
-      { children: 'Loading...' },
-    ]
+    const defaultFallback = null
     const safeFallback = props?.fallback
       ? traverseToRSC(props.fallback, clientComponents, depth + 1)
       : defaultFallback

@@ -75,11 +75,7 @@ mod compliance_tests {
 
         let fallback = ReactElement {
             element_type: ElementType::HtmlTag("div".to_string()),
-            props: Some({
-                let mut props = FxHashMap::default();
-                props.insert("children".to_string(), serde_json::json!("Loading..."));
-                props
-            }),
+            props: Some(FxHashMap::default()),
             key: None,
             ref_: None,
         };
