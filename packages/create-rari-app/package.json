@@ -53,7 +53,7 @@
     "@types/node": "^24.2.1",
     "@typescript/native-preview": "7.0.0-dev.20250611.1",
     "eslint": "^9.33.0",
-    "oxlint": "^1.11.1",
+    "oxlint": "^1.11.2",
     "tsdown": "^0.12.9"
   }
 }

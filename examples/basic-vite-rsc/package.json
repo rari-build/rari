@@ -30,8 +30,8 @@
     "@typescript/native-preview": "7.0.0-dev.20250611.1",
     "@vitejs/plugin-react-oxc": "^0.2.3",
     "eslint": "^9.33.0",
-    "oxlint": "^1.11.1",
-    "rolldown-vite": "^7.1.0",
+    "oxlint": "^1.11.2",
+    "rolldown-vite": "^7.1.1",
     "tailwindcss": "^4.1.11"
   }
 }
