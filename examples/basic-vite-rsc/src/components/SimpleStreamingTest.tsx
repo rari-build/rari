@@ -72,14 +72,7 @@ async function SimpleStreamingTest() {
             {' '}
             <code className="bg-gray-200 px-1 rounded">/api/rsc/stream</code>
             {' '}
-            - Original streaming (legacy)
-          </p>
-          <p>
-            •
-            {' '}
-            <code className="bg-gray-200 px-1 rounded">/api/rsc/stream-v2</code>
-            {' '}
-            - True streaming (new)
+            - Streaming (current)
           </p>
         </div>
         <p className="text-xs text-gray-500 mt-2">

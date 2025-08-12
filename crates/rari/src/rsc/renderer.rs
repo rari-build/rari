@@ -4,7 +4,7 @@ use crate::rsc::js_loader::{ModuleOperation, RscJsLoader};
 use crate::rsc::jsx_transform::{extract_dependencies, hash_string, transform_jsx};
 
 use crate::rsc::serializer::{ReactElement, RscSerializer};
-use crate::rsc::streaming_v2::{RscStreamV2, StreamingRenderer};
+use crate::rsc::streaming::{RscStream, StreamingRenderer};
 use crate::runtime::JsExecutionRuntime;
 use crate::server_fn::ServerFunctionExecutor;
 use dashmap::DashMap;
@@ -1372,11 +1372,11 @@ impl RscRenderer {
         Ok(result)
     }
 
-    pub async fn render_with_true_streaming(
+    pub async fn render_with_streaming(
         &self,
         component_id: &str,
         props: Option<&str>,
-    ) -> Result<RscStreamV2, RariError> {
+    ) -> Result<RscStream, RariError> {
         if !self.initialized {
             return Err(RariError::internal("RSC renderer not initialized"));
         }

@@ -1474,8 +1474,8 @@ class RscClient {
     await loadRscClient();
 
     const endpoints = [
-      '/api/rsc/stream-v2',
-      'http://127.0.0.1:3000/api/rsc/stream-v2',
+      '/api/rsc/stream',
+      'http://127.0.0.1:3000/api/rsc/stream',
     ];
     let response = null;
     let lastError = null;
@@ -1499,7 +1499,7 @@ class RscClient {
       }
     }
     if (!response) {
-      throw lastError || new Error('Failed to reach stream-v2 endpoint');
+      throw lastError || new Error('Failed to reach stream endpoint');
     }
 
     if (!response.ok) {
@@ -1509,7 +1509,7 @@ class RscClient {
 
     const stream = response.body;
     if (!stream) {
-      throw new Error('No ReadableStream from stream-v2 response');
+      throw new Error('No ReadableStream from stream response');
     }
 
     if (createFromReadableStream) {

@@ -1,6 +1,5 @@
 use crate::error::RariError;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
-use crate::rsc::streaming::RscStreamingExt;
 
 use crate::runtime::JsExecutionRuntime;
 use crate::server::config::Config;
@@ -21,7 +20,6 @@ use axum::{
     routing::{any, get, post},
 };
 use colored::Colorize;
-use futures::StreamExt;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -109,10 +107,8 @@ impl Server {
     async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let mut router = Router::new()
             .route("/api/test", get(test_handler))
-            .route("/api/rsc/render", post(render_component))
             .route("/api/rsc/stream", post(stream_component))
-            .route("/api/rsc/stream-v2", post(stream_component_v2))
-            .route("/api/rsc/stream-v2", axum::routing::options(cors_preflight_ok))
+            .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
             .route("/api/rsc/register", post(register_component))
             .route("/api/rsc/register-client", post(register_client_component))
             .route("/api/rsc/hmr-register", post(hmr_register_component))
@@ -332,46 +328,6 @@ async fn test_handler() -> &'static str {
 }
 
 #[axum::debug_handler]
-async fn render_component(
-    State(state): State<ServerState>,
-    Json(request): Json<RenderRequest>,
-) -> Result<Json<RenderResponse>, StatusCode> {
-    let start_time = std::time::Instant::now();
-
-    state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-    debug!("Rendering component: {}", request.component_id);
-
-    let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
-
-    let result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.render_to_rsc_format(&request.component_id, props_str.as_deref()).await
-    };
-
-    match result {
-        Ok(rsc_data) => {
-            let render_time = start_time.elapsed().as_millis() as u64;
-
-            Ok(Json(RenderResponse {
-                success: true,
-                data: Some(rsc_data),
-                error: None,
-                component_id: request.component_id,
-                render_time_ms: render_time,
-            }))
-        }
-        Err(e) => {
-            let _render_time = start_time.elapsed().as_millis() as u64;
-
-            error!("Failed to render component {}: {}", request.component_id, e);
-
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-#[axum::debug_handler]
 async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
@@ -381,55 +337,8 @@ async fn stream_component(
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let stream_result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.render_with_readable_stream(&request.component_id, props_str.as_deref())
-    };
-
-    match stream_result {
-        Ok(mut rsc_stream) => {
-            debug!("Successfully created stream for component: {}", request.component_id);
-
-            let byte_stream = async_stream::stream! {
-                while let Some(chunk_result) = rsc_stream.next().await {
-                    match chunk_result {
-                        Ok(chunk_bytes) => yield Ok(chunk_bytes),
-                        Err(e) => {
-                            error!("Stream error for component {}: {}", request.component_id, e);
-                            yield Err(std::io::Error::other(e.to_string()));
-                            break;
-                        }
-                    }
-                }
-            };
-
-            let body = Body::from_stream(byte_stream);
-
-            Ok(Response::builder()
-                .header("content-type", RSC_CONTENT_TYPE)
-                .header("cache-control", NO_CACHE_CONTROL)
-                .header("transfer-encoding", CHUNKED_ENCODING)
-                .body(body)
-                .expect("Valid streaming response"))
-        }
-        Err(e) => {
-            error!("Failed to create stream for component {}: {}", request.component_id, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-#[axum::debug_handler]
-async fn stream_component_v2(
-    State(state): State<ServerState>,
-    Json(request): Json<RenderRequest>,
-) -> Result<Response, StatusCode> {
-    debug!("Streaming component V2 (true streaming): {}", request.component_id);
-
-    let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
-
-    let stream_result = {
         let renderer = state.renderer.lock().await;
-        renderer.render_with_true_streaming(&request.component_id, props_str.as_deref()).await
+        renderer.render_with_streaming(&request.component_id, props_str.as_deref()).await
     };
 
     match stream_result {
@@ -448,9 +357,6 @@ async fn stream_component_v2(
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", NO_CACHE_CONTROL)
                 .header("transfer-encoding", CHUNKED_ENCODING)
-                .header("x-rsc-streaming-version", "2")
-                .header("access-control-allow-origin", "*")
-                .header("access-control-expose-headers", "x-rsc-streaming-version")
                 .body(body)
                 .expect("Valid streaming response"))
         }

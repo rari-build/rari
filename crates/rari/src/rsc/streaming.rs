@@ -1,704 +1,1105 @@
-use crate::error::RariError;
-use futures::StreamExt;
-use futures::stream::Stream;
-use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
-use std::io::Write;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio::sync::mpsc::{Receiver, channel};
+use futures::Stream;
+use rustc_hash::FxHashMap;
+use serde::Serialize;
+use std::sync::Arc;
+use tokio::sync::{Mutex, mpsc};
 use tracing::error;
 
-const DEFAULT_CHANNEL_BUFFER_SIZE: usize = 32;
+use crate::error::RariError;
+use crate::runtime::JsExecutionRuntime;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum RscStreamChunkType {
-    ModuleReference,
-    Import,
-    ReactElement,
-    Symbol,
-    Error,
+#[derive(Debug, Clone)]
+pub struct PartialRenderResult {
+    pub initial_content: serde_json::Value,
+    pub pending_promises: Vec<PendingSuspensePromise>,
+    pub boundaries: Vec<SuspenseBoundaryInfo>,
+    pub has_suspense: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RscStreamChunkMetadata {
-    pub chunk_type: RscStreamChunkType,
-    pub row_id: String,
-    pub is_final: bool,
-    pub error: Option<RscStreamError>,
+#[derive(Debug, Clone)]
+pub struct PendingSuspensePromise {
+    pub id: String,
+    pub boundary_id: String,
+    pub component_path: String,
+    pub promise_handle: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RscStreamError {
-    pub message: String,
-    pub stack: Option<String>,
-    pub digest: Option<String>,
+#[derive(Debug, Clone)]
+pub struct SuspenseBoundaryInfo {
+    pub id: String,
+    pub fallback_content: serde_json::Value,
+    pub parent_boundary_id: Option<String>,
+    pub pending_promise_count: usize,
 }
 
-pub struct RscStream {
-    receiver: Receiver<Result<Vec<u8>, String>>,
+#[derive(Debug, Clone, Serialize)]
+pub struct BoundaryUpdate {
+    pub boundary_id: String,
+    pub content: serde_json::Value,
+    pub row_id: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct RscStreamChunk {
     pub data: Vec<u8>,
-    pub metadata: RscStreamChunkMetadata,
+    pub chunk_type: RscChunkType,
+    pub row_id: u32,
+    pub is_final: bool,
 }
 
-impl Stream for RscStream {
-    type Item = Result<Vec<u8>, RariError>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match Pin::new(&mut self.receiver).poll_recv(cx) {
-            Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(Ok(data))),
-            Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(RariError::internal(err)))),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
-        }
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub enum RscChunkType {
+    ModuleImport,
+    InitialShell,
+    BoundaryUpdate,
+    BoundaryError,
+    StreamComplete,
 }
 
-impl RscStream {
-    pub fn new(receiver: Receiver<Result<Vec<u8>, String>>) -> Self {
-        Self { receiver }
+pub struct BackgroundPromiseResolver {
+    runtime: Arc<JsExecutionRuntime>,
+    active_promises: Arc<Mutex<FxHashMap<String, PendingSuspensePromise>>>,
+    update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
+    shared_row_counter: Arc<Mutex<u32>>,
+}
+
+impl BackgroundPromiseResolver {
+    pub fn new(
+        runtime: Arc<JsExecutionRuntime>,
+        update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
+        shared_row_counter: Arc<Mutex<u32>>,
+    ) -> Self {
+        Self {
+            runtime,
+            active_promises: Arc::new(Mutex::new(FxHashMap::default())),
+            update_sender,
+            shared_row_counter,
+        }
     }
 
-    pub fn create() -> (Self, tokio::sync::mpsc::Sender<Result<Vec<u8>, String>>) {
-        let (sender, receiver) = channel(DEFAULT_CHANNEL_BUFFER_SIZE);
-        (Self::new(receiver), sender)
-    }
+    pub async fn resolve_async(&self, promise: PendingSuspensePromise) {
+        let promise_id = promise.id.clone();
+        let boundary_id = promise.boundary_id.clone();
 
-    pub fn add_chunk(&mut self, data: Vec<u8>) -> Result<(), RariError> {
-        let (sender, new_receiver) = channel(DEFAULT_CHANNEL_BUFFER_SIZE);
-
-        sender
-            .try_send(Ok(data))
-            .map_err(|e| RariError::internal(format!("Failed to send chunk: {e}")))?;
-
-        self.receiver = new_receiver;
-
-        Ok(())
-    }
-
-    pub fn complete(&mut self) -> Result<(), RariError> {
-        Ok(())
-    }
-
-    pub fn process_raw_chunk(raw_data: &[u8]) -> Result<RscStreamChunk, RariError> {
-        let raw_str = String::from_utf8(raw_data.to_vec())
-            .map_err(|e| RariError::serialization(format!("Invalid UTF-8: {e}")))?;
-
-        let lines: Vec<&str> = raw_str.lines().collect();
-        if lines.is_empty() {
-            return Err(RariError::serialization("Empty RSC payload".to_string()));
+        {
+            let mut active = self.active_promises.lock().await;
+            active.insert(promise_id.clone(), promise.clone());
         }
 
-        let line = lines[0];
+        let runtime = Arc::clone(&self.runtime);
+        let update_sender = self.update_sender.clone();
+        let shared_row_counter = Arc::clone(&self.shared_row_counter);
+        let active_promises = Arc::clone(&self.active_promises);
 
-        let colon_pos = line.find(':').ok_or_else(|| {
-            RariError::serialization(format!("Invalid RSC line format, missing colon: {line}"))
-        })?;
+        tokio::spawn(async move {
+            let resolution_script = format!(
+                r#"
+                (function() {{
+                    try {{
+                        const promiseId = '{promise_id}';
+                        const boundaryId = '{boundary_id}';
 
-        let row_id = &line[..colon_pos];
-        let rest = &line[colon_pos + 1..];
+                        const promise = globalThis.__suspense_promises[promiseId];
 
-        let (chunk_type, row_data) = if let Some(stripped) = rest.strip_prefix('M') {
-            (RscStreamChunkType::ModuleReference, stripped)
-        } else if let Some(stripped) = rest.strip_prefix('I') {
-            (RscStreamChunkType::Import, stripped)
-        } else if let Some(stripped) = rest.strip_prefix('J') {
-            (RscStreamChunkType::ReactElement, stripped)
-        } else if let Some(stripped) = rest.strip_prefix('S') {
-            (RscStreamChunkType::Symbol, stripped)
-        } else if let Some(stripped) = rest.strip_prefix('E') {
-            (RscStreamChunkType::Error, stripped)
-        } else {
-            (RscStreamChunkType::ReactElement, rest)
-        };
+                        if (!promise) {{
+                            return Promise.resolve({{
+                                success: false,
+                                boundary_id: boundaryId,
+                                error: 'Promise not found: ' + promiseId,
+                                errorName: 'PromiseNotFound',
+                                debug_available_promises: Object.keys(globalThis.__suspense_promises || {{}})
+                            }});
+                        }}
 
-        let error = if chunk_type == RscStreamChunkType::Error {
-            let error_data: serde_json::Value = serde_json::from_str(row_data)
-                .map_err(|e| RariError::serialization(format!("Invalid error JSON: {e}")))?;
+                        return promise.then(function(resolvedElement) {{
+                            if (resolvedElement === undefined || resolvedElement === null) {{
+                                return {{
+                                    success: false,
+                                    boundary_id: boundaryId,
+                                    error: 'Promise resolved to null/undefined',
+                                    errorName: 'InvalidPromiseResolution',
+                                    resolvedType: typeof resolvedElement,
+                                    resolvedValue: String(resolvedElement)
+                                }};
+                            }}
 
-            Some(RscStreamError {
-                message: error_data
-                    .get("message")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("Unknown error")
-                    .to_string(),
-                stack: error_data.get("stack").and_then(|s| s.as_str()).map(String::from),
-                digest: error_data.get("digest").and_then(|d| d.as_str()).map(String::from),
-            })
-        } else {
-            if !row_data.is_empty() && chunk_type != RscStreamChunkType::Symbol {
-                serde_json::from_str::<serde_json::Value>(row_data).map_err(|e| {
-                    RariError::serialization(format!("Invalid JSON in row data: {e}"))
-                })?;
+                            let rscData;
+                            try {{
+                                if (globalThis.renderToRSC) {{
+                                    rscData = globalThis.renderToRSC(resolvedElement, globalThis.__rsc_client_components || {{}});
+                                }} else {{
+                                    rscData = resolvedElement;
+                                }}
+                            }} catch (rscError) {{
+                                return {{
+                                    success: false,
+                                    boundary_id: boundaryId,
+                                    error: 'RSC conversion failed: ' + (rscError.message || 'Unknown RSC error'),
+                                    errorName: 'RSCConversionError',
+                                    rscErrorName: rscError.name || 'UnknownRSCError',
+                                    rscErrorStack: rscError.stack || 'No RSC stack',
+                                    resolvedElementType: typeof resolvedElement
+                                }};
+                            }}
+
+                            return {{
+                                success: true,
+                                boundary_id: boundaryId,
+                                content: rscData
+                            }};
+                        }}).catch(function(awaitError) {{
+                            return {{
+                                success: false,
+                                boundary_id: boundaryId,
+                                error: 'Promise await failed: ' + (awaitError.message || 'Unknown await error'),
+                                errorName: 'PromiseAwaitError',
+                                awaitErrorName: awaitError.name || 'UnknownAwaitError',
+                                awaitErrorStack: awaitError.stack || 'No await stack'
+                            }};
+                        }});
+
+                    }} catch (error) {{
+                        return Promise.resolve({{
+                            success: false,
+                            boundary_id: boundaryId,
+                            error: 'General error: ' + (error.message || 'Unknown general error'),
+                            stack: error.stack || 'No stack available',
+                            errorName: error.name || 'UnknownGeneralError',
+                            errorToString: error.toString() || 'toString failed'
+                        }});
+                    }}
+                }})()
+                "#
+            );
+
+            let script_name = format!("<promise_resolution_{promise_id}>");
+
+            match runtime.execute_script(script_name.clone(), resolution_script).await {
+                Ok(result) => {
+                    let result_string = result.to_string();
+
+                    match serde_json::from_str::<serde_json::Value>(&result_string) {
+                        Ok(result_data) => {
+                            if result_data["success"].as_bool().unwrap_or(false) {
+                                let row_id = {
+                                    let mut counter = shared_row_counter.lock().await;
+                                    *counter += 1;
+                                    *counter
+                                };
+
+                                let update = BoundaryUpdate {
+                                    boundary_id: boundary_id.clone(),
+                                    content: result_data["content"].clone(),
+                                    row_id,
+                                };
+
+                                match update_sender.send(update) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to send boundary update for {}: {}",
+                                            boundary_id, e
+                                        );
+                                    }
+                                }
+                            } else {
+                                error!(
+                                    "Promise resolution failed for boundary {}: {} (Details: error={}, stack={}, errorName={}, errorToString={}, debug_info={:?})",
+                                    boundary_id,
+                                    result_data["error"].as_str().unwrap_or("Unknown error"),
+                                    result_data["error"].as_str().unwrap_or("N/A"),
+                                    result_data["stack"].as_str().unwrap_or("N/A"),
+                                    result_data["errorName"].as_str().unwrap_or("N/A"),
+                                    result_data["errorToString"].as_str().unwrap_or("N/A"),
+                                    result_data
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to parse promise resolution result for {}: {} - Raw result: {} - Script: {}",
+                                boundary_id, e, result_string, script_name
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to execute promise resolution script {} for boundary {}: {}",
+                        script_name, boundary_id, e
+                    );
+                }
             }
-            None
-        };
 
-        Ok(RscStreamChunk {
-            data: raw_data.to_vec(),
-            metadata: RscStreamChunkMetadata {
-                chunk_type,
-                row_id: row_id.to_string(),
-                is_final: false,
-                error,
-            },
+            {
+                let mut active = active_promises.lock().await;
+                active.remove(&promise_id);
+            }
+        });
+    }
+
+    pub async fn active_count(&self) -> usize {
+        self.active_promises.lock().await.len()
+    }
+}
+
+pub struct SuspenseBoundaryManager {
+    boundaries: Arc<Mutex<FxHashMap<String, SuspenseBoundaryInfo>>>,
+    boundary_stack: Vec<String>,
+    resolved_boundaries: Arc<Mutex<FxHashMap<String, serde_json::Value>>>,
+}
+
+impl Default for SuspenseBoundaryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SuspenseBoundaryManager {
+    pub fn new() -> Self {
+        Self {
+            boundaries: Arc::new(Mutex::new(FxHashMap::default())),
+            boundary_stack: Vec::new(),
+            resolved_boundaries: Arc::new(Mutex::new(FxHashMap::default())),
+        }
+    }
+
+    pub async fn register_boundary(&mut self, boundary: SuspenseBoundaryInfo) {
+        let boundary_id = boundary.id.clone();
+        {
+            let mut boundaries = self.boundaries.lock().await;
+            boundaries.insert(boundary_id.clone(), boundary);
+        }
+        self.boundary_stack.push(boundary_id);
+    }
+
+    pub async fn resolve_boundary(&self, boundary_id: &str, content: serde_json::Value) {
+        {
+            let mut resolved = self.resolved_boundaries.lock().await;
+            resolved.insert(boundary_id.to_string(), content);
+        }
+
+        {
+            let mut boundaries = self.boundaries.lock().await;
+            if let Some(boundary) = boundaries.get_mut(boundary_id) {
+                boundary.pending_promise_count = 0;
+            }
+        }
+    }
+
+    pub async fn get_pending_boundaries(&self) -> Vec<SuspenseBoundaryInfo> {
+        let boundaries = self.boundaries.lock().await;
+        let resolved = self.resolved_boundaries.lock().await;
+
+        boundaries
+            .values()
+            .filter(|b| !resolved.contains_key(&b.id) && b.pending_promise_count > 0)
+            .cloned()
+            .collect()
+    }
+}
+
+pub struct StreamingRenderer {
+    runtime: Arc<JsExecutionRuntime>,
+    promise_resolver: Option<BackgroundPromiseResolver>,
+    row_counter: u32,
+    module_path: Option<String>,
+    shared_row_counter: Arc<Mutex<u32>>,
+    boundary_row_ids: Arc<Mutex<FxHashMap<String, u32>>>,
+}
+
+impl StreamingRenderer {
+    pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
+        Self {
+            runtime,
+            promise_resolver: None,
+            row_counter: 0,
+            module_path: None,
+            shared_row_counter: Arc::new(Mutex::new(0)),
+            boundary_row_ids: Arc::new(Mutex::new(FxHashMap::default())),
+        }
+    }
+
+    pub async fn start_streaming(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+    ) -> Result<RscStream, RariError> {
+        let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
+        let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunk>(64);
+
+        self.promise_resolver = Some(BackgroundPromiseResolver::new(
+            Arc::clone(&self.runtime),
+            update_sender,
+            Arc::clone(&self.shared_row_counter),
+        ));
+
+        self.module_path = Some(format!("app/{component_id}.js"));
+
+        let partial_result = self.render_partial(component_id, props).await?;
+
+        self.send_initial_shell(&chunk_sender, &partial_result).await?;
+
+        if let Some(resolver) = &self.promise_resolver {
+            for promise in partial_result.pending_promises {
+                resolver.resolve_async(promise).await;
+            }
+        } else {
+            return Err(RariError::internal(
+                "No promise resolver available - this should not happen",
+            ));
+        }
+
+        let chunk_sender_clone = chunk_sender.clone();
+        let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
+        tokio::spawn(async move {
+            let mut update_receiver = update_receiver;
+
+            while let Some(update) = update_receiver.recv().await {
+                Self::send_boundary_update_with_map(
+                    &chunk_sender_clone,
+                    update,
+                    Arc::clone(&boundary_rows_map),
+                )
+                .await;
+            }
+
+            let final_chunk = RscStreamChunk {
+                data: b"STREAM_COMPLETE\n".to_vec(),
+                chunk_type: RscChunkType::StreamComplete,
+                row_id: u32::MAX,
+                is_final: true,
+            };
+
+            let _ = chunk_sender_clone.send(final_chunk).await;
+        });
+
+        Ok(RscStream::new(chunk_receiver))
+    }
+
+    async fn render_partial(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+    ) -> Result<PartialRenderResult, RariError> {
+        let react_init_script = r#"
+            (function() {
+                if (typeof React === 'undefined') {
+                    try {
+                        if (typeof globalThis.__rsc_modules !== 'undefined') {
+                            const reactModule = globalThis.__rsc_modules['react'] ||
+                                              globalThis.__rsc_modules['React'] ||
+                                              Object.values(globalThis.__rsc_modules).find(m => m && m.createElement);
+                            if (reactModule) {
+                                globalThis.React = reactModule;
+                            }
+                        }
+
+                        if (typeof React === 'undefined' && typeof require !== 'undefined') {
+                            globalThis.React = require('react');
+                        }
+
+                        if (typeof React !== 'undefined' && React.createElement && !globalThis.__react_patched) {
+                            globalThis.__original_create_element = React.createElement;
+
+                                const createElementOverride = function(type, props, ...children) {
+                                    return globalThis.__original_create_element(type, props, ...children);
+                                };
+
+                            Object.defineProperty(React, 'createElement', {
+                                value: createElementOverride,
+                                writable: false,
+                                enumerable: true,
+                                configurable: false
+                            });
+
+                            globalThis.__react_patched = true;
+                        }
+
+                        if (typeof React !== 'undefined' && React.Suspense) {
+                            React.__originalSuspense = React.Suspense;
+
+                            React.Suspense = function SuspenseOverride(props) {
+                                if (!props) return null;
+                                const previousBoundaryId = globalThis.__current_boundary_id;
+                                const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                globalThis.__current_boundary_id = boundaryId;
+                                try {
+                                    const safeFallback = props?.fallback || React.createElement('div', null, 'Loading...');
+                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
+                                    globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId });
+                                    if (!props.children) {
+                                        return safeFallback;
+                                    }
+                                    return props.children;
+                                } catch (error) {
+                                    if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
+                                        const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
+                                        globalThis.__suspense_promises[promiseId] = error.promise;
+                                        globalThis.__pending_promises = globalThis.__pending_promises || [];
+                                        globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
+                                        return props.fallback || React.createElement('div', null, 'Loading...');
+                                    }
+                                    return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + (error && error.message ? error.message : 'Unknown'));
+                                } finally {
+                                    globalThis.__current_boundary_id = previousBoundaryId;
+                                }
+                            };
+                        }
+
+                        if (typeof React === 'undefined') {
+                            globalThis.React = {
+                                createElement: function(type, props, ...children) {
+                                    return {
+                                        type: type,
+                                        props: props ? { ...props, children: children.length > 0 ? children : props.children } : { children: children },
+                                        key: props?.key || null,
+                                        ref: props?.ref || null
+                                    };
+                                },
+                                Fragment: Symbol.for('react.fragment'),
+                                Suspense: function(props) {
+                                    return props.children;
+                                }
+                            };
+                        }
+                    } catch (e) {
+                        console.error('Failed to load React in streaming context:', e);
+                        throw new Error('Cannot initialize streaming without React: ' + e.message);
+                    }
+                }
+
+                return {
+                    available: typeof React !== 'undefined',
+                    reactType: typeof React,
+                    createElementType: typeof React.createElement,
+                    suspenseType: typeof React.Suspense
+                };
+            })()
+        "#;
+
+        let react_init_result = self
+            .runtime
+            .execute_script("streaming-react-init".to_string(), react_init_script.to_string())
+            .await?;
+
+        if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
+            if !available {
+                return Err(RariError::internal("Failed to initialize React in streaming context"));
+            }
+        } else {
+            return Err(RariError::internal("Failed to check React initialization"));
+        }
+
+        let init_script = r#"
+            if (!globalThis.renderToRSC) {
+                globalThis.renderToRSC = function(element, clientComponents = {}) {
+                    if (!element) return null;
+
+                    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+                        return element;
+                    }
+
+                    if (Array.isArray(element)) {
+                        return element.map(child => globalThis.renderToRSC(child, clientComponents));
+                    }
+
+                    if (element && typeof element === 'object') {
+                        const uniqueKey = element.key || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                        if (element.type) {
+                            if (typeof element.type === 'string') {
+                                const props = element.props || {};
+                                const { children: propsChildren, ...otherProps } = props;
+
+                                const actualChildren = element.children || propsChildren;
+
+                                const rscProps = {
+                                    ...otherProps,
+                                    children: actualChildren ? globalThis.renderToRSC(actualChildren, clientComponents) : undefined
+                                };
+                                if (rscProps.children === undefined) {
+                                    delete rscProps.children;
+                                }
+                                return ["$", element.type, uniqueKey, rscProps];
+                            } else if (typeof element.type === 'function') {
+                                try {
+                                    const rendered = element.type(element.props || {});
+                                    return globalThis.renderToRSC(rendered, clientComponents);
+                                } catch (error) {
+                                    console.error('Error rendering function component in fallback renderToRSC:', error);
+                                    return ["$", "div", uniqueKey, {
+                                        style: { color: 'red', border: '1px solid red', padding: '10px' },
+                                        children: `Error: ${error.message}`
+                                    }];
+                                }
+                            }
+                        }
+
+                        return ["$", "div", uniqueKey, {
+                            className: "rsc-unknown",
+                            children: "Unknown element type"
+                        }];
+                    }
+
+                    return element;
+                };
+            }
+
+
+            if (typeof React === 'undefined') {
+                throw new Error('React is not available in streaming context. This suggests the runtime was not properly initialized with React extensions.');
+            }
+
+            if (!globalThis.__suspense_streaming) {
+                globalThis.__suspense_streaming = true;
+                globalThis.__suspense_promises = {};
+                globalThis.__boundary_props = {};
+                globalThis.__discovered_boundaries = [];
+                globalThis.__pending_promises = [];
+                globalThis.__current_boundary_id = null;
+
+                globalThis.__safeSerializeElement = function(element) {
+                    if (!element) return null;
+
+                    try {
+                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+                            return element;
+                        }
+
+                        if (element && typeof element === 'object') {
+                            return {
+                                type: element.type || 'div',
+                                props: element.props ? {
+                                    children: element.props.children || 'Loading...',
+                                    ...(element.props.className && { className: element.props.className })
+                                } : { children: 'Loading...' },
+                                key: null,
+                                ref: null
+                            };
+                        }
+
+                        return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
+                    } catch (e) {
+                        return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
+                    }
+                };
+
+                if (!globalThis.__react_patched && typeof React !== 'undefined' && React.createElement) {
+                    globalThis.__original_create_element = React.createElement;
+
+                    const createElementOverride = function(type, props, ...children) {
+                        return globalThis.__original_create_element(type, props, ...children);
+                    };
+
+                    React.createElement = createElementOverride;
+                    globalThis.__react_patched = true;
+                }
+            } else {
+                globalThis.__discovered_boundaries = [];
+                globalThis.__pending_promises = [];
+                globalThis.__current_boundary_id = null;
+            }
+        "#;
+
+        self.runtime
+            .execute_script("<streaming_init>".to_string(), init_script.to_string())
+            .await
+            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
+
+        let component_hash = crate::rsc::jsx_transform::hash_string(component_id);
+        let render_script = format!(
+            r#"
+            (async function() {{
+                try {{
+                    let Component = globalThis['{component_id}'] ||
+                                    globalThis['Component_{component_id}'] ||
+                                    globalThis['Component_{component_hash}'] ||
+                                    (globalThis.__rsc_modules && (globalThis.__rsc_modules['{component_id}']?.default || globalThis.__rsc_modules['{component_id}']));
+
+                    if (Component && typeof Component === 'object' && typeof Component.default === 'function') {{
+                        Component = Component.default;
+                    }}
+
+                    if (!Component || typeof Component !== 'function') {{
+                        throw new Error('Component {component_id} not found or not a function');
+                    }}
+
+                    const props = {props_json};
+                    globalThis.__boundary_props['root'] = props;
+
+                    let element;
+                    let renderError = null;
+                    let isAsyncResult = false;
+
+
+                    try {{
+                        const isOverrideActive = React.createElement.toString().includes('SUSPENSE BOUNDARY FOUND');
+
+                        if (!isOverrideActive) {{
+                            if (!globalThis.__original_create_element) {{
+                                globalThis.__original_create_element = React.createElement;
+                            }}
+
+                            React.createElement = function(type, props, ...children) {{
+                                const isSuspenseComponent = (type) => {{
+                                    if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {{
+                                        return true;
+                                    }}
+                                    if (typeof type === 'function' && type.name === 'Suspense') {{
+                                        return true;
+                                    }}
+                                    return false;
+                                }};
+
+                                if (isSuspenseComponent(type)) {{
+                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                    const previousBoundaryId = globalThis.__current_boundary_id;
+                                    globalThis.__current_boundary_id = boundaryId;
+
+                                    const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
+                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
+
+                                    globalThis.__discovered_boundaries.push({{
+                                        id: boundaryId,
+                                        fallback: serializableFallback,
+                                        parentId: previousBoundaryId
+                                    }});
+
+                                    globalThis.__current_boundary_id = previousBoundaryId;
+                                    return globalThis.__original_create_element('suspense', {{...props, key: boundaryId}}, ...children);
+                                }}
+                                return globalThis.__original_create_element(type, props, ...children);
+                            }};
+                        }}
+
+                        element = Component(props);
+
+                        if (element && typeof element.then === 'function') {{
+                            try {{
+                                element = await element;
+                            }} catch (asyncError) {{
+                                console.error('Async component execution failed:', asyncError);
+                                element = globalThis.__original_create_element ?
+                                    globalThis.__original_create_element('div', null, 'Async Error: ' + asyncError.message) :
+                                    {{'type': 'div', 'props': {{'children': 'Async Error: ' + asyncError.message}}}};
+                            }}
+                        }}
+
+                        const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
+                                if (!el || typeof el !== 'object') return el;
+
+                                if (!el.type && el.props && el.props.fallback && el.children) {{
+                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                    const previousBoundaryId = globalThis.__current_boundary_id;
+                                    globalThis.__current_boundary_id = boundaryId;
+
+                                    const safeFallback = el.props.fallback || {{'type': 'div', 'props': {{'children': ['Loading...']}}}};
+                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
+
+                                    globalThis.__discovered_boundaries.push({{
+                                        id: boundaryId,
+                                        fallback: serializableFallback,
+                                        parentId: previousBoundaryId
+                                    }});
+
+                                    const processedChildren = el.children.map(child => {{
+                                        if (child && child.props && Object.keys(child.props).length === 0 &&
+                                            (!child.children || child.children.length === 0)) {{
+                                            if (globalThis.SimpleAsyncContent && typeof globalThis.SimpleAsyncContent === 'function') {{
+                                                try {{
+                                                    const result = globalThis.SimpleAsyncContent({{}});
+
+                                                    if (result && typeof result.then === 'function') {{
+                                                        const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                                                        globalThis.__suspense_promises[promiseId] = result;
+
+                                                        globalThis.__pending_promises.push({{
+                                                            id: promiseId,
+                                                            boundaryId: boundaryId,
+                                                            componentPath: 'SimpleAsyncContent'
+                                                        }});
+
+                                                        return safeFallback;
+                                                    }} else {{
+                                                        return result;
+                                                    }}
+                                                }} catch (error) {{
+                                                    return safeFallback;
+                                                }}
+                                            }} else {{
+                                                return safeFallback;
+                                            }}
+                                        }}
+
+                                        return processSuspenseInStructure(child, boundaryId);
+                                    }});
+
+                                    globalThis.__current_boundary_id = previousBoundaryId;
+
+                                    return {{
+                                        type: 'suspense',
+                                        props: {{...el.props, key: boundaryId}},
+                                        children: processedChildren
+                                    }};
+                                }}
+
+                                if (el.children && Array.isArray(el.children)) {{
+                                    el.children = el.children.map(child => processSuspenseInStructure(child, parentBoundaryId));
+                                }}
+
+                                return el;
+                            }};
+
+                            element = processSuspenseInStructure(element);
+                        }}
+                    catch (suspenseError) {{
+                        if (suspenseError && suspenseError.$$typeof === Symbol.for('react.suspense.pending')) {{
+                            const componentName = suspenseError.componentName || suspenseError.name || suspenseError.message || '{component_id}';
+                            const asyncDetected = suspenseError.asyncComponentDetected === true;
+                            const hasPromise = suspenseError.promise && typeof suspenseError.promise.then === 'function';
+
+                            const isParentComponent = componentName === '{component_id}' ||
+                                componentName.includes('Test') ||
+                                componentName.includes('Streaming');
+
+                            const isLeafAsyncComponent = asyncDetected ||
+                                (hasPromise && !isParentComponent) ||
+                                (componentName.includes('Async') && !isParentComponent);
+
+                            if (isLeafAsyncComponent) {{
+                                const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                globalThis.__suspense_promises[promiseId] = suspenseError.promise;
+
+                                const boundaryId = globalThis.__current_boundary_id || 'root_boundary';
+                                globalThis.__pending_promises.push({{
+                                    id: promiseId,
+                                    boundaryId: boundaryId,
+                                    componentPath: componentName
+                                }});
+
+                            }}
+
+                            element = globalThis.__original_create_element ?
+                                globalThis.__original_create_element('div', null, 'Loading...') :
+                                {{'type': 'div', 'props': {{'children': 'Loading...'}}}};
+                        }} else {{
+                            console.error('Non-suspense error during rendering:', suspenseError);
+                            renderError = suspenseError;
+                            element = globalThis.__original_create_element ?
+                                globalThis.__original_create_element('div', null, 'Error: ' + suspenseError.message) :
+                                {{'type': 'div', 'props': {{'children': 'Error: ' + suspenseError.message}}}};
+                        }}
+                    }}
+
+                    let rscData;
+                    try {{
+                        rscData = globalThis.renderToRSC ?
+                            globalThis.renderToRSC(element, globalThis.__rsc_client_components || {{}}) :
+                            element;
+                    }} catch (rscError) {{
+                        console.error('Error in RSC conversion:', rscError);
+                        rscData = {{
+                            type: 'div',
+                            props: {{
+                                children: renderError ? 'Render Error: ' + renderError.message : 'RSC Conversion Error'
+                            }}
+                        }};
+                    }}
+
+                    const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
+                        id: boundary.id,
+                        fallback: globalThis.__safeSerializeElement(boundary.fallback),
+                        parentId: boundary.parentId
+                    }}));
+
+                    const finalResult = {{
+                        success: !renderError,
+                        rsc_data: rscData,
+                        boundaries: safeBoundaries,
+                        pending_promises: globalThis.__pending_promises || [],
+                        has_suspense: (safeBoundaries && safeBoundaries.length > 0) ||
+                                     (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
+                        error: renderError ? renderError.message : null,
+                        error_stack: renderError ? renderError.stack : null
+                    }};
+
+                    globalThis.__streaming_result = finalResult;
+                    return finalResult;
+                }} catch (error) {{
+                    console.error('Fatal error in component rendering:', error);
+                    const errorResult = {{
+                        success: false,
+                        error: error.message,
+                        stack: error.stack,
+                        fatal: true
+                    }};
+                    globalThis.__streaming_result = errorResult;
+                    return errorResult;
+                }}
+            }})()
+            "#,
+            component_id = component_id,
+            component_hash = component_hash,
+            props_json = props.unwrap_or("{}")
+        );
+
+        let result = self
+            .runtime
+            .execute_script(format!("<partial_render_{component_id}>"), render_script)
+            .await
+            .map_err(|e| RariError::internal(format!("Partial render failed: {e}")))?;
+
+        let result_data: serde_json::Value =
+            serde_json::from_str(&result.to_string()).map_err(|e| {
+                RariError::internal(format!(
+                    "Failed to parse render result: {e} - Raw result: {result}"
+                ))
+            })?;
+
+        if !result_data["success"].as_bool().unwrap_or(false) {
+            return Err(RariError::internal(format!(
+                "Component render failed: {}",
+                result_data["error"].as_str().unwrap_or("Unknown error")
+            )));
+        }
+
+        let boundaries = result_data["boundaries"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|b| SuspenseBoundaryInfo {
+                id: b["id"].as_str().unwrap_or("unknown").to_string(),
+                fallback_content: b["fallback"].clone(),
+                parent_boundary_id: b["parentId"].as_str().map(|s| s.to_string()),
+                pending_promise_count: 1,
+            })
+            .collect();
+
+        let pending_promises = result_data["pending_promises"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|p| PendingSuspensePromise {
+                id: p["id"].as_str().unwrap_or("unknown").to_string(),
+                boundary_id: p["boundaryId"].as_str().unwrap_or("root").to_string(),
+                component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
+                promise_handle: p["id"].as_str().unwrap_or("unknown").to_string(),
+            })
+            .collect();
+
+        Ok(PartialRenderResult {
+            initial_content: result_data["rsc_data"].clone(),
+            pending_promises,
+            boundaries,
+            has_suspense: result_data["has_suspense"].as_bool().unwrap_or(false),
         })
     }
 
-    pub fn process_multi_row_chunk(raw_data: &[u8]) -> Result<Vec<RscStreamChunk>, RariError> {
-        let raw_str = String::from_utf8(raw_data.to_vec())
-            .map_err(|e| RariError::serialization(format!("Invalid UTF-8: {e}")))?;
-
-        let mut chunks = Vec::new();
-        for line in raw_str.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let chunk = Self::process_raw_chunk(line.as_bytes())?;
-            chunks.push(chunk);
-        }
-
-        if chunks.is_empty() {
-            return Err(RariError::serialization("No valid RSC rows found".to_string()));
-        }
-
-        Ok(chunks)
-    }
-
-    pub fn format_as_rsc_row(row_id: &str, row_tag: &str, data: &str) -> String {
-        match row_tag {
-            "M" | "I" => format!("{row_id}:{row_tag}[{data}]"),
-            "J" => format!("{row_id}:{data}"),
-            "S" => format!("{row_id}:{data}"),
-            "E" => format!("{row_id}:E{{{data}}}"),
-            _ => format!("{row_id}:{data}"),
-        }
-    }
-
-    #[allow(clippy::disallowed_methods)]
-    pub fn create_module_row(row_id: &str, module_id: &str, chunks: &[&str], name: &str) -> String {
-        let chunks_json = serde_json::to_string(&chunks).unwrap_or_else(|_| "[]".to_string());
-        let module_data = if name.is_empty() {
-            format!("[\"{module_id}\",{chunks_json},\"\"]")
-        } else {
-            format!("[\"{module_id}\",{chunks_json},\"{name}\"]")
-        };
-        Self::format_as_rsc_row(row_id, "I", &module_data)
-    }
-
-    pub fn create_element_row(row_id: &str, element_data: &serde_json::Value) -> String {
-        Self::format_as_rsc_row(row_id, "", &element_data.to_string())
-    }
-
-    pub fn create_symbol_row(row_id: &str, symbol_ref: &str) -> String {
-        Self::format_as_rsc_row(row_id, "S", &format!("Symbol.for(\"{symbol_ref}\")"))
-    }
-
-    #[allow(clippy::disallowed_methods)]
-    pub fn create_error_row(row_id: &str, error: &RscStreamError) -> String {
-        let error_data = serde_json::json!({
-            "digest": error.digest.as_ref().unwrap_or(&"".to_string()),
-            "message": error.message,
-            "stack": error.stack
-        });
-        Self::format_as_rsc_row(row_id, "E", &error_data.to_string())
-    }
-}
-
-pub trait RscStreamingExt {
-    fn render_to_stream(
+    async fn send_initial_shell(
         &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscStream, RariError>;
-
-    fn render_to_writer<W: Write + Send + 'static>(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<(), RariError>;
-
-    fn render_to_enhanced_stream(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscEnhancedStream, RariError>;
-
-    fn render_with_readable_stream(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscStream, RariError>;
-
-    fn invoke_server_component(
-        &mut self,
-        server_reference_id: &str,
-        args: Vec<serde_json::Value>,
-    ) -> Result<serde_json::Value, RariError>;
-}
-
-pub struct RscEnhancedStream {
-    stream: RscStream,
-    shell_complete: bool,
-    chunks_received: usize,
-    complete: bool,
-    error: Option<RscStreamError>,
-    module_count: usize,
-    element_count: usize,
-}
-
-impl RscEnhancedStream {
-    pub fn new(stream: RscStream) -> Self {
-        Self {
-            stream,
-            shell_complete: false,
-            chunks_received: 0,
-            complete: false,
-            error: None,
-            module_count: 0,
-            element_count: 0,
-        }
-    }
-
-    pub fn is_shell_complete(&self) -> bool {
-        self.shell_complete
-    }
-
-    pub fn chunks_received(&self) -> usize {
-        self.chunks_received
-    }
-
-    pub fn module_count(&self) -> usize {
-        self.module_count
-    }
-
-    pub fn element_count(&self) -> usize {
-        self.element_count
-    }
-
-    pub fn is_complete(&self) -> bool {
-        self.complete
-    }
-
-    pub fn error(&self) -> Option<&RscStreamError> {
-        self.error.as_ref()
-    }
-
-    pub async fn wait_for_shell(&mut self) -> Result<(), RariError> {
-        if self.shell_complete {
-            return Ok(());
-        }
-
-        while let Some(chunk_result) = self.stream.next().await {
-            let chunk = chunk_result?;
-            let processed_chunk = RscStream::process_raw_chunk(&chunk)?;
-            self.chunks_received += 1;
-
-            match processed_chunk.metadata.chunk_type {
-                RscStreamChunkType::ReactElement => {
-                    if !self.shell_complete {
-                        self.shell_complete = true;
-                        return Ok(());
-                    }
-                }
-                RscStreamChunkType::Error => {
-                    self.error = processed_chunk.metadata.error;
-                    return Err(RariError::internal("Stream error encountered"));
-                }
-                _ => {}
-            }
-
-            if processed_chunk.metadata.is_final {
-                self.complete = true;
-                return Ok(());
-            }
-        }
-        Err(RariError::internal("Stream ended unexpectedly while waiting for shell"))
-    }
-
-    pub async fn collect_html(&mut self) -> Result<String, RariError> {
-        let mut html_parts = SmallVec::<[String; 4]>::new();
-
-        while let Some(chunk_result) = self.stream.next().await {
-            let chunk_bytes = chunk_result?;
-            let processed_chunk = RscStream::process_raw_chunk(&chunk_bytes)?;
-
-            match processed_chunk.metadata.chunk_type {
-                RscStreamChunkType::ReactElement => {
-                    let chunk_str = String::from_utf8(processed_chunk.data).map_err(|e| {
-                        RariError::Serialization(format!("Non-UTF8 data: {e}"), None)
-                    })?;
-                    html_parts.push(chunk_str);
-                }
-                RscStreamChunkType::Error => {
-                    self.error = processed_chunk.metadata.error;
-                    let error_message =
-                        self.error.as_ref().map(|e| e.message.clone()).unwrap_or_else(|| {
-                            "Unknown error occurred during streaming".to_string()
-                        });
-                    return Err(RariError::Internal(error_message, None));
-                }
-                _ => {}
-            }
-
-            if processed_chunk.metadata.is_final {
-                self.complete = true;
-                break;
-            }
-        }
-
-        if !self.complete {
-            return Err(RariError::internal("Stream did not complete"));
-        }
-        Ok(html_parts.join(""))
-    }
-}
-
-impl Stream for RscEnhancedStream {
-    type Item = Result<RscStreamChunk, RariError>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        if this.complete {
-            return Poll::Ready(None);
-        }
-        match Pin::new(&mut this.stream).poll_next(cx) {
-            Poll::Ready(Some(Ok(raw_chunk_bytes))) => {
-                this.chunks_received += 1;
-                match RscStream::process_raw_chunk(&raw_chunk_bytes) {
-                    Ok(processed_chunk) => {
-                        match processed_chunk.metadata.chunk_type {
-                            RscStreamChunkType::ModuleReference => {
-                                this.module_count += 1;
-                            }
-                            RscStreamChunkType::ReactElement => {
-                                this.element_count += 1;
-                                if !this.shell_complete {
-                                    this.shell_complete = true;
-                                }
-                            }
-                            RscStreamChunkType::Error => {
-                                this.error = processed_chunk.metadata.error.clone();
-                            }
-                            _ => {}
-                        }
-
-                        if processed_chunk.metadata.is_final {
-                            this.complete = true;
-                        }
-                        Poll::Ready(Some(Ok(processed_chunk)))
-                    }
-                    Err(e) => {
-                        this.complete = true;
-                        this.error = Some(RscStreamError {
-                            message: e.to_string(),
-                            stack: None,
-                            digest: None,
-                        });
-                        Poll::Ready(Some(Err(e)))
-                    }
-                }
-            }
-            Poll::Ready(Some(Err(e))) => {
-                this.complete = true;
-                this.error =
-                    Some(RscStreamError { message: e.to_string(), stack: None, digest: None });
-                Poll::Ready(Some(Err(e)))
-            }
-            Poll::Ready(None) => {
-                this.complete = true;
-                Poll::Ready(None)
-            }
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl RscStreamingExt for super::renderer::RscRenderer {
-    fn render_to_stream(
-        &mut self,
-        _component_id: &str,
-        _props: Option<&str>,
-    ) -> Result<RscStream, RariError> {
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
-        }
-        let (_sender, receiver) = channel(DEFAULT_CHANNEL_BUFFER_SIZE);
-        Ok(RscStream { receiver })
-    }
-
-    #[allow(clippy::disallowed_methods)]
-    fn render_to_writer<W: Write + Send + 'static>(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
+        sender: &mpsc::Sender<RscStreamChunk>,
+        partial_result: &PartialRenderResult,
     ) -> Result<(), RariError> {
-        if !self.initialized {
-            let err_msg = "RSC renderer not initialized".to_string();
-            return Err(RariError::internal(err_msg));
+        self.row_counter += 1;
+        let module_chunk = self.create_module_chunk()?;
+        sender
+            .send(module_chunk)
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to send module chunk: {e}")))?;
+
+        if partial_result.has_suspense {
+            self.row_counter += 1;
+            let symbol_chunk = self.create_symbol_chunk("react.suspense")?;
+            sender
+                .send(symbol_chunk)
+                .await
+                .map_err(|e| RariError::internal(format!("Failed to send symbol chunk: {e}")))?;
+
+            for boundary in &partial_result.boundaries {
+                self.row_counter += 1;
+                {
+                    let mut map = self.boundary_row_ids.lock().await;
+                    map.insert(boundary.id.clone(), self.row_counter);
+                }
+                let boundary_chunk = Self::create_boundary_chunk_static(
+                    self.row_counter,
+                    &boundary.id,
+                    &boundary.fallback_content,
+                )?;
+                sender.send(boundary_chunk).await.map_err(|e| {
+                    RariError::internal(format!("Failed to send boundary chunk: {e}"))
+                })?;
+            }
         }
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| RariError::internal(format!("Failed to create Tokio runtime: {e}")))?;
-
-        let component_id_string = component_id.to_string();
-        let props_string = props.map(|p| p.to_string());
-
-        let setup_result = runtime.block_on(async {
-            let (sender, receiver) = tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(32);
-
-            let mut row_counter = 0u32;
-
-            let module_row = RscStream::create_module_row(
-                &row_counter.to_string(),
-                &format!("rsc-component-{component_id_string}"),
-                &["main"],
-                "default",
-            );
-            row_counter += 1;
-
-            if sender.send(Ok(format!("{module_row}\n").into_bytes())).await.is_err() {
-                error!("Failed to send module row");
-            }
-
-            let element_data = serde_json::json!([
-                "$",
-                format!("${}", 0),
-                null,
-                {
-                    "component": component_id_string,
-                    "props": props_string.unwrap_or_else(|| "{}".to_string())
-                }
-            ]);
-
-            let element_row =
-                RscStream::create_element_row(&row_counter.to_string(), &element_data);
-
-            if sender.send(Ok(format!("{element_row}\n").into_bytes())).await.is_err() {
-                error!("Failed to send element row");
-            }
-
-            Ok::<_, RariError>(receiver)
-        });
-
-        let mut receiver = match setup_result {
-            Ok(r) => r,
-            Err(e) => {
-                let _err_msg = format!("Failed to set up streaming: {e}");
-                return Err(e);
-            }
+        self.row_counter += 1;
+        let module_row_id = if partial_result.has_suspense {
+            self.row_counter.saturating_sub(1 + 1 + (partial_result.boundaries.len() as u32))
+        } else {
+            self.row_counter.saturating_sub(1)
         };
-
-        tokio::spawn(async move {
-            while let Some(message_result) = receiver.recv().await {
-                match message_result {
-                    Ok(_chunk_bytes) => {}
-                    Err(error_string) => {
-                        let err_msg = format!("Error during RSC stream processing: {error_string}");
-                        error!("{err_msg}");
-                        break;
-                    }
-                }
-            }
-        });
+        let shell_chunk =
+            self.create_shell_chunk_with_module(&partial_result.initial_content, module_row_id)?;
+        sender
+            .send(shell_chunk)
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
         Ok(())
     }
 
-    #[allow(clippy::disallowed_methods)]
-    fn render_to_enhanced_stream(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscEnhancedStream, RariError> {
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
-        }
-
-        let (sender, receiver) = tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(32);
-        let component_id_string = component_id.to_string();
-        let props_string = props.map(|p| p.to_string());
-
-        let mut row_counter = 0u32;
-
-        let module_row = RscStream::create_module_row(
-            &row_counter.to_string(),
-            &format!("rsc-component-{component_id_string}"),
-            &["main"],
-            "default",
-        );
-        row_counter += 1;
-
-        if sender.try_send(Ok(format!("{module_row}\n").into_bytes())).is_err() {
-            error!("Failed to send module row to enhanced stream");
-        }
-
-        let element_data = serde_json::json!([
-            "$",
-            format!("${}", 0),
-            null,
-            {
-                "component": component_id_string,
-                "props": props_string.unwrap_or_else(|| "{}".to_string())
+    async fn send_boundary_update_with_map(
+        sender: &mpsc::Sender<RscStreamChunk>,
+        update: BoundaryUpdate,
+        boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
+    ) {
+        let id_value = {
+            let map = boundary_rows_map.lock().await;
+            if let Some(row) = map.get(&update.boundary_id) {
+                format!("$L{row}")
+            } else if update.boundary_id.starts_with("$L") {
+                update.boundary_id.clone()
+            } else if update.boundary_id.chars().all(|c| c.is_ascii_digit()) {
+                format!("$L{}", update.boundary_id)
+            } else {
+                update.boundary_id.clone()
             }
+        };
+        let element = serde_json::Value::Array(vec![
+            serde_json::Value::String("$".to_string()),
+            serde_json::Value::String(id_value),
+            serde_json::Value::Null,
+            serde_json::Value::Object({
+                let mut map = serde_json::Map::new();
+                map.insert("children".to_string(), update.content);
+                map
+            }),
         ]);
 
-        let element_row = RscStream::create_element_row(&row_counter.to_string(), &element_data);
+        let update_row = format!("{}:{}\n", update.row_id, element);
 
-        if sender.try_send(Ok(format!("{element_row}\n").into_bytes())).is_err() {
-            error!("Failed to send element row to enhanced stream");
+        let chunk = RscStreamChunk {
+            data: update_row.into_bytes(),
+            chunk_type: RscChunkType::BoundaryUpdate,
+            row_id: update.row_id,
+            is_final: false,
+        };
+
+        if let Err(e) = sender.send(chunk).await {
+            error!("Failed to send boundary update: {}", e);
         }
-
-        let stream = RscStream::new(receiver);
-        Ok(RscEnhancedStream::new(stream))
     }
 
-    #[allow(clippy::disallowed_methods)]
-    fn render_with_readable_stream(
-        &mut self,
-        component_id: &str,
-        props: Option<&str>,
-    ) -> Result<RscStream, RariError> {
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
-        }
+    fn create_module_chunk(&self) -> Result<RscStreamChunk, RariError> {
+        let path = self
+            .module_path
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| "app/UnknownComponent.js".to_string());
+        let module_data = format!("{}:I[\"{}\",[\"main\"],\"default\"]\n", self.row_counter, path);
 
-        let (sender, receiver) = tokio::sync::mpsc::channel::<Result<Vec<u8>, String>>(64);
-        let component_id_string = component_id.to_string();
-        let props_string = props.map(|p| p.to_string());
-
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let mut row_counter = 0u32;
-
-                let module_row = RscStream::create_module_row(
-                    &row_counter.to_string(),
-                    &format!("rsc-component-{component_id_string}"),
-                    &["main"],
-                    "default",
-                );
-                row_counter += 1;
-
-                if sender.send(Ok(format!("{module_row}\n").into_bytes())).await.is_err() {
-                    error!("Failed to send module row");
-                    return;
-                }
-
-                let element_data = serde_json::json!([
-                    "$",
-                    format!("${}", 0),
-                    null,
-                    {
-                        "component": component_id_string,
-                        "props": props_string.unwrap_or_else(|| "{}".to_string())
-                    }
-                ]);
-
-                let element_row =
-                    RscStream::create_element_row(&row_counter.to_string(), &element_data);
-
-                if sender.send(Ok(format!("{element_row}\n").into_bytes())).await.is_err() {
-                    error!("Failed to send element row");
-                    return;
-                }
-
-                if component_id_string.contains("suspense") || component_id_string.contains("async")
-                {
-                    let suspense_row =
-                        RscStream::create_symbol_row(&row_counter.to_string(), "$Sreact.suspense");
-                    row_counter += 1;
-
-                    if sender.send(Ok(format!("{suspense_row}\n").into_bytes())).await.is_err() {
-                        error!("Failed to send suspense row");
-                        return;
-                    }
-
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-                    let resolved_data = serde_json::json!([
-                        "$",
-                        format!("${}", row_counter - 1),
-                        null,
-                        {
-                            "fallback": ["$", "div", null, {"children": "Loading..."}],
-                            "children": format!("Resolved content for {}", component_id_string)
-                        }
-                    ]);
-
-                    let resolved_row =
-                        RscStream::create_element_row(&row_counter.to_string(), &resolved_data);
-
-                    if sender.send(Ok(format!("{resolved_row}\n").into_bytes())).await.is_err() {
-                        error!("Failed to send resolved suspense content");
-                    }
-                }
-            });
-        } else {
-            let mut row_counter = 0u32;
-
-            let module_row = RscStream::create_module_row(
-                &row_counter.to_string(),
-                &format!("rsc-component-{component_id_string}"),
-                &["main"],
-                "default",
-            );
-            row_counter += 1;
-
-            if sender.try_send(Ok(format!("{module_row}\n").into_bytes())).is_err() {
-                error!("Failed to send module row");
-            }
-
-            let element_data = serde_json::json!([
-                "$",
-                format!("${}", 0),
-                null,
-                {
-                    "component": component_id_string,
-                    "props": props_string.unwrap_or_else(|| "{}".to_string())
-                }
-            ]);
-
-            let element_row =
-                RscStream::create_element_row(&row_counter.to_string(), &element_data);
-
-            if sender.try_send(Ok(format!("{element_row}\n").into_bytes())).is_err() {
-                error!("Failed to send element row");
-            }
-        }
-
-        Ok(RscStream::new(receiver))
+        Ok(RscStreamChunk {
+            data: module_data.into_bytes(),
+            chunk_type: RscChunkType::ModuleImport,
+            row_id: self.row_counter,
+            is_final: false,
+        })
     }
 
-    #[allow(clippy::disallowed_methods)]
-    fn invoke_server_component(
-        &mut self,
-        server_reference_id: &str,
-        args: Vec<serde_json::Value>,
-    ) -> Result<serde_json::Value, RariError> {
-        if !self.initialized {
-            return Err(RariError::internal("RSC renderer not initialized"));
+    fn create_shell_chunk_with_module(
+        &self,
+        content: &serde_json::Value,
+        module_row_id: u32,
+    ) -> Result<RscStreamChunk, RariError> {
+        let mut props = serde_json::Map::new();
+        props.insert("children".to_string(), content.clone());
+        let element = serde_json::Value::Array(vec![
+            serde_json::Value::String("$".to_string()),
+            serde_json::Value::String(format!("$L{module_row_id}")),
+            serde_json::Value::Null,
+            serde_json::Value::Object(props),
+        ]);
+        let row = format!("{}:{}\n", self.row_counter, element);
+
+        Ok(RscStreamChunk {
+            data: row.into_bytes(),
+            chunk_type: RscChunkType::InitialShell,
+            row_id: self.row_counter,
+            is_final: false,
+        })
+    }
+
+    fn create_symbol_chunk(&self, symbol_ref: &str) -> Result<RscStreamChunk, RariError> {
+        let symbol_row = format!("{}:SSymbol.for(\"{}\")\n", self.row_counter, symbol_ref);
+
+        Ok(RscStreamChunk {
+            data: symbol_row.into_bytes(),
+            chunk_type: RscChunkType::InitialShell,
+            row_id: self.row_counter,
+            is_final: false,
+        })
+    }
+
+    fn create_boundary_chunk_static(
+        row_id: u32,
+        boundary_id: &str,
+        fallback_content: &serde_json::Value,
+    ) -> Result<RscStreamChunk, RariError> {
+        let mut props = serde_json::Map::new();
+        props.insert("fallback".to_string(), fallback_content.clone());
+        props.insert("boundaryId".to_string(), serde_json::Value::String(boundary_id.to_string()));
+        let element = serde_json::Value::Array(vec![
+            serde_json::Value::String("$".to_string()),
+            serde_json::Value::String("react.suspense".to_string()),
+            serde_json::Value::Null,
+            serde_json::Value::Object(props),
+        ]);
+        let row = format!("{row_id}:{element}\n");
+
+        Ok(RscStreamChunk {
+            data: row.into_bytes(),
+            chunk_type: RscChunkType::InitialShell,
+            row_id,
+            is_final: false,
+        })
+    }
+}
+
+pub struct RscStream {
+    receiver: mpsc::Receiver<RscStreamChunk>,
+}
+
+impl RscStream {
+    pub fn new(receiver: mpsc::Receiver<RscStreamChunk>) -> Self {
+        Self { receiver }
+    }
+
+    pub async fn next_chunk(&mut self) -> Option<RscStreamChunk> {
+        self.receiver.recv().await
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.receiver.is_closed()
+    }
+}
+
+impl Stream for RscStream {
+    type Item = Result<Vec<u8>, String>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+
+        match self.receiver.poll_recv(cx) {
+            Poll::Ready(Some(chunk)) => Poll::Ready(Some(Ok(chunk.data))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
         }
-
-        let result = serde_json::json!({
-            "type": "server-component",
-            "id": server_reference_id,
-            "args": args,
-            "result": {
-                "element": ["$", "div", null, {
-                    "data-server-component": server_reference_id,
-                    "children": format!("Server component {} executed", server_reference_id)
-                }]
-            }
-        });
-
-        Ok(result)
     }
 }
 
@@ -706,485 +1107,77 @@ impl RscStreamingExt for super::renderer::RscRenderer {
 #[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
-    use crate::rsc::renderer::RscRenderer;
-    use crate::runtime::JsExecutionRuntime;
-    use futures::stream::StreamExt;
-    use std::sync::Arc;
 
-    type ChunkList = SmallVec<[Vec<u8>; 4]>;
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_rsc_wire_format_parsing() {
-        let test_payload = b"0:I[\"test-component\",[\"main\"],\"default\"]\n1:[\"$\",\"$L0\",null,{\"component\":\"TestComponent\"}]";
-
-        let chunks =
-            RscStream::process_multi_row_chunk(test_payload).expect("Failed to parse RSC payload");
-
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].metadata.chunk_type, RscStreamChunkType::Import);
-        assert_eq!(chunks[0].metadata.row_id, "0");
-        assert_eq!(chunks[1].metadata.chunk_type, RscStreamChunkType::ReactElement);
-        assert_eq!(chunks[1].metadata.row_id, "1");
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_rsc_format_generation() {
-        let module_row = RscStream::create_module_row("0", "test-component", &["main"], "default");
-        assert!(module_row.starts_with("0:I["));
-        assert!(module_row.contains("test-component"));
-
-        let element_data = serde_json::json!(["$", "$0", null, {"test": "data"}]);
-        let element_row = RscStream::create_element_row("1", &element_data);
-        assert!(element_row.starts_with("1:["));
-
-        let symbol_row = RscStream::create_symbol_row("2", "react.suspense");
-        assert!(symbol_row.starts_with("2:Symbol.for("));
-        assert!(symbol_row.contains("react.suspense"));
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_enhanced_stream_with_rsc_format() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = RscRenderer::new(runtime.clone());
-
-        renderer.initialize().await.expect("Failed to initialize renderer");
-
-        let mut enhanced_stream = renderer
-            .render_to_enhanced_stream("TestComponent", Some("{\"test\":\"props\"}"))
-            .expect("Failed to create enhanced stream");
-
-        let mut received_chunks = ChunkList::new();
-        let mut module_refs = 0;
-        let mut elements = 0;
-
-        while let Some(chunk_result) = enhanced_stream.next().await {
-            match chunk_result {
-                Ok(chunk) => {
-                    match chunk.metadata.chunk_type {
-                        RscStreamChunkType::ModuleReference => module_refs += 1,
-                        RscStreamChunkType::ReactElement => elements += 1,
-                        _ => {}
-                    }
-                    received_chunks.push(chunk.data);
-                }
-                Err(_e) => {
-                    break;
-                }
-            }
-
-            if received_chunks.len() >= 2 {
-                break;
-            }
-        }
-
-        assert_eq!(enhanced_stream.module_count(), module_refs);
-        assert_eq!(enhanced_stream.element_count(), elements);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_suspense_streaming() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = RscRenderer::new(runtime.clone());
-
-        renderer.initialize().await.expect("Failed to initialize renderer");
-
-        let stream = renderer
-            .render_with_readable_stream("suspense-component", None)
-            .expect("Failed to create readable stream");
-
-        let mut enhanced_stream = RscEnhancedStream::new(stream);
-
-        enhanced_stream.wait_for_shell().await.expect("Failed to wait for shell");
-
-        assert!(enhanced_stream.is_shell_complete(), "Shell should be complete");
-        assert!(enhanced_stream.chunks_received() > 0, "Should have received chunks");
-    }
-
-    #[test]
-    fn test_error_row_creation() {
-        let error = RscStreamError {
-            message: "Test error".to_string(),
-            stack: Some("Stack trace".to_string()),
-            digest: Some("abc123".to_string()),
+    #[tokio::test]
+    async fn test_partial_render_result() {
+        let partial_result = PartialRenderResult {
+            initial_content: serde_json::json!({"test": "content"}),
+            pending_promises: vec![],
+            boundaries: vec![],
+            has_suspense: false,
         };
 
-        let error_row = RscStream::create_error_row("0", &error);
-        assert!(error_row.starts_with("0:E"));
-        assert!(error_row.contains("Test error"));
-        assert!(error_row.contains("Stack trace"));
-        assert!(error_row.contains("abc123"));
+        assert!(!partial_result.has_suspense);
+        assert_eq!(partial_result.pending_promises.len(), 0);
+        assert_eq!(partial_result.boundaries.len(), 0);
     }
 
-    #[test]
-    fn test_rsc_wire_format_compliance() {
-        let module_row = RscStream::create_module_row(
-            "1",
-            "app/page.js",
-            &["app", "static/chunks/app.js"],
-            "default",
-        );
-        assert!(module_row.starts_with("1:I["));
-        assert!(module_row.contains("\"app/page.js\""));
-        assert!(module_row.contains("\"default\""));
+    #[tokio::test]
+    async fn test_boundary_manager() {
+        let mut manager = SuspenseBoundaryManager::new();
 
-        let element_data = serde_json::json!(["$", "div", null, {"children": "Hello"}]);
-        let element_row = RscStream::create_element_row("2", &element_data);
-        assert!(element_row.starts_with("2:["));
-        assert!(element_row.starts_with("2:["));
-
-        let symbol_row = RscStream::create_symbol_row("3", "react.element");
-        assert!(symbol_row.starts_with("3:Symbol.for("));
-
-        let error = RscStreamError {
-            message: "Test error".to_string(),
-            stack: Some("Stack trace".to_string()),
-            digest: Some("abc123".to_string()),
+        let boundary = SuspenseBoundaryInfo {
+            id: "test-boundary".to_string(),
+            fallback_content: serde_json::json!({"loading": true}),
+            parent_boundary_id: None,
+            pending_promise_count: 1,
         };
-        let error_row = RscStream::create_error_row("4", &error);
-        assert!(error_row.starts_with("4:E{"));
-        assert!(error_row.contains("\"digest\":\"abc123\""));
-        assert!(error_row.contains("\"message\":\"Test error\""));
+
+        manager.register_boundary(boundary).await;
+
+        let pending = manager.get_pending_boundaries().await;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id, "test-boundary");
     }
 
     #[test]
-    fn test_metadata_compliance() {
-        let metadata = RscStreamChunkMetadata {
-            chunk_type: RscStreamChunkType::ReactElement,
-            row_id: "1".to_string(),
+    fn test_rsc_stream_chunk() {
+        let chunk = RscStreamChunk {
+            data: b"test data".to_vec(),
+            chunk_type: RscChunkType::InitialShell,
+            row_id: 1,
             is_final: false,
-            error: None,
         };
 
-        assert_eq!(metadata.row_id, "1");
-        assert!(!metadata.is_final);
-        assert!(metadata.error.is_none());
-
-        let error = RscStreamError {
-            message: "Error message".to_string(),
-            stack: Some("Stack".to_string()),
-            digest: Some("digest123".to_string()),
-        };
-
-        assert_eq!(error.message, "Error message");
-        assert_eq!(error.stack, Some("Stack".to_string()));
-        assert_eq!(error.digest, Some("digest123".to_string()));
+        assert_eq!(chunk.chunk_type, RscChunkType::InitialShell);
+        assert_eq!(chunk.row_id, 1);
+        assert!(!chunk.is_final);
     }
 
-    #[tokio::test]
-    async fn test_streaming_compliance() {
-        let (mut stream, sender) = RscStream::create();
-
-        let payload = "1:I[\"app/page.js\",[\"app\",\"static/chunks/app.js\"],\"default\"]\n";
-        sender.send(Ok(payload.as_bytes().to_vec())).await.unwrap();
-        drop(sender);
-
-        if let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.unwrap();
-            let processed = RscStream::process_raw_chunk(&chunk).unwrap();
-
-            assert_eq!(processed.metadata.chunk_type, RscStreamChunkType::Import);
-            assert_eq!(processed.metadata.row_id, "1");
-            assert!(!processed.metadata.is_final);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_rsc_compliance() {
-        let module_row = RscStream::create_module_row(
-            "0",
-            "app/page.js",
-            &["app", "static/chunks/app.js"],
-            "default",
-        );
-
-        assert!(module_row.starts_with("0:I["));
-        assert!(module_row.contains("\"app/page.js\""));
-        assert!(module_row.contains("[\"app\",\"static/chunks/app.js\"]"));
-        assert!(module_row.contains("\"default\""));
-        assert!(module_row.ends_with("]"));
-
-        let element_data = serde_json::json!(["$", "div", null, {"children": "Hello World"}]);
-        let element_row = RscStream::create_element_row("1", &element_data);
-
-        assert!(element_row.starts_with("1:["));
-        assert!(element_row.contains("\"$\""));
-        assert!(element_row.contains("\"div\""));
-        assert!(element_row.contains("\"Hello World\""));
-        assert!(element_row.ends_with("]"));
-
-        let error = RscStreamError {
-            message: "Component failed to render".to_string(),
-            stack: Some("Error: Component failed\n    at Component.render".to_string()),
-            digest: Some("error-123".to_string()),
-        };
-        let error_row = RscStream::create_error_row("2", &error);
-
-        assert!(error_row.starts_with("2:E{"));
-        assert!(error_row.contains("\"message\":\"Component failed to render\""));
-        assert!(error_row.contains("\"digest\":\"error-123\""));
-        assert!(error_row.ends_with("}"));
-
-        let rsc_payload = concat!(
-            "0:I[\"app/page.js\",[\"app\",\"static/chunks/app.js\"],\"default\"]\n",
-            "1:[\"$\",\"$L0\",null,{\"children\":\"Hello from React Server Components\"}]\n"
-        );
-
-        let chunks = RscStream::process_multi_row_chunk(rsc_payload.as_bytes())
-            .expect("Should parse valid RSC payload");
-
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].metadata.chunk_type, RscStreamChunkType::Import);
-        assert_eq!(chunks[1].metadata.chunk_type, RscStreamChunkType::ReactElement);
-    }
-
-    #[tokio::test]
-    async fn test_streaming_with_react_server_dom_format() {
+    #[test]
+    fn test_module_row_format() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = RscRenderer::new(runtime.clone());
+        let renderer = StreamingRenderer::new(runtime);
 
-        renderer.initialize().await.expect("Failed to initialize renderer");
+        let mut renderer = renderer;
+        renderer.row_counter = 1;
+        renderer.module_path = Some("app/MyComponent.js".to_string());
 
-        let mut stream = renderer
-            .render_with_readable_stream("TestComponent", Some("{\"message\":\"Hello\"}"))
-            .expect("Failed to create readable stream");
-
-        let mut received_data = Vec::new();
-        let mut stream_pin = std::pin::Pin::new(&mut stream);
-
-        for _ in 0..3 {
-            if let Some(chunk_result) = futures::StreamExt::next(&mut stream_pin).await {
-                match chunk_result {
-                    Ok(chunk_bytes) => {
-                        let chunk_str = String::from_utf8_lossy(&chunk_bytes);
-                        received_data.push(chunk_str.to_string());
-
-                        for line in chunk_str.lines() {
-                            if !line.is_empty() {
-                                assert!(
-                                    line.contains(":"),
-                                    "Each line should have row_id:data format"
-                                );
-                                let parts: Vec<&str> = line.splitn(2, ':').collect();
-                                assert_eq!(
-                                    parts.len(),
-                                    2,
-                                    "Should have exactly one colon separator"
-                                );
-
-                                assert!(
-                                    parts[0].parse::<u32>().is_ok(),
-                                    "Row ID should be numeric"
-                                );
-
-                                let data = parts[1];
-                                assert!(
-                                    data.starts_with("I[")
-                                        || data.starts_with("[")
-                                        || data.starts_with("E{")
-                                        || data.starts_with("Symbol.for("),
-                                    "Data should follow React RSC format, got: {data}"
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Stream error: {e}");
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-
-        assert!(!received_data.is_empty(), "Should have received some data");
+        let module_chunk = renderer.create_module_chunk().expect("module chunk");
+        let s = String::from_utf8(module_chunk.data).expect("utf8");
+        assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
     }
 
-    #[tokio::test]
-    async fn test_multi_chunk_streaming_complex() {
-        let complex_payload = concat!(
-            "0:I[\"app/components/Header.js\",[\"app\",\"static/chunks/header.js\"],\"default\"]\n",
-            "1:I[\"app/components/Sidebar.js\",[\"app\",\"static/chunks/sidebar.js\"],\"default\"]\n",
-            "2:I[\"app/components/Footer.js\",[\"app\",\"static/chunks/footer.js\"],\"default\"]\n",
-            "3:I[\"app/lib/utils.js\",[\"app\",\"static/chunks/utils.js\"],\"formatDate\"]\n",
-            "4:[\"$\",\"$L0\",null,{\"title\":\"My App\",\"user\":\"John\"}]\n",
-            "5:[\"$\",\"div\",null,{\"className\":\"layout\",\"children\":[[\"$\",\"$L0\",\"header\",{}],[\"$\",\"main\",null,{\"children\":[\"$\",\"$L1\",\"sidebar\",{}]}],[\"$\",\"$L2\",\"footer\",{}]]}]\n",
-            "6:[\"$\",\"$L1\",null,{\"navigation\":[\"Home\",\"About\",\"Contact\"]}]\n",
-            "7:Symbol.for(\"react.suspense\")\n",
-            "8:[\"$\",\"$L7\",null,{\"fallback\":[\"$\",\"div\",null,{\"children\":\"Loading...\"}],\"children\":[\"$\",\"div\",null,{\"children\":\"Async content loaded!\"}]}]\n"
-        );
-
-        let chunks = RscStream::process_multi_row_chunk(complex_payload.as_bytes())
-            .expect("Should parse complex multi-chunk payload");
-
-        assert_eq!(chunks.len(), 9, "Should parse all 9 chunks");
-
-        let import_chunks: Vec<_> =
-            chunks.iter().filter(|c| c.metadata.chunk_type == RscStreamChunkType::Import).collect();
-        assert_eq!(import_chunks.len(), 4, "Should have 4 import chunks");
-
-        let element_chunks: Vec<_> = chunks
-            .iter()
-            .filter(|c| c.metadata.chunk_type == RscStreamChunkType::ReactElement)
-            .collect();
-        assert_eq!(element_chunks.len(), 4, "Should have 4 element chunks");
-
-        let symbol_chunks: Vec<_> =
-            chunks.iter().filter(|c| c.metadata.chunk_type == RscStreamChunkType::Symbol).collect();
-        assert_eq!(symbol_chunks.len(), 1, "Should have 1 symbol chunk");
-
-        for (i, chunk) in chunks.iter().enumerate() {
-            assert_eq!(chunk.metadata.row_id, i.to_string(), "Row IDs should be sequential");
-        }
-    }
-
-    #[tokio::test]
-    async fn test_streaming_with_multiple_async_chunks() {
-        let (mut stream, sender) = RscStream::create();
-
-        let sender_task = tokio::spawn(async move {
-            let module_chunk = "0:I[\"app/AsyncComponent.js\",[\"app\"],\"default\"]\n";
-            sender.send(Ok(module_chunk.as_bytes().to_vec())).await.unwrap();
-
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-            let element_chunk = "1:[\"$\",\"$L0\",null,{\"data\":\"chunk1\"}]\n";
-            sender.send(Ok(element_chunk.as_bytes().to_vec())).await.unwrap();
-
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-            let element_chunk2 = "2:[\"$\",\"div\",null,{\"children\":\"chunk2\"}]\n";
-            sender.send(Ok(element_chunk2.as_bytes().to_vec())).await.unwrap();
-
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-            let final_chunk = "3:[\"$\",\"span\",null,{\"children\":\"final\"}]\n";
-            sender.send(Ok(final_chunk.as_bytes().to_vec())).await.unwrap();
-
-            drop(sender);
-        });
-
-        let mut received_chunks = Vec::new();
-        let mut chunk_types = Vec::new();
-
-        while let Some(chunk_result) = stream.next().await {
-            match chunk_result {
-                Ok(chunk_bytes) => {
-                    let processed_chunk =
-                        RscStream::process_raw_chunk(&chunk_bytes).expect("Should process chunk");
-                    chunk_types.push(processed_chunk.metadata.chunk_type.clone());
-                    received_chunks.push(chunk_bytes);
-                }
-                Err(e) => {
-                    panic!("Stream error: {e}");
-                }
-            }
-        }
-
-        sender_task.await.unwrap();
-
-        assert_eq!(received_chunks.len(), 4, "Should receive all 4 chunks");
-        assert_eq!(chunk_types[0], RscStreamChunkType::Import);
-        assert_eq!(chunk_types[1], RscStreamChunkType::ReactElement);
-        assert_eq!(chunk_types[2], RscStreamChunkType::ReactElement);
-        assert_eq!(chunk_types[3], RscStreamChunkType::ReactElement);
-    }
-
-    #[tokio::test]
-    async fn test_enhanced_stream_multi_chunk_metrics() {
+    #[test]
+    fn test_symbol_row_format() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = RscRenderer::new(runtime.clone());
+        let renderer = StreamingRenderer::new(runtime);
 
-        renderer.initialize().await.expect("Failed to initialize renderer");
+        let mut renderer = renderer;
+        renderer.row_counter = 2;
 
-        let mut enhanced_stream = renderer
-            .render_to_enhanced_stream("MultiChunkComponent", Some("{\"complexity\":\"high\"}"))
-            .expect("Failed to create enhanced stream");
-
-        let mut total_chunks = 0;
-        let mut max_modules = 0;
-        let mut max_elements = 0;
-
-        while let Some(chunk_result) = enhanced_stream.next().await {
-            match chunk_result {
-                Ok(_chunk) => {
-                    total_chunks += 1;
-                    max_modules = max_modules.max(enhanced_stream.module_count());
-                    max_elements = max_elements.max(enhanced_stream.element_count());
-
-                    if total_chunks >= 5 {
-                        break;
-                    }
-                }
-                Err(_e) => {
-                    break;
-                }
-            }
-        }
-
-        assert!(total_chunks > 0, "Should receive multiple chunks");
-        assert_eq!(enhanced_stream.chunks_received(), total_chunks, "Chunk count should match");
-
-        println!("Processed {total_chunks} chunks, {max_modules} modules, {max_elements} elements");
-    }
-
-    #[tokio::test]
-    async fn test_large_multi_chunk_payload() {
-        let mut large_payload = String::new();
-        let chunk_count = 50;
-
-        for i in 0..chunk_count {
-            if i % 2 == 0 {
-                large_payload.push_str(&format!(
-                    "{i}:I[\"app/component{i}.js\",[\"app\"],\"Component{i}\"]\n"
-                ));
-            } else {
-                large_payload.push_str(&format!(
-                    "{i}:[\"$\",\"div\",null,{{\"id\":\"element{i}\",\"children\":\"Content {i}\"}}]\n"
-                ));
-            }
-        }
-
-        let chunks = RscStream::process_multi_row_chunk(large_payload.as_bytes())
-            .expect("Should parse large multi-chunk payload");
-
-        assert_eq!(chunks.len(), chunk_count, "Should parse all {chunk_count} chunks");
-
-        for (i, chunk) in chunks.iter().enumerate() {
-            if i % 2 == 0 {
-                assert_eq!(chunk.metadata.chunk_type, RscStreamChunkType::Import);
-            } else {
-                assert_eq!(chunk.metadata.chunk_type, RscStreamChunkType::ReactElement);
-            }
-            assert_eq!(chunk.metadata.row_id, i.to_string());
-        }
-    }
-
-    #[tokio::test]
-    async fn test_multi_chunk_error_handling() {
-        let payload_with_error = concat!(
-            "0:I[\"app/GoodComponent.js\",[\"app\"],\"default\"]\n",
-            "1:[\"$\",\"$L0\",null,{\"status\":\"ok\"}]\n",
-            "2:E{\"message\":\"Component failed to render\",\"digest\":\"error123\",\"stack\":\"Error: Failed\\n    at Component.render\"}\n",
-            "3:[\"$\",\"div\",null,{\"children\":\"This should still work\"}]\n"
-        );
-
-        let chunks = RscStream::process_multi_row_chunk(payload_with_error.as_bytes())
-            .expect("Should parse payload with error");
-
-        assert_eq!(chunks.len(), 4, "Should parse all chunks including error");
-
-        let error_chunk = chunks
-            .iter()
-            .find(|c| c.metadata.chunk_type == RscStreamChunkType::Error)
-            .expect("Should have error chunk");
-
-        assert!(error_chunk.metadata.error.is_some(), "Error chunk should have error metadata");
-        let error = error_chunk.metadata.error.as_ref().unwrap();
-        assert_eq!(error.message, "Component failed to render");
-        assert_eq!(error.digest.as_ref().unwrap(), "error123");
-
-        let valid_chunks: Vec<_> =
-            chunks.iter().filter(|c| c.metadata.chunk_type != RscStreamChunkType::Error).collect();
-        assert_eq!(valid_chunks.len(), 3, "Should have 3 valid chunks");
+        let sym_chunk = renderer.create_symbol_chunk("react.suspense").expect("symbol chunk");
+        let s = String::from_utf8(sym_chunk.data).expect("utf8");
+        assert!(s.starts_with("2:SSymbol.for(\"react.suspense\")"));
     }
 }

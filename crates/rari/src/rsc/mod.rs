@@ -5,7 +5,6 @@ pub mod renderer;
 pub mod rsc_tree;
 pub mod serializer;
 pub mod streaming;
-pub mod streaming_v2;
 pub mod suspense;
 
 use rustc_hash::FxHashMap;
@@ -30,14 +29,13 @@ pub use renderer::RscRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
 
-pub use streaming::{RscStream, RscStreamChunk, RscStreamChunkType, RscStreamError};
+pub use streaming::{RscStream, RscStreamChunk};
 
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod compliance_tests {
     use super::*;
     use crate::rsc::serializer::RscSerializer;
-    use crate::rsc::streaming::{RscStream, RscStreamChunkType};
 
     #[test]
     fn test_rsc_wire_format_compliance() {
@@ -69,37 +67,6 @@ mod compliance_tests {
 
         assert!(lines[1].contains("[\"$\""), "Element should start with React element format");
         assert!(lines[1].contains("\"$L"), "Element should reference module with $L prefix");
-    }
-
-    #[test]
-    fn test_streaming_wire_format_parsing() {
-        let test_payload = concat!(
-            "0:I[\"/components/Button.js\",[\"main\"],\"default\"]\n",
-            "1:[\"$\",\"$L0\",null,{\"children\":\"Hello World\"}]\n",
-            "2:[\"$\",\"react.suspense\",null,{\"fallback\":null}]\n",
-            "3:E{\"message\":\"Component failed\",\"digest\":\"abc123\"}"
-        );
-
-        let chunks = RscStream::process_multi_row_chunk(test_payload.as_bytes())
-            .expect("Should parse valid RSC payload");
-
-        assert_eq!(chunks.len(), 4, "Should parse all 4 rows");
-
-        assert_eq!(chunks[0].metadata.chunk_type, RscStreamChunkType::Import);
-        assert_eq!(chunks[0].metadata.row_id, "0");
-
-        assert_eq!(chunks[1].metadata.chunk_type, RscStreamChunkType::ReactElement);
-        assert_eq!(chunks[1].metadata.row_id, "1");
-
-        assert_eq!(chunks[2].metadata.chunk_type, RscStreamChunkType::ReactElement);
-        assert_eq!(chunks[2].metadata.row_id, "2");
-
-        assert_eq!(chunks[3].metadata.chunk_type, RscStreamChunkType::Error);
-        assert_eq!(chunks[3].metadata.row_id, "3");
-        assert!(chunks[3].metadata.error.is_some());
-        let error = chunks[3].metadata.error.as_ref().unwrap();
-        assert_eq!(error.message, "Component failed");
-        assert_eq!(error.digest.as_ref().unwrap(), "abc123");
     }
 
     #[test]
@@ -153,25 +120,5 @@ mod compliance_tests {
             "Should use proper element format with $L reference"
         );
         assert!(output.contains("\"initialValue\":42"), "Should serialize props correctly");
-    }
-
-    #[test]
-    fn test_error_boundary_compliance() {
-        let error_row = RscStream::create_error_row(
-            "5",
-            &crate::rsc::streaming::RscStreamError {
-                message: "Rendering failed".to_string(),
-                stack: Some("Error: Rendering failed\n    at Component.render".to_string()),
-                digest: Some("error-digest-123".to_string()),
-            },
-        );
-
-        assert!(error_row.starts_with("5:E"), "Should start with row ID and E tag");
-        assert!(error_row.contains("Rendering failed"), "Should contain error message");
-        assert!(error_row.contains("Component.render"), "Should contain stack trace");
-        assert!(
-            error_row.contains("\"digest\":\"error-digest-123\""),
-            "Should contain error digest"
-        );
     }
 }
