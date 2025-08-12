@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.1.1"
+version = "0.2.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -64,7 +64,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.88"
 futures = { version = "0.3.31", features = [ "std" ] }
 futures-util = "0.3.31"
-tokio = { version = "1.46.1", features = [ "full" ] }
+tokio = { version = "1.47.1", features = [ "full" ] }
 
 # === JavaScript Transformation ===
 oxc = { version = "0.69.0", features = [
@@ -75,7 +75,7 @@ oxc = { version = "0.69.0", features = [
 
 # === Serialization ===
 serde = { version = "1.0.219", features = [ "derive" ] }
-serde_json = "1.0.141"
+serde_json = "1.0.142"
 toml = "0.8"
 
 # === HTTP Client & Server ===
@@ -106,11 +106,11 @@ parking_lot = "0.12.4"
 smallvec = { version = "1.15.1", features = [ "serde" ] }
 regex = "^1.11.1"
 rustc-hash = "2.1.1"
-uuid = { version = "1.17.0", features = [
+uuid = { version = "1.18.0", features = [
   "v4",
   "serde"
 ] }
-thiserror = "2.0.12"
+thiserror = "2.0.14"
 chrono = { version = "0.4", features = [ "serde" ] }
 
 # === System Integration ===
@@ -121,7 +121,7 @@ hyper-util = { version = "0.1.16", features = [
   "server",
   "server-auto",
 ] }
-libc = "0.2.174"
+libc = "0.2.175"
 nix = { version = "=0.27.1", features = [ "term" ] }
 sys_traits = "=0.1.17"
 sysinfo = "0.36.1"
@@ -141,7 +141,7 @@ winapi = { version = "0.3.9", features = [
 ] }
 
 # === CLI & Logging ===
-clap = { version = "4.5.41", features = [ "derive" ] }
+clap = { version = "4.5.44", features = [ "derive" ] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.19", features = [ "env-filter" ] }
 dotenv = "0.15.0"
