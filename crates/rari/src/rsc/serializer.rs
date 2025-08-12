@@ -229,7 +229,8 @@ impl RscSerializer {
                 self.serialize_client_reference_rsc(id, key.as_deref(), props)
             }
             RSCTree::ServerElement { tag, props, children, key } => {
-                self.serialize_server_element_rsc(tag, props, children, key.as_deref())
+                let normalized_tag = if tag == "react.suspense" { "react.suspense" } else { tag };
+                self.serialize_server_element_rsc(normalized_tag, props, children, key.as_deref())
             }
             RSCTree::Text(content) => serde_json::to_string(content).unwrap_or_default(),
             RSCTree::Fragment { children, .. } => self.serialize_fragment_rsc(children),
@@ -350,6 +351,15 @@ impl RscSerializer {
         key: Option<&str>,
     ) -> String {
         let mut element_props = props.clone().unwrap_or_default();
+
+        if tag == "react.suspense" {
+            if let Some(fallback_value) = element_props.get("fallback") {
+                return serde_json::to_string(fallback_value).unwrap_or_else(|_| {
+                    "[\"$\",\"div\",null,{\"children\":\"Loading...\"}]".to_string()
+                });
+            }
+            return "[\"$\",\"div\",null,{\"children\":\"Loading...\"}]".to_string();
+        }
 
         if let Some(children) = children {
             if children.len() == 1 {
@@ -918,6 +928,7 @@ impl ReactElement {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use serde_json::json;

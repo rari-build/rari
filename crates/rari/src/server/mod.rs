@@ -1,6 +1,7 @@
 use crate::error::RariError;
-use crate::rsc::renderer::RscRenderer;
+use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 use crate::rsc::streaming::RscStreamingExt;
+
 use crate::runtime::JsExecutionRuntime;
 use crate::server::config::Config;
 use crate::server::request_middleware::{
@@ -9,6 +10,7 @@ use crate::server::request_middleware::{
 use crate::server::vite_proxy::{
     check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_websocket_proxy,
 };
+use axum::http::HeaderValue;
 use axum::{
     Router,
     body::Body,
@@ -69,7 +71,13 @@ impl Server {
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
 
         let js_runtime = Arc::new(JsExecutionRuntime::new(Some(env_vars)));
-        let mut renderer = RscRenderer::new(js_runtime);
+
+        let resource_limits = ResourceLimits {
+            max_script_execution_time_ms: config.rsc.script_execution_timeout_ms,
+            ..ResourceLimits::default()
+        };
+
+        let mut renderer = RscRenderer::with_resource_limits(js_runtime, resource_limits);
         renderer.initialize().await?;
 
         if config.is_production() {
@@ -103,6 +111,8 @@ impl Server {
             .route("/api/test", get(test_handler))
             .route("/api/rsc/render", post(render_component))
             .route("/api/rsc/stream", post(stream_component))
+            .route("/api/rsc/stream-v2", post(stream_component_v2))
+            .route("/api/rsc/stream-v2", axum::routing::options(cors_preflight_ok))
             .route("/api/rsc/register", post(register_component))
             .route("/api/rsc/register-client", post(register_client_component))
             .route("/api/rsc/hmr-register", post(hmr_register_component))
@@ -111,6 +121,7 @@ impl Server {
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/:component_id", get(rsc_render_handler))
+            .route("/api/*path", axum::routing::options(cors_preflight_ok))
             .with_state(state);
 
         if config.is_development() {
@@ -406,6 +417,51 @@ async fn stream_component(
         }
     }
 }
+
+#[axum::debug_handler]
+async fn stream_component_v2(
+    State(state): State<ServerState>,
+    Json(request): Json<RenderRequest>,
+) -> Result<Response, StatusCode> {
+    debug!("Streaming component V2 (true streaming): {}", request.component_id);
+
+    let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
+
+    let stream_result = {
+        let renderer = state.renderer.lock().await;
+        renderer.render_with_true_streaming(&request.component_id, props_str.as_deref()).await
+    };
+
+    match stream_result {
+        Ok(mut rsc_stream) => {
+            debug!("Successfully created true streaming for component: {}", request.component_id);
+
+            let byte_stream = async_stream::stream! {
+                while let Some(chunk) = rsc_stream.next_chunk().await {
+                    yield Ok::<Vec<u8>, std::io::Error>(chunk.data);
+                }
+            };
+
+            let body = Body::from_stream(byte_stream);
+
+            Ok(Response::builder()
+                .header("content-type", RSC_CONTENT_TYPE)
+                .header("cache-control", NO_CACHE_CONTROL)
+                .header("transfer-encoding", CHUNKED_ENCODING)
+                .header("x-rsc-streaming-version", "2")
+                .header("access-control-allow-origin", "*")
+                .header("access-control-expose-headers", "x-rsc-streaming-version")
+                .body(body)
+                .expect("Valid streaming response"))
+        }
+        Err(e) => {
+            error!("Failed to create true streaming for component {}: {}", request.component_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// removed debug_promises endpoint and promise_debug module
 
 #[axum::debug_handler]
 async fn register_component(
@@ -742,6 +798,27 @@ fn get_content_type(path: &str) -> &'static str {
     } else {
         "application/octet-stream"
     }
+}
+
+fn cors_preflight_response() -> Response {
+    let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
+    let headers = builder.headers_mut().expect("Response builder should have headers");
+    headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    headers.insert(
+        "Access-Control-Allow-Methods",
+        HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+    );
+    headers.insert(
+        "Access-Control-Allow-Headers",
+        HeaderValue::from_static("Content-Type, Authorization, Accept, Origin, X-Requested-With"),
+    );
+    headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
+    builder.body(Body::empty()).expect("Valid preflight response")
+}
+
+#[axum::debug_handler]
+async fn cors_preflight_ok() -> Response {
+    cors_preflight_response()
 }
 
 #[cfg(test)]

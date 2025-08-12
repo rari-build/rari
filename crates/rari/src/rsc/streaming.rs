@@ -703,6 +703,7 @@ impl RscStreamingExt for super::renderer::RscRenderer {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use crate::rsc::renderer::RscRenderer;

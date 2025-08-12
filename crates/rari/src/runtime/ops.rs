@@ -216,6 +216,7 @@ pub fn op_internal_log(#[string] message: &str) {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use tokio::sync::mpsc;

@@ -5,6 +5,8 @@ pub mod renderer;
 pub mod rsc_tree;
 pub mod serializer;
 pub mod streaming;
+pub mod streaming_v2;
+pub mod suspense;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -31,6 +33,7 @@ pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentEx
 pub use streaming::{RscStream, RscStreamChunk, RscStreamChunkType, RscStreamError};
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod compliance_tests {
     use super::*;
     use crate::rsc::serializer::RscSerializer;

@@ -318,6 +318,7 @@ impl Default for ComponentRegistry {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use smallvec::smallvec;
@@ -351,9 +352,10 @@ mod tests {
                     .to_string(),
                 smallvec![],
             )
-            .unwrap();
+            .expect("Failed to register test component");
 
-        let component = registry.get_component("TestComponent").unwrap();
+        let component =
+            registry.get_component("TestComponent").expect("TestComponent should be registered");
         assert_eq!(component.id, "TestComponent");
         assert_eq!(
             component.transformed_source,
@@ -374,7 +376,7 @@ mod tests {
                 "transformed A".to_string(),
                 smallvec!["ComponentB".to_string(), "ComponentC".to_string()],
             )
-            .unwrap();
+            .expect("Failed to register ComponentA");
 
         registry
             .register_component(
@@ -383,22 +385,28 @@ mod tests {
                 "transformed B".to_string(),
                 smallvec!["ComponentC".to_string()],
             )
-            .unwrap();
+            .expect("Failed to register ComponentB");
 
         registry
             .register_component("ComponentC", "source C", "transformed C".to_string(), smallvec![])
-            .unwrap();
+            .expect("Failed to register ComponentC");
 
         let order = registry.get_unloaded_components_in_order();
 
         assert!(
-            order.iter().position(|id| id == "ComponentC").unwrap()
-                < order.iter().position(|id| id == "ComponentB").unwrap()
+            order.iter().position(|id| id == "ComponentC").expect("ComponentC should be in order")
+                < order
+                    .iter()
+                    .position(|id| id == "ComponentB")
+                    .expect("ComponentB should be in order")
         );
 
         assert!(
-            order.iter().position(|id| id == "ComponentB").unwrap()
-                < order.iter().position(|id| id == "ComponentA").unwrap()
+            order.iter().position(|id| id == "ComponentB").expect("ComponentB should be in order")
+                < order
+                    .iter()
+                    .position(|id| id == "ComponentA")
+                    .expect("ComponentA should be in order")
         );
     }
 
@@ -413,7 +421,7 @@ mod tests {
                 "transformed X".to_string(),
                 smallvec!["ComponentY".to_string()],
             )
-            .unwrap();
+            .expect("Failed to register ComponentX with dependency");
 
         registry
             .register_component(
@@ -422,7 +430,7 @@ mod tests {
                 "transformed Y".to_string(),
                 smallvec!["ComponentZ".to_string()],
             )
-            .unwrap();
+            .expect("Failed to register ComponentY with dependency");
 
         registry
             .register_component(
@@ -431,7 +439,7 @@ mod tests {
                 "transformed Z".to_string(),
                 smallvec!["ComponentX".to_string()],
             )
-            .unwrap();
+            .expect("Failed to register ComponentZ with dependency");
 
         let order = registry.get_unloaded_components_in_order();
 
@@ -462,7 +470,7 @@ mod tests {
                 "transformed code".to_string(),
                 SmallVec::new(),
             )
-            .unwrap();
+            .expect("Failed to register MyComponent");
 
         assert!(!registry.is_client_reference("MyComponent"));
         assert!(registry.get_client_reference_info("MyComponent").is_none());
@@ -473,7 +481,7 @@ mod tests {
 
         let info = registry.get_client_reference_info("MyComponent");
         assert!(info.is_some());
-        let (path, export) = info.unwrap();
+        let (path, export) = info.expect("Component info should be available");
         assert_eq!(path, "/components/MyComponent.tsx");
         assert_eq!(export, "default");
 

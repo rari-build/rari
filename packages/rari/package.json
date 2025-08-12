@@ -84,13 +84,13 @@
     "rari-win32-x64": "0.1.5"
   },
   "devDependencies": {
-    "@types/node": "^24.1.0",
-    "@types/react": "^19.1.8",
+    "@types/node": "^24.2.1",
+    "@types/react": "^19.1.10",
     "@typescript/native-preview": "7.0.0-dev.20250620.1",
     "chokidar": "^3.6.0",
-    "eslint": "^9.32.0",
-    "oxlint": "^1.8.0",
-    "rolldown-vite": "^7.0.11",
+    "eslint": "^9.33.0",
+    "oxlint": "^1.11.1",
+    "rolldown-vite": "^7.1.0",
     "tsdown": "^0.12.9"
   }
 }

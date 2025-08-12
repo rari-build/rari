@@ -1168,6 +1168,14 @@ export function createClientModuleMap() {
       }
 
       if (id === 'virtual:rsc-integration') {
+        if (process.env.NODE_ENV === 'production') {
+          return `
+export function createServerComponentWrapper() { return () => null }
+export function registerClientComponent() {}
+export const RscErrorComponent = () => null
+export const rscClient = { fetchServerComponent: async () => null }
+`
+        }
         return `
 import React, { useState, useEffect, Suspense } from 'react';
 
@@ -1280,7 +1288,7 @@ async function loadRscClient() {
 
   rscClientLoadPromise = (async () => {
     try {
-      const rscModule = await import('react-dom/server');
+      const rscModule = await import('react-dom/client');
       createFromFetch = rscModule.createFromFetch;
       createFromReadableStream = rscModule.createFromReadableStream;
       return rscModule;
@@ -1297,7 +1305,7 @@ class RscClient {
     this.componentCache = new Map();
     this.moduleCache = new Map();
     this.config = {
-      enableStreaming: false,
+      enableStreaming: true,
       maxRetries: 5,
       retryDelay: 500,
       timeout: 10000,
@@ -1320,8 +1328,13 @@ class RscClient {
       return this.componentCache.get(cacheKey);
     }
 
+    if (this.config.enableStreaming) {
+      const result = await this.fetchServerComponentStreamV2(componentId, props);
+      this.componentCache.set(cacheKey, result);
+      return result;
+    }
+
     const encodedProps = encodeURIComponent(JSON.stringify(props));
-    // Add cache-busting parameter to prevent browser caching issues
     const cacheBuster = Date.now();
     const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster;
 
@@ -1359,6 +1372,80 @@ class RscClient {
       return result;
     } catch (error) {
       throw new Error('Failed to fetch server component ' + componentId + ': ' + error.message);
+    }
+  }
+
+  async fetchServerComponentStreamV2(componentId, props = {}) {
+    await loadRscClient();
+
+    const endpoints = [
+      '/api/rsc/stream-v2',
+      'http://127.0.0.1:3000/api/rsc/stream-v2',
+    ];
+    let response = null;
+    let lastError = null;
+    for (const url of endpoints) {
+      try {
+        const r = await this.fetchWithTimeout(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.buildRequestHeaders(),
+          },
+          body: JSON.stringify({ component_id: componentId, props }),
+        });
+        if (r.ok) {
+          response = r;
+          break;
+        }
+        lastError = new Error('HTTP ' + r.status + ': ' + (await r.text()));
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!response) {
+      throw lastError || new Error('Failed to reach stream-v2 endpoint');
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error('Server responded with ' + response.status + ': ' + errorText);
+    }
+
+    const stream = response.body;
+    if (!stream) {
+      throw new Error('No ReadableStream from stream-v2 response');
+    }
+
+    if (createFromReadableStream) {
+      const rscPromise = createFromReadableStream(stream);
+      return {
+        _isRscResponse: true,
+        _rscPromise: rscPromise,
+        readRoot() {
+          return rscPromise;
+        }
+      };
+    }
+
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffered = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      buffered += chunk;
+    }
+    buffered += decoder.decode();
+
+    const synthetic = new Response(new Blob([buffered], { type: 'text/plain' }));
+    try {
+      const result = await this.processRscResponseManually(synthetic);
+      return result;
+    } catch (e) {
+      const result = await this.processRscResponse(synthetic);
+      return result;
     }
   }
 
@@ -1470,13 +1557,27 @@ class RscClient {
 
     let rootElement = null;
 
-    const elementKeys = Array.from(elements.keys()).sort((a, b) => parseInt(b) - parseInt(a));
+    const elementKeys = Array.from(elements.keys());
 
     for (const key of elementKeys) {
       const element = elements.get(key);
-      if (Array.isArray(element) && element[0] === '$') {
-        rootElement = element;
-        break;
+      if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
+        const [marker, type] = element;
+        if (typeof type === 'string' && (type === 'root_boundary' || type.startsWith('boundary_'))) {
+          rootElement = element;
+          break;
+        }
+      }
+    }
+
+    if (!rootElement) {
+      const sortedKeys = elementKeys.sort((a, b) => parseInt(b) - parseInt(a));
+      for (const key of sortedKeys) {
+        const element = elements.get(key);
+        if (Array.isArray(element) && element[0] === '$') {
+          rootElement = element;
+          break;
+        }
       }
     }
 
@@ -1501,9 +1602,37 @@ class RscClient {
       if (elementData.length >= 2 && elementData[0] === '$') {
         const [marker, type, key, props] = elementData;
 
+        if (typeof type === 'string' && (type === 'root_boundary' || type.startsWith('boundary_'))) {
+          const children = props && typeof props === 'object' ? props.children : null;
+          return this.reconstructElementFromRscData(children, modules);
+        }
+
         let actualType = type;
 
-        if (typeof type === 'string' && type.startsWith('$L')) {
+        if (typeof type === 'string' && type.includes('#')) {
+          const clientComponent = getClientComponent(type);
+          if (clientComponent) {
+            actualType = clientComponent;
+          } else {
+            actualType = ({ children, ...restProps }) => React.createElement(
+              'div',
+              {
+                ...restProps,
+                'data-client-component': type,
+                style: {
+                  border: '2px dashed #f00',
+                  padding: '8px',
+                  margin: '4px',
+                  backgroundColor: '#fff0f0'
+                }
+              },
+              React.createElement('small', { style: { color: '#c00' } },
+                'Missing Client Component: ' + type
+              ),
+              children
+            );
+          }
+        } else if (typeof type === 'string' && type.startsWith('$L')) {
           if (modules.has(type)) {
             const moduleData = modules.get(type);
             const clientComponentKey = moduleData.id + '#' + moduleData.name;
@@ -1862,6 +1991,11 @@ export {
       }
 
       if (id === 'virtual:rsc-client-components') {
+        if (process.env.NODE_ENV === 'production') {
+          return `
+export function registerClientComponent() {}
+`
+        }
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir)
 

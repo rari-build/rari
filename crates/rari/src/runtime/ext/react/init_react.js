@@ -1,121 +1,97 @@
-globalThis.createElement = function (type, props, ...children) {
-  const element = {
-    type,
-    props: {
-      ...props,
-      children: children.length === 1 ? children[0] : children,
-    },
-    key: props?.key || null,
-    ref: props?.ref || null,
-    $$typeof: Symbol.for('react.element'),
-  }
-  return element
-}
-
-globalThis.Fragment = Symbol.for('react.fragment')
-
-globalThis.Suspense = function Suspense({ children, fallback }) {
-  return globalThis.createElement('suspense', { fallback }, children)
-}
-
-globalThis.createContext = function (defaultValue) {
-  const context = {
-    $$typeof: Symbol.for('react.context'),
-    _currentValue: defaultValue,
-    _currentValue2: defaultValue,
-    Provider: function Provider({ value, children }) {
-      context._currentValue = value
-      return children
-    },
-    Consumer: function Consumer({ children }) {
-      return children(context._currentValue)
-    },
-  }
-  return context
-}
-
-globalThis.useContext = function (context) {
-  return context._currentValue
-}
-
-globalThis.memo = function memo(Component, areEqual) {
-  const MemoComponent = function (props) {
-    return Component(props)
-  }
-  MemoComponent.$$typeof = Symbol.for('react.memo')
-  MemoComponent.type = Component
-  MemoComponent.compare = areEqual || null
-  return MemoComponent
-}
-
-globalThis.forwardRef = function forwardRef(render) {
-  const ForwardRef = function (props) {
-    return render(props, null)
-  }
-  ForwardRef.$$typeof = Symbol.for('react.forward_ref')
-  ForwardRef.render = render
-  return ForwardRef
-}
-
-globalThis.createRef = function () {
-  return { current: null }
-}
-
-globalThis.use = function use(resource) {
-  if (resource && typeof resource.then === 'function') {
-    throw resource
-  }
-  if (resource && resource.$$typeof === Symbol.for('react.context')) {
-    return globalThis.use(resource)
-  }
-  throw new Error('use() can only be called with promises or context objects')
-}
-
-globalThis.lazy = function lazy(_loadComponent) {
-  return function LazyComponent(_props) {
-    throw new Error('Lazy components require client-side rendering in this RSC framework')
-  }
-}
-
-globalThis.StrictMode = function StrictMode({ children }) {
-  return children
-}
-
-function createClientOnlyHook(hookName) {
-  return function () {
-    throw new Error(
-      `${hookName} is a client-side only hook. `
-      + 'Use "use client" directive at the top of your component file to run this code on the client.',
-    )
-  }
-}
-
-globalThis.useState = createClientOnlyHook('useState')
-globalThis.useEffect = createClientOnlyHook('useEffect')
-globalThis.useRef = createClientOnlyHook('useRef')
-globalThis.useCallback = createClientOnlyHook('useCallback')
-globalThis.useMemo = createClientOnlyHook('useMemo')
-globalThis.useTransition = createClientOnlyHook('useTransition')
-globalThis.useDeferredValue = createClientOnlyHook('useDeferredValue')
-globalThis.useId = function () {
-  return `:r${Math.random().toString(36).substr(2, 9)}:`
-}
-
-globalThis.startTransition = createClientOnlyHook('startTransition')
-globalThis.flushSync = createClientOnlyHook('flushSync')
-globalThis.unstable_act = createClientOnlyHook('unstable_act')
-
 globalThis.ReactDOMServer = {
   renderToString(element) {
-    return renderElementToString(element)
+    try {
+      return renderElementToString(element)
+    }
+    catch (error) {
+      if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+        console.warn(
+          'ReactDOMServer: Caught unhandled Suspense error, rendering fallback',
+        )
+
+        if (error.promise) {
+          const promiseId
+            = `suspense_${
+              Date.now()
+            }_${
+              Math.random().toString(36).substr(2, 9)}`
+          globalThis.__suspense_promises = globalThis.__suspense_promises || {}
+          globalThis.__suspense_promises[promiseId] = error.promise
+          console.warn(
+            'ReactDOMServer: Stored promise for background resolution:',
+            promiseId,
+          )
+        }
+
+        return '<div>Loading...</div>'
+      }
+
+      throw error
+    }
   },
   renderToStaticMarkup(element) {
-    return renderElementToString(element, true)
+    try {
+      return renderElementToString(element, true)
+    }
+    catch (error) {
+      if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+        console.warn(
+          'ReactDOMServer: Caught unhandled Suspense error in static markup, rendering fallback',
+        )
+        return '<div>Loading...</div>'
+      }
+
+      throw error
+    }
   },
+}
+
+if (typeof globalThis.React === 'undefined') {
+  console.warn('React not found in server runtime. Installing minimal React stub.')
+  globalThis.React = {
+    createElement(type, props, ...children) {
+      const normalizedChildren
+        = children && children.length > 0
+          ? children
+          : props && Object.prototype.hasOwnProperty.call(props || {}, 'children')
+            ? props.children
+            : undefined
+      return {
+        $$typeof: Symbol.for('react.element'),
+        type,
+        props: props ? { ...props, children: normalizedChildren } : { children: normalizedChildren },
+        key: props && Object.prototype.hasOwnProperty.call(props, 'key') ? props.key : null,
+        ref: props && Object.prototype.hasOwnProperty.call(props, 'ref') ? props.ref : null,
+      }
+    },
+    Fragment: Symbol.for('react.fragment'),
+    Suspense: function Suspense(props) {
+      return props && Object.prototype.hasOwnProperty.call(props, 'children') ? props.children : null
+    },
+  }
 }
 
 function renderElementToString(element, isStatic = false) {
-  if (element === null || element === undefined || typeof element === 'boolean') {
+  console.warn('renderElementToString START:', {
+    element,
+    elementType: typeof element,
+    isNull: element === null,
+    isUndefined: element === undefined,
+    isBoolean: typeof element === 'boolean',
+    hasType: element && element.type,
+    hasProps: element && element.props,
+    hasChildren: element && element.children,
+    isStatic,
+  })
+
+  if (
+    element === null
+    || element === undefined
+    || typeof element === 'boolean'
+  ) {
+    console.warn(
+      'renderElementToString: Returning empty for null/undefined/boolean',
+    )
     return ''
   }
 
@@ -124,38 +100,164 @@ function renderElementToString(element, isStatic = false) {
   }
 
   if (Array.isArray(element)) {
-    return element.map(child => renderElementToString(child, isStatic)).join('')
+    return element
+      .map(child => renderElementToString(child, isStatic))
+      .join('')
   }
 
-  if (typeof element === 'object' && element.$$typeof === Symbol.for('react.element')) {
-    const { type, props } = element
+  if (
+    typeof element === 'object'
+    && element.type
+    && (element.$$typeof === Symbol.for('react.element')
+      || element.props
+      || element.children)
+  ) {
+    const { type, props, children } = element
+
+    const elementChildren = props?.children || children
+    const elementProps = props
+      ? { ...props, children: elementChildren }
+      : { children: elementChildren }
+
+    console.warn('renderElementToString: Processing React element:', {
+      type,
+      typeOf: typeof type,
+      typeName: type?.name || 'no-name',
+      elementProps,
+      hasChildren: !!elementChildren,
+    })
 
     if (typeof type === 'string') {
-      return renderHTMLElement(type, props, isStatic)
+      console.warn('renderElementToString: Rendering HTML element:', type)
+      const result = renderHTMLElement(type, elementProps, isStatic)
+      console.warn(
+        'renderElementToString: HTML element rendered, length:',
+        result.length,
+      )
+      return result
     }
 
     if (typeof type === 'function') {
+      console.warn('renderElementToString: Processing function type:', {
+        functionName: type.name || 'anonymous',
+        isSuspense: type.name === 'Suspense' || type.displayName === 'Suspense',
+        props: elementProps,
+      })
+
       try {
-        const result = type(props)
-        return renderElementToString(result, isStatic)
+        console.warn('renderElementToString: About to call function type')
+        const result = type(elementProps)
+        console.warn('renderElementToString: Function returned:', {
+          result,
+          resultType: typeof result,
+          resultHasType: result && result.type,
+          resultTypeValue: result && result.type,
+        })
+
+        const rendered = renderElementToString(result, isStatic)
+        console.warn(
+          'renderElementToString: Function result rendered, length:',
+          rendered.length,
+        )
+
+        return rendered
       }
       catch (error) {
-        if (error && typeof error.then === 'function') {
-          throw error
+        console.error('renderElementToString: Function type error:', {
+          functionName: type.name || 'anonymous',
+          error,
+          message: error.message,
+          isPromise: error && typeof error.then === 'function',
+          isSuspenseError:
+            error && error.$$typeof === Symbol.for('react.suspense.pending'),
+        })
+
+        if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+          console.warn(
+            'renderElementToString: Caught Suspense error, checking if we\'re in Suspense boundary',
+          )
+
+          if (
+            type.name === 'Suspense'
+            || type.displayName === 'Suspense'
+            || type.name === 'SuspenseOverride'
+            || type === globalThis.React?.Suspense
+          ) {
+            console.warn(
+              'renderElementToString: Inside Suspense boundary, processing fallback',
+            )
+
+            if (error.promise) {
+              const promiseId
+                = `suspense_${
+                  Date.now()
+                }_${
+                  Math.random().toString(36).substr(2, 9)}`
+              globalThis.__suspense_promises
+                = globalThis.__suspense_promises || {}
+              globalThis.__suspense_promises[promiseId] = error.promise
+              console.warn(
+                'renderElementToString: Stored promise for background resolution:',
+                promiseId,
+              )
+            }
+
+            const fallback = elementProps?.fallback
+            if (fallback) {
+              console.warn('renderElementToString: Rendering Suspense fallback')
+              return renderElementToString(fallback, isStatic)
+            }
+            else {
+              console.warn(
+                'renderElementToString: No fallback provided, using default',
+              )
+              return '<div>Loading...</div>'
+            }
+          }
         }
+
         throw error
       }
     }
 
-    if (type === globalThis.Fragment || type === Symbol.for('react.fragment')) {
-      return renderElementToString(props.children, isStatic)
+    if (type === Symbol.for('react.fragment')) {
+      return renderElementToString(elementChildren, isStatic)
     }
   }
 
+  if (
+    element
+    && typeof element === 'object'
+    && typeof element.then === 'function'
+  ) {
+    console.warn(
+      'renderElementToString: Promise detected, checking Suspense context',
+    )
+
+    const suspenseError = new Error('Async component boundary')
+    suspenseError.$$typeof = Symbol.for('react.suspense.pending')
+    suspenseError.promise = element
+
+    console.warn('renderElementToString: Throwing Suspense error with Promise', {
+      errorType: suspenseError.$$typeof?.toString(),
+      hasPromise: !!suspenseError.promise,
+      suspenseDepth: globalThis.__current_suspense_depth,
+    })
+
+    throw suspenseError
+  }
+
+  console.warn('renderElementToString: No matching condition, returning empty')
   return ''
 }
 
 function renderHTMLElement(type, props, isStatic) {
+  console.warn('renderHTMLElement called with:', {
+    type,
+    typeOf: typeof type,
+    props: props && Object.keys(props),
+  })
+
   const { children, dangerouslySetInnerHTML, ...attributes } = props || {}
 
   if (dangerouslySetInnerHTML && dangerouslySetInnerHTML.__html) {
@@ -175,7 +277,6 @@ function renderHTMLElement(type, props, isStatic) {
 
   const attrs = renderAttributes(attributes, isStatic)
   const childrenString = renderElementToString(children, isStatic)
-
   return `<${type}${attrs}>${childrenString}</${type}>`
 }
 
@@ -216,35 +317,6 @@ if (typeof globalThis.__resolved_promises === 'undefined') {
   globalThis.__resolved_promises = new Map()
 }
 globalThis.__current_suspense_depth = 0
-
-globalThis.React = {
-  createElement: globalThis.createElement,
-  Fragment: globalThis.Fragment,
-  Suspense: globalThis.Suspense,
-  createContext: globalThis.createContext,
-  useContext: globalThis.useContext,
-  memo: globalThis.memo,
-  forwardRef: globalThis.forwardRef,
-  createRef: globalThis.createRef,
-  use: globalThis.use,
-  lazy: globalThis.lazy,
-  StrictMode: globalThis.StrictMode,
-  useState: globalThis.useState,
-  useEffect: globalThis.useEffect,
-  useRef: globalThis.useRef,
-  useCallback: globalThis.useCallback,
-  useMemo: globalThis.useMemo,
-  useTransition: globalThis.useTransition,
-  useDeferredValue: globalThis.useDeferredValue,
-  useId: globalThis.useId,
-  startTransition: globalThis.startTransition,
-  flushSync: globalThis.flushSync,
-  unstable_act: globalThis.unstable_act,
-}
-
-if (!globalThis.createElement) {
-  throw new Error('createElement polyfill failed to initialize')
-}
 
 if (!globalThis.ReactDOMServer?.renderToString) {
   throw new Error('ReactDOMServer.renderToString polyfill failed to initialize')

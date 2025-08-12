@@ -85,6 +85,7 @@ pub struct RscConfig {
     pub enable_streaming: bool,
     pub component_cache_size: usize,
     pub render_timeout_ms: u64,
+    pub script_execution_timeout_ms: u64,
     pub enable_hot_reload: bool,
 }
 
@@ -95,6 +96,7 @@ impl Default for RscConfig {
             enable_streaming: true,
             component_cache_size: 1000,
             render_timeout_ms: 5000,
+            script_execution_timeout_ms: 2000,
             enable_hot_reload: true,
         }
     }
@@ -163,6 +165,12 @@ impl Config {
             config.static_files.prod_public_dir = PathBuf::from(dist_dir);
         }
 
+        if let Ok(timeout_str) = std::env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
+            config.rsc.script_execution_timeout_ms = timeout_str
+                .parse()
+                .map_err(|_| ConfigError::InvalidTimeout(timeout_str.clone()))?;
+        }
+
         Ok(config)
     }
 
@@ -220,6 +228,9 @@ pub enum ConfigError {
 
     #[error("Invalid Vite port: {0}")]
     InvalidVitePort(String),
+
+    #[error("Invalid timeout: {0}")]
+    InvalidTimeout(String),
 
     #[error("Failed to read config file: {0}")]
     FileRead(std::io::Error),

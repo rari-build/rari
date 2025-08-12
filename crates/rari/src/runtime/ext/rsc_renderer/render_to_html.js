@@ -69,7 +69,19 @@ if (typeof globalThis.renderToHTML === 'undefined') {
         globalThis.ReactDOMServer
         && typeof globalThis.ReactDOMServer.renderToString === 'function'
       ) {
-        return globalThis.ReactDOMServer.renderToString(element)
+        try {
+          const result = globalThis.ReactDOMServer.renderToString(element)
+          return result
+        }
+        catch (reactError) {
+          if (
+            reactError
+            && reactError.$$typeof === Symbol.for('react.suspense.pending')
+          ) {
+            throw reactError
+          }
+          console.warn('renderToHTML: ReactDOMServer failed, falling back to custom renderer:', reactError.message)
+        }
       }
 
       if (!element) {

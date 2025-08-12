@@ -29,6 +29,7 @@ export default function Layout({
       )}
 
       <button
+        type="button"
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200"
       >
