@@ -810,7 +810,9 @@ fn cors_preflight_response() -> Response {
     );
     headers.insert(
         "Access-Control-Allow-Headers",
-        HeaderValue::from_static("Content-Type, Authorization, Accept, Origin, X-Requested-With"),
+        HeaderValue::from_static(
+            "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
+        ),
     );
     headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
     builder.body(Body::empty()).expect("Valid preflight response")

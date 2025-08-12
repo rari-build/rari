@@ -223,7 +223,8 @@ if (import.meta.hot) {
         .replace(/^src\//, '')
         .replace(/^components\//, '')
 
-      let newCode = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
+      let newCode
+        = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
 
       for (const name of exportedNames) {
         if (name === 'default') {
@@ -665,7 +666,9 @@ const ${componentName} = registerClientReference(
 
       const discoverAndRegisterComponents = async () => {
         try {
-          const { ServerComponentBuilder, scanDirectory } = await import('./server-build')
+          const { ServerComponentBuilder, scanDirectory } = await import(
+            './server-build'
+          )
 
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'temp',
@@ -679,7 +682,8 @@ const ${componentName} = registerClientReference(
             scanDirectory(srcDir, builder)
           }
 
-          const components = await builder.getTransformedComponentsForDevelopment()
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
@@ -736,26 +740,28 @@ const ${componentName} = registerClientReference(
 
           for (const componentPath of clientComponentFiles) {
             const relativePath = path.relative(process.cwd(), componentPath)
-            const componentName = path.basename(componentPath).replace(/\.[^.]+$/, '')
+            const componentName = path
+              .basename(componentPath)
+              .replace(/\.[^.]+$/, '')
 
             try {
-              await fetch(
-                `${baseUrl}/api/rsc/register-client`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    component_id: componentName,
-                    file_path: relativePath,
-                    export_name: 'default',
-                  }),
+              await fetch(`${baseUrl}/api/rsc/register-client`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
                 },
-              )
+                body: JSON.stringify({
+                  component_id: componentName,
+                  file_path: relativePath,
+                  export_name: 'default',
+                }),
+              })
             }
             catch (error) {
-              console.error(`Failed to pre-register client component ${componentName}:`, error)
+              console.error(
+                `Failed to pre-register client component ${componentName}:`,
+                error,
+              )
             }
           }
         }
@@ -869,7 +875,9 @@ const ${componentName} = registerClientReference(
               await discoverAndRegisterComponents()
             }
             else {
-              console.error('Server failed to become ready for component registration')
+              console.error(
+                'Server failed to become ready for component registration',
+              )
             }
           }
           catch (error) {
@@ -889,7 +897,8 @@ const ${componentName} = registerClientReference(
 
           builder.addServerComponent(filePath)
 
-          const components = await builder.getTransformedComponentsForDevelopment()
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           if (components.length === 0) {
             return
@@ -918,16 +927,26 @@ const ${componentName} = registerClientReference(
 
               if (!registerResponse.ok) {
                 const errorText = await registerResponse.text()
-                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
+                throw new Error(
+                  `HTTP ${registerResponse.status}: ${errorText}`,
+                )
               }
             }
             catch (error) {
-              console.error('[RARI HMR] Failed to register component', `${component.id}:`, error instanceof Error ? error.message : String(error))
+              console.error(
+                '[RARI HMR] Failed to register component',
+                `${component.id}:`,
+                error instanceof Error ? error.message : String(error),
+              )
             }
           }
         }
         catch (error) {
-          console.error('[RARI HMR] Targeted HMR failed for', `${filePath}:`, error instanceof Error ? error.message : String(error))
+          console.error(
+            '[RARI HMR] Targeted HMR failed for',
+            `${filePath}:`,
+            error instanceof Error ? error.message : String(error),
+          )
           setTimeout(discoverAndRegisterComponents, 1000)
         }
       }
@@ -975,19 +994,23 @@ const ${componentName} = registerClientReference(
 
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({
-              success: true,
-              filePath,
-              message: 'Component transformation completed',
-            }))
+            res.end(
+              JSON.stringify({
+                success: true,
+                filePath,
+                message: 'Component transformation completed',
+              }),
+            )
           }
           catch (error) {
             res.statusCode = 500
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            }))
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            )
           }
         })
       })
@@ -1291,8 +1314,21 @@ async function loadRscClient() {
       const rscModule = await import('react-dom/client');
       createFromFetch = rscModule.createFromFetch;
       createFromReadableStream = rscModule.createFromReadableStream;
+
+      if (typeof createFromReadableStream !== 'function') {
+        console.warn('createFromReadableStream is not available in react-dom/client');
+        createFromReadableStream = null;
+      }
+      if (typeof createFromFetch !== 'function') {
+        console.warn('createFromFetch is not available in react-dom/client');
+        createFromFetch = null;
+      }
+
       return rscModule;
     } catch (error) {
+      console.warn('Failed to load react-dom/client RSC functions:', error);
+      createFromFetch = null;
+      createFromReadableStream = null;
       return null;
     }
   })()
@@ -1418,36 +1454,230 @@ class RscClient {
     }
 
     if (createFromReadableStream) {
-      const rscPromise = createFromReadableStream(stream);
-      return {
-        _isRscResponse: true,
-        _rscPromise: rscPromise,
-        readRoot() {
-          return rscPromise;
-        }
-      };
+      try {
+        const rscPromise = createFromReadableStream(stream);
+        return {
+          _isRscResponse: true,
+          _rscPromise: rscPromise,
+          readRoot() {
+            return rscPromise;
+          }
+        };
+      } catch (error) {
+        console.warn('Failed to use createFromReadableStream:', error);
+      }
     }
 
     const reader = stream.getReader();
     const decoder = new TextDecoder();
-    let buffered = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      buffered += chunk;
-    }
-    buffered += decoder.decode();
+    let content = '';
 
-    const synthetic = new Response(new Blob([buffered], { type: 'text/plain' }));
-    try {
-      const result = await this.processRscResponseManually(synthetic);
-      return result;
-    } catch (e) {
-      const result = await this.processRscResponse(synthetic);
-      return result;
-    }
+    const convertRscToReact = (element) => {
+      if (!React) {
+        console.warn('React not available for RSC conversion');
+        return null;
+      }
+
+      if (!element) {
+        return null;
+      }
+
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+        return element;
+      }
+
+      if (Array.isArray(element)) {
+        if (element.length >= 3 && element[0] === '$') {
+          const [, type, key, props] = element;
+
+          if (type === 'react.suspense') {
+
+            const suspenseWrapper = React.createElement('div',
+              {
+                'data-boundary-id': props?.boundaryId,
+                boundaryId: props?.boundaryId,
+                'data-suspense-boundary': true
+              },
+              convertRscToReact(props?.fallback || props?.children)
+            );
+
+            return suspenseWrapper;
+          }
+
+          const processedProps = props ? { ...props } : {};
+          if (props?.children) {
+            processedProps.children = convertRscToReact(props.children);
+          }
+
+          if (typeof type === 'string') {
+            if (type.includes('.tsx#') || type.includes('.jsx#')) {
+              const clientComponent = getClientComponent(type);
+              if (clientComponent) {
+                const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                return reactElement;
+              } else {
+                console.warn('Failed to resolve client component:', type);
+                return null;
+              }
+            } else {
+              const reactElement = React.createElement(type, key ? { ...processedProps, key } : processedProps);
+              return reactElement;
+            }
+          } else {
+            console.warn('Unknown RSC element type:', type);
+          }
+        }
+
+        return element.map((child, index) => {
+          const converted = convertRscToReact(child);
+          return converted;
+        });
+      }
+
+      if (typeof element === 'object') {
+        console.warn('Unexpected object in RSC conversion:', element);
+        return null;
+      }
+
+      return element;
+    };
+
+    let initialContent = null;
+    let boundaryUpdates = new Map();
+    let isComplete = false;
+    let buffered = '';
+
+    const processStream = async () => {
+      const newlineChar = String.fromCharCode(10);
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            isComplete = true;
+            break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffered += chunk;
+
+          const lines = buffered.split(newlineChar);
+          const completeLines = lines.slice(0, -1);
+          buffered = lines[lines.length - 1];
+
+          for (const line of completeLines) {
+            if (!line.trim()) continue;
+
+            try {
+              const colonIndex = line.indexOf(':');
+              if (colonIndex === -1) continue;
+
+              const rowId = line.substring(0, colonIndex);
+              const content = line.substring(colonIndex + 1);
+
+              if (content.includes('STREAM_COMPLETE')) {
+                isComplete = true;
+              } else {
+                try {
+                  const parsed = JSON.parse(content);
+
+                  if (Array.isArray(parsed) && parsed.length >= 4) {
+                    const [marker, selector, key, props] = parsed;
+
+                    if (marker === '$' && typeof selector === 'string' && selector.startsWith('boundary_') && props && props.resolved) {
+                      const resolvedContent = convertRscToReact(props.children);
+                      boundaryUpdates.set(selector, resolvedContent);
+
+                      if (streamingComponent) {
+                        streamingComponent.updateBoundary(selector, resolvedContent);
+                      } else {
+                        console.warn('No streamingComponent available for update');
+                      }
+                      continue;
+                    }
+                  }
+
+                  if (rowId === '2') {
+                    initialContent = convertRscToReact(parsed);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to parse stream line:', line, e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error processing stream:', error);
+        isComplete = true;
+      }
+    };
+
+    let streamingComponent = null;
+
+    const StreamingWrapper = () => {
+      const [renderTrigger, setRenderTrigger] = React.useState(0);
+
+      React.useEffect(() => {
+        streamingComponent = {
+          updateBoundary: (boundaryId, resolvedContent) => {
+            boundaryUpdates.set(boundaryId, resolvedContent);
+            setRenderTrigger(prev => {
+              return prev + 1;
+            });
+          }
+        };
+
+        return () => {
+          streamingComponent = null;
+        };
+      }, []);
+
+      const renderWithBoundaryUpdates = (element) => {
+        if (!element) return null;
+
+        if (React.isValidElement(element)) {
+          if (element.props && element.props.boundaryId) {
+            const boundaryId = element.props.boundaryId;
+            const resolvedContent = boundaryUpdates.get(boundaryId);
+            if (resolvedContent) {
+              return resolvedContent;
+            }
+          }
+
+          if (element.props && element.props.children) {
+            const updatedChildren = renderWithBoundaryUpdates(element.props.children);
+            if (updatedChildren !== element.props.children) {
+              return React.cloneElement(element, { ...element.props, children: updatedChildren });
+            }
+          }
+
+          return element;
+        }
+
+        if (Array.isArray(element)) {
+          return element.map((child, index) => renderWithBoundaryUpdates(child));
+        }
+
+        return element;
+      };
+
+      const renderedContent = renderWithBoundaryUpdates(initialContent);
+      return renderedContent;
+    };
+
+    processStream();
+
+    return {
+      _isRscResponse: true,
+      _rscPromise: Promise.resolve(React.createElement(StreamingWrapper)),
+      readRoot() {
+        return Promise.resolve(React.createElement(StreamingWrapper));
+      }
+    };
   }
+
+
 
   buildRequestHeaders() {
     const headers = {
@@ -2032,7 +2262,10 @@ ${registrations.join('\n')}
 
     handleHotUpdate({ file, server }) {
       if (/\.(?:tsx?|jsx?)$/.test(file) && isServerComponent(file)) {
-        server.hot.send('vite:beforeFullReload', { type: 'full-reload', path: file })
+        server.hot.send('vite:beforeFullReload', {
+          type: 'full-reload',
+          path: file,
+        })
         return []
       }
       return undefined

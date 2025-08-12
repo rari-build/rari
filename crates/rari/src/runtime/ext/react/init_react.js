@@ -10,11 +10,9 @@ globalThis.ReactDOMServer = {
         )
 
         if (error.promise) {
-          const promiseId
-            = `suspense_${
-              Date.now()
-            }_${
-              Math.random().toString(36).substr(2, 9)}`
+          const promiseId = `suspense_${Date.now()}_${Math.random()
+            .toString(36)
+            .substring(2, 11)}`
           globalThis.__suspense_promises = globalThis.__suspense_promises || {}
           globalThis.__suspense_promises[promiseId] = error.promise
           console.warn(
@@ -47,26 +45,39 @@ globalThis.ReactDOMServer = {
 }
 
 if (typeof globalThis.React === 'undefined') {
-  console.warn('React not found in server runtime. Installing minimal React stub.')
+  console.warn(
+    'React not found in server runtime. Installing minimal React stub.',
+  )
   globalThis.React = {
     createElement(type, props, ...children) {
       const normalizedChildren
         = children && children.length > 0
           ? children
-          : props && Object.prototype.hasOwnProperty.call(props || {}, 'children')
+          : props
+            && Object.prototype.hasOwnProperty.call(props || {}, 'children')
             ? props.children
             : undefined
       return {
         $$typeof: Symbol.for('react.element'),
         type,
-        props: props ? { ...props, children: normalizedChildren } : { children: normalizedChildren },
-        key: props && Object.prototype.hasOwnProperty.call(props, 'key') ? props.key : null,
-        ref: props && Object.prototype.hasOwnProperty.call(props, 'ref') ? props.ref : null,
+        props: props
+          ? { ...props, children: normalizedChildren }
+          : { children: normalizedChildren },
+        key:
+          props && Object.prototype.hasOwnProperty.call(props, 'key')
+            ? props.key
+            : null,
+        ref:
+          props && Object.prototype.hasOwnProperty.call(props, 'ref')
+            ? props.ref
+            : null,
       }
     },
     Fragment: Symbol.for('react.fragment'),
     Suspense: function Suspense(props) {
-      return props && Object.prototype.hasOwnProperty.call(props, 'children') ? props.children : null
+      return props && Object.prototype.hasOwnProperty.call(props, 'children')
+        ? props.children
+        : null
     },
   }
 }
@@ -145,14 +156,23 @@ function renderElementToString(element, isStatic = false) {
       })
 
       try {
-        console.warn('renderElementToString: About to call function type')
         const result = type(elementProps)
-        console.warn('renderElementToString: Function returned:', {
-          result,
-          resultType: typeof result,
-          resultHasType: result && result.type,
-          resultTypeValue: result && result.type,
-        })
+
+        if (result && typeof result.then === 'function') {
+          const suspenseError = new Error('Async component suspended')
+          suspenseError.$$typeof = Symbol.for('react.suspense.pending')
+          suspenseError.promise = result
+          suspenseError.componentName = type.name || 'anonymous'
+          suspenseError.asyncComponentDetected = true
+
+          console.warn('renderElementToString: THROWING SUSPENSE ERROR FOR:', {
+            componentName: suspenseError.componentName,
+            errorType: suspenseError.$$typeof.toString(),
+            hasPromise: !!suspenseError.promise,
+          })
+
+          throw suspenseError
+        }
 
         const rendered = renderElementToString(result, isStatic)
         console.warn(
@@ -163,13 +183,16 @@ function renderElementToString(element, isStatic = false) {
         return rendered
       }
       catch (error) {
-        console.error('renderElementToString: Function type error:', {
+        console.error('renderElementToString: FUNCTION TYPE ERROR CAUGHT:', {
           functionName: type.name || 'anonymous',
           error,
           message: error.message,
           isPromise: error && typeof error.then === 'function',
           isSuspenseError:
             error && error.$$typeof === Symbol.for('react.suspense.pending'),
+          asyncComponentDetected: error.asyncComponentDetected,
+          componentName: error.componentName,
+          errorSymbol: error.$$typeof ? error.$$typeof.toString() : 'none',
         })
 
         if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
@@ -184,27 +207,56 @@ function renderElementToString(element, isStatic = false) {
             || type === globalThis.React?.Suspense
           ) {
             console.warn(
-              'renderElementToString: Inside Suspense boundary, processing fallback',
+              'renderElementToString: INSIDE SUSPENSE BOUNDARY - PROCESSING FALLBACK',
+              {
+                componentName: error.componentName,
+                hasPromise: !!error.promise,
+                promiseConstructorName: error.promise?.constructor?.name,
+                errorType: error.$$typeof?.toString(),
+                asyncComponentDetected: error.asyncComponentDetected,
+                suspenseComponentName: type.name || 'anonymous',
+              },
             )
 
             if (error.promise) {
-              const promiseId
-                = `suspense_${
-                  Date.now()
-                }_${
-                  Math.random().toString(36).substr(2, 9)}`
+              const promiseId = `suspense_${Date.now()}_${Math.random()
+                .toString(36)
+                .substring(2, 11)}`
               globalThis.__suspense_promises
                 = globalThis.__suspense_promises || {}
               globalThis.__suspense_promises[promiseId] = error.promise
               console.warn(
-                'renderElementToString: Stored promise for background resolution:',
+                'renderElementToString: STORED PROMISE FOR BACKGROUND RESOLUTION:',
                 promiseId,
+                {
+                  componentName: error.componentName,
+                  promiseStored: !!globalThis.__suspense_promises[promiseId],
+                  totalPromises: Object.keys(
+                    globalThis.__suspense_promises || {},
+                  ).length,
+                  suspenseComponentName: type.name || 'anonymous',
+                  promiseKeys: Object.keys(
+                    globalThis.__suspense_promises || {},
+                  ),
+                },
+              )
+            }
+            else {
+              console.warn(
+                'renderElementToString: NO PROMISE FOUND IN SUSPENSE ERROR',
+                {
+                  componentName: error.componentName,
+                  errorHasPromise: !!error.promise,
+                  errorKeys: Object.keys(error || {}),
+                },
               )
             }
 
             const fallback = elementProps?.fallback
             if (fallback) {
-              console.warn('renderElementToString: Rendering Suspense fallback')
+              console.warn(
+                'renderElementToString: Rendering Suspense fallback',
+              )
               return renderElementToString(fallback, isStatic)
             }
             else {
@@ -238,11 +290,14 @@ function renderElementToString(element, isStatic = false) {
     suspenseError.$$typeof = Symbol.for('react.suspense.pending')
     suspenseError.promise = element
 
-    console.warn('renderElementToString: Throwing Suspense error with Promise', {
-      errorType: suspenseError.$$typeof?.toString(),
-      hasPromise: !!suspenseError.promise,
-      suspenseDepth: globalThis.__current_suspense_depth,
-    })
+    console.warn(
+      'renderElementToString: Throwing Suspense error with Promise',
+      {
+        errorType: suspenseError.$$typeof?.toString(),
+        hasPromise: !!suspenseError.promise,
+        suspenseDepth: globalThis.__current_suspense_depth,
+      },
+    )
 
     throw suspenseError
   }
@@ -319,5 +374,7 @@ if (typeof globalThis.__resolved_promises === 'undefined') {
 globalThis.__current_suspense_depth = 0
 
 if (!globalThis.ReactDOMServer?.renderToString) {
-  throw new Error('ReactDOMServer.renderToString polyfill failed to initialize')
+  throw new Error(
+    'ReactDOMServer.renderToString polyfill failed to initialize',
+  )
 }

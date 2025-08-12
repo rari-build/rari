@@ -52,9 +52,10 @@ export default function ComponentSelector({
             key={comp.id}
             onClick={() => setActiveComponent(comp.id)}
             type="button"
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeComponent === comp.id
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeComponent === comp.id
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
             }`}
           >
             {comp.name}

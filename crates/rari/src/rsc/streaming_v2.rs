@@ -94,60 +94,9 @@ impl BackgroundPromiseResolver {
             let resolution_script = format!(
                 r#"
                 (function() {{
-                    const promiseId = '{promise_id}';
-                    const boundaryId = '{boundary_id}';
-
                     try {{
-                        if (!globalThis.__original_create_element && typeof React !== 'undefined' && React.createElement) {{
-                            globalThis.__original_create_element = React.createElement;
-                            React.createElement = function(type, props, ...children) {{
-                                const isSuspenseComponent = (type) => {{
-                                    if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {{
-                                        return true;
-                                    }}
-
-                                    if (type && type.$$typeof === Symbol.for('react.suspense')) {{
-                                        return true;
-                                    }}
-
-                                    if (typeof type === 'function' &&
-                                        (type.name === 'Suspense' || type.displayName === 'Suspense')) {{
-                                        return true;
-                                    }}
-
-                                    if (typeof type === 'function' && type.toString().includes('Suspense')) {{
-                                        return true;
-                                    }}
-
-                                    if (type === 'suspense') {{
-                                        return true;
-                                    }}
-
-                                    return false;
-                                }};
-
-                                if (isSuspenseComponent(type)) {{
-                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                    globalThis.__current_boundary_id = boundaryId;
-
-                                    const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
-                                    const serializableFallback = globalThis.__safeSerializeElement ?
-                                        globalThis.__safeSerializeElement(safeFallback) : safeFallback;
-
-                                    if (!globalThis.__discovered_boundaries) {{
-                                        globalThis.__discovered_boundaries = [];
-                                    }}
-                                    globalThis.__discovered_boundaries.push({{
-                                        id: boundaryId,
-                                        fallback: serializableFallback,
-                                        parentId: globalThis.__current_boundary_id
-                                    }});
-
-                                    return globalThis.__original_create_element(type, {{...props, key: boundaryId}}, ...children);
-                                }}
-                                return globalThis.__original_create_element(type, props, ...children);
-                            }};
-                        }}
+                        const promiseId = '{promise_id}';
+                        const boundaryId = '{boundary_id}';
 
                         const promise = globalThis.__suspense_promises[promiseId];
 
@@ -156,7 +105,8 @@ impl BackgroundPromiseResolver {
                                 success: false,
                                 boundary_id: boundaryId,
                                 error: 'Promise not found: ' + promiseId,
-                                errorName: 'PromiseNotFound'
+                                errorName: 'PromiseNotFound',
+                                debug_available_promises: Object.keys(globalThis.__suspense_promises || {{}})
                             }});
                         }}
 
@@ -221,12 +171,13 @@ impl BackgroundPromiseResolver {
                 "#
             );
 
-            match runtime
-                .execute_script(format!("<promise_resolution_{promise_id}>"), resolution_script)
-                .await
-            {
+            let script_name = format!("<promise_resolution_{promise_id}>");
+
+            match runtime.execute_script(script_name.clone(), resolution_script).await {
                 Ok(result) => {
-                    match serde_json::from_str::<serde_json::Value>(&result.to_string()) {
+                    let result_string = result.to_string();
+
+                    match serde_json::from_str::<serde_json::Value>(&result_string) {
                         Ok(result_data) => {
                             if result_data["success"].as_bool().unwrap_or(false) {
                                 let row_id = {
@@ -241,32 +192,41 @@ impl BackgroundPromiseResolver {
                                     row_id,
                                 };
 
-                                if let Err(e) = update_sender.send(update) {
-                                    error!("Failed to send boundary update: {}", e);
+                                match update_sender.send(update) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to send boundary update for {}: {}",
+                                            boundary_id, e
+                                        );
+                                    }
                                 }
                             } else {
                                 error!(
-                                    "Promise resolution failed for boundary {}: {} (Details: error={}, stack={}, errorName={}, errorToString={})",
+                                    "Promise resolution failed for boundary {}: {} (Details: error={}, stack={}, errorName={}, errorToString={}, debug_info={:?})",
                                     boundary_id,
                                     result_data["error"].as_str().unwrap_or("Unknown error"),
                                     result_data["error"].as_str().unwrap_or("N/A"),
                                     result_data["stack"].as_str().unwrap_or("N/A"),
                                     result_data["errorName"].as_str().unwrap_or("N/A"),
-                                    result_data["errorToString"].as_str().unwrap_or("N/A")
+                                    result_data["errorToString"].as_str().unwrap_or("N/A"),
+                                    result_data
                                 );
                             }
                         }
                         Err(e) => {
                             error!(
-                                "Failed to parse promise resolution result: {} - Raw result: {}",
-                                e,
-                                result.to_string()
+                                "Failed to parse promise resolution result for {}: {} - Raw result: {} - Script: {}",
+                                boundary_id, e, result_string, script_name
                             );
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Failed to execute promise resolution script: {}", e);
+                    error!(
+                        "Failed to execute promise resolution script {} for boundary {}: {}",
+                        script_name, boundary_id, e
+                    );
                 }
             }
 
@@ -377,6 +337,7 @@ impl StreamingRenderer {
         let chunk_sender_clone = chunk_sender.clone();
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
+
             while let Some(update) = update_receiver.recv().await {
                 Self::send_boundary_update(&chunk_sender_clone, update).await;
             }
@@ -554,7 +515,6 @@ impl StreamingRenderer {
 
         let init_script = r#"
             if (!globalThis.renderToRSC) {
-                console.warn('renderToRSC not available from extensions, creating fallback');
                 globalThis.renderToRSC = function(element, clientComponents = {}) {
                     if (!element) return null;
 
@@ -643,7 +603,6 @@ impl StreamingRenderer {
 
                         return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
                     } catch (e) {
-                        console.warn('Failed to serialize element:', e);
                         return { type: 'div', props: { children: 'Loading...' }, key: null, ref: null };
                     }
                 };
@@ -673,7 +632,7 @@ impl StreamingRenderer {
         let component_hash = crate::rsc::jsx_transform::hash_string(component_id);
         let render_script = format!(
             r#"
-            (function() {{
+            (async function() {{
                 try {{
                     let Component = globalThis['{component_id}'] ||
                                     globalThis['Component_{component_id}'] ||
@@ -695,77 +654,61 @@ impl StreamingRenderer {
                     let renderError = null;
                     let isAsyncResult = false;
 
+
                     try {{
-                        const isAsync = typeof Component === 'function' && (
-                            Component.constructor.name === 'AsyncFunction' ||
-                            Component[Symbol.toStringTag] === 'AsyncFunction' ||
-                            Component.toString().trim().startsWith('async ')
-                        );
+                        const isOverrideActive = React.createElement.toString().includes('SUSPENSE BOUNDARY FOUND');
 
-                        if (isAsync) {{
-                            const result = Component(props);
-
-                            if (result && typeof result.then === 'function') {{
-                                const suspenseError = new Error('Async component boundary');
-                                suspenseError.$$typeof = Symbol.for('react.suspense.pending');
-                                suspenseError.promise = result;
-
-                                throw suspenseError;
-                            }} else {{
-                                element = result;
+                        if (!isOverrideActive) {{
+                            if (!globalThis.__original_create_element) {{
+                                globalThis.__original_create_element = React.createElement;
                             }}
-                        }} else {{
 
-                            const isOverrideActive = React.createElement.toString().includes('SUSPENSE BOUNDARY FOUND');
-
-                            if (!isOverrideActive) {{
-                                if (!globalThis.__original_create_element) {{
-                                    globalThis.__original_create_element = React.createElement;
-                                }}
-
-                                const createElementOverride = function(type, props, ...children) {{
-                                    const debugInfo = {{
-                                        typeOf: typeof type,
-                                        typeName: type?.name || type?.displayName,
-                                        isSuspenseFunction: typeof React !== 'undefined' && React.Suspense && type === React.Suspense,
-                                    }};
-
-                                    const isSuspenseComponent = (type) => {{
-                                        if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {{
-                                            return true;
-                                        }}
-                                        if (typeof type === 'function' && type.name === 'Suspense') {{
-                                            return true;
-                                        }}
-                                        return false;
-                                    }};
-
-                                    if (isSuspenseComponent(type)) {{
-                                        const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                        const previousBoundaryId = globalThis.__current_boundary_id;
-                                        globalThis.__current_boundary_id = boundaryId;
-
-                                        const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
-                                        const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-
-                                        globalThis.__discovered_boundaries.push({{
-                                            id: boundaryId,
-                                            fallback: serializableFallback,
-                                            parentId: previousBoundaryId
-                                        }});
-
-                                        globalThis.__current_boundary_id = previousBoundaryId;
-                                        return globalThis.__original_create_element('suspense', {{...props, key: boundaryId}}, ...children);
+                            React.createElement = function(type, props, ...children) {{
+                                const isSuspenseComponent = (type) => {{
+                                    if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {{
+                                        return true;
                                     }}
-                                    return globalThis.__original_create_element(type, props, ...children);
+                                    if (typeof type === 'function' && type.name === 'Suspense') {{
+                                        return true;
+                                    }}
+                                    return false;
                                 }};
 
-                                React.createElement = createElementOverride;
+                                if (isSuspenseComponent(type)) {{
+                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                    const previousBoundaryId = globalThis.__current_boundary_id;
+                                    globalThis.__current_boundary_id = boundaryId;
+
+                                    const safeFallback = props?.fallback || globalThis.__original_create_element('div', null, 'Loading...');
+                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
+
+                                    globalThis.__discovered_boundaries.push({{
+                                        id: boundaryId,
+                                        fallback: serializableFallback,
+                                        parentId: previousBoundaryId
+                                    }});
+
+                                    globalThis.__current_boundary_id = previousBoundaryId;
+                                    return globalThis.__original_create_element('suspense', {{...props, key: boundaryId}}, ...children);
+                                }}
+                                return globalThis.__original_create_element(type, props, ...children);
+                            }};
+                        }}
+
+                        element = Component(props);
+
+                        if (element && typeof element.then === 'function') {{
+                            try {{
+                                element = await element;
+                            }} catch (asyncError) {{
+                                console.error('Async component execution failed:', asyncError);
+                                element = globalThis.__original_create_element ?
+                                    globalThis.__original_create_element('div', null, 'Async Error: ' + asyncError.message) :
+                                    {{'type': 'div', 'props': {{'children': 'Async Error: ' + asyncError.message}}}};
                             }}
+                        }}
 
-                            element = Component(props);
-
-                            const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
+                        const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
                                 if (!el || typeof el !== 'object') return el;
 
                                 if (!el.type && el.props && el.props.fallback && el.children) {{
@@ -833,17 +776,32 @@ impl StreamingRenderer {
 
                             element = processSuspenseInStructure(element);
                         }}
-                    }} catch (suspenseError) {{
+                    catch (suspenseError) {{
                         if (suspenseError && suspenseError.$$typeof === Symbol.for('react.suspense.pending')) {{
-                            const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                            globalThis.__suspense_promises[promiseId] = suspenseError.promise;
+                            const componentName = suspenseError.componentName || suspenseError.name || suspenseError.message || '{component_id}';
+                            const asyncDetected = suspenseError.asyncComponentDetected === true;
+                            const hasPromise = suspenseError.promise && typeof suspenseError.promise.then === 'function';
 
-                            const boundaryId = globalThis.__current_boundary_id || 'root_boundary';
-                            globalThis.__pending_promises.push({{
-                                id: promiseId,
-                                boundaryId: boundaryId,
-                                componentPath: '{component_id}'
-                            }});
+                            const isParentComponent = componentName === '{component_id}' ||
+                                componentName.includes('Test') ||
+                                componentName.includes('Streaming');
+
+                            const isLeafAsyncComponent = asyncDetected ||
+                                (hasPromise && !isParentComponent) ||
+                                (componentName.includes('Async') && !isParentComponent);
+
+                            if (isLeafAsyncComponent) {{
+                                const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                globalThis.__suspense_promises[promiseId] = suspenseError.promise;
+
+                                const boundaryId = globalThis.__current_boundary_id || 'root_boundary';
+                                globalThis.__pending_promises.push({{
+                                    id: promiseId,
+                                    boundaryId: boundaryId,
+                                    componentPath: componentName
+                                }});
+
+                            }}
 
                             element = globalThis.__original_create_element ?
                                 globalThis.__original_create_element('div', null, 'Loading...') :
@@ -913,10 +871,7 @@ impl StreamingRenderer {
             .runtime
             .execute_script(format!("<partial_render_{component_id}>"), render_script)
             .await
-            .map_err(|e| {
-                error!("JavaScript execution failed: {}", e);
-                RariError::internal(format!("Partial render failed: {e}"))
-            })?;
+            .map_err(|e| RariError::internal(format!("Partial render failed: {e}")))?;
 
         let result_data: serde_json::Value =
             serde_json::from_str(&result.to_string()).map_err(|e| {
