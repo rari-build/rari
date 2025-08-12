@@ -342,6 +342,47 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      config.resolve = config.resolve || {}
+      const existingDedupe = Array.isArray((config.resolve as any).dedupe)
+        ? (config.resolve as any).dedupe as string[]
+        : []
+      const toAdd = ['react', 'react-dom']
+      ;(config.resolve as any).dedupe = Array.from(
+        new Set([...(existingDedupe || []), ...toAdd]),
+      )
+
+      const existingAlias: Array<{ find: string | RegExp, replacement: string }>
+        = Array.isArray((config.resolve as any).alias)
+          ? (config.resolve as any).alias
+          : []
+      const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
+      try {
+        const reactPath = require.resolve('react')
+        const reactDomClientPath = require.resolve('react-dom/client')
+        const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
+        const aliasesToAppend: Array<{ find: string, replacement: string }> = []
+        if (!aliasFinds.has('react/jsx-runtime')) {
+          aliasesToAppend.push({ find: 'react/jsx-runtime', replacement: reactJsxRuntimePath })
+        }
+        try {
+          const reactJsxDevRuntimePath = require.resolve('react/jsx-dev-runtime')
+          if (!aliasFinds.has('react/jsx-dev-runtime')) {
+            aliasesToAppend.push({ find: 'react/jsx-dev-runtime', replacement: reactJsxDevRuntimePath })
+          }
+        }
+        catch {}
+        if (!aliasFinds.has('react')) {
+          aliasesToAppend.push({ find: 'react', replacement: reactPath })
+        }
+        if (!aliasFinds.has('react-dom/client')) {
+          aliasesToAppend.push({ find: 'react-dom/client', replacement: reactDomClientPath })
+        }
+        if (aliasesToAppend.length > 0) {
+          (config.resolve as any).alias = [...existingAlias, ...aliasesToAppend]
+        }
+      }
+      catch {}
+
       config.environments = config.environments || {}
 
       config.environments.rsc = {
@@ -1191,14 +1232,6 @@ export function createClientModuleMap() {
       }
 
       if (id === 'virtual:rsc-integration') {
-        if (process.env.NODE_ENV === 'production') {
-          return `
-export function createServerComponentWrapper() { return () => null }
-export function registerClientComponent() {}
-export const RscErrorComponent = () => null
-export const rscClient = { fetchServerComponent: async () => null }
-`
-        }
         return `
 import React, { useState, useEffect, Suspense } from 'react';
 
@@ -1578,28 +1611,26 @@ class RscClient {
               if (content.includes('STREAM_COMPLETE')) {
                 isComplete = true;
               } else {
-                try {
-                  const parsed = JSON.parse(content);
+                const parsed = JSON.parse(content);
 
-                  if (Array.isArray(parsed) && parsed.length >= 4) {
-                    const [marker, selector, key, props] = parsed;
+                if (Array.isArray(parsed) && parsed.length >= 4) {
+                  const [marker, selector, key, props] = parsed;
 
-                    if (marker === '$' && typeof selector === 'string' && selector.startsWith('boundary_') && props && props.resolved) {
-                      const resolvedContent = convertRscToReact(props.children);
-                      boundaryUpdates.set(selector, resolvedContent);
+                  if (marker === '$' && typeof selector === 'string' && selector.startsWith('boundary_') && props && props.resolved) {
+                    const resolvedContent = convertRscToReact(props.children);
+                    boundaryUpdates.set(selector, resolvedContent);
 
-                      if (streamingComponent) {
-                        streamingComponent.updateBoundary(selector, resolvedContent);
-                      } else {
-                        console.warn('No streamingComponent available for update');
-                      }
-                      continue;
+                    if (streamingComponent) {
+                      streamingComponent.updateBoundary(selector, resolvedContent);
+                    } else {
+                      console.warn('No streamingComponent available for update');
                     }
+                    continue;
                   }
+                }
 
-                  if (rowId === '2') {
-                    initialContent = convertRscToReact(parsed);
-                  }
+                if (rowId === '2') {
+                  initialContent = convertRscToReact(parsed);
                 }
               }
             } catch (e) {
@@ -2221,11 +2252,6 @@ export {
       }
 
       if (id === 'virtual:rsc-client-components') {
-        if (process.env.NODE_ENV === 'production') {
-          return `
-export function registerClientComponent() {}
-`
-        }
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir)
 
