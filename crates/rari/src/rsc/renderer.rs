@@ -406,7 +406,7 @@ impl RscRenderer {
 
         for dep in &dependencies {
             let dep_owned = dep.clone();
-            if let Err(e) = Box::pin(self.register_dependency_if_needed(dep_owned.clone())).await {
+            if let Err(e) = self.register_dependency_if_needed(dep_owned).await {
                 error!(
                     "[RSC] Warning: Failed to register dependency '{dep}' for component '{component_id}': {e}"
                 );
@@ -524,93 +524,97 @@ impl RscRenderer {
     }
 
     async fn register_dependency_if_needed(&mut self, dep: String) -> Result<(), RariError> {
-        if !dep.starts_with("./") && !dep.starts_with("../") {
-            return Ok(());
-        }
+        let mut stack: Vec<String> = vec![dep];
+        let mut visited: FxHashSet<String> = FxHashSet::default();
 
         let base_path = std::env::current_dir().unwrap_or_default();
         let src_dir = base_path.join("src");
-
-        let mut resolved_path_candidates = Vec::new();
-
-        let clean_dep = dep.trim_start_matches("./").trim_start_matches("../");
-
-        if dep.starts_with("../") {
-            let up_count = dep.matches("../").count();
-            let remaining_path = dep.replacen("../", "", up_count);
-
-            if up_count == 1 {
-                resolved_path_candidates.push(src_dir.join(&remaining_path));
-            } else if up_count == 2 {
-                resolved_path_candidates.push(base_path.join(&remaining_path));
-            }
-        } else if dep.starts_with("./") {
-            resolved_path_candidates.push(src_dir.join("components").join(clean_dep));
-            resolved_path_candidates.push(src_dir.join(clean_dep));
-        }
-
         let extensions = [".ts", ".tsx", ".js", ".jsx"];
-        let mut potential_paths = Vec::new();
 
-        for base_path_candidate in &resolved_path_candidates {
-            for ext in &extensions {
-                potential_paths.push(base_path_candidate.with_extension(&ext[1..]));
+        while let Some(current) = stack.pop() {
+            if !visited.insert(current.clone()) {
+                continue;
             }
 
-            for ext in &extensions {
-                potential_paths.push(base_path_candidate.join(format!("index{ext}")));
+            if !current.starts_with("./") && !current.starts_with("../") {
+                continue;
             }
-        }
 
-        for potential_path in &potential_paths {
-            if potential_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(potential_path) {
-                    let dep_component_id = potential_path
-                        .file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
+            let clean_dep = current.trim_start_matches("./").trim_start_matches("../");
 
-                    let path_components: Vec<&str> = potential_path
-                        .strip_prefix(base_path.join("src"))
-                        .unwrap_or(potential_path)
-                        .components()
-                        .filter_map(|c| c.as_os_str().to_str())
-                        .collect();
+            let mut resolved_path_candidates: Vec<std::path::PathBuf> = Vec::new();
+            if current.starts_with("../") {
+                let up_count = current.matches("../").count();
+                let remaining_path = current.replacen("../", "", up_count);
+                if up_count == 1 {
+                    resolved_path_candidates.push(src_dir.join(&remaining_path));
+                } else if up_count == 2 {
+                    resolved_path_candidates.push(base_path.join(&remaining_path));
+                }
+            } else if current.starts_with("./") {
+                resolved_path_candidates.push(src_dir.join("components").join(clean_dep));
+                resolved_path_candidates.push(src_dir.join(clean_dep));
+            }
 
-                    let unique_dep_id = if path_components.len() > 1 {
-                        format!(
-                            "{}_{}",
-                            path_components[0..path_components.len() - 1].join("_"),
-                            dep_component_id
-                        )
-                    } else {
-                        dep_component_id.clone()
-                    };
+            let mut potential_paths: Vec<std::path::PathBuf> = Vec::new();
+            for base_path_candidate in &resolved_path_candidates {
+                for ext in &extensions {
+                    potential_paths.push(base_path_candidate.with_extension(&ext[1..]));
+                }
+                for ext in &extensions {
+                    potential_paths.push(base_path_candidate.join(format!("index{ext}")));
+                }
+            }
 
-                    let already_registered = {
-                        let registry = self.component_registry.lock();
-                        registry.is_component_registered(&unique_dep_id)
-                    };
+            for potential_path in &potential_paths {
+                if potential_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(potential_path) {
+                        let dep_component_id = potential_path
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
 
-                    if !already_registered {
-                        if Self::is_react_component_file(&content) {
-                            let sub_dependencies = extract_dependencies(&content);
-                            for sub_dep in sub_dependencies {
-                                let _ = Box::pin(self.register_dependency_if_needed(sub_dep)).await;
-                            }
+                        let path_components: Vec<&str> = potential_path
+                            .strip_prefix(base_path.join("src"))
+                            .unwrap_or(potential_path)
+                            .components()
+                            .filter_map(|c| c.as_os_str().to_str())
+                            .collect();
 
-                            self.register_component_without_loading(&unique_dep_id, &content)
-                                .await?;
+                        let unique_dep_id = if path_components.len() > 1 {
+                            format!(
+                                "{}_{}",
+                                path_components[0..path_components.len() - 1].join("_"),
+                                dep_component_id
+                            )
                         } else {
-                            debug!(
-                                "Skipping registration of '{}' as it's not a React component",
-                                unique_dep_id
-                            );
+                            dep_component_id.clone()
+                        };
+
+                        let already_registered = {
+                            let registry = self.component_registry.lock();
+                            registry.is_component_registered(&unique_dep_id)
+                        };
+
+                        if !already_registered {
+                            if Self::is_react_component_file(&content) {
+                                let sub_dependencies = extract_dependencies(&content);
+                                for sub_dep in sub_dependencies {
+                                    stack.push(sub_dep);
+                                }
+                                self.register_component_without_loading(&unique_dep_id, &content)
+                                    .await?;
+                            } else {
+                                debug!(
+                                    "Skipping registration of '{}' as it's not a React component",
+                                    unique_dep_id
+                                );
+                            }
                         }
                     }
+                    break;
                 }
-                break;
             }
         }
 
