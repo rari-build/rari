@@ -57,8 +57,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: ^0.2.0
-        version: 0.2.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: ^0.2.1
+        version: 0.2.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -2630,8 +2630,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.2.0:
-    resolution: {integrity: sha512-Csxk165dVPHuCVfY5peYIpjq0NCAocrjI2l9MTeNYH9hyI08aKV+G0ROFY+/xwi8vpoj/54DDrV/VSoVJdtkEA==}
+  rari@0.2.1:
+    resolution: {integrity: sha512-YX9ONQhPuhR/3Rdk16bw996rhrGYS/dc2v761SARDX9UfVip8P4IJ8GSJVwHOMj3/1TavSpA9bEYIpAXYdeufw==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -5603,7 +5603,7 @@ snapshots:
   rari-win32-x64@0.2.0:
     optional: true
 
-  rari@0.2.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  rari@0.2.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       acorn: 8.15.0
       esbuild: 0.25.9
