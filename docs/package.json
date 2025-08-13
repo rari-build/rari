@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "markdown-it": "^14.1.0",
-    "rari": "^0.1.4",
+    "rari": "^0.2.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "shiki": "^3.9.2"
