@@ -73,7 +73,7 @@
   },
   "dependencies": {
     "acorn": "^8.15.0",
-    "esbuild": "^0.25.8",
+    "esbuild": "^0.25.9",
     "picocolors": "^1.1.1"
   },
   "optionalDependencies": {
