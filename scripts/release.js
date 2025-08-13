@@ -9,7 +9,7 @@ import { logRecentCommits, run } from './releaseUtils.js'
 const args = process.argv.slice(2)
 const skipPrompts = args.includes('--skip-prompts')
 
-const packages = [
+let packages = [
   {
     name: 'rari',
     path: 'packages/rari',
@@ -20,32 +20,30 @@ const packages = [
     path: 'packages/create-rari-app',
     needsBuild: true,
   },
-  {
-    name: 'rari-linux-x64',
-    path: 'packages/rari-linux-x64',
-    needsBuild: false,
-  },
-  {
-    name: 'rari-linux-arm64',
-    path: 'packages/rari-linux-arm64',
-    needsBuild: false,
-  },
-  {
-    name: 'rari-darwin-x64',
-    path: 'packages/rari-darwin-x64',
-    needsBuild: false,
-  },
-  {
-    name: 'rari-darwin-arm64',
-    path: 'packages/rari-darwin-arm64',
-    needsBuild: false,
-  },
-  {
-    name: 'rari-win32-x64',
-    path: 'packages/rari-win32-x64',
-    needsBuild: false,
-  },
 ]
+
+// Allow selecting a subset of packages via CLI or env
+// Examples:
+//   node scripts/release.js --only rari
+//   node scripts/release.js --only rari,create-rari-app
+const onlyArgIdx = args.findIndex(a => a === '--only' || a.startsWith('--only='))
+let onlyList = null
+if (onlyArgIdx !== -1) {
+  const val = args[onlyArgIdx].includes('=') ? args[onlyArgIdx].split('=')[1] : args[onlyArgIdx + 1]
+  if (val) {
+    onlyList = val.split(',').map(s => s.trim()).filter(Boolean)
+  }
+}
+if (!onlyList && process.env.PACKAGES) {
+  onlyList = process.env.PACKAGES.split(',').map(s => s.trim()).filter(Boolean)
+}
+if (onlyList && onlyList.length > 0) {
+  packages = packages.filter(p => onlyList.includes(p.name))
+  if (packages.length === 0) {
+    console.error(colors.red(`No matching packages for selection: ${onlyList.join(', ')}`))
+    process.exit(1)
+  }
+}
 
 async function release() {
   intro(colors.cyan('🚀 Rari Release Script'))
