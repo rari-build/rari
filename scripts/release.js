@@ -117,6 +117,33 @@ async function releasePackage(pkg) {
 }
 
 async function getNewVersion(currentVersion, skipPrompts) {
+  // Allow non-interactive control via env vars
+  const envVersion = process.env.RELEASE_VERSION
+  const envType = process.env.RELEASE_TYPE
+  if (envVersion) {
+    if (!semver.valid(envVersion)) {
+      throw new Error(`Invalid RELEASE_VERSION: ${envVersion}`)
+    }
+    if (!semver.gt(envVersion, currentVersion)) {
+      throw new Error(`RELEASE_VERSION (${envVersion}) must be greater than current version ${currentVersion}`)
+    }
+    return envVersion
+  }
+  if (envType) {
+    const allowedTypes = new Set([
+      'patch',
+      'minor',
+      'major',
+      'prepatch',
+      'preminor',
+      'premajor',
+      'prerelease',
+    ])
+    if (!allowedTypes.has(envType)) {
+      throw new Error(`Invalid RELEASE_TYPE: ${envType}`)
+    }
+    return semver.inc(currentVersion, envType)
+  }
   if (skipPrompts) {
     return currentVersion
   }
