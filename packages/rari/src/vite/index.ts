@@ -136,6 +136,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
               }
             }
             break
+          case 'ExportAllDeclaration':
+            if (node.exported && node.exported.type === 'Identifier') {
+              exportedNames.push(node.exported.name)
+            }
+            break
         }
       }
 
@@ -146,8 +151,29 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
+  function hasTopLevelDirective(code: string, directive: 'use client' | 'use server'): boolean {
+    try {
+      const ast = acorn.parse(code, {
+        ecmaVersion: 2024,
+        sourceType: 'module',
+        locations: false,
+      }) as any
+
+      for (const node of ast.body) {
+        if (node.type !== 'ExpressionStatement' || !node.directive)
+          break
+        if (node.directive === directive)
+          return true
+      }
+      return false
+    }
+    catch {
+      return false
+    }
+  }
+
   function transformServerModule(code: string, id: string): string {
-    if (!code.includes('use server')) {
+    if (!hasTopLevelDirective(code, 'use server')) {
       return code
     }
 
@@ -209,7 +235,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string): string {
-    if (code.includes('use server')) {
+    if (hasTopLevelDirective(code, 'use server')) {
       const exportedNames = parseExportedNames(code)
       if (exportedNames.length === 0) {
         return ''
@@ -223,7 +249,8 @@ if (import.meta.hot) {
         .replace(/^src\//, '')
         .replace(/^components\//, '')
 
-      let newCode = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
+      let newCode
+        = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
 
       for (const name of exportedNames) {
         if (name === 'default') {
@@ -237,7 +264,7 @@ if (import.meta.hot) {
       return newCode
     }
 
-    if (!code.includes('use client')) {
+    if (!hasTopLevelDirective(code, 'use client')) {
       return code
     }
 
@@ -269,7 +296,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModuleForClient(code: string, id: string): string {
-    if (!code.includes('use client')) {
+    if (!hasTopLevelDirective(code, 'use client')) {
       return code
     }
 
@@ -341,6 +368,47 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      config.resolve = config.resolve || {}
+      const existingDedupe = Array.isArray((config.resolve as any).dedupe)
+        ? (config.resolve as any).dedupe as string[]
+        : []
+      const toAdd = ['react', 'react-dom']
+        ; (config.resolve as any).dedupe = Array.from(
+        new Set([...(existingDedupe || []), ...toAdd]),
+      )
+
+      const existingAlias: Array<{ find: string | RegExp, replacement: string }>
+        = Array.isArray((config.resolve as any).alias)
+          ? (config.resolve as any).alias
+          : []
+      const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
+      try {
+        const reactPath = require.resolve('react')
+        const reactDomClientPath = require.resolve('react-dom/client')
+        const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
+        const aliasesToAppend: Array<{ find: string, replacement: string }> = []
+        if (!aliasFinds.has('react/jsx-runtime')) {
+          aliasesToAppend.push({ find: 'react/jsx-runtime', replacement: reactJsxRuntimePath })
+        }
+        try {
+          const reactJsxDevRuntimePath = require.resolve('react/jsx-dev-runtime')
+          if (!aliasFinds.has('react/jsx-dev-runtime')) {
+            aliasesToAppend.push({ find: 'react/jsx-dev-runtime', replacement: reactJsxDevRuntimePath })
+          }
+        }
+        catch { }
+        if (!aliasFinds.has('react')) {
+          aliasesToAppend.push({ find: 'react', replacement: reactPath })
+        }
+        if (!aliasFinds.has('react-dom/client')) {
+          aliasesToAppend.push({ find: 'react-dom/client', replacement: reactDomClientPath })
+        }
+        if (aliasesToAppend.length > 0) {
+          (config.resolve as any).alias = [...existingAlias, ...aliasesToAppend]
+        }
+      }
+      catch { }
+
       config.environments = config.environments || {}
 
       config.environments.rsc = {
@@ -454,7 +522,7 @@ if (import.meta.hot) {
 
       const environment = (this as any).environment
 
-      if (code.includes('\'use client\'') || code.includes('"use client"')) {
+      if (hasTopLevelDirective(code, 'use client')) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
@@ -469,7 +537,7 @@ if (import.meta.hot) {
         }
       }
 
-      if (code.includes('\'use server\'') || code.includes('"use server"')) {
+      if (hasTopLevelDirective(code, 'use server')) {
         componentTypeCache.set(id, 'server')
         serverComponents.add(id)
 
@@ -482,7 +550,7 @@ if (import.meta.hot) {
         else {
           let clientTransformedCode = transformClientModule(code, id)
 
-          if (code.includes('\'use server\'') || code.includes('"use server"')) {
+          if (hasTopLevelDirective(code, 'use server')) {
             clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -665,7 +733,9 @@ const ${componentName} = registerClientReference(
 
       const discoverAndRegisterComponents = async () => {
         try {
-          const { ServerComponentBuilder, scanDirectory } = await import('./server-build')
+          const { ServerComponentBuilder, scanDirectory } = await import(
+            './server-build'
+          )
 
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'temp',
@@ -679,7 +749,8 @@ const ${componentName} = registerClientReference(
             scanDirectory(srcDir, builder)
           }
 
-          const components = await builder.getTransformedComponentsForDevelopment()
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
@@ -736,26 +807,28 @@ const ${componentName} = registerClientReference(
 
           for (const componentPath of clientComponentFiles) {
             const relativePath = path.relative(process.cwd(), componentPath)
-            const componentName = path.basename(componentPath).replace(/\.[^.]+$/, '')
+            const componentName = path
+              .basename(componentPath)
+              .replace(/\.[^.]+$/, '')
 
             try {
-              await fetch(
-                `${baseUrl}/api/rsc/register-client`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    component_id: componentName,
-                    file_path: relativePath,
-                    export_name: 'default',
-                  }),
+              await fetch(`${baseUrl}/api/rsc/register-client`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
                 },
-              )
+                body: JSON.stringify({
+                  component_id: componentName,
+                  file_path: relativePath,
+                  export_name: 'default',
+                }),
+              })
             }
             catch (error) {
-              console.error(`Failed to pre-register client component ${componentName}:`, error)
+              console.error(
+                `Failed to pre-register client component ${componentName}:`,
+                error,
+              )
             }
           }
         }
@@ -869,7 +942,9 @@ const ${componentName} = registerClientReference(
               await discoverAndRegisterComponents()
             }
             else {
-              console.error('Server failed to become ready for component registration')
+              console.error(
+                'Server failed to become ready for component registration',
+              )
             }
           }
           catch (error) {
@@ -889,7 +964,8 @@ const ${componentName} = registerClientReference(
 
           builder.addServerComponent(filePath)
 
-          const components = await builder.getTransformedComponentsForDevelopment()
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           if (components.length === 0) {
             return
@@ -918,16 +994,26 @@ const ${componentName} = registerClientReference(
 
               if (!registerResponse.ok) {
                 const errorText = await registerResponse.text()
-                throw new Error(`HTTP ${registerResponse.status}: ${errorText}`)
+                throw new Error(
+                  `HTTP ${registerResponse.status}: ${errorText}`,
+                )
               }
             }
             catch (error) {
-              console.error('[RARI HMR] Failed to register component', `${component.id}:`, error instanceof Error ? error.message : String(error))
+              console.error(
+                '[RARI HMR] Failed to register component',
+                `${component.id}:`,
+                error instanceof Error ? error.message : String(error),
+              )
             }
           }
         }
         catch (error) {
-          console.error('[RARI HMR] Targeted HMR failed for', `${filePath}:`, error instanceof Error ? error.message : String(error))
+          console.error(
+            '[RARI HMR] Targeted HMR failed for',
+            `${filePath}:`,
+            error instanceof Error ? error.message : String(error),
+          )
           setTimeout(discoverAndRegisterComponents, 1000)
         }
       }
@@ -975,19 +1061,23 @@ const ${componentName} = registerClientReference(
 
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({
-              success: true,
-              filePath,
-              message: 'Component transformation completed',
-            }))
+            res.end(
+              JSON.stringify({
+                success: true,
+                filePath,
+                message: 'Component transformation completed',
+              }),
+            )
           }
           catch (error) {
             res.statusCode = 500
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            }))
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            )
           }
         })
       })
@@ -1280,11 +1370,24 @@ async function loadRscClient() {
 
   rscClientLoadPromise = (async () => {
     try {
-      const rscModule = await import('react-dom/server');
+      const rscModule = await import('react-dom/client');
       createFromFetch = rscModule.createFromFetch;
       createFromReadableStream = rscModule.createFromReadableStream;
+
+      if (typeof createFromReadableStream !== 'function') {
+        console.warn('createFromReadableStream is not available in react-dom/client');
+        createFromReadableStream = null;
+      }
+      if (typeof createFromFetch !== 'function') {
+        console.warn('createFromFetch is not available in react-dom/client');
+        createFromFetch = null;
+      }
+
       return rscModule;
     } catch (error) {
+      console.warn('Failed to load react-dom/client RSC functions:', error);
+      createFromFetch = null;
+      createFromReadableStream = null;
       return null;
     }
   })()
@@ -1296,8 +1399,9 @@ class RscClient {
   constructor() {
     this.componentCache = new Map();
     this.moduleCache = new Map();
+    this.inflightRequests = new Map();
     this.config = {
-      enableStreaming: false,
+      enableStreaming: true,
       maxRetries: 5,
       retryDelay: 500,
       timeout: 10000,
@@ -1320,47 +1424,393 @@ class RscClient {
       return this.componentCache.get(cacheKey);
     }
 
-    const encodedProps = encodeURIComponent(JSON.stringify(props));
-    // Add cache-busting parameter to prevent browser caching issues
-    const cacheBuster = Date.now();
-    const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster;
+    if (this.inflightRequests.has(cacheKey)) {
+      return this.inflightRequests.get(cacheKey);
+    }
 
-    try {
-      await this.waitForServerReady();
-
-      const response = await this.fetchWithTimeout(fetchUrl, {
-        method: 'GET',
-        headers: {
-          ...this.buildRequestHeaders(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Server responded with ' + response.status + ': ' + response.statusText);
-      }
-
-      let result;
-
-      try {
-        result = await this.processRscResponseManually(response);
-      } catch (manualError) {
-        try {
-          result = await this.processRscResponse(response);
-        } catch (error) {
-          console.error('Both RSC parsing methods failed:', { manualError, error });
-          throw new Error('Failed to parse RSC response: ' + manualError.message);
+    let requestPromise;
+    if (this.config.enableStreaming) {
+      requestPromise = this.fetchServerComponentStreamV2(componentId, props);
+    } else {
+      requestPromise = (async () => {
+        const encodedProps = encodeURIComponent(JSON.stringify(props));
+        const cacheBuster = Date.now();
+        const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster;
+        await this.waitForServerReady();
+        const response = await this.fetchWithTimeout(fetchUrl, {
+          method: 'GET',
+          headers: {
+            ...this.buildRequestHeaders(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+        });
+        if (!response.ok) {
+          throw new Error('Server responded with ' + response.status + ': ' + response.statusText);
         }
-      }
+        try {
+          return await this.processRscResponseManually(response);
+        } catch (manualError) {
+          const fallback = await this.processRscResponse(response);
+          return fallback;
+        }
+      })();
+    }
 
+    this.inflightRequests.set(cacheKey, requestPromise);
+    try {
+      const result = await requestPromise;
       this.componentCache.set(cacheKey, result);
       return result;
-    } catch (error) {
-      throw new Error('Failed to fetch server component ' + componentId + ': ' + error.message);
+    } finally {
+      this.inflightRequests.delete(cacheKey);
     }
+
   }
+
+  async fetchServerComponentStreamV2(componentId, props = {}) {
+    await loadRscClient();
+
+    const endpoints = (() => {
+      const list = [
+        'http://127.0.0.1:3000/api/rsc/stream',
+        'http://localhost:3000/api/rsc/stream',
+        '/api/rsc/stream',
+      ];
+      return list;
+    })();
+    let response = null;
+    let lastError = null;
+    const attempt = async () => {
+      for (const url of endpoints) {
+        try {
+          const r = await this.fetchWithTimeout(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...this.buildRequestHeaders(),
+            },
+            body: JSON.stringify({ component_id: componentId, props }),
+          });
+          if (r.ok) {
+            return r;
+          }
+          lastError = new Error('HTTP ' + r.status + ': ' + (await r.text()));
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      return null;
+    };
+
+    const abortController = new AbortController();
+    const abortTimeout = setTimeout(() => abortController.abort(), this.config.timeout);
+
+    response = await attempt();
+    if (!response) {
+      await new Promise(r => setTimeout(r, 150));
+      response = await attempt();
+    }
+    if (!response) {
+      throw lastError || new Error('Failed to reach stream endpoint');
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error('Server responded with ' + response.status + ': ' + errorText);
+    }
+
+    const stream = response.body;
+    if (!stream) {
+      throw new Error('No ReadableStream from stream response');
+    }
+
+    if (false && createFromReadableStream) {
+      try {
+        const rscPromise = createFromReadableStream(stream);
+        return {
+          _isRscResponse: true,
+          _rscPromise: rscPromise,
+          readRoot() {
+            return rscPromise;
+          }
+        };
+      } catch (error) {
+        console.warn('Failed to use createFromReadableStream:', error);
+      }
+    }
+
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let content = '';
+    const modules = new Map();
+    const boundaryRowMap = new Map();
+
+    const convertRscToReact = (element) => {
+      if (!React) {
+        console.warn('React not available for RSC conversion');
+        return null;
+      }
+
+      if (!element) {
+        return null;
+      }
+
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+        return element;
+      }
+
+      if (Array.isArray(element)) {
+        if (element.length >= 3 && element[0] === '$') {
+          const [, type, key, props] = element;
+
+          if (type === 'react.suspense' || type === 'suspense') {
+
+            const suspenseWrapper = React.createElement('div',
+              {
+                'data-boundary-id': props?.boundaryId,
+                boundaryId: props?.boundaryId,
+                'data-suspense-boundary': true
+              },
+              convertRscToReact(props?.fallback || props?.children)
+            );
+
+            return suspenseWrapper;
+          }
+
+          let processedProps = props ? { ...props } : {};
+          if (props?.children) {
+            const child = convertRscToReact(props.children);
+            if (Array.isArray(child)) {
+              processedProps.children = child.map((c, i) => React.isValidElement(c) ? React.cloneElement(c, { key: (c.key ?? i) }) : c);
+            } else {
+              processedProps.children = child;
+            }
+          }
+
+           if (typeof type === 'string') {
+            if (type.startsWith('$L')) {
+              const mod = modules.get(type);
+              if (mod) {
+                const clientKey = mod.id + '#' + (mod.name || 'default');
+                const clientComponent = getClientComponent(clientKey);
+                if (clientComponent) {
+                  const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                  return reactElement;
+                }
+              }
+              return processedProps && processedProps.children ? processedProps.children : null;
+            }
+            if (type.includes('.tsx#') || type.includes('.jsx#')) {
+              const clientComponent = getClientComponent(type);
+              if (clientComponent) {
+                const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                return reactElement;
+              } else {
+                console.warn('Failed to resolve client component:', type);
+                return null;
+              }
+            } else {
+              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, 'boundaryId')) {
+                const { boundaryId, ...rest } = processedProps;
+                processedProps = rest;
+              }
+              const reactElement = React.createElement(type, key ? { ...processedProps, key } : processedProps);
+              return reactElement;
+            }
+          } else {
+            console.warn('Unknown RSC element type:', type);
+          }
+        }
+
+        return element.map((child, index) => {
+          const converted = convertRscToReact(child);
+          return converted;
+        });
+      }
+
+      if (typeof element === 'object') {
+        console.warn('Unexpected object in RSC conversion:', element);
+        return null;
+      }
+
+      return element;
+    };
+
+    let initialContent = null;
+    let boundaryUpdates = new Map();
+    let isComplete = false;
+    let buffered = '';
+
+    const processStream = async () => {
+      const newlineChar = String.fromCharCode(10);
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            isComplete = true;
+            break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffered += chunk;
+
+          const lines = buffered.split(newlineChar);
+          const completeLines = lines.slice(0, -1);
+          buffered = lines[lines.length - 1];
+
+          for (const line of completeLines) {
+            if (!line.trim()) continue;
+
+            try {
+              const colonIndex = line.indexOf(':');
+              if (colonIndex === -1) continue;
+
+              const rowId = line.substring(0, colonIndex);
+              const content = line.substring(colonIndex + 1);
+
+              if (content.includes('STREAM_COMPLETE')) {
+                isComplete = true;
+              } else if (content.startsWith('I[')) {
+                try {
+                  const importData = JSON.parse(content.substring(1));
+                  if (Array.isArray(importData) && importData.length >= 3) {
+                    const [path, chunks, exportName] = importData;
+                    modules.set('$L' + rowId, {
+                      id: path,
+                      chunks: Array.isArray(chunks) ? chunks : [chunks],
+                      name: exportName || 'default'
+                    });
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse import row:', content, e);
+                }
+              } else if (content.startsWith('E{')) {
+                try {
+                  const err = JSON.parse(content.substring(1));
+                  console.error('RSC stream error:', err);
+                } catch (e) {
+                  console.error('Failed to parse error row:', content, e);
+                }
+              } else if (content.startsWith('Symbol.for(')) {
+                continue;
+              } else if (content.startsWith('[')) {
+                const parsed = JSON.parse(content);
+                if (Array.isArray(parsed) && parsed.length >= 4) {
+                  const [marker, selector, key, props] = parsed;
+                   if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && props.boundaryId) {
+                    boundaryRowMap.set('$L' + rowId, props.boundaryId);
+                  }
+                  if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
+                    if (typeof selector === 'string' && selector.startsWith('$L')) {
+                      const target = boundaryRowMap.get(selector) || null;
+                      if (target) {
+                        const resolvedContent = convertRscToReact(props.children);
+                        boundaryUpdates.set(target, resolvedContent);
+                        if (streamingComponent) {
+                          streamingComponent.updateBoundary(target, resolvedContent);
+                        }
+                        continue;
+                      }
+                    }
+                  }
+                }
+                if (!initialContent) {
+                  let canUseAsRoot = true;
+                  if (Array.isArray(parsed) && parsed.length >= 4 && parsed[0] === '$') {
+                    const sel = parsed[1];
+                    const p = parsed[3];
+                     if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && p.boundaryId) {
+                      canUseAsRoot = false;
+                    }
+                  }
+                  if (canUseAsRoot) {
+                    initialContent = convertRscToReact(parsed);
+                    if (streamingComponent && typeof streamingComponent.updateRoot === 'function') {
+                      streamingComponent.updateRoot();
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to parse stream line:', line, e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error processing stream:', error);
+        isComplete = true;
+      }
+    };
+
+    let streamingComponent = null;
+
+    const StreamingWrapper = () => {
+      const [renderTrigger, setRenderTrigger] = React.useState(0);
+
+      React.useEffect(() => {
+        streamingComponent = {
+          updateBoundary: (boundaryId, resolvedContent) => {
+            boundaryUpdates.set(boundaryId, resolvedContent);
+            setRenderTrigger(prev => prev + 1);
+          },
+          updateRoot: () => {
+            setRenderTrigger(prev => prev + 1);
+          }
+        };
+
+        return () => {
+          streamingComponent = null;
+        };
+      }, []);
+
+      const renderWithBoundaryUpdates = (element) => {
+        if (!element) return null;
+
+        if (React.isValidElement(element)) {
+          if (element.props && element.props.boundaryId) {
+            const boundaryId = element.props.boundaryId;
+            const resolvedContent = boundaryUpdates.get(boundaryId);
+            if (resolvedContent) {
+              return resolvedContent;
+            }
+          }
+
+          if (element.props && element.props.children) {
+            const updatedChildren = renderWithBoundaryUpdates(element.props.children);
+            if (updatedChildren !== element.props.children) {
+              return React.cloneElement(element, { ...element.props, children: updatedChildren });
+            }
+          }
+
+          return element;
+        }
+
+        if (Array.isArray(element)) {
+          return element.map((child, index) => renderWithBoundaryUpdates(child));
+        }
+
+        return element;
+      };
+
+      const renderedContent = renderWithBoundaryUpdates(initialContent);
+      return renderedContent;
+    };
+
+    processStream();
+
+    return {
+      _isRscResponse: true,
+      _rscPromise: Promise.resolve(React.createElement(StreamingWrapper)),
+      readRoot() {
+        return Promise.resolve(React.createElement(StreamingWrapper));
+      }
+    };
+  }
+
+
 
   buildRequestHeaders() {
     const headers = {
@@ -1470,11 +1920,14 @@ class RscClient {
 
     let rootElement = null;
 
-    const elementKeys = Array.from(elements.keys()).sort((a, b) => parseInt(b) - parseInt(a));
-
+    const elementKeys = Array.from(elements.keys()).sort((a, b) => parseInt(a) - parseInt(b));
     for (const key of elementKeys) {
       const element = elements.get(key);
-      if (Array.isArray(element) && element[0] === '$') {
+      if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
+        const [, type, , props] = element;
+        if (type === 'react.suspense' && props && props.boundaryId) {
+          continue;
+        }
         rootElement = element;
         break;
       }
@@ -1503,7 +1956,30 @@ class RscClient {
 
         let actualType = type;
 
-        if (typeof type === 'string' && type.startsWith('$L')) {
+        if (typeof type === 'string' && type.includes('#')) {
+          const clientComponent = getClientComponent(type);
+          if (clientComponent) {
+            actualType = clientComponent;
+          } else {
+            actualType = ({ children, ...restProps }) => React.createElement(
+              'div',
+              {
+                ...restProps,
+                'data-client-component': type,
+                style: {
+                  border: '2px dashed #f00',
+                  padding: '8px',
+                  margin: '4px',
+                  backgroundColor: '#fff0f0'
+                }
+              },
+              React.createElement('small', { style: { color: '#c00' } },
+                'Missing Client Component: ' + type
+              ),
+              children
+            );
+          }
+        } else if (typeof type === 'string' && type.startsWith('$L')) {
           if (modules.has(type)) {
             const moduleData = modules.get(type);
             const clientComponentKey = moduleData.id + '#' + moduleData.name;
@@ -1681,9 +2157,7 @@ function ServerComponentWrapper({
   }, [componentId, JSON.stringify(props)]);
 
   if (loading) {
-    return fallback || React.createElement('div', { className: 'rsc-loading' },
-      'Loading ' + componentId + '...'
-    );
+    return fallback || null;
   }
 
   if (error) {
@@ -1696,7 +2170,7 @@ function ServerComponentWrapper({
     if (data) {
     if (data._isRscResponse) {
       return React.createElement(Suspense,
-        { fallback: fallback || React.createElement('div', null, 'Loading...') },
+        { fallback: fallback || null },
         data.readRoot()
       );
     } else if (data) {
@@ -1744,11 +2218,12 @@ function createServerComponentWrapper(componentName, importPath) {
     }, []);
 
     return React.createElement(Suspense, {
-      fallback: React.createElement('div', null, 'Loading ' + componentName + '...')
+      fallback: null
     }, React.createElement(ServerComponentWrapper, {
       key: componentName + '-' + mountKey, // Force re-mount with key change
       componentId: componentName,
-      props: props
+      props: props,
+      fallback: null
     }));
   };
 
@@ -1898,7 +2373,10 @@ ${registrations.join('\n')}
 
     handleHotUpdate({ file, server }) {
       if (/\.(?:tsx?|jsx?)$/.test(file) && isServerComponent(file)) {
-        server.hot.send('vite:beforeFullReload', { type: 'full-reload', path: file })
+        server.hot.send('vite:beforeFullReload', {
+          type: 'full-reload',
+          path: file,
+        })
         return []
       }
       return undefined

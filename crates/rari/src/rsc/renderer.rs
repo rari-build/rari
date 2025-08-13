@@ -4,18 +4,20 @@ use crate::rsc::js_loader::{ModuleOperation, RscJsLoader};
 use crate::rsc::jsx_transform::{extract_dependencies, hash_string, transform_jsx};
 
 use crate::rsc::serializer::{ReactElement, RscSerializer};
+use crate::rsc::streaming::{RscStream, StreamingRenderer};
 use crate::runtime::JsExecutionRuntime;
 use crate::server_fn::ServerFunctionExecutor;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use regex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::time::sleep;
 use tokio::time::timeout;
-use tracing::error;
+use tracing::{debug, error};
 
 const MEMORY_PRESSURE_THRESHOLD: f64 = 0.8;
 const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_millis(10);
@@ -403,7 +405,8 @@ impl RscRenderer {
         let dependencies = extract_dependencies(component_code);
 
         for dep in &dependencies {
-            if let Err(e) = self.register_dependency_if_needed(dep).await {
+            let dep_owned = dep.clone();
+            if let Err(e) = self.register_dependency_if_needed(dep_owned).await {
                 error!(
                     "[RSC] Warning: Failed to register dependency '{dep}' for component '{component_id}': {e}"
                 );
@@ -500,86 +503,118 @@ impl RscRenderer {
         Ok(())
     }
 
-    async fn register_dependency_if_needed(&mut self, dep: &str) -> Result<(), RariError> {
-        if !dep.starts_with("./") && !dep.starts_with("../") {
-            return Ok(());
-        }
+    fn is_react_component_file(content: &str) -> bool {
+        let has_jsx =
+            content.contains('<') && content.contains('>') && !content.contains("</script>");
+        let has_react_import = content.contains("import")
+            && (content.contains("from 'react'")
+                || content.contains("from \"react\"")
+                || content.contains("React"));
+        let has_server_directive =
+            content.contains("'use server'") || content.contains("\"use server\"");
+        let has_client_directive =
+            content.contains("'use client'") || content.contains("\"use client\"");
+        let has_component_export = content.contains("export default function")
+            || content.contains("export default async function");
+
+        has_jsx
+            || has_server_directive
+            || has_client_directive
+            || (has_react_import && has_component_export)
+    }
+
+    async fn register_dependency_if_needed(&mut self, dep: String) -> Result<(), RariError> {
+        let mut stack: Vec<String> = vec![dep];
+        let mut visited: FxHashSet<String> = FxHashSet::default();
 
         let base_path = std::env::current_dir().unwrap_or_default();
         let src_dir = base_path.join("src");
-
-        let mut resolved_path_candidates = Vec::new();
-
-        let clean_dep = dep.trim_start_matches("./").trim_start_matches("../");
-
-        if dep.starts_with("../") {
-            let up_count = dep.matches("../").count();
-            let remaining_path = dep.replacen("../", "", up_count);
-
-            if up_count == 1 {
-                resolved_path_candidates.push(src_dir.join(&remaining_path));
-            } else if up_count == 2 {
-                resolved_path_candidates.push(base_path.join(&remaining_path));
-            }
-        } else if dep.starts_with("./") {
-            resolved_path_candidates.push(src_dir.join("components").join(clean_dep));
-            resolved_path_candidates.push(src_dir.join(clean_dep));
-        }
-
         let extensions = [".ts", ".tsx", ".js", ".jsx"];
-        let mut potential_paths = Vec::new();
 
-        for base_path_candidate in &resolved_path_candidates {
-            for ext in &extensions {
-                potential_paths.push(base_path_candidate.with_extension(&ext[1..]));
+        while let Some(current) = stack.pop() {
+            if !visited.insert(current.clone()) {
+                continue;
             }
 
-            for ext in &extensions {
-                potential_paths.push(base_path_candidate.join(format!("index{ext}")));
+            if !current.starts_with("./") && !current.starts_with("../") {
+                continue;
             }
-        }
 
-        for potential_path in &potential_paths {
-            if potential_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(potential_path) {
-                    let dep_component_id = potential_path
-                        .file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
+            let clean_dep = current.trim_start_matches("./").trim_start_matches("../");
 
-                    let path_components: Vec<&str> = potential_path
-                        .strip_prefix(base_path.join("src"))
-                        .unwrap_or(potential_path)
-                        .components()
-                        .filter_map(|c| c.as_os_str().to_str())
-                        .collect();
-
-                    let unique_dep_id = if path_components.len() > 1 {
-                        format!(
-                            "{}_{}",
-                            path_components[0..path_components.len() - 1].join("_"),
-                            dep_component_id
-                        )
-                    } else {
-                        dep_component_id.clone()
-                    };
-
-                    let already_registered = {
-                        let registry = self.component_registry.lock();
-                        registry.is_component_registered(&unique_dep_id)
-                    };
-
-                    if !already_registered {
-                        let sub_dependencies = extract_dependencies(&content);
-                        for sub_dep in &sub_dependencies {
-                            let _ = Box::pin(self.register_dependency_if_needed(sub_dep)).await;
-                        }
-
-                        self.register_component_without_loading(&unique_dep_id, &content).await?;
-                    }
+            let mut resolved_path_candidates: Vec<std::path::PathBuf> = Vec::new();
+            if current.starts_with("../") {
+                let up_count = current.matches("../").count();
+                let remaining_path = current.replacen("../", "", up_count);
+                if up_count == 1 {
+                    resolved_path_candidates.push(src_dir.join(&remaining_path));
+                } else if up_count == 2 {
+                    resolved_path_candidates.push(base_path.join(&remaining_path));
                 }
-                break;
+            } else if current.starts_with("./") {
+                resolved_path_candidates.push(src_dir.join("components").join(clean_dep));
+                resolved_path_candidates.push(src_dir.join(clean_dep));
+            }
+
+            let mut potential_paths: Vec<std::path::PathBuf> = Vec::new();
+            for base_path_candidate in &resolved_path_candidates {
+                for ext in &extensions {
+                    potential_paths.push(base_path_candidate.with_extension(&ext[1..]));
+                }
+                for ext in &extensions {
+                    potential_paths.push(base_path_candidate.join(format!("index{ext}")));
+                }
+            }
+
+            for potential_path in &potential_paths {
+                if potential_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(potential_path) {
+                        let dep_component_id = potential_path
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+
+                        let path_components: Vec<&str> = potential_path
+                            .strip_prefix(base_path.join("src"))
+                            .unwrap_or(potential_path)
+                            .components()
+                            .filter_map(|c| c.as_os_str().to_str())
+                            .collect();
+
+                        let unique_dep_id = if path_components.len() > 1 {
+                            format!(
+                                "{}_{}",
+                                path_components[0..path_components.len() - 1].join("_"),
+                                dep_component_id
+                            )
+                        } else {
+                            dep_component_id.clone()
+                        };
+
+                        let already_registered = {
+                            let registry = self.component_registry.lock();
+                            registry.is_component_registered(&unique_dep_id)
+                        };
+
+                        if !already_registered {
+                            if Self::is_react_component_file(&content) {
+                                let sub_dependencies = extract_dependencies(&content);
+                                for sub_dep in sub_dependencies {
+                                    stack.push(sub_dep);
+                                }
+                                self.register_component_without_loading(&unique_dep_id, &content)
+                                    .await?;
+                            } else {
+                                debug!(
+                                    "Skipping registration of '{}' as it's not a React component",
+                                    unique_dep_id
+                                );
+                            }
+                        }
+                    }
+                    break;
+                }
             }
         }
 
@@ -672,12 +707,7 @@ impl RscRenderer {
                 (component.transformed_source.clone(), component.dependencies.clone())
             };
 
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let module_specifier_js =
-                format!("file:///rari_component/{component_id}.js?v={timestamp}");
+            let module_specifier_js = format!("file:///rari_component/{component_id}.js");
 
             self.runtime
                 .add_module_to_loader_only(&module_specifier_js, transformed_source)
@@ -700,12 +730,7 @@ impl RscRenderer {
         }
 
         for component_id in &components_to_load {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let module_specifier_js =
-                format!("file:///rari_component/{component_id}.js?v={timestamp}");
+            let module_specifier_js = format!("file:///rari_component/{component_id}.js");
 
             let load_script = RscJsLoader::create_module_operation_script(
                 component_id,
@@ -1340,6 +1365,214 @@ impl RscRenderer {
         })?;
 
         Ok(result)
+    }
+
+    pub async fn render_with_streaming(
+        &self,
+        component_id: &str,
+        props: Option<&str>,
+    ) -> Result<RscStream, RariError> {
+        if !self.initialized {
+            return Err(RariError::internal("RSC renderer not initialized"));
+        }
+
+        let canonical_id = self.ensure_component_available(component_id).await?;
+        self.ensure_component_loaded(&canonical_id).await?;
+
+        let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
+        match streaming_renderer.start_streaming(&canonical_id, props).await {
+            Ok(stream) => Ok(stream),
+            Err(e) => {
+                let msg = format!("{e}");
+                let should_retry = msg.contains("not a function")
+                    || msg.contains("not found")
+                    || msg.contains("Component render failed");
+                if should_retry {
+                    sleep(Duration::from_millis(80)).await;
+                    let canonical_id = self.ensure_component_available(component_id).await?;
+                    self.ensure_component_loaded(&canonical_id).await?;
+                    let mut retry_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
+                    return retry_renderer.start_streaming(&canonical_id, props).await;
+                }
+                Err(e)
+            }
+        }
+    }
+
+    async fn ensure_component_available(&self, original_id: &str) -> Result<String, RariError> {
+        let candidates = self.generate_component_id_candidates(original_id);
+
+        for candidate in &candidates {
+            if self.component_exists(candidate) {
+                return Ok(candidate.clone());
+            }
+            if self.auto_register_component_from_fs(candidate.clone()).await.is_ok() {
+                return Ok(candidate.clone());
+            }
+        }
+
+        sleep(Duration::from_millis(20)).await;
+        if self.component_exists(original_id)
+            || self.auto_register_component_from_fs(original_id.to_string()).await.is_ok()
+        {
+            return Ok(original_id.to_string());
+        }
+
+        Err(RariError::not_found(format!(
+            "Component not found: {} (tried: {})",
+            original_id,
+            candidates.join(", ")
+        )))
+    }
+
+    fn generate_component_id_candidates(&self, id: &str) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        out.push(id.to_string());
+
+        if let Some((path, _export)) = id.split_once('#') {
+            out.push(path.to_string());
+        }
+
+        let path_like = id.replace('\\', "/");
+        if let Some(basename) = path_like.rsplit('/').next() {
+            out.push(basename.to_string());
+        }
+
+        for ext in [".tsx", ".ts", ".jsx", ".js"] {
+            if id.ends_with(ext) {
+                out.push(id.trim_end_matches(ext).to_string());
+            }
+        }
+
+        let mut seen = FxHashSet::default();
+        out.retain(|s| seen.insert(s.clone()));
+        out
+    }
+
+    async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {
+        let init_registry_script = RscJsLoader::create_global_init();
+        self.runtime
+            .execute_script(
+                "init_global_registries.js".to_string(),
+                init_registry_script.to_string(),
+            )
+            .await?;
+
+        let is_loaded = {
+            let registry = self.component_registry.lock();
+            registry.is_component_loaded(component_id)
+        };
+        if is_loaded {
+            return Ok(());
+        }
+
+        let (transformed_source, dependencies) = {
+            let registry = self.component_registry.lock();
+            let component = registry.get_component(component_id).ok_or_else(|| {
+                RariError::not_found(format!("Component not registered: {component_id}"))
+            })?;
+            (component.transformed_source.clone(), component.dependencies.clone())
+        };
+
+        let isolation_script = RscJsLoader::create_isolation_init_script(component_id);
+        self.runtime
+            .execute_script(format!("isolation_{component_id}.js"), isolation_script)
+            .await?;
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let module_specifier_js = format!("file:///rari_component/{component_id}.js?v={timestamp}");
+
+        self.runtime.add_module_to_loader_only(&module_specifier_js, transformed_source).await?;
+
+        let dependencies_json =
+            serde_json::to_string(&dependencies.into_iter().collect::<Vec<_>>())
+                .unwrap_or_else(|_| "[]".to_string());
+        let register_exports_script = RscJsLoader::create_module_operation_script(
+            component_id,
+            ModuleOperation::Register { dependencies_json },
+        );
+
+        self.runtime
+            .execute_script(format!("register_exports_{component_id}.js"), register_exports_script)
+            .await?;
+
+        let load_script = RscJsLoader::create_module_operation_script(
+            component_id,
+            ModuleOperation::Load { module_specifier: module_specifier_js },
+        );
+        self.runtime.execute_script(format!("load_{component_id}.js"), load_script).await?;
+
+        let verify_script = self.create_component_verification_script(component_id);
+        self.execute_verification_script(component_id, verify_script).await?;
+        {
+            let mut registry = self.component_registry.lock();
+            registry.mark_component_loaded(component_id);
+        }
+        Ok(())
+    }
+
+    async fn auto_register_component_from_fs(&self, component_id: String) -> Result<(), RariError> {
+        if let Some(config) = crate::server::config::Config::get()
+            && !config.is_development()
+        {
+            return Err(RariError::not_found("Auto-register only in development".to_string()));
+        }
+
+        let cwd = std::env::current_dir().map_err(|e| RariError::io(e.to_string()))?;
+        let search_roots = [
+            cwd.join("examples/basic-vite-rsc/src/components"),
+            cwd.join("examples/basic-vite-rsc/src/pages"),
+            cwd.join("docs/src/components"),
+            cwd.join("docs/src/pages"),
+        ];
+
+        let stem = component_id.clone();
+        let exts = [".tsx", ".ts", ".jsx", ".js"];
+        let mut found: Option<std::path::PathBuf> = None;
+        for root in &search_roots {
+            for ext in &exts {
+                let candidate = root.join(format!("{stem}{ext}"));
+                if candidate.exists() {
+                    found = Some(candidate);
+                    break;
+                }
+
+                let candidate_idx = root.join(stem.clone()).join(format!("index{ext}"));
+                if candidate_idx.exists() {
+                    found = Some(candidate_idx);
+                    break;
+                }
+            }
+            if found.is_some() {
+                break;
+            }
+        }
+
+        let path = found.ok_or_else(|| {
+            RariError::not_found(format!("Source file not found for component {component_id}"))
+        })?;
+
+        let code = std::fs::read_to_string(&path)
+            .map_err(|e| RariError::io(format!("Failed to read {}: {}", path.display(), e)))?;
+
+        {
+            let mut renderer = crate::rsc::renderer::RscRenderer {
+                runtime: Arc::clone(&self.runtime),
+                timeout_ms: self.timeout_ms,
+                initialized: self.initialized,
+                server_fn_executor: self.server_fn_executor.clone(),
+                component_registry: Arc::clone(&self.component_registry),
+                script_cache: self.script_cache.clone(),
+                resource_limits: self.resource_limits.clone(),
+                resource_tracker: Arc::clone(&self.resource_tracker),
+                serializer: Arc::clone(&self.serializer),
+            };
+            renderer.register_component(&component_id, &code).await?;
+        }
+        Ok(())
     }
 }
 

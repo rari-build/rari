@@ -1,7 +1,7 @@
 {
   "name": "rari",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Runtime Accelerated Rendering Infrastructure (Rari)",
   "author": "Ryan Skinner",
   "license": "MIT",
@@ -73,24 +73,24 @@
   },
   "dependencies": {
     "acorn": "^8.15.0",
-    "esbuild": "^0.25.8",
+    "esbuild": "^0.25.9",
     "picocolors": "^1.1.1"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.1.5",
-    "rari-darwin-x64": "0.1.5",
-    "rari-linux-arm64": "0.1.5",
-    "rari-linux-x64": "0.1.5",
-    "rari-win32-x64": "0.1.5"
+    "rari-darwin-arm64": "0.2.0",
+    "rari-darwin-x64": "0.2.0",
+    "rari-linux-arm64": "0.2.0",
+    "rari-linux-x64": "0.2.0",
+    "rari-win32-x64": "0.2.0"
   },
   "devDependencies": {
-    "@types/node": "^24.1.0",
-    "@types/react": "^19.1.8",
+    "@types/node": "^24.2.1",
+    "@types/react": "^19.1.10",
     "@typescript/native-preview": "7.0.0-dev.20250620.1",
     "chokidar": "^3.6.0",
-    "eslint": "^9.32.0",
-    "oxlint": "^1.8.0",
-    "rolldown-vite": "^7.0.11",
+    "eslint": "^9.33.0",
+    "oxlint": "^1.11.2",
+    "rolldown-vite": "^7.1.2",
     "tsdown": "^0.12.9"
   }
 }

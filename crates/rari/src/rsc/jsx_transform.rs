@@ -116,9 +116,8 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
     let semantic_info = semantic_result.semantic;
 
     let jsx_options = JsxOptions {
-        runtime: JsxRuntime::Classic,
-        pragma: Some("React.createElement".to_string()),
-        pragma_frag: Some("React.Fragment".to_string()),
+        runtime: JsxRuntime::Automatic,
+        import_source: Some("react".to_string()),
         ..JsxOptions::default()
     };
 
@@ -819,7 +818,7 @@ mod tests {
 
         assert!(js_code.contains("TestComponent"));
 
-        assert!(js_code.contains("React.createElement"));
+        assert!(js_code.contains("_jsx") || js_code.contains("React.createElement"));
 
         assert!(js_code.contains("__rsc_modules") || js_code.contains("__rsc_functions"));
     }

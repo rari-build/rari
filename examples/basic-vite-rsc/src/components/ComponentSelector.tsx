@@ -7,7 +7,10 @@ import FetchExample from './FetchExample'
 import Markdown from './Markdown'
 import ServerWithClient from './ServerWithClient'
 import ShoppingList from './ShoppingList'
+import SimpleStreamingTest from './SimpleStreamingTest'
+import StreamingVerificationTest from './StreamingVerificationTest'
 import StressTest from './StressTest'
+import SuspenseStreamingTest from './SuspenseStreamingTest'
 import TestComponent from './TestComponent'
 import WhatsHot from './WhatsHot'
 
@@ -28,15 +31,20 @@ const componentMap = {
   WhatsHot,
   TestComponent,
   Markdown,
+  SimpleStreamingTest,
   StressTest,
+  StreamingVerificationTest,
+  SuspenseStreamingTest,
 } as const
 
 export default function ComponentSelector({
   serverComponents,
 }: ComponentSelectorProps) {
-  const [activeComponent, setActiveComponent] = useState<string>('ServerWithClient')
+  const [activeComponent, setActiveComponent]
+    = useState<string>('ServerWithClient')
 
-  const ComponentToRender = componentMap[activeComponent as keyof typeof componentMap]
+  const ComponentToRender
+    = componentMap[activeComponent as keyof typeof componentMap]
 
   return (
     <>
@@ -79,30 +87,36 @@ export default function ComponentSelector({
               •
               {' '}
               <strong>App.tsx</strong>
-              : Server Component (renders server components)
+              : Server Component (renders server
+              components)
             </div>
             <div>
               •
               {' '}
               <strong>ComponentSelector.tsx</strong>
-              : Client Component (handles interactivity)
+              : Client Component
+              (handles interactivity)
             </div>
             <div>
               •
               {' '}
               <strong>Server Components</strong>
-              : Run on server, can fetch data, no interactivity
+              : Run on server, can fetch
+              data, no interactivity
             </div>
             <div>
               •
               {' '}
               <strong>Client Components</strong>
-              : Run in browser, have state and event handlers
+              : Run in browser, have state
+              and event handlers
             </div>
             <div className="mt-2 text-xs">
               Current:
               {' '}
-              <span className="font-mono bg-blue-100 px-1 rounded">Server Component</span>
+              <span className="font-mono bg-blue-100 px-1 rounded">
+                Server Component
+              </span>
             </div>
           </div>
         </div>

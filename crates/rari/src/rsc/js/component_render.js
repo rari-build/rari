@@ -116,7 +116,7 @@
     }
   }
   else {
-    element = React.createElement(Component, props)
+    element = Component(props)
   }
 
   try {
@@ -172,7 +172,7 @@
         try {
           await error.promise
 
-          const newElement = React.createElement(Component, props)
+          const newElement = Component(props)
 
           const rscResult = elementToRSC(newElement, '{component_id}')
 

@@ -211,8 +211,7 @@ impl RSCTree {
                 if arr.len() == 4 && arr[0] == "$" {
                     let id = arr[1].as_str().ok_or("Invalid reference ID")?;
 
-                    let is_client_reference =
-                        id.starts_with("$L") || id.starts_with("client") || !is_html_tag(id);
+                    let is_client_reference = id.starts_with("$L") || id.contains('#');
 
                     if is_client_reference {
                         let key = arr[2].as_str().map(|s| s.to_string());
@@ -303,84 +302,6 @@ impl RSCTree {
     }
 }
 
-const HTML_TAGS: &[&str] = &[
-    "div",
-    "span",
-    "p",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "a",
-    "img",
-    "ul",
-    "ol",
-    "li",
-    "table",
-    "tr",
-    "td",
-    "th",
-    "thead",
-    "tbody",
-    "form",
-    "input",
-    "button",
-    "select",
-    "option",
-    "textarea",
-    "label",
-    "br",
-    "hr",
-    "strong",
-    "em",
-    "b",
-    "i",
-    "small",
-    "code",
-    "pre",
-    "blockquote",
-    "article",
-    "section",
-    "header",
-    "footer",
-    "nav",
-    "main",
-    "aside",
-    "figure",
-    "figcaption",
-    "details",
-    "summary",
-    "mark",
-    "time",
-    "progress",
-    "meter",
-    "audio",
-    "video",
-    "source",
-    "track",
-    "canvas",
-    "svg",
-    "iframe",
-    "embed",
-    "object",
-    "param",
-    "script",
-    "noscript",
-    "style",
-    "link",
-    "meta",
-    "title",
-    "head",
-    "body",
-    "html",
-];
-
-fn is_html_tag(tag: &str) -> bool {
-    HTML_TAGS.contains(&tag)
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RSCRenderResult {
     pub tree: RSCTree,
@@ -445,6 +366,7 @@ impl RSCRenderResult {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -511,12 +433,12 @@ mod tests {
 
     #[test]
     fn test_json_deserialization() {
-        let json_value = json!(["$", "Counter", null, {"count": 42}]);
+        let json_value = json!(["$", "$L0", null, {"count": 42}]);
         let tree = RSCTree::from_json(&json_value).unwrap();
 
         match tree {
             RSCTree::ClientReference { id, key, props } => {
-                assert_eq!(id, "Counter");
+                assert_eq!(id, "$L0");
                 assert_eq!(key, None);
                 assert_eq!(props.get("count"), Some(&json!(42)));
             }
