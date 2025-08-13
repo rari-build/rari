@@ -405,7 +405,8 @@ impl RscRenderer {
         let dependencies = extract_dependencies(component_code);
 
         for dep in &dependencies {
-            if let Err(e) = self.register_dependency_if_needed(dep).await {
+            let dep_owned = dep.clone();
+            if let Err(e) = Box::pin(self.register_dependency_if_needed(dep_owned.clone())).await {
                 error!(
                     "[RSC] Warning: Failed to register dependency '{dep}' for component '{component_id}': {e}"
                 );
@@ -522,7 +523,7 @@ impl RscRenderer {
             || (has_react_import && has_component_export)
     }
 
-    async fn register_dependency_if_needed(&mut self, dep: &str) -> Result<(), RariError> {
+    async fn register_dependency_if_needed(&mut self, dep: String) -> Result<(), RariError> {
         if !dep.starts_with("./") && !dep.starts_with("../") {
             return Ok(());
         }
@@ -595,7 +596,7 @@ impl RscRenderer {
                     if !already_registered {
                         if Self::is_react_component_file(&content) {
                             let sub_dependencies = extract_dependencies(&content);
-                            for sub_dep in &sub_dependencies {
+                            for sub_dep in sub_dependencies {
                                 let _ = Box::pin(self.register_dependency_if_needed(sub_dep)).await;
                             }
 
@@ -1401,14 +1402,14 @@ impl RscRenderer {
             if self.component_exists(candidate) {
                 return Ok(candidate.clone());
             }
-            if self.auto_register_component_from_fs(candidate).await.is_ok() {
+            if self.auto_register_component_from_fs(candidate.clone()).await.is_ok() {
                 return Ok(candidate.clone());
             }
         }
 
         sleep(Duration::from_millis(20)).await;
         if self.component_exists(original_id)
-            || self.auto_register_component_from_fs(original_id).await.is_ok()
+            || self.auto_register_component_from_fs(original_id.to_string()).await.is_ok()
         {
             return Ok(original_id.to_string());
         }
@@ -1509,7 +1510,7 @@ impl RscRenderer {
         Ok(())
     }
 
-    async fn auto_register_component_from_fs(&self, component_id: &str) -> Result<(), RariError> {
+    async fn auto_register_component_from_fs(&self, component_id: String) -> Result<(), RariError> {
         if let Some(config) = crate::server::config::Config::get()
             && !config.is_development()
         {
@@ -1524,7 +1525,7 @@ impl RscRenderer {
             cwd.join("docs/src/pages"),
         ];
 
-        let stem = component_id;
+        let stem = component_id.clone();
         let exts = [".tsx", ".ts", ".jsx", ".js"];
         let mut found: Option<std::path::PathBuf> = None;
         for root in &search_roots {
@@ -1535,7 +1536,7 @@ impl RscRenderer {
                     break;
                 }
 
-                let candidate_idx = root.join(stem).join(format!("index{ext}"));
+                let candidate_idx = root.join(stem.clone()).join(format!("index{ext}"));
                 if candidate_idx.exists() {
                     found = Some(candidate_idx);
                     break;
@@ -1565,7 +1566,7 @@ impl RscRenderer {
                 resource_tracker: Arc::clone(&self.resource_tracker),
                 serializer: Arc::clone(&self.serializer),
             };
-            renderer.register_component(component_id, &code).await?;
+            renderer.register_component(&component_id, &code).await?;
         }
         Ok(())
     }
