@@ -3,7 +3,7 @@
 import React, { Suspense } from 'react'
 
 async function SimpleAsyncComponent() {
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  await new Promise(resolve => setTimeout(resolve, 5000))
   const timestamp = new Date().toLocaleTimeString()
 
   return (
@@ -11,7 +11,7 @@ async function SimpleAsyncComponent() {
       <h3 className="text-lg font-semibold text-green-800">
         ✅ Simple Async Component
       </h3>
-      <p className="text-green-700">Successfully loaded after 1 second</p>
+      <p className="text-green-700">Successfully loaded after 5 seconds</p>
       <p className="text-xs text-green-600">
         Resolved at:
         {timestamp}
@@ -80,7 +80,7 @@ async function SuspenseStreamingTest() {
       <div className="p-3 bg-blue-50 border border-blue-200 rounded">
         <h4 className="font-semibold text-blue-800 mb-2">Expected Behavior:</h4>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>1. You should see "Loading simple component..." for 1 second</li>
+          <li>1. You should see "Loading simple component..." for ~5 seconds</li>
           <li>2. Then see the green success box with timestamp</li>
           <li>
             3. If you only see this container, Suspense boundaries aren't

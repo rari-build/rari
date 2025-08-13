@@ -301,7 +301,7 @@ impl SuspenseBoundaryManager {
 
 pub struct StreamingRenderer {
     runtime: Arc<JsExecutionRuntime>,
-    promise_resolver: Option<BackgroundPromiseResolver>,
+    promise_resolver: Option<Arc<BackgroundPromiseResolver>>,
     row_counter: u32,
     module_path: Option<String>,
     shared_row_counter: Arc<Mutex<u32>>,
@@ -328,11 +328,11 @@ impl StreamingRenderer {
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
         let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunk>(64);
 
-        self.promise_resolver = Some(BackgroundPromiseResolver::new(
+        self.promise_resolver = Some(Arc::new(BackgroundPromiseResolver::new(
             Arc::clone(&self.runtime),
             update_sender,
             Arc::clone(&self.shared_row_counter),
-        ));
+        )));
 
         self.module_path = Some(format!("app/{component_id}.js"));
 
@@ -435,7 +435,7 @@ impl StreamingRenderer {
                                 } catch (error) {
                                     if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
                                         const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
+                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
                                         globalThis.__suspense_promises[promiseId] = error.promise;
                                         globalThis.__pending_promises = globalThis.__pending_promises || [];
                                         globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
@@ -524,16 +524,7 @@ impl StreamingRenderer {
                                 }
                                 return ["$", element.type, uniqueKey, rscProps];
                             } else if (typeof element.type === 'function') {
-                                try {
-                                    const rendered = element.type(element.props || {});
-                                    return globalThis.renderToRSC(rendered, clientComponents);
-                                } catch (error) {
-                                    console.error('Error rendering function component in fallback renderToRSC:', error);
-                                    return ["$", "div", uniqueKey, {
-                                        style: { color: 'red', border: '1px solid red', padding: '10px' },
-                                        children: `Error: ${error.message}`
-                                    }];
-                                }
+                                return ["$", "div", uniqueKey, { children: null }];
                             }
                         }
 
@@ -690,7 +681,7 @@ impl StreamingRenderer {
                         const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
                                 if (!el || typeof el !== 'object') return el;
 
-                                if (!el.type && el.props && el.props.fallback && el.children) {{
+                                if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {{
                                     const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                                     const previousBoundaryId = globalThis.__current_boundary_id;
                                     globalThis.__current_boundary_id = boundaryId;
@@ -705,33 +696,40 @@ impl StreamingRenderer {
                                     }});
 
                                     const processedChildren = el.children.map(child => {{
-                                        if (child && child.props && Object.keys(child.props).length === 0 &&
-                                            (!child.children || child.children.length === 0)) {{
-                                            if (globalThis.SimpleAsyncContent && typeof globalThis.SimpleAsyncContent === 'function') {{
-                                                try {{
-                                                    const result = globalThis.SimpleAsyncContent({{}});
+                                        try {{
+                                            if (child && typeof child === 'object' && child.type && typeof child.type === 'function') {{
+                                                const result = child.type(child.props || {{}});
+                                                if (result && typeof result.then === 'function') {{
+                                                    const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                                    globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                                                    globalThis.__suspense_promises[promiseId] = result;
 
-                                                    if (result && typeof result.then === 'function') {{
-                                                        const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
-                                                        globalThis.__suspense_promises[promiseId] = result;
-
-                                                        globalThis.__pending_promises.push({{
-                                                            id: promiseId,
-                                                            boundaryId: boundaryId,
-                                                            componentPath: 'SimpleAsyncContent'
-                                                        }});
-
-                                                        return safeFallback;
-                                                    }} else {{
-                                                        return result;
-                                                    }}
-                                                }} catch (error) {{
+                                                    globalThis.__pending_promises = globalThis.__pending_promises || [];
+                                                    globalThis.__pending_promises.push({{
+                                                        id: promiseId,
+                                                        boundaryId: boundaryId,
+                                                        componentPath: (child.type.name || 'AnonymousComponent')
+                                                    }});
                                                     return safeFallback;
+                                                }} else {{
+                                                    return globalThis.renderToRSC(result, globalThis.__rsc_client_components || {{}});
                                                 }}
-                                            }} else {{
+                                            }}
+                                        }} catch (error) {{
+                                            if (error && typeof error.then === 'function') {{
+                                                const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                                                globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                                                globalThis.__suspense_promises[promiseId] = error;
+
+                                                globalThis.__pending_promises = globalThis.__pending_promises || [];
+                                                globalThis.__pending_promises.push({{
+                                                    id: promiseId,
+                                                    boundaryId: boundaryId,
+                                                    componentPath: 'ThrownPromise'
+                                                }});
                                                 return safeFallback;
                                             }}
+                                            return safeFallback;
                                         }}
 
                                         return processSuspenseInStructure(child, boundaryId);
@@ -741,7 +739,7 @@ impl StreamingRenderer {
 
                                     return {{
                                         type: 'suspense',
-                                        props: {{...el.props, key: boundaryId}},
+                                        props: {{...el.props, key: boundaryId, boundaryId: boundaryId}},
                                         children: processedChildren
                                     }};
                                 }}
@@ -866,15 +864,31 @@ impl StreamingRenderer {
             )));
         }
 
+        let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
+        if let Some(pending) = result_data["pending_promises"].as_array() {
+            for p in pending {
+                if let Some(bid) = p["boundaryId"].as_str() {
+                    *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
+                }
+            }
+        }
+
         let boundaries = result_data["boundaries"]
             .as_array()
             .unwrap_or(&Vec::new())
             .iter()
-            .map(|b| SuspenseBoundaryInfo {
-                id: b["id"].as_str().unwrap_or("unknown").to_string(),
-                fallback_content: b["fallback"].clone(),
-                parent_boundary_id: b["parentId"].as_str().map(|s| s.to_string()),
-                pending_promise_count: 1,
+            .filter_map(|b| {
+                let id = b["id"].as_str().unwrap_or("unknown").to_string();
+                let count = pending_counts.get(&id).cloned().unwrap_or(0);
+                if count == 0 {
+                    return None;
+                }
+                Some(SuspenseBoundaryInfo {
+                    id,
+                    fallback_content: b["fallback"].clone(),
+                    parent_boundary_id: b["parentId"].as_str().map(|s| s.to_string()),
+                    pending_promise_count: count,
+                })
             })
             .collect();
 

@@ -702,12 +702,7 @@ impl RscRenderer {
                 (component.transformed_source.clone(), component.dependencies.clone())
             };
 
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let module_specifier_js =
-                format!("file:///rari_component/{component_id}.js?v={timestamp}");
+            let module_specifier_js = format!("file:///rari_component/{component_id}.js");
 
             self.runtime
                 .add_module_to_loader_only(&module_specifier_js, transformed_source)
@@ -730,12 +725,7 @@ impl RscRenderer {
         }
 
         for component_id in &components_to_load {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let module_specifier_js =
-                format!("file:///rari_component/{component_id}.js?v={timestamp}");
+            let module_specifier_js = format!("file:///rari_component/{component_id}.js");
 
             let load_script = RscJsLoader::create_module_operation_script(
                 component_id,

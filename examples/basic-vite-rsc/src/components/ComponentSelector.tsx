@@ -8,6 +8,7 @@ import Markdown from './Markdown'
 import ServerWithClient from './ServerWithClient'
 import ShoppingList from './ShoppingList'
 import SimpleStreamingTest from './SimpleStreamingTest'
+import StreamingVerificationTest from './StreamingVerificationTest'
 import StressTest from './StressTest'
 import SuspenseStreamingTest from './SuspenseStreamingTest'
 import TestComponent from './TestComponent'
@@ -32,6 +33,7 @@ const componentMap = {
   Markdown,
   SimpleStreamingTest,
   StressTest,
+  StreamingVerificationTest,
   SuspenseStreamingTest,
 } as const
 

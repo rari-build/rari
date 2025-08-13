@@ -373,7 +373,7 @@ if (import.meta.hot) {
         ? (config.resolve as any).dedupe as string[]
         : []
       const toAdd = ['react', 'react-dom']
-      ;(config.resolve as any).dedupe = Array.from(
+        ; (config.resolve as any).dedupe = Array.from(
         new Set([...(existingDedupe || []), ...toAdd]),
       )
 
@@ -396,7 +396,7 @@ if (import.meta.hot) {
             aliasesToAppend.push({ find: 'react/jsx-dev-runtime', replacement: reactJsxDevRuntimePath })
           }
         }
-        catch {}
+        catch { }
         if (!aliasFinds.has('react')) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
@@ -407,7 +407,7 @@ if (import.meta.hot) {
           (config.resolve as any).alias = [...existingAlias, ...aliasesToAppend]
         }
       }
-      catch {}
+      catch { }
 
       config.environments = config.environments || {}
 
@@ -1399,6 +1399,7 @@ class RscClient {
   constructor() {
     this.componentCache = new Map();
     this.moduleCache = new Map();
+    this.inflightRequests = new Map();
     this.config = {
       enableStreaming: true,
       maxRetries: 5,
@@ -1423,80 +1424,93 @@ class RscClient {
       return this.componentCache.get(cacheKey);
     }
 
+    if (this.inflightRequests.has(cacheKey)) {
+      return this.inflightRequests.get(cacheKey);
+    }
+
+    let requestPromise;
     if (this.config.enableStreaming) {
-      const result = await this.fetchServerComponentStreamV2(componentId, props);
-      this.componentCache.set(cacheKey, result);
-      return result;
-    }
-
-    const encodedProps = encodeURIComponent(JSON.stringify(props));
-    const cacheBuster = Date.now();
-    const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster;
-
-    try {
-      await this.waitForServerReady();
-
-      const response = await this.fetchWithTimeout(fetchUrl, {
-        method: 'GET',
-        headers: {
-          ...this.buildRequestHeaders(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Server responded with ' + response.status + ': ' + response.statusText);
-      }
-
-      let result;
-
-      try {
-        result = await this.processRscResponseManually(response);
-      } catch (manualError) {
-        try {
-          result = await this.processRscResponse(response);
-        } catch (error) {
-          console.error('Both RSC parsing methods failed:', { manualError, error });
-          throw new Error('Failed to parse RSC response: ' + manualError.message);
+      requestPromise = this.fetchServerComponentStreamV2(componentId, props);
+    } else {
+      requestPromise = (async () => {
+        const encodedProps = encodeURIComponent(JSON.stringify(props));
+        const cacheBuster = Date.now();
+        const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster;
+        await this.waitForServerReady();
+        const response = await this.fetchWithTimeout(fetchUrl, {
+          method: 'GET',
+          headers: {
+            ...this.buildRequestHeaders(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+        });
+        if (!response.ok) {
+          throw new Error('Server responded with ' + response.status + ': ' + response.statusText);
         }
-      }
+        try {
+          return await this.processRscResponseManually(response);
+        } catch (manualError) {
+          const fallback = await this.processRscResponse(response);
+          return fallback;
+        }
+      })();
+    }
 
+    this.inflightRequests.set(cacheKey, requestPromise);
+    try {
+      const result = await requestPromise;
       this.componentCache.set(cacheKey, result);
       return result;
-    } catch (error) {
-      throw new Error('Failed to fetch server component ' + componentId + ': ' + error.message);
+    } finally {
+      this.inflightRequests.delete(cacheKey);
     }
+
   }
 
   async fetchServerComponentStreamV2(componentId, props = {}) {
     await loadRscClient();
 
-    const endpoints = [
-      '/api/rsc/stream',
-      'http://127.0.0.1:3000/api/rsc/stream',
-    ];
+    const endpoints = (() => {
+      const list = [
+        'http://127.0.0.1:3000/api/rsc/stream',
+        'http://localhost:3000/api/rsc/stream',
+        '/api/rsc/stream',
+      ];
+      return list;
+    })();
     let response = null;
     let lastError = null;
-    for (const url of endpoints) {
-      try {
-        const r = await this.fetchWithTimeout(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...this.buildRequestHeaders(),
-          },
-          body: JSON.stringify({ component_id: componentId, props }),
-        });
-        if (r.ok) {
-          response = r;
-          break;
+    const attempt = async () => {
+      for (const url of endpoints) {
+        try {
+          const r = await this.fetchWithTimeout(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...this.buildRequestHeaders(),
+            },
+            body: JSON.stringify({ component_id: componentId, props }),
+          });
+          if (r.ok) {
+            return r;
+          }
+          lastError = new Error('HTTP ' + r.status + ': ' + (await r.text()));
+        } catch (e) {
+          lastError = e;
         }
-        lastError = new Error('HTTP ' + r.status + ': ' + (await r.text()));
-      } catch (e) {
-        lastError = e;
       }
+      return null;
+    };
+
+    const abortController = new AbortController();
+    const abortTimeout = setTimeout(() => abortController.abort(), this.config.timeout);
+
+    response = await attempt();
+    if (!response) {
+      await new Promise(r => setTimeout(r, 150));
+      response = await attempt();
     }
     if (!response) {
       throw lastError || new Error('Failed to reach stream endpoint');
@@ -1512,7 +1526,7 @@ class RscClient {
       throw new Error('No ReadableStream from stream response');
     }
 
-    if (createFromReadableStream) {
+    if (false && createFromReadableStream) {
       try {
         const rscPromise = createFromReadableStream(stream);
         return {
@@ -1551,7 +1565,7 @@ class RscClient {
         if (element.length >= 3 && element[0] === '$') {
           const [, type, key, props] = element;
 
-          if (type === 'react.suspense') {
+          if (type === 'react.suspense' || type === 'suspense') {
 
             const suspenseWrapper = React.createElement('div',
               {
@@ -1565,12 +1579,17 @@ class RscClient {
             return suspenseWrapper;
           }
 
-          const processedProps = props ? { ...props } : {};
+          let processedProps = props ? { ...props } : {};
           if (props?.children) {
-            processedProps.children = convertRscToReact(props.children);
+            const child = convertRscToReact(props.children);
+            if (Array.isArray(child)) {
+              processedProps.children = child.map((c, i) => React.isValidElement(c) ? React.cloneElement(c, { key: (c.key ?? i) }) : c);
+            } else {
+              processedProps.children = child;
+            }
           }
 
-          if (typeof type === 'string') {
+           if (typeof type === 'string') {
             if (type.startsWith('$L')) {
               const mod = modules.get(type);
               if (mod) {
@@ -1593,6 +1612,10 @@ class RscClient {
                 return null;
               }
             } else {
+              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, 'boundaryId')) {
+                const { boundaryId, ...rest } = processedProps;
+                processedProps = rest;
+              }
               const reactElement = React.createElement(type, key ? { ...processedProps, key } : processedProps);
               return reactElement;
             }
@@ -1677,7 +1700,7 @@ class RscClient {
                 const parsed = JSON.parse(content);
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, key, props] = parsed;
-                  if (marker === '$' && selector === 'react.suspense' && props && props.boundaryId) {
+                   if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && props.boundaryId) {
                     boundaryRowMap.set('$L' + rowId, props.boundaryId);
                   }
                   if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
@@ -1699,12 +1722,15 @@ class RscClient {
                   if (Array.isArray(parsed) && parsed.length >= 4 && parsed[0] === '$') {
                     const sel = parsed[1];
                     const p = parsed[3];
-                    if (typeof sel === 'string' && sel === 'react.suspense' && p && p.boundaryId) {
+                     if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && p.boundaryId) {
                       canUseAsRoot = false;
                     }
                   }
                   if (canUseAsRoot) {
                     initialContent = convertRscToReact(parsed);
+                    if (streamingComponent && typeof streamingComponent.updateRoot === 'function') {
+                      streamingComponent.updateRoot();
+                    }
                   }
                 }
               }
@@ -1728,9 +1754,10 @@ class RscClient {
         streamingComponent = {
           updateBoundary: (boundaryId, resolvedContent) => {
             boundaryUpdates.set(boundaryId, resolvedContent);
-            setRenderTrigger(prev => {
-              return prev + 1;
-            });
+            setRenderTrigger(prev => prev + 1);
+          },
+          updateRoot: () => {
+            setRenderTrigger(prev => prev + 1);
           }
         };
 
@@ -2195,7 +2222,8 @@ function createServerComponentWrapper(componentName, importPath) {
     }, React.createElement(ServerComponentWrapper, {
       key: componentName + '-' + mountKey, // Force re-mount with key change
       componentId: componentName,
-      props: props
+      props: props,
+      fallback: null
     }));
   };
 

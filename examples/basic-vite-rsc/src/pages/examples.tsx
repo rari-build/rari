@@ -19,6 +19,7 @@ function ExamplesPage() {
     { id: 'StressTest', name: 'StressTest' },
     { id: 'SimpleStreamingTest', name: 'Simple Streaming Test' },
     { id: 'SuspenseStreamingTest', name: 'Suspense Streaming Test' },
+    { id: 'StreamingVerificationTest', name: 'Streaming Verification Test' },
   ]
 
   return (
