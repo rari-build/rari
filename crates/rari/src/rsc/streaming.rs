@@ -435,7 +435,7 @@ impl StreamingRenderer {
                                 } catch (error) {
                                     if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
                                         const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
                                         globalThis.__suspense_promises[promiseId] = error.promise;
                                         globalThis.__pending_promises = globalThis.__pending_promises || [];
                                         globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
@@ -698,10 +698,10 @@ impl StreamingRenderer {
                                     const processedChildren = el.children.map(child => {{
                                         try {{
                                             if (child && typeof child === 'object' && child.type && typeof child.type === 'function') {{
-                                                const result = child.type(child.props || {{}});
+                                                const result = child.type(child.props || null);
                                                 if (result && typeof result.then === 'function') {{
                                                     const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                                    globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                                                 globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
                                                     globalThis.__suspense_promises[promiseId] = result;
 
                                                     globalThis.__pending_promises = globalThis.__pending_promises || [];
