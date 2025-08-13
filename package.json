@@ -8,7 +8,7 @@
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/",
     "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ --fix",
-    "changelog": "pnpm exec git-cliff --output packages/rari/CHANGELOG.md",
+    "changelog": "pnpm exec git-cliff --output CHANGELOG.md",
     "changelog:preview": "pnpm exec git-cliff --unreleased",
     "changelog:latest": "pnpm exec git-cliff --latest",
     "release": "node scripts/release.js",

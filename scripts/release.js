@@ -92,6 +92,8 @@ async function releasePackage(pkg) {
 
   const changelogArgs = [
     'git-cliff',
+    '--tag',
+    `v${newVersion}`,
     '--output',
     'CHANGELOG.md',
   ]

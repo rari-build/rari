@@ -22,7 +22,7 @@ body = """
 # Remove leading and trailing whitespaces from the changelog's body.
 trim = true
 # Render body even when there are no releases to process.
-render_always = true
+render_always = false
 # An array of regex based postprocessors to modify the changelog.
 postprocessors = []
 # render body even when there are no releases to process
@@ -70,7 +70,7 @@ filter_commits = false
 # An array of link parsers for extracting external references, and turning them into URLs, using regex.
 link_parsers = []
 # Include only the tags that belong to the current branch.
-use_branch_tags = false
+use_branch_tags = true
 # Order releases topologically instead of chronologically.
 topo_order = false
 # Order releases topologically instead of chronologically.
