@@ -1375,11 +1375,9 @@ async function loadRscClient() {
       createFromReadableStream = rscModule.createFromReadableStream;
 
       if (typeof createFromReadableStream !== 'function') {
-        console.warn('createFromReadableStream is not available in react-dom/client');
         createFromReadableStream = null;
       }
       if (typeof createFromFetch !== 'function') {
-        console.warn('createFromFetch is not available in react-dom/client');
         createFromFetch = null;
       }
 
@@ -1473,11 +1471,13 @@ class RscClient {
     await loadRscClient();
 
     const endpoints = (() => {
-      const list = [
-        'http://127.0.0.1:3000/api/rsc/stream',
-        'http://localhost:3000/api/rsc/stream',
-        '/api/rsc/stream',
-      ];
+      const list = ['/api/rsc/stream'];
+      try {
+        const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        if (isLocalHost) {
+          list.push('http://127.0.0.1:3000/api/rsc/stream', 'http://localhost:3000/api/rsc/stream');
+        }
+      } catch {}
       return list;
     })();
     let response = null;
