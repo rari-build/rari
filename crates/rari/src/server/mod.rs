@@ -4,7 +4,7 @@ use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 use crate::runtime::JsExecutionRuntime;
 use crate::server::config::Config;
 use crate::server::request_middleware::{
-    cors_middleware, html_optimization_middleware, request_logger, security_headers_middleware,
+    cors_middleware, request_logger, security_headers_middleware,
 };
 use crate::server::vite_proxy::{
     check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_websocket_proxy,
@@ -135,7 +135,6 @@ impl Server {
             }
         } else {
             router = router.layer(middleware::from_fn(security_headers_middleware));
-            router = router.layer(middleware::from_fn(html_optimization_middleware));
         }
 
         if config.is_production() {
@@ -629,7 +628,6 @@ async fn root_handler() -> Result<Response, StatusCode> {
             Ok(content) => {
                 return Ok(Response::builder()
                     .header("content-type", "text/html")
-                    .header("cache-control", "public, max-age=0, must-revalidate")
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
             }
@@ -656,10 +654,8 @@ async fn static_or_spa_handler(Path(path): Path<String>) -> Result<Response, Sta
         match std::fs::read(&file_path) {
             Ok(content) => {
                 let content_type = get_content_type(&path);
-                let cache_control = get_cache_control_for_file(&path, &config.static_files);
                 return Ok(Response::builder()
                     .header("content-type", content_type)
-                    .header("cache-control", cache_control)
                     .body(Body::from(content))
                     .expect("Valid static file response"));
             }
@@ -678,7 +674,6 @@ async fn static_or_spa_handler(Path(path): Path<String>) -> Result<Response, Sta
             Ok(content) => {
                 return Ok(Response::builder()
                     .header("content-type", "text/html")
-                    .header("cache-control", "public, max-age=0, must-revalidate")
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
             }
@@ -706,52 +701,8 @@ fn get_content_type(path: &str) -> &'static str {
         "image/jpeg"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
-    } else if path.ends_with(".webp") {
-        "image/webp"
-    } else if path.ends_with(".gif") {
-        "image/gif"
-    } else if path.ends_with(".ico") {
-        "image/x-icon"
-    } else if path.ends_with(".woff") {
-        "font/woff"
-    } else if path.ends_with(".woff2") {
-        "font/woff2"
-    } else if path.ends_with(".ttf") {
-        "font/ttf"
-    } else if path.ends_with(".otf") {
-        "font/otf"
     } else {
         "application/octet-stream"
-    }
-}
-
-fn get_cache_control_for_file<'a>(
-    path: &str,
-    static_config: &'a crate::server::config::StaticConfig,
-) -> &'a str {
-    if path.ends_with(".html") {
-        &static_config.html_cache_control
-    } else if path.ends_with(".js") {
-        &static_config.js_cache_control
-    } else if path.ends_with(".css") {
-        &static_config.css_cache_control
-    } else if path.ends_with(".png")
-        || path.ends_with(".jpg")
-        || path.ends_with(".jpeg")
-        || path.ends_with(".svg")
-        || path.ends_with(".webp")
-        || path.ends_with(".gif")
-        || path.ends_with(".ico")
-    {
-        &static_config.image_cache_control
-    } else if path.ends_with(".woff")
-        || path.ends_with(".woff2")
-        || path.ends_with(".ttf")
-        || path.ends_with(".otf")
-    {
-        &static_config.font_cache_control
-    } else {
-        &static_config.cache_control
     }
 }
 
