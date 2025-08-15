@@ -1,6 +1,4 @@
-export {
-  Link,
-} from './router'
+export { Link } from "./router";
 
 export {
   buildSearchString,
@@ -13,7 +11,7 @@ export {
   normalizePathname,
   parseSearchParams,
   parseUrl,
-} from './router'
+} from "./router";
 
 export {
   Navigate,
@@ -28,7 +26,7 @@ export {
   useRouter,
   useSearchParams,
   withRouter,
-} from './router'
+} from "./router";
 
 export type {
   ErrorBoundaryProps,
@@ -49,7 +47,7 @@ export type {
   RouterProviderProps,
   Route as RouteType,
   SearchParams,
-} from './router'
+} from "./router";
 
 export {
   convertFilePatternToRoutePattern,
@@ -59,21 +57,14 @@ export {
   loadRouteManifest,
   validateRoutes,
   watchFileRoutes,
-} from './router/file-routes'
+} from "./router/file-routes";
 
-export {
-  getRoutePriority,
-} from './router/utils'
+export { getRoutePriority } from "./router/utils";
 
-export { rariRouter } from './router/vite-plugin'
+export { rariRouter } from "./router/vite-plugin";
 
-export {
-  createHttpRuntimeClient,
-  HttpRuntimeClient,
-} from './runtime-client'
+export { createHttpRuntimeClient, HttpRuntimeClient } from "./runtime-client";
 
-export type {
-  RuntimeClient,
-} from './runtime-client'
+export type { RuntimeClient } from "./runtime-client";
 
-export { defineRariConfig, rari } from './vite'
+export { createReactDOMOptimization, defineRariConfig, rari } from "./vite";
