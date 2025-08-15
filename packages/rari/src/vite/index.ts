@@ -1,100 +1,105 @@
-import type { Buffer } from "node:buffer";
-import type { Plugin, UserConfig } from "rolldown-vite";
-import type { ServerBuildOptions } from "./server-build";
-import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
-import * as acorn from "acorn";
-import { createServerBuildPlugin } from "./server-build";
+import type { Buffer } from 'node:buffer'
+import type { Plugin, UserConfig } from 'rolldown-vite'
+import type { ServerBuildOptions } from './server-build'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
+import * as acorn from 'acorn'
+import { createServerBuildPlugin } from './server-build'
 
 interface RariOptions {
-  projectRoot?: string;
-  serverBuild?: ServerBuildOptions;
-  serverHandler?: boolean;
+  projectRoot?: string
+  serverBuild?: ServerBuildOptions
+  serverHandler?: boolean
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
-  const clientComponents = new Set<string>();
+  const clientComponents = new Set<string>()
 
   function scanDirectory(dir: string) {
-    if (!fs.existsSync(dir)) return;
+    if (!fs.existsSync(dir))
+      return
 
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
 
     for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
+      const fullPath = path.join(dir, entry.name)
 
       if (entry.isDirectory()) {
-        scanDirectory(fullPath);
-      } else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+        scanDirectory(fullPath)
+      }
+      else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
         try {
-          const content = fs.readFileSync(fullPath, "utf8");
+          const content = fs.readFileSync(fullPath, 'utf8')
           if (
-            content.includes("'use client'") ||
-            content.includes('"use client"')
+            content.includes('\'use client\'')
+            || content.includes('"use client"')
           ) {
-            clientComponents.add(fullPath);
+            clientComponents.add(fullPath)
           }
-        } catch {
+        }
+        catch {
           // Skip files that can't be read
         }
       }
     }
   }
 
-  scanDirectory(srcDir);
-  return clientComponents;
+  scanDirectory(srcDir)
+  return clientComponents
 }
 
 export function rari(options: RariOptions = {}): Plugin[] {
-  const componentTypeCache = new Map<string, "client" | "server" | "unknown">();
-  const serverComponents = new Set<string>();
-  const clientComponents = new Set<string>();
-  let rustServerProcess: any = null;
+  const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
+  const serverComponents = new Set<string>()
+  const clientComponents = new Set<string>()
+  let rustServerProcess: any = null
 
-  const serverImportedClientComponents = new Set<string>();
+  const serverImportedClientComponents = new Set<string>()
 
   function isServerComponent(filePath: string): boolean {
-    let pathForFsOperations = filePath;
+    let pathForFsOperations = filePath
     try {
-      pathForFsOperations = fs.realpathSync(filePath);
-    } catch {
-      return false;
+      pathForFsOperations = fs.realpathSync(filePath)
+    }
+    catch {
+      return false
     }
 
     try {
       if (!fs.existsSync(pathForFsOperations)) {
-        return false;
+        return false
       }
-      const code = fs.readFileSync(pathForFsOperations, "utf-8");
+      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
 
-      const serverDirectives = ["'use server'", '"use server"'];
+      const serverDirectives = ['\'use server\'', '"use server"']
 
-      const trimmedCode = code.trim();
+      const trimmedCode = code.trim()
 
       const hasServerDirective = serverDirectives.some(
-        (directive) =>
+        directive =>
           trimmedCode.startsWith(directive) || code.includes(directive),
-      );
+      )
 
-      const isInFunctionsDir =
-        filePath.includes("/functions/") || filePath.includes("\\functions\\");
-      const hasServerFunctionSignature =
-        (code.includes("export async function") ||
-          code.includes("export function")) &&
-        code.includes("'use server'");
+      const isInFunctionsDir
+        = filePath.includes('/functions/') || filePath.includes('\\functions\\')
+      const hasServerFunctionSignature
+        = (code.includes('export async function')
+          || code.includes('export function'))
+        && code.includes('\'use server\'')
 
       if (
-        hasServerDirective ||
-        (isInFunctionsDir && hasServerFunctionSignature)
+        hasServerDirective
+        || (isInFunctionsDir && hasServerFunctionSignature)
       ) {
-        return true;
+        return true
       }
 
-      return false;
-    } catch {
-      return false;
+      return false
+    }
+    catch {
+      return false
     }
   }
 
@@ -102,114 +107,121 @@ export function rari(options: RariOptions = {}): Plugin[] {
     try {
       const ast = acorn.parse(code, {
         ecmaVersion: 2024,
-        sourceType: "module",
-      }) as any;
+        sourceType: 'module',
+      }) as any
 
-      const exportedNames: string[] = [];
+      const exportedNames: string[] = []
 
       for (const node of ast.body) {
         switch (node.type) {
-          case "ExportDefaultDeclaration":
-            exportedNames.push("default");
-            break;
-          case "ExportNamedDeclaration":
+          case 'ExportDefaultDeclaration':
+            exportedNames.push('default')
+            break
+          case 'ExportNamedDeclaration':
             if (node.declaration) {
-              if (node.declaration.type === "VariableDeclaration") {
+              if (node.declaration.type === 'VariableDeclaration') {
                 for (const declarator of node.declaration.declarations) {
-                  if (declarator.id.type === "Identifier") {
-                    exportedNames.push(declarator.id.name);
+                  if (declarator.id.type === 'Identifier') {
+                    exportedNames.push(declarator.id.name)
                   }
                 }
-              } else if (node.declaration.id) {
-                exportedNames.push(node.declaration.id.name);
+              }
+              else if (node.declaration.id) {
+                exportedNames.push(node.declaration.id.name)
               }
             }
             if (node.specifiers) {
               for (const specifier of node.specifiers) {
-                exportedNames.push(specifier.exported.name);
+                exportedNames.push(specifier.exported.name)
               }
             }
-            break;
-          case "ExportAllDeclaration":
-            if (node.exported && node.exported.type === "Identifier") {
-              exportedNames.push(node.exported.name);
+            break
+          case 'ExportAllDeclaration':
+            if (node.exported && node.exported.type === 'Identifier') {
+              exportedNames.push(node.exported.name)
             }
-            break;
+            break
         }
       }
 
-      return exportedNames;
-    } catch {
-      return [];
+      return exportedNames
+    }
+    catch {
+      return []
     }
   }
 
   function hasTopLevelDirective(
     code: string,
-    directive: "use client" | "use server",
+    directive: 'use client' | 'use server',
   ): boolean {
     try {
       const ast = acorn.parse(code, {
         ecmaVersion: 2024,
-        sourceType: "module",
+        sourceType: 'module',
         locations: false,
-      }) as any;
+      }) as any
 
       for (const node of ast.body) {
-        if (node.type !== "ExpressionStatement" || !node.directive) break;
-        if (node.directive === directive) return true;
+        if (node.type !== 'ExpressionStatement' || !node.directive)
+          break
+        if (node.directive === directive)
+          return true
       }
-      return false;
-    } catch {
-      return false;
+      return false
+    }
+    catch {
+      return false
     }
   }
 
   function transformServerModule(code: string, id: string): string {
-    if (!hasTopLevelDirective(code, "use server")) {
-      return code;
+    if (!hasTopLevelDirective(code, 'use server')) {
+      return code
     }
 
-    const exportedNames = parseExportedNames(code);
+    const exportedNames = parseExportedNames(code)
     if (exportedNames.length === 0) {
-      return code;
+      return code
     }
 
-    let newCode = code;
-    newCode +=
-      '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n';
+    let newCode = code
+    newCode
+      += '\n\nimport {registerServerReference} from "react-server-dom-rari/server";\n'
 
     for (const name of exportedNames) {
-      if (name === "default") {
-        const functionDeclRegex =
-          /export\s+default\s+(?:async\s+)?function\s+(\w+)/;
-        const functionDeclMatch = code.match(functionDeclRegex);
+      if (name === 'default') {
+        const functionDeclRegex
+          = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
+        const functionDeclMatch = code.match(functionDeclRegex)
 
         if (functionDeclMatch) {
-          const functionName = functionDeclMatch[1];
-          newCode += `\n// Register server reference for default export (function declaration)\n`;
-          newCode += `registerServerReference(${functionName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`;
-        } else {
-          const defaultExportRegex = /export\s+default\s+([^;]+)/;
-          const match = code.match(defaultExportRegex);
+          const functionName = functionDeclMatch[1]
+          newCode += `\n// Register server reference for default export (function declaration)\n`
+          newCode += `registerServerReference(${functionName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+        }
+        else {
+          const defaultExportRegex = /export\s+default\s+([^;]+)/
+          const match = code.match(defaultExportRegex)
           if (match) {
-            const exportedValue = match[1].trim();
-            const tempVarName = "__default_export__";
+            const exportedValue = match[1].trim()
+            const tempVarName = '__default_export__'
             newCode = newCode.replace(
               defaultExportRegex,
               `const ${tempVarName} = ${exportedValue};\nexport default ${tempVarName}`,
-            );
-            newCode += `\n// Register server reference for default export\n`;
-            newCode += `if (typeof ${tempVarName} === "function") {\n`;
-            newCode += `  registerServerReference(${tempVarName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`;
-            newCode += `}\n`;
+            )
+            newCode += `\n// Register server reference for default export\n`
+            newCode += `if (typeof ${tempVarName} === "function") {\n`
+            newCode += `  registerServerReference(${tempVarName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+            newCode += `}\n`
           }
         }
-      } else {
-        newCode += `\n// Register server reference for ${name}\n`;
-        newCode += `if (typeof ${name} === "function") {\n`;
-        newCode += `  registerServerReference(${name}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`;
-        newCode += `}\n`;
+      }
+      else {
+        newCode += `\n// Register server reference for ${name}\n`
+        newCode += `if (typeof ${name} === "function") {\n`
+        newCode += `  registerServerReference(${name}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
+        newCode += `}\n`
       }
     }
 
@@ -220,407 +232,415 @@ if (import.meta.hot) {
   import.meta.hot.accept(() => {
     // Server component updated, no need to reload
   });
-}`;
+}`
 
-    return newCode;
+    return newCode
   }
 
   function transformClientModule(code: string, id: string): string {
-    if (hasTopLevelDirective(code, "use server")) {
-      const exportedNames = parseExportedNames(code);
+    if (hasTopLevelDirective(code, 'use server')) {
+      const exportedNames = parseExportedNames(code)
       if (exportedNames.length === 0) {
-        return "";
+        return ''
       }
 
-      const relativePath = path.relative(process.cwd(), id);
+      const relativePath = path.relative(process.cwd(), id)
       const componentId = relativePath
-        .replace(/\\/g, "/")
-        .replace(/\.(tsx?|jsx?)$/, "")
-        .replace(/[^\w/-]/g, "_")
-        .replace(/^src\//, "")
-        .replace(/^components\//, "");
+        .replace(/\\/g, '/')
+        .replace(/\.(tsx?|jsx?)$/, '')
+        .replace(/[^\w/-]/g, '_')
+        .replace(/^src\//, '')
+        .replace(/^components\//, '')
 
-      let newCode =
-        'import { createServerComponentWrapper } from "virtual:rsc-integration";\n';
+      let newCode
+        = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
 
       for (const name of exportedNames) {
-        if (name === "default") {
-          newCode += `export default createServerComponentWrapper("${componentId}", ${JSON.stringify(id)});\n`;
-        } else {
-          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${JSON.stringify(id)});\n`;
+        if (name === 'default') {
+          newCode += `export default createServerComponentWrapper("${componentId}", ${JSON.stringify(id)});\n`
+        }
+        else {
+          newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${JSON.stringify(id)});\n`
         }
       }
 
-      return newCode;
+      return newCode
     }
 
-    if (!hasTopLevelDirective(code, "use client")) {
-      return code;
+    if (!hasTopLevelDirective(code, 'use client')) {
+      return code
     }
 
-    const exportedNames = parseExportedNames(code);
+    const exportedNames = parseExportedNames(code)
     if (exportedNames.length === 0) {
-      return "";
+      return ''
     }
 
-    let newCode =
-      'import {registerClientReference} from "react-server-dom-rari/server";\n';
+    let newCode
+      = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
 
     for (const name of exportedNames) {
-      if (name === "default") {
-        newCode += "export default ";
-        newCode += "registerClientReference(function() {";
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`;
-      } else {
-        newCode += `export const ${name} = `;
-        newCode += "registerClientReference(function() {";
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`;
+      if (name === 'default') {
+        newCode += 'export default '
+        newCode += 'registerClientReference(function() {'
+        newCode += `throw new Error(${JSON.stringify(`Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
       }
-      newCode += "},";
-      newCode += `${JSON.stringify(id)},`;
-      newCode += `${JSON.stringify(name)});\n`;
+      else {
+        newCode += `export const ${name} = `
+        newCode += 'registerClientReference(function() {'
+        newCode += `throw new Error(${JSON.stringify(`Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
+      }
+      newCode += '},'
+      newCode += `${JSON.stringify(id)},`
+      newCode += `${JSON.stringify(name)});\n`
     }
 
-    return newCode;
+    return newCode
   }
 
   function transformClientModuleForClient(code: string, id: string): string {
-    if (!hasTopLevelDirective(code, "use client")) {
-      return code;
+    if (!hasTopLevelDirective(code, 'use client')) {
+      return code
     }
 
-    const exportedNames = parseExportedNames(code);
+    const exportedNames = parseExportedNames(code)
     if (exportedNames.length === 0) {
-      return code;
+      return code
     }
 
-    let newCode = code.replace(/^['"]use client['"];?\s*$/gm, "");
-    newCode += "\n\n// Client component registration\n";
-    newCode +=
-      'import { registerClientComponent } from "virtual:rsc-integration";\n';
+    let newCode = code.replace(/^['"]use client['"];?\s*$/gm, '')
+    newCode += '\n\n// Client component registration\n'
+    newCode
+      += 'import { registerClientComponent } from "virtual:rsc-integration";\n'
 
     for (const name of exportedNames) {
-      if (name === "default") {
+      if (name === 'default') {
         const defaultExportMatch = code.match(
           /export\s+default\s+function\s+(\w+)/,
-        );
-        const functionName = defaultExportMatch ? defaultExportMatch[1] : null;
+        )
+        const functionName = defaultExportMatch ? defaultExportMatch[1] : null
 
         if (functionName) {
-          newCode += `\nif (typeof registerClientComponent === 'function') {\n`;
-          newCode += `  registerClientComponent(${functionName}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`;
-          newCode += `}\n`;
+          newCode += `\nif (typeof registerClientComponent === 'function') {\n`
+          newCode += `  registerClientComponent(${functionName}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`
+          newCode += `}\n`
         }
-      } else {
-        newCode += `\nif (typeof registerClientComponent === 'function') {\n`;
-        newCode += `  registerClientComponent(${name}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`;
-        newCode += `}\n`;
+      }
+      else {
+        newCode += `\nif (typeof registerClientComponent === 'function') {\n`
+        newCode += `  registerClientComponent(${name}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`
+        newCode += `}\n`
       }
     }
 
-    return newCode;
+    return newCode
   }
 
   function resolveImportToFilePath(
     importPath: string,
     importerPath: string,
   ): string {
-    const resolvedPath = path.resolve(path.dirname(importerPath), importPath);
+    const resolvedPath = path.resolve(path.dirname(importerPath), importPath)
 
-    const extensions = [".tsx", ".jsx", ".ts", ".js"];
+    const extensions = ['.tsx', '.jsx', '.ts', '.js']
     for (const ext of extensions) {
-      const pathWithExt = `${resolvedPath}${ext}`;
+      const pathWithExt = `${resolvedPath}${ext}`
       if (fs.existsSync(pathWithExt)) {
-        return pathWithExt;
+        return pathWithExt
       }
     }
 
     if (fs.existsSync(resolvedPath)) {
       for (const ext of extensions) {
-        const indexPath = path.join(resolvedPath, `index${ext}`);
+        const indexPath = path.join(resolvedPath, `index${ext}`)
         if (fs.existsSync(indexPath)) {
-          return indexPath;
+          return indexPath
         }
       }
     }
 
-    return `${resolvedPath}.tsx`;
+    return `${resolvedPath}.tsx`
   }
 
   function getComponentName(importPath: string): string {
-    const lastSegment = importPath.split("/").pop() || importPath;
-    return lastSegment.replace(/\.[^.]*$/, "");
+    const lastSegment = importPath.split('/').pop() || importPath
+    return lastSegment.replace(/\.[^.]*$/, '')
   }
 
   const mainPlugin: Plugin = {
-    name: "rari",
+    name: 'rari',
 
     config(config: UserConfig, { command }) {
-      config.resolve = config.resolve || {};
+      config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
         ? ((config.resolve as any).dedupe as string[])
-        : [];
-      const toAdd = ["react", "react-dom"];
+        : []
+      const toAdd = ['react', 'react-dom'];
       (config.resolve as any).dedupe = Array.from(
         new Set([...(existingDedupe || []), ...toAdd]),
-      );
+      )
 
       // Add React DOM server alias for better tree shaking
       const existingResolveAlias = (config.resolve as any).alias || {};
       (config.resolve as any).alias = {
         ...existingResolveAlias,
-        "react-dom/server": "react-dom/server.browser",
+        'react-dom/server': 'react-dom/server.browser',
         // Optimize React DOM imports for better tree-shaking
-        "react-dom$": "react-dom/client",
-        "react-dom/cjs/react-dom.production.min.js": "react-dom/client",
-        "react-dom/cjs/react-dom.development.js": "react-dom/client",
-      };
+        'react-dom$': 'react-dom/client',
+        'react-dom/cjs/react-dom.production.min.js': 'react-dom/client',
+        'react-dom/cjs/react-dom.development.js': 'react-dom/client',
+      }
 
       const existingAlias: Array<{
-        find: string | RegExp;
-        replacement: string;
+        find: string | RegExp
+        replacement: string
       }> = Array.isArray((config.resolve as any).alias)
         ? (config.resolve as any).alias
-        : [];
-      const aliasFinds = new Set(existingAlias.map((a) => String(a.find)));
+        : []
+      const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
-        const reactPath = require.resolve("react");
-        const reactDomClientPath = require.resolve("react-dom/client");
-        const reactJsxRuntimePath = require.resolve("react/jsx-runtime");
-        const aliasesToAppend: Array<{ find: string; replacement: string }> =
-          [];
-        if (!aliasFinds.has("react/jsx-runtime")) {
+        const reactPath = require.resolve('react')
+        const reactDomClientPath = require.resolve('react-dom/client')
+        const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
+        const aliasesToAppend: Array<{ find: string, replacement: string }>
+          = []
+        if (!aliasFinds.has('react/jsx-runtime')) {
           aliasesToAppend.push({
-            find: "react/jsx-runtime",
+            find: 'react/jsx-runtime',
             replacement: reactJsxRuntimePath,
-          });
+          })
         }
         try {
           const reactJsxDevRuntimePath = require.resolve(
-            "react/jsx-dev-runtime",
-          );
-          if (!aliasFinds.has("react/jsx-dev-runtime")) {
+            'react/jsx-dev-runtime',
+          )
+          if (!aliasFinds.has('react/jsx-dev-runtime')) {
             aliasesToAppend.push({
-              find: "react/jsx-dev-runtime",
+              find: 'react/jsx-dev-runtime',
               replacement: reactJsxDevRuntimePath,
-            });
+            })
           }
-        } catch {}
-        if (!aliasFinds.has("react")) {
-          aliasesToAppend.push({ find: "react", replacement: reactPath });
         }
-        if (!aliasFinds.has("react-dom/client")) {
+        catch {}
+        if (!aliasFinds.has('react')) {
+          aliasesToAppend.push({ find: 'react', replacement: reactPath })
+        }
+        if (!aliasFinds.has('react-dom/client')) {
           aliasesToAppend.push({
-            find: "react-dom/client",
+            find: 'react-dom/client',
             replacement: reactDomClientPath,
-          });
+          })
         }
         if (aliasesToAppend.length > 0) {
           (config.resolve as any).alias = [
             ...existingAlias,
             ...aliasesToAppend,
-          ];
+          ]
         }
-      } catch {}
+      }
+      catch {}
 
-      config.environments = config.environments || {};
+      config.environments = config.environments || {}
 
       config.environments.rsc = {
         resolve: {
-          conditions: ["react-server", "node", "import"],
+          conditions: ['react-server', 'node', 'import'],
         },
         ...config.environments.rsc,
-      };
+      }
 
       config.environments.ssr = {
         resolve: {
-          conditions: ["node", "import"],
+          conditions: ['node', 'import'],
         },
         ...config.environments.ssr,
-      };
+      }
 
       config.environments.client = {
         resolve: {
-          conditions: ["browser", "import"],
+          conditions: ['browser', 'import'],
         },
         ...config.environments.client,
-      };
-
-      config.optimizeDeps = config.optimizeDeps || {};
-      config.optimizeDeps.include = config.optimizeDeps.include || [];
-      if (!config.optimizeDeps.include.includes("react-dom/server")) {
-        config.optimizeDeps.include.push("react-dom/server");
-      }
-      if (!config.optimizeDeps.include.includes("react")) {
-        config.optimizeDeps.include.push("react");
-      }
-      if (!config.optimizeDeps.include.includes("react-dom/client")) {
-        config.optimizeDeps.include.push("react-dom/client");
-      }
-      config.optimizeDeps.exclude = config.optimizeDeps.exclude || [];
-      if (!config.optimizeDeps.exclude.includes("virtual:rsc-integration")) {
-        config.optimizeDeps.exclude.push("virtual:rsc-integration");
       }
 
-      if (command === "build") {
-        for (const envName of ["rsc", "ssr", "client"]) {
-          const env = config.environments[envName];
+      config.optimizeDeps = config.optimizeDeps || {}
+      config.optimizeDeps.include = config.optimizeDeps.include || []
+      if (!config.optimizeDeps.include.includes('react-dom/server')) {
+        config.optimizeDeps.include.push('react-dom/server')
+      }
+      if (!config.optimizeDeps.include.includes('react')) {
+        config.optimizeDeps.include.push('react')
+      }
+      if (!config.optimizeDeps.include.includes('react-dom/client')) {
+        config.optimizeDeps.include.push('react-dom/client')
+      }
+      config.optimizeDeps.exclude = config.optimizeDeps.exclude || []
+      if (!config.optimizeDeps.exclude.includes('virtual:rsc-integration')) {
+        config.optimizeDeps.exclude.push('virtual:rsc-integration')
+      }
+
+      if (command === 'build') {
+        for (const envName of ['rsc', 'ssr', 'client']) {
+          const env = config.environments[envName]
           if (env && env.build) {
-            env.build.rollupOptions = env.build.rollupOptions || {};
+            env.build.rollupOptions = env.build.rollupOptions || {}
           }
         }
       }
 
-      config.server = config.server || {};
-      config.server.proxy = config.server.proxy || {};
+      config.server = config.server || {}
+      config.server.proxy = config.server.proxy || {}
 
       const serverPort = process.env.SERVER_PORT
         ? Number(process.env.SERVER_PORT)
-        : Number(process.env.PORT || process.env.RSC_PORT || 3000);
+        : Number(process.env.PORT || process.env.RSC_PORT || 3000)
 
-      config.server.proxy["/api"] = {
+      config.server.proxy['/api'] = {
         target: `http://localhost:${serverPort}`,
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, "/api"),
+        rewrite: path => path.replace(/^\/api/, '/api'),
         ws: false,
-      };
+      }
 
-      config.server.proxy["/rsc"] = {
-        target: `http://localhost:${serverPort}`,
-        changeOrigin: true,
-        secure: false,
-        ws: false,
-      };
-
-      config.server.proxy["/_rsc_status"] = {
+      config.server.proxy['/rsc'] = {
         target: `http://localhost:${serverPort}`,
         changeOrigin: true,
         secure: false,
         ws: false,
-      };
+      }
 
-      if (command === "build") {
-        config.build = config.build || {};
-        config.build.rollupOptions = config.build.rollupOptions || {};
+      config.server.proxy['/_rsc_status'] = {
+        target: `http://localhost:${serverPort}`,
+        changeOrigin: true,
+        secure: false,
+        ws: false,
+      }
+
+      if (command === 'build') {
+        config.build = config.build || {}
+        config.build.rollupOptions = config.build.rollupOptions || {}
 
         if (!config.build.rollupOptions.input) {
           config.build.rollupOptions.input = {
-            main: "./index.html",
-          };
+            main: './index.html',
+          }
         }
 
         // Enhanced React DOM bundle optimization
-        config.build.rollupOptions.output =
-          config.build.rollupOptions.output || {};
+        config.build.rollupOptions.output
+          = config.build.rollupOptions.output || {}
         const outputConfig = Array.isArray(config.build.rollupOptions.output)
           ? config.build.rollupOptions.output[0] || {}
-          : config.build.rollupOptions.output;
+          : config.build.rollupOptions.output
 
         // Always apply our chunk splitting (more assertive)
         outputConfig.manualChunks = (id) => {
           // More aggressive React DOM detection and splitting
           if (
-            id.includes("node_modules/react-dom") ||
-            id.includes("react-dom/client") ||
-            id.includes("react-dom/server") ||
-            id.includes("react-dom/")
+            id.includes('node_modules/react-dom')
+            || id.includes('react-dom/client')
+            || id.includes('react-dom/server')
+            || id.includes('react-dom/')
           ) {
-            return "react-dom";
+            return 'react-dom'
           }
           if (
-            (id.includes("node_modules/react") || id.includes("react/")) &&
-            !id.includes("react-dom")
+            (id.includes('node_modules/react') || id.includes('react/'))
+            && !id.includes('react-dom')
           ) {
-            return "react";
+            return 'react'
           }
-          if (id.includes("scheduler") && id.includes("node_modules")) {
-            return "scheduler";
+          if (id.includes('scheduler') && id.includes('node_modules')) {
+            return 'scheduler'
           }
-          if (id.includes("markdown-it") || id.includes("shiki")) {
-            return "vendor";
+          if (id.includes('markdown-it') || id.includes('shiki')) {
+            return 'vendor'
           }
-          if (id.includes("node_modules")) {
-            return "vendor";
+          if (id.includes('node_modules')) {
+            return 'vendor'
           }
-        };
+        }
 
         config.build.rollupOptions.treeshake = config.build.rollupOptions
           .treeshake || {
           moduleSideEffects: (id) => {
-            if (id.includes(".css") || id.includes("polyfill")) {
-              return true;
+            if (id.includes('.css') || id.includes('polyfill')) {
+              return true
             }
             // Aggressively remove side effects from React DOM internals
             if (
-              id.includes("react-dom") ||
-              id.includes("react") ||
-              id.includes("scheduler") ||
-              id.includes("react-dom/client") ||
-              id.includes("react-dom/server")
+              id.includes('react-dom')
+              || id.includes('react')
+              || id.includes('scheduler')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
             ) {
-              return false;
+              return false
             }
-            return false;
+            return false
           },
           unknownGlobalSideEffects: false,
-        };
+        }
 
         // External dependencies for unused React DOM features
-        const existingExternal = config.build.rollupOptions?.external || [];
+        const existingExternal = config.build.rollupOptions?.external || []
         const reactDomExternals = [
-          "react-dom/profiling",
-          "react-dom/test-utils",
-          "react-dom/server",
-          "react-dom/server.browser",
-          "react-dom/server.node",
-          "react/jsx-dev-runtime",
-          "scheduler/tracing",
-          "scheduler/unstable_mock",
-          "react/cjs/react.development.js",
-          "react/cjs/react.production.min.js",
-          "react-dom/cjs/react-dom.development.js",
-          "react-dom/cjs/react-dom.production.min.js",
+          'react-dom/profiling',
+          'react-dom/test-utils',
+          'react-dom/server',
+          'react-dom/server.browser',
+          'react-dom/server.node',
+          'react/jsx-dev-runtime',
+          'scheduler/tracing',
+          'scheduler/unstable_mock',
+          'react/cjs/react.development.js',
+          'react/cjs/react.production.min.js',
+          'react-dom/cjs/react-dom.development.js',
+          'react-dom/cjs/react-dom.production.min.js',
           // Additional React DOM internals that can be externalized
-          "react-dom/src/client/ReactDOMRoot.js",
-          "react-dom/src/events/plugins",
-          "react-dom/src/shared/HTMLDOMPropertyConfig.js",
-          "react-dom/src/shared/DOMPropertyOperations.js",
-        ];
+          'react-dom/src/client/ReactDOMRoot.js',
+          'react-dom/src/events/plugins',
+          'react-dom/src/shared/HTMLDOMPropertyConfig.js',
+          'react-dom/src/shared/DOMPropertyOperations.js',
+        ]
 
         if (Array.isArray(existingExternal)) {
-          const external = [...existingExternal];
+          const external = [...existingExternal]
           external.push(
-            ...reactDomExternals.filter((dep) => !external.includes(dep)),
-          );
-          config.build.rollupOptions.external = external;
-        } else if (typeof existingExternal === "function") {
-          const originalExternal = existingExternal;
+            ...reactDomExternals.filter(dep => !external.includes(dep)),
+          )
+          config.build.rollupOptions.external = external
+        }
+        else if (typeof existingExternal === 'function') {
+          const originalExternal = existingExternal
           config.build.rollupOptions.external = (id, parentId, isResolved) => {
-            if (reactDomExternals.includes(id)) return true;
-            return originalExternal(id, parentId, isResolved);
-          };
-        } else {
+            if (reactDomExternals.includes(id))
+              return true
+            return originalExternal(id, parentId, isResolved)
+          }
+        }
+        else {
           config.build.rollupOptions.external = [
             ...(Array.isArray(existingExternal)
               ? existingExternal
               : [existingExternal]),
             ...reactDomExternals,
-          ].filter(Boolean);
+          ].filter(Boolean)
         }
 
-        config.build.minify = config.build.minify !== false ? "terser" : false;
+        config.build.minify = false
         config.build.target = config.build.target || [
-          "es2020",
-          "edge88",
-          "firefox78",
-          "chrome87",
-          "safari14",
-        ];
-        config.build.cssMinify =
-          config.build.cssMinify !== false ? "esbuild" : false;
-        config.build.sourcemap =
-          config.build.sourcemap !== undefined ? config.build.sourcemap : false;
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.build.cssMinify
+          = config.build.cssMinify !== false ? 'esbuild' : false
+        config.build.sourcemap
+          = config.build.sourcemap !== undefined ? config.build.sourcemap : true
 
         // Advanced terser options for React DOM optimization
         config.build.terserOptions = config.build.terserOptions || {
@@ -628,19 +648,19 @@ if (import.meta.hot) {
             drop_console: true,
             drop_debugger: true,
             pure_funcs: [
-              "console.log",
-              "console.info",
-              "console.debug",
-              "console.warn",
+              'console.log',
+              'console.info',
+              'console.debug',
+              'console.warn',
               // React DOM specific optimizations
-              "invariant",
-              "warning",
-              "__DEV__",
+              'invariant',
+              'warning',
+              '__DEV__',
               // Additional React DOM internals
-              "ReactDOM.render",
-              "ReactDOM.unmountComponentAtNode",
-              "ReactDOM.findDOMNode",
-              "ReactDOM.createPortal",
+              'ReactDOM.render',
+              'ReactDOM.unmountComponentAtNode',
+              'ReactDOM.findDOMNode',
+              'ReactDOM.createPortal',
             ],
             passes: 3,
             unsafe: true,
@@ -665,231 +685,236 @@ if (import.meta.hot) {
           format: {
             comments: false,
           },
-        };
+        }
 
-        outputConfig.format = outputConfig.format || "es";
-        outputConfig.minify = true;
+        outputConfig.format = outputConfig.format || 'es'
+        outputConfig.minify = false
 
         if (Array.isArray(config.build.rollupOptions.output)) {
-          config.build.rollupOptions.output[0] = outputConfig;
-        } else {
-          config.build.rollupOptions.output = outputConfig;
+          config.build.rollupOptions.output[0] = outputConfig
+        }
+        else {
+          config.build.rollupOptions.output = outputConfig
         }
       }
 
       if (config.environments && config.environments.client) {
         if (!config.environments.client.build) {
-          config.environments.client.build = {};
+          config.environments.client.build = {}
         }
         if (!config.environments.client.build.rollupOptions) {
-          config.environments.client.build.rollupOptions = {};
+          config.environments.client.build.rollupOptions = {}
         }
         if (!config.environments.client.build.rollupOptions.input) {
-          config.environments.client.build.rollupOptions.input = {};
+          config.environments.client.build.rollupOptions.input = {}
         }
 
         if (
-          typeof config.environments.client.build.rollupOptions.input ===
-            "object" &&
-          !Array.isArray(config.environments.client.build.rollupOptions.input)
+          typeof config.environments.client.build.rollupOptions.input
+          === 'object'
+          && !Array.isArray(config.environments.client.build.rollupOptions.input)
         ) {
           (
             config.environments.client.build.rollupOptions.input as Record<
               string,
               string
             >
-          )["client-components"] = "virtual:rsc-client-components";
+          )['client-components'] = 'virtual:rsc-client-components'
         }
 
-        config.environments.client.build.minify =
-          config.environments.client.build.minify !== false ? "esbuild" : false;
+        config.environments.client.build.minify = false
         config.environments.client.build.target = config.environments.client
-          .build.target || [
-          "es2020",
-          "edge88",
-          "firefox78",
-          "chrome87",
-          "safari14",
-        ];
-        config.environments.client.build.cssMinify = "esbuild";
+          .build
+          .target || [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.environments.client.build.cssMinify = 'esbuild'
         config.environments.client.build.rollupOptions.treeshake = {
           moduleSideEffects: false,
           unknownGlobalSideEffects: false,
-        };
+        }
 
         // Client-specific chunk splitting for React DOM
-        config.environments.client.build.rollupOptions.output =
-          config.environments.client.build.rollupOptions.output || {};
+        config.environments.client.build.rollupOptions.output
+          = config.environments.client.build.rollupOptions.output || {}
         const clientOutputConfig = Array.isArray(
           config.environments.client.build.rollupOptions.output,
         )
           ? config.environments.client.build.rollupOptions.output[0] || {}
-          : config.environments.client.build.rollupOptions.output;
+          : config.environments.client.build.rollupOptions.output
 
         // Always apply our client chunk splitting (more assertive)
         clientOutputConfig.manualChunks = (id) => {
           // Enhanced React DOM splitting for client environment
           if (
-            id.includes("node_modules/react-dom") ||
-            id.includes("react-dom/client") ||
-            id.includes("react-dom/server") ||
-            id.includes("react-dom/")
+            id.includes('node_modules/react-dom')
+            || id.includes('react-dom/client')
+            || id.includes('react-dom/server')
+            || id.includes('react-dom/')
           ) {
-            return "react-dom";
+            return 'react-dom'
           }
           if (
-            (id.includes("node_modules/react") || id.includes("react/")) &&
-            !id.includes("react-dom")
+            (id.includes('node_modules/react') || id.includes('react/'))
+            && !id.includes('react-dom')
           ) {
-            return "react";
+            return 'react'
           }
-          if (id.includes("scheduler") && id.includes("node_modules")) {
-            return "scheduler";
+          if (id.includes('scheduler') && id.includes('node_modules')) {
+            return 'scheduler'
           }
           if (
-            id.includes("rari") &&
-            (id.includes("router") || id.includes("navigation"))
+            id.includes('rari')
+            && (id.includes('router') || id.includes('navigation'))
           ) {
-            return "router";
+            return 'router'
           }
-          if (id.includes("markdown-it") || id.includes("shiki")) {
-            return "vendor";
+          if (id.includes('markdown-it') || id.includes('shiki')) {
+            return 'vendor'
           }
-          if (id.includes("node_modules")) {
-            return "vendor";
+          if (id.includes('node_modules')) {
+            return 'vendor'
           }
-        };
+        }
 
-        clientOutputConfig.format = clientOutputConfig.format || "es";
-        clientOutputConfig.minify = true;
+        clientOutputConfig.format = clientOutputConfig.format || 'es'
+        clientOutputConfig.minify = false
 
         if (
           Array.isArray(config.environments.client.build.rollupOptions.output)
         ) {
-          config.environments.client.build.rollupOptions.output[0] =
-            clientOutputConfig;
-        } else {
-          config.environments.client.build.rollupOptions.output =
-            clientOutputConfig;
+          config.environments.client.build.rollupOptions.output[0]
+            = clientOutputConfig
+        }
+        else {
+          config.environments.client.build.rollupOptions.output
+            = clientOutputConfig
         }
       }
 
-      return config;
+      return config
     },
 
     transform(code, id) {
       if (!/\.(?:tsx?|jsx?)$/.test(id)) {
-        return null;
+        return null
       }
 
       // Transform React DOM imports for better tree-shaking
-      if (code.includes("react-dom")) {
+      if (code.includes('react-dom')) {
         // Transform broad React DOM imports to specific named imports
         code = code.replace(
           /import\s+ReactDOM\s+from\s+['"]react-dom\/client['"];?/g,
-          "import { createRoot, hydrateRoot } from 'react-dom/client';",
-        );
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
         code = code.replace(
           /import\s+ReactDOM\s+from\s+['"]react-dom['"];?/g,
-          "import { createRoot, hydrateRoot } from 'react-dom/client';",
-        );
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
         // Replace ReactDOM.createRoot calls with direct createRoot calls
-        code = code.replace(/ReactDOM\.createRoot/g, "createRoot");
-        code = code.replace(/ReactDOM\.hydrateRoot/g, "hydrateRoot");
+        code = code.replace(/ReactDOM\.createRoot/g, 'createRoot')
+        code = code.replace(/ReactDOM\.hydrateRoot/g, 'hydrateRoot')
       }
 
-      const environment = (this as any).environment;
+      const environment = (this as any).environment
 
-      if (hasTopLevelDirective(code, "use client")) {
-        componentTypeCache.set(id, "client");
-        clientComponents.add(id);
+      if (hasTopLevelDirective(code, 'use client')) {
+        componentTypeCache.set(id, 'client')
+        clientComponents.add(id)
 
         if (
-          environment &&
-          (environment.name === "rsc" || environment.name === "ssr")
+          environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          return transformClientModule(code, id);
-        } else {
-          return transformClientModuleForClient(code, id);
+          return transformClientModule(code, id)
+        }
+        else {
+          return transformClientModuleForClient(code, id)
         }
       }
 
-      if (hasTopLevelDirective(code, "use server")) {
-        componentTypeCache.set(id, "server");
-        serverComponents.add(id);
+      if (hasTopLevelDirective(code, 'use server')) {
+        componentTypeCache.set(id, 'server')
+        serverComponents.add(id)
 
         if (
-          environment &&
-          (environment.name === "rsc" || environment.name === "ssr")
+          environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          return transformServerModule(code, id);
-        } else {
-          let clientTransformedCode = transformClientModule(code, id);
+          return transformServerModule(code, id)
+        }
+        else {
+          let clientTransformedCode = transformClientModule(code, id)
 
-          if (hasTopLevelDirective(code, "use server")) {
+          if (hasTopLevelDirective(code, 'use server')) {
             clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
   import.meta.hot.accept();
 }
 
-${clientTransformedCode}`;
+${clientTransformedCode}`
           }
 
-          return clientTransformedCode;
+          return clientTransformedCode
         }
       }
 
-      const cachedType = componentTypeCache.get(id);
-      if (cachedType === "server") {
-        return transformServerModule(code, id);
+      const cachedType = componentTypeCache.get(id)
+      if (cachedType === 'server') {
+        return transformServerModule(code, id)
       }
 
-      if (cachedType === "client") {
-        return transformClientModule(code, id);
+      if (cachedType === 'client') {
+        return transformClientModule(code, id)
       }
 
-      componentTypeCache.set(id, "unknown");
+      componentTypeCache.set(id, 'unknown')
 
-      const lines = code.split("\n");
-      let modifiedCode = code;
-      let hasServerImports = false;
-      let needsReactImport = false;
-      let needsWrapperImport = false;
-      const serverComponentReplacements: string[] = [];
+      const lines = code.split('\n')
+      let modifiedCode = code
+      let hasServerImports = false
+      let needsReactImport = false
+      let needsWrapperImport = false
+      const serverComponentReplacements: string[] = []
 
-      const importRegex =
-        /^\s*import\s+(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?\s+from\s+['"]([./@][^'"]+)['"].*$/;
+      const importRegex
+        = /^\s*import\s+(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?\s+from\s+['"]([./@][^'"]+)['"].*$/
 
       for (const line of lines) {
-        const importMatch = line.match(importRegex);
-        if (!importMatch) continue;
+        const importMatch = line.match(importRegex)
+        if (!importMatch)
+          continue
 
-        const importedDefault = importMatch[1];
-        const importPath = importMatch[3];
-        const componentName = getComponentName(importPath);
-        const resolvedImportPath = resolveImportToFilePath(importPath, id);
+        const importedDefault = importMatch[1]
+        const importPath = importMatch[3]
+        const componentName = getComponentName(importPath)
+        const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
-        const isClientComponent =
-          componentTypeCache.get(resolvedImportPath) === "client" ||
-          (fs.existsSync(resolvedImportPath) &&
-            fs
-              .readFileSync(resolvedImportPath, "utf-8")
-              .includes("'use client'"));
+        const isClientComponent
+          = componentTypeCache.get(resolvedImportPath) === 'client'
+            || (fs.existsSync(resolvedImportPath)
+              && fs
+                .readFileSync(resolvedImportPath, 'utf-8')
+                .includes('\'use client\''))
 
         if (isClientComponent) {
-          componentTypeCache.set(resolvedImportPath, "client");
-          clientComponents.add(resolvedImportPath);
+          componentTypeCache.set(resolvedImportPath, 'client')
+          clientComponents.add(resolvedImportPath)
         }
 
         if (
-          isClientComponent &&
-          environment &&
-          (environment.name === "rsc" || environment.name === "ssr")
+          isClientComponent
+          && environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          serverImportedClientComponents.add(resolvedImportPath);
+          serverImportedClientComponents.add(resolvedImportPath)
 
-          const originalImport = line;
-          const componentName = importedDefault || "default";
+          const originalImport = line
+          const componentName = importedDefault || 'default'
 
           const clientRefReplacement = `
 import { registerClientReference } from "react-server-dom-rari/server";
@@ -898,483 +923,501 @@ const ${componentName} = registerClientReference(
     throw new Error("Attempted to call ${componentName} from the server but it's on the client. It can only be rendered as a Component or passed to props of a Client Component.");
   },
   ${JSON.stringify(resolvedImportPath)},
-  ${JSON.stringify(importedDefault || "default")}
-);`;
+  ${JSON.stringify(importedDefault || 'default')}
+);`
 
           modifiedCode = modifiedCode.replace(
             originalImport,
             clientRefReplacement,
-          );
-          hasServerImports = true;
-          needsReactImport = true;
-        } else if (isServerComponent(resolvedImportPath)) {
-          hasServerImports = true;
-          needsReactImport = true;
-          needsWrapperImport = true;
-          serverComponents.add(resolvedImportPath);
+          )
+          hasServerImports = true
+          needsReactImport = true
+        }
+        else if (isServerComponent(resolvedImportPath)) {
+          hasServerImports = true
+          needsReactImport = true
+          needsWrapperImport = true
+          serverComponents.add(resolvedImportPath)
 
-          const originalImport = line;
+          const originalImport = line
 
-          if (importedDefault && importedDefault !== "_") {
+          if (importedDefault && importedDefault !== '_') {
             serverComponentReplacements.push(
               `const ${importedDefault} = createServerComponentWrapper('${componentName}', '${importPath}');`,
-            );
+            )
           }
 
-          modifiedCode = modifiedCode.replace(originalImport, "");
+          modifiedCode = modifiedCode.replace(originalImport, '')
         }
       }
 
       if (hasServerImports) {
-        const hasReactImport =
-          modifiedCode.includes("import React") ||
-          modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/) ||
-          modifiedCode.match(
-            /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
-          );
+        const hasReactImport
+          = modifiedCode.includes('import React')
+            || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
+            || modifiedCode.match(
+              /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
+            )
 
         const hasWrapperImport = modifiedCode.includes(
-          "createServerComponentWrapper",
-        );
+          'createServerComponentWrapper',
+        )
 
-        let importsToAdd = "";
+        let importsToAdd = ''
 
         if (needsReactImport && !hasReactImport) {
-          importsToAdd += `import React from 'react';\n`;
+          importsToAdd += `import React from 'react';\n`
         }
 
         if (needsWrapperImport && !hasWrapperImport) {
-          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`;
+          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`
         }
 
         if (serverComponentReplacements.length > 0) {
-          importsToAdd += `${serverComponentReplacements.join("\n")}\n`;
+          importsToAdd += `${serverComponentReplacements.join('\n')}\n`
         }
 
         if (importsToAdd) {
-          modifiedCode = importsToAdd + modifiedCode;
+          modifiedCode = importsToAdd + modifiedCode
         }
 
-        if (!modifiedCode.includes("Suspense")) {
+        if (!modifiedCode.includes('Suspense')) {
           const reactImportMatch = modifiedCode.match(
             /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/,
-          );
+          )
           if (reactImportMatch) {
             if (
-              reactImportMatch[1] &&
-              !reactImportMatch[2].includes("Suspense")
+              reactImportMatch[1]
+              && !reactImportMatch[2].includes('Suspense')
             ) {
               modifiedCode = modifiedCode.replace(
                 reactImportMatch[0],
                 reactImportMatch[0].replace(/\{([^}]*)\}/, `{ Suspense, $1 }`),
-              );
-            } else if (!reactImportMatch[1]) {
+              )
+            }
+            else if (!reactImportMatch[1]) {
               modifiedCode = modifiedCode.replace(
                 reactImportMatch[0],
                 `import React, { Suspense } from 'react';`,
-              );
+              )
             }
           }
         }
 
-        const isDevMode = process.env.NODE_ENV !== "production";
-        const hasJsx =
-          modifiedCode.includes("</") ||
-          modifiedCode.includes("/>") ||
-          /\bJSX\b/.test(modifiedCode);
+        const isDevMode = process.env.NODE_ENV !== 'production'
+        const hasJsx
+          = modifiedCode.includes('</')
+            || modifiedCode.includes('/>')
+            || /\bJSX\b/.test(modifiedCode)
 
         if (
-          !modifiedCode.includes("'use client'") &&
-          !modifiedCode.includes('"use client"') &&
-          hasJsx
+          !modifiedCode.includes('\'use client\'')
+          && !modifiedCode.includes('"use client"')
+          && hasJsx
         ) {
           if (isDevMode) {
-            modifiedCode = `'use client';\n\n${modifiedCode}`;
-            componentTypeCache.set(id, "client");
+            modifiedCode = `'use client';\n\n${modifiedCode}`
+            componentTypeCache.set(id, 'client')
           }
         }
 
-        return modifiedCode;
+        return modifiedCode
       }
 
-      return null;
+      return null
     },
 
     configureServer(server) {
-      const projectRoot = options.projectRoot || process.cwd();
-      const srcDir = path.join(projectRoot, "src");
+      const projectRoot = options.projectRoot || process.cwd()
+      const srcDir = path.join(projectRoot, 'src')
 
       const discoverAndRegisterComponents = async () => {
         try {
           const { ServerComponentBuilder, scanDirectory } = await import(
-            "./server-build"
-          );
+            './server-build'
+          )
 
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: "temp",
-            serverDir: "server",
-            manifestPath: "server-manifest.json",
-          });
+            outDir: 'temp',
+            serverDir: 'server',
+            manifestPath: 'server-manifest.json',
+          })
 
-          const srcDir = path.join(projectRoot, "src");
+          const srcDir = path.join(projectRoot, 'src')
 
           if (fs.existsSync(srcDir)) {
-            scanDirectory(srcDir, builder);
+            scanDirectory(srcDir, builder)
           }
 
-          const components =
-            await builder.getTransformedComponentsForDevelopment();
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000);
-          const baseUrl = `http://localhost:${serverPort}`;
+            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const baseUrl = `http://localhost:${serverPort}`
 
           for (const component of components) {
             try {
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
-                  method: "POST",
+                  method: 'POST',
                   headers: {
-                    "Content-Type": "application/json",
+                    'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
                   }),
                 },
-              );
+              )
 
               if (!registerResponse.ok) {
-                const errorText = await registerResponse.text();
+                const errorText = await registerResponse.text()
                 throw new Error(
                   `HTTP ${registerResponse.status}: ${errorText}`,
-                );
+                )
               }
-            } catch (error) {
+            }
+            catch (error) {
               console.error(
                 `Failed to register component ${component.id}:`,
                 error instanceof Error ? error.message : String(error),
-              );
+              )
             }
           }
-        } catch (error) {
-          console.error(
-            "Component discovery failed:",
-            error instanceof Error ? error.message : String(error),
-          );
         }
-      };
+        catch (error) {
+          console.error(
+            'Component discovery failed:',
+            error instanceof Error ? error.message : String(error),
+          )
+        }
+      }
 
       const ensureClientComponentsRegistered = async () => {
         try {
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000);
-          const baseUrl = `http://localhost:${serverPort}`;
+            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const baseUrl = `http://localhost:${serverPort}`
 
-          const clientComponentFiles = scanForClientComponents(srcDir);
+          const clientComponentFiles = scanForClientComponents(srcDir)
 
           for (const componentPath of clientComponentFiles) {
-            const relativePath = path.relative(process.cwd(), componentPath);
+            const relativePath = path.relative(process.cwd(), componentPath)
             const componentName = path
               .basename(componentPath)
-              .replace(/\.[^.]+$/, "");
+              .replace(/\.[^.]+$/, '')
 
             try {
               await fetch(`${baseUrl}/api/rsc/register-client`, {
-                method: "POST",
+                method: 'POST',
                 headers: {
-                  "Content-Type": "application/json",
+                  'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                   component_id: componentName,
                   file_path: relativePath,
-                  export_name: "default",
+                  export_name: 'default',
                 }),
-              });
-            } catch (error) {
+              })
+            }
+            catch (error) {
               console.error(
                 `Failed to pre-register client component ${componentName}:`,
                 error,
-              );
+              )
             }
           }
-        } catch (error) {
-          console.error("Failed to pre-register client components:", error);
         }
-      };
+        catch (error) {
+          console.error('Failed to pre-register client components:', error)
+        }
+      }
 
       const startRustServer = async () => {
-        if (rustServerProcess) return;
+        if (rustServerProcess)
+          return
 
         const { getBinaryPath, getInstallationInstructions } = await import(
-          "../platform"
-        );
+          '../platform'
+        )
 
-        let binaryPath: string;
+        let binaryPath: string
         try {
-          binaryPath = getBinaryPath();
-        } catch (error) {
-          console.error("Rari binary not found");
-          console.error(`   ${(error as Error).message}`);
-          console.error(getInstallationInstructions());
-          return;
+          binaryPath = getBinaryPath()
+        }
+        catch (error) {
+          console.error('Rari binary not found')
+          console.error(`   ${(error as Error).message}`)
+          console.error(getInstallationInstructions())
+          return
         }
 
         const serverPort = process.env.SERVER_PORT
           ? Number(process.env.SERVER_PORT)
-          : Number(process.env.PORT || process.env.RSC_PORT || 3000);
-        const mode =
-          process.env.NODE_ENV === "production" ? "production" : "development";
+          : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+        const mode
+          = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 
         const args = [
-          "--mode",
+          '--mode',
           mode,
-          "--port",
+          '--port',
           serverPort.toString(),
-          "--host",
-          "127.0.0.1",
-        ];
+          '--host',
+          '127.0.0.1',
+        ]
 
         rustServerProcess = spawn(binaryPath, args, {
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: ['ignore', 'pipe', 'pipe'],
           cwd: process.cwd(),
           env: {
             ...process.env,
-            RUST_LOG: process.env.RUST_LOG || "info",
+            RUST_LOG: process.env.RUST_LOG || 'info',
           },
-        });
+        })
 
-        rustServerProcess.stdout?.on("data", (data: Buffer) => {
-          const output = data.toString().trim();
+        rustServerProcess.stdout?.on('data', (data: Buffer) => {
+          const output = data.toString().trim()
           if (output) {
-            console.warn(`${output}`);
+            console.warn(`${output}`)
           }
-        });
+        })
 
-        rustServerProcess.stderr?.on("data", (data: Buffer) => {
-          const output = data.toString().trim();
-          if (output && !output.includes("warning")) {
-            console.error(`${output}`);
+        rustServerProcess.stderr?.on('data', (data: Buffer) => {
+          const output = data.toString().trim()
+          if (output && !output.includes('warning')) {
+            console.error(`${output}`)
           }
-        });
+        })
 
-        rustServerProcess.on("error", (error: Error) => {
-          console.error("Failed to start Rari server:", error.message);
-          if (error.message.includes("ENOENT")) {
+        rustServerProcess.on('error', (error: Error) => {
+          console.error('Failed to start Rari server:', error.message)
+          if (error.message.includes('ENOENT')) {
             console.error(
-              "   Binary not found. Please ensure Rari is properly installed.",
-            );
+              '   Binary not found. Please ensure Rari is properly installed.',
+            )
           }
-        });
+        })
 
-        rustServerProcess.on("exit", (code: number, signal: string) => {
-          rustServerProcess = null;
+        rustServerProcess.on('exit', (code: number, signal: string) => {
+          rustServerProcess = null
           if (signal) {
-            console.warn(`Rari server stopped by signal ${signal}`);
-          } else if (code === 0) {
-            console.warn("Rari server stopped successfully");
-          } else if (code) {
-            console.error(`Rari server exited with code ${code}`);
+            console.warn(`Rari server stopped by signal ${signal}`)
           }
-        });
+          else if (code === 0) {
+            console.warn('Rari server stopped successfully')
+          }
+          else if (code) {
+            console.error(`Rari server exited with code ${code}`)
+          }
+        })
 
         setTimeout(async () => {
           try {
             const serverPort = process.env.SERVER_PORT
               ? Number(process.env.SERVER_PORT)
-              : Number(process.env.PORT || process.env.RSC_PORT || 3000);
-            const baseUrl = `http://localhost:${serverPort}`;
+              : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+            const baseUrl = `http://localhost:${serverPort}`
 
-            let serverReady = false;
+            let serverReady = false
             for (let i = 0; i < 10; i++) {
               try {
-                const healthResponse = await fetch(`${baseUrl}/api/rsc/health`);
+                const healthResponse = await fetch(`${baseUrl}/api/rsc/health`)
                 if (healthResponse.ok) {
-                  serverReady = true;
-                  break;
+                  serverReady = true
+                  break
                 }
-              } catch {
-                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
+              catch {
+                await new Promise(resolve => setTimeout(resolve, 500))
               }
             }
 
             if (serverReady) {
-              await ensureClientComponentsRegistered();
-              await discoverAndRegisterComponents();
-            } else {
-              console.error(
-                "Server failed to become ready for component registration",
-              );
+              await ensureClientComponentsRegistered()
+              await discoverAndRegisterComponents()
             }
-          } catch (error) {
-            console.error("Failed during component registration:", error);
+            else {
+              console.error(
+                'Server failed to become ready for component registration',
+              )
+            }
           }
-        }, 1000);
-      };
+          catch (error) {
+            console.error('Failed during component registration:', error)
+          }
+        }, 1000)
+      }
 
       const handleServerComponentHMR = async (filePath: string) => {
         try {
-          const { ServerComponentBuilder } = await import("./server-build");
+          const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: "temp",
-            serverDir: "server",
-            manifestPath: "server-manifest.json",
-          });
+            outDir: 'temp',
+            serverDir: 'server',
+            manifestPath: 'server-manifest.json',
+          })
 
-          builder.addServerComponent(filePath);
+          builder.addServerComponent(filePath)
 
-          const components =
-            await builder.getTransformedComponentsForDevelopment();
+          const components
+            = await builder.getTransformedComponentsForDevelopment()
 
           if (components.length === 0) {
-            return;
+            return
           }
 
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
-            : Number(process.env.PORT || process.env.RSC_PORT || 3000);
-          const baseUrl = `http://localhost:${serverPort}`;
+            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+          const baseUrl = `http://localhost:${serverPort}`
 
           for (const component of components) {
             try {
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
-                  method: "POST",
+                  method: 'POST',
                   headers: {
-                    "Content-Type": "application/json",
+                    'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
                   }),
                 },
-              );
+              )
 
               if (!registerResponse.ok) {
-                const errorText = await registerResponse.text();
+                const errorText = await registerResponse.text()
                 throw new Error(
                   `HTTP ${registerResponse.status}: ${errorText}`,
-                );
+                )
               }
-            } catch (error) {
+            }
+            catch (error) {
               console.error(
-                "[RARI HMR] Failed to register component",
+                '[RARI HMR] Failed to register component',
                 `${component.id}:`,
                 error instanceof Error ? error.message : String(error),
-              );
+              )
             }
           }
-        } catch (error) {
+        }
+        catch (error) {
           console.error(
-            "[RARI HMR] Targeted HMR failed for",
+            '[RARI HMR] Targeted HMR failed for',
             `${filePath}:`,
             error instanceof Error ? error.message : String(error),
-          );
-          setTimeout(discoverAndRegisterComponents, 1000);
+          )
+          setTimeout(discoverAndRegisterComponents, 1000)
         }
-      };
+      }
 
-      startRustServer();
+      startRustServer()
 
-      server.watcher.on("change", async (filePath) => {
+      server.watcher.on('change', async (filePath) => {
         if (/\.(?:tsx?|jsx?)$/.test(filePath)) {
-          componentTypeCache.delete(filePath);
+          componentTypeCache.delete(filePath)
         }
 
         if (/\.(?:tsx?|jsx?)$/.test(filePath) && filePath.includes(srcDir)) {
           if (isServerComponent(filePath)) {
-            await handleServerComponentHMR(filePath);
-          } else {
-            setTimeout(discoverAndRegisterComponents, 1000);
+            await handleServerComponentHMR(filePath)
+          }
+          else {
+            setTimeout(discoverAndRegisterComponents, 1000)
           }
         }
-      });
+      })
 
-      server.middlewares.use("/api/vite/hmr-transform", async (req, res) => {
-        if (req.method !== "POST") {
-          res.statusCode = 405;
-          res.end("Method Not Allowed");
-          return;
+      server.middlewares.use('/api/vite/hmr-transform', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end('Method Not Allowed')
+          return
         }
 
-        let body = "";
-        req.on("data", (chunk) => {
-          body += chunk.toString();
-        });
+        let body = ''
+        req.on('data', (chunk) => {
+          body += chunk.toString()
+        })
 
-        req.on("end", async () => {
+        req.on('end', async () => {
           try {
-            const { filePath } = JSON.parse(body);
+            const { filePath } = JSON.parse(body)
 
             if (!filePath) {
-              res.statusCode = 400;
-              res.end(JSON.stringify({ error: "filePath is required" }));
-              return;
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'filePath is required' }))
+              return
             }
 
-            await handleServerComponentHMR(filePath);
+            await handleServerComponentHMR(filePath)
 
-            res.statusCode = 200;
-            res.setHeader("Content-Type", "application/json");
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
             res.end(
               JSON.stringify({
                 success: true,
                 filePath,
-                message: "Component transformation completed",
+                message: 'Component transformation completed',
               }),
-            );
-          } catch (error) {
-            res.statusCode = 500;
-            res.setHeader("Content-Type", "application/json");
+            )
+          }
+          catch (error) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
             res.end(
               JSON.stringify({
                 success: false,
                 error: error instanceof Error ? error.message : String(error),
               }),
-            );
+            )
           }
-        });
-      });
+        })
+      })
 
-      server.httpServer?.on("close", () => {
+      server.httpServer?.on('close', () => {
         if (rustServerProcess) {
-          rustServerProcess.kill("SIGTERM");
-          rustServerProcess = null;
+          rustServerProcess.kill('SIGTERM')
+          rustServerProcess = null
         }
-      });
+      })
     },
 
     resolveId(id) {
-      if (id === "virtual:rsc-integration") {
-        return id;
+      if (id === 'virtual:rsc-integration') {
+        return id
       }
 
-      if (id === "virtual:rsc-client-components") {
-        return id;
+      if (id === 'virtual:rsc-client-components') {
+        return id
       }
 
-      if (id === "react-server-dom-rari/server") {
-        return id;
+      if (id === 'react-server-dom-rari/server') {
+        return id
       }
 
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === 'production') {
         try {
-          const resolvedPath = path.resolve(id);
+          const resolvedPath = path.resolve(id)
           if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath)) {
-            return { id, external: true };
+            return { id, external: true }
           }
-        } catch {}
+        }
+        catch {}
       }
 
-      return null;
+      return null
     },
 
     load(id) {
-      if (id === "react-server-dom-rari/server") {
+      if (id === 'react-server-dom-rari/server') {
         return `
 let clientReferenceRegistry = new Map();
 let serverReferenceRegistry = new Map();
@@ -1511,10 +1554,10 @@ export function createClientModuleMap() {
 
   return moduleMap;
 }
-`;
+`
       }
 
-      if (id === "virtual:rsc-integration") {
+      if (id === 'virtual:rsc-integration') {
         return `
 import React, { useState, useEffect, Suspense } from 'react';
 
@@ -2590,59 +2633,59 @@ export {
   RscErrorComponent,
   rscClient
 };
-`;
+`
       }
 
-      if (id === "virtual:rsc-client-components") {
-        const srcDir = path.join(process.cwd(), "src");
-        const scannedClientComponents = scanForClientComponents(srcDir);
+      if (id === 'virtual:rsc-client-components') {
+        const srcDir = path.join(process.cwd(), 'src')
+        const scannedClientComponents = scanForClientComponents(srcDir)
 
         const allClientComponents = new Set([
           ...clientComponents,
           ...scannedClientComponents,
           ...serverImportedClientComponents,
-        ]);
+        ])
 
-        const imports: string[] = [];
-        const registrations: string[] = [];
+        const imports: string[] = []
+        const registrations: string[] = []
 
         Array.from(allClientComponents).forEach((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath);
-          const componentName = `ClientComponent${index}`;
+          const relativePath = path.relative(process.cwd(), componentPath)
+          const componentName = `ClientComponent${index}`
 
           imports.push(
             `import ${componentName} from ${JSON.stringify(componentPath)};`,
-          );
+          )
           registrations.push(
             `registerClientComponent(${componentName}, ${JSON.stringify(relativePath)}, "default");`,
-          );
-        });
+          )
+        })
 
         return `
 import { registerClientComponent } from "virtual:rsc-integration";
 
-${imports.join("\n")}
+${imports.join('\n')}
 
-${registrations.join("\n")}
-`;
+${registrations.join('\n')}
+`
       }
     },
 
     handleHotUpdate({ file, server }) {
       if (/\.(?:tsx?|jsx?)$/.test(file) && isServerComponent(file)) {
-        server.hot.send("vite:beforeFullReload", {
-          type: "full-reload",
+        server.hot.send('vite:beforeFullReload', {
+          type: 'full-reload',
           path: file,
-        });
-        return [];
+        })
+        return []
       }
-      return undefined;
+      return undefined
     },
-  };
+  }
 
-  const serverBuildPlugin = createServerBuildPlugin(options.serverBuild);
+  const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
 
-  return [mainPlugin, serverBuildPlugin];
+  return [mainPlugin, serverBuildPlugin]
 }
 
 export function createReactDOMOptimization() {
@@ -2653,78 +2696,78 @@ export function createReactDOMOptimization() {
           manualChunks: (id: string) => {
             // React DOM detection and splitting
             if (
-              id.includes("node_modules/react-dom") ||
-              id.includes("react-dom/client") ||
-              id.includes("react-dom/server") ||
-              id.includes("react-dom/")
+              id.includes('node_modules/react-dom')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
+              || id.includes('react-dom/')
             ) {
-              return "react-dom";
+              return 'react-dom'
             }
 
             // React splitting (but not React DOM)
             if (
-              (id.includes("node_modules/react") || id.includes("react/")) &&
-              !id.includes("react-dom")
+              (id.includes('node_modules/react') || id.includes('react/'))
+              && !id.includes('react-dom')
             ) {
-              return "react";
+              return 'react'
             }
 
             // Scheduler splitting
-            if (id.includes("scheduler") && id.includes("node_modules")) {
-              return "scheduler";
+            if (id.includes('scheduler') && id.includes('node_modules')) {
+              return 'scheduler'
             }
 
             // Other vendor libraries
-            if (id.includes("markdown-it") || id.includes("shiki")) {
-              return "vendor";
+            if (id.includes('markdown-it') || id.includes('shiki')) {
+              return 'vendor'
             }
 
             // Generic node_modules
-            if (id.includes("node_modules")) {
-              return "vendor";
+            if (id.includes('node_modules')) {
+              return 'vendor'
             }
           },
         },
         treeshake: {
           moduleSideEffects: (id: string) => {
-            if (id.includes(".css") || id.includes("polyfill")) {
-              return true;
+            if (id.includes('.css') || id.includes('polyfill')) {
+              return true
             }
             // Aggressively remove side effects from React DOM internals
             if (
-              id.includes("react-dom") ||
-              id.includes("react") ||
-              id.includes("scheduler") ||
-              id.includes("react-dom/client") ||
-              id.includes("react-dom/server")
+              id.includes('react-dom')
+              || id.includes('react')
+              || id.includes('scheduler')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
             ) {
-              return false;
+              return false
             }
-            return false;
+            return false
           },
           unknownGlobalSideEffects: false,
         },
       },
-      minify: "terser",
-      target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
-      cssMinify: "esbuild",
+      minify: 'terser',
+      target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+      cssMinify: 'esbuild',
       sourcemap: false,
       terserOptions: {
         compress: {
           drop_console: true,
           drop_debugger: true,
           pure_funcs: [
-            "console.log",
-            "console.info",
-            "console.debug",
-            "console.warn",
-            "invariant",
-            "warning",
-            "__DEV__",
-            "ReactDOM.render",
-            "ReactDOM.unmountComponentAtNode",
-            "ReactDOM.findDOMNode",
-            "ReactDOM.createPortal",
+            'console.log',
+            'console.info',
+            'console.debug',
+            'console.warn',
+            'invariant',
+            'warning',
+            '__DEV__',
+            'ReactDOM.render',
+            'ReactDOM.unmountComponentAtNode',
+            'ReactDOM.findDOMNode',
+            'ReactDOM.createPortal',
           ],
           passes: 3,
           unsafe: true,
@@ -2750,7 +2793,7 @@ export function createReactDOMOptimization() {
         },
       },
     },
-  };
+  }
 }
 
 export function defineRariConfig(
@@ -2759,5 +2802,5 @@ export function defineRariConfig(
   return {
     plugins: [rari(), ...(config.plugins || [])],
     ...config,
-  };
+  }
 }
