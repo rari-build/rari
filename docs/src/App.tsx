@@ -2,6 +2,17 @@ import { RouterProvider, useRouter } from 'rari/client'
 import { routes } from '../.rari/routes'
 import Layout from './components/Layout'
 
+function getMetaDescription(pathname: string): string {
+  switch (pathname) {
+    case '/':
+      return 'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.'
+    case '/getting-started':
+      return 'Learn how to build your first Rari application. Step-by-step guide to creating high-performance React apps with Rust-powered server components and zero-config setup.'
+    default:
+      return 'Rari - Performance-first React framework powered by Rust for building web applications.'
+  }
+}
+
 function NotFoundPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#f0f6fc] flex items-center justify-center">
@@ -49,7 +60,10 @@ function Routes() {
   }
 
   return (
-    <Layout currentPage={getPageFromPath(currentRoute.pathname)}>
+    <Layout
+      currentPage={getPageFromPath(currentRoute.pathname)}
+      metaDescription={getMetaDescription(currentRoute.pathname)}
+    >
       <Component
         params={params}
         searchParams={searchParams}
