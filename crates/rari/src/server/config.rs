@@ -66,6 +66,12 @@ pub struct StaticConfig {
     pub prod_public_dir: PathBuf,
     pub enable_directory_listing: bool,
     pub cache_control: String,
+    pub js_cache_control: String,
+    pub css_cache_control: String,
+    pub html_cache_control: String,
+    pub image_cache_control: String,
+    pub font_cache_control: String,
+    pub preconnect_domains: Vec<String>,
 }
 
 impl Default for StaticConfig {
@@ -75,6 +81,12 @@ impl Default for StaticConfig {
             prod_public_dir: PathBuf::from("dist"),
             enable_directory_listing: false,
             cache_control: "public, max-age=31536000".to_string(),
+            js_cache_control: "public, max-age=31536000, immutable".to_string(),
+            css_cache_control: "public, max-age=31536000, immutable".to_string(),
+            html_cache_control: "public, max-age=0, must-revalidate".to_string(),
+            image_cache_control: "public, max-age=2592000".to_string(),
+            font_cache_control: "public, max-age=31536000, immutable".to_string(),
+            preconnect_domains: Vec::new(),
         }
     }
 }

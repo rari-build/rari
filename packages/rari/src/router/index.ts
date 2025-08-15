@@ -1,12 +1,13 @@
 export {
-  Link,
-  Navigate,
   Outlet,
   RouteComponent,
   RouterContext,
   RouteRenderer,
   default as RouterProvider,
   Routes,
+} from './router'
+
+export {
   useNavigation,
   useParams,
   usePathname,
@@ -16,7 +17,16 @@ export {
   withRouter,
 } from './router'
 
+export { Link, Navigate } from './router'
+
 export type * from './types'
+
+export {
+  findMatchingRoute,
+  isDynamicRoute,
+  normalizePathname,
+  parseUrl,
+} from './utils'
 
 export {
   analyzeFilePath,
@@ -24,16 +34,12 @@ export {
   buildUrl,
   extractParamNames,
   filePathToRoutePath,
-  findMatchingRoute,
   getParentPath,
   getParentPaths,
-  isDynamicRoute,
   isPathActive,
   joinPaths,
   matchRoute,
-  normalizePathname,
   parseSearchParams,
-  parseUrl,
   routePathsEqual,
   routePathToRegex,
   sortRoutesBySpecificity,

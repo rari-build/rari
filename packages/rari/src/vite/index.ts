@@ -6,12 +6,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import * as acorn from 'acorn'
+import { minify } from 'rollup-plugin-esbuild'
 import { createServerBuildPlugin } from './server-build'
 
 interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  preconnectDomains?: string[]
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
@@ -151,7 +153,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
-  function hasTopLevelDirective(code: string, directive: 'use client' | 'use server'): boolean {
+  function hasTopLevelDirective(
+    code: string,
+    directive: 'use client' | 'use server',
+  ): boolean {
     try {
       const ast = acorn.parse(code, {
         ecmaVersion: 2024,
@@ -224,7 +229,6 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     newCode += `
 
-// HMR acceptance for server components
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
     // Server component updated, no need to reload
@@ -370,44 +374,70 @@ if (import.meta.hot) {
     config(config: UserConfig, { command }) {
       config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
-        ? (config.resolve as any).dedupe as string[]
+        ? ((config.resolve as any).dedupe as string[])
         : []
-      const toAdd = ['react', 'react-dom']
-        ; (config.resolve as any).dedupe = Array.from(
+      const toAdd = ['react', 'react-dom'];
+      (config.resolve as any).dedupe = Array.from(
         new Set([...(existingDedupe || []), ...toAdd]),
       )
 
-      const existingAlias: Array<{ find: string | RegExp, replacement: string }>
-        = Array.isArray((config.resolve as any).alias)
-          ? (config.resolve as any).alias
-          : []
+      const existingResolveAlias = (config.resolve as any).alias || {};
+      (config.resolve as any).alias = {
+        ...existingResolveAlias,
+        'react-dom/server': 'react-dom/server.browser',
+        'react-dom$': 'react-dom/client',
+        'react-dom/cjs/react-dom.production.min.js': 'react-dom/client',
+        'react-dom/cjs/react-dom.development.js': 'react-dom/client',
+      }
+
+      const existingAlias: Array<{
+        find: string | RegExp
+        replacement: string
+      }> = Array.isArray((config.resolve as any).alias)
+        ? (config.resolve as any).alias
+        : []
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
         const reactPath = require.resolve('react')
         const reactDomClientPath = require.resolve('react-dom/client')
         const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
-        const aliasesToAppend: Array<{ find: string, replacement: string }> = []
+        const aliasesToAppend: Array<{ find: string, replacement: string }>
+          = []
         if (!aliasFinds.has('react/jsx-runtime')) {
-          aliasesToAppend.push({ find: 'react/jsx-runtime', replacement: reactJsxRuntimePath })
+          aliasesToAppend.push({
+            find: 'react/jsx-runtime',
+            replacement: reactJsxRuntimePath,
+          })
         }
         try {
-          const reactJsxDevRuntimePath = require.resolve('react/jsx-dev-runtime')
+          const reactJsxDevRuntimePath = require.resolve(
+            'react/jsx-dev-runtime',
+          )
           if (!aliasFinds.has('react/jsx-dev-runtime')) {
-            aliasesToAppend.push({ find: 'react/jsx-dev-runtime', replacement: reactJsxDevRuntimePath })
+            aliasesToAppend.push({
+              find: 'react/jsx-dev-runtime',
+              replacement: reactJsxDevRuntimePath,
+            })
           }
         }
-        catch { }
+        catch {}
         if (!aliasFinds.has('react')) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
         if (!aliasFinds.has('react-dom/client')) {
-          aliasesToAppend.push({ find: 'react-dom/client', replacement: reactDomClientPath })
+          aliasesToAppend.push({
+            find: 'react-dom/client',
+            replacement: reactDomClientPath,
+          })
         }
         if (aliasesToAppend.length > 0) {
-          (config.resolve as any).alias = [...existingAlias, ...aliasesToAppend]
+          (config.resolve as any).alias = [
+            ...existingAlias,
+            ...aliasesToAppend,
+          ]
         }
       }
-      catch { }
+      catch {}
 
       config.environments = config.environments || {}
 
@@ -437,12 +467,22 @@ if (import.meta.hot) {
       if (!config.optimizeDeps.include.includes('react-dom/server')) {
         config.optimizeDeps.include.push('react-dom/server')
       }
+      if (!config.optimizeDeps.include.includes('react')) {
+        config.optimizeDeps.include.push('react')
+      }
+      if (!config.optimizeDeps.include.includes('react-dom/client')) {
+        config.optimizeDeps.include.push('react-dom/client')
+      }
+      config.optimizeDeps.exclude = config.optimizeDeps.exclude || []
+      if (!config.optimizeDeps.exclude.includes('virtual:rsc-integration')) {
+        config.optimizeDeps.exclude.push('virtual:rsc-integration')
+      }
 
       if (command === 'build') {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
           if (env && env.build) {
-            env.build.rollupOptions = env.build.rollupOptions || {}
+            env.build.rolldownOptions = env.build.rolldownOptions || {}
           }
         }
       }
@@ -478,12 +518,243 @@ if (import.meta.hot) {
 
       if (command === 'build') {
         config.build = config.build || {}
-        config.build.rollupOptions = config.build.rollupOptions || {}
+        config.build.rolldownOptions = config.build.rolldownOptions || {}
 
-        if (!config.build.rollupOptions.input) {
-          config.build.rollupOptions.input = {
+        config.build.rolldownOptions.plugins
+          = config.build.rolldownOptions.plugins || []
+        if (Array.isArray(config.build.rolldownOptions.plugins)) {
+          config.build.rolldownOptions.plugins.push(minify())
+
+          config.build.rolldownOptions.plugins.push({
+            name: 'html-css-optimizer',
+            generateBundle(options, bundle) {
+              Object.keys(bundle).forEach((fileName) => {
+                const file = bundle[fileName]
+                if (file.type === 'asset' && fileName.endsWith('.html')) {
+                  let html = file.source as string
+
+                  html = html.replace(
+                    /<link\s+rel="stylesheet"\s+crossorigin\s+href="([^"]+\.css)"\s*>/g,
+                    (match, href) => {
+                      return `<link rel="preload" as="style" crossorigin href="${href}" fetchpriority="high" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" crossorigin href="${href}"></noscript>`
+                    },
+                  )
+
+                  const scriptMatch = html.match(
+                    /<script\s+type="module"\s+crossorigin\s+src="([^"]+)"\s*><\/script>/,
+                  )
+                  if (scriptMatch) {
+                    const mainJsHref = scriptMatch[1]
+                    html = html.replace(
+                      scriptMatch[0],
+                      `<link rel="preload" as="script" crossorigin href="${mainJsHref}" fetchpriority="high">
+  <script type="module" crossorigin src="${mainJsHref}" fetchpriority="high"></script>`,
+                    )
+                  }
+
+                  const preconnectDomains
+                    = (options as RariOptions).preconnectDomains || []
+                  if (preconnectDomains.length > 0) {
+                    const preconnectHints = preconnectDomains
+                      .map(
+                        (domain: string) =>
+                          `  <link rel="dns-prefetch" href="//${domain}">`,
+                      )
+                      .join('\n')
+                    html = html.replace(
+                      '</head>',
+                      `  <!-- Performance optimizations -->
+${preconnectHints}
+</head>`,
+                    )
+                  }
+
+                  file.source = html
+                }
+              })
+            },
+          })
+        }
+
+        if (!config.build.rolldownOptions.input) {
+          config.build.rolldownOptions.input = {
             main: './index.html',
           }
+        }
+
+        config.build.rolldownOptions.output
+          = config.build.rolldownOptions.output || {}
+        const outputConfig = Array.isArray(config.build.rolldownOptions.output)
+          ? config.build.rolldownOptions.output[0] || {}
+          : config.build.rolldownOptions.output
+
+        outputConfig.assetFileNames = (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) {
+            return 'assets/[name]-[hash][extname]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        }
+
+        outputConfig.manualChunks = (id) => {
+          if (
+            id.includes('node_modules/react-dom')
+            || id.includes('react-dom/client')
+            || id.includes('react-dom/server')
+            || id.includes('react-dom/')
+          ) {
+            return 'react-dom'
+          }
+          if (
+            (id.includes('node_modules/react') || id.includes('react/'))
+            && !id.includes('react-dom')
+          ) {
+            return 'react'
+          }
+          if (id.includes('scheduler') && id.includes('node_modules')) {
+            return 'scheduler'
+          }
+          if (id.includes('markdown-it') || id.includes('shiki')) {
+            return 'vendor'
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+        }
+
+        config.build.rolldownOptions.treeshake = config.build.rolldownOptions
+          .treeshake || {
+          moduleSideEffects: (id) => {
+            if (id.includes('.css') || id.includes('polyfill')) {
+              return true
+            }
+            if (
+              id.includes('react-dom')
+              || id.includes('react')
+              || id.includes('scheduler')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
+            ) {
+              return false
+            }
+            return false
+          },
+          unknownGlobalSideEffects: false,
+        }
+
+        const existingExternal = config.build.rolldownOptions?.external || []
+        const reactDomExternals = [
+          'react-dom/profiling',
+          'react-dom/test-utils',
+          'react-dom/server',
+          'react-dom/server.browser',
+          'react-dom/server.node',
+          'react/jsx-dev-runtime',
+          'scheduler/tracing',
+          'scheduler/unstable_mock',
+          'react/cjs/react.development.js',
+          'react/cjs/react.production.min.js',
+          'react-dom/cjs/react-dom.development.js',
+          'react-dom/cjs/react-dom.production.min.js',
+          'react-dom/src/client/ReactDOMRoot.js',
+          'react-dom/src/events/plugins',
+          'react-dom/src/shared/HTMLDOMPropertyConfig.js',
+          'react-dom/src/shared/DOMPropertyOperations.js',
+        ]
+
+        if (Array.isArray(existingExternal)) {
+          const external = [...existingExternal]
+          external.push(
+            ...reactDomExternals.filter(dep => !external.includes(dep)),
+          )
+          config.build.rolldownOptions.external = external
+        }
+        else if (typeof existingExternal === 'function') {
+          const originalExternal = existingExternal
+          config.build.rolldownOptions.external = (
+            id,
+            parentId,
+            isResolved,
+          ) => {
+            if (reactDomExternals.includes(id))
+              return true
+            return originalExternal(id, parentId, isResolved)
+          }
+        }
+        else {
+          config.build.rolldownOptions.external = [
+            ...(Array.isArray(existingExternal)
+              ? existingExternal
+              : [existingExternal]),
+            ...reactDomExternals,
+          ].filter(Boolean)
+        }
+
+        config.build.minify = true
+        config.build.target = config.build.target || [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.build.cssMinify
+          = config.build.cssMinify !== false ? 'esbuild' : false
+        config.build.cssCodeSplit = true
+        config.build.assetsInlineLimit = 4096
+        config.build.chunkSizeWarningLimit = 1000
+        config.build.sourcemap
+          = config.build.sourcemap !== undefined ? config.build.sourcemap : true
+
+        config.build.terserOptions = config.build.terserOptions || {
+          compress: {
+            drop_console: true,
+            drop_debugger: true,
+            pure_funcs: [
+              'console.log',
+              'console.info',
+              'console.debug',
+              'console.warn',
+              'invariant',
+              'warning',
+              '__DEV__',
+              'ReactDOM.render',
+              'ReactDOM.unmountComponentAtNode',
+              'ReactDOM.findDOMNode',
+              'ReactDOM.createPortal',
+            ],
+            passes: 3,
+            unsafe: true,
+            unsafe_comps: true,
+            unsafe_Function: true,
+            unsafe_math: true,
+            unsafe_symbols: true,
+            unsafe_methods: true,
+            unsafe_proto: true,
+            unsafe_regexp: true,
+            unsafe_undefined: true,
+            dead_code: true,
+            side_effects: false,
+          },
+          mangle: {
+            safari10: true,
+            properties: {
+              regex: /^_/,
+            },
+          },
+          format: {
+            comments: false,
+          },
+        }
+
+        outputConfig.format = outputConfig.format || 'es'
+        outputConfig.minify = true
+
+        if (Array.isArray(config.build.rolldownOptions.output)) {
+          config.build.rolldownOptions.output[0] = outputConfig
+        }
+        else {
+          config.build.rolldownOptions.output = outputConfig
         }
       }
 
@@ -491,24 +762,108 @@ if (import.meta.hot) {
         if (!config.environments.client.build) {
           config.environments.client.build = {}
         }
-        if (!config.environments.client.build.rollupOptions) {
-          config.environments.client.build.rollupOptions = {}
+        if (!config.environments.client.build.rolldownOptions) {
+          config.environments.client.build.rolldownOptions = {}
         }
-        if (!config.environments.client.build.rollupOptions.input) {
-          config.environments.client.build.rollupOptions.input = {}
+        if (!config.environments.client.build.rolldownOptions.input) {
+          config.environments.client.build.rolldownOptions.input = {}
         }
 
         if (
-          typeof config.environments.client.build.rollupOptions.input
+          typeof config.environments.client.build.rolldownOptions.input
           === 'object'
-          && !Array.isArray(config.environments.client.build.rollupOptions.input)
+          && !Array.isArray(config.environments.client.build.rolldownOptions.input)
         ) {
           (
-            config.environments.client.build.rollupOptions.input as Record<
+            config.environments.client.build.rolldownOptions.input as Record<
               string,
               string
             >
           )['client-components'] = 'virtual:rsc-client-components'
+        }
+
+        config.environments.client.build.rolldownOptions.plugins
+          = config.environments.client.build.rolldownOptions.plugins || []
+        if (
+          Array.isArray(
+            config.environments.client.build.rolldownOptions.plugins,
+          )
+        ) {
+          config.environments.client.build.rolldownOptions.plugins.push(
+            minify(),
+          )
+        }
+
+        config.environments.client.build.minify = true
+        config.environments.client.build.target = config.environments.client
+          .build
+          .target || [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.environments.client.build.cssMinify = 'esbuild'
+        config.environments.client.build.cssCodeSplit = true
+        config.environments.client.build.assetsInlineLimit = 4096
+        config.environments.client.build.rolldownOptions.treeshake = {
+          moduleSideEffects: false,
+          unknownGlobalSideEffects: false,
+        }
+
+        config.environments.client.build.rolldownOptions.output
+          = config.environments.client.build.rolldownOptions.output || {}
+        const clientOutputConfig = Array.isArray(
+          config.environments.client.build.rolldownOptions.output,
+        )
+          ? config.environments.client.build.rolldownOptions.output[0] || {}
+          : config.environments.client.build.rolldownOptions.output
+
+        clientOutputConfig.manualChunks = (id) => {
+          if (
+            id.includes('node_modules/react-dom')
+            || id.includes('react-dom/client')
+            || id.includes('react-dom/server')
+            || id.includes('react-dom/')
+          ) {
+            return 'react-dom'
+          }
+          if (
+            (id.includes('node_modules/react') || id.includes('react/'))
+            && !id.includes('react-dom')
+          ) {
+            return 'react'
+          }
+          if (id.includes('scheduler') && id.includes('node_modules')) {
+            return 'scheduler'
+          }
+          if (
+            id.includes('rari')
+            && (id.includes('router') || id.includes('navigation'))
+          ) {
+            return 'router'
+          }
+          if (id.includes('markdown-it') || id.includes('shiki')) {
+            return 'vendor'
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+        }
+
+        clientOutputConfig.format = clientOutputConfig.format || 'es'
+        clientOutputConfig.minify = true
+
+        if (
+          Array.isArray(config.environments.client.build.rolldownOptions.output)
+        ) {
+          config.environments.client.build.rolldownOptions.output[0]
+            = clientOutputConfig
+        }
+        else {
+          config.environments.client.build.rolldownOptions.output
+            = clientOutputConfig
         }
       }
 
@@ -518,6 +873,20 @@ if (import.meta.hot) {
     transform(code, id) {
       if (!/\.(?:tsx?|jsx?)$/.test(id)) {
         return null
+      }
+
+      if (code.includes('react-dom')) {
+        code = code.replace(
+          /import\s+ReactDOM\s+from\s+['"]react-dom\/client['"];?/g,
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
+        code = code.replace(
+          /import\s+ReactDOM\s+from\s+['"]react-dom['"];?/g,
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
+
+        code = code.replace(/ReactDOM\.createRoot/g, 'createRoot')
+        code = code.replace(/ReactDOM\.hydrateRoot/g, 'hydrateRoot')
       }
 
       const environment = (this as any).environment
@@ -1110,7 +1479,7 @@ const ${componentName} = registerClientReference(
             return { id, external: true }
           }
         }
-        catch { }
+        catch {}
       }
 
       return null
@@ -1235,7 +1604,6 @@ export const __CLIENT_REFERENCE_REGISTRY__ = clientReferenceRegistry;
 export const __SERVER_REFERENCE_REGISTRY__ = serverReferenceRegistry;
 export const __CLIENT_COMPONENT_REGISTRY__ = clientComponentRegistry;
 
-// Module map for React Server Components
 export function createClientModuleMap() {
   const moduleMap = {};
 
@@ -1261,7 +1629,6 @@ export function createClientModuleMap() {
         return `
 import React, { useState, useEffect, Suspense } from 'react';
 
-// Client component registration for RSC system compatibility
 if (typeof globalThis.__clientComponents === 'undefined') {
   globalThis.__clientComponents = {};
 }
@@ -1279,7 +1646,6 @@ export function registerClientComponent(componentFunction, id, exportName) {
 
   const componentId = componentName;
 
-  // Register in global registry for RSC traversal
   globalThis.__clientComponents[componentId] = {
     id: componentId,
     path: id,
@@ -2040,7 +2406,7 @@ class RscClient {
             const processedChildren = value.map((child, index) => {
               const result = this.reconstructElementFromRscData(child, modules);
               return result;
-            }).filter(child => child !== null && child !== undefined); // Remove null/undefined children
+            }).filter(child => child !== null && child !== undefined);
 
             if (processedChildren.length === 0) {
               processed[key] = null;
@@ -2185,7 +2551,6 @@ function ServerComponentWrapper({
 }
 
 function createServerComponentWrapper(componentName, importPath) {
-  // Use a global refresh counter to force re-mounting when components change
   let globalRefreshCounter = 0;
 
   if (typeof window !== 'undefined') {
@@ -2199,7 +2564,6 @@ function createServerComponentWrapper(componentName, importPath) {
   const ServerComponent = (props) => {
     const [mountKey, setMountKey] = useState(globalRefreshCounter);
 
-    // Force re-mount when component is invalidated
     useEffect(() => {
       const handleRscInvalidate = (event) => {
         const detail = event.detail;
@@ -2220,7 +2584,7 @@ function createServerComponentWrapper(componentName, importPath) {
     return React.createElement(Suspense, {
       fallback: null
     }, React.createElement(ServerComponentWrapper, {
-      key: componentName + '-' + mountKey, // Force re-mount with key change
+      key: componentName + '-' + mountKey,
       componentId: componentName,
       props: props,
       fallback: null
@@ -2237,9 +2601,7 @@ function createServerComponentWrapper(componentName, importPath) {
 export const fetchServerComponent = (componentId, props) =>
   rscClient.fetchServerComponent(componentId, props);
 
-// Helper function to check if a file is a server component (client-side)
 function isServerComponent(filePath) {
-  // Simple client-side check based on file path patterns
   return filePath && (
     filePath.includes('ServerWithClient') ||
     filePath.includes('server') ||
@@ -2247,32 +2609,26 @@ function isServerComponent(filePath) {
   );
 }
 
-// HMR support for RSC cache invalidation
 if (import.meta.hot) {
-  // Listen for Vite's beforeFullReload event for server components
   import.meta.hot.on('vite:beforeFullReload', async (data) => {
     if (data?.path && isServerComponent(data.path)) {
-      // Immediately invalidate cache and trigger re-registration before reload
       await invalidateRscCache({ filePath: data.path, forceReload: true });
     }
   });
 
 
 
-  // Helper function to invalidate RSC cache and trigger component re-registration
   async function invalidateRscCache(data) {
     const filePath = data?.filePath || data;
 
-    // Wait for server to be ready
     const waitForServerReady = async () => {
-      for (let i = 0; i < 20; i++) { // Try for up to 2 seconds
+      for (let i = 0; i < 20; i++) {
         try {
           const response = await fetch('/_rsc_status');
           if (response.ok) {
             return true;
           }
         } catch (e) {
-          // Server not ready yet
         }
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -2281,10 +2637,8 @@ if (import.meta.hot) {
 
     const serverReady = await waitForServerReady();
     if (serverReady) {
-      // Clear client-side RSC cache immediately
       rscClient.clearCache();
 
-      // Trigger immediate server component re-registration
       try {
         await fetch('/api/rsc/hmr-register', {
           method: 'POST',
@@ -2296,14 +2650,10 @@ if (import.meta.hot) {
           })
         });
 
-        // Wait a bit for the server to re-register the component
-        // The server now immediately reads and re-registers the component
         await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
-        // Fallback to existing timeout-based approach
       }
 
-      // Trigger re-render of active server components
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('rari:rsc-invalidate', {
           detail: { filePath }
@@ -2386,6 +2736,108 @@ ${registrations.join('\n')}
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
 
   return [mainPlugin, serverBuildPlugin]
+}
+
+export function createReactDOMOptimization() {
+  return {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: (id: string) => {
+            if (
+              id.includes('node_modules/react-dom')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
+              || id.includes('react-dom/')
+            ) {
+              return 'react-dom'
+            }
+
+            if (
+              (id.includes('node_modules/react') || id.includes('react/'))
+              && !id.includes('react-dom')
+            ) {
+              return 'react'
+            }
+
+            if (id.includes('scheduler') && id.includes('node_modules')) {
+              return 'scheduler'
+            }
+
+            if (id.includes('markdown-it') || id.includes('shiki')) {
+              return 'vendor'
+            }
+
+            if (id.includes('node_modules')) {
+              return 'vendor'
+            }
+          },
+        },
+        treeshake: {
+          moduleSideEffects: (id: string) => {
+            if (id.includes('.css') || id.includes('polyfill')) {
+              return true
+            }
+            if (
+              id.includes('react-dom')
+              || id.includes('react')
+              || id.includes('scheduler')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
+            ) {
+              return false
+            }
+            return false
+          },
+          unknownGlobalSideEffects: false,
+        },
+      },
+      minify: 'terser',
+      target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+      cssMinify: 'esbuild',
+      sourcemap: false,
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+          pure_funcs: [
+            'console.log',
+            'console.info',
+            'console.debug',
+            'console.warn',
+            'invariant',
+            'warning',
+            '__DEV__',
+            'ReactDOM.render',
+            'ReactDOM.unmountComponentAtNode',
+            'ReactDOM.findDOMNode',
+            'ReactDOM.createPortal',
+          ],
+          passes: 3,
+          unsafe: true,
+          unsafe_comps: true,
+          unsafe_Function: true,
+          unsafe_math: true,
+          unsafe_symbols: true,
+          unsafe_methods: true,
+          unsafe_proto: true,
+          unsafe_regexp: true,
+          unsafe_undefined: true,
+          dead_code: true,
+          side_effects: false,
+        },
+        mangle: {
+          safari10: true,
+          properties: {
+            regex: /^_/,
+          },
+        },
+        format: {
+          comments: false,
+        },
+      },
+    },
+  }
 }
 
 export function defineRariConfig(
