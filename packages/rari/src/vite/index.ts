@@ -13,6 +13,7 @@ interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  preconnectDomains?: string[]
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
@@ -419,7 +420,7 @@ if (import.meta.hot) {
             })
           }
         }
-        catch { }
+        catch {}
         if (!aliasFinds.has('react')) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
@@ -436,7 +437,7 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch { }
+      catch {}
 
       config.environments = config.environments || {}
 
@@ -523,6 +524,76 @@ if (import.meta.hot) {
           = config.build.rolldownOptions.plugins || []
         if (Array.isArray(config.build.rolldownOptions.plugins)) {
           config.build.rolldownOptions.plugins.push(minify())
+
+          config.build.rolldownOptions.plugins.push({
+            name: 'html-css-optimizer',
+            generateBundle(rolldownOptions, bundle) {
+              Object.keys(bundle).forEach((fileName) => {
+                const file = bundle[fileName]
+                if (file.type === 'asset' && fileName.endsWith('.html')) {
+                  let html = file.source as string
+
+                  html = html.replace(
+                    /<link\s+rel="stylesheet"\s+crossorigin\s+href="([^"]+\.css)"\s*>/g,
+                    (match, href) => {
+                      return `<link rel="preload" as="style" crossorigin href="${href}" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" crossorigin href="${href}"></noscript>`
+                    },
+                  )
+
+                  const scriptMatch = html.match(
+                    /<script\s+type="module"\s+crossorigin\s+src="([^"]+)"\s*><\/script>/,
+                  )
+                  if (scriptMatch) {
+                    const mainJsHref = scriptMatch[1]
+                    html = html.replace(
+                      scriptMatch[0],
+                      `<link rel="preload" as="script" crossorigin href="${mainJsHref}" fetchpriority="high">
+  <script type="module" crossorigin src="${mainJsHref}" fetchpriority="high"></script>`,
+                    )
+                  }
+
+                  const modulePreloadLinks = html.match(
+                    /<link\s+rel="modulepreload"\s+crossorigin\s+href="([^"]+)"\s*>/g,
+                  )
+                  if (modulePreloadLinks) {
+                    let preloadHints = ''
+                    modulePreloadLinks.forEach((link) => {
+                      const hrefMatch = link.match(/href="([^"]+)"/)
+                      if (hrefMatch) {
+                        preloadHints += `  <link rel="preload" as="script" crossorigin href="${hrefMatch[1]}">
+`
+                      }
+                    })
+                    if (preloadHints) {
+                      html = html.replace(
+                        modulePreloadLinks[0],
+                        `${preloadHints}  ${modulePreloadLinks[0]}`,
+                      )
+                    }
+                  }
+
+                  const preconnectDomains = options.preconnectDomains || []
+                  if (preconnectDomains.length > 0) {
+                    const preconnectHints = preconnectDomains
+                      .map(
+                        (domain: string) =>
+                          `  <link rel="dns-prefetch" href="//${domain}">`,
+                      )
+                      .join('\n')
+                    html = html.replace(
+                      '</head>',
+                      `  <!-- Performance optimizations -->
+${preconnectHints}
+</head>`,
+                    )
+                  }
+
+                  file.source = html
+                }
+              })
+            },
+          })
         }
 
         if (!config.build.rolldownOptions.input) {
@@ -536,6 +607,13 @@ if (import.meta.hot) {
         const outputConfig = Array.isArray(config.build.rolldownOptions.output)
           ? config.build.rolldownOptions.output[0] || {}
           : config.build.rolldownOptions.output
+
+        outputConfig.assetFileNames = (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) {
+            return 'assets/[name]-[hash][extname]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        }
 
         outputConfig.manualChunks = (id) => {
           if (
@@ -612,7 +690,11 @@ if (import.meta.hot) {
         }
         else if (typeof existingExternal === 'function') {
           const originalExternal = existingExternal
-          config.build.rolldownOptions.external = (id, parentId, isResolved) => {
+          config.build.rolldownOptions.external = (
+            id,
+            parentId,
+            isResolved,
+          ) => {
             if (reactDomExternals.includes(id))
               return true
             return originalExternal(id, parentId, isResolved)
@@ -637,6 +719,9 @@ if (import.meta.hot) {
         ]
         config.build.cssMinify
           = config.build.cssMinify !== false ? 'esbuild' : false
+        config.build.cssCodeSplit = true
+        config.build.assetsInlineLimit = 4096
+        config.build.chunkSizeWarningLimit = 1000
         config.build.sourcemap
           = config.build.sourcemap !== undefined ? config.build.sourcemap : true
 
@@ -719,9 +804,13 @@ if (import.meta.hot) {
         config.environments.client.build.rolldownOptions.plugins
           = config.environments.client.build.rolldownOptions.plugins || []
         if (
-          Array.isArray(config.environments.client.build.rolldownOptions.plugins)
+          Array.isArray(
+            config.environments.client.build.rolldownOptions.plugins,
+          )
         ) {
-          config.environments.client.build.rolldownOptions.plugins.push(minify())
+          config.environments.client.build.rolldownOptions.plugins.push(
+            minify(),
+          )
         }
 
         config.environments.client.build.minify = true
@@ -735,6 +824,8 @@ if (import.meta.hot) {
           'safari14',
         ]
         config.environments.client.build.cssMinify = 'esbuild'
+        config.environments.client.build.cssCodeSplit = true
+        config.environments.client.build.assetsInlineLimit = 4096
         config.environments.client.build.rolldownOptions.treeshake = {
           moduleSideEffects: false,
           unknownGlobalSideEffects: false,
@@ -1407,7 +1498,7 @@ const ${componentName} = registerClientReference(
             return { id, external: true }
           }
         }
-        catch { }
+        catch {}
       }
 
       return null
