@@ -527,7 +527,7 @@ if (import.meta.hot) {
 
           config.build.rolldownOptions.plugins.push({
             name: 'html-css-optimizer',
-            generateBundle(rolldownOptions, bundle) {
+            generateBundle(options, bundle) {
               Object.keys(bundle).forEach((fileName) => {
                 const file = bundle[fileName]
                 if (file.type === 'asset' && fileName.endsWith('.html')) {
@@ -536,7 +536,7 @@ if (import.meta.hot) {
                   html = html.replace(
                     /<link\s+rel="stylesheet"\s+crossorigin\s+href="([^"]+\.css)"\s*>/g,
                     (match, href) => {
-                      return `<link rel="preload" as="style" crossorigin href="${href}" onload="this.onload=null;this.rel='stylesheet'">
+                      return `<link rel="preload" as="style" crossorigin href="${href}" fetchpriority="high" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" crossorigin href="${href}"></noscript>`
                     },
                   )
@@ -553,27 +553,8 @@ if (import.meta.hot) {
                     )
                   }
 
-                  const modulePreloadLinks = html.match(
-                    /<link\s+rel="modulepreload"\s+crossorigin\s+href="([^"]+)"\s*>/g,
-                  )
-                  if (modulePreloadLinks) {
-                    let preloadHints = ''
-                    modulePreloadLinks.forEach((link) => {
-                      const hrefMatch = link.match(/href="([^"]+)"/)
-                      if (hrefMatch) {
-                        preloadHints += `  <link rel="preload" as="script" crossorigin href="${hrefMatch[1]}">
-`
-                      }
-                    })
-                    if (preloadHints) {
-                      html = html.replace(
-                        modulePreloadLinks[0],
-                        `${preloadHints}  ${modulePreloadLinks[0]}`,
-                      )
-                    }
-                  }
-
-                  const preconnectDomains = options.preconnectDomains || []
+                  const preconnectDomains
+                    = (options as RariOptions).preconnectDomains || []
                   if (preconnectDomains.length > 0) {
                     const preconnectHints = preconnectDomains
                       .map(

@@ -4,5 +4,15 @@ import { rari, rariRouter } from 'rari'
 import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
-  plugins: [rari(), rariRouter(), react(), tailwindcss()],
+  plugins: [
+    rari({
+      preconnectDomains: [
+        'www.googletagmanager.com',
+        'www.google-analytics.com',
+      ],
+    }),
+    rariRouter(),
+    react(),
+    tailwindcss(),
+  ],
 })

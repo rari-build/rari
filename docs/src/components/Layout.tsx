@@ -41,6 +41,7 @@ export default function Layout({
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          style={{ willChange: 'opacity' }}
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -70,11 +71,15 @@ export default function Layout({
 
       <div className="flex min-h-screen">
         <nav
-          className={`fixed lg:relative lg:translate-x-0 transform transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto ${
-            isMobileMenuOpen
-              ? 'translate-x-0'
-              : '-translate-x-full lg:translate-x-0'
+          className={`fixed lg:relative lg:translate-x-0 transform transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto ${isMobileMenuOpen
+            ? 'translate-x-0'
+            : '-translate-x-full lg:translate-x-0'
           } w-64 flex-shrink-0`}
+          style={{
+            willChange: isMobileMenuOpen ? 'transform' : 'auto',
+            contentVisibility: 'auto',
+            containIntrinsicSize: '256px auto',
+          }}
         >
           <div className="p-6">
             <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
@@ -96,11 +101,11 @@ export default function Layout({
                 <li key={item.id}>
                   <Link
                     to={item.href}
-                    className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                      currentPage === item.id
-                        ? 'bg-[#1f2937] text-[#fd7e14] border-l-2 border-[#fd7e14] shadow-sm'
-                        : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                    className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${currentPage === item.id
+                      ? 'bg-[#1f2937] text-[#fd7e14] border-l-2 border-[#fd7e14] shadow-sm'
+                      : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                     }`}
+                    style={{ willChange: 'background-color, color' }}
                   >
                     {item.label}
                   </Link>
@@ -151,8 +156,14 @@ export default function Layout({
           </div>
         </nav>
 
-        <main className="flex-1 min-h-screen bg-[#0d1117]">
-          <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
+        <main
+          className="flex-1 min-h-screen bg-[#0d1117]"
+          style={{ contentVisibility: 'auto' }}
+        >
+          <div
+            className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8"
+            style={{ containIntrinsicSize: '1280px auto' }}
+          >
             {children}
           </div>
         </main>
