@@ -1,6 +1,6 @@
 {
   "name": "rari-win32-x64",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Runtime Accelerated Rendering Infrastructure (Windows x64 binary)",
   "author": "Ryan Skinner",
   "license": "MIT",
