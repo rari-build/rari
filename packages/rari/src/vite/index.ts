@@ -380,10 +380,15 @@ if (import.meta.hot) {
         new Set([...(existingDedupe || []), ...toAdd]),
       )
 
+      // Add React DOM server alias for better tree shaking
       const existingResolveAlias = (config.resolve as any).alias || {};
       (config.resolve as any).alias = {
         ...existingResolveAlias,
         'react-dom/server': 'react-dom/server.browser',
+        // Optimize React DOM imports for better tree-shaking
+        'react-dom$': 'react-dom/client',
+        'react-dom/cjs/react-dom.production.min.js': 'react-dom/client',
+        'react-dom/cjs/react-dom.development.js': 'react-dom/client',
       }
 
       const existingAlias: Array<{
@@ -416,7 +421,7 @@ if (import.meta.hot) {
             })
           }
         }
-        catch { }
+        catch {}
         if (!aliasFinds.has('react')) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
@@ -433,7 +438,7 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch { }
+      catch {}
 
       config.environments = config.environments || {}
 
@@ -478,7 +483,7 @@ if (import.meta.hot) {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
           if (env && env.build) {
-            env.build.rolldownOptions = env.build.rolldownOptions || {}
+            env.build.rollupOptions = env.build.rollupOptions || {}
           }
         }
       }
@@ -514,28 +519,41 @@ if (import.meta.hot) {
 
       if (command === 'build') {
         config.build = config.build || {}
-        config.build.rolldownOptions = config.build.rolldownOptions || {}
+        config.build.rollupOptions = config.build.rollupOptions || {}
 
-        if (!config.build.rolldownOptions.input) {
-          config.build.rolldownOptions.input = {
+        if (!config.build.rollupOptions.input) {
+          config.build.rollupOptions.input = {
             main: './index.html',
           }
         }
 
-        config.build.rolldownOptions.output
-          = config.build.rolldownOptions.output || {}
-        const outputConfig = Array.isArray(config.build.rolldownOptions.output)
-          ? config.build.rolldownOptions.output[0] || {}
-          : config.build.rolldownOptions.output
+        // Enhanced React DOM bundle optimization
+        config.build.rollupOptions.output
+          = config.build.rollupOptions.output || {}
+        const outputConfig = Array.isArray(config.build.rollupOptions.output)
+          ? config.build.rollupOptions.output[0] || {}
+          : config.build.rollupOptions.output
 
         outputConfig.manualChunks
           = outputConfig.manualChunks
             || ((id) => {
-              if (id.includes('react-dom')) {
+            // More aggressive React DOM detection and splitting
+              if (
+                id.includes('node_modules/react-dom')
+                || id.includes('react-dom/client')
+                || id.includes('react-dom/server')
+                || id.includes('react-dom/')
+              ) {
                 return 'react-dom'
               }
-              if (id.includes('react') && !id.includes('react-dom')) {
+              if (
+                (id.includes('node_modules/react') || id.includes('react/'))
+                && !id.includes('react-dom')
+              ) {
                 return 'react'
+              }
+              if (id.includes('scheduler') && id.includes('node_modules')) {
+                return 'scheduler'
               }
               if (id.includes('markdown-it') || id.includes('shiki')) {
                 return 'vendor'
@@ -545,16 +563,19 @@ if (import.meta.hot) {
               }
             })
 
-        config.build.rolldownOptions.treeshake = config.build.rolldownOptions
+        config.build.rollupOptions.treeshake = config.build.rollupOptions
           .treeshake || {
           moduleSideEffects: (id) => {
             if (id.includes('.css') || id.includes('polyfill')) {
               return true
             }
+            // Aggressively remove side effects from React DOM internals
             if (
               id.includes('react-dom')
               || id.includes('react')
               || id.includes('scheduler')
+              || id.includes('react-dom/client')
+              || id.includes('react-dom/server')
             ) {
               return false
             }
@@ -563,7 +584,8 @@ if (import.meta.hot) {
           unknownGlobalSideEffects: false,
         }
 
-        const existingExternal = config.build.rolldownOptions.external || []
+        // External dependencies for unused React DOM features
+        const existingExternal = config.build.rollupOptions?.external || []
         const reactDomExternals = [
           'react-dom/profiling',
           'react-dom/test-utils',
@@ -577,6 +599,11 @@ if (import.meta.hot) {
           'react/cjs/react.production.min.js',
           'react-dom/cjs/react-dom.development.js',
           'react-dom/cjs/react-dom.production.min.js',
+          // Additional React DOM internals that can be externalized
+          'react-dom/src/client/ReactDOMRoot.js',
+          'react-dom/src/events/plugins',
+          'react-dom/src/shared/HTMLDOMPropertyConfig.js',
+          'react-dom/src/shared/DOMPropertyOperations.js',
         ]
 
         if (Array.isArray(existingExternal)) {
@@ -584,18 +611,18 @@ if (import.meta.hot) {
           external.push(
             ...reactDomExternals.filter(dep => !external.includes(dep)),
           )
-          config.build.rolldownOptions.external = external
+          config.build.rollupOptions.external = external
         }
         else if (typeof existingExternal === 'function') {
           const originalExternal = existingExternal
-          config.build.rolldownOptions.external = (id, parentId, isResolved) => {
+          config.build.rollupOptions.external = (id, parentId, isResolved) => {
             if (reactDomExternals.includes(id))
               return true
             return originalExternal(id, parentId, isResolved)
           }
         }
         else {
-          config.build.rolldownOptions.external = [
+          config.build.rollupOptions.external = [
             ...(Array.isArray(existingExternal)
               ? existingExternal
               : [existingExternal]),
@@ -616,15 +643,45 @@ if (import.meta.hot) {
         config.build.sourcemap
           = config.build.sourcemap !== undefined ? config.build.sourcemap : false
 
+        // Advanced terser options for React DOM optimization
         config.build.terserOptions = config.build.terserOptions || {
           compress: {
             drop_console: true,
             drop_debugger: true,
-            pure_funcs: ['console.log', 'console.info', 'console.debug'],
-            passes: 2,
+            pure_funcs: [
+              'console.log',
+              'console.info',
+              'console.debug',
+              'console.warn',
+              // React DOM specific optimizations
+              'invariant',
+              'warning',
+              '__DEV__',
+              // Additional React DOM internals
+              'ReactDOM.render',
+              'ReactDOM.unmountComponentAtNode',
+              'ReactDOM.findDOMNode',
+              'ReactDOM.createPortal',
+            ],
+            passes: 3,
+            unsafe: true,
+            unsafe_comps: true,
+            unsafe_Function: true,
+            unsafe_math: true,
+            unsafe_symbols: true,
+            unsafe_methods: true,
+            unsafe_proto: true,
+            unsafe_regexp: true,
+            unsafe_undefined: true,
+            // React DOM specific dead code elimination
+            dead_code: true,
+            side_effects: false,
           },
           mangle: {
             safari10: true,
+            properties: {
+              regex: /^_/,
+            },
           },
           format: {
             comments: false,
@@ -634,11 +691,11 @@ if (import.meta.hot) {
         outputConfig.format = outputConfig.format || 'es'
         outputConfig.minify = true
 
-        if (Array.isArray(config.build.rolldownOptions.output)) {
-          config.build.rolldownOptions.output[0] = outputConfig
+        if (Array.isArray(config.build.rollupOptions.output)) {
+          config.build.rollupOptions.output[0] = outputConfig
         }
         else {
-          config.build.rolldownOptions.output = outputConfig
+          config.build.rollupOptions.output = outputConfig
         }
       }
 
@@ -646,20 +703,20 @@ if (import.meta.hot) {
         if (!config.environments.client.build) {
           config.environments.client.build = {}
         }
-        if (!config.environments.client.build.rolldownOptions) {
-          config.environments.client.build.rolldownOptions = {}
+        if (!config.environments.client.build.rollupOptions) {
+          config.environments.client.build.rollupOptions = {}
         }
-        if (!config.environments.client.build.rolldownOptions.input) {
-          config.environments.client.build.rolldownOptions.input = {}
+        if (!config.environments.client.build.rollupOptions.input) {
+          config.environments.client.build.rollupOptions.input = {}
         }
 
         if (
-          typeof config.environments.client.build.rolldownOptions.input
+          typeof config.environments.client.build.rollupOptions.input
           === 'object'
-          && !Array.isArray(config.environments.client.build.rolldownOptions.input)
+          && !Array.isArray(config.environments.client.build.rollupOptions.input)
         ) {
           (
-            config.environments.client.build.rolldownOptions.input as Record<
+            config.environments.client.build.rollupOptions.input as Record<
               string,
               string
             >
@@ -678,27 +735,40 @@ if (import.meta.hot) {
           'safari14',
         ]
         config.environments.client.build.cssMinify = 'esbuild'
-        config.environments.client.build.rolldownOptions.treeshake = {
+        config.environments.client.build.rollupOptions.treeshake = {
           moduleSideEffects: false,
           unknownGlobalSideEffects: false,
         }
 
-        config.environments.client.build.rolldownOptions.output
-          = config.environments.client.build.rolldownOptions.output || {}
+        // Client-specific chunk splitting for React DOM
+        config.environments.client.build.rollupOptions.output
+          = config.environments.client.build.rollupOptions.output || {}
         const clientOutputConfig = Array.isArray(
-          config.environments.client.build.rolldownOptions.output,
+          config.environments.client.build.rollupOptions.output,
         )
-          ? config.environments.client.build.rolldownOptions.output[0] || {}
-          : config.environments.client.build.rolldownOptions.output
+          ? config.environments.client.build.rollupOptions.output[0] || {}
+          : config.environments.client.build.rollupOptions.output
 
         clientOutputConfig.manualChunks
           = clientOutputConfig.manualChunks
             || ((id) => {
-              if (id.includes('react-dom')) {
+            // Enhanced React DOM splitting for client environment
+              if (
+                id.includes('node_modules/react-dom')
+                || id.includes('react-dom/client')
+                || id.includes('react-dom/server')
+                || id.includes('react-dom/')
+              ) {
                 return 'react-dom'
               }
-              if (id.includes('react') && !id.includes('react-dom')) {
+              if (
+                (id.includes('node_modules/react') || id.includes('react/'))
+                && !id.includes('react-dom')
+              ) {
                 return 'react'
+              }
+              if (id.includes('scheduler') && id.includes('node_modules')) {
+                return 'scheduler'
               }
               if (
                 id.includes('rari')
@@ -718,13 +788,13 @@ if (import.meta.hot) {
         clientOutputConfig.minify = true
 
         if (
-          Array.isArray(config.environments.client.build.rolldownOptions.output)
+          Array.isArray(config.environments.client.build.rollupOptions.output)
         ) {
-          config.environments.client.build.rolldownOptions.output[0]
+          config.environments.client.build.rollupOptions.output[0]
             = clientOutputConfig
         }
         else {
-          config.environments.client.build.rolldownOptions.output
+          config.environments.client.build.rollupOptions.output
             = clientOutputConfig
         }
       }
@@ -735,6 +805,22 @@ if (import.meta.hot) {
     transform(code, id) {
       if (!/\.(?:tsx?|jsx?)$/.test(id)) {
         return null
+      }
+
+      // Transform React DOM imports for better tree-shaking
+      if (code.includes('react-dom')) {
+        // Transform broad React DOM imports to specific named imports
+        code = code.replace(
+          /import\s+ReactDOM\s+from\s+['"]react-dom\/client['"];?/g,
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
+        code = code.replace(
+          /import\s+ReactDOM\s+from\s+['"]react-dom['"];?/g,
+          'import { createRoot, hydrateRoot } from \'react-dom/client\';',
+        )
+        // Replace ReactDOM.createRoot calls with direct createRoot calls
+        code = code.replace(/ReactDOM\.createRoot/g, 'createRoot')
+        code = code.replace(/ReactDOM\.hydrateRoot/g, 'hydrateRoot')
       }
 
       const environment = (this as any).environment
@@ -1327,7 +1413,7 @@ const ${componentName} = registerClientReference(
             return { id, external: true }
           }
         }
-        catch { }
+        catch {}
       }
 
       return null
