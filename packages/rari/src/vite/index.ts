@@ -151,7 +151,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
-  function hasTopLevelDirective(code: string, directive: 'use client' | 'use server'): boolean {
+  function hasTopLevelDirective(
+    code: string,
+    directive: 'use client' | 'use server',
+  ): boolean {
     try {
       const ast = acorn.parse(code, {
         ecmaVersion: 2024,
@@ -370,30 +373,47 @@ if (import.meta.hot) {
     config(config: UserConfig, { command }) {
       config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
-        ? (config.resolve as any).dedupe as string[]
+        ? ((config.resolve as any).dedupe as string[])
         : []
-      const toAdd = ['react', 'react-dom']
-        ; (config.resolve as any).dedupe = Array.from(
+      const toAdd = ['react', 'react-dom'];
+      (config.resolve as any).dedupe = Array.from(
         new Set([...(existingDedupe || []), ...toAdd]),
       )
 
-      const existingAlias: Array<{ find: string | RegExp, replacement: string }>
-        = Array.isArray((config.resolve as any).alias)
-          ? (config.resolve as any).alias
-          : []
+      const existingResolveAlias = (config.resolve as any).alias || {};
+      (config.resolve as any).alias = {
+        ...existingResolveAlias,
+        'react-dom/server': 'react-dom/server.browser',
+      }
+
+      const existingAlias: Array<{
+        find: string | RegExp
+        replacement: string
+      }> = Array.isArray((config.resolve as any).alias)
+        ? (config.resolve as any).alias
+        : []
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
         const reactPath = require.resolve('react')
         const reactDomClientPath = require.resolve('react-dom/client')
         const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
-        const aliasesToAppend: Array<{ find: string, replacement: string }> = []
+        const aliasesToAppend: Array<{ find: string, replacement: string }>
+          = []
         if (!aliasFinds.has('react/jsx-runtime')) {
-          aliasesToAppend.push({ find: 'react/jsx-runtime', replacement: reactJsxRuntimePath })
+          aliasesToAppend.push({
+            find: 'react/jsx-runtime',
+            replacement: reactJsxRuntimePath,
+          })
         }
         try {
-          const reactJsxDevRuntimePath = require.resolve('react/jsx-dev-runtime')
+          const reactJsxDevRuntimePath = require.resolve(
+            'react/jsx-dev-runtime',
+          )
           if (!aliasFinds.has('react/jsx-dev-runtime')) {
-            aliasesToAppend.push({ find: 'react/jsx-dev-runtime', replacement: reactJsxDevRuntimePath })
+            aliasesToAppend.push({
+              find: 'react/jsx-dev-runtime',
+              replacement: reactJsxDevRuntimePath,
+            })
           }
         }
         catch { }
@@ -401,10 +421,16 @@ if (import.meta.hot) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
         if (!aliasFinds.has('react-dom/client')) {
-          aliasesToAppend.push({ find: 'react-dom/client', replacement: reactDomClientPath })
+          aliasesToAppend.push({
+            find: 'react-dom/client',
+            replacement: reactDomClientPath,
+          })
         }
         if (aliasesToAppend.length > 0) {
-          (config.resolve as any).alias = [...existingAlias, ...aliasesToAppend]
+          (config.resolve as any).alias = [
+            ...existingAlias,
+            ...aliasesToAppend,
+          ]
         }
       }
       catch { }
@@ -437,12 +463,22 @@ if (import.meta.hot) {
       if (!config.optimizeDeps.include.includes('react-dom/server')) {
         config.optimizeDeps.include.push('react-dom/server')
       }
+      if (!config.optimizeDeps.include.includes('react')) {
+        config.optimizeDeps.include.push('react')
+      }
+      if (!config.optimizeDeps.include.includes('react-dom/client')) {
+        config.optimizeDeps.include.push('react-dom/client')
+      }
+      config.optimizeDeps.exclude = config.optimizeDeps.exclude || []
+      if (!config.optimizeDeps.exclude.includes('virtual:rsc-integration')) {
+        config.optimizeDeps.exclude.push('virtual:rsc-integration')
+      }
 
       if (command === 'build') {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
           if (env && env.build) {
-            env.build.rollupOptions = env.build.rollupOptions || {}
+            env.build.rolldownOptions = env.build.rolldownOptions || {}
           }
         }
       }
@@ -478,12 +514,131 @@ if (import.meta.hot) {
 
       if (command === 'build') {
         config.build = config.build || {}
-        config.build.rollupOptions = config.build.rollupOptions || {}
+        config.build.rolldownOptions = config.build.rolldownOptions || {}
 
-        if (!config.build.rollupOptions.input) {
-          config.build.rollupOptions.input = {
+        if (!config.build.rolldownOptions.input) {
+          config.build.rolldownOptions.input = {
             main: './index.html',
           }
+        }
+
+        config.build.rolldownOptions.output
+          = config.build.rolldownOptions.output || {}
+        const outputConfig = Array.isArray(config.build.rolldownOptions.output)
+          ? config.build.rolldownOptions.output[0] || {}
+          : config.build.rolldownOptions.output
+
+        outputConfig.manualChunks
+          = outputConfig.manualChunks
+            || ((id) => {
+              if (id.includes('react-dom')) {
+                return 'react-dom'
+              }
+              if (id.includes('react') && !id.includes('react-dom')) {
+                return 'react'
+              }
+              if (id.includes('markdown-it') || id.includes('shiki')) {
+                return 'vendor'
+              }
+              if (id.includes('node_modules')) {
+                return 'vendor'
+              }
+            })
+
+        config.build.rolldownOptions.treeshake = config.build.rolldownOptions
+          .treeshake || {
+          moduleSideEffects: (id) => {
+            if (id.includes('.css') || id.includes('polyfill')) {
+              return true
+            }
+            if (
+              id.includes('react-dom')
+              || id.includes('react')
+              || id.includes('scheduler')
+            ) {
+              return false
+            }
+            return false
+          },
+          unknownGlobalSideEffects: false,
+        }
+
+        const existingExternal = config.build.rolldownOptions.external || []
+        const reactDomExternals = [
+          'react-dom/profiling',
+          'react-dom/test-utils',
+          'react-dom/server',
+          'react-dom/server.browser',
+          'react-dom/server.node',
+          'react/jsx-dev-runtime',
+          'scheduler/tracing',
+          'scheduler/unstable_mock',
+          'react/cjs/react.development.js',
+          'react/cjs/react.production.min.js',
+          'react-dom/cjs/react-dom.development.js',
+          'react-dom/cjs/react-dom.production.min.js',
+        ]
+
+        if (Array.isArray(existingExternal)) {
+          const external = [...existingExternal]
+          external.push(
+            ...reactDomExternals.filter(dep => !external.includes(dep)),
+          )
+          config.build.rolldownOptions.external = external
+        }
+        else if (typeof existingExternal === 'function') {
+          const originalExternal = existingExternal
+          config.build.rolldownOptions.external = (id, parentId, isResolved) => {
+            if (reactDomExternals.includes(id))
+              return true
+            return originalExternal(id, parentId, isResolved)
+          }
+        }
+        else {
+          config.build.rolldownOptions.external = [
+            ...(Array.isArray(existingExternal)
+              ? existingExternal
+              : [existingExternal]),
+            ...reactDomExternals,
+          ].filter(Boolean)
+        }
+
+        config.build.minify = config.build.minify !== false ? 'terser' : false
+        config.build.target = config.build.target || [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.build.cssMinify
+          = config.build.cssMinify !== false ? 'esbuild' : false
+        config.build.sourcemap
+          = config.build.sourcemap !== undefined ? config.build.sourcemap : false
+
+        config.build.terserOptions = config.build.terserOptions || {
+          compress: {
+            drop_console: true,
+            drop_debugger: true,
+            pure_funcs: ['console.log', 'console.info', 'console.debug'],
+            passes: 2,
+          },
+          mangle: {
+            safari10: true,
+          },
+          format: {
+            comments: false,
+          },
+        }
+
+        outputConfig.format = outputConfig.format || 'es'
+        outputConfig.minify = true
+
+        if (Array.isArray(config.build.rolldownOptions.output)) {
+          config.build.rolldownOptions.output[0] = outputConfig
+        }
+        else {
+          config.build.rolldownOptions.output = outputConfig
         }
       }
 
@@ -491,24 +646,86 @@ if (import.meta.hot) {
         if (!config.environments.client.build) {
           config.environments.client.build = {}
         }
-        if (!config.environments.client.build.rollupOptions) {
-          config.environments.client.build.rollupOptions = {}
+        if (!config.environments.client.build.rolldownOptions) {
+          config.environments.client.build.rolldownOptions = {}
         }
-        if (!config.environments.client.build.rollupOptions.input) {
-          config.environments.client.build.rollupOptions.input = {}
+        if (!config.environments.client.build.rolldownOptions.input) {
+          config.environments.client.build.rolldownOptions.input = {}
         }
 
         if (
-          typeof config.environments.client.build.rollupOptions.input
+          typeof config.environments.client.build.rolldownOptions.input
           === 'object'
-          && !Array.isArray(config.environments.client.build.rollupOptions.input)
+          && !Array.isArray(config.environments.client.build.rolldownOptions.input)
         ) {
           (
-            config.environments.client.build.rollupOptions.input as Record<
+            config.environments.client.build.rolldownOptions.input as Record<
               string,
               string
             >
           )['client-components'] = 'virtual:rsc-client-components'
+        }
+
+        config.environments.client.build.minify
+          = config.environments.client.build.minify !== false ? 'esbuild' : false
+        config.environments.client.build.target = config.environments.client
+          .build
+          .target || [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ]
+        config.environments.client.build.cssMinify = 'esbuild'
+        config.environments.client.build.rolldownOptions.treeshake = {
+          moduleSideEffects: false,
+          unknownGlobalSideEffects: false,
+        }
+
+        config.environments.client.build.rolldownOptions.output
+          = config.environments.client.build.rolldownOptions.output || {}
+        const clientOutputConfig = Array.isArray(
+          config.environments.client.build.rolldownOptions.output,
+        )
+          ? config.environments.client.build.rolldownOptions.output[0] || {}
+          : config.environments.client.build.rolldownOptions.output
+
+        clientOutputConfig.manualChunks
+          = clientOutputConfig.manualChunks
+            || ((id) => {
+              if (id.includes('react-dom')) {
+                return 'react-dom'
+              }
+              if (id.includes('react') && !id.includes('react-dom')) {
+                return 'react'
+              }
+              if (
+                id.includes('rari')
+                && (id.includes('router') || id.includes('navigation'))
+              ) {
+                return 'router'
+              }
+              if (id.includes('markdown-it') || id.includes('shiki')) {
+                return 'vendor'
+              }
+              if (id.includes('node_modules')) {
+                return 'vendor'
+              }
+            })
+
+        clientOutputConfig.format = clientOutputConfig.format || 'es'
+        clientOutputConfig.minify = true
+
+        if (
+          Array.isArray(config.environments.client.build.rolldownOptions.output)
+        ) {
+          config.environments.client.build.rolldownOptions.output[0]
+            = clientOutputConfig
+        }
+        else {
+          config.environments.client.build.rolldownOptions.output
+            = clientOutputConfig
         }
       }
 

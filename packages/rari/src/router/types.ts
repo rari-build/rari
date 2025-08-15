@@ -75,6 +75,7 @@ export interface RouterContext {
   replace: (path: string, options?: Omit<NavigationOptions, 'replace'>) => void
   isActive: (path: string, exact?: boolean) => boolean
   config: RouterConfig
+  isReady: boolean
 }
 
 export interface NavigationState {
@@ -122,7 +123,7 @@ export type RouteGenerator = (
   options: RouteGenerationOptions,
 ) => Promise<Route[]>
 
-export interface UseRouterReturn extends RouterContext { }
+export interface UseRouterReturn extends RouterContext {}
 
 export interface UseNavigationReturn extends NavigationState {
   navigate: RouterContext['navigate']

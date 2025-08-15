@@ -47,10 +47,9 @@ export function RouterProvider({
     }),
     [config],
   )
-  const [currentRoute, setCurrentRoute] = useState<RouteMatch | null>(null)
 
-  const updateCurrentRoute = useCallback(
-    (url: string) => {
+  const resolveRoute = useCallback(
+    (url: string): RouteMatch | null => {
       const { pathname, search, hash, searchParams } = parseUrl(url)
       const normalizedPathname = normalizePathname(pathname)
 
@@ -64,15 +63,54 @@ export function RouterProvider({
           hash,
         }
 
-        enhancedMatch.childMatch = findDeepestChildMatch(enhancedMatch, normalizedPathname)
+        enhancedMatch.childMatch = findDeepestChildMatch(
+          enhancedMatch,
+          normalizedPathname,
+        )
+        return enhancedMatch
+      }
 
-        setCurrentRoute(enhancedMatch)
-      }
-      else {
-        setCurrentRoute(null)
-      }
+      return null
     },
     [routes],
+  )
+
+  const [routerState, setRouterState] = useState<{
+    currentRoute: RouteMatch | null
+    isReady: boolean
+  }>(() => {
+    if (typeof window === 'undefined') {
+      return { currentRoute: null, isReady: false }
+    }
+
+    const url = mergedConfig.useHash
+      ? window.location.hash.slice(1) || '/'
+      : window.location.pathname
+        + window.location.search
+        + window.location.hash
+
+    let initialRoute
+    try {
+      initialRoute = resolveRoute(url)
+    }
+    catch (error) {
+      console.error('Error resolving initial route:', error)
+      initialRoute = null
+    }
+
+    const isReady = true
+    return { currentRoute: initialRoute, isReady }
+  })
+
+  const currentRoute = routerState.currentRoute
+  const isReady = routerState.isReady
+
+  const updateCurrentRoute = useCallback(
+    (url: string) => {
+      const route = resolveRoute(url)
+      setRouterState({ currentRoute: route, isReady: true })
+    },
+    [resolveRoute],
   )
 
   useEffect(() => {
@@ -85,8 +123,6 @@ export function RouterProvider({
 
       updateCurrentRoute(url)
     }
-
-    handleLocationChange()
 
     const handlePopState = () => {
       handleLocationChange()
@@ -175,8 +211,8 @@ export function RouterProvider({
     [currentRoute],
   )
 
-  const contextValue: IRouterContext = useMemo(
-    () => ({
+  const contextValue: IRouterContext = useMemo(() => {
+    return {
       currentRoute,
       routes,
       navigate,
@@ -185,18 +221,19 @@ export function RouterProvider({
       replace,
       isActive,
       config: mergedConfig,
-    }),
-    [
-      currentRoute,
-      routes,
-      navigate,
-      back,
-      forward,
-      replace,
-      isActive,
-      mergedConfig,
-    ],
-  )
+      isReady,
+    }
+  }, [
+    currentRoute,
+    routes,
+    navigate,
+    back,
+    forward,
+    replace,
+    isActive,
+    mergedConfig,
+    isReady,
+  ])
 
   return <RouterContext value={contextValue}>{children}</RouterContext>
 }
@@ -244,8 +281,7 @@ export function useParams() {
 }
 
 export function useSearchParams() {
-  const { currentRoute } = useRouter()
-  const { navigate } = useRouter()
+  const { currentRoute, navigate } = useRouter()
 
   const searchParams = currentRoute?.searchParams || {}
 
@@ -254,7 +290,7 @@ export function useSearchParams() {
       params:
         | Record<string, string | string[]>
         | ((
-          prev: Record<string, string | string[]>
+          prev: Record<string, string | string[]>,
         ) => Record<string, string | string[]>),
       options: NavigationOptions = DEFAULT_CONFIG,
     ) => {
@@ -357,16 +393,25 @@ export function Outlet() {
     return null
   }
 
-  return <ChildComponent {...childRoute.params} searchParams={childRoute.searchParams} />
+  return (
+    <ChildComponent
+      {...childRoute.params}
+      searchParams={childRoute.searchParams}
+    />
+  )
 }
 
-function findChildRouteForCurrentLevel(currentRoute: RouteMatch): RouteMatch | null {
+function findChildRouteForCurrentLevel(
+  currentRoute: RouteMatch,
+): RouteMatch | null {
   if (currentRoute.childMatch) {
     return currentRoute.childMatch
   }
 
   if (currentRoute.route.children) {
-    const indexRoute = currentRoute.route.children.find(child => child.isIndex)
+    const indexRoute = currentRoute.route.children.find(
+      child => child.isIndex,
+    )
     if (indexRoute) {
       return {
         route: indexRoute,
@@ -385,14 +430,26 @@ function findChildRouteForCurrentLevel(currentRoute: RouteMatch): RouteMatch | n
 export function RouteRenderer({ routeMatch }: { routeMatch: RouteMatch }) {
   if (!routeMatch.layouts || routeMatch.layouts.length === 0) {
     const Component = routeMatch.route.component
-    return Component ? <Component {...routeMatch.params} searchParams={routeMatch.searchParams} /> : null
+    return Component
+      ? (
+          <Component
+            {...routeMatch.params}
+            searchParams={routeMatch.searchParams}
+          />
+        )
+      : null
   }
 
   let rendered: ReactNode = null
   const Component = routeMatch.route.component
 
   if (Component) {
-    rendered = <Component {...routeMatch.params} searchParams={routeMatch.searchParams} />
+    rendered = (
+      <Component
+        {...routeMatch.params}
+        searchParams={routeMatch.searchParams}
+      />
+    )
   }
 
   for (let i = routeMatch.layouts.length - 1; i >= 0; i--) {
@@ -400,7 +457,9 @@ export function RouteRenderer({ routeMatch }: { routeMatch: RouteMatch }) {
     const LayoutComponent = layout.component
 
     if (LayoutComponent) {
-      rendered = <LayoutComponent route={routeMatch}>{rendered}</LayoutComponent>
+      rendered = (
+        <LayoutComponent route={routeMatch}>{rendered}</LayoutComponent>
+      )
     }
   }
 
@@ -428,7 +487,10 @@ export function Navigate({
 export default RouterProvider
 export { RouterContext }
 
-function findDeepestChildMatch(routeMatch: RouteMatch, pathname: string): RouteMatch | null {
+function findDeepestChildMatch(
+  routeMatch: RouteMatch,
+  pathname: string,
+): RouteMatch | null {
   if (!routeMatch.route.children || routeMatch.route.children.length === 0) {
     return null
   }
@@ -486,18 +548,12 @@ export function Link({
   )
 
   const isLinkActive = isActive(to, exact)
-  const finalClassName = [
-    className,
-    isLinkActive && activeClassName,
-  ].filter(Boolean).join(' ')
+  const finalClassName = [className, isLinkActive && activeClassName]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <a
-      href={to}
-      className={finalClassName}
-      onClick={handleClick}
-      {...props}
-    >
+    <a href={to} className={finalClassName} onClick={handleClick} {...props}>
       {children}
     </a>
   )
