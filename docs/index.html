@@ -1,21 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure." />
+  <meta name="google-site-verification" content="6MR283BBWG" />
   <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
   <link rel="stylesheet" href="/src/index.css" />
 
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag() {
+    window.gtag = function () {
       dataLayer.push(arguments);
-    }
-    gtag("js", new Date());
+    };
 
-    gtag("config", "G-6MR283BBWG");
+    function loadGTM() {
+      let loaded = false;
+      const trackingId = "G-6MR283BBWG";
+
+      function initGTM() {
+        if (loaded) return;
+        loaded = true;
+
+        const script = document.createElement("script");
+        script.async = true;
+        script.defer = true;
+        script.src = `https://www.googletagmanager.com/gtag/js?id=${trackingId}`;
+
+        script.onload = function () {
+          const configure = () => {
+            window.gtag("js", new Date());
+            window.gtag("config", trackingId, {
+              page_title: document.title,
+              page_location: window.location.href,
+            });
+          };
+
+          if (window.requestIdleCallback) {
+            requestIdleCallback(configure, { timeout: 2000 });
+          } else {
+            setTimeout(configure, 100);
+          }
+        };
+
+        script.onerror = () => console.warn("GTM failed to load");
+        document.head.appendChild(script);
+      }
+
+      const triggers = [
+        () => {
+          const events = ["click", "scroll", "keydown", "touchstart"];
+          const handler = () => {
+            events.forEach((e) => document.removeEventListener(e, handler));
+            setTimeout(initGTM, 200);
+          };
+          events.forEach((e) =>
+            document.addEventListener(e, handler, {
+              once: true,
+              passive: true,
+            }),
+          );
+        },
+        () => {
+          const loadHandler = () => setTimeout(initGTM, 2000);
+          if (document.readyState === "complete") {
+            loadHandler();
+          } else {
+            window.addEventListener("load", loadHandler);
+          }
+        },
+        () => setTimeout(initGTM, 5000),
+      ];
+
+      triggers.forEach((trigger) => trigger());
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", loadGTM);
+    } else {
+      loadGTM();
+    }
   </script>
 </head>
 
@@ -23,5 +89,4 @@
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
-
 </html>

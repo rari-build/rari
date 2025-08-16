@@ -43,6 +43,10 @@
       "types": "./dist/client.d.ts",
       "default": "./dist/client.js"
     },
+    "./client-dev": {
+      "types": "./dist/client-dev.d.ts",
+      "default": "./dist/client-dev.js"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
@@ -74,7 +78,8 @@
   "dependencies": {
     "acorn": "^8.15.0",
     "esbuild": "^0.25.9",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "rollup-plugin-esbuild": "^6.2.1"
   },
   "optionalDependencies": {
     "rari-darwin-arm64": "0.2.7",
