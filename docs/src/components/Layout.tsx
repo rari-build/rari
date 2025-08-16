@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'rari/client'
+import { Link, useRouter } from 'rari/client'
 import { useEffect, useState } from 'react'
 import { Bluesky } from './icons/Bluesky'
 import { Github } from './icons/Github'
@@ -23,6 +23,33 @@ export default function Layout({
   metaDescription,
 }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { currentRoute } = useRouter()
+
+  useEffect(() => {
+    if (metaDescription) {
+      const metaTag = document.querySelector('meta[name="description"]')
+      if (metaTag) {
+        metaTag.setAttribute('content', metaDescription)
+      }
+    }
+    else if (currentRoute?.pathname) {
+      const descriptions: Record<string, string> = {
+        '/': 'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
+        '/getting-started':
+          'Get started with Rari - learn how to build high-performance React applications with zero configuration.',
+        '/docs':
+          'Complete documentation for Rari framework. Learn about React Server Components, routing, and advanced features.',
+      }
+
+      const description
+        = descriptions[currentRoute.pathname] || descriptions['/']
+
+      const metaTag = document.querySelector('meta[name="description"]')
+      if (metaTag) {
+        metaTag.setAttribute('content', description)
+      }
+    }
+  }, [metaDescription, currentRoute?.pathname])
 
   useEffect(() => {
     if (metaDescription) {
@@ -75,11 +102,6 @@ export default function Layout({
             ? 'translate-x-0'
             : '-translate-x-full lg:translate-x-0'
           } w-64 flex-shrink-0`}
-          style={{
-            willChange: isMobileMenuOpen ? 'transform' : 'auto',
-            contentVisibility: 'auto',
-            containIntrinsicSize: '256px auto',
-          }}
         >
           <div className="p-6">
             <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
@@ -156,14 +178,8 @@ export default function Layout({
           </div>
         </nav>
 
-        <main
-          className="flex-1 min-h-screen bg-[#0d1117]"
-          style={{ contentVisibility: 'auto' }}
-        >
-          <div
-            className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8"
-            style={{ containIntrinsicSize: '1280px auto' }}
-          >
+        <main className="flex-1 min-h-screen bg-[#0d1117]">
+          <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
             {children}
           </div>
         </main>

@@ -57,8 +57,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: ^0.2.7
-        version: 0.2.7(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: workspace:*
+        version: link:../packages/rari
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -2632,14 +2632,6 @@ packages:
     cpu: [x64]
     os: [win32]
     hasBin: true
-
-  rari@0.2.7:
-    resolution: {integrity: sha512-241kiLLFLLqcZOFhEo4v2z7nJv+LVrZ4LHUX7mzKvTEdCuiAkwGmZqPFUyCElns+k0OjGNzRcDLI5u1935xiDQ==}
-    engines: {node: '>=20.0.0'}
-    hasBin: true
-    peerDependencies:
-      react: ^19.0.0
-      react-dom: ^19.0.0
 
   react-dom@19.1.0:
     resolution: {integrity: sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==}
@@ -5618,21 +5610,6 @@ snapshots:
 
   rari-win32-x64@0.2.7:
     optional: true
-
-  rari@0.2.7(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
-    dependencies:
-      acorn: 8.15.0
-      esbuild: 0.25.9
-      picocolors: 1.1.1
-      react: 19.1.1
-      react-dom: 19.1.1(react@19.1.1)
-      rollup-plugin-esbuild: 6.2.1(esbuild@0.25.9)(rollup@4.46.2)
-    optionalDependencies:
-      rari-darwin-arm64: 0.2.7
-      rari-darwin-x64: 0.2.7
-      rari-linux-arm64: 0.2.7
-      rari-linux-x64: 0.2.7
-      rari-win32-x64: 0.2.7
 
   react-dom@19.1.0(react@19.1.0):
     dependencies:
