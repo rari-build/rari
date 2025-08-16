@@ -13,7 +13,6 @@ interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
-  preconnectDomains?: string[]
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
@@ -420,7 +419,7 @@ if (import.meta.hot) {
             })
           }
         }
-        catch {}
+        catch { }
         if (!aliasFinds.has('react')) {
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         }
@@ -437,7 +436,7 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch {}
+      catch { }
 
       config.environments = config.environments || {}
 
@@ -553,23 +552,6 @@ if (import.meta.hot) {
                     )
                   }
 
-                  const preconnectDomains
-                    = (options as RariOptions).preconnectDomains || []
-                  if (preconnectDomains.length > 0) {
-                    const preconnectHints = preconnectDomains
-                      .map(
-                        (domain: string) =>
-                          `  <link rel="dns-prefetch" href="//${domain}">`,
-                      )
-                      .join('\n')
-                    html = html.replace(
-                      '</head>',
-                      `  <!-- Performance optimizations -->
-${preconnectHints}
-</head>`,
-                    )
-                  }
-
                   file.source = html
                 }
               })
@@ -588,13 +570,6 @@ ${preconnectHints}
         const outputConfig = Array.isArray(config.build.rolldownOptions.output)
           ? config.build.rolldownOptions.output[0] || {}
           : config.build.rolldownOptions.output
-
-        outputConfig.assetFileNames = (assetInfo) => {
-          if (assetInfo.name?.endsWith('.css')) {
-            return 'assets/[name]-[hash][extname]'
-          }
-          return 'assets/[name]-[hash][extname]'
-        }
 
         outputConfig.manualChunks = (id) => {
           if (
@@ -1479,7 +1454,7 @@ const ${componentName} = registerClientReference(
             return { id, external: true }
           }
         }
-        catch {}
+        catch { }
       }
 
       return null
