@@ -603,6 +603,7 @@ if (import.meta.hot) {
             if (id.includes('.css') || id.includes('polyfill')) {
               return true
             }
+            // Preserve side effects for React modules to prevent import issues
             if (
               id.includes('react-dom')
               || id.includes('react')
@@ -610,9 +611,13 @@ if (import.meta.hot) {
               || id.includes('react-dom/client')
               || id.includes('react-dom/server')
             ) {
+              return true
+            }
+            // Only disable side effects for specific safe modules
+            if (id.includes('node_modules') && !id.includes('react')) {
               return false
             }
-            return false
+            return true
           },
           unknownGlobalSideEffects: false,
         }
