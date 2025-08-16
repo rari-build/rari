@@ -2,26 +2,32 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
-  <link rel="stylesheet" href="/src/index.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure."
+    />
+    <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
+    <link rel="stylesheet" href="/src/index.css" />
 
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() {
-      dataLayer.push(arguments);
-    }
-    gtag("js", new Date());
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-6MR283BBWG");
+    </script>
+  </head>
 
-    gtag("config", "G-6MR283BBWG");
-  </script>
-</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
-
-</html>
+  </html>
