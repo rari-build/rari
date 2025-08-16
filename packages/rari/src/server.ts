@@ -67,4 +67,4 @@ export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
 
-export { defineRariConfig, rari } from './vite'
+export { createReactDOMOptimization, defineRariConfig, rari } from './vite'

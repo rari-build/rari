@@ -51,11 +51,24 @@ export default function Layout({
     }
   }, [metaDescription, currentRoute?.pathname])
 
+  useEffect(() => {
+    if (metaDescription) {
+      let metaTag = document.querySelector('meta[name="description"]')
+      if (!metaTag) {
+        metaTag = document.createElement('meta')
+        metaTag.setAttribute('name', 'description')
+        document.head.appendChild(metaTag)
+      }
+      metaTag.setAttribute('content', metaDescription)
+    }
+  }, [metaDescription])
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans">
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          style={{ willChange: 'opacity' }}
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -114,6 +127,7 @@ export default function Layout({
                       ? 'bg-[#1f2937] text-[#fd7e14] border-l-2 border-[#fd7e14] shadow-sm'
                       : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                     }`}
+                    style={{ willChange: 'background-color, color' }}
                   >
                     {item.label}
                   </Link>
