@@ -1860,8 +1860,8 @@ export function __rari_register() {{
                 let file_path = specifier_str.strip_prefix("file://").unwrap_or(specifier_str);
 
                 if !std::path::Path::new(file_path).exists() {
-                    return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
-                        "Module not found",
+                    return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::from_err(
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "Module not found"),
                     ))));
                 }
             }
@@ -2113,8 +2113,8 @@ export const __esModule = true;
                     }
                 }
 
-                return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
-                    "Module not found",
+                return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::from_err(
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "Module not found"),
                 ))));
             }
 
@@ -2156,7 +2156,10 @@ impl ModuleLoader for RariModuleLoader {
                     let referrer_dir = match std::path::Path::new(referrer).parent() {
                         Some(dir) => dir,
                         None => {
-                            return Err(JsErrorBox::generic("Module not found"));
+                            return Err(JsErrorBox::from_err(std::io::Error::new(
+                                std::io::ErrorKind::NotFound,
+                                "Module not found",
+                            )));
                         }
                     };
                     let resolved_path = referrer_dir.join(specifier);
@@ -2211,7 +2214,10 @@ impl ModuleLoader for RariModuleLoader {
                     }
                 }
 
-                return Err(JsErrorBox::generic("Module not found"));
+                return Err(JsErrorBox::from_err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Module not found",
+                )));
             }
 
             if referrer.contains(RARI_COMPONENT_PATH) {
@@ -2429,7 +2435,10 @@ impl ModuleLoader for RariModuleLoader {
         let load_duration = load_start.elapsed().as_millis() as u64;
         self.record_module_load(load_duration);
         self.record_operation();
-        ModuleLoadResponse::Sync(Err(JsErrorBox::generic("Module not found")))
+        ModuleLoadResponse::Sync(Err(JsErrorBox::from_err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Module not found",
+        ))))
     }
 }
 
