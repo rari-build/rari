@@ -82,14 +82,14 @@
     "rollup-plugin-esbuild": "^6.2.1"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.2.7",
-    "rari-darwin-x64": "0.2.7",
-    "rari-linux-arm64": "0.2.7",
-    "rari-linux-x64": "0.2.7",
-    "rari-win32-x64": "0.2.7"
+    "rari-darwin-arm64": "0.2.8",
+    "rari-darwin-x64": "0.2.8",
+    "rari-linux-arm64": "0.2.8",
+    "rari-linux-x64": "0.2.8",
+    "rari-win32-x64": "0.2.8"
   },
   "devDependencies": {
-    "@types/node": "^24.2.1",
+    "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",
     "@typescript/native-preview": "7.0.0-dev.20250620.1",
     "chokidar": "^3.6.0",

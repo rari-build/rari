@@ -25,11 +25,11 @@ pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
 }
 
 impl deno_napi::NapiPermissions for PermissionsContainer {
-    fn check(
+    fn check<'a>(
         &mut self,
-        path: &str,
-    ) -> Result<std::path::PathBuf, deno_permissions::PermissionCheckError> {
-        let p = self.0.check_read(Cow::Borrowed(std::path::Path::new(path)), None)?;
-        Ok(p.to_path_buf())
+        path: Cow<'a, std::path::Path>,
+    ) -> Result<Cow<'a, std::path::Path>, deno_permissions::PermissionCheckError> {
+        let p = self.0.check_read(path, None)?;
+        Ok(p)
     }
 }

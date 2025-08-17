@@ -40,9 +40,57 @@ pub enum Error {
 
 impl From<deno_core::error::CoreError> for Error {
     fn from(e: deno_core::error::CoreError) -> Self {
-        match e {
-            deno_core::error::CoreError::Js(js_error) => Error::JsError(Box::new(js_error)),
-            _ => Error::Runtime(e.to_string()),
+        use deno_core::error::CoreErrorKind;
+
+        let error_string = e.to_string();
+        match e.into_kind() {
+            CoreErrorKind::Js(js_error) => Error::JsError(Box::new(js_error)),
+            CoreErrorKind::Io(_) => Error::Runtime(error_string),
+            CoreErrorKind::Parse(_) => {
+                Error::Runtime(format!("Module parse error: {error_string}"))
+            }
+            CoreErrorKind::Execute(_) => {
+                Error::Runtime(format!("Module execution error: {error_string}"))
+            }
+            CoreErrorKind::MissingFromModuleMap(module) => Error::ModuleNotFound(module),
+            CoreErrorKind::UnusedModules(_) => {
+                Error::Runtime(format!("Unused modules: {error_string}"))
+            }
+            CoreErrorKind::NonEvaluatedModules(_) => {
+                Error::Runtime(format!("Non-evaluated modules: {error_string}"))
+            }
+            CoreErrorKind::Url(_) => Error::Runtime(format!("URL parse error: {error_string}")),
+            CoreErrorKind::JsBox(_) => Error::Runtime(error_string),
+            CoreErrorKind::ExtensionTranspiler(_) => {
+                Error::Runtime(format!("Extension transpiler error: {error_string}"))
+            }
+            CoreErrorKind::ExecutionTerminated => {
+                Error::Runtime("JavaScript execution terminated".to_string())
+            }
+            CoreErrorKind::PendingPromiseResolution => {
+                Error::Runtime("Pending promise resolution error".to_string())
+            }
+            CoreErrorKind::EvaluateDynamicImportedModule => {
+                Error::Runtime("Dynamic import evaluation error".to_string())
+            }
+            CoreErrorKind::TLA => Error::Runtime("Top-level await error".to_string()),
+            CoreErrorKind::CouldNotExecute { .. } => {
+                Error::Runtime(format!("Could not execute: {error_string}"))
+            }
+            CoreErrorKind::Module(_) => Error::Runtime(format!("Module error: {error_string}")),
+            CoreErrorKind::Data(_) => Error::JsonDecode(error_string),
+            CoreErrorKind::CreateCodeCache(_) => {
+                Error::Runtime(format!("Code cache creation error: {error_string}"))
+            }
+            CoreErrorKind::ExtensionSnapshotMismatch(_) => {
+                Error::Runtime(format!("Extension snapshot mismatch: {error_string}"))
+            }
+            CoreErrorKind::ExtensionLazyInitCountMismatch(_) => {
+                Error::Runtime(format!("Extension lazy init count mismatch: {error_string}"))
+            }
+            CoreErrorKind::ExtensionLazyInitOrderMismatch(_) => {
+                Error::Runtime(format!("Extension lazy init order mismatch: {error_string}"))
+            }
         }
     }
 }
@@ -396,5 +444,78 @@ impl From<serde_json::Error> for RariError {
                 error_source: None,
             }),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deno_core::error::{CoreError, CoreErrorKind};
+
+    #[test]
+    fn test_core_error_io_conversion() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
+        let core_error = CoreError::from(CoreErrorKind::Io(io_error));
+        let error: Error = core_error.into();
+
+        match error {
+            Error::Runtime(msg) => {
+                assert!(msg.contains("File not found"));
+            }
+            _ => panic!("Expected Runtime error variant"),
+        }
+    }
+
+    #[test]
+    fn test_core_error_module_not_found_conversion() {
+        let module_name = "missing_module".to_string();
+        let core_error = CoreError::from(CoreErrorKind::MissingFromModuleMap(module_name.clone()));
+        let error: Error = core_error.into();
+
+        match error {
+            Error::ModuleNotFound(name) => {
+                assert_eq!(name, module_name);
+            }
+            _ => panic!("Expected ModuleNotFound variant"),
+        }
+    }
+
+    #[test]
+    fn test_core_error_execution_terminated() {
+        let core_error = CoreError::from(CoreErrorKind::ExecutionTerminated);
+        let error: Error = core_error.into();
+
+        match error {
+            Error::Runtime(msg) => {
+                assert_eq!(msg, "JavaScript execution terminated");
+            }
+            _ => panic!("Expected Runtime error variant"),
+        }
+    }
+
+    #[test]
+    fn test_core_error_tla_conversion() {
+        let core_error = CoreError::from(CoreErrorKind::TLA);
+        let error: Error = core_error.into();
+
+        match error {
+            Error::Runtime(msg) => {
+                assert_eq!(msg, "Top-level await error");
+            }
+            _ => panic!("Expected Runtime error variant"),
+        }
+    }
+
+    #[test]
+    fn test_core_error_pending_promise_conversion() {
+        let core_error = CoreError::from(CoreErrorKind::PendingPromiseResolution);
+        let error: Error = core_error.into();
+
+        match error {
+            Error::Runtime(msg) => {
+                assert_eq!(msg, "Pending promise resolution error");
+            }
+            _ => panic!("Expected Runtime error variant"),
+        }
     }
 }

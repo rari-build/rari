@@ -62,7 +62,7 @@ impl Server {
         Config::set_global(config.clone())
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
 
-        if let Err(e) = dotenv::dotenv() {
+        if let Err(e) = dotenvy::dotenv() {
             debug!("No .env file found or error loading .env: {}", e);
         }
 
@@ -116,8 +116,8 @@ impl Server {
             .route("/api/rsc/health", get(health_check))
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
-            .route("/rsc/render/:component_id", get(rsc_render_handler))
-            .route("/api/*path", axum::routing::options(cors_preflight_ok))
+            .route("/rsc/render/{component_id}", get(rsc_render_handler))
+            .route("/api/{*path}", axum::routing::options(cors_preflight_ok))
             .with_state(state);
 
         if config.is_development() {
@@ -125,7 +125,7 @@ impl Server {
 
             router = router
                 .route("/vite-server/", get(vite_websocket_proxy))
-                .route("/vite-server/*path", any(vite_reverse_proxy));
+                .route("/vite-server/{*path}", any(vite_reverse_proxy));
 
             router = router.layer(middleware::from_fn(cors_middleware));
 
@@ -139,7 +139,7 @@ impl Server {
 
         if config.is_production() {
             router =
-                router.route("/", get(root_handler)).route("/*path", get(static_or_spa_handler));
+                router.route("/", get(root_handler)).route("/{*path}", get(static_or_spa_handler));
         } else {
             let static_service =
                 ServeDir::new(config.public_dir()).append_index_html_on_directories(true);
