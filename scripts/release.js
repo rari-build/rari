@@ -1,10 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { cancel, intro, isCancel, outro, select, text } from '@clack/prompts'
 import colors from 'picocolors'
 import semver from 'semver'
 import { logRecentCommits, run } from './releaseUtils.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const projectRoot = path.resolve(__dirname, '..')
 
 const args = process.argv.slice(2)
 const skipPrompts = args.includes('--skip-prompts')
@@ -95,7 +99,12 @@ async function releasePackage(pkg) {
     '--output',
     'CHANGELOG.md',
   ]
-  await run('npx', changelogArgs, { cwd: pkgPath })
+  await run('pnpm', ['exec', ...changelogArgs], { cwd: projectRoot })
+
+  // Copy the generated changelog to the package directory
+  const sourceChangelogPath = path.join(projectRoot, 'CHANGELOG.md')
+  const targetChangelogPath = path.join(pkgPath, 'CHANGELOG.md')
+  await fs.copyFile(sourceChangelogPath, targetChangelogPath)
 
   await run('git', ['add', '.'], { cwd: pkgPath })
   await run('git', ['commit', '-m', `release: ${pkg.name}@${newVersion}`])
