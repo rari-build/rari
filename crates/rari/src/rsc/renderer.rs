@@ -34,11 +34,11 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_concurrent_renders: 10,
-            max_render_time_ms: 5000,
-            max_script_execution_time_ms: 1000,
-            max_memory_per_component_mb: 50,
-            max_cache_size: 100,
+            max_concurrent_renders: 1000,
+            max_render_time_ms: 30000,
+            max_script_execution_time_ms: 10000,
+            max_memory_per_component_mb: 200,
+            max_cache_size: 10000,
         }
     }
 }

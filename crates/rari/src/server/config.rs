@@ -94,9 +94,9 @@ impl Default for RscConfig {
         Self {
             enable_ssr: true,
             enable_streaming: true,
-            component_cache_size: 1000,
-            render_timeout_ms: 5000,
-            script_execution_timeout_ms: 2000,
+            component_cache_size: 50000,
+            render_timeout_ms: 30000,
+            script_execution_timeout_ms: 10000,
             enable_hot_reload: true,
         }
     }
