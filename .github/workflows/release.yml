@@ -41,25 +41,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Special handling for macOS x86_64
-      - name: Install specific Rust toolchain (macOS x86_64)
-        if: matrix.target == 'x86_64-apple-darwin'
+      - name: Override Rust version on macOS
+        if: runner.os == 'macOS'
         run: |
-          rustup toolchain install 1.88.0-x86_64-apple-darwin
-          rustup default 1.88.0-x86_64-apple-darwin
-          rustup target add x86_64-apple-darwin
-
-      # Special handling for macOS aarch64
-      - name: Install specific Rust toolchain (macOS aarch64)
-        if: matrix.target == 'aarch64-apple-darwin'
-        run: |
-          rustup toolchain install 1.88.0-aarch64-apple-darwin
-          rustup default 1.88.0-aarch64-apple-darwin
-          rustup target add aarch64-apple-darwin
-
-      # Windows and Linux use the default toolchain
-      - name: Install additional Rust targets (non-macOS)
-        if: matrix.target != 'x86_64-apple-darwin' && matrix.target != 'aarch64-apple-darwin'
+          rustup override set 1.85.0-x86_64-apple-darwin
+          
+      - name: Install additional Rust targets
         run: |
           rustup target add ${{ matrix.target }}
 
