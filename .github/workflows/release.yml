@@ -43,6 +43,9 @@ jobs:
 
       - name: Install additional Rust targets
         run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            rustup override set 1.85.0-x86_64-apple-darwin
+          fi
           rustup target add ${{ matrix.target }}
 
       - name: Install cross-compilation tools (Linux)
