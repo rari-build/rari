@@ -600,16 +600,16 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            max_concurrent_operations: 1000,
-            operation_timeout_ms: 30000,
-            cache_size_limit: 50000,
+            max_concurrent_operations: 100,
+            operation_timeout_ms: 8000,
+            cache_size_limit: 5000,
             enable_hot_reload: true,
-            batch_size_limit: 500,
+            batch_size_limit: 50,
             batch_time_limit_ms: 100,
             file_cache_duration_secs: 300,
             cleanup_interval_secs: 300,
-            max_memory_per_component_mb: 200,
-            string_interner_max_size: 50000,
+            max_memory_per_component_mb: 50,
+            string_interner_max_size: 10000,
             enable_string_interning: true,
             enable_batch_operations: true,
             enable_async_file_cache: true,
