@@ -154,7 +154,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
             });
 
             if let Ok(error_text) = serde_json::to_string(&error_msg) {
-                let _ = client_socket.send(WsMessage::Text(error_text)).await;
+                let _ = client_socket.send(WsMessage::Text(error_text.into())).await;
             }
 
             let _ = client_socket.send(WsMessage::Close(None)).await;
@@ -227,7 +227,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
 
 fn convert_axum_to_tungstenite_message(msg: WsMessage) -> Option<Message> {
     match msg {
-        WsMessage::Text(text) => Some(Message::Text(text)),
+        WsMessage::Text(text) => Some(Message::Text(text.to_string().into())),
         WsMessage::Binary(data) => Some(Message::Binary(data)),
         WsMessage::Ping(data) => Some(Message::Ping(data)),
         WsMessage::Pong(data) => Some(Message::Pong(data)),
@@ -237,7 +237,7 @@ fn convert_axum_to_tungstenite_message(msg: WsMessage) -> Option<Message> {
 
 fn convert_tungstenite_to_axum_message(msg: Message) -> Option<WsMessage> {
     match msg {
-        Message::Text(text) => Some(WsMessage::Text(text)),
+        Message::Text(text) => Some(WsMessage::Text(text.to_string().into())),
         Message::Binary(data) => Some(WsMessage::Binary(data)),
         Message::Ping(data) => Some(WsMessage::Ping(data)),
         Message::Pong(data) => Some(WsMessage::Pong(data)),
@@ -327,11 +327,11 @@ mod tests {
 
     #[test]
     fn test_message_conversion() {
-        let axum_msg = WsMessage::Text("test".to_string());
+        let axum_msg = WsMessage::Text("test".to_string().into());
         let tungstenite_msg = convert_axum_to_tungstenite_message(axum_msg);
         assert!(matches!(tungstenite_msg, Some(Message::Text(_))));
 
-        let tungstenite_msg = Message::Text("test".to_string());
+        let tungstenite_msg = Message::Text("test".to_string().into());
         let axum_msg = convert_tungstenite_to_axum_message(tungstenite_msg);
         assert!(matches!(axum_msg, Some(WsMessage::Text(_))));
     }

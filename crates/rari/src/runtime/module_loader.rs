@@ -1,9 +1,8 @@
 use crate::error::RariError;
 use dashmap::DashMap;
 use deno_core::{
-    FastString, ModuleLoadResponse, ModuleLoader, ModuleResolutionError, ModuleSource,
-    ModuleSourceCode, ModuleSpecifier, ModuleType, RequestedModuleType, ResolutionKind,
-    error::ModuleLoaderError,
+    FastString, ModuleLoadResponse, ModuleLoader, ModuleSource, ModuleSourceCode, ModuleSpecifier,
+    ModuleType, RequestedModuleType, ResolutionKind,
 };
 use deno_error::JsErrorBox;
 use parking_lot::{Mutex, RwLock};
@@ -1802,15 +1801,11 @@ export function __rari_register() {{
                         (transpiled_code.to_string(), ModuleType::JavaScript)
                     }
                     Err(err) => {
-                        return Some(ModuleLoadResponse::Sync(Err(ModuleLoaderError::Core(
-                            std::io::Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                format!(
-                                    "Failed to transpile TypeScript module '{specifier_str}': {err}"
-                                ),
-                            )
-                            .into(),
-                        ))));
+                        return Some(ModuleLoadResponse::Sync(Err(
+                            deno_error::JsErrorBox::generic(format!(
+                                "Failed to transpile TypeScript module '{specifier_str}': {err}"
+                            )),
+                        )));
                     }
                 }
             } else if specifier_str.ends_with(JSX_EXTENSION) {
@@ -1822,13 +1817,11 @@ export function __rari_register() {{
                         (transpiled_code.to_string(), ModuleType::JavaScript)
                     }
                     Err(err) => {
-                        return Some(ModuleLoadResponse::Sync(Err(ModuleLoaderError::Core(
-                            std::io::Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                format!("Failed to transpile JSX module '{specifier_str}': {err}"),
-                            )
-                            .into(),
-                        ))));
+                        return Some(ModuleLoadResponse::Sync(Err(
+                            deno_error::JsErrorBox::generic(format!(
+                                "Failed to transpile JSX module '{specifier_str}': {err}"
+                            )),
+                        )));
                     }
                 }
             } else {
@@ -1862,7 +1855,9 @@ export function __rari_register() {{
                 let file_path = specifier_str.strip_prefix("file://").unwrap_or(specifier_str);
 
                 if !std::path::Path::new(file_path).exists() {
-                    return Some(ModuleLoadResponse::Sync(Err(ModuleLoaderError::NotFound)));
+                    return Some(ModuleLoadResponse::Sync(Err(deno_error::JsErrorBox::generic(
+                        "Module not found",
+                    ))));
                 }
             }
         }
@@ -2113,7 +2108,9 @@ export const __esModule = true;
                     }
                 }
 
-                return Some(ModuleLoadResponse::Sync(Err(ModuleLoaderError::NotFound)));
+                return Some(ModuleLoadResponse::Sync(Err(deno_error::JsErrorBox::generic(
+                    "Module not found",
+                ))));
             }
 
             let stub_code = create_component_stub(&component_name);
@@ -2141,7 +2138,7 @@ impl ModuleLoader for RariModuleLoader {
         specifier: &str,
         referrer: &str,
         kind: ResolutionKind,
-    ) -> Result<ModuleSpecifier, ModuleLoaderError> {
+    ) -> Result<ModuleSpecifier, deno_error::JsErrorBox> {
         if matches!(kind, ResolutionKind::DynamicImport)
             && referrer.contains("node_modules")
             && let Some(package_start) = referrer.rfind("node_modules/")
@@ -2154,7 +2151,7 @@ impl ModuleLoader for RariModuleLoader {
                     let referrer_dir = match std::path::Path::new(referrer).parent() {
                         Some(dir) => dir,
                         None => {
-                            return Err(ModuleLoaderError::NotFound);
+                            return Err(deno_error::JsErrorBox::generic("Module not found"));
                         }
                     };
                     let resolved_path = referrer_dir.join(specifier);
@@ -2169,9 +2166,8 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if specifier.starts_with(FILE_PROTOCOL) {
-            let url = ModuleSpecifier::parse(specifier).map_err(|err| {
-                ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
-            })?;
+            let url = ModuleSpecifier::parse(specifier)
+                .map_err(|err| deno_error::JsErrorBox::generic(format!("Invalid URL: {err}")))?;
             return Ok(url);
         }
 
@@ -2186,7 +2182,7 @@ impl ModuleLoader for RariModuleLoader {
                 };
 
                 let url = ModuleSpecifier::parse(&resolved_path).map_err(|err| {
-                    ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
+                    deno_error::JsErrorBox::generic(format!("Invalid URL: {err}"))
                 })?;
                 return Ok(url);
             }
@@ -2205,15 +2201,13 @@ impl ModuleLoader for RariModuleLoader {
                     if let Some(functions_specifier) = self.component_specifiers.get(*key) {
                         let url =
                             ModuleSpecifier::parse(functions_specifier.value()).map_err(|err| {
-                                ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(
-                                    err,
-                                ))
+                                deno_error::JsErrorBox::generic(format!("Invalid URL: {err}"))
                             })?;
                         return Ok(url);
                     }
                 }
 
-                return Err(ModuleLoaderError::NotFound);
+                return Err(deno_error::JsErrorBox::generic("Module not found"));
             }
 
             if referrer.contains(RARI_COMPONENT_PATH) {
@@ -2256,7 +2250,7 @@ impl ModuleLoader for RariModuleLoader {
                     };
 
                     let url = ModuleSpecifier::parse(&resolved_path).map_err(|err| {
-                        ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
+                        deno_error::JsErrorBox::generic(format!("Invalid URL: {err}"))
                     })?;
                     return Ok(url);
                 }
@@ -2287,9 +2281,8 @@ impl ModuleLoader for RariModuleLoader {
                 format!("file://{base_dir}/{remaining}")
             };
 
-            let url = ModuleSpecifier::parse(&resolved_path).map_err(|err| {
-                ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
-            })?;
+            let url = ModuleSpecifier::parse(&resolved_path)
+                .map_err(|err| deno_error::JsErrorBox::generic(format!("Invalid URL: {err}")))?;
             return Ok(url);
         }
 
@@ -2325,15 +2318,14 @@ impl ModuleLoader for RariModuleLoader {
                 let result =
                     ModuleSpecifier::parse(&format!("file:///node_builtin/{node_module_name}.js"))
                         .map_err(|err| {
-                            ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
+                            deno_error::JsErrorBox::generic(format!("Invalid URL: {err}"))
                         })?;
 
                 return Ok(result);
             }
 
-            let result = ModuleSpecifier::parse(specifier).map_err(|err| {
-                ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err))
-            })?;
+            let result = ModuleSpecifier::parse(specifier)
+                .map_err(|err| deno_error::JsErrorBox::generic(format!("Invalid URL: {err}")))?;
 
             return Ok(result);
         }
@@ -2354,7 +2346,7 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         let url = ModuleSpecifier::parse(specifier)
-            .map_err(|err| ModuleLoaderError::Resolution(ModuleResolutionError::InvalidUrl(err)))?;
+            .map_err(|err| deno_error::JsErrorBox::generic(format!("Invalid URL: {err}")))?;
 
         Ok(url)
     }
@@ -2433,7 +2425,7 @@ impl ModuleLoader for RariModuleLoader {
         let load_duration = load_start.elapsed().as_millis() as u64;
         self.record_module_load(load_duration);
         self.record_operation();
-        ModuleLoadResponse::Sync(Err(ModuleLoaderError::NotFound))
+        ModuleLoadResponse::Sync(Err(deno_error::JsErrorBox::generic("Module not found")))
     }
 }
 
