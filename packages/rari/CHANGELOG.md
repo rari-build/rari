@@ -1,3 +1,21 @@
+## [0.2.16] - 2025-08-21
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove CHANGELOG.md and update release script to handle changelog copying
+## [0.2.11] - 2025-08-21
+
+### ⚙️ Miscellaneous Tasks
+
+- Add CHANGELOG.md with updates for versions 0.2.10 and 0.2.10-next.0, including features, bug fixes, and miscellaneous tasks
+- Update rari package version from 0.2.15-next.0 to 0.2.15 and adjust optional dependencies for all platforms
+- Update rari crate version to 0.2.4, adjust dependencies, and improve error handling in module loader
+- Bump rari package versions to 0.2.11 for all platforms
+## [rari@0.2.15] - 2025-08-20
+
+### 💼 Other
+
+- Rari@0.2.15
 ## [0.2.10] - 2025-08-20
 
 ### ⚙️ Miscellaneous Tasks
