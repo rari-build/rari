@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
             os: macos-13
             name: rari-darwin-x64
           - target: aarch64-apple-darwin
-            os: macos-15
+            os: macos-13
             name: rari-darwin-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
@@ -53,6 +53,14 @@ jobs:
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             sudo apt-get install -y gcc-aarch64-linux-gnu
           fi
+
+      - name: Install cross-compilation tools (macOS)
+        if: runner.os == 'macOS' && matrix.target == 'aarch64-apple-darwin'
+        run: |
+          # Ensure we have the ARM64 target and tools
+          rustup target add aarch64-apple-darwin
+          # Set up environment for cross-compilation
+          echo "MACOSX_DEPLOYMENT_TARGET=10.9" >> $GITHUB_ENV
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -92,6 +100,12 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
+          # Help build scripts find the correct tools
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+          # Ensure build scripts use the correct architecture
+          CARGO_TARGET_DIR: target
+          # Fix potential objcopy issues
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS: "-C link-arg=-undefined -C link-arg=dynamic_lookup"
 
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
@@ -138,8 +152,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Download platform binary
         uses: actions/download-artifact@v4
