@@ -44,7 +44,7 @@ jobs:
       - name: Install additional Rust targets (macOS)
         if: runner.os == 'macOS'
         run: |
-          rustup override set 1.85.0-x86_64-apple-darwin
+          rustup override set 1.88.0-x86_64-apple-darwin
           rustup target add ${{ matrix.target }}
 
       - name: Install additional Rust targets (Windows)
