@@ -36,24 +36,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust 1.88.0
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: ${{ matrix.target }}
+        env:
+          RUSTUP_TOOLCHAIN: 1.88.0
 
-      - name: Install additional Rust targets (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          rustup override set 1.88.0-x86_64-apple-darwin
-          rustup target add ${{ matrix.target }}
-
-      - name: Install additional Rust targets (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          rustup target add ${{ matrix.target }}
-
-      - name: Install additional Rust targets (Linux)
-        if: runner.os == 'Linux'
+      - name: Install additional Rust targets
         run: |
           rustup target add ${{ matrix.target }}
 
