@@ -1,4 +1,22 @@
-## [0.2.16] - 2025-08-21
+## [0.2.12] - 2025-08-21
+
+### 🐛 Bug Fixes
+
+- Resolve macOS cross-compilation issues in GitHub Actions
+- Use native compilation for macOS targets to avoid cross-compilation issues
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari package version to 0.2.16 and adjust dependencies in pnpm-lock.yaml and package.json
+- Adjust resource limits and improve performance
+- Bump rari package versions to 0.2.12 for all platforms
+- Update GitHub Actions workflow for release process
+- Update GitHub Actions workflow for release process
+## [rari@0.2.16] - 2025-08-21
+
+### 💼 Other
+
+- Rari@0.2.16
 
 ### ⚙️ Miscellaneous Tasks
 
