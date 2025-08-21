@@ -72,7 +72,7 @@ impl Resolver {
             NodeResolutionSys::new(RealSys, Some(self.folder_resolver.resolution_cache())),
             node_resolver::NodeResolverOptions {
                 conditions: NodeConditionOptions::default(),
-                prefer_browser_field: false,
+                is_browser_platform: false,
                 bundle_mode: false,
                 typescript_version: Some(
                     deno_semver::Version::parse_standard(TYPESCRIPT_VERSION)

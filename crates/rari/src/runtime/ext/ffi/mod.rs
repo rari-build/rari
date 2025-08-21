@@ -30,12 +30,12 @@ impl deno_ffi::FfiPermissions for PermissionsContainer {
         Ok(())
     }
 
-    fn check_partial_with_path(
+    fn check_partial_with_path<'a>(
         &mut self,
-        path: &str,
-    ) -> Result<std::path::PathBuf, deno_permissions::PermissionCheckError> {
+        path: Cow<'a, std::path::Path>,
+    ) -> Result<Cow<'a, std::path::Path>, deno_permissions::PermissionCheckError> {
         self.check_partial_no_path()?;
-        let p = self.0.check_read(Cow::Borrowed(std::path::Path::new(path)), None)?;
-        Ok(p.to_path_buf())
+        let p = self.0.check_read(path, None)?;
+        Ok(p)
     }
 }

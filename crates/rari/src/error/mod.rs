@@ -40,10 +40,7 @@ pub enum Error {
 
 impl From<deno_core::error::CoreError> for Error {
     fn from(e: deno_core::error::CoreError) -> Self {
-        match e {
-            deno_core::error::CoreError::Js(js_error) => Error::JsError(Box::new(js_error)),
-            _ => Error::Runtime(e.to_string()),
-        }
+        Error::Runtime(e.to_string())
     }
 }
 

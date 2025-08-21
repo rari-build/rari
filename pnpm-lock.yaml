@@ -221,20 +221,20 @@ importers:
         version: 0.12.9(@typescript/native-preview@7.0.0-dev.20250620.1)(typescript@5.9.2)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: workspace:*
+        version: link:../rari-darwin-arm64
       rari-darwin-x64:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: workspace:*
+        version: link:../rari-darwin-x64
       rari-linux-arm64:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: workspace:*
+        version: link:../rari-linux-arm64
       rari-linux-x64:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: workspace:*
+        version: link:../rari-linux-x64
       rari-win32-x64:
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: workspace:*
+        version: link:../rari-win32-x64
 
   packages/rari-darwin-arm64: {}
 
