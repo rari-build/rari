@@ -1,3 +1,15 @@
+## [0.2.13] - 2025-08-22
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump rari version to 0.2.6 and update type annotations
+- Update dependencies
+- Bump rari version to 0.2.13 across all platforms
+## [rari@0.2.17] - 2025-08-21
+
+### 💼 Other
+
+- Rari@0.2.17
 ## [0.2.12] - 2025-08-21
 
 ### 🐛 Bug Fixes

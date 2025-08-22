@@ -391,7 +391,7 @@ impl ServerFunctionManager {
     fn find_function(
         &self,
         function_id: &str,
-    ) -> Result<dashmap::mapref::one::Ref<String, Box<dyn ServerFunction>>, RariError> {
+    ) -> Result<dashmap::mapref::one::Ref<'_, String, Box<dyn ServerFunction>>, RariError> {
         if let Some(function) = self.functions.get(function_id) {
             return Ok(function);
         }
