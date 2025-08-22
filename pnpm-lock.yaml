@@ -57,8 +57,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: ^0.2.17
-        version: 0.2.17(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(rollup@4.46.2)
+        specifier: ^0.2.18
+        version: 0.2.18(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(rollup@4.46.2)
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -221,20 +221,20 @@ importers:
         version: 0.12.9(@typescript/native-preview@7.0.0-dev.20250620.1)(typescript@5.9.2)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.2.12
-        version: 0.2.12
+        specifier: 0.2.13
+        version: 0.2.13
       rari-darwin-x64:
-        specifier: 0.2.12
-        version: 0.2.12
+        specifier: 0.2.13
+        version: 0.2.13
       rari-linux-arm64:
-        specifier: 0.2.12
-        version: 0.2.12
+        specifier: 0.2.13
+        version: 0.2.13
       rari-linux-x64:
-        specifier: 0.2.12
-        version: 0.2.12
+        specifier: 0.2.13
+        version: 0.2.13
       rari-win32-x64:
-        specifier: 0.2.12
-        version: 0.2.12
+        specifier: 0.2.13
+        version: 0.2.13
 
   packages/rari-darwin-arm64: {}
 
@@ -2617,43 +2617,43 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-  rari-darwin-arm64@0.2.12:
-    resolution: {integrity: sha512-4Pct/BkG0ep6uhiP5Y1o25pCotsmjbuJysxdpmufN5XbeKozqIbYIAgxXtEGar6mJ3kfXuUWGYRp/x4ZrSyd8w==}
+  rari-darwin-arm64@0.2.13:
+    resolution: {integrity: sha512-eIAwrdFe+HXgQUlpyU5ogAkkUqnIOP2bYCeXS6CrT102BuXWZDIHf5abhp3nbrG5N/nti8xUC5ltx3Zf/vFmBA==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  rari-darwin-x64@0.2.12:
-    resolution: {integrity: sha512-hyfb4paVj87EMv82K0dWh7PnMRDS9W4xBg0miCShAtMereXL3K198Ma5Ar/Ex4QfcLKn60cvIoGkK8HQqPlDKg==}
+  rari-darwin-x64@0.2.13:
+    resolution: {integrity: sha512-Gl4658rHVLV/Ewz6/JYOPeioYcHn9z7JNPn0jYB1okUBCXpaK4MJYoxl7ZopOl54BYdjdedtOQXgQqchB/BcOA==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.2.12:
-    resolution: {integrity: sha512-D2NnOpHf6dZG8y8ApgwMw1wskd4IUyEFSE2vjgeYPlIQK50jBAoCevsvJqhgbqZN/8atbJWjxhEswlBY05F1zQ==}
+  rari-linux-arm64@0.2.13:
+    resolution: {integrity: sha512-uqQvDCHvCnKQV1SLSck6ebTA6ngGC2reCozhtrOadFL7r61j6SiE1S8i3u+yjz5SU2A2ZPnrtTODYTKvUW5T2A==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  rari-linux-x64@0.2.12:
-    resolution: {integrity: sha512-eLvTAfih1xNQKWu3JIvUtqtl9nmNY1sZs8TvSdhoMRe6RWBm9AIO0FDBr2xlyI2NfCjhM0I5j2qO5nUHLmFzQw==}
+  rari-linux-x64@0.2.13:
+    resolution: {integrity: sha512-sHNJK076t72/ly58bSYR8yt6TChGQDBuQJirYgxYIjqKvljs4jzDZvFHl4xwWlPlvHCqTwKzipRFqqCrGVHQvg==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  rari-win32-x64@0.2.12:
-    resolution: {integrity: sha512-89IXNehMQ3IUjpT47FyKzzEMzRVpydQei5O0Y28wU7dZY6cDqRl8o8MCPHg7Z+WLVm1MBS/a1+BXqdQK+FXaeA==}
+  rari-win32-x64@0.2.13:
+    resolution: {integrity: sha512-L68o2BST6sY095cEsNFJc23xjxdC05A5SsQzs0fCWBHrFcqEzVjwsvy+FfUi1AbPnIa1ak+9LP8RRD3rAcmvVA==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  rari@0.2.17:
-    resolution: {integrity: sha512-m26BikeK3o8KJd7ZPOKgLhMxdk6iFazdwuKC+ZVT/fB6Q8ukMUlctLZIq3oLt2NWjGPowEwSqXXCcOfW4OqgAw==}
+  rari@0.2.18:
+    resolution: {integrity: sha512-IwZPZBEyPFCyH81ZxuZ9hBmiChcAHuGS0SArY2G1qi9lr4J7EHyor4fKjGHgYiF2p7MHf1dWDjjB282SMhyNIg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -5632,22 +5632,22 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  rari-darwin-arm64@0.2.12:
+  rari-darwin-arm64@0.2.13:
     optional: true
 
-  rari-darwin-x64@0.2.12:
+  rari-darwin-x64@0.2.13:
     optional: true
 
-  rari-linux-arm64@0.2.12:
+  rari-linux-arm64@0.2.13:
     optional: true
 
-  rari-linux-x64@0.2.12:
+  rari-linux-x64@0.2.13:
     optional: true
 
-  rari-win32-x64@0.2.12:
+  rari-win32-x64@0.2.13:
     optional: true
 
-  rari@0.2.17(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(rollup@4.46.2):
+  rari@0.2.18(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(rollup@4.46.2):
     dependencies:
       acorn: 8.15.0
       esbuild: 0.25.9
@@ -5656,11 +5656,11 @@ snapshots:
       react-dom: 19.1.1(react@19.1.1)
       rollup-plugin-esbuild: 6.2.1(esbuild@0.25.9)(rollup@4.46.2)
     optionalDependencies:
-      rari-darwin-arm64: 0.2.12
-      rari-darwin-x64: 0.2.12
-      rari-linux-arm64: 0.2.12
-      rari-linux-x64: 0.2.12
-      rari-win32-x64: 0.2.12
+      rari-darwin-arm64: 0.2.13
+      rari-darwin-x64: 0.2.13
+      rari-linux-arm64: 0.2.13
+      rari-linux-x64: 0.2.13
+      rari-win32-x64: 0.2.13
     transitivePeerDependencies:
       - rollup
       - supports-color
