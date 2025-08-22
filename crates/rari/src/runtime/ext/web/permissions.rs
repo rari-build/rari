@@ -141,7 +141,7 @@ struct AllowlistWebPermissionsSet {
 #[derive(Clone, Default, Debug)]
 pub struct AllowlistWebPermissions(Arc<RwLock<AllowlistWebPermissionsSet>>);
 impl AllowlistWebPermissions {
-    fn borrow(&self) -> parking_lot::RwLockReadGuard<AllowlistWebPermissionsSet> {
+    fn borrow(&self) -> parking_lot::RwLockReadGuard<'_, AllowlistWebPermissionsSet> {
         self.0.read()
     }
 }

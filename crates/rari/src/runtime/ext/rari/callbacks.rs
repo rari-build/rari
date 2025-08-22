@@ -5,6 +5,7 @@ use rustc_hash::FxHashMap;
 use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
 
 pub trait RsStoredCallback: 'static {
+    #[allow(dead_code)]
     fn call(
         &self,
         args: serde_json::Value,
@@ -138,6 +139,7 @@ macro_rules! rs_fn {
     }
 }
 
+#[allow(dead_code)]
 #[op2(async)]
 #[serde]
 pub async fn run_rscallback<T: RsCallback>(
@@ -146,8 +148,10 @@ pub async fn run_rscallback<T: RsCallback>(
     T::body(args).await.map_err(JsError::from)
 }
 
+#[allow(dead_code)]
 type CallbackTable = FxHashMap<String, Rc<Box<dyn RsStoredCallback>>>;
 
+#[allow(dead_code)]
 fn find_callback(name: &str, state: &OpState) -> Result<Rc<Box<dyn RsStoredCallback>>, JsError> {
     state
         .try_borrow::<CallbackTable>()
@@ -155,6 +159,7 @@ fn find_callback(name: &str, state: &OpState) -> Result<Rc<Box<dyn RsStoredCallb
         .ok_or_else(|| JsError::generic(format!("Callback '{name}' is not callable")))
 }
 
+#[allow(dead_code)]
 #[op2(async)]
 #[serde]
 pub async fn rscallback(
