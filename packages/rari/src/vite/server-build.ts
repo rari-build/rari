@@ -1,4 +1,5 @@
 import type { Plugin } from 'rolldown-vite'
+import type { PageCacheConfig } from '../router/cache'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -14,6 +15,7 @@ export interface ServerComponentManifest {
       bundlePath: string
       dependencies: string[]
       hasNodeImports: boolean
+      cacheConfig?: PageCacheConfig
     }
   >
   version: string
@@ -35,6 +37,7 @@ export class ServerComponentBuilder {
       originalCode: string
       dependencies: string[]
       hasNodeImports: boolean
+      cacheConfig?: PageCacheConfig
     }
   >()
 
@@ -143,13 +146,43 @@ export class ServerComponentBuilder {
     const code = fs.readFileSync(filePath, 'utf-8')
     const dependencies = this.extractDependencies(code)
     const hasNodeImports = this.hasNodeImports(code)
+    const cacheConfig = this.extractCacheConfig(code)
 
     this.serverComponents.set(filePath, {
       filePath,
       originalCode: code,
       dependencies,
       hasNodeImports,
+      cacheConfig,
     })
+  }
+
+  private extractCacheConfig(code: string): PageCacheConfig | undefined {
+    try {
+      const cacheConfigRegex = /export\s+const\s+cacheConfig\s*[:=]\s*(\{[^}]*\})/
+      const match = code.match(cacheConfigRegex)
+
+      if (match) {
+        const configStr = match[1]
+        const cacheControlMatch = configStr.match(/'cache-control'\s*:\s*['"]([^'"]+)['"]/)
+        const varyMatch = configStr.match(/'vary'\s*:\s*['"]([^'"]+)['"]/)
+
+        const config: PageCacheConfig = {}
+        if (cacheControlMatch) {
+          config['cache-control'] = cacheControlMatch[1]
+        }
+        if (varyMatch) {
+          config.vary = varyMatch[1]
+        }
+
+        return Object.keys(config).length > 0 ? config : undefined
+      }
+    }
+    catch (error) {
+      console.warn(`Failed to extract cache config from component: ${error}`)
+    }
+
+    return undefined
   }
 
   private extractDependencies(code: string): string[] {
@@ -223,8 +256,8 @@ export class ServerComponentBuilder {
     )
   }
 
-  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string }>> {
-    const components: Array<{ id: string, code: string }> = []
+  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string, cacheConfig?: PageCacheConfig }>> {
+    const components: Array<{ id: string, code: string, cacheConfig?: PageCacheConfig }> = []
 
     for (const [filePath, component] of this.serverComponents) {
       const relativePath = path.relative(this.projectRoot, filePath)
@@ -235,6 +268,7 @@ export class ServerComponentBuilder {
       components.push({
         id: componentId,
         code: transformedCode,
+        cacheConfig: component.cacheConfig,
       })
     }
 

@@ -93,6 +93,23 @@ export default function HomePage({ params, searchParams }: PageProps) {
               <code className="bg-gray-100 px-2 py-1 rounded">/examples</code>
             </div>
           </Link>
+
+          <Link
+            to="/cache-test"
+            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">
+              🗄️ Cache Test
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Test cache headers and RSC caching functionality
+            </p>
+            <div className="text-sm text-gray-500">
+              Route:
+              {' '}
+              <code className="bg-gray-100 px-2 py-1 rounded">/cache-test</code>
+            </div>
+          </Link>
         </div>
 
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">

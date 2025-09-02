@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
+import type { PageCacheConfig } from './cache'
 
 export interface Route {
   path: string
@@ -17,6 +18,7 @@ export interface RouteMeta {
   title?: string
   description?: string
   requiresAuth?: boolean
+  cacheConfig?: PageCacheConfig
   [key: string]: any
 }
 
