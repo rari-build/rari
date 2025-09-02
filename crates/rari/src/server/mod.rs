@@ -20,6 +20,7 @@ use axum::{
     routing::{any, get, post},
 };
 use colored::Colorize;
+use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -35,7 +36,6 @@ pub mod request_middleware;
 pub mod vite_proxy;
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
-const NO_CACHE_CONTROL: &str = "no-cache";
 const CHUNKED_ENCODING: &str = "chunked";
 const SERVER_MANIFEST_PATH: &str = "dist/server-manifest.json";
 const DIST_DIR: &str = "dist";
@@ -46,6 +46,12 @@ pub struct ServerState {
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
     pub start_time: std::time::Instant,
+    pub component_cache_configs: Arc<
+        tokio::sync::RwLock<rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>>,
+    >,
+    pub page_cache_configs: Arc<
+        tokio::sync::RwLock<rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>>,
+    >,
 }
 
 pub struct Server {
@@ -86,9 +92,20 @@ impl Server {
             config: Arc::new(config.clone()),
             request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             start_time: std::time::Instant::now(),
+            component_cache_configs: Arc::new(tokio::sync::RwLock::new(
+                rustc_hash::FxHashMap::default(),
+            )),
+            page_cache_configs: Arc::new(
+                tokio::sync::RwLock::new(rustc_hash::FxHashMap::default()),
+            ),
         };
 
-        let router = Self::build_router(&config, state).await?;
+        if config.is_production() {
+            Self::load_page_cache_configs(&state).await?;
+            Self::load_vite_cache_config(&state).await?;
+        }
+
+        let router = Self::build_router(&config, state.clone()).await?;
 
         let address = config.server_address();
         info!("Binding server to {}", address);
@@ -104,7 +121,7 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
-    async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
+    async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
         let mut router = Router::new()
             .route("/api/test", get(test_handler))
             .route("/api/rsc/stream", post(stream_component))
@@ -117,8 +134,7 @@ impl Server {
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
-            .route("/api/{*path}", axum::routing::options(cors_preflight_ok))
-            .with_state(state);
+            .route("/api/{*path}", axum::routing::options(cors_preflight_ok));
 
         if config.is_development() {
             info!("Adding development routes");
@@ -152,7 +168,7 @@ impl Server {
         router = router.layer(middleware_stack);
         router = router.layer(DefaultBodyLimit::max(1024 * 1024 * 100));
 
-        Ok(router)
+        Ok(router.with_state(state))
     }
 
     pub async fn start(self) -> Result<(), RariError> {
@@ -233,6 +249,200 @@ impl Server {
         Ok(())
     }
 
+    async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
+        info!("Loading page cache configurations");
+
+        let pages_dir = std::path::Path::new("src/pages");
+        if !pages_dir.exists() {
+            debug!("No pages directory found, skipping page cache config loading");
+            return Ok(());
+        }
+
+        let mut loaded_count = 0;
+        Self::scan_pages_directory(pages_dir, state, &mut loaded_count).await?;
+
+        info!("Loaded {} page cache configurations", loaded_count);
+        Ok(())
+    }
+
+    async fn scan_pages_directory(
+        dir: &std::path::Path,
+        state: &ServerState,
+        loaded_count: &mut usize,
+    ) -> Result<(), RariError> {
+        let mut dirs_to_scan = vec![dir.to_path_buf()];
+
+        while let Some(current_dir) = dirs_to_scan.pop() {
+            let entries = std::fs::read_dir(&current_dir)
+                .map_err(|e| RariError::io(format!("Failed to read pages directory: {e}")))?;
+
+            for entry in entries {
+                let entry = entry
+                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    dirs_to_scan.push(path);
+                } else if path.is_file()
+                    && let Some(extension) = path.extension()
+                    && (extension == "tsx"
+                        || extension == "jsx"
+                        || extension == "ts"
+                        || extension == "js")
+                {
+                    if let Err(e) = Self::load_page_cache_config(&path, state).await {
+                        warn!("Failed to load cache config for {}: {}", path.display(), e);
+                    } else {
+                        *loaded_count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn load_page_cache_config(
+        page_path: &std::path::Path,
+        state: &ServerState,
+    ) -> Result<(), RariError> {
+        let content = std::fs::read_to_string(page_path)
+            .map_err(|e| RariError::io(format!("Failed to read page file: {e}")))?;
+
+        if let Some(cache_config) = Self::extract_cache_config_from_content(&content) {
+            let route_path = Self::page_path_to_route(page_path)?;
+
+            let mut page_configs = state.page_cache_configs.write().await;
+            page_configs.insert(route_path.clone(), cache_config);
+
+            debug!("Loaded cache config for route: {}", route_path);
+        }
+
+        Ok(())
+    }
+
+    fn page_path_to_route(page_path: &std::path::Path) -> Result<String, RariError> {
+        let pages_dir = std::path::Path::new("src/pages");
+        let relative_path = page_path.strip_prefix(pages_dir).map_err(|_| {
+            RariError::configuration("Page path is not within pages directory".to_string())
+        })?;
+
+        let route = relative_path.with_extension("").to_string_lossy().replace('\\', "/");
+
+        let route = if route == "index" { "/".to_string() } else { format!("/{}", route) };
+
+        Ok(route)
+    }
+
+    fn extract_cache_config_from_content(
+        content: &str,
+    ) -> Option<rustc_hash::FxHashMap<String, String>> {
+        let cache_config_regex =
+            Regex::new(r"export\s+const\s+cacheConfig\s*:\s*\w+\s*=\s*\{([^}]+)\}").ok()?;
+
+        if let Some(captures) = cache_config_regex.captures(content) {
+            let config_content = captures.get(1)?.as_str();
+            let mut config = rustc_hash::FxHashMap::default();
+
+            let cache_control_regex = Regex::new(r"'cache-control'\s*:\s*'([^']+)'").ok()?;
+            if let Some(cache_control_match) = cache_control_regex.captures(config_content) {
+                config.insert(
+                    "cache-control".to_string(),
+                    cache_control_match.get(1)?.as_str().to_string(),
+                );
+            }
+
+            let vary_regex = Regex::new(r"'vary'\s*:\s*'([^']+)'").ok()?;
+            if let Some(vary_match) = vary_regex.captures(config_content) {
+                config.insert("vary".to_string(), vary_match.get(1)?.as_str().to_string());
+            }
+
+            if !config.is_empty() {
+                debug!("Extracted cache config: {:?}", config);
+                return Some(config);
+            }
+        }
+
+        None
+    }
+
+    fn find_matching_cache_config<'a>(
+        page_configs: &'a rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>,
+        route_path: &str,
+    ) -> Option<&'a rustc_hash::FxHashMap<String, String>> {
+        if let Some(config) = page_configs.get(route_path) {
+            return Some(config);
+        }
+
+        for (pattern, config) in page_configs {
+            if Server::matches_route_pattern(pattern, route_path) {
+                return Some(config);
+            }
+        }
+
+        None
+    }
+
+    fn matches_route_pattern(pattern: &str, path: &str) -> bool {
+        if pattern == path {
+            return true;
+        }
+
+        if let Some(prefix) = pattern.strip_suffix("/*") {
+            return path.starts_with(prefix)
+                && (path.len() == prefix.len() || path.chars().nth(prefix.len()) == Some('/'));
+        }
+
+        if pattern.contains('*') {
+            let regex_pattern = pattern.replace('*', ".*").replace('/', "\\/");
+            if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                return regex.is_match(path);
+            }
+        }
+
+        false
+    }
+
+    async fn load_vite_cache_config(state: &ServerState) -> Result<(), RariError> {
+        let cache_config_path = std::path::Path::new("dist/cache-config.json");
+
+        if !cache_config_path.exists() {
+            debug!("No vite cache config file found, using defaults");
+            return Ok(());
+        }
+
+        match std::fs::read_to_string(cache_config_path) {
+            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(config_json) => {
+                    if let Some(routes) = config_json.get("routes").and_then(|r| r.as_object()) {
+                        let mut page_configs = state.page_cache_configs.write().await;
+
+                        for (route, cache_control) in routes {
+                            if let Some(cache_str) = cache_control.as_str()
+                                && !page_configs.contains_key(route)
+                            {
+                                let mut cache_config = rustc_hash::FxHashMap::default();
+                                cache_config
+                                    .insert("cache-control".to_string(), cache_str.to_string());
+                                page_configs.insert(route.clone(), cache_config);
+                            }
+                        }
+
+                        info!("Loaded vite cache configuration with {} routes", routes.len());
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to parse vite cache config: {}", e);
+                }
+            },
+            Err(e) => {
+                warn!("Failed to read vite cache config file: {}", e);
+            }
+        }
+
+        Ok(())
+    }
+
     fn read_manifest(manifest_path: &std::path::Path) -> Result<serde_json::Value, RariError> {
         let manifest_content = std::fs::read_to_string(manifest_path)
             .map_err(|e| RariError::io(format!("Failed to read server manifest: {e}")))?;
@@ -298,6 +508,7 @@ pub struct RenderResponse {
 pub struct RegisterRequest {
     pub component_id: String,
     pub component_code: String,
+    pub cache_config: Option<rustc_hash::FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -353,9 +564,11 @@ async fn stream_component(
 
             let body = Body::from_stream(byte_stream);
 
+            let cache_control = state.config.get_cache_control_for_route("/api/rsc/stream");
+
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
-                .header("cache-control", NO_CACHE_CONTROL)
+                .header("cache-control", cache_control)
                 .header("transfer-encoding", CHUNKED_ENCODING)
                 .body(body)
                 .expect("Valid streaming response"))
@@ -367,14 +580,18 @@ async fn stream_component(
     }
 }
 
-// removed debug_promises endpoint and promise_debug module
-
 #[axum::debug_handler]
 async fn register_component(
     State(state): State<ServerState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     debug!("Registering component: {}", request.component_id);
+
+    if let Some(cache_config) = &request.cache_config {
+        let mut cache_configs = state.component_cache_configs.write().await;
+        cache_configs.insert(request.component_id.clone(), cache_config.clone());
+        debug!("Stored cache config for component: {}", request.component_id);
+    }
 
     let result = {
         let mut renderer = state.renderer.lock().await;
@@ -563,11 +780,22 @@ async fn rsc_render_handler(
         Ok(rsc_data) => {
             let _render_time = start_time.elapsed().as_millis() as u64;
 
-            Ok(Response::builder()
-                .header("content-type", RSC_CONTENT_TYPE)
-                .header("cache-control", NO_CACHE_CONTROL)
-                .body(Body::from(rsc_data))
-                .expect("Valid RSC response"))
+            let cache_configs = state.component_cache_configs.read().await;
+            let mut response_builder = Response::builder().header("content-type", RSC_CONTENT_TYPE);
+
+            if let Some(component_cache_config) = cache_configs.get(&component_id) {
+                for (key, value) in component_cache_config {
+                    response_builder = response_builder.header(key.to_lowercase(), value);
+                }
+                debug!("Applied component-specific cache headers for: {}", component_id);
+            } else {
+                let cache_control = state
+                    .config
+                    .get_cache_control_for_route(&format!("/rsc/render/{}", component_id));
+                response_builder = response_builder.header("cache-control", cache_control);
+            }
+
+            Ok(response_builder.body(Body::from(rsc_data)).expect("Valid RSC response"))
         }
         Err(e) => {
             let _render_time = start_time.elapsed().as_millis() as u64;
@@ -613,7 +841,7 @@ fn get_memory_usage() -> Option<u64> {
     Some(sys.used_memory() * 1024)
 }
 
-async fn root_handler() -> Result<Response, StatusCode> {
+async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -626,8 +854,19 @@ async fn root_handler() -> Result<Response, StatusCode> {
     if index_path.exists() {
         match std::fs::read_to_string(&index_path) {
             Ok(content) => {
-                return Ok(Response::builder()
-                    .header("content-type", "text/html")
+                let mut response_builder = Response::builder().header("content-type", "text/html");
+
+                let page_configs = state.page_cache_configs.read().await;
+                if let Some(page_cache_config) =
+                    Server::find_matching_cache_config(&page_configs, "/")
+                {
+                    for (key, value) in page_cache_config {
+                        response_builder = response_builder.header(key.to_lowercase(), value);
+                    }
+                    debug!("Applied cache headers for root route");
+                }
+
+                return Ok(response_builder
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
             }
@@ -640,7 +879,10 @@ async fn root_handler() -> Result<Response, StatusCode> {
     Err(StatusCode::NOT_FOUND)
 }
 
-async fn static_or_spa_handler(Path(path): Path<String>) -> Result<Response, StatusCode> {
+async fn static_or_spa_handler(
+    State(state): State<ServerState>,
+    Path(path): Path<String>,
+) -> Result<Response, StatusCode> {
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -654,8 +896,10 @@ async fn static_or_spa_handler(Path(path): Path<String>) -> Result<Response, Sta
         match std::fs::read(&file_path) {
             Ok(content) => {
                 let content_type = get_content_type(&path);
+                let cache_control = &config.caching.static_files;
                 return Ok(Response::builder()
                     .header("content-type", content_type)
+                    .header("cache-control", cache_control)
                     .body(Body::from(content))
                     .expect("Valid static file response"));
             }
@@ -668,12 +912,26 @@ async fn static_or_spa_handler(Path(path): Path<String>) -> Result<Response, Sta
     if path.contains('.') {
         return Err(StatusCode::NOT_FOUND);
     }
+
+    let route_path = if path.is_empty() { "/" } else { &format!("/{}", path) };
+
     let index_path = config.public_dir().join("index.html");
     if index_path.exists() {
         match std::fs::read_to_string(&index_path) {
             Ok(content) => {
-                return Ok(Response::builder()
-                    .header("content-type", "text/html")
+                let mut response_builder = Response::builder().header("content-type", "text/html");
+
+                let page_configs = state.page_cache_configs.read().await;
+                if let Some(page_cache_config) =
+                    Server::find_matching_cache_config(&page_configs, route_path)
+                {
+                    for (key, value) in page_cache_config {
+                        response_builder = response_builder.header(key.to_lowercase(), value);
+                    }
+                    debug!("Applied cache headers for route: {}", route_path);
+                }
+
+                return Ok(response_builder
                     .body(Body::from(content))
                     .expect("Valid HTML response"));
             }

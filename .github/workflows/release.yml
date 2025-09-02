@@ -41,11 +41,6 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Override Rust version on macOS
-        if: runner.os == 'macOS'
-        run: |
-          rustup override set 1.88.0-x86_64-apple-darwin
-
       - name: Install additional Rust targets
         run: |
           rustup target add ${{ matrix.target }}

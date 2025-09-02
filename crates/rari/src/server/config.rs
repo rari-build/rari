@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -80,6 +81,23 @@ impl Default for StaticConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    pub routes: FxHashMap<String, String>,
+    pub static_files: String,
+    pub server_components: String,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            routes: FxHashMap::default(),
+            static_files: "public, max-age=31536000, immutable".to_string(),
+            server_components: "no-cache".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RscConfig {
     pub enable_ssr: bool,
     pub enable_streaming: bool,
@@ -109,6 +127,7 @@ pub struct Config {
     pub vite: ViteConfig,
     pub static_files: StaticConfig,
     pub rsc: RscConfig,
+    pub caching: CacheConfig,
 }
 
 impl Config {
@@ -216,6 +235,35 @@ impl Config {
     pub fn is_production(&self) -> bool {
         self.mode == Mode::Production
     }
+
+    pub fn get_cache_control_for_route(&self, path: &str) -> &str {
+        if let Some(cache_control) = self.caching.routes.get(path) {
+            return cache_control;
+        }
+
+        for (pattern, cache_control) in &self.caching.routes {
+            if Self::matches_pattern(pattern, path) {
+                return cache_control;
+            }
+        }
+
+        &self.caching.server_components
+    }
+
+    pub fn matches_pattern(pattern: &str, path: &str) -> bool {
+        if let Some(prefix) = pattern.strip_suffix("/*") {
+            return path.starts_with(prefix);
+        }
+
+        if pattern.contains('*') {
+            let regex_pattern = pattern.replace("*", ".*").replace("/", "\\/");
+            if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                return regex.is_match(path);
+            }
+        }
+
+        pattern == path
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -290,5 +338,81 @@ mod tests {
     fn test_mode_display() {
         assert_eq!(Mode::Development.to_string(), "development");
         assert_eq!(Mode::Production.to_string(), "production");
+    }
+
+    #[test]
+    fn test_cache_control_exact_match() {
+        let mut config = Config::default();
+        config.caching.routes.insert("/api/users".to_string(), "no-cache".to_string());
+
+        let cache_control = config.get_cache_control_for_route("/api/users");
+        assert_eq!(cache_control, "no-cache");
+    }
+
+    #[test]
+    fn test_cache_control_glob_pattern() {
+        let mut config = Config::default();
+        config.caching.routes.insert("/api/*".to_string(), "no-cache".to_string());
+
+        let cache_control = config.get_cache_control_for_route("/api/users");
+        assert_eq!(cache_control, "no-cache");
+
+        let cache_control = config.get_cache_control_for_route("/api/products/123");
+        assert_eq!(cache_control, "no-cache");
+    }
+
+    #[test]
+    fn test_cache_control_default_fallback() {
+        let config = Config::default();
+
+        let cache_control = config.get_cache_control_for_route("/some/random/path");
+        assert_eq!(cache_control, "no-cache");
+    }
+
+    #[test]
+    fn test_cache_control_pattern_priority() {
+        let mut config = Config::default();
+        config.caching.routes.insert("/api/*".to_string(), "no-cache".to_string());
+        config.caching.routes.insert("/api/public".to_string(), "public, max-age=3600".to_string());
+
+        let cache_control = config.get_cache_control_for_route("/api/public");
+        assert_eq!(cache_control, "public, max-age=3600");
+
+        let cache_control = config.get_cache_control_for_route("/api/private");
+        assert_eq!(cache_control, "no-cache");
+    }
+
+    #[test]
+    fn test_pattern_matching() {
+        assert!(Config::matches_pattern("/api/*", "/api/users"));
+        assert!(Config::matches_pattern("/api/*", "/api/products/123"));
+        assert!(!Config::matches_pattern("/api/*", "/blog/posts"));
+
+        assert!(Config::matches_pattern("/blog/*/comments", "/blog/post-1/comments"));
+        assert!(!Config::matches_pattern("/blog/*/comments", "/blog/post-1"));
+
+        assert!(Config::matches_pattern("*", "/any/path"));
+        assert!(Config::matches_pattern("*.js", "/static/app.js"));
+        assert!(!Config::matches_pattern("*.js", "/static/app.css"));
+    }
+
+    #[test]
+    fn test_cache_config_serialization() {
+        let mut routes = FxHashMap::default();
+        routes.insert("/api/*".to_string(), "no-cache".to_string());
+        routes.insert("/blog/*".to_string(), "public, max-age=3600".to_string());
+
+        let cache_config = CacheConfig {
+            routes,
+            static_files: "public, max-age=31536000, immutable".to_string(),
+            server_components: "no-cache".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&cache_config).unwrap();
+        let deserialized: CacheConfig = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(cache_config.static_files, deserialized.static_files);
+        assert_eq!(cache_config.server_components, deserialized.server_components);
+        assert_eq!(cache_config.routes.len(), deserialized.routes.len());
     }
 }

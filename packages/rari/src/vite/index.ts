@@ -1,5 +1,6 @@
 import type { Buffer } from 'node:buffer'
 import type { Plugin, UserConfig } from 'rolldown-vite'
+import type { CacheConfig, PageCacheConfig } from '../router/cache'
 import type { ServerBuildOptions } from './server-build'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -12,6 +13,7 @@ interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  caching?: CacheConfig
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
@@ -48,6 +50,75 @@ function scanForClientComponents(srcDir: string): Set<string> {
 
   scanDirectory(srcDir)
   return clientComponents
+}
+
+export type { CacheConfig, PageCacheConfig } from '../router/cache'
+
+function extractCacheConfigFromContent(content: string): PageCacheConfig | undefined {
+  const ast = acorn.parse(content, {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    allowImportExportEverywhere: true,
+  }) as any
+
+  for (const node of ast.body) {
+    if (
+      node.type === 'ExportNamedDeclaration'
+      && node.declaration
+      && node.declaration.type === 'VariableDeclaration'
+    ) {
+      for (const declarator of node.declaration.declarations) {
+        if (
+          declarator.id
+          && declarator.id.name === 'cacheConfig'
+          && declarator.init
+          && declarator.init.type === 'ObjectExpression'
+        ) {
+          const config: PageCacheConfig = {}
+
+          for (const prop of declarator.init.properties) {
+            if (
+              prop.type === 'Property'
+              && prop.key
+              && prop.value
+              && prop.value.type === 'Literal'
+            ) {
+              const keyName = prop.key.type === 'Literal' ? prop.key.value : prop.key.name
+              if (keyName === 'cache-control' || keyName === 'vary') {
+                config[keyName as keyof PageCacheConfig] = prop.value.value as string
+              }
+            }
+          }
+
+          return Object.keys(config).length > 0 ? config : undefined
+        }
+      }
+    }
+  }
+
+  return undefined
+}
+
+function matchesPattern(pattern: string, path: string): boolean {
+  if (pattern === path)
+    return true
+
+  if (pattern.endsWith('/*')) {
+    const prefix = pattern.slice(0, -2)
+    return path.startsWith(prefix)
+  }
+
+  if (pattern.includes('*')) {
+    const regexPattern = pattern.replace(/\*/g, '.*').replace(/\//g, '\\/')
+    const regex = new RegExp(`^${regexPattern}$`)
+    return regex.test(path)
+  }
+
+  return false
+}
+
+export function defineRariOptions(config: RariOptions): RariOptions {
+  return config
 }
 
 export function rari(options: RariOptions = {}): Plugin[] {
@@ -789,6 +860,7 @@ const ${componentName} = registerClientReference(
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
+                    cache_config: component.cacheConfig,
                   }),
                 },
               )
@@ -1008,6 +1080,7 @@ const ${componentName} = registerClientReference(
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
+                    cache_config: component.cacheConfig,
                   }),
                 },
               )
@@ -2405,7 +2478,58 @@ ${registrations.join('\n')}
 
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
 
-  return [mainPlugin, serverBuildPlugin]
+  const cacheMiddlewarePlugin: Plugin = {
+    name: 'rari:cache-middleware',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url?.startsWith('/@fs/')) {
+          res.setHeader('Cache-Control', 'no-cache')
+          next()
+          return
+        }
+
+        const url = req.url || ''
+        const pathname = url.split('?')[0]
+
+        if (pathname && !pathname.includes('.') && !pathname.startsWith('/api') && !pathname.startsWith('/rsc')) {
+          if (options.caching?.routes) {
+            for (const [pattern, cacheControl] of Object.entries(options.caching.routes)) {
+              if (matchesPattern(pattern, pathname)) {
+                res.setHeader('cache-control', cacheControl)
+                break
+              }
+            }
+          }
+
+          const pagePath = pathname === '/' ? '/index' : pathname
+          const pageFilePath = path.join(process.cwd(), 'src/pages', `${pagePath.slice(1) || 'index'}.tsx`)
+
+          if (fs.existsSync(pageFilePath)) {
+            const pageContent = fs.readFileSync(pageFilePath, 'utf-8')
+            const cacheConfig = extractCacheConfigFromContent(pageContent)
+
+            if (cacheConfig) {
+              Object.entries(cacheConfig).forEach(([key, value]) => {
+                if (value) {
+                  res.setHeader(key, value)
+                }
+              })
+            }
+          }
+        }
+
+        next()
+      })
+    },
+    writeBundle() {
+      if (options.caching) {
+        const cacheConfigPath = path.join(process.cwd(), 'dist', 'cache-config.json')
+        fs.writeFileSync(cacheConfigPath, JSON.stringify(options.caching, null, 2))
+      }
+    },
+  }
+
+  return [mainPlugin, serverBuildPlugin, cacheMiddlewarePlugin]
 }
 
 export function defineRariConfig(

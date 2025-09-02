@@ -49,6 +49,8 @@ export type {
   SearchParams,
 } from './router'
 
+export type { CacheConfig, PageCacheConfig } from './router/cache'
+
 export {
   convertFilePatternToRoutePattern,
   createRouteManifest,
@@ -67,4 +69,4 @@ export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
 
-export { defineRariConfig, rari } from './vite'
+export { defineRariConfig, defineRariOptions, rari } from './vite'
