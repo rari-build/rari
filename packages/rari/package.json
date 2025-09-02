@@ -82,11 +82,11 @@
     "rollup-plugin-esbuild": "^6.2.1"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.2.13",
-    "rari-darwin-x64": "0.2.13",
-    "rari-linux-arm64": "0.2.13",
-    "rari-linux-x64": "0.2.13",
-    "rari-win32-x64": "0.2.13"
+    "rari-darwin-arm64": "0.2.14",
+    "rari-darwin-x64": "0.2.14",
+    "rari-linux-arm64": "0.2.14",
+    "rari-linux-x64": "0.2.14",
+    "rari-win32-x64": "0.2.14"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
