@@ -1,3 +1,25 @@
+## [0.2.19] - 2025-09-02
+
+### ⚙️ Miscellaneous Tasks
+
+- Update optionalDependencies for rari to version 0.2.14
+## [0.2.14] - 2025-09-02
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump rari version to 0.2.18
+- Update rari to version 0.2.7, add caching configuration support, and remove macOS Rust version override in release workflow
+- Bump rari version to 0.2.14 across all platforms
+## [create-rari-app@0.1.10] - 2025-08-22
+
+### 💼 Other
+
+- Create-rari-app@0.1.10
+## [rari@0.2.18] - 2025-08-22
+
+### 💼 Other
+
+- Rari@0.2.18
 ## [0.2.13] - 2025-08-22
 
 ### ⚙️ Miscellaneous Tasks
