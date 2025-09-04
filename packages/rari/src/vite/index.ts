@@ -52,12 +52,20 @@ function scanForClientComponents(srcDir: string): Set<string> {
   return clientComponents
 }
 
-function extractCacheConfigFromContent(content: string): PageCacheConfig | undefined {
-  const ast = acorn.parse(content, {
-    ecmaVersion: 2022,
-    sourceType: 'module',
-    allowImportExportEverywhere: true,
-  }) as any
+function extractCacheConfigFromContent(
+  content: string,
+): PageCacheConfig | undefined {
+  let ast: any
+  try {
+    ast = acorn.parse(content, {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      allowImportExportEverywhere: true,
+    }) as any
+  }
+  catch {
+    return undefined
+  }
 
   for (const node of ast.body) {
     if (
@@ -81,9 +89,11 @@ function extractCacheConfigFromContent(content: string): PageCacheConfig | undef
               && prop.value
               && prop.value.type === 'Literal'
             ) {
-              const keyName = prop.key.type === 'Literal' ? prop.key.value : prop.key.name
+              const keyName
+                = prop.key.type === 'Literal' ? prop.key.value : prop.key.name
               if (keyName === 'cache-control' || keyName === 'vary') {
-                config[keyName as keyof PageCacheConfig] = prop.value.value as string
+                config[keyName as keyof PageCacheConfig] = prop.value
+                  .value as string
               }
             }
           }
@@ -2489,9 +2499,16 @@ ${registrations.join('\n')}
         const url = req.url || ''
         const pathname = url.split('?')[0]
 
-        if (pathname && !pathname.includes('.') && !pathname.startsWith('/api') && !pathname.startsWith('/rsc')) {
+        if (
+          pathname
+          && !pathname.includes('.')
+          && !pathname.startsWith('/api')
+          && !pathname.startsWith('/rsc')
+        ) {
           if (options.caching?.routes) {
-            for (const [pattern, cacheControl] of Object.entries(options.caching.routes)) {
+            for (const [pattern, cacheControl] of Object.entries(
+              options.caching.routes,
+            )) {
               if (matchesPattern(pattern, pathname)) {
                 res.setHeader('cache-control', cacheControl)
                 break
@@ -2500,7 +2517,11 @@ ${registrations.join('\n')}
           }
 
           const pagePath = pathname === '/' ? '/index' : pathname
-          const pageFilePath = path.join(process.cwd(), 'src/pages', `${pagePath.slice(1) || 'index'}.tsx`)
+          const pageFilePath = path.join(
+            process.cwd(),
+            'src/pages',
+            `${pagePath.slice(1) || 'index'}.tsx`,
+          )
 
           if (fs.existsSync(pageFilePath)) {
             const pageContent = fs.readFileSync(pageFilePath, 'utf-8')
@@ -2521,8 +2542,15 @@ ${registrations.join('\n')}
     },
     writeBundle() {
       if (options.caching) {
-        const cacheConfigPath = path.join(process.cwd(), 'dist', 'cache-config.json')
-        fs.writeFileSync(cacheConfigPath, JSON.stringify(options.caching, null, 2))
+        const cacheConfigPath = path.join(
+          process.cwd(),
+          'dist',
+          'cache-config.json',
+        )
+        fs.writeFileSync(
+          cacheConfigPath,
+          JSON.stringify(options.caching, null, 2),
+        )
       }
     },
   }
