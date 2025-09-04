@@ -1,4 +1,23 @@
-## [0.2.19] - 2025-09-02
+## [create-rari-app@0.1.11] - 2025-09-04
+
+### 💼 Other
+
+- Create-rari-app@0.1.11
+
+### 🚜 Refactor
+
+- Remove unused router components and functions, simplify package.json dependencies
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari to version 0.2.19
+- Update ESLint configuration, remove unused dependencies, and refactor icon exports to default
+- Update dependencies across multiple packages to latest versions
+## [rari@0.2.19] - 2025-09-02
+
+### 💼 Other
+
+- Rari@0.2.19
 
 ### ⚙️ Miscellaneous Tasks
 
