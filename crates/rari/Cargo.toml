@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.2.7"
+version = "0.2.8"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -17,47 +17,47 @@ path = "src/bin/rari.rs"
 # === Core Runtime Dependencies ===
 deno_core = "0.355.0"
 deno_error = "=0.7.0"
-deno_features = "0.10.0"
-deno_runtime = "0.221.0"
-deno_permissions = "0.72.0"
-deno_process = "0.28.0"
+deno_features = "0.11.0"
+deno_runtime = "0.222.0"
+deno_permissions = "0.73.0"
+deno_process = "0.29.0"
 
 # === Essential Web APIs ===
-deno_console = "0.213.0"
-deno_crypto = "0.227.0"
-deno_fetch = "0.237.0"
-deno_url = "0.213.0"
-deno_web = "0.244.0"
-deno_webidl = "0.213.0"
-deno_broadcast_channel = "0.207.0"
-deno_cache = "0.145.0"
-deno_webstorage = "0.208.0"
+deno_console = "0.214.0"
+deno_crypto = "0.228.0"
+deno_fetch = "0.238.0"
+deno_url = "0.214.0"
+deno_web = "0.245.0"
+deno_webidl = "0.214.0"
+deno_broadcast_channel = "0.208.0"
+deno_cache = "0.146.0"
+deno_webstorage = "0.209.0"
 
 # === Network & HTTP ===
-deno_http = "0.211.0"
-deno_net = "0.205.0"
-deno_tls = "0.200.0"
-deno_websocket = "0.218.0"
+deno_http = "0.212.0"
+deno_net = "0.206.0"
+deno_tls = "0.201.0"
+deno_websocket = "0.219.0"
 
 # === File System & I/O ===
-deno_fs = "0.123.0"
-deno_io = "0.123.0"
+deno_fs = "0.124.0"
+deno_io = "0.124.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.35.0"
+deno_telemetry = "0.36.0"
 deno_terminal = "=0.2.2"
-deno_webgpu = "0.180.0"
-deno_kv = "0.121.0"
-deno_cron = "0.93.0"
+deno_webgpu = "0.181.0"
+deno_kv = "0.122.0"
+deno_cron = "0.94.0"
 
 # === Node.js Integration ===
-deno_node = "0.151.0"
-deno_resolver = "0.44.0"
-node_resolver = "0.51.0"
+deno_node = "0.152.0"
+deno_resolver = "0.45.0"
+node_resolver = "0.52.0"
 
 # === FFI & NAPI ===
-deno_ffi = "0.200.0"
-deno_napi = "0.144.0"
+deno_ffi = "0.201.0"
+deno_napi = "0.145.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -104,9 +104,9 @@ tungstenite = "0.27"
 dashmap = "6.1.0"
 parking_lot = "0.12.4"
 smallvec = { version = "1.15.1", features = [ "serde" ] }
-regex = "1.11.1"
+regex = "1.11.2"
 rustc-hash = "2.1.1"
-uuid = { version = "1.18.0", features = [
+uuid = { version = "1.18.1", features = [
   "v4",
   "serde"
 ] }
@@ -129,7 +129,7 @@ sysinfo = "0.37.0"
 # === Development Tools ===
 rustyline = "=13.0.0"
 deno_ast = { version = "=0.49", features = [ "transpiling" ] }
-deno_package_json = { version = "0.15.0", default-features = false }
+deno_package_json = { version = "0.16.0", default-features = false }
 deno_semver = "=0.9.0"
 
 # === Platform-specific Dependencies ===
@@ -141,9 +141,9 @@ winapi = { version = "0.3.9", features = [
 ] }
 
 # === CLI & Logging ===
-clap = { version = "4.5.45", features = [ "derive" ] }
+clap = { version = "4.5.47", features = [ "derive" ] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.20", features = [ "env-filter" ] }
 dotenvy = "0.15.7"
 
 # === TLS & Crypto ===
