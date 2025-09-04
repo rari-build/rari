@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link, useRouter } from 'rari/client'
 import { useEffect, useState } from 'react'
-import { Bluesky } from './icons/Bluesky'
-import { Github } from './icons/Github'
-import { Npm } from './icons/Npm'
+import Bluesky from './icons/Bluesky'
+import Github from './icons/Github'
+import Npm from './icons/Npm'
 import Version from './Version'
 
 interface LayoutProps {

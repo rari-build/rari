@@ -191,9 +191,6 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.1.0(react@19.1.0)
-      rollup-plugin-esbuild:
-        specifier: ^6.2.1
-        version: 6.2.1(esbuild@0.25.9)(rollup@4.46.2)
     devDependencies:
       '@types/node':
         specifier: ^24.3.0

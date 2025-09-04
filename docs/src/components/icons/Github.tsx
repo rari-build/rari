@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react'
 
-export function Github(props: SVGProps<SVGSVGElement>) {
+export default function Github(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -17,4 +17,3 @@ export function Github(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
-export default Github
