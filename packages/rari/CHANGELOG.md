@@ -1,3 +1,19 @@
+## [0.2.21] - 2025-09-04
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependencies to version 0.2.15 and remove unused client-dev entry
+## [0.2.15] - 2025-09-04
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.20
+- Update rari to version 0.2.8 and bump dependencies across multiple packages
+## [rari@0.2.20] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.20
 ## [create-rari-app@0.1.11] - 2025-09-04
 
 ### 💼 Other

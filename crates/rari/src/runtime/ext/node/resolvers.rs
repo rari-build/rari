@@ -14,7 +14,7 @@ use node_resolver::{
     NpmPackageFolderResolver, PackageJsonResolver, UrlOrPath, UrlOrPathRef,
     cache::NodeResolutionSys,
     errors::{
-        ClosestPkgJsonError, PackageFolderResolveError, PackageFolderResolveErrorKind,
+        PackageFolderResolveError, PackageFolderResolveErrorKind, PackageJsonLoadError,
         PackageNotFoundError,
     },
 };
@@ -126,7 +126,7 @@ impl Resolver {
     fn check_based_on_pkg_json(
         &self,
         specifier: &ModuleSpecifier,
-    ) -> Result<bool, ClosestPkgJsonError> {
+    ) -> Result<bool, PackageJsonLoadError> {
         let pjson = self.folder_resolver.pjson_resolver();
 
         let Ok(path) = specifier.to_file_path() else {
@@ -464,7 +464,7 @@ impl NodeRequireLoader for RequireLoader {
         }
     }
 
-    fn is_maybe_cjs(&self, specifier: &reqwest::Url) -> Result<bool, ClosestPkgJsonError> {
+    fn is_maybe_cjs(&self, specifier: &reqwest::Url) -> Result<bool, PackageJsonLoadError> {
         if specifier.scheme() != "file" {
             return Ok(false);
         }
