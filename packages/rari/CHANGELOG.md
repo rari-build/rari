@@ -1,4 +1,17 @@
-## [0.2.21] - 2025-09-04
+## [0.2.22] - 2025-09-04
+
+### 🚜 Refactor
+
+- Improve formatting and error handling in extractCacheConfigFromContent function
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.21
+## [rari@0.2.21] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.21
 
 ### ⚙️ Miscellaneous Tasks
 
