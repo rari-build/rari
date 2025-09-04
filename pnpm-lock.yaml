@@ -57,8 +57,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       rari:
-        specifier: ^0.2.20
-        version: 0.2.20(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: ^0.2.21
+        version: 0.2.21(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -2511,24 +2511,10 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-  rari-darwin-arm64@0.2.14:
-    resolution: {integrity: sha512-lQEbhtrE7+znW1oM1clT/y3hcgegNCfE6cTytDbPQ68bWkjdtgBwlB3DBXwrqulqzKTmKAR4HIswtyq+Sc6VCA==}
-    engines: {node: '>=20.0.0'}
-    cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
   rari-darwin-arm64@0.2.15:
     resolution: {integrity: sha512-/E9p9/Ep8qeSYpkB5nxG+VaxpAMExOYPsWEacPZHxO3BkDIwCTk/rH7Ofa9Scx+eXDZtowFmd8rnj0+wWY+E3Q==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
-  rari-darwin-x64@0.2.14:
-    resolution: {integrity: sha512-HTUjMEnjlBdzsBLTzmY7oag/PF3JFYpFhtF+qiurTg8W8aVDrUW3Cw/hYZieteYE3C9e7fUUEru1AVl5TAjsLQ==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
     os: [darwin]
     hasBin: true
 
@@ -2539,24 +2525,10 @@ packages:
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.2.14:
-    resolution: {integrity: sha512-069vlvVEJ2hYt/uwion/Jnm1hZQBwXS0yI1CK26WB4V/BABbI0DR/auglZxVBcJ9d2eC5J+QzdM0PKobP2vHvQ==}
-    engines: {node: '>=20.0.0'}
-    cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
   rari-linux-arm64@0.2.15:
     resolution: {integrity: sha512-Kt4/fb5THHg0+HJyNnMHdjefEIqAgyoKHjtPDgSS2YwP8J+vjMiP5SrkwWyx8XPiTIIUnUAhGrmV3IsMzAUPoA==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
-  rari-linux-x64@0.2.14:
-    resolution: {integrity: sha512-4gubDQUK0iU9fFzjqpdef5FAMpcx1XaMUsJoduag8fLNPjcXSNddySRk+wSAmvhQGQXbG8cWh15XWzq6j1UjUA==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
     os: [linux]
     hasBin: true
 
@@ -2567,13 +2539,6 @@ packages:
     os: [linux]
     hasBin: true
 
-  rari-win32-x64@0.2.14:
-    resolution: {integrity: sha512-JpyAmvcpW2LDSTTW60bM/kM3WmrCFp8iTUqTLg1ndSU6bBnd8XqSvhihAxqN1qOT73caUGQmoLM/IJV6EarpfQ==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
-    os: [win32]
-    hasBin: true
-
   rari-win32-x64@0.2.15:
     resolution: {integrity: sha512-3F3QFgAS6P03GsDGRLn6Dxt63u6diDWWueR8vl0AKe7zdWo1ssadtvI0oNRe5jQpHsy2ynMnY9ofcit+rqGWDA==}
     engines: {node: '>=20.0.0'}
@@ -2581,8 +2546,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.2.20:
-    resolution: {integrity: sha512-s0hFLUs2qwcxSjR8tG/ddY2zH1ID0HvKfdguD/TSKhuWdMYNhggp/8iJaFRdGR7CViLFBwTWHnkivkxdk7k2Fw==}
+  rari@0.2.21:
+    resolution: {integrity: sha512-ZrgmHue3HL/gINF/gZpjbIYJDnfyv7f2hxUBfMFggaeJbxb34PFjnh01iqzcR872PPLm4lpPb5BNYqYZb6jlyg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -5464,37 +5429,22 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  rari-darwin-arm64@0.2.14:
-    optional: true
-
   rari-darwin-arm64@0.2.15:
-    optional: true
-
-  rari-darwin-x64@0.2.14:
     optional: true
 
   rari-darwin-x64@0.2.15:
     optional: true
 
-  rari-linux-arm64@0.2.14:
-    optional: true
-
   rari-linux-arm64@0.2.15:
-    optional: true
-
-  rari-linux-x64@0.2.14:
     optional: true
 
   rari-linux-x64@0.2.15:
     optional: true
 
-  rari-win32-x64@0.2.14:
-    optional: true
-
   rari-win32-x64@0.2.15:
     optional: true
 
-  rari@0.2.20(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  rari@0.2.21(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       acorn: 8.15.0
       esbuild: 0.25.9
@@ -5502,11 +5452,11 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
     optionalDependencies:
-      rari-darwin-arm64: 0.2.14
-      rari-darwin-x64: 0.2.14
-      rari-linux-arm64: 0.2.14
-      rari-linux-x64: 0.2.14
-      rari-win32-x64: 0.2.14
+      rari-darwin-arm64: 0.2.15
+      rari-darwin-x64: 0.2.15
+      rari-linux-arm64: 0.2.15
+      rari-linux-x64: 0.2.15
+      rari-win32-x64: 0.2.15
 
   react-dom@19.1.0(react@19.1.0):
     dependencies:
