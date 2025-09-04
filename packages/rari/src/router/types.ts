@@ -92,7 +92,7 @@ export interface RouteGenerationOptions {
   transforms?: RouteTransform[]
 }
 
-export type RouteTransform = (route: Route) => Route
+type RouteTransform = (route: Route) => Route
 
 export interface LinkProps {
   to: string
@@ -105,25 +105,11 @@ export interface LinkProps {
   [key: string]: any
 }
 
-export interface NavLinkProps extends Omit<LinkProps, 'activeClassName'> {
-  activeClassName?: string
-  activeStyle?: React.CSSProperties
-  exact?: boolean
-  isActive?: (pathname: string, to: string) => boolean
-  disabled?: boolean
-}
-
 export interface RouterProviderProps {
   config?: RouterConfig
   routes?: Route[]
   children: ReactNode
 }
-
-export type RouteMatcher = (path: string, routes: Route[]) => RouteMatch | null
-
-export type RouteGenerator = (
-  options: RouteGenerationOptions,
-) => Promise<Route[]>
 
 export interface UseRouterReturn extends RouterContext {}
 
@@ -156,8 +142,6 @@ export interface LayoutProps {
   children: ReactNode
   route: RouteMatch
 }
-
-export type LayoutComponent = ComponentType<LayoutProps>
 
 export interface ErrorBoundaryProps {
   error: Error

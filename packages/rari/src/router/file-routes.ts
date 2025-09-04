@@ -449,5 +449,3 @@ export function convertFilePatternToRoutePattern(pattern: string): string {
     .replace(/\/index$/, '') // /index -> /
     .replace(/^$/, '/') // empty -> /
 }
-
-export default FileRouteGenerator

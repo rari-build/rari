@@ -1,9 +1,8 @@
-import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
-export interface PlatformInfo {
+interface PlatformInfo {
   platform: string
   arch: string
   packageName: string
@@ -18,7 +17,7 @@ const SUPPORTED_PLATFORMS = {
   'win32-x64': 'rari-win32-x64',
 } as const
 
-export function getPlatformInfo(): PlatformInfo {
+function getPlatformInfo(): PlatformInfo {
   const platform = process.platform
   const arch = process.arch
 
@@ -121,21 +120,6 @@ export function getBinaryPath(): string {
   }
 }
 
-export function validateBinary(binaryPath: string): boolean {
-  try {
-    const result = execSync(`"${binaryPath}" --version`, {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: 'pipe',
-    })
-
-    return result.trim().startsWith('rari')
-  }
-  catch {
-    return false
-  }
-}
-
 export function getInstallationInstructions(): string {
   const { packageName } = getPlatformInfo()
 
@@ -156,8 +140,4 @@ If you continue to have issues, you can also install from source:
 
   cargo install --git https://github.com/rari-build/rari
 `
-}
-
-export function getSupportedPlatforms(): string[] {
-  return Object.keys(SUPPORTED_PLATFORMS)
 }

@@ -5,7 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { build } from 'esbuild'
 
-export interface ServerComponentManifest {
+interface ServerComponentManifest {
   components: Record<
     string,
     {

@@ -52,8 +52,6 @@ function scanForClientComponents(srcDir: string): Set<string> {
   return clientComponents
 }
 
-export type { CacheConfig, PageCacheConfig } from '../router/cache'
-
 function extractCacheConfigFromContent(content: string): PageCacheConfig | undefined {
   const ast = acorn.parse(content, {
     ecmaVersion: 2022,
