@@ -6,7 +6,7 @@ import type {
   SearchParams,
 } from './types'
 
-export function filePathToRoutePath(filePath: string): string {
+function filePathToRoutePath(filePath: string): string {
   let routePath = filePath
     .replace(/^pages\//, '')
     .replace(/\.(tsx?|jsx?)$/, '')
@@ -55,7 +55,7 @@ export function isDynamicRoute(routePath: string): boolean {
   return routePath.includes(':')
 }
 
-export function routePathToRegex(routePath: string): RegExp {
+function routePathToRegex(routePath: string): RegExp {
   let pattern = routePath.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
 
   pattern = pattern.replace(/:([^/]+)/g, (match, paramName) => {
@@ -361,43 +361,6 @@ export function analyzeFilePath(filePath: string): FileRouteInfo {
   }
 }
 
-export function sortRoutesBySpecificity(routes: Route[]): Route[] {
-  return [...routes].sort((a, b) => {
-    if (!a.isDynamic && b.isDynamic)
-      return -1
-    if (a.isDynamic && !b.isDynamic)
-      return 1
-
-    const aSegments = a.path.split('/').length
-    const bSegments = b.path.split('/').length
-
-    if (aSegments !== bSegments) {
-      return aSegments - bSegments
-    }
-
-    const aParamCount = a.paramNames?.length || 0
-    const bParamCount = b.paramNames?.length || 0
-
-    if (aParamCount !== bParamCount) {
-      return aParamCount - bParamCount
-    }
-
-    const aHasCatchAll = a.path.includes('*')
-    const bHasCatchAll = b.path.includes('*')
-
-    if (aHasCatchAll && !bHasCatchAll)
-      return 1
-    if (!aHasCatchAll && bHasCatchAll)
-      return -1
-
-    return 0
-  })
-}
-
-export function routePathsEqual(a: string, b: string): boolean {
-  return a === b
-}
-
 export function isPathActive(
   pathname: string,
   routePath: string,
@@ -430,26 +393,6 @@ export function joinPaths(...segments: string[]): string {
       .replace(/\/+/g, '/')
       .replace(/\/$/, '') || '/'
   )
-}
-
-export function getParentPath(pathname: string): string {
-  const segments = pathname.split('/').filter(Boolean)
-  if (segments.length <= 1) {
-    return '/'
-  }
-
-  return `/${segments.slice(0, -1).join('/')}`
-}
-
-export function getParentPaths(pathname: string): string[] {
-  const segments = pathname.split('/').filter(Boolean)
-  const parents: string[] = ['/']
-
-  for (let i = 1; i < segments.length; i++) {
-    parents.push(`/${segments.slice(0, i).join('/')}`)
-  }
-
-  return parents
 }
 
 export function getRoutePriority(route: Route): number {

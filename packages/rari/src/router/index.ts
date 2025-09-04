@@ -2,8 +2,7 @@ export {
   Outlet,
   RouteComponent,
   RouterContext,
-  RouteRenderer,
-  default as RouterProvider,
+  RouterProvider,
   Routes,
 } from './router'
 
@@ -29,18 +28,10 @@ export {
 } from './utils'
 
 export {
-  analyzeFilePath,
   buildSearchString,
   buildUrl,
   extractParamNames,
-  filePathToRoutePath,
-  getParentPath,
-  getParentPaths,
   isPathActive,
   joinPaths,
-  matchRoute,
   parseSearchParams,
-  routePathsEqual,
-  routePathToRegex,
-  sortRoutesBySpecificity,
 } from './utils'

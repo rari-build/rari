@@ -427,7 +427,7 @@ function findChildRouteForCurrentLevel(
   return null
 }
 
-export function RouteRenderer({ routeMatch }: { routeMatch: RouteMatch }) {
+function RouteRenderer({ routeMatch }: { routeMatch: RouteMatch }) {
   if (!routeMatch.layouts || routeMatch.layouts.length === 0) {
     const Component = routeMatch.route.component
     return Component
@@ -484,7 +484,6 @@ export function Navigate({
   return null
 }
 
-export default RouterProvider
 export { RouterContext }
 
 function findDeepestChildMatch(

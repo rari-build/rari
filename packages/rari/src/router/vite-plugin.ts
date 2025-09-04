@@ -11,7 +11,7 @@ import {
   validateRoutes,
 } from './file-routes'
 
-export interface RariRouterPluginOptions {
+interface RariRouterPluginOptions {
   pagesDir?: string
   extensions?: string[]
   outDir?: string
@@ -320,5 +320,3 @@ export default routes
     },
   }
 }
-
-export default rariRouter
