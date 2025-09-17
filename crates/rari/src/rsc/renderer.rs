@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
 use tokio::time::timeout;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 const MEMORY_PRESSURE_THRESHOLD: f64 = 0.8;
 const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_millis(10);
@@ -1376,27 +1376,70 @@ impl RscRenderer {
             return Err(RariError::internal("RSC renderer not initialized"));
         }
 
-        let canonical_id = self.ensure_component_available(component_id).await?;
-        self.ensure_component_loaded(&canonical_id).await?;
+        let max_retries = 3;
+        let mut attempt = 0;
+        let mut last_error = None;
 
-        let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-        match streaming_renderer.start_streaming(&canonical_id, props).await {
-            Ok(stream) => Ok(stream),
-            Err(e) => {
-                let msg = format!("{e}");
-                let should_retry = msg.contains("not a function")
-                    || msg.contains("not found")
-                    || msg.contains("Component render failed");
-                if should_retry {
-                    sleep(Duration::from_millis(80)).await;
-                    let canonical_id = self.ensure_component_available(component_id).await?;
-                    self.ensure_component_loaded(&canonical_id).await?;
-                    let mut retry_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-                    return retry_renderer.start_streaming(&canonical_id, props).await;
+        while attempt < max_retries {
+            attempt += 1;
+
+            let canonical_id = match self.ensure_component_available(component_id).await {
+                Ok(id) => id,
+                Err(e) => {
+                    if attempt >= max_retries {
+                        return Err(e);
+                    }
+                    info!(
+                        "Component {} not available on attempt {}/{}, retrying: {}",
+                        component_id, attempt, max_retries, e
+                    );
+                    sleep(Duration::from_millis(150 * attempt)).await;
+                    continue;
                 }
-                Err(e)
+            };
+
+            if let Err(e) = self.ensure_component_loaded(&canonical_id).await {
+                if attempt >= max_retries {
+                    return Err(e);
+                }
+                info!(
+                    "Component {} could not be loaded on attempt {}/{}, retrying: {}",
+                    canonical_id, attempt, max_retries, e
+                );
+                sleep(Duration::from_millis(150 * attempt)).await;
+                continue;
+            }
+
+            let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
+            match streaming_renderer.start_streaming(&canonical_id, props).await {
+                Ok(stream) => return Ok(stream),
+                Err(e) => {
+                    let msg = format!("{e}");
+                    let should_retry = msg.contains("not a function")
+                        || msg.contains("not found")
+                        || msg.contains("Component render failed");
+
+                    if should_retry && attempt < max_retries {
+                        info!(
+                            "Component {} rendering failed on attempt {}/{}, retrying: {}",
+                            canonical_id, attempt, max_retries, e
+                        );
+                        last_error = Some(e);
+                        sleep(Duration::from_millis(150 * attempt)).await;
+                        continue;
+                    }
+
+                    return Err(e);
+                }
             }
         }
+
+        Err(last_error.unwrap_or_else(|| {
+            RariError::internal(format!(
+                "Failed to render component {} after {} attempts with unknown error",
+                component_id, max_retries
+            ))
+        }))
     }
 
     async fn ensure_component_available(&self, original_id: &str) -> Result<String, RariError> {

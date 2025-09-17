@@ -653,17 +653,13 @@ async fn hmr_register_component(
     info!("HMR component re-registration requested for file: {}", request.file_path);
 
     let file_path = request.file_path.clone();
-    let state_clone = state.clone();
 
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    if let Err(e) = immediate_component_reregistration(&state, &file_path).await {
+        error!("Failed to immediately re-register component for {}: {}", file_path, e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
-        if let Err(e) = immediate_component_reregistration(&state_clone, &file_path).await {
-            error!("Failed to immediately re-register component for {}: {}", file_path, e);
-        }
-    });
-
-    info!("HMR component re-registration triggered for: {}", request.file_path);
+    info!("HMR component re-registration completed for: {}", request.file_path);
     #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
@@ -684,8 +680,26 @@ async fn immediate_component_reregistration(
     info!("Re-registering component '{}' from file: {}", component_name, file_path);
 
     {
-        let renderer = state.renderer.lock().await;
+        let mut renderer = state.renderer.lock().await;
         renderer.clear_script_cache();
+
+        if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+            warn!("Failed to clear component module cache: {}", e);
+        }
+    }
+
+    if let Ok(content) = tokio::fs::read_to_string(file_path).await {
+        info!("Read component '{}' directly from file", component_name);
+
+        let mut renderer = state.renderer.lock().await;
+        if let Err(e) = renderer.register_component(component_name, &content).await {
+            error!("Failed to register component directly: {}", e);
+        } else {
+            info!("Successfully registered component '{}' directly from file", component_name);
+            return Ok(());
+        }
+    } else {
+        warn!("Failed to read component file directly, trying Vite transformation");
     }
 
     let vite_port = std::env::var("VITE_PORT")
@@ -702,7 +716,8 @@ async fn immediate_component_reregistration(
 
     info!("Triggering Vite transformation for: {}", file_path);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
+
     let response = client
         .post(&vite_url)
         .header("Content-Type", "application/json")
@@ -716,9 +731,29 @@ async fn immediate_component_reregistration(
     }
 
     let response_data: serde_json::Value = response.json().await?;
-    info!("Vite transformation completed: {:?}", response_data);
 
-    info!("Component '{}' transformation triggered successfully", component_name);
+    let component_code = if let Some(components) = response_data.get("components") {
+        if let Some(component) = components.as_array().and_then(|arr| arr.first()) {
+            component.get("code").and_then(|c| c.as_str()).map(|s| s.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(code) = component_code {
+        info!("Registering updated component '{}' with code from Vite", component_name);
+
+        let mut renderer = state.renderer.lock().await;
+        if let Err(e) = renderer.register_component(component_name, &code).await {
+            return Err(format!("Failed to register component: {e}").into());
+        }
+    } else {
+        warn!("No component code received from Vite transformation");
+    }
+
+    info!("Component '{}' re-registration completed", component_name);
     Ok(())
 }
 
