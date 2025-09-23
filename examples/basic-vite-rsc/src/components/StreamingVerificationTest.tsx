@@ -81,7 +81,7 @@ function LoadingFallback({
   }
 
   return (
-    <div className={`p-4 border rounded animate-pulse ${colorClasses[color]}`}>
+    <div className={`p-4 border rounded animate-pulse ${colorClasses[color as keyof typeof colorClasses]}`}>
       <div className="flex items-center space-x-2">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
         <span>{message}</span>

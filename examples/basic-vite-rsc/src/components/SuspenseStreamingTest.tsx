@@ -137,9 +137,9 @@ async function SuspenseStreamingTest() {
         <h1 className="text-red-800">SuspenseStreamingTest Error</h1>
         <p className="text-red-700">
           Error:
-          {error.message}
+          {error instanceof Error ? error.message : String(error)}
         </p>
-        <pre className="text-xs text-red-600 mt-2">{error.stack}</pre>
+        <pre className="text-xs text-red-600 mt-2">{error instanceof Error ? error.stack : String(error)}</pre>
       </div>
     )
   }

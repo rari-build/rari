@@ -650,8 +650,6 @@ async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    info!("HMR component re-registration requested for file: {}", request.file_path);
-
     let file_path = request.file_path.clone();
 
     if let Err(e) = immediate_component_reregistration(&state, &file_path).await {
@@ -659,7 +657,6 @@ async fn hmr_register_component(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    info!("HMR component re-registration completed for: {}", request.file_path);
     #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
@@ -671,13 +668,9 @@ async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    info!("Immediately re-registering component for file: {}", file_path);
-
     let path = std::path::Path::new(file_path);
     let component_name =
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
-
-    info!("Re-registering component '{}' from file: {}", component_name, file_path);
 
     {
         let mut renderer = state.renderer.lock().await;
@@ -689,13 +682,108 @@ async fn immediate_component_reregistration(
     }
 
     if let Ok(content) = tokio::fs::read_to_string(file_path).await {
-        info!("Read component '{}' directly from file", component_name);
-
         let mut renderer = state.renderer.lock().await;
+
         if let Err(e) = renderer.register_component(component_name, &content).await {
             error!("Failed to register component directly: {}", e);
         } else {
-            info!("Successfully registered component '{}' directly from file", component_name);
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+            if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+                warn!("Failed to clear component module cache: {}", e);
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+            if let Err(e) = renderer.register_component(component_name, &content).await {
+                error!("Failed to re-register component after cache clear: {}", e);
+                return Ok(());
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+            if let Err(e) = renderer.ensure_component_loaded_with_force(component_name, true).await
+            {
+                error!("Failed to load component after re-registration: {}", e);
+                return Ok(());
+            }
+
+            let verification_attempts = 3;
+            for attempt in 1..=verification_attempts {
+                let _unique_id = format!(
+                    "{}_{}",
+                    component_name,
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                );
+                let verification_script = format!(
+                    r#"
+                    (function() {{
+                        const componentName = "{}";
+                        const hashedComponentName = "Component_" + componentName;
+                        const componentExists = (
+                            typeof globalThis[componentName] === 'function' ||
+                            typeof globalThis[hashedComponentName] === 'function' ||
+                            (globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] &&
+                             (typeof globalThis.__rsc_modules[componentName].default === 'function' ||
+                              typeof Object.values(globalThis.__rsc_modules[componentName])[0] === 'function'))
+                        );
+
+                        const debugInfo = {{
+                            globalExists: typeof globalThis[componentName],
+                            moduleRegistryExists: !!globalThis.__rsc_modules,
+                            moduleExists: globalThis.__rsc_modules ? !!globalThis.__rsc_modules[componentName] : false,
+                            moduleDefaultExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof globalThis.__rsc_modules[componentName].default : 'module_not_found',
+                            moduleFirstExportExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof Object.values(globalThis.__rsc_modules[componentName])[0] : 'module_not_found',
+                            hashedExists: typeof globalThis[hashedComponentName],
+                            availableGlobals: Object.keys(globalThis).filter(k => typeof globalThis[k] === 'function' && k.match(/^[A-Z]/)).slice(0, 20),
+                            moduleKeys: globalThis.__rsc_modules ? Object.keys(globalThis.__rsc_modules).slice(0, 20) : []
+                        }};
+
+                        return {{ success: componentExists, componentName: componentName, debugInfo: debugInfo }};
+                    }})()
+                    "#,
+                    component_name
+                );
+
+                match renderer
+                    .runtime
+                    .execute_script(
+                        format!("hmr_verify_{}.js", component_name),
+                        verification_script,
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        if let Some(success) = result.get("success").and_then(|v| v.as_bool())
+                            && success
+                        {
+                            return Ok(());
+                        }
+
+                        if attempt == verification_attempts {
+                            warn!(
+                                "Component '{}' verification failed after {} attempts",
+                                component_name, verification_attempts
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Component '{}' verification script execution failed on attempt {}: {}",
+                            component_name, attempt, e
+                        );
+                    }
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            }
+
+            warn!(
+                "Component '{}' verification failed after {} attempts",
+                component_name, verification_attempts
+            );
             return Ok(());
         }
     } else {
@@ -743,8 +831,6 @@ async fn immediate_component_reregistration(
     };
 
     if let Some(code) = component_code {
-        info!("Registering updated component '{}' with code from Vite", component_name);
-
         let mut renderer = state.renderer.lock().await;
         if let Err(e) = renderer.register_component(component_name, &code).await {
             return Err(format!("Failed to register component: {e}").into());
@@ -753,7 +839,6 @@ async fn immediate_component_reregistration(
         warn!("No component code received from Vite transformation");
     }
 
-    info!("Component '{}' re-registration completed", component_name);
     Ok(())
 }
 

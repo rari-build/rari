@@ -169,23 +169,35 @@ impl RscJsLoader {
                 format!(
                     r#"
                     (function() {{
-                        return new Promise(async (resolve, reject) => {{
-                            try {{
-                                const module = await import("{module_specifier}");
+                        try {{
 
-                                if (typeof globalThis.RscModuleManager?.register === 'function') {{
-                                    const result = globalThis.RscModuleManager.register(module, "{component_id}");
-                                    resolve({{ success: true, module: "{component_id}", exports: result.exportCount }});
-                                }} else if (typeof globalThis.registerModule === 'function') {{
-                                    const result = globalThis.registerModule(module, "{component_id}");
-                                    resolve({{ success: true, module: "{component_id}", exports: result.exportCount }});
-                                }} else {{
-                                    reject(new Error("Module registration not available - RSC modules extension may not be loaded"));
+                            import("{module_specifier}").then(module => {{
+                                try {{
+                                    if (typeof globalThis.RscModuleManager?.register === 'function') {{
+                                        const result = globalThis.RscModuleManager.register(module, "{component_id}");
+
+                                        let isAsync = false;
+                                        if (module.default && typeof module.default === 'function') {{
+                                            isAsync = module.default.constructor.name === 'AsyncFunction' ||
+                                                     module.default.toString().includes('async function');
+                                        }}
+
+                                        return {{ success: true, module: "{component_id}", exports: result.exportCount, async: isAsync }};
+                                    }} else if (typeof globalThis.registerModule === 'function') {{
+                                        const result = globalThis.registerModule(module, "{component_id}");
+                                        return {{ success: true, module: "{component_id}", exports: result.exportCount }};
+                                    }}
+                                }} catch (registrationError) {{
+                                    // Silently handle registration errors
                                 }}
-                            }} catch (error) {{
-                                reject(new Error("Failed to load module {component_id}: " + (error?.message || error)));
-                            }}
-                        }});
+                            }}).catch(importError => {{
+                                // Silently handle import errors
+                            }});
+
+                            return {{ success: true, module: "{component_id}", loading: true }};
+                        }} catch (error) {{
+                            return {{ success: false, error: error.message }};
+                        }}
                     }})()
                     "#
                 )
@@ -197,6 +209,25 @@ impl RscJsLoader {
                         try {{
                             globalThis.__rsc_module_dependencies = globalThis.__rsc_module_dependencies || {{}};
                             globalThis.__rsc_module_dependencies["{component_id}"] = {dependencies_json};
+
+                            globalThis.__rsc_modules = globalThis.__rsc_modules || {{}};
+                            if (!globalThis.__rsc_modules["{component_id}"]) {{
+                                let componentFunction = null;
+
+                                if (typeof globalThis["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis.__rsc_functions["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
+                                    componentFunction = globalThis.__rsc_functions["fn_{component_id}"];
+                                }}
+
+                                if (componentFunction) {{
+                                    globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+                                }} else {{
+                                    globalThis.__rsc_modules["{component_id}"] = {{}};
+                                }}
+                            }}
 
                             for (const dep of {dependencies_json}) {{
                                 const depName = dep.split('/').pop().replace(/\.\w+$/, '');
@@ -261,7 +292,81 @@ impl RscJsLoader {
                                 }}
                             }}
 
+                            if (!globalThis.__rsc_modules["{component_id}"] || Object.keys(globalThis.__rsc_modules["{component_id}"]).length === 0) {{
+                                let componentFunction = null;
+
+                                if (typeof globalThis["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis.__rsc_functions["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
+                                    componentFunction = globalThis.__rsc_functions["fn_{component_id}"];
+                                }}
+
+                                if (componentFunction) {{
+                                    globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+                                }}
+                            }}
+
                             return {{ success: true, component: "{component_id}", dependencies: {dependencies_json}.length }};
+                        }} catch (error) {{
+                            return {{ success: false, error: error.message }};
+                        }}
+                    }})()
+                    "#
+                )
+            }
+            ModuleOperation::PostRegister => {
+                format!(
+                    r#"
+                    (function() {{
+                        try {{
+                            globalThis.__rsc_modules = globalThis.__rsc_modules || {{}};
+
+                            let componentFunction = null;
+                            let attempts = 0;
+                            const maxAttempts = 5;
+
+                            const findComponent = () => {{
+                                if (typeof globalThis["{component_id}"] === 'function') {{
+                                    return globalThis["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
+                                    return globalThis.__rsc_functions["{component_id}"];
+                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
+                                    return globalThis.__rsc_functions["fn_{component_id}"];
+                                }}
+                                return null;
+                            }};
+
+                            componentFunction = findComponent();
+
+                            while (!componentFunction && attempts < maxAttempts) {{
+                                attempts++;
+
+                                const start = Date.now();
+                                while (Date.now() - start < 20) {{
+                                }}
+
+                                componentFunction = findComponent();
+                                if (componentFunction) {{
+                                    break;
+                                }}
+                            }}
+
+                            if (componentFunction) {{
+                                const isAsync = componentFunction.constructor.name === 'AsyncFunction' ||
+                                               componentFunction.toString().includes('async function');
+
+                                globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+
+                                return {{ success: true, component: "{component_id}", function_found: true, async: isAsync }};
+                            }} else {{
+                                return {{
+                                    success: false,
+                                    component: "{component_id}",
+                                    function_found: false
+                                }};
+                            }}
                         }} catch (error) {{
                             return {{ success: false, error: error.message }};
                         }}
@@ -452,5 +557,6 @@ pub enum StubType {
 #[derive(Debug, Clone)]
 pub enum ModuleOperation {
     Load { module_specifier: String },
+    PostRegister,
     Register { dependencies_json: String },
 }

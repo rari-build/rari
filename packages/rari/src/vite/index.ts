@@ -162,7 +162,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       )
 
       const isInFunctionsDir
-        = filePath.includes('/functions/') || filePath.includes('\\functions\\')
+        = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
       const hasServerFunctionSignature
         = (code.includes('export async function')
           || code.includes('export function'))
@@ -655,6 +655,11 @@ if (import.meta.hot) {
   import.meta.hot.accept();
 }
 
+if (typeof globalThis !== 'undefined') {
+  globalThis.__rari_server_components = globalThis.__rari_server_components || new Set();
+  globalThis.__rari_server_components.add(${JSON.stringify(id)});
+}
+
 ${clientTransformedCode}`
           }
 
@@ -843,9 +848,39 @@ const ${componentName} = registerClientReference(
           })
 
           const srcDir = path.join(projectRoot, 'src')
+          const serverComponentPaths: string[] = []
 
           if (fs.existsSync(srcDir)) {
+            const collectServerComponents = (dir: string) => {
+              const entries = fs.readdirSync(dir, { withFileTypes: true })
+              for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name)
+                if (entry.isDirectory()) {
+                  collectServerComponents(fullPath)
+                }
+                else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+                  try {
+                    if (isServerComponent(fullPath)) {
+                      serverComponentPaths.push(fullPath)
+                    }
+                  }
+                  catch (error) {
+                    console.warn(`[RARI] Error checking ${fullPath}:`, error)
+                  }
+                }
+              }
+            }
+
+            collectServerComponents(srcDir)
             scanDirectory(srcDir, builder)
+          }
+
+          if (serverComponentPaths.length > 0) {
+            server.ws.send({
+              type: 'custom',
+              event: 'rari:server-components-registry',
+              data: { serverComponents: serverComponentPaths },
+            })
           }
 
           const components
@@ -1128,6 +1163,11 @@ const ${componentName} = registerClientReference(
 
         if (/\.(?:tsx?|jsx?)$/.test(filePath) && filePath.includes(srcDir)) {
           if (isServerComponent(filePath)) {
+            server.ws.send({
+              type: 'custom',
+              event: 'rari:register-server-component',
+              data: { filePath },
+            })
             await handleServerComponentHMR(filePath)
           }
           else {
@@ -1517,7 +1557,9 @@ class RscClient {
   }
 
   async fetchServerComponent(componentId, props = {}) {
-    const cacheKey = componentId + ':' + JSON.stringify(props);
+    const hmrCounter = (typeof window !== 'undefined' && window.__rscRefreshCounters && window.__rscRefreshCounters[componentId]) || 0;
+    const cacheKey = componentId + ':' + JSON.stringify(props) + ':hmr:' + hmrCounter;
+
 
     if (this.componentCache.has(cacheKey)) {
       return this.componentCache.get(cacheKey);
@@ -1763,14 +1805,15 @@ class RscClient {
           buffered = lines[lines.length - 1];
 
           for (const line of completeLines) {
-            if (!line.trim()) continue;
+              if (!line.trim()) continue;
 
-            try {
-              const colonIndex = line.indexOf(':');
-              if (colonIndex === -1) continue;
+              try {
+                const colonIndex = line.indexOf(':');
+                if (colonIndex === -1) continue;
 
-              const rowId = line.substring(0, colonIndex);
-              const content = line.substring(colonIndex + 1);
+                const rowId = line.substring(0, colonIndex);
+                const content = line.substring(colonIndex + 1);
+
 
               if (content.includes('STREAM_COMPLETE')) {
                 isComplete = true;
@@ -2305,6 +2348,9 @@ function createServerComponentWrapper(componentName, importPath) {
       const handleRscInvalidate = (event) => {
         const detail = event.detail;
         if (detail && detail.filePath && isServerComponent(detail.filePath)) {
+
+          rscClient.clearCache();
+
           if (typeof window !== 'undefined') {
             window.__rscRefreshCounters[componentName] = (window.__rscRefreshCounters[componentName] || 0) + 1;
             setMountKey(window.__rscRefreshCounters[componentName]);
@@ -2340,17 +2386,48 @@ export const fetchServerComponent = (componentId, props) =>
 
 // Helper function to check if a file is a server component (client-side)
 function isServerComponent(filePath) {
-  // Simple client-side check based on file path patterns
-  return filePath && (
-    filePath.includes('ServerWithClient') ||
-    filePath.includes('server') ||
-    filePath.includes('Server')
-  );
+  if (!filePath) {
+    return false;
+  }
+
+  try {
+    if (typeof globalThis !== 'undefined' && globalThis.__rari_server_components) {
+      return globalThis.__rari_server_components.has(filePath);
+    }
+
+    const hasServerPattern = (
+      filePath.includes('/functions/') ||
+      filePath.includes('\\\\functions\\\\')
+    );
+
+    return hasServerPattern;
+  } catch (error) {
+    console.warn('Error checking if file is server component:', error);
+    return false;
+  }
 }
 
-// HMR support for RSC cache invalidation
 if (import.meta.hot) {
-  // Listen for Vite's beforeFullReload event for server components
+  import.meta.hot.on('rari:register-server-component', (data) => {
+    if (data?.filePath) {
+      if (typeof globalThis !== 'undefined') {
+        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set();
+        globalThis.__rari_server_components.add(data.filePath);
+      }
+    }
+  });
+
+  import.meta.hot.on('rari:server-components-registry', (data) => {
+    if (data?.serverComponents && Array.isArray(data.serverComponents)) {
+      if (typeof globalThis !== 'undefined') {
+        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set();
+        data.serverComponents.forEach(path => {
+          globalThis.__rari_server_components.add(path);
+        });
+      }
+    }
+  });
+
   import.meta.hot.on('vite:beforeFullReload', async (data) => {
     if (data?.path && isServerComponent(data.path)) {
       // Immediately invalidate cache and trigger re-registration before reload
@@ -2358,13 +2435,17 @@ if (import.meta.hot) {
     }
   });
 
+  import.meta.hot.on('rari:server-component-updated', async (data) => {
+    if (data?.path && isServerComponent(data.path)) {
+      await invalidateRscCache({ filePath: data.path, forceReload: false });
+    }
+  });
 
 
-  // Helper function to invalidate RSC cache and trigger component re-registration
+
   async function invalidateRscCache(data) {
     const filePath = data?.filePath || data;
 
-    // Wait for server to be ready
     const waitForServerReady = async () => {
       for (let i = 0; i < 20; i++) { // Try for up to 2 seconds
         try {
@@ -2473,9 +2554,12 @@ ${registrations.join('\n')}
     },
 
     handleHotUpdate({ file, server }) {
-      if (/\.(?:tsx?|jsx?)$/.test(file) && isServerComponent(file)) {
-        server.hot.send('vite:beforeFullReload', {
-          type: 'full-reload',
+      const isReactFile = /\.(?:tsx?|jsx?)$/.test(file)
+      const isServerComp = isServerComponent(file)
+
+      if (isReactFile && isServerComp) {
+        server.hot.send('rari:server-component-updated', {
+          type: 'rari-hmr',
           path: file,
         })
         return []
