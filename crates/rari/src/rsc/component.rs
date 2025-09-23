@@ -32,6 +32,7 @@ pub struct TransformedComponent {
     pub transformed_source: String,
     pub dependencies: ComponentDependencies,
     pub is_loaded: bool,
+    pub initially_loaded: bool,
     pub module_specifier: Option<String>,
     pub module_id: Option<usize>,
     pub is_client_reference: bool,
@@ -74,6 +75,7 @@ impl ComponentRegistry {
                 transformed_source,
                 dependencies: dependencies.clone(),
                 is_loaded: false,
+                initially_loaded: false,
                 module_specifier: None,
                 module_id: None,
                 is_client_reference: false,
@@ -98,6 +100,28 @@ impl ComponentRegistry {
         if let Some(component) = self.components.get_mut(id) {
             component.is_loaded = true;
         }
+    }
+
+    pub fn mark_component_not_loaded(&mut self, id: &str) {
+        if let Some(component) = self.components.get_mut(id) {
+            component.is_loaded = false;
+        }
+    }
+
+    pub fn mark_component_initially_loaded(&mut self, id: &str) {
+        if let Some(component) = self.components.get_mut(id) {
+            component.initially_loaded = true;
+        }
+    }
+
+    pub fn mark_component_not_initially_loaded(&mut self, id: &str) {
+        if let Some(component) = self.components.get_mut(id) {
+            component.initially_loaded = false;
+        }
+    }
+
+    pub fn has_been_initially_loaded(&self, id: &str) -> bool {
+        self.components.get(id).is_some_and(|c| c.initially_loaded)
     }
 
     pub fn is_component_loaded(&self, id: &str) -> bool {

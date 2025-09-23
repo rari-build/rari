@@ -650,20 +650,13 @@ async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    info!("HMR component re-registration requested for file: {}", request.file_path);
-
     let file_path = request.file_path.clone();
-    let state_clone = state.clone();
 
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    if let Err(e) = immediate_component_reregistration(&state, &file_path).await {
+        error!("Failed to immediately re-register component for {}: {}", file_path, e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
-        if let Err(e) = immediate_component_reregistration(&state_clone, &file_path).await {
-            error!("Failed to immediately re-register component for {}: {}", file_path, e);
-        }
-    });
-
-    info!("HMR component re-registration triggered for: {}", request.file_path);
     #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
@@ -675,17 +668,126 @@ async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    info!("Immediately re-registering component for file: {}", file_path);
-
     let path = std::path::Path::new(file_path);
     let component_name =
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
 
-    info!("Re-registering component '{}' from file: {}", component_name, file_path);
-
     {
-        let renderer = state.renderer.lock().await;
+        let mut renderer = state.renderer.lock().await;
         renderer.clear_script_cache();
+
+        if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+            warn!("Failed to clear component module cache: {}", e);
+        }
+    }
+
+    if let Ok(content) = tokio::fs::read_to_string(file_path).await {
+        let mut renderer = state.renderer.lock().await;
+
+        if let Err(e) = renderer.register_component(component_name, &content).await {
+            error!("Failed to register component directly: {}", e);
+        } else {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+            if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+                warn!("Failed to clear component module cache: {}", e);
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+            if let Err(e) = renderer.register_component(component_name, &content).await {
+                error!("Failed to re-register component after cache clear: {}", e);
+                return Ok(());
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+            if let Err(e) = renderer.ensure_component_loaded_with_force(component_name, true).await
+            {
+                error!("Failed to load component after re-registration: {}", e);
+                return Ok(());
+            }
+
+            let verification_attempts = 3;
+            for attempt in 1..=verification_attempts {
+                let _unique_id = format!(
+                    "{}_{}",
+                    component_name,
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                );
+                let verification_script = format!(
+                    r#"
+                    (function() {{
+                        const componentName = "{}";
+                        const hashedComponentName = "Component_" + componentName;
+                        const componentExists = (
+                            typeof globalThis[componentName] === 'function' ||
+                            typeof globalThis[hashedComponentName] === 'function' ||
+                            (globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] &&
+                             (typeof globalThis.__rsc_modules[componentName].default === 'function' ||
+                              typeof Object.values(globalThis.__rsc_modules[componentName])[0] === 'function'))
+                        );
+
+                        const debugInfo = {{
+                            globalExists: typeof globalThis[componentName],
+                            moduleRegistryExists: !!globalThis.__rsc_modules,
+                            moduleExists: globalThis.__rsc_modules ? !!globalThis.__rsc_modules[componentName] : false,
+                            moduleDefaultExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof globalThis.__rsc_modules[componentName].default : 'module_not_found',
+                            moduleFirstExportExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof Object.values(globalThis.__rsc_modules[componentName])[0] : 'module_not_found',
+                            hashedExists: typeof globalThis[hashedComponentName],
+                            availableGlobals: Object.keys(globalThis).filter(k => typeof globalThis[k] === 'function' && k.match(/^[A-Z]/)).slice(0, 20),
+                            moduleKeys: globalThis.__rsc_modules ? Object.keys(globalThis.__rsc_modules).slice(0, 20) : []
+                        }};
+
+                        return {{ success: componentExists, componentName: componentName, debugInfo: debugInfo }};
+                    }})()
+                    "#,
+                    component_name
+                );
+
+                match renderer
+                    .runtime
+                    .execute_script(
+                        format!("hmr_verify_{}.js", component_name),
+                        verification_script,
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        if let Some(success) = result.get("success").and_then(|v| v.as_bool())
+                            && success
+                        {
+                            return Ok(());
+                        }
+
+                        if attempt == verification_attempts {
+                            warn!(
+                                "Component '{}' verification failed after {} attempts",
+                                component_name, verification_attempts
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Component '{}' verification script execution failed on attempt {}: {}",
+                            component_name, attempt, e
+                        );
+                    }
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            }
+
+            warn!(
+                "Component '{}' verification failed after {} attempts",
+                component_name, verification_attempts
+            );
+            return Ok(());
+        }
+    } else {
+        warn!("Failed to read component file directly, trying Vite transformation");
     }
 
     let vite_port = std::env::var("VITE_PORT")
@@ -702,7 +804,8 @@ async fn immediate_component_reregistration(
 
     info!("Triggering Vite transformation for: {}", file_path);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
+
     let response = client
         .post(&vite_url)
         .header("Content-Type", "application/json")
@@ -716,9 +819,26 @@ async fn immediate_component_reregistration(
     }
 
     let response_data: serde_json::Value = response.json().await?;
-    info!("Vite transformation completed: {:?}", response_data);
 
-    info!("Component '{}' transformation triggered successfully", component_name);
+    let component_code = if let Some(components) = response_data.get("components") {
+        if let Some(component) = components.as_array().and_then(|arr| arr.first()) {
+            component.get("code").and_then(|c| c.as_str()).map(|s| s.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(code) = component_code {
+        let mut renderer = state.renderer.lock().await;
+        if let Err(e) = renderer.register_component(component_name, &code).await {
+            return Err(format!("Failed to register component: {e}").into());
+        }
+    } else {
+        warn!("No component code received from Vite transformation");
+    }
+
     Ok(())
 }
 

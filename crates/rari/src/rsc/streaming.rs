@@ -604,10 +604,11 @@ impl StreamingRenderer {
             r#"
             (async function() {{
                 try {{
-                    let Component = globalThis['{component_id}'] ||
+                    let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default) ||
+                                    globalThis['{component_id}'] ||
                                     globalThis['Component_{component_id}'] ||
                                     globalThis['Component_{component_hash}'] ||
-                                    (globalThis.__rsc_modules && (globalThis.__rsc_modules['{component_id}']?.default || globalThis.__rsc_modules['{component_id}']));
+                                    (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']);
 
                     if (Component && typeof Component === 'object' && typeof Component.default === 'function') {{
                         Component = Component.default;

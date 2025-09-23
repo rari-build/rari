@@ -10,6 +10,7 @@ use crate::server_fn::ServerFunctionExecutor;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use regex;
+use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
@@ -117,6 +118,126 @@ pub struct ResourceMetrics {
     pub cache_hit_rate: f64,
     pub timeout_errors: u64,
     pub memory_pressure_events: u64,
+}
+
+fn transform_imports_for_hmr(source: &str) -> String {
+    let react_named_imports_regex =
+        match Regex::new(r"import\s+React,?\s*\{\s*([^}]+)\s*\}\s+from\s+['\x22]react['\x22]") {
+            Ok(regex) => regex,
+            Err(_) => return source.to_string(),
+        };
+
+    let react_default_import_regex =
+        match Regex::new(r"import\s+React\s+from\s+['\x22]react['\x22]") {
+            Ok(regex) => regex,
+            Err(_) => return source.to_string(),
+        };
+
+    let named_imports_regex =
+        match Regex::new(r"import\s+\{\s*([^}]+)\s*\}\s+from\s+['\x22]([^'\x22]+)['\x22]") {
+            Ok(regex) => regex,
+            Err(_) => return source.to_string(),
+        };
+
+    let default_import_regex =
+        match Regex::new(r"import\s+(\w+)\s+from\s+['\x22]([^'\x22]+)['\x22]") {
+            Ok(regex) => regex,
+            Err(_) => return source.to_string(),
+        };
+
+    let mut result = String::new();
+    let lines: Vec<&str> = source.lines().collect();
+
+    for line in lines {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("import") && trimmed.contains("from 'react'") {
+            if let Some(captures) = react_named_imports_regex.captures(trimmed)
+                && let Some(named_imports_match) = captures.get(1)
+            {
+                let named_imports = named_imports_match.as_str();
+                let imports: Vec<&str> = named_imports.split(',').map(|s| s.trim()).collect();
+
+                result.push_str("if (typeof React === 'undefined') { var React = globalThis.React || { createElement: function() { return null; }, Fragment: function() { return null; } }; }\n");
+
+                for import in imports {
+                    let import_name = import.trim();
+                    if !import_name.is_empty() {
+                        if import_name.contains(" as ") {
+                            let parts: Vec<&str> = import_name.split(" as ").collect();
+                            if parts.len() == 2 {
+                                let original_name = parts[0].trim();
+                                let alias_name = parts[1].trim();
+                                result.push_str(&format!(
+                                        "if (typeof {} === 'undefined') {{ var {} = globalThis.React?.{} || globalThis.{} || (function(props) {{ return props?.children || null; }}); }}\n",
+                                        alias_name, alias_name, original_name, alias_name
+                                    ));
+                            }
+                        } else {
+                            result.push_str(&format!(
+                                    "if (typeof {} === 'undefined') {{ var {} = globalThis.React?.{} || globalThis.{} || (function(props) {{ return props?.children || null; }}); }}\n",
+                                    import_name, import_name, import_name, import_name
+                                ));
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if react_default_import_regex.is_match(trimmed) {
+                result.push_str("if (typeof React === 'undefined') { var React = globalThis.React || { createElement: function() { return null; }, Fragment: function() { return null; } }; }\n");
+                continue;
+            }
+        } else if trimmed.starts_with("import") && !trimmed.contains("from 'react'") {
+            if let Some(captures) = named_imports_regex.captures(trimmed)
+                && let Some(named_imports_match) = captures.get(1)
+            {
+                let named_imports = named_imports_match.as_str();
+                let imports: Vec<&str> = named_imports.split(',').map(|s| s.trim()).collect();
+
+                for import in imports {
+                    let import_name = import.trim();
+                    if !import_name.is_empty() {
+                        if import_name.contains(" as ") {
+                            let parts: Vec<&str> = import_name.split(" as ").collect();
+                            if parts.len() == 2 {
+                                let original_name = parts[0].trim();
+                                let alias_name = parts[1].trim();
+                                result.push_str(&format!(
+                                        "if (typeof {} === 'undefined') {{ var {} = (globalThis.__rsc_functions && globalThis.__rsc_functions.{} && globalThis.__rsc_functions.{}.__rsc_original) ? globalThis.__rsc_functions.{}.__rsc_original : (globalThis.__rsc_functions && globalThis.__rsc_functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
+                                        alias_name, alias_name, original_name, original_name, original_name, original_name, alias_name
+                                    ));
+                            }
+                        } else {
+                            result.push_str(&format!(
+                                    "if (typeof {} === 'undefined') {{ var {} = (globalThis.__rsc_functions && globalThis.__rsc_functions.{} && globalThis.__rsc_functions.{}.__rsc_original) ? globalThis.__rsc_functions.{}.__rsc_original : (globalThis.__rsc_functions && globalThis.__rsc_functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
+                                    import_name, import_name, import_name, import_name, import_name, import_name, import_name
+                                ));
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if let Some(captures) = default_import_regex.captures(trimmed)
+                && let Some(import_name_match) = captures.get(1)
+            {
+                let import_name = import_name_match.as_str();
+                result.push_str(&format!(
+                        "if (typeof {} === 'undefined') {{ var {} = globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
+                        import_name, import_name, import_name
+                    ));
+                continue;
+            }
+
+            continue;
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    result
 }
 
 pub struct RscRenderer {
@@ -444,6 +565,7 @@ impl RscRenderer {
         {
             let mut registry = self.component_registry.lock();
             registry.remove_component(component_id);
+            registry.mark_component_not_loaded(component_id);
         }
 
         self.runtime.clear_module_loader_caches(component_id).await?;
@@ -805,27 +927,15 @@ impl RscRenderer {
     }
 
     pub async fn is_client_reference(&self, component_id: &str) -> bool {
-        tracing::info!("Checking if component '{}' is a client reference", component_id);
-
         let registry = self.component_registry.lock();
         let is_client_ref = registry.is_client_reference(component_id);
         if is_client_ref {
-            tracing::info!(
-                "Component '{}' found in component registry as client reference",
-                component_id
-            );
             return true;
         }
 
         let serializer = self.serializer.lock();
-        let is_registered = serializer.is_client_component_registered(component_id);
-        tracing::info!(
-            "Component '{}' serializer registration status: {}",
-            component_id,
-            is_registered
-        );
 
-        is_registered
+        serializer.is_client_component_registered(component_id)
     }
 
     pub fn register_client_component(
@@ -834,20 +944,11 @@ impl RscRenderer {
         file_path: &str,
         export_name: &str,
     ) {
-        tracing::info!(
-            "Registering client component in renderer: {} from {} with export {}",
-            component_id,
-            file_path,
-            export_name
-        );
-
         let mut registry = self.component_registry.lock();
         registry.register_client_reference(component_id, file_path, export_name);
 
         let mut serializer = self.serializer.lock();
         serializer.register_client_component(component_id, file_path, export_name);
-
-        tracing::info!("Client component '{}' registered successfully", component_id);
     }
 
     pub fn list_components(&self) -> Vec<String> {
@@ -901,16 +1002,9 @@ impl RscRenderer {
             return Err(RariError::internal("ReactDOMServer not initialized"));
         }
 
-        tracing::info!("Checking if component '{}' is a client reference", component_id);
         if self.is_client_reference(component_id).await {
-            tracing::info!("Component '{}' is a client reference, handling as such", component_id);
             return self.handle_client_reference(component_id, props).await;
         }
-
-        tracing::info!(
-            "Component '{}' is not a client reference, proceeding with RSC rendering",
-            component_id
-        );
 
         if !self.component_exists(component_id) {
             return Err(RariError::not_found(format!("Component not found: {component_id}")));
@@ -945,7 +1039,8 @@ impl RscRenderer {
                     RariError::js_execution(format!("Failed to load component render script: {e}"))
                 })?;
 
-        self.execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
+        let _render_result = self
+            .execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
             .await?;
 
         let rsc_extraction_script = self
@@ -1023,15 +1118,9 @@ impl RscRenderer {
             return Err(RariError::internal("ReactDOMServer not initialized"));
         }
 
-        tracing::info!("About to check if component '{}' is a client reference", component_id);
         if self.is_client_reference(component_id).await {
-            tracing::info!("Component '{}' is a client reference, handling as such", component_id);
             return self.handle_client_reference(component_id, props).await;
         }
-        tracing::info!(
-            "Component '{}' is not a client reference, proceeding with server rendering",
-            component_id
-        );
 
         let component_found = self.component_exists(component_id);
         if !component_found {
@@ -1238,8 +1327,6 @@ impl RscRenderer {
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
-        tracing::info!("Handling client reference for component: {}", component_id);
-
         let props_map = if let Some(props_str) = props {
             if !props_str.trim().is_empty() {
                 serde_json::from_str::<FxHashMap<String, JsonValue>>(props_str).ok()
@@ -1376,27 +1463,58 @@ impl RscRenderer {
             return Err(RariError::internal("RSC renderer not initialized"));
         }
 
-        let canonical_id = self.ensure_component_available(component_id).await?;
-        self.ensure_component_loaded(&canonical_id).await?;
+        let max_retries = 3;
+        let mut attempt = 0;
+        let mut last_error = None;
 
-        let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-        match streaming_renderer.start_streaming(&canonical_id, props).await {
-            Ok(stream) => Ok(stream),
-            Err(e) => {
-                let msg = format!("{e}");
-                let should_retry = msg.contains("not a function")
-                    || msg.contains("not found")
-                    || msg.contains("Component render failed");
-                if should_retry {
-                    sleep(Duration::from_millis(80)).await;
-                    let canonical_id = self.ensure_component_available(component_id).await?;
-                    self.ensure_component_loaded(&canonical_id).await?;
-                    let mut retry_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
-                    return retry_renderer.start_streaming(&canonical_id, props).await;
+        while attempt < max_retries {
+            attempt += 1;
+
+            let canonical_id = match self.ensure_component_available(component_id).await {
+                Ok(id) => id,
+                Err(e) => {
+                    if attempt >= max_retries {
+                        return Err(e);
+                    }
+                    sleep(Duration::from_millis(150 * attempt)).await;
+                    continue;
                 }
-                Err(e)
+            };
+
+            if let Err(e) = self.ensure_component_loaded(&canonical_id).await {
+                if attempt >= max_retries {
+                    return Err(e);
+                }
+                sleep(Duration::from_millis(150 * attempt)).await;
+                continue;
+            }
+
+            let mut streaming_renderer = StreamingRenderer::new(Arc::clone(&self.runtime));
+            match streaming_renderer.start_streaming(&canonical_id, props).await {
+                Ok(stream) => return Ok(stream),
+                Err(e) => {
+                    let msg = format!("{e}");
+                    let should_retry = msg.contains("not a function")
+                        || msg.contains("not found")
+                        || msg.contains("Component render failed");
+
+                    if should_retry && attempt < max_retries {
+                        last_error = Some(e);
+                        sleep(Duration::from_millis(150 * attempt)).await;
+                        continue;
+                    }
+
+                    return Err(e);
+                }
             }
         }
+
+        Err(last_error.unwrap_or_else(|| {
+            RariError::internal(format!(
+                "Failed to render component {} after {} attempts with unknown error",
+                component_id, max_retries
+            ))
+        }))
     }
 
     async fn ensure_component_available(&self, original_id: &str) -> Result<String, RariError> {
@@ -1449,7 +1567,15 @@ impl RscRenderer {
         out
     }
 
-    async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {
+    pub async fn ensure_component_loaded(&self, component_id: &str) -> Result<(), RariError> {
+        self.ensure_component_loaded_with_force(component_id, false).await
+    }
+
+    pub async fn ensure_component_loaded_with_force(
+        &self,
+        component_id: &str,
+        force_reload: bool,
+    ) -> Result<(), RariError> {
         let init_registry_script = RscJsLoader::create_global_init();
         self.runtime
             .execute_script(
@@ -1462,7 +1588,7 @@ impl RscRenderer {
             let registry = self.component_registry.lock();
             registry.is_component_loaded(component_id)
         };
-        if is_loaded {
+        if is_loaded && !force_reload {
             return Ok(());
         }
 
@@ -1483,9 +1609,74 @@ impl RscRenderer {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let module_specifier_js = format!("file:///rari_component/{component_id}.js?v={timestamp}");
 
-        self.runtime.add_module_to_loader_only(&module_specifier_js, transformed_source).await?;
+        let module_specifier_js = if force_reload {
+            format!("file:///rari_component/{component_id}.js")
+        } else {
+            format!("file:///rari_component/{component_id}.js?v={timestamp}")
+        };
+
+        self.runtime
+            .add_module_to_loader_only(&module_specifier_js, transformed_source.clone())
+            .await?;
+
+        let needs_initial_load = !force_reload;
+
+        if needs_initial_load {
+            let module_id = self.runtime.load_es_module(component_id).await.map_err(|e| {
+                RariError::js_execution(format!(
+                    "Failed to load ES module for component '{}' (specifier: '{}'): {}",
+                    component_id, module_specifier_js, e
+                ))
+            })?;
+            self.runtime.evaluate_module(module_id).await.map_err(|e| {
+                RariError::js_execution(format!(
+                    "Failed to evaluate ES module '{}': {}",
+                    module_specifier_js, e
+                ))
+            })?;
+            let module_namespace =
+                self.runtime.get_module_namespace(module_id).await.map_err(|e| {
+                    RariError::js_execution(format!(
+                        "Failed to get module namespace for component '{}' (module_id: {}): {}",
+                        component_id, module_id, e
+                    ))
+                })?;
+
+            let register_from_namespace_script = format!(
+                r#"
+                (function() {{
+                    try {{
+                        const moduleNamespace = {};
+
+                        if (typeof globalThis.RscModuleManager?.register === 'function') {{
+                            const result = globalThis.RscModuleManager.register(moduleNamespace, "{component_id}");
+                            return {{ success: true, module: "{component_id}", exports: result.exportCount }};
+                        }} else if (typeof globalThis.registerModule === 'function') {{
+                            const result = globalThis.registerModule(moduleNamespace, "{component_id}");
+                            return {{ success: true, module: "{component_id}", exports: result.exportCount }};
+                        }} else {{
+                            return {{ success: false, error: "No module registration function available" }};
+                        }}
+                    }} catch (error) {{
+                        return {{ success: false, error: error.message }};
+                    }}
+                }})()
+                "#,
+                serde_json::to_string(&module_namespace).unwrap_or_else(|_| "null".to_string())
+            );
+
+            self.runtime
+                .execute_script(
+                    format!("load_from_namespace_{component_id}.js"),
+                    register_from_namespace_script,
+                )
+                .await?;
+
+            self.component_registry.lock().mark_component_initially_loaded(component_id);
+        } else {
+            // HMR reload: Skip V8 ES module system entirely to avoid "Module already evaluated" crashes
+        }
 
         let dependencies_json =
             serde_json::to_string(&dependencies.into_iter().collect::<Vec<_>>())
@@ -1499,11 +1690,161 @@ impl RscRenderer {
             .execute_script(format!("register_exports_{component_id}.js"), register_exports_script)
             .await?;
 
-        let load_script = RscJsLoader::create_module_operation_script(
+        if force_reload {
+            let setup_jsx_runtime = r#"
+                globalThis.__jsx_runtime = globalThis.__jsx_runtime || {
+                    jsx: function(type, props, key) {
+                        const element = {
+                            $$typeof: Symbol.for('react.element'),
+                            type,
+                            props: props || {},
+                            key: key || null,
+                            ref: null
+                        };
+                        if (props && props.children !== undefined) {
+                            element.props = { ...element.props, children: props.children };
+                        }
+                        return element;
+                    },
+                    jsxs: function(type, props, key) {
+                        return globalThis.__jsx_runtime.jsx(type, props, key);
+                    }
+                };
+            "#;
+
+            self.runtime
+                .execute_script(
+                    format!("setup_jsx_{component_id}.js"),
+                    setup_jsx_runtime.to_string(),
+                )
+                .await?;
+
+            let mut transformed_source_safe = transformed_source.clone();
+
+            if transformed_source_safe.contains("export default async function") {
+                transformed_source_safe = transformed_source_safe
+                    .replace("export default async function", "async function");
+            } else if transformed_source_safe.contains("export default function") {
+                transformed_source_safe =
+                    transformed_source_safe.replace("export default function", "function");
+            } else {
+                transformed_source_safe = transformed_source_safe.replace("export default ", "");
+            }
+
+            transformed_source_safe = transformed_source_safe
+                .replace(&format!("export const __rari_main_export = {component_id};"), "")
+                .replace(
+                    "export function __rari_register() { /* Compatibility stub */ return true; }",
+                    "",
+                )
+                .replace("export const __registry_proxy =", "")
+                .replace("const __registry_proxy =", "");
+
+            transformed_source_safe.push_str(r#"
+
+if (typeof __registry_proxy === 'undefined') {
+    var __registry_proxy = new Proxy({}, {
+        get: function(target, prop) {
+            if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions[prop] === 'function') {
+                return globalThis.__rsc_functions[prop];
+            }
+            if (typeof globalThis[prop] === 'function') {
+                return globalThis[prop];
+            }
+            return undefined;
+        }
+    });
+}
+"#);
+
+            transformed_source_safe =
+                transformed_source_safe.replace("\"use module\";", "").replace("'use module';", "");
+
+            let mut eval_safe_source = r#"
+if (typeof _jsx === 'undefined') {
+    var _jsx = globalThis.__jsx_runtime?.jsx || (() => null);
+}
+if (typeof _jsxs === 'undefined') {
+    var _jsxs = globalThis.__jsx_runtime?.jsxs || (() => null);
+}
+
+if (typeof globalThis.React === 'undefined') {
+    globalThis.React = {
+        createElement: function(type, props, ...children) {
+            return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children };
+        },
+        Fragment: function(props) { return props?.children || null; },
+        Suspense: function(props) { return props?.children || props?.fallback || null; }
+    };
+}
+
+if (!globalThis.React.Suspense) {
+    globalThis.React.Suspense = function(props) { return props?.children || props?.fallback || null; };
+}
+
+if (typeof globalThis.Suspense === 'undefined') {
+    globalThis.Suspense = globalThis.React.Suspense;
+}
+
+if (typeof globalThis.Fragment === 'undefined') {
+    globalThis.Fragment = globalThis.React.Fragment;
+}
+
+
+if (!globalThis.readFileSync && globalThis.__nodeModules && globalThis.__nodeModules.get) {
+    const nodeFs = globalThis.__nodeModules.get('node:fs');
+    if (nodeFs && nodeFs.readFileSync) {
+        globalThis.readFileSync = nodeFs.readFileSync;
+        globalThis.existsSync = nodeFs.existsSync;
+    }
+    const nodePath = globalThis.__nodeModules.get('node:path');
+    if (nodePath && nodePath.join) {
+        globalThis.join = nodePath.join;
+    }
+    const nodeProcess = globalThis.__nodeModules.get('node:process');
+    if (nodeProcess && nodeProcess.cwd) {
+        globalThis.cwd = nodeProcess.cwd;
+    }
+}
+
+// No special npm package restoration needed - import transformation handles everything
+"#.to_string();
+
+            let import_transformed_source = transform_imports_for_hmr(&transformed_source_safe);
+            eval_safe_source.push_str(&import_transformed_source);
+
+            eval_safe_source.push_str(&format!(
+                r#"
+
+globalThis.{component_id} = {component_id};
+globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+globalThis.__rsc_functions['{component_id}'] = {component_id};
+"#,
+                component_id = component_id
+            ));
+
+            let execution_result = self
+                .runtime
+                .execute_script(format!("direct_execution_{component_id}.js"), eval_safe_source)
+                .await;
+
+            if let Err(e) = execution_result {
+                error!(
+                    "HMR wrapper script execution failed for component '{}': {:?}",
+                    component_id, e
+                );
+                return Err(e);
+            }
+        }
+
+        let post_register_script = RscJsLoader::create_module_operation_script(
             component_id,
-            ModuleOperation::Load { module_specifier: module_specifier_js },
+            ModuleOperation::PostRegister,
         );
-        self.runtime.execute_script(format!("load_{component_id}.js"), load_script).await?;
+        let _post_register_result = self
+            .runtime
+            .execute_script(format!("post_register_{component_id}.js"), post_register_script)
+            .await?;
 
         let verify_script = self.create_component_verification_script(component_id);
         self.execute_verification_script(component_id, verify_script).await?;

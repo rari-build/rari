@@ -5,13 +5,18 @@ import { join } from 'node:path'
 import { cwd } from 'node:process'
 import MarkdownIt from 'markdown-it'
 
-interface MarkdownTestProps {
+interface MarkdownProps {
   filePath?: string
 }
 
-export default async function MarkdownTest({
+interface GlobalWithCache {
+  __rari_markdown_cache?: Record<string, string>
+}
+
+export default async function Markdown({
   filePath = 'demo-article.md',
-}: MarkdownTestProps) {
+}: MarkdownProps) {
+  // HMR test comment
   try {
     // Try different paths: dist/content (production from project root), content/ (production from dist), public/content/ (development)
     const distPath = join(cwd(), 'dist', 'content', filePath)
@@ -30,14 +35,31 @@ export default async function MarkdownTest({
     }
     const content = readFileSync(fullPath, 'utf-8')
 
-    const md = new MarkdownIt({
-      html: true,
-      linkify: true,
-      typographer: true,
-      breaks: false,
-    })
+    const cacheKey = `markdown_${filePath}_${content.length}`
 
-    const html = md.render(content)
+    let html: string
+    const globalWithCache = globalThis as unknown as GlobalWithCache
+
+    if (typeof globalThis !== 'undefined' && globalWithCache.__rari_markdown_cache?.[cacheKey]) {
+      html = globalWithCache.__rari_markdown_cache[cacheKey]
+    }
+    else {
+      const md = new MarkdownIt({
+        html: true,
+        linkify: true,
+        typographer: true,
+        breaks: false,
+      })
+
+      html = md.render(content)
+
+      if (typeof globalThis !== 'undefined') {
+        if (!globalWithCache.__rari_markdown_cache) {
+          globalWithCache.__rari_markdown_cache = {}
+        }
+        globalWithCache.__rari_markdown_cache[cacheKey] = html
+      }
+    }
 
     return (
       <div className="max-w-4xl mx-auto p-6">

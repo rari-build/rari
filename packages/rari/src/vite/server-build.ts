@@ -80,7 +80,7 @@ export class ServerComponentBuilder {
       )
 
       const isInFunctionsDir
-        = filePath.includes('/functions/') || filePath.includes('\\functions\\')
+        = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
       const hasServerFunctionSignature
         = (code.includes('export async function')
           || code.includes('export function'))

@@ -127,6 +127,34 @@ export const readdir = () => Promise.resolve([]);
 export const __esModule = true;
 "#;
 
+const JSX_RUNTIME_STUB: &str = r#"
+export function jsx(type, props, key) {
+  const element = {
+    $$typeof: Symbol.for('react.element'),
+    type,
+    props: props || {},
+    key: key || null,
+    ref: null
+  };
+
+  if (props && props.children !== undefined) {
+    element.props = { ...element.props, children: props.children };
+  }
+
+  return element;
+}
+
+export function jsxs(type, props, key) {
+  return jsx(type, props, key);
+}
+
+export function Fragment(props) {
+  return props?.children || null;
+}
+
+export default { jsx, jsxs, Fragment };
+"#;
+
 const LOADER_STUB_TEMPLATE: &str = r#"
 // Auto-generated loader stub for {component_id}
 
@@ -2021,12 +2049,23 @@ export const __esModule = true;
             let module_path = parts.get(1).unwrap_or(&"unknown");
 
             if module_path.starts_with(REACT_MODULE) {
-                return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                    ModuleType::JavaScript,
-                    ModuleSourceCode::String(REACT_STUB.to_string().into()),
-                    module_specifier,
-                    None,
-                ))));
+                if *module_path == "react/jsx-runtime.js"
+                    || module_path.ends_with("/jsx-runtime.js")
+                {
+                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                        ModuleType::JavaScript,
+                        ModuleSourceCode::String(JSX_RUNTIME_STUB.to_string().into()),
+                        module_specifier,
+                        None,
+                    ))));
+                } else {
+                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                        ModuleType::JavaScript,
+                        ModuleSourceCode::String(REACT_STUB.to_string().into()),
+                        module_specifier,
+                        None,
+                    ))));
+                }
             }
 
             let package_name = module_path.split('/').next().unwrap_or(module_path);
@@ -2206,7 +2245,6 @@ impl ModuleLoader for RariModuleLoader {
                         return Ok(url);
                     }
                 }
-
                 return Err(deno_error::JsErrorBox::generic("Module not found"));
             }
 
@@ -2336,8 +2374,14 @@ impl ModuleLoader for RariModuleLoader {
 
         if !specifier.contains("://") && !specifier.starts_with("/") {
             if specifier == "react" || specifier.starts_with("react/") {
-                let react_url = "file:///node_modules/react/esm/react.development.js".to_string();
-                return self.resolve(&react_url, referrer, kind);
+                if specifier == "react/jsx-runtime" {
+                    let jsx_runtime_url = "file:///node_modules/react/jsx-runtime.js".to_string();
+                    return self.resolve(&jsx_runtime_url, referrer, kind);
+                } else {
+                    let react_url =
+                        "file:///node_modules/react/esm/react.development.js".to_string();
+                    return self.resolve(&react_url, referrer, kind);
+                }
             }
 
             if let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer) {
