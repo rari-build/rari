@@ -1,4 +1,22 @@
-## [0.2.22] - 2025-09-04
+## [0.2.16] - 2025-09-23
+
+### 🚀 Features
+
+- Add support for component initial loading state and enhance HMR functionality
+
+### 🚜 Refactor
+
+- Enhance error handling and retry logic in component rendering and registration processes
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.22
+- Bump version to 0.2.16 for multiple Rari packages
+## [rari@0.2.22] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.22
 
 ### 🚜 Refactor
 
