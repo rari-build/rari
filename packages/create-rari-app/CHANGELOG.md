@@ -1,4 +1,70 @@
-## [0.1.11] - 2025-09-04
+## [rari@0.2.24] - 2025-09-23
+
+### 💼 Other
+
+- Rari@0.2.24
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.23
+- Update dependencies across multiple packages to latest versions
+## [rari@0.2.23] - 2025-09-23
+
+### 💼 Other
+
+- Rari@0.2.23
+## [0.2.16] - 2025-09-23
+
+### 🚀 Features
+
+- Add support for component initial loading state and enhance HMR functionality
+
+### 🚜 Refactor
+
+- Enhance error handling and retry logic in component rendering and registration processes
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.22
+- Bump version to 0.2.16 for multiple Rari packages
+## [rari@0.2.22] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.22
+
+### 🚜 Refactor
+
+- Improve formatting and error handling in extractCacheConfigFromContent function
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.21
+## [rari@0.2.21] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.21
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependencies to version 0.2.15 and remove unused client-dev entry
+## [0.2.15] - 2025-09-04
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.20
+- Update rari to version 0.2.8 and bump dependencies across multiple packages
+## [rari@0.2.20] - 2025-09-04
+
+### 💼 Other
+
+- Rari@0.2.20
+## [create-rari-app@0.1.11] - 2025-09-04
+
+### 💼 Other
+
+- Create-rari-app@0.1.11
 
 ### 🚜 Refactor
 
