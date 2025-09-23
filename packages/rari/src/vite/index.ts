@@ -838,7 +838,7 @@ const ${componentName} = registerClientReference(
       const discoverAndRegisterComponents = async () => {
         try {
           const { ServerComponentBuilder, scanDirectory } = await import(
-            './server-build'
+            './server-build',
           )
 
           const builder = new ServerComponentBuilder(projectRoot, {
@@ -977,7 +977,7 @@ const ${componentName} = registerClientReference(
           return
 
         const { getBinaryPath, getInstallationInstructions } = await import(
-          '../platform'
+          '../platform',
         )
 
         let binaryPath: string

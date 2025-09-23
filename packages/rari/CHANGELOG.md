@@ -1,3 +1,14 @@
+## [0.2.24] - 2025-09-23
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.23
+- Update dependencies across multiple packages to latest versions
+## [rari@0.2.23] - 2025-09-23
+
+### 💼 Other
+
+- Rari@0.2.23
 ## [0.2.16] - 2025-09-23
 
 ### 🚀 Features
