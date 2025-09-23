@@ -1,8 +1,8 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm run build"
+buildCommand = "rm -rf node_modules package-lock.json pnpm-lock.yaml && pnpm install && pnpm run build"
 nixpacksPlan = { phases = { setup = { nixPkgs = [
-  "nodejs_20",
+  "nodejs_22",
   "pnpm"
 ] } } }
 
