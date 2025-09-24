@@ -1,5 +1,3 @@
-'use server'
-
 async function FetchExample() {
   const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
 

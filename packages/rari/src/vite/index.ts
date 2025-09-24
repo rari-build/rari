@@ -1,6 +1,5 @@
 import type { Buffer } from 'node:buffer'
 import type { Plugin, UserConfig } from 'rolldown-vite'
-import type { CacheConfig, PageCacheConfig } from '../router/cache'
 import type { ServerBuildOptions } from './server-build'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -13,7 +12,6 @@ interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
-  caching?: CacheConfig
 }
 
 function scanForClientComponents(srcDir: string): Set<string> {
@@ -52,79 +50,6 @@ function scanForClientComponents(srcDir: string): Set<string> {
   return clientComponents
 }
 
-function extractCacheConfigFromContent(
-  content: string,
-): PageCacheConfig | undefined {
-  let ast: any
-  try {
-    ast = acorn.parse(content, {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      allowImportExportEverywhere: true,
-    }) as any
-  }
-  catch {
-    return undefined
-  }
-
-  for (const node of ast.body) {
-    if (
-      node.type === 'ExportNamedDeclaration'
-      && node.declaration
-      && node.declaration.type === 'VariableDeclaration'
-    ) {
-      for (const declarator of node.declaration.declarations) {
-        if (
-          declarator.id
-          && declarator.id.name === 'cacheConfig'
-          && declarator.init
-          && declarator.init.type === 'ObjectExpression'
-        ) {
-          const config: PageCacheConfig = {}
-
-          for (const prop of declarator.init.properties) {
-            if (
-              prop.type === 'Property'
-              && prop.key
-              && prop.value
-              && prop.value.type === 'Literal'
-            ) {
-              const keyName
-                = prop.key.type === 'Literal' ? prop.key.value : prop.key.name
-              if (keyName === 'cache-control' || keyName === 'vary') {
-                config[keyName as keyof PageCacheConfig] = prop.value
-                  .value as string
-              }
-            }
-          }
-
-          return Object.keys(config).length > 0 ? config : undefined
-        }
-      }
-    }
-  }
-
-  return undefined
-}
-
-function matchesPattern(pattern: string, path: string): boolean {
-  if (pattern === path)
-    return true
-
-  if (pattern.endsWith('/*')) {
-    const prefix = pattern.slice(0, -2)
-    return path.startsWith(prefix)
-  }
-
-  if (pattern.includes('*')) {
-    const regexPattern = pattern.replace(/\*/g, '.*').replace(/\//g, '\\/')
-    const regex = new RegExp(`^${regexPattern}$`)
-    return regex.test(path)
-  }
-
-  return false
-}
-
 export function defineRariOptions(config: RariOptions): RariOptions {
   return config
 }
@@ -138,6 +63,14 @@ export function rari(options: RariOptions = {}): Plugin[] {
   const serverImportedClientComponents = new Set<string>()
 
   function isServerComponent(filePath: string): boolean {
+    if (filePath.includes('node_modules')) {
+      return false
+    }
+
+    if (filePath.includes('/.rari/') || filePath.includes('\\.rari\\')) {
+      return false
+    }
+
     let pathForFsOperations = filePath
     try {
       pathForFsOperations = fs.realpathSync(filePath)
@@ -152,30 +85,67 @@ export function rari(options: RariOptions = {}): Plugin[] {
       }
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
 
-      const serverDirectives = ['\'use server\'', '"use server"']
-
-      const trimmedCode = code.trim()
-
-      const hasServerDirective = serverDirectives.some(
-        directive =>
-          trimmedCode.startsWith(directive) || code.includes(directive),
-      )
-
       const isInFunctionsDir
         = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
-      const hasServerFunctionSignature
-        = (code.includes('export async function')
-          || code.includes('export function'))
-        && code.includes('\'use server\'')
 
-      if (
-        hasServerDirective
-        || (isInFunctionsDir && hasServerFunctionSignature)
-      ) {
-        return true
+      if (isInFunctionsDir) {
+        return false
       }
 
-      return false
+      const hasClientDirective = hasTopLevelDirective(code, 'use client')
+      if (hasClientDirective) {
+        return false
+      }
+
+      const hasClientPatterns
+        = code.includes('react-dom/client')
+          || code.includes('ReactDOM.createRoot')
+          || code.includes('document.')
+          || code.includes('window.')
+          || code.includes('localStorage')
+          || code.includes('sessionStorage')
+          || code.includes('navigator.')
+          || code.includes('history.')
+          || (code.includes('rari/client') && (code.includes('useRouter') || code.includes('RouterProvider')))
+          || /addEventListener\s*\(/.test(code)
+          || /removeEventListener\s*\(/.test(code)
+
+      if (hasClientPatterns) {
+        return false
+      }
+
+      const hasNodeImports
+        = code.includes('from \'node:')
+          || code.includes('from "node:')
+          || code.includes('from \'fs\'')
+          || code.includes('from "fs"')
+          || code.includes('from \'path\'')
+          || code.includes('from "path"')
+          || code.includes('from \'crypto\'')
+          || code.includes('from "crypto"')
+
+      const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(code)
+
+      const hasServerOnlyPatterns
+        = code.includes('readFileSync')
+          || code.includes('writeFileSync')
+          || code.includes('process.env')
+          || code.includes('await fetch')
+
+      const hasReactImport = code.includes('react') || code.includes('React')
+      const hasJSX = /<[A-Z]/.test(code) || code.includes('jsx') || code.includes('tsx')
+
+      const hasDefaultExport = /export\s+default/.test(code)
+      const hasFunctionDeclaration = /function\s+\w+/.test(code) || /const\s+\w+\s*=\s*\([^)]*\)\s*=>/.test(code)
+      const hasReactComponent = (hasReactImport || hasJSX) && (hasDefaultExport || hasFunctionDeclaration)
+
+      const isServerComponent
+        = hasNodeImports
+          || hasAsyncDefaultExport
+          || hasServerOnlyPatterns
+          || (hasReactComponent && !hasClientDirective)
+
+      return isServerComponent
     }
     catch {
       return false
@@ -255,7 +225,9 @@ export function rari(options: RariOptions = {}): Plugin[] {
   }
 
   function transformServerModule(code: string, id: string): string {
-    if (!hasTopLevelDirective(code, 'use server')) {
+    const isInFunctionsDir = id.includes('/functions/') || id.includes('\\\\functions\\\\')
+
+    if (isInFunctionsDir && !hasTopLevelDirective(code, 'use server')) {
       return code
     }
 
@@ -276,7 +248,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]
-          newCode += `\n// Register server reference for default export (function declaration)\n`
+          newCode += `\n// Register server reference for default export\n`
           newCode += `registerServerReference(${functionName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
         }
         else {
@@ -317,7 +289,10 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string): string {
-    if (hasTopLevelDirective(code, 'use server')) {
+    const isServerFunction = hasTopLevelDirective(code, 'use server')
+    const isServerComp = isServerComponent(id)
+
+    if (isServerFunction || isServerComp) {
       const exportedNames = parseExportedNames(code)
       if (exportedNames.length === 0) {
         return ''
@@ -636,7 +611,7 @@ if (import.meta.hot) {
         }
       }
 
-      if (hasTopLevelDirective(code, 'use server')) {
+      if (isServerComponent(id)) {
         componentTypeCache.set(id, 'server')
         serverComponents.add(id)
 
@@ -649,8 +624,7 @@ if (import.meta.hot) {
         else {
           let clientTransformedCode = transformClientModule(code, id)
 
-          if (hasTopLevelDirective(code, 'use server')) {
-            clientTransformedCode = `// HMR acceptance for server component
+          clientTransformedCode = `// HMR acceptance for server component
 if (import.meta.hot) {
   import.meta.hot.accept();
 }
@@ -661,9 +635,22 @@ if (typeof globalThis !== 'undefined') {
 }
 
 ${clientTransformedCode}`
-          }
 
           return clientTransformedCode
+        }
+      }
+
+      if (hasTopLevelDirective(code, 'use server')) {
+        componentTypeCache.set(id, 'server')
+
+        if (
+          environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
+        ) {
+          return transformServerModule(code, id)
+        }
+        else {
+          return transformClientModule(code, id)
         }
       }
 
@@ -903,7 +890,6 @@ const ${componentName} = registerClientReference(
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
-                    cache_config: component.cacheConfig,
                   }),
                 },
               )
@@ -1123,7 +1109,6 @@ const ${componentName} = registerClientReference(
                   body: JSON.stringify({
                     component_id: component.id,
                     component_code: component.code,
-                    cache_config: component.cacheConfig,
                   }),
                 },
               )
@@ -1400,7 +1385,7 @@ export function createClientModuleMap() {
 
       if (id === 'virtual:rsc-integration') {
         return `
-import React, { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, createElement, isValidElement, cloneElement } from 'react';
 
 // Client component registration for RSC system compatibility
 if (typeof globalThis.__clientComponents === 'undefined') {
@@ -1691,7 +1676,7 @@ class RscClient {
     const boundaryRowMap = new Map();
 
     const convertRscToReact = (element) => {
-      if (!React) {
+      if (!createElement) {
         console.warn('React not available for RSC conversion');
         return null;
       }
@@ -1710,7 +1695,7 @@ class RscClient {
 
           if (type === 'react.suspense' || type === 'suspense') {
 
-            const suspenseWrapper = React.createElement('div',
+            const suspenseWrapper = createElement('div',
               {
                 'data-boundary-id': props?.boundaryId,
                 boundaryId: props?.boundaryId,
@@ -1726,7 +1711,7 @@ class RscClient {
           if (props?.children) {
             const child = convertRscToReact(props.children);
             if (Array.isArray(child)) {
-              processedProps.children = child.map((c, i) => React.isValidElement(c) ? React.cloneElement(c, { key: (c.key ?? i) }) : c);
+              processedProps.children = child.map((c, i) => isValidElement(c) ? cloneElement(c, { key: (c.key ?? i) }) : c);
             } else {
               processedProps.children = child;
             }
@@ -1739,7 +1724,7 @@ class RscClient {
                 const clientKey = mod.id + '#' + (mod.name || 'default');
                 const clientComponent = getClientComponent(clientKey);
                 if (clientComponent) {
-                  const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                  const reactElement = createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
                   return reactElement;
                 }
               }
@@ -1748,7 +1733,7 @@ class RscClient {
             if (type.includes('.tsx#') || type.includes('.jsx#')) {
               const clientComponent = getClientComponent(type);
               if (clientComponent) {
-                const reactElement = React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
+                const reactElement = createElement(clientComponent, key ? { ...processedProps, key } : processedProps);
                 return reactElement;
               } else {
                 console.warn('Failed to resolve client component:', type);
@@ -1759,7 +1744,7 @@ class RscClient {
                 const { boundaryId, ...rest } = processedProps;
                 processedProps = rest;
               }
-              const reactElement = React.createElement(type, key ? { ...processedProps, key } : processedProps);
+              const reactElement = createElement(type, key ? { ...processedProps, key } : processedProps);
               return reactElement;
             }
           } else {
@@ -1892,9 +1877,9 @@ class RscClient {
     let streamingComponent = null;
 
     const StreamingWrapper = () => {
-      const [renderTrigger, setRenderTrigger] = React.useState(0);
+      const [renderTrigger, setRenderTrigger] = useState(0);
 
-      React.useEffect(() => {
+      useEffect(() => {
         streamingComponent = {
           updateBoundary: (boundaryId, resolvedContent) => {
             boundaryUpdates.set(boundaryId, resolvedContent);
@@ -1913,7 +1898,7 @@ class RscClient {
       const renderWithBoundaryUpdates = (element) => {
         if (!element) return null;
 
-        if (React.isValidElement(element)) {
+        if (isValidElement(element)) {
           if (element.props && element.props.boundaryId) {
             const boundaryId = element.props.boundaryId;
             const resolvedContent = boundaryUpdates.get(boundaryId);
@@ -1925,7 +1910,7 @@ class RscClient {
           if (element.props && element.props.children) {
             const updatedChildren = renderWithBoundaryUpdates(element.props.children);
             if (updatedChildren !== element.props.children) {
-              return React.cloneElement(element, { ...element.props, children: updatedChildren });
+              return cloneElement(element, { ...element.props, children: updatedChildren });
             }
           }
 
@@ -1947,9 +1932,9 @@ class RscClient {
 
     return {
       _isRscResponse: true,
-      _rscPromise: Promise.resolve(React.createElement(StreamingWrapper)),
+      _rscPromise: Promise.resolve(createElement(StreamingWrapper)),
       readRoot() {
-        return Promise.resolve(React.createElement(StreamingWrapper));
+        return Promise.resolve(createElement(StreamingWrapper));
       }
     };
   }
@@ -2105,7 +2090,7 @@ class RscClient {
           if (clientComponent) {
             actualType = clientComponent;
           } else {
-            actualType = ({ children, ...restProps }) => React.createElement(
+            actualType = ({ children, ...restProps }) => createElement(
               'div',
               {
                 ...restProps,
@@ -2117,7 +2102,7 @@ class RscClient {
                   backgroundColor: '#fff0f0'
                 }
               },
-              React.createElement('small', { style: { color: '#c00' } },
+              createElement('small', { style: { color: '#c00' } },
                 'Missing Client Component: ' + type
               ),
               children
@@ -2133,7 +2118,7 @@ class RscClient {
             if (clientComponent) {
               actualType = clientComponent;
             } else {
-              actualType = ({ children, ...restProps }) => React.createElement(
+              actualType = ({ children, ...restProps }) => createElement(
                 'div',
                 {
                   ...restProps,
@@ -2145,7 +2130,7 @@ class RscClient {
                     backgroundColor: '#fff0f0'
                   }
                 },
-                React.createElement('small', { style: { color: '#c00' } },
+                createElement('small', { style: { color: '#c00' } },
                   'Missing Client Component: ' + moduleData.name + ' (' + moduleData.id + ')'
                 ),
                 children
@@ -2156,7 +2141,7 @@ class RscClient {
 
         const processedProps = props ? this.processPropsRecursively(props, modules) : {};
 
-        return React.createElement(actualType, { key, ...processedProps });
+        return createElement(actualType, { key, ...processedProps });
       } else {
         return elementData.map((item, index) => this.reconstructElementFromRscData(item, modules));
       }
@@ -2242,7 +2227,7 @@ class RscClient {
 const rscClient = new RscClient();
 
 function RscErrorComponent({ error, details }) {
-  return React.createElement('div',
+  return createElement('div',
     {
       className: 'rsc-error',
       style: {
@@ -2254,12 +2239,12 @@ function RscErrorComponent({ error, details }) {
         fontFamily: 'monospace'
       }
     },
-    React.createElement('h3', { style: { margin: '0 0 8px 0', color: '#c00' } }, 'RSC Error'),
-    React.createElement('p', { style: { margin: '0 0 8px 0' } }, error),
-    details && React.createElement('details',
+    createElement('h3', { style: { margin: '0 0 8px 0', color: '#c00' } }, 'RSC Error'),
+    createElement('p', { style: { margin: '0 0 8px 0' } }, error),
+    details && createElement('details',
       { style: { marginTop: '8px' } },
-      React.createElement('summary', { style: { cursor: 'pointer' } }, 'Error Details'),
-      React.createElement('pre',
+      createElement('summary', { style: { cursor: 'pointer' } }, 'Error Details'),
+      createElement('pre',
         { style: { fontSize: '12px', overflow: 'auto', backgroundColor: '#f5f5f5', padding: '8px' } },
         JSON.stringify(details, null, 2)
       )
@@ -2305,7 +2290,7 @@ function ServerComponentWrapper({
   }
 
   if (error) {
-    return React.createElement(RscErrorComponent, {
+    return createElement(RscErrorComponent, {
       error: 'Error loading component',
       details: { message: error.message, componentId }
     });
@@ -2313,7 +2298,7 @@ function ServerComponentWrapper({
 
     if (data) {
     if (data._isRscResponse) {
-      return React.createElement(Suspense,
+      return createElement(Suspense,
         { fallback: fallback || null },
         data.readRoot()
       );
@@ -2322,7 +2307,7 @@ function ServerComponentWrapper({
     }
   }
 
-  return React.createElement(RscErrorComponent, {
+  return createElement(RscErrorComponent, {
     error: 'No data received for component: ' + componentId,
     details: { componentId, dataType: typeof data, hasData: !!data }
   });
@@ -2364,9 +2349,9 @@ function createServerComponentWrapper(componentName, importPath) {
       }
     }, []);
 
-    return React.createElement(Suspense, {
+    return createElement(Suspense, {
       fallback: null
-    }, React.createElement(ServerComponentWrapper, {
+    }, createElement(ServerComponentWrapper, {
       key: componentName + '-' + mountKey, // Force re-mount with key change
       componentId: componentName,
       props: props,
@@ -2377,7 +2362,7 @@ function createServerComponentWrapper(componentName, importPath) {
   ServerComponent.displayName = 'ServerComponent(' + componentName + ')';
 
   return function(props) {
-    return React.createElement(ServerComponent, props);
+    return createElement(ServerComponent, props);
   };
 }
 
@@ -2507,10 +2492,6 @@ if (import.meta.hot) {
 }
 
 export {
-  React,
-  useState,
-  useEffect,
-  Suspense,
   createServerComponentWrapper,
   RscErrorComponent,
   rscClient
@@ -2570,76 +2551,7 @@ ${registrations.join('\n')}
 
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
 
-  const cacheMiddlewarePlugin: Plugin = {
-    name: 'rari:cache-middleware',
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (req.url?.startsWith('/@fs/')) {
-          res.setHeader('Cache-Control', 'no-cache')
-          next()
-          return
-        }
-
-        const url = req.url || ''
-        const pathname = url.split('?')[0]
-
-        if (
-          pathname
-          && !pathname.includes('.')
-          && !pathname.startsWith('/api')
-          && !pathname.startsWith('/rsc')
-        ) {
-          if (options.caching?.routes) {
-            for (const [pattern, cacheControl] of Object.entries(
-              options.caching.routes,
-            )) {
-              if (matchesPattern(pattern, pathname)) {
-                res.setHeader('cache-control', cacheControl)
-                break
-              }
-            }
-          }
-
-          const pagePath = pathname === '/' ? '/index' : pathname
-          const pageFilePath = path.join(
-            process.cwd(),
-            'src/pages',
-            `${pagePath.slice(1) || 'index'}.tsx`,
-          )
-
-          if (fs.existsSync(pageFilePath)) {
-            const pageContent = fs.readFileSync(pageFilePath, 'utf-8')
-            const cacheConfig = extractCacheConfigFromContent(pageContent)
-
-            if (cacheConfig) {
-              Object.entries(cacheConfig).forEach(([key, value]) => {
-                if (value) {
-                  res.setHeader(key, value)
-                }
-              })
-            }
-          }
-        }
-
-        next()
-      })
-    },
-    writeBundle() {
-      if (options.caching) {
-        const cacheConfigPath = path.join(
-          process.cwd(),
-          'dist',
-          'cache-config.json',
-        )
-        fs.writeFileSync(
-          cacheConfigPath,
-          JSON.stringify(options.caching, null, 2),
-        )
-      }
-    },
-  }
-
-  return [mainPlugin, serverBuildPlugin, cacheMiddlewarePlugin]
+  return [mainPlugin, serverBuildPlugin]
 }
 
 export function defineRariConfig(

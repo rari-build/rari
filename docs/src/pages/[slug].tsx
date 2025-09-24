@@ -1,7 +1,6 @@
-import type { PageProps } from 'rari/client'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 
-export default function DocPage({ params }: PageProps) {
+export default function DocPage({ params }: { params: { slug: string } }) {
   const slug = params?.slug
 
   if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {

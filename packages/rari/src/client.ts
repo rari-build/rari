@@ -1,5 +1,3 @@
-export { Link } from './router'
-
 export {
   buildSearchString,
   buildUrl,
@@ -36,8 +34,6 @@ export type {
   LoadingProps,
   NavigationOptions,
   NavigationState,
-  PageComponent,
-  PageProps,
   RouteGenerationOptions,
   RouteMatch,
   RouteMeta,

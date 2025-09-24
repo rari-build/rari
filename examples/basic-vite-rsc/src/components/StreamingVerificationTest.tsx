@@ -1,5 +1,3 @@
-'use server'
-
 import React, { Suspense } from 'react'
 
 function delay(ms: number) {

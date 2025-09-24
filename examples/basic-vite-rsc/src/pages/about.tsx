@@ -1,13 +1,16 @@
-import type { PageProps } from 'rari/client'
-import { Link } from 'rari/client'
-
-export default function AboutPage({ params, searchParams }: PageProps) {
+export default function AboutPage({
+  params = {},
+  searchParams = {}
+}: {
+  params?: { [key: string]: string | undefined }
+  searchParams?: { [key: string]: string | string[] | undefined }
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <Link
-            to="/"
+          <a
+            href="/"
             className="inline-flex items-center text-purple-600 hover:text-purple-800 transition-colors"
           >
             <svg
@@ -24,7 +27,7 @@ export default function AboutPage({ params, searchParams }: PageProps) {
               />
             </svg>
             Back to Home
-          </Link>
+          </a>
         </div>
 
         <div className="text-center mb-12">
@@ -239,8 +242,8 @@ export default function AboutPage({ params, searchParams }: PageProps) {
                 automatic prefetching.
               </p>
               <div className="space-y-3">
-                <Link
-                  to="/users/123"
+                <a
+                  href="/users/123"
                   className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <span className="text-gray-700">User Profile Example</span>
@@ -255,9 +258,9 @@ export default function AboutPage({ params, searchParams }: PageProps) {
                       strokeLinejoin="round"
                       strokeWidth={2}
                       d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </Link>
+                  />
+                </svg>
+                </a>
               </div>
             </div>
           </div>

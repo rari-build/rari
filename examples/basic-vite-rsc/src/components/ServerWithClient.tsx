@@ -1,5 +1,3 @@
-'use server'
-
 import Counter from './Counter'
 
 export default function ServerWithClient() {

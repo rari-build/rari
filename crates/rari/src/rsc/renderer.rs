@@ -632,17 +632,12 @@ impl RscRenderer {
             && (content.contains("from 'react'")
                 || content.contains("from \"react\"")
                 || content.contains("React"));
-        let has_server_directive =
-            content.contains("'use server'") || content.contains("\"use server\"");
         let has_client_directive =
             content.contains("'use client'") || content.contains("\"use client\"");
         let has_component_export = content.contains("export default function")
             || content.contains("export default async function");
 
-        has_jsx
-            || has_server_directive
-            || has_client_directive
-            || (has_react_import && has_component_export)
+        has_jsx || has_client_directive || (has_react_import && has_component_export)
     }
 
     async fn register_dependency_if_needed(&mut self, dep: String) -> Result<(), RariError> {

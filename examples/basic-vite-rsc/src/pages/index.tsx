@@ -1,7 +1,10 @@
-import type { PageProps } from 'rari/client'
-import { Link } from 'rari/client'
-
-export default function HomePage({ params, searchParams }: PageProps) {
+export default function HomePage({
+  params = {},
+  searchParams = {},
+}: {
+  params?: { [key: string]: string | undefined }
+  searchParams?: { [key: string]: string | string[] | undefined }
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -47,8 +50,8 @@ export default function HomePage({ params, searchParams }: PageProps) {
             </div>
           </div>
 
-          <Link
-            to="/about"
+          <a
+            href="/about"
             className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -60,10 +63,10 @@ export default function HomePage({ params, searchParams }: PageProps) {
               {' '}
               <code className="bg-gray-100 px-2 py-1 rounded">/about</code>
             </div>
-          </Link>
+          </a>
 
-          <Link
-            to="/users/123"
+          <a
+            href="/users/123"
             className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -75,10 +78,10 @@ export default function HomePage({ params, searchParams }: PageProps) {
               {' '}
               <code className="bg-gray-100 px-2 py-1 rounded">/users/[id]</code>
             </div>
-          </Link>
+          </a>
 
-          <Link
-            to="/examples"
+          <a
+            href="/examples"
             className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -92,24 +95,7 @@ export default function HomePage({ params, searchParams }: PageProps) {
               {' '}
               <code className="bg-gray-100 px-2 py-1 rounded">/examples</code>
             </div>
-          </Link>
-
-          <Link
-            to="/cache-test"
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">
-              🗄️ Cache Test
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Test cache headers and RSC caching functionality
-            </p>
-            <div className="text-sm text-gray-500">
-              Route:
-              {' '}
-              <code className="bg-gray-100 px-2 py-1 rounded">/cache-test</code>
-            </div>
-          </Link>
+          </a>
         </div>
 
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">

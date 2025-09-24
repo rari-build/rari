@@ -1,5 +1,3 @@
-'use server'
-
 // This is a React Server Component
 export default async function ServerTime() {
   // This runs on the server!

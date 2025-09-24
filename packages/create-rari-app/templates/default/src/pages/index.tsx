@@ -1,10 +1,8 @@
-import type { PageProps } from 'rari/client'
-import { Link } from 'rari/client'
 import { useState } from 'react'
 import ServerTime from '../components/ServerTime'
 import Welcome from '../components/Welcome'
 
-export default function HomePage({ params, searchParams }: PageProps) {
+export default function HomePage({ params, searchParams }: { params: { [key: string]: string }, searchParams: { [key: string]: string } }) {
   const [count, setCount] = useState(0)
 
   return (
@@ -88,8 +86,8 @@ export default function HomePage({ params, searchParams }: PageProps) {
             </div>
           </div>
 
-          <Link
-            to="/about"
+          <a
+            href="/about"
             className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow block"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -101,7 +99,7 @@ export default function HomePage({ params, searchParams }: PageProps) {
               {' '}
               <code className="bg-gray-100 px-2 py-1 rounded">/about</code>
             </div>
-          </Link>
+          </a>
         </div>
 
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-8">

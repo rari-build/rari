@@ -43,6 +43,73 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     outDir: string,
     routes: Route[],
   ): Promise<void> => {
+    const isServerComponent = (filePath: string): boolean => {
+      try {
+        const fullPath = path.resolve(opts.pagesDir, filePath)
+        if (!require('node:fs').existsSync(fullPath)) {
+          return false
+        }
+        const code = require('node:fs').readFileSync(fullPath, 'utf-8')
+
+        const hasClientDirective = code.includes('\'use client\'') || code.includes('"use client"')
+        if (hasClientDirective) {
+          return false
+        }
+
+        const hasClientPatterns
+          = code.includes('react-dom/client')
+            || code.includes('ReactDOM.createRoot')
+            || code.includes('document.')
+            || code.includes('window.')
+            || code.includes('localStorage')
+            || code.includes('sessionStorage')
+            || code.includes('navigator.')
+            || code.includes('history.')
+            || (code.includes('rari/client') && (code.includes('useRouter') || code.includes('RouterProvider')))
+            || /addEventListener\s*\(/.test(code)
+            || /removeEventListener\s*\(/.test(code)
+
+        if (hasClientPatterns) {
+          return false
+        }
+
+        const hasNodeImports
+          = /from\s+['"]node:/.test(code)
+            || /from\s+['"]fs['"]/.test(code)
+            || /from\s+['"]path['"]/.test(code)
+            || /from\s+['"]crypto['"]/.test(code)
+            || /from\s+['"]util['"]/.test(code)
+            || /from\s+['"]os['"]/.test(code)
+            || /from\s+['"]process['"]/.test(code)
+
+        const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(code)
+
+        const hasServerOnlyPatterns
+          = code.includes('readFileSync')
+            || code.includes('writeFileSync')
+            || code.includes('process.env')
+            || code.includes('await fetch')
+
+        const hasReactImport = code.includes('react') || code.includes('React')
+        const hasJSX = /<[A-Z]/.test(code) || code.includes('jsx') || code.includes('tsx')
+
+        const hasDefaultExport = /export\s+default/.test(code)
+        const hasFunctionDeclaration = /function\s+\w+/.test(code) || /const\s+\w+\s*=\s*\([^)]*\)\s*=>/.test(code)
+        const hasReactComponent = (hasReactImport || hasJSX) && (hasDefaultExport || hasFunctionDeclaration)
+
+        const isServer
+          = hasNodeImports
+            || hasAsyncDefaultExport
+            || hasServerOnlyPatterns
+            || (hasReactComponent && !hasClientDirective)
+
+        return isServer
+      }
+      catch {
+        return false
+      }
+    }
+
     const imports = routes
       .map((route, index) => {
         const componentName = `Page${index}`
@@ -51,14 +118,37 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           .replace(/\\/g, '/')
           .replace(/\.(tsx?|jsx?)$/, '')
 
-        return `import ${componentName} from '${importPath.startsWith('.') ? importPath : `./${importPath}`}'`
+        const fullImportPath = importPath.startsWith('.') ? importPath : `./${importPath}`
+
+        if (isServerComponent(route.filePath)) {
+          return `// Server component - using RSC wrapper for ${route.filePath}
+const ${componentName} = null // Server component placeholder`
+        }
+        else {
+          return `import ${componentName} from '${fullImportPath}'`
+        }
       })
       .join('\n')
 
     const routeDefinitions = routes
       .map((route, index) => {
         const componentName = `Page${index}`
-        return `  {
+        const componentId = route.filePath
+          .replace(/\.(tsx?|jsx?)$/, '')
+          .replace(/[^\w/-]/g, '_')
+
+        if (isServerComponent(route.filePath)) {
+          return `  {
+    path: ${JSON.stringify(route.path)},
+    filePath: ${JSON.stringify(route.filePath)},
+    component: createServerComponentWrapper('pages/${componentId}', '${route.filePath}'),
+    isDynamic: ${route.isDynamic},
+    paramNames: ${JSON.stringify(route.paramNames)},
+    meta: ${JSON.stringify(route.meta)},
+  }`
+        }
+        else {
+          return `  {
     path: ${JSON.stringify(route.path)},
     filePath: ${JSON.stringify(route.filePath)},
     component: ${componentName},
@@ -66,11 +156,13 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     paramNames: ${JSON.stringify(route.paramNames)},
     meta: ${JSON.stringify(route.meta)},
   }`
+        }
       })
       .join(',\n')
 
     const content = `// This file is auto-generated. Do not edit manually.
 /* eslint-disable perfectionist/sort-imports */
+import { createServerComponentWrapper } from 'virtual:rsc-integration'
 ${imports}
 
 export const routes = [

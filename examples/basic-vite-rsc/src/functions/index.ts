@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Get the list of grocery items
  * @returns {Promise<Array<{id: number, text: string, completed: boolean}>>} Array of grocery items

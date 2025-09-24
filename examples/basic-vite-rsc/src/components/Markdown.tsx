@@ -1,5 +1,3 @@
-'use server'
-
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cwd } from 'node:process'

@@ -1,5 +1,3 @@
-'use server'
-
 import { add } from '../functions'
 
 interface TestComponentProps {

@@ -1,5 +1,3 @@
-'use server'
-
 import process from 'node:process'
 
 function EnvTestComponent() {

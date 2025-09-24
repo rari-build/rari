@@ -1,5 +1,4 @@
 import type { Plugin } from 'rolldown-vite'
-import type { PageCacheConfig } from '../router/cache'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -15,7 +14,6 @@ interface ServerComponentManifest {
       bundlePath: string
       dependencies: string[]
       hasNodeImports: boolean
-      cacheConfig?: PageCacheConfig
     }
   >
   version: string
@@ -37,7 +35,6 @@ export class ServerComponentBuilder {
       originalCode: string
       dependencies: string[]
       hasNodeImports: boolean
-      cacheConfig?: PageCacheConfig
     }
   >()
 
@@ -59,32 +56,48 @@ export class ServerComponentBuilder {
   }
 
   isServerComponent(filePath: string): boolean {
+    if (filePath.includes('node_modules')) {
+      return false
+    }
+
+    if (filePath.includes('/.rari/') || filePath.includes('\\.rari\\')) {
+      return false
+    }
+
     try {
       if (!fs.existsSync(filePath)) {
         return false
       }
       const code = fs.readFileSync(filePath, 'utf-8')
 
-      const serverDirectives = [
-        '\'use server\'',
-        '"use server"',
-        '/* @server */',
-        '// @server',
-      ]
-
-      const trimmedCode = code.trim()
-
-      const hasServerDirective = serverDirectives.some(
-        directive =>
-          trimmedCode.startsWith(directive) || code.includes(directive),
-      )
-
       const isInFunctionsDir
         = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
-      const hasServerFunctionSignature
-        = (code.includes('export async function')
-          || code.includes('export function'))
-        && code.includes('\'use server\'')
+
+      if (isInFunctionsDir) {
+        return false
+      }
+
+      const hasClientDirective = code.includes('\'use client\'') || code.includes('"use client"')
+      if (hasClientDirective) {
+        return false
+      }
+
+      const hasClientPatterns =
+        code.includes('react-dom/client') ||
+        code.includes('ReactDOM.createRoot') ||
+        code.includes('document.') ||
+        code.includes('window.') ||
+        code.includes('localStorage') ||
+        code.includes('sessionStorage') ||
+        code.includes('navigator.') ||
+        code.includes('history.') ||
+        (code.includes('rari/client') && (code.includes('useRouter') || code.includes('RouterProvider'))) ||
+        /addEventListener\s*\(/.test(code) ||
+        /removeEventListener\s*\(/.test(code)
+
+      if (hasClientPatterns) {
+        return false
+      }
 
       const hasNodeImports
         = code.includes('from \'node:')
@@ -93,17 +106,31 @@ export class ServerComponentBuilder {
           || code.includes('from "fs"')
           || code.includes('from \'path\'')
           || code.includes('from "path"')
+          || code.includes('from \'crypto\'')
+          || code.includes('from "crypto"')
 
-      const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(
-        code,
-      )
+      const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(code)
 
-      const isServer
-        = hasServerDirective
-          || (isInFunctionsDir && hasServerFunctionSignature)
-          || (hasNodeImports && hasAsyncDefaultExport)
+      const hasServerOnlyPatterns =
+        code.includes('readFileSync') ||
+        code.includes('writeFileSync') ||
+        code.includes('process.env') ||
+        code.includes('await fetch')
 
-      return isServer
+      const hasReactImport = code.includes('react') || code.includes('React')
+      const hasJSX = /<[A-Z]/.test(code) || code.includes('jsx') || code.includes('tsx')
+
+      const hasDefaultExport = /export\s+default/.test(code)
+      const hasFunctionDeclaration = /function\s+\w+/.test(code) || /const\s+\w+\s*=\s*\(\s*[^)]*\s*\)\s*=>/.test(code)
+      const hasReactComponent = (hasReactImport || hasJSX) && (hasDefaultExport || hasFunctionDeclaration)
+
+      const isServerComponent =
+        hasNodeImports ||
+        hasAsyncDefaultExport ||
+        hasServerOnlyPatterns ||
+        (hasReactComponent && !hasClientDirective)
+
+      return isServerComponent
     }
     catch {
       return false
@@ -146,44 +173,15 @@ export class ServerComponentBuilder {
     const code = fs.readFileSync(filePath, 'utf-8')
     const dependencies = this.extractDependencies(code)
     const hasNodeImports = this.hasNodeImports(code)
-    const cacheConfig = this.extractCacheConfig(code)
 
     this.serverComponents.set(filePath, {
       filePath,
       originalCode: code,
       dependencies,
       hasNodeImports,
-      cacheConfig,
     })
   }
 
-  private extractCacheConfig(code: string): PageCacheConfig | undefined {
-    try {
-      const cacheConfigRegex = /export\s+const\s+cacheConfig\s*[:=]\s*(\{[^}]*\})/
-      const match = code.match(cacheConfigRegex)
-
-      if (match) {
-        const configStr = match[1]
-        const cacheControlMatch = configStr.match(/'cache-control'\s*:\s*['"]([^'"]+)['"]/)
-        const varyMatch = configStr.match(/'vary'\s*:\s*['"]([^'"]+)['"]/)
-
-        const config: PageCacheConfig = {}
-        if (cacheControlMatch) {
-          config['cache-control'] = cacheControlMatch[1]
-        }
-        if (varyMatch) {
-          config.vary = varyMatch[1]
-        }
-
-        return Object.keys(config).length > 0 ? config : undefined
-      }
-    }
-    catch (error) {
-      console.warn(`Failed to extract cache config from component: ${error}`)
-    }
-
-    return undefined
-  }
 
   private extractDependencies(code: string): string[] {
     const dependencies: string[] = []
@@ -256,8 +254,8 @@ export class ServerComponentBuilder {
     )
   }
 
-  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string, cacheConfig?: PageCacheConfig }>> {
-    const components: Array<{ id: string, code: string, cacheConfig?: PageCacheConfig }> = []
+  async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string }>> {
+    const components: Array<{ id: string, code: string }> = []
 
     for (const [filePath, component] of this.serverComponents) {
       const relativePath = path.relative(this.projectRoot, filePath)
@@ -268,7 +266,6 @@ export class ServerComponentBuilder {
       components.push({
         id: componentId,
         code: transformedCode,
-        cacheConfig: component.cacheConfig,
       })
     }
 

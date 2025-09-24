@@ -1,5 +1,3 @@
-'use server'
-
 import { getTodosList } from '../functions'
 
 export default async function ShoppingList() {

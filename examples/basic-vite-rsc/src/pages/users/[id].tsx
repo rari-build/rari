@@ -1,7 +1,10 @@
-import type { PageProps } from 'rari/client'
-import { Link } from 'rari/client'
-
-export default function UserProfilePage({ params, searchParams }: PageProps) {
+export default function UserProfilePage({
+  params = {},
+  searchParams = {}
+}: {
+  params?: { [key: string]: string | undefined }
+  searchParams?: { [key: string]: string | string[] | undefined }
+}) {
   const { id } = params
 
   const users = {
@@ -89,8 +92,8 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 py-8 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <div className="mb-8">
-            <Link
-              to="/"
+            <a
+              href="/"
               className="inline-flex items-center text-red-600 hover:text-red-800 transition-colors"
             >
               <svg
@@ -107,7 +110,7 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
                 />
               </svg>
               Back to Home
-            </Link>
+            </a>
           </div>
 
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
@@ -144,14 +147,14 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
               </h3>
               <div className="space-y-2">
                 {Object.keys(users).map(userId => (
-                  <Link
+                  <a
                     key={userId}
-                    to={`/users/${userId}`}
+                    href={`/users/${userId}`}
                     className="block text-blue-600 hover:text-blue-800 transition-colors"
                   >
                     /users/
                     {userId}
-                  </Link>
+                  </a>
                 ))}
               </div>
             </div>
@@ -165,10 +168,10 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-cyan-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <Link
-            to="/"
-            className="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition-colors"
-          >
+            <a
+              href="/"
+              className="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
             <svg
               className="w-5 h-5 mr-2"
               fill="none"
@@ -183,7 +186,7 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
               />
             </svg>
             Back to Home
-          </Link>
+          </a>
         </div>
 
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-8">
@@ -374,9 +377,9 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
                   .filter(u => u.id !== id)
                   .slice(0, 3)
                   .map(otherUser => (
-                    <Link
+                    <a
                       key={otherUser.id}
-                      to={`/users/${otherUser.id}`}
+                      href={`/users/${otherUser.id}`}
                       className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <span className="text-2xl mr-3">{otherUser.avatar}</span>
@@ -402,7 +405,7 @@ export default function UserProfilePage({ params, searchParams }: PageProps) {
                           d="M9 5l7 7-7 7"
                         />
                       </svg>
-                    </Link>
+                    </a>
                   ))}
               </div>
             </div>

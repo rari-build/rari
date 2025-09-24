@@ -1,5 +1,3 @@
-'use server'
-
 interface NpmPackageInfo {
   'dist-tags': {
     latest: string

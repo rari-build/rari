@@ -16,7 +16,7 @@ export {
   withRouter,
 } from './router'
 
-export { Link, Navigate } from './router'
+export { Navigate } from './router'
 
 export type * from './types'
 

@@ -135,8 +135,8 @@ Zero Errors:              100% success      (all test scenarios)
 my-rari-app/
 ├── src/
 │   ├── components/
-│   │   ├── ServerTime.tsx    # Server components ('use server')
-│   │   └── Welcome.tsx       # Client components
+│   │   ├── ServerTime.tsx    # Server components
+│   │   └── Welcome.tsx       # Client components ('use client')
 │   ├── styles/
 │   │   └── index.css
 │   ├── App.tsx               # Root component
@@ -149,8 +149,6 @@ my-rari-app/
 
 ### Server Component
 ```tsx
-'use server'
-
 export default async function UserProfile({ userId }: { userId: string }) {
   // This runs on the server
   const user = await fetch(`/api/users/${userId}`).then(r => r.json())
@@ -183,8 +181,6 @@ export default function Counter() {
 
 ### NPM Package Usage
 ```tsx
-'use server'
-
 import MarkdownIt from 'markdown-it'
 
 export default async function BlogPost({ content }: { content: string }) {

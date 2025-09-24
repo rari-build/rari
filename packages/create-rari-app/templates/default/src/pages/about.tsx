@@ -1,7 +1,4 @@
-import type { PageProps } from 'rari/client'
-import { Link } from 'rari/client'
-
-export default function AboutPage({ params, searchParams }: PageProps) {
+export default function AboutPage({ params, searchParams }: { params: { [key: string]: string }, searchParams: { [key: string]: string } }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -214,8 +211,8 @@ export default function AboutPage({ params, searchParams }: PageProps) {
         </div>
 
         <div className="text-center">
-          <Link
-            to="/"
+          <a
+            href="/"
             className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <svg
@@ -232,7 +229,7 @@ export default function AboutPage({ params, searchParams }: PageProps) {
               />
             </svg>
             Back to Home
-          </Link>
+          </a>
         </div>
       </div>
     </div>

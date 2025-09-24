@@ -1,5 +1,4 @@
 import type { ComponentType, ReactNode } from 'react'
-import type { PageCacheConfig } from './cache'
 
 export interface Route {
   path: string
@@ -18,7 +17,6 @@ export interface RouteMeta {
   title?: string
   description?: string
   requiresAuth?: boolean
-  cacheConfig?: PageCacheConfig
   [key: string]: any
 }
 
@@ -58,14 +56,8 @@ export interface RouterConfig {
   errorComponent?: ComponentType<{ error: Error, retry: () => void }>
 }
 
-export interface PageProps {
-  params: RouteParams
-  searchParams: SearchParams
-  meta?: RouteMeta
-}
-
 export type PageComponent<P = Record<string, unknown>> = ComponentType<
-  PageProps & P
+  { params: RouteParams, searchParams: SearchParams, meta?: RouteMeta } & P
 >
 
 export interface RouterContext {

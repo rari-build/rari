@@ -1,5 +1,3 @@
-'use server'
-
 interface StressTestProps {
   itemCount?: number
 }

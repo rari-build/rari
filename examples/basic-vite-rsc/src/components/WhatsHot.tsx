@@ -1,5 +1,3 @@
-'use server'
-
 interface BlueskyPost {
   uri: string
   cid: string

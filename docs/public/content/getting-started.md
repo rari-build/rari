@@ -62,8 +62,6 @@ export default defineConfig({
 Create `src/components/ServerTime.tsx`:
 
 ```tsx
-'use server'
-
 // This is a React Server Component
 export default async function ServerTime() {
   // This runs on the server!
@@ -134,8 +132,6 @@ npm install markdown-it
 Create `src/components/MarkdownPost.tsx`:
 
 ```tsx
-'use server'
-
 import MarkdownIt from 'markdown-it'
 
 interface MarkdownPostProps {
@@ -230,8 +226,8 @@ A typical Rari project (created with `create-rari-app`) looks like this:
 my-rari-app/
 ├── src/
 │   ├── components/          # Reusable React components
-│   │   ├── ServerTime.tsx   # Server components ('use server')
-│   │   └── Welcome.tsx      # Client components
+│   │   ├── ServerTime.tsx   # Server components
+│   │   └── Welcome.tsx      # Client components ('use client')
 │   ├── pages/               # File-based routing
 │   │   ├── index.tsx        # Home page (/)
 │   │   ├── about.tsx        # About page (/about)
@@ -288,9 +284,11 @@ Use square brackets for dynamic route parameters:
 
 ```tsx
 // src/pages/users/[id].tsx
-import type { PageProps } from 'rari/client'
-
-export default function UserPage({ params }: PageProps) {
+export default function UserPage({
+  params
+}: {
+  params: { id: string }
+}) {
   const { id } = params
 
   return (
@@ -321,9 +319,11 @@ Use spread syntax for catch-all routes:
 
 ```tsx
 // src/pages/docs/[...slug].tsx
-import type { PageProps } from 'rari/client'
-
-export default function DocsPage({ params }: PageProps) {
+export default function DocsPage({
+  params
+}: {
+  params: { slug: string[] }
+}) {
   const { slug } = params // slug is an array: ['getting-started', 'installation']
 
   return (
@@ -408,11 +408,8 @@ function Routes() {
 - Can use async/await and server-only APIs
 - Cannot use browser APIs or event handlers
 - Automatically serialized for the client
-- Use `'use server'` directive for clarity
 
 ```tsx
-'use server'
-
 // Server Component (default)
 export default async function ServerComponent() {
   const data = await fetch('https://api.example.com/data')
@@ -425,8 +422,11 @@ export default async function ServerComponent() {
 - Run in the browser
 - Can use hooks, event handlers, browser APIs
 - Cannot use server-only APIs
+- Use `'use client'` directive to mark explicitly
 
 ```tsx
+'use client'
+
 import { useState } from 'react'
 
 export default function ClientComponent() {
@@ -447,17 +447,33 @@ export default function ClientComponent() {
 }
 ```
 
+### Server Functions/Actions
+- Use `'use server'` directive for server functions that can be called from client components
+- Place in `/functions/` directory for organization
+
+```tsx
+'use server'
+
+export async function createUser(formData: FormData) {
+  const name = formData.get('name') as string
+  const email = formData.get('email') as string
+
+  const user = await database.users.create({ name, email })
+  return user
+}
+```
+
 ## Common Patterns
 
 ### Loading Data in Routes
 
 ```tsx
-'use server'
-
 // src/pages/users/[id].tsx
-import type { PageProps } from 'rari/client'
-
-export default async function UserProfile({ params }: PageProps) {
+export default async function UserProfile({
+  params
+}: {
+  params: { id: string }
+}) {
   const { id } = params
 
   // Fetch data on the server
@@ -480,8 +496,6 @@ export default async function UserProfile({ params }: PageProps) {
 ### Combining Server and Client
 
 ```tsx
-'use server'
-
 // Server component that includes client components
 import ClientCounter from '../components/ClientCounter'
 
@@ -533,8 +547,6 @@ export default function LoginForm() {
 ### Error Handling
 
 ```tsx
-'use server'
-
 export default async function DataComponent() {
   try {
     const data = await fetchSomeData()
