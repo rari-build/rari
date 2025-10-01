@@ -3,4 +3,3 @@ dist/
 node_modules/
 packages/*/bin/
 .pnpm-store/
-.rari/

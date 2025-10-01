@@ -116,7 +116,6 @@ node_modules/
 .pnpm-store/
 
 # Build outputs
-.rari/
 dist/
 
 # Environment variables

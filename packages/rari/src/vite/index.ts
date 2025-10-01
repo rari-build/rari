@@ -67,10 +67,6 @@ export function rari(options: RariOptions = {}): Plugin[] {
       return false
     }
 
-    if (filePath.includes('/.rari/') || filePath.includes('\\.rari\\')) {
-      return false
-    }
-
     let pathForFsOperations = filePath
     try {
       pathForFsOperations = fs.realpathSync(filePath)

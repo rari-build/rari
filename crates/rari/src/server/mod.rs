@@ -95,30 +95,22 @@ impl Server {
         Self::load_app_router_components(&mut renderer, &config).await?;
 
         let app_router = {
-            let manifest_paths = if config.is_production() {
-                vec!["dist/app-routes.json"]
-            } else {
-                vec![".rari/app-routes.json", "dist/app-routes.json"]
-            };
+            let manifest_path = "dist/app-routes.json";
 
-            let mut loaded_router = None;
-            for manifest_path in manifest_paths {
-                match app_router::AppRouter::from_file(manifest_path).await {
-                    Ok(router) => {
-                        info!(
-                            "Loaded app router from {} with {} routes",
-                            manifest_path,
-                            router.manifest().routes.len()
-                        );
-                        loaded_router = Some(Arc::new(router));
-                        break;
-                    }
-                    Err(e) => {
-                        debug!("No app router manifest found at {}: {}", manifest_path, e);
-                    }
+            match app_router::AppRouter::from_file(manifest_path).await {
+                Ok(router) => {
+                    info!(
+                        "Loaded app router from {} with {} routes",
+                        manifest_path,
+                        router.manifest().routes.len()
+                    );
+                    Some(Arc::new(router))
+                }
+                Err(e) => {
+                    debug!("No app router manifest found at {}: {}", manifest_path, e);
+                    None
                 }
             }
-            loaded_router
         };
 
         let state = ServerState {
@@ -190,12 +182,7 @@ impl Server {
             router = router.layer(middleware::from_fn(security_headers_middleware));
         }
 
-        let has_app_router = if config.is_production() {
-            std::path::Path::new("dist/app-routes.json").exists()
-        } else {
-            std::path::Path::new(".rari/app-routes.json").exists()
-                || std::path::Path::new("dist/app-routes.json").exists()
-        };
+        let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
 
         if has_app_router {
             info!("App router enabled - using app route handler");

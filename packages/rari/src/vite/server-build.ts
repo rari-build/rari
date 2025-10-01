@@ -60,10 +60,6 @@ export class ServerComponentBuilder {
       return false
     }
 
-    if (filePath.includes('/.rari/') || filePath.includes('\\.rari\\')) {
-      return false
-    }
-
     try {
       if (!fs.existsSync(filePath)) {
         return false

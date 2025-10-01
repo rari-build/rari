@@ -38,8 +38,6 @@ lerna-debug.log*
 # OS generated files
 Thumbs.db
 
-# Rari generated files
-.rari/
 
 # Railway
 .railway/

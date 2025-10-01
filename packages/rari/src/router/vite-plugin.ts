@@ -14,7 +14,7 @@ interface RariRouterPluginOptions {
 const DEFAULT_OPTIONS: Required<RariRouterPluginOptions> = {
   appDir: 'src/app',
   extensions: ['.tsx', '.jsx', '.ts', '.js'],
-  outDir: '.rari',
+  outDir: 'dist',
 }
 
 export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
