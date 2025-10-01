@@ -892,6 +892,8 @@ const ${componentName} = registerClientReference(
         const mode
           = process.env.NODE_ENV === 'production' ? 'production' : 'development'
 
+        const vitePort = server.config.server.port || 5173
+
         const args = [
           '--mode',
           mode,
@@ -907,6 +909,7 @@ const ${componentName} = registerClientReference(
           env: {
             ...process.env,
             RUST_LOG: process.env.RUST_LOG || 'info',
+            RARI_VITE_PORT: vitePort.toString(),
           },
         })
 

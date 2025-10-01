@@ -165,14 +165,10 @@ impl Server {
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
 
-            router = router.layer(middleware::from_fn(cors_middleware));
-
             if let Err(e) = check_vite_server_health().await {
                 warn!("Vite development server check failed: {}", e);
                 warn!("Make sure to start your Vite dev server for HMR to work");
             }
-        } else {
-            router = router.layer(middleware::from_fn(security_headers_middleware));
         }
 
         let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
@@ -188,6 +184,12 @@ impl Server {
             let static_service =
                 ServeDir::new(config.public_dir()).append_index_html_on_directories(true);
             router = router.fallback_service(static_service);
+        }
+
+        if config.is_development() {
+            router = router.layer(middleware::from_fn(cors_middleware));
+        } else {
+            router = router.layer(middleware::from_fn(security_headers_middleware));
         }
 
         let middleware_stack =
@@ -1463,7 +1465,10 @@ async fn handle_app_route(
                     .expect("Valid RSC response"))
             } else {
                 debug!("Sending HTML shell for initial page load");
-                let html_shell = r#"<!DOCTYPE html>
+
+                let vite_port = state.config.vite.port;
+                let html_shell = format!(
+                    r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1473,10 +1478,12 @@ async fn handle_app_route(
 <body>
   <div id="root"></div>
   <script type="module">
-    import 'http://localhost:5173/@id/virtual:rari-entry-client';
+    import 'http://localhost:{}/@id/virtual:rari-entry-client';
   </script>
 </body>
-</html>"#;
+</html>"#,
+                    vite_port
+                );
 
                 Ok(Response::builder()
                     .status(StatusCode::OK)
