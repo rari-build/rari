@@ -1497,8 +1497,7 @@ async fn handle_app_route(
 <body>
   <div id="root"></div>
   <script type="module">
-    import { renderApp } from 'http://localhost:3001/src/entry-client.tsx';
-    renderApp();
+    import 'http://localhost:3001/@id/virtual:rari-entry-client';
   </script>
 </body>
 </html>"#;
