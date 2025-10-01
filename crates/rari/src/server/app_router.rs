@@ -109,7 +109,7 @@ impl AppRouter {
         debug!("Matching route for path: {}", normalized_path);
 
         for route in &self.manifest.routes {
-            if let Some(params) = self.match_route_pattern(&route, &normalized_path) {
+            if let Some(params) = self.match_route_pattern(route, &normalized_path) {
                 debug!("Matched route: {} -> {}", normalized_path, route.path);
 
                 let layouts = self.resolve_layouts(&route.path);

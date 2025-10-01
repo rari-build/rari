@@ -49,12 +49,9 @@ pub struct ServerState {
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
     pub start_time: std::time::Instant,
-    pub component_cache_configs: Arc<
-        tokio::sync::RwLock<rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>>,
-    >,
-    pub page_cache_configs: Arc<
-        tokio::sync::RwLock<rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>>,
-    >,
+    pub component_cache_configs:
+        Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
+    pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<app_router::AppRouter>>,
 }
 
@@ -76,7 +73,7 @@ impl Server {
             debug!("No .env file found or error loading .env: {}", e);
         }
 
-        let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
+        let env_vars: FxHashMap<String, String> = std::env::vars().collect();
 
         let js_runtime = Arc::new(JsExecutionRuntime::new(Some(env_vars)));
 
@@ -118,12 +115,8 @@ impl Server {
             config: Arc::new(config.clone()),
             request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             start_time: std::time::Instant::now(),
-            component_cache_configs: Arc::new(tokio::sync::RwLock::new(
-                rustc_hash::FxHashMap::default(),
-            )),
-            page_cache_configs: Arc::new(
-                tokio::sync::RwLock::new(rustc_hash::FxHashMap::default()),
-            ),
+            component_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
+            page_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             app_router,
         };
 
@@ -369,15 +362,13 @@ impl Server {
         Ok(route)
     }
 
-    fn extract_cache_config_from_content(
-        content: &str,
-    ) -> Option<rustc_hash::FxHashMap<String, String>> {
+    fn extract_cache_config_from_content(content: &str) -> Option<FxHashMap<String, String>> {
         let cache_config_regex =
             Regex::new(r"export\s+const\s+cacheConfig\s*:\s*\w+\s*=\s*\{([^}]+)\}").ok()?;
 
         if let Some(captures) = cache_config_regex.captures(content) {
             let config_content = captures.get(1)?.as_str();
-            let mut config = rustc_hash::FxHashMap::default();
+            let mut config = FxHashMap::default();
 
             let cache_control_regex = Regex::new(r"'cache-control'\s*:\s*'([^']+)'").ok()?;
             if let Some(cache_control_match) = cache_control_regex.captures(config_content) {
@@ -402,9 +393,9 @@ impl Server {
     }
 
     fn find_matching_cache_config<'a>(
-        page_configs: &'a rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>,
+        page_configs: &'a FxHashMap<String, FxHashMap<String, String>>,
         route_path: &str,
-    ) -> Option<&'a rustc_hash::FxHashMap<String, String>> {
+    ) -> Option<&'a FxHashMap<String, String>> {
         if let Some(config) = page_configs.get(route_path) {
             return Some(config);
         }
@@ -456,7 +447,7 @@ impl Server {
                             if let Some(cache_str) = cache_control.as_str()
                                 && !page_configs.contains_key(route)
                             {
-                                let mut cache_config = rustc_hash::FxHashMap::default();
+                                let mut cache_config = FxHashMap::default();
                                 cache_config
                                     .insert("cache-control".to_string(), cache_str.to_string());
                                 page_configs.insert(route.clone(), cache_config);
@@ -687,7 +678,7 @@ pub struct RenderResponse {
 pub struct RegisterRequest {
     pub component_id: String,
     pub component_code: String,
-    pub cache_config: Option<rustc_hash::FxHashMap<String, String>>,
+    pub cache_config: Option<FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1404,17 +1395,17 @@ async fn cors_preflight_ok() -> Response {
 }
 
 fn extract_search_params(
-    query_params: std::collections::HashMap<String, String>,
-) -> rustc_hash::FxHashMap<String, Vec<String>> {
-    let mut search_params = rustc_hash::FxHashMap::default();
+    query_params: FxHashMap<String, String>,
+) -> FxHashMap<String, Vec<String>> {
+    let mut search_params = FxHashMap::default();
     for (key, value) in query_params {
         search_params.insert(key, vec![value]);
     }
     search_params
 }
 
-fn extract_headers(headers: &axum::http::HeaderMap) -> rustc_hash::FxHashMap<String, String> {
-    let mut header_map = rustc_hash::FxHashMap::default();
+fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, String> {
+    let mut header_map = FxHashMap::default();
     for (name, value) in headers {
         if let Ok(value_str) = value.to_str() {
             header_map.insert(name.to_string(), value_str.to_string());
@@ -1427,9 +1418,7 @@ fn extract_headers(headers: &axum::http::HeaderMap) -> rustc_hash::FxHashMap<Str
 async fn handle_app_route(
     State(state): State<ServerState>,
     uri: axum::http::Uri,
-    axum::extract::Query(query_params): axum::extract::Query<
-        std::collections::HashMap<String, String>,
-    >,
+    axum::extract::Query(query_params): axum::extract::Query<FxHashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
