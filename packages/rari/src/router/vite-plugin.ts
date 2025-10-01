@@ -13,6 +13,8 @@ import {
 
 interface RariRouterPluginOptions {
   pagesDir?: string
+  appDir?: string
+  useAppRouter?: boolean
   extensions?: string[]
   outDir?: string
   generateTypes?: boolean
@@ -23,6 +25,8 @@ interface RariRouterPluginOptions {
 
 const DEFAULT_OPTIONS: Required<RariRouterPluginOptions> = {
   pagesDir: 'src/pages',
+  appDir: 'src/app',
+  useAppRouter: false,
   extensions: ['.tsx', '.jsx', '.ts', '.js'],
   outDir: '.rari',
   generateTypes: true,
@@ -250,6 +254,38 @@ export default routes
     }
   }
 
+  const generateAppRoutes = async (root: string): Promise<void> => {
+    if (!opts.useAppRouter) {
+      return
+    }
+
+    const appDir = path.resolve(root, opts.appDir)
+
+    try {
+      await fs.access(appDir)
+    } catch {
+      return
+    }
+
+    try {
+      const { generateAppRouteManifest, writeManifest } = await import('./app-routes')
+
+      const manifest = await generateAppRouteManifest(appDir, {
+        extensions: opts.extensions,
+      })
+
+      const outDir = path.resolve(root, opts.outDir)
+      await fs.mkdir(outDir, { recursive: true })
+
+      await writeManifest(manifest, path.join(outDir, 'app-routes.json'))
+
+      console.warn(`Generated app router manifest with ${manifest.routes.length} routes`)
+    }
+    catch (error) {
+      console.error('Failed to generate app routes:', error)
+    }
+  }
+
   const writeGeneratedFiles = async (
     root: string,
     routes: Route[],
@@ -266,6 +302,8 @@ export default routes
       if (opts.generateTypes) {
         await writeTypeDefinitions(outDir, routes)
       }
+
+      await generateAppRoutes(root)
     }
     catch (error) {
       console.error('Failed to write generated files:', error)
@@ -277,9 +315,13 @@ export default routes
       watcher.close()
     }
 
-    const pagesDir = path.resolve(root, opts.pagesDir)
+    const watchPaths = [path.resolve(root, opts.pagesDir)]
 
-    watcher = watch(pagesDir, {
+    if (opts.useAppRouter) {
+      watchPaths.push(path.resolve(root, opts.appDir))
+    }
+
+    watcher = watch(watchPaths, {
       ignored: /node_modules/,
       persistent: true,
       ignoreInitial: true,
@@ -299,6 +341,13 @@ export default routes
             )
             if (module) {
               server.reloadModule(module)
+            }
+
+            if (opts.useAppRouter && filePath.includes(opts.appDir)) {
+              server.ws.send({
+                type: 'full-reload',
+                path: '*'
+              })
             }
           }
         }
@@ -357,21 +406,33 @@ export default routes
       const { file, server } = ctx
 
       const pagesDir = path.resolve(server.config.root, opts.pagesDir)
+      const appDir = path.resolve(server.config.root, opts.appDir)
+
       const isPageFile
         = file.startsWith(pagesDir)
           && opts.extensions.some(ext => file.endsWith(ext))
 
-      if (isPageFile) {
+      const isAppFile
+        = opts.useAppRouter
+          && file.startsWith(appDir)
+          && opts.extensions.some(ext => file.endsWith(ext))
+
+      if (isPageFile || isAppFile) {
         const newRoutes = await generateRoutes(server.config.root)
         routes = newRoutes
 
         await writeGeneratedFiles(server.config.root, routes)
 
+        if (isAppFile) {
+          console.warn(`App router file changed: ${path.relative(server.config.root, file)}`)
+          return []
+        }
+
         return []
       }
     },
 
-    generateBundle() {
+    async generateBundle() {
       if (isBuilding) {
         this.emitFile({
           type: 'asset',
@@ -390,6 +451,21 @@ export default routes
             2,
           ),
         })
+
+        if (opts.useAppRouter) {
+          try {
+            const manifestPath = path.join(process.cwd(), opts.outDir, 'app-routes.json')
+            const manifestContent = await fs.readFile(manifestPath, 'utf-8')
+
+            this.emitFile({
+              type: 'asset',
+              fileName: 'app-routes.json',
+              source: manifestContent,
+            })
+          } catch (error) {
+            console.warn('App router manifest not found, skipping emission')
+          }
+        }
       }
     },
 

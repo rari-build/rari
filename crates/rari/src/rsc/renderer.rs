@@ -1117,9 +1117,13 @@ impl RscRenderer {
             return self.handle_client_reference(component_id, props).await;
         }
 
-        let component_found = self.component_exists(component_id);
-        if !component_found {
-            return Err(RariError::not_found(format!("Component not found: {component_id}")));
+        let is_app_router_component = component_id.starts_with("app/");
+
+        if !is_app_router_component {
+            let component_found = self.component_exists(component_id);
+            if !component_found {
+                return Err(RariError::not_found(format!("Component not found: {component_id}")));
+            }
         }
 
         let component_hash = hash_string(component_id);

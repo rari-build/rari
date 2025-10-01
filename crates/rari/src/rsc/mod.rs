@@ -1,6 +1,7 @@
 pub mod component;
 pub mod js_loader;
 pub mod jsx_transform;
+pub mod layout_renderer;
 pub mod renderer;
 pub mod rsc_tree;
 pub mod serializer;

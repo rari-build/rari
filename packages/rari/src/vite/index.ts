@@ -362,32 +362,7 @@ if (import.meta.hot) {
       return code
     }
 
-    let newCode = code.replace(/^['"]use client['"];?\s*$/gm, '')
-    newCode += '\n\n// Client component registration\n'
-    newCode
-      += 'import { registerClientComponent } from "virtual:rsc-integration";\n'
-
-    for (const name of exportedNames) {
-      if (name === 'default') {
-        const defaultExportMatch = code.match(
-          /export\s+default\s+function\s+(\w+)/,
-        )
-        const functionName = defaultExportMatch ? defaultExportMatch[1] : null
-
-        if (functionName) {
-          newCode += `\nif (typeof registerClientComponent === 'function') {\n`
-          newCode += `  registerClientComponent(${functionName}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`
-          newCode += `}\n`
-        }
-      }
-      else {
-        newCode += `\nif (typeof registerClientComponent === 'function') {\n`
-        newCode += `  registerClientComponent(${name}, ${JSON.stringify(path.relative(process.cwd(), id))}, ${JSON.stringify(name)});\n`
-        newCode += `}\n`
-      }
-    }
-
-    return newCode
+    return code.replace(/^['"]use client['"];?\s*$/gm, '')
   }
 
   function resolveImportToFilePath(
@@ -572,18 +547,6 @@ if (import.meta.hot) {
           config.environments.client.build.rollupOptions.input = {}
         }
 
-        if (
-          typeof config.environments.client.build.rollupOptions.input
-          === 'object'
-          && !Array.isArray(config.environments.client.build.rollupOptions.input)
-        ) {
-          (
-            config.environments.client.build.rollupOptions.input as Record<
-              string,
-              string
-            >
-          )['client-components'] = 'virtual:rsc-client-components'
-        }
       }
 
       return config
@@ -600,15 +563,7 @@ if (import.meta.hot) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
-        if (
-          environment
-          && (environment.name === 'rsc' || environment.name === 'ssr')
-        ) {
-          return transformClientModule(code, id)
-        }
-        else {
-          return transformClientModuleForClient(code, id)
-        }
+        return transformClientModuleForClient(code, id)
       }
 
       if (isServerComponent(id)) {
@@ -660,7 +615,7 @@ ${clientTransformedCode}`
       }
 
       if (cachedType === 'client') {
-        return transformClientModule(code, id)
+        return transformClientModuleForClient(code, id)
       }
 
       componentTypeCache.set(id, 'unknown')
@@ -702,12 +657,17 @@ ${clientTransformedCode}`
           && environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          serverImportedClientComponents.add(resolvedImportPath)
+          const importingFileIsClient = hasTopLevelDirective(code, 'use client')
+            || componentTypeCache.get(id) === 'client'
+            || id.includes('entry-client')
 
-          const originalImport = line
-          const componentName = importedDefault || 'default'
+          if (!importingFileIsClient) {
+            serverImportedClientComponents.add(resolvedImportPath)
 
-          const clientRefReplacement = `
+            const originalImport = line
+            const componentName = importedDefault || 'default'
+
+            const clientRefReplacement = `
 import { registerClientReference } from "react-server-dom-rari/server";
 const ${componentName} = registerClientReference(
   function() {
@@ -717,12 +677,13 @@ const ${componentName} = registerClientReference(
   ${JSON.stringify(importedDefault || 'default')}
 );`
 
-          modifiedCode = modifiedCode.replace(
-            originalImport,
-            clientRefReplacement,
-          )
-          hasServerImports = true
-          needsReactImport = true
+            modifiedCode = modifiedCode.replace(
+              originalImport,
+              clientRefReplacement,
+            )
+            hasServerImports = true
+            needsReactImport = true
+          }
         }
         else if (isServerComponent(resolvedImportPath)) {
           hasServerImports = true
@@ -880,6 +841,11 @@ const ${componentName} = registerClientReference(
 
           for (const component of components) {
             try {
+              const isAppRouterComponent = component.id.startsWith('app/')
+              if (isAppRouterComponent) {
+                continue
+              }
+
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
@@ -1099,6 +1065,11 @@ const ${componentName} = registerClientReference(
 
           for (const component of components) {
             try {
+              const isAppRouterComponent = component.id.startsWith('app/')
+              if (isAppRouterComponent) {
+                continue
+              }
+
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
@@ -2500,36 +2471,9 @@ export {
       }
 
       if (id === 'virtual:rsc-client-components') {
-        const srcDir = path.join(process.cwd(), 'src')
-        const scannedClientComponents = scanForClientComponents(srcDir)
-
-        const allClientComponents = new Set([
-          ...clientComponents,
-          ...scannedClientComponents,
-          ...serverImportedClientComponents,
-        ])
-
-        const imports: string[] = []
-        const registrations: string[] = []
-
-        Array.from(allClientComponents).forEach((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath)
-          const componentName = `ClientComponent${index}`
-
-          imports.push(
-            `import ${componentName} from ${JSON.stringify(componentPath)};`,
-          )
-          registrations.push(
-            `registerClientComponent(${componentName}, ${JSON.stringify(relativePath)}, "default");`,
-          )
-        })
-
         return `
-import { registerClientComponent } from "virtual:rsc-integration";
-
-${imports.join('\n')}
-
-${registrations.join('\n')}
+// Client components for app router are registered manually in entry-client.tsx
+export {}
 `
       }
     },

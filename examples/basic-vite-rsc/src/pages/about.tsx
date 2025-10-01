@@ -1,6 +1,6 @@
 export default function AboutPage({
   params = {},
-  searchParams = {}
+  searchParams = {},
 }: {
   params?: { [key: string]: string | undefined }
   searchParams?: { [key: string]: string | string[] | undefined }
@@ -258,8 +258,8 @@ export default function AboutPage({
                       strokeLinejoin="round"
                       strokeWidth={2}
                       d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                    />
+                  </svg>
                 </a>
               </div>
             </div>

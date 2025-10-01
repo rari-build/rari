@@ -20,6 +20,87 @@ use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
 
+pub async fn vite_src_proxy(
+    Path(path): Path<String>,
+    query: Query<FxHashMap<String, String>>,
+) -> impl IntoResponse {
+    let config = match Config::get() {
+        Some(config) => config,
+        None => {
+            error!("Failed to get global configuration for Vite proxy");
+            return create_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Configuration not available",
+            );
+        }
+    };
+
+    let client = Client::new();
+    let vite_base_url = format!("http://{}", config.vite_address());
+
+    let query_string = if query.0.is_empty() {
+        String::new()
+    } else {
+        let query_params = query
+            .0
+            .iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        format!("?{query_params}")
+    };
+
+    let target_url = format!("{vite_base_url}/src/{path}{query_string}");
+
+    debug!("Proxying src request to Vite server: {}", target_url);
+
+    match client.get(&target_url).send().await {
+        Ok(response) => {
+            let status = response.status();
+            let mut response_builder = Response::builder().status(status);
+
+            if let Some(headers) = response_builder.headers_mut() {
+                for (name, value) in response.headers() {
+                    if let (Ok(name), Ok(value)) = (
+                        HeaderName::from_bytes(name.as_ref()),
+                        HeaderValue::from_bytes(value.as_ref()),
+                    ) {
+                        headers.insert(name, value);
+                    }
+                }
+            }
+
+            match response_builder.body(Body::from_stream(response.bytes_stream())) {
+                Ok(response) => response,
+                Err(e) => {
+                    error!("Failed to build proxy response: {}", e);
+                    create_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to build response",
+                    )
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to proxy src request to Vite server: {}", e);
+
+            if e.is_connect() {
+                create_error_response(
+                    StatusCode::BAD_GATEWAY,
+                    &format!(
+                        "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
+                    ),
+                )
+            } else {
+                create_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("Proxy error: {e}"),
+                )
+            }
+        }
+    }
+}
+
 pub async fn vite_reverse_proxy(
     Path(path): Path<String>,
     query: Query<FxHashMap<String, String>>,

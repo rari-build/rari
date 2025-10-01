@@ -27,24 +27,51 @@ export {
 } from './router'
 
 export type {
-  ErrorBoundaryProps,
-  FileRouteInfo,
+  AppRouteEntry,
+  AppRouteManifest,
+  AppRouteMatch,
+  LayoutEntry,
+  LoadingEntry,
+  ErrorEntry,
+  NotFoundEntry,
+  RouteSegment,
+  RouteSegmentType,
+  PageProps,
   LayoutProps,
-  LinkProps,
   LoadingProps,
-  NavigationOptions,
-  NavigationState,
-  RouteGenerationOptions,
-  RouteMatch,
-  RouteMeta,
-  RouteParams,
-  RouterConfig,
+  ErrorProps,
+  NotFoundProps,
+  GenerateStaticParams,
+  GenerateMetadata,
   RouterContext,
-  RouterProviderProps,
-  Route as RouteType,
-  SearchParams,
 } from './router'
 
-export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
+export {
+  createHttpRuntimeClient,
+  HttpRuntimeClient,
+  ErrorBoundary,
+  createErrorBoundary,
+  createLoadingBoundary,
+  NotFound,
+  LoadingSpinner,
+  DefaultLoading,
+  DefaultError,
+} from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
+
+export {
+  extractServerProps,
+  extractServerPropsWithCache,
+  extractMetadata,
+  extractStaticParams,
+  hasServerSideDataFetching,
+  clearPropsCache,
+  clearPropsCacheForComponent,
+} from './router'
+
+export type {
+  ServerPropsResult,
+  MetadataResult,
+  StaticParamsResult,
+} from './router'

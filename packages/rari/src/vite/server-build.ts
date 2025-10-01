@@ -64,6 +64,13 @@ export class ServerComponentBuilder {
       return false
     }
 
+    const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || ''
+    if (fileName === 'entry-client.tsx' || fileName === 'entry-client.ts' ||
+        fileName === 'entry-client.jsx' || fileName === 'entry-client.js' ||
+        fileName === 'main.tsx' || fileName === 'main.ts') {
+      return false
+    }
+
     try {
       if (!fs.existsSync(filePath)) {
         return false
@@ -77,60 +84,23 @@ export class ServerComponentBuilder {
         return false
       }
 
-      const hasClientDirective = code.includes('\'use client\'') || code.includes('"use client"')
-      if (hasClientDirective) {
-        return false
+      const lines = code.split('\n')
+      let hasClientDirective = false
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+          continue
+        }
+        if (trimmed === '\'use client\'' || trimmed === '"use client"' ||
+            trimmed === '\'use client\';' || trimmed === '"use client";') {
+          hasClientDirective = true
+          break
+        }
+        if (trimmed) {
+          break
+        }
       }
-
-      const hasClientPatterns =
-        code.includes('react-dom/client') ||
-        code.includes('ReactDOM.createRoot') ||
-        code.includes('document.') ||
-        code.includes('window.') ||
-        code.includes('localStorage') ||
-        code.includes('sessionStorage') ||
-        code.includes('navigator.') ||
-        code.includes('history.') ||
-        (code.includes('rari/client') && (code.includes('useRouter') || code.includes('RouterProvider'))) ||
-        /addEventListener\s*\(/.test(code) ||
-        /removeEventListener\s*\(/.test(code)
-
-      if (hasClientPatterns) {
-        return false
-      }
-
-      const hasNodeImports
-        = code.includes('from \'node:')
-          || code.includes('from "node:')
-          || code.includes('from \'fs\'')
-          || code.includes('from "fs"')
-          || code.includes('from \'path\'')
-          || code.includes('from "path"')
-          || code.includes('from \'crypto\'')
-          || code.includes('from "crypto"')
-
-      const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(code)
-
-      const hasServerOnlyPatterns =
-        code.includes('readFileSync') ||
-        code.includes('writeFileSync') ||
-        code.includes('process.env') ||
-        code.includes('await fetch')
-
-      const hasReactImport = code.includes('react') || code.includes('React')
-      const hasJSX = /<[A-Z]/.test(code) || code.includes('jsx') || code.includes('tsx')
-
-      const hasDefaultExport = /export\s+default/.test(code)
-      const hasFunctionDeclaration = /function\s+\w+/.test(code) || /const\s+\w+\s*=\s*\(\s*[^)]*\s*\)\s*=>/.test(code)
-      const hasReactComponent = (hasReactImport || hasJSX) && (hasDefaultExport || hasFunctionDeclaration)
-
-      const isServerComponent =
-        hasNodeImports ||
-        hasAsyncDefaultExport ||
-        hasServerOnlyPatterns ||
-        (hasReactComponent && !hasClientDirective)
-
-      return isServerComponent
+      return !hasClientDirective
     }
     catch {
       return false
@@ -181,7 +151,6 @@ export class ServerComponentBuilder {
       hasNodeImports,
     })
   }
-
 
   private extractDependencies(code: string): string[] {
     const dependencies: string[] = []

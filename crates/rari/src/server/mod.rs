@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 
 use crate::runtime::JsExecutionRuntime;
@@ -7,7 +8,8 @@ use crate::server::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
 use crate::server::vite_proxy::{
-    check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_websocket_proxy,
+    check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_src_proxy,
+    vite_websocket_proxy,
 };
 use axum::http::HeaderValue;
 use axum::{
@@ -31,6 +33,7 @@ use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info, warn};
 
+pub mod app_router;
 pub mod config;
 pub mod request_middleware;
 pub mod vite_proxy;
@@ -52,6 +55,7 @@ pub struct ServerState {
     pub page_cache_configs: Arc<
         tokio::sync::RwLock<rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<String, String>>>,
     >,
+    pub app_router: Option<Arc<app_router::AppRouter>>,
 }
 
 pub struct Server {
@@ -87,6 +91,36 @@ impl Server {
         if config.is_production() {
             Self::load_production_components(&mut renderer).await?;
         }
+
+        Self::load_app_router_components(&mut renderer, &config).await?;
+
+        let app_router = {
+            let manifest_paths = if config.is_production() {
+                vec!["dist/app-routes.json"]
+            } else {
+                vec![".rari/app-routes.json", "dist/app-routes.json"]
+            };
+
+            let mut loaded_router = None;
+            for manifest_path in manifest_paths {
+                match app_router::AppRouter::from_file(manifest_path).await {
+                    Ok(router) => {
+                        info!(
+                            "Loaded app router from {} with {} routes",
+                            manifest_path,
+                            router.manifest().routes.len()
+                        );
+                        loaded_router = Some(Arc::new(router));
+                        break;
+                    }
+                    Err(e) => {
+                        debug!("No app router manifest found at {}: {}", manifest_path, e);
+                    }
+                }
+            }
+            loaded_router
+        };
+
         let state = ServerState {
             renderer: Arc::new(tokio::sync::Mutex::new(renderer)),
             config: Arc::new(config.clone()),
@@ -98,6 +132,7 @@ impl Server {
             page_cache_configs: Arc::new(
                 tokio::sync::RwLock::new(rustc_hash::FxHashMap::default()),
             ),
+            app_router,
         };
 
         if config.is_production() {
@@ -127,6 +162,7 @@ impl Server {
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
             .route("/api/rsc/register", post(register_component))
+            .route("/api/rsc/register-direct", post(register_component_direct))
             .route("/api/rsc/register-client", post(register_client_component))
             .route("/api/rsc/hmr-register", post(hmr_register_component))
             .route("/api/rsc/components", get(list_components))
@@ -141,7 +177,8 @@ impl Server {
 
             router = router
                 .route("/vite-server/", get(vite_websocket_proxy))
-                .route("/vite-server/{*path}", any(vite_reverse_proxy));
+                .route("/vite-server/{*path}", any(vite_reverse_proxy))
+                .route("/src/{*path}", any(vite_src_proxy));
 
             router = router.layer(middleware::from_fn(cors_middleware));
 
@@ -153,7 +190,18 @@ impl Server {
             router = router.layer(middleware::from_fn(security_headers_middleware));
         }
 
-        if config.is_production() {
+        let has_app_router = if config.is_production() {
+            std::path::Path::new("dist/app-routes.json").exists()
+        } else {
+            std::path::Path::new(".rari/app-routes.json").exists()
+                || std::path::Path::new("dist/app-routes.json").exists()
+        };
+
+        if has_app_router {
+            info!("App router enabled - using app route handler");
+            router =
+                router.route("/", get(handle_app_route)).route("/{*path}", get(handle_app_route));
+        } else if config.is_production() {
             router =
                 router.route("/", get(root_handler)).route("/{*path}", get(static_or_spa_handler));
         } else {
@@ -486,6 +534,150 @@ impl Server {
             .await
             .map_err(|e| RariError::internal(format!("Failed to register component: {e}")))
     }
+
+    async fn load_app_router_components(
+        renderer: &mut RscRenderer,
+        _config: &Config,
+    ) -> Result<(), RariError> {
+        info!("Loading app router components");
+
+        let server_dir = std::path::Path::new(DIST_DIR).join("server");
+        if !server_dir.exists() {
+            debug!(
+                "No server directory found at {}, skipping app router component loading",
+                server_dir.display()
+            );
+            return Ok(());
+        }
+
+        let mut loaded_count = 0;
+        Self::load_server_components_recursive(
+            &server_dir,
+            &server_dir,
+            renderer,
+            &mut loaded_count,
+        )
+        .await?;
+
+        info!("Loaded {} app router components", loaded_count);
+        Ok(())
+    }
+
+    fn load_server_components_recursive<'a>(
+        dir: &'a std::path::Path,
+        base_dir: &'a std::path::Path,
+        renderer: &'a mut RscRenderer,
+        loaded_count: &'a mut usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
+        Box::pin(async move {
+            let entries = std::fs::read_dir(dir).map_err(|e| {
+                RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
+            })?;
+
+            for entry in entries {
+                let entry = entry
+                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    Self::load_server_components_recursive(&path, base_dir, renderer, loaded_count)
+                        .await?;
+                } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
+                    let component_code = std::fs::read_to_string(&path).map_err(|e| {
+                        RariError::io(format!("Failed to read component file: {e}"))
+                    })?;
+
+                    let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
+                    let relative_str = relative_path
+                        .to_str()
+                        .unwrap_or("unknown")
+                        .replace(".js", "")
+                        .replace('\\', "/");
+
+                    let component_id = if relative_str.starts_with("app/") {
+                        relative_str.clone()
+                    } else {
+                        relative_path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string()
+                    };
+
+                    debug!("Loading component: {} from {:?}", component_id, path);
+
+                    let is_client_component = component_code.contains("'use client'")
+                        || component_code.contains("\"use client\"");
+
+                    let cleaned_code = strip_module_syntax(&component_code);
+
+                    match renderer
+                        .runtime
+                        .execute_script(
+                            format!("load_{}.js", component_id.replace('/', "_")),
+                            cleaned_code,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            debug!("Successfully executed component code: {}", component_id);
+
+                            let mark_client_script = if is_client_component {
+                                format!(
+                                    r#"(function() {{
+                                        const comp = globalThis["{}"];
+                                        if (comp && typeof comp === 'function') {{
+                                            comp.__isClientComponent = true;
+                                            comp.__clientComponentId = "{}";
+                                        }}
+                                        const exists = typeof globalThis["{}"] !== 'undefined';
+                                        const type = typeof globalThis["{}"];
+                                        return {{ exists, type, componentId: "{}", isClient: true }};
+                                    }})()"#,
+                                    component_id,
+                                    component_id,
+                                    component_id,
+                                    component_id,
+                                    component_id
+                                )
+                            } else {
+                                format!(
+                                    r#"(function() {{
+                                        const exists = typeof globalThis["{}"] !== 'undefined';
+                                        const type = typeof globalThis["{}"];
+                                        return {{ exists, type, componentId: "{}", isClient: false }};
+                                    }})()"#,
+                                    component_id, component_id, component_id
+                                )
+                            };
+
+                            match renderer
+                                .runtime
+                                .execute_script(
+                                    format!("verify_{}.js", component_id.replace('/', "_")),
+                                    mark_client_script,
+                                )
+                                .await
+                            {
+                                Ok(result) => {
+                                    info!("Component {} in globalThis: {:?}", component_id, result);
+                                    *loaded_count += 1;
+                                }
+                                Err(e) => {
+                                    error!("Failed to verify component {}: {}", component_id, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to execute component {}: {}", component_id, e);
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -601,6 +793,37 @@ async fn register_component(
     match result {
         Ok(_) => {
             info!("Successfully registered component: {}", request.component_id);
+
+            let renderer = state.renderer.lock().await;
+            let is_client =
+                renderer.serializer.lock().is_client_component_registered(&request.component_id);
+
+            if is_client {
+                let mark_script = format!(
+                    r#"(function() {{
+                        const comp = globalThis["{}"];
+                        if (comp && typeof comp === 'function') {{
+                            comp.__isClientComponent = true;
+                            comp.__clientComponentId = "{}";
+                        }}
+                    }})()"#,
+                    request.component_id, request.component_id
+                );
+
+                if let Err(e) = renderer
+                    .runtime
+                    .execute_script(
+                        format!("mark_client_{}.js", request.component_id.replace('/', "_")),
+                        mark_script,
+                    )
+                    .await
+                {
+                    error!("Failed to mark {} as client component: {}", request.component_id, e);
+                } else {
+                    debug!("Marked {} as client component", request.component_id);
+                }
+            }
+
             #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": true,
@@ -612,6 +835,92 @@ async fn register_component(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+async fn register_component_direct(
+    State(state): State<ServerState>,
+    Json(request): Json<RegisterRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    debug!("Registering component directly (no transform): {}", request.component_id);
+
+    if let Some(cache_config) = &request.cache_config {
+        let mut cache_configs = state.component_cache_configs.write().await;
+        cache_configs.insert(request.component_id.clone(), cache_config.clone());
+        debug!("Stored cache config for component: {}", request.component_id);
+    }
+
+    let result = {
+        let renderer = state.renderer.lock().await;
+
+        let cleaned_code = strip_module_syntax(&request.component_code);
+
+        renderer
+            .runtime
+            .execute_script(
+                format!("register_direct_{}.js", request.component_id.replace('/', "_")),
+                cleaned_code,
+            )
+            .await
+    };
+
+    match result {
+        Ok(_) => {
+            info!("Successfully registered component directly: {}", request.component_id);
+            #[allow(clippy::disallowed_methods)]
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "component_id": request.component_id
+            })))
+        }
+        Err(e) => {
+            error!("Failed to register component directly {}: {}", request.component_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+fn strip_module_syntax(code: &str) -> String {
+    let mut result = String::new();
+    let mut in_exports_comment = false;
+
+    for line in code.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == "\"use module\";" || trimmed == "'use module';" {
+            continue;
+        }
+
+        if trimmed.starts_with("// Exports:") {
+            in_exports_comment = true;
+            continue;
+        }
+
+        if in_exports_comment {
+            if trimmed.is_empty() || trimmed.starts_with("//") && !trimmed.contains("Exports:") {
+                in_exports_comment = false;
+                result.push_str(line);
+                result.push('\n');
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("import ") || trimmed.starts_with("import{") {
+            continue;
+        }
+
+        if trimmed.starts_with("export ") {
+            let without_export = line.replacen("export ", "", 1);
+            result.push_str(&without_export);
+            result.push('\n');
+        } else if trimmed.starts_with("export{") || trimmed.starts_with("export {") {
+            continue;
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
 }
 
 #[axum::debug_handler]
@@ -1105,6 +1414,144 @@ fn cors_preflight_response() -> Response {
 #[axum::debug_handler]
 async fn cors_preflight_ok() -> Response {
     cors_preflight_response()
+}
+
+fn extract_search_params(
+    query_params: std::collections::HashMap<String, String>,
+) -> rustc_hash::FxHashMap<String, Vec<String>> {
+    let mut search_params = rustc_hash::FxHashMap::default();
+    for (key, value) in query_params {
+        search_params.insert(key, vec![value]);
+    }
+    search_params
+}
+
+fn extract_headers(headers: &axum::http::HeaderMap) -> rustc_hash::FxHashMap<String, String> {
+    let mut header_map = rustc_hash::FxHashMap::default();
+    for (name, value) in headers {
+        if let Ok(value_str) = value.to_str() {
+            header_map.insert(name.to_string(), value_str.to_string());
+        }
+    }
+    header_map
+}
+
+#[axum::debug_handler]
+async fn handle_app_route(
+    State(state): State<ServerState>,
+    uri: axum::http::Uri,
+    axum::extract::Query(query_params): axum::extract::Query<
+        std::collections::HashMap<String, String>,
+    >,
+    headers: axum::http::HeaderMap,
+) -> Result<Response, StatusCode> {
+    let path = uri.path();
+    let app_router = match &state.app_router {
+        Some(router) => router,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    let route_match = match app_router.match_route(path) {
+        Ok(m) => m,
+        Err(_) => return Err(StatusCode::NOT_FOUND),
+    };
+
+    debug!("App route matched: {} -> {}", path, route_match.route.path);
+
+    let search_params = extract_search_params(query_params);
+
+    let request_headers = extract_headers(&headers);
+
+    let context = crate::rsc::layout_renderer::create_layout_context(
+        route_match.params.clone(),
+        search_params,
+        request_headers,
+    );
+
+    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+
+    match layout_renderer.render_route(&route_match, &context).await {
+        Ok(rsc_wire_format) => {
+            debug!("Successfully rendered route with layouts");
+
+            let accept_header = headers.get("accept").and_then(|v| v.to_str().ok()).unwrap_or("");
+
+            let wants_rsc = accept_header.contains("text/x-component");
+
+            if wants_rsc {
+                debug!("Sending RSC wire format (Accept: text/x-component)");
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/x-component")
+                    .body(Body::from(rsc_wire_format))
+                    .expect("Valid RSC response"))
+            } else {
+                debug!("Sending HTML shell for initial page load");
+                let html_shell = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rari App Router Example</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+    import { renderApp } from 'http://localhost:3001/src/entry-client.tsx';
+    renderApp();
+  </script>
+</body>
+</html>"#;
+
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .body(Body::from(html_shell))
+                    .expect("Valid HTML response"))
+            }
+        }
+        Err(e) => {
+            error!("Failed to render route: {}", e);
+
+            if let Some(error_entry) = &route_match.error {
+                match layout_renderer
+                    .render_error(&error_entry.file_path, &e.to_string(), &context)
+                    .await
+                {
+                    Ok(error_html) => Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .header("content-type", "text/html; charset=utf-8")
+                        .body(Body::from(error_html))
+                        .expect("Valid HTML response")),
+                    Err(_) => {
+                        let fallback_html = format!(
+                            r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Error - Rari App Router</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>Error</h1>
+    <p>Failed to render route: {}</p>
+    <p>Route: {}</p>
+</body>
+</html>"#,
+                            e, route_match.route.path
+                        );
+
+                        Ok(Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .header("content-type", "text/html; charset=utf-8")
+                            .body(Body::from(fallback_html))
+                            .expect("Valid HTML response"))
+                    }
+                }
+            } else {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

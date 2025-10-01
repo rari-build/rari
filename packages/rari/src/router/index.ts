@@ -1,4 +1,29 @@
 export {
+  AppRouteGenerator,
+  generateAppRouteManifest,
+  loadManifest,
+  writeManifest,
+} from './app-routes'
+
+export type * from './app-types'
+
+export {
+  extractServerProps,
+  extractServerPropsWithCache,
+  extractMetadata,
+  extractStaticParams,
+  hasServerSideDataFetching,
+  clearPropsCache,
+  clearPropsCacheForComponent,
+} from './props-extractor'
+
+export type {
+  ServerPropsResult,
+  MetadataResult,
+  StaticParamsResult,
+} from './props-extractor'
+
+export {
   Outlet,
   RouteComponent,
   RouterContext,
@@ -18,15 +43,12 @@ export {
 
 export { Navigate } from './router'
 
-export type * from './types'
-
 export {
   findMatchingRoute,
   isDynamicRoute,
   normalizePathname,
   parseUrl,
 } from './utils'
-
 export {
   buildSearchString,
   buildUrl,
