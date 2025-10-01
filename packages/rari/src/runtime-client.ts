@@ -1,4 +1,4 @@
-import React, { Suspense, Component, ReactNode, ReactElement } from 'react'
+import React, { Component, ReactElement, ReactNode, Suspense } from 'react'
 
 export interface RuntimeClient {
   initialize: () => Promise<void>
@@ -455,13 +455,13 @@ export class ErrorBoundary extends Component<
       }
 
       return React.createElement('div', {
-        style: { padding: '1rem', border: '1px solid #ef4444', borderRadius: '0.5rem', backgroundColor: '#fef2f2' }
+        style: { padding: '1rem', border: '1px solid #ef4444', borderRadius: '0.5rem', backgroundColor: '#fef2f2' },
       }, [
         React.createElement('h2', {
-          style: { color: '#dc2626', margin: '0 0 0.5rem 0' }
+          style: { color: '#dc2626', margin: '0 0 0.5rem 0' },
         }, 'Something went wrong'),
         React.createElement('p', {
-          style: { color: '#991b1b', margin: '0 0 1rem 0' }
+          style: { color: '#991b1b', margin: '0 0 1rem 0' },
         }, this.state.error?.message || 'An unexpected error occurred'),
         React.createElement('button', {
           onClick: reset,
@@ -471,9 +471,9 @@ export class ErrorBoundary extends Component<
             color: 'white',
             border: 'none',
             borderRadius: '0.25rem',
-            cursor: 'pointer'
-          }
-        }, 'Try again')
+            cursor: 'pointer',
+          },
+        }, 'Try again'),
       ])
     }
 
@@ -489,13 +489,13 @@ export function createErrorBoundary(fallback?: (error: Error, reset: () => void)
 
 export function NotFound() {
   return React.createElement('div', {
-    style: { padding: '2rem', textAlign: 'center' }
+    style: { padding: '2rem', textAlign: 'center' },
   }, [
     React.createElement('h1', {
-      style: { fontSize: '2rem', margin: '0 0 1rem 0' }
+      style: { fontSize: '2rem', margin: '0 0 1rem 0' },
     }, '404 - Page Not Found'),
     React.createElement('p', {
-      style: { color: '#6b7280', margin: '0 0 1rem 0' }
+      style: { color: '#6b7280', margin: '0 0 1rem 0' },
     }, 'The page you\'re looking for doesn\'t exist.'),
     React.createElement('button', {
       onClick: () => window.history.back(),
@@ -505,9 +505,9 @@ export function NotFound() {
         color: 'white',
         border: 'none',
         borderRadius: '0.25rem',
-        cursor: 'pointer'
-      }
-    }, 'Go back')
+        cursor: 'pointer',
+      },
+    }, 'Go back'),
   ])
 }
 
@@ -515,7 +515,7 @@ export function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' 
   const sizeMap = {
     small: '1rem',
     medium: '2rem',
-    large: '3rem'
+    large: '3rem',
   }
 
   return React.createElement('div', {
@@ -526,8 +526,8 @@ export function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' 
       border: '2px solid #e5e7eb',
       borderTop: '2px solid #3b82f6',
       borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
-    }
+      animation: 'spin 1s linear infinite',
+    },
   })
 }
 
@@ -538,26 +538,26 @@ export function DefaultLoading() {
       justifyContent: 'center',
       alignItems: 'center',
       padding: '2rem',
-      minHeight: '200px'
-    }
+      minHeight: '200px',
+    },
   }, React.createElement(LoadingSpinner))
 }
 
-export function DefaultError({ error, reset }: { error: Error; reset: () => void }) {
+export function DefaultError({ error, reset }: { error: Error, reset: () => void }) {
   return React.createElement('div', {
     style: {
       padding: '2rem',
       border: '1px solid #ef4444',
       borderRadius: '0.5rem',
       backgroundColor: '#fef2f2',
-      textAlign: 'center'
-    }
+      textAlign: 'center',
+    },
   }, [
     React.createElement('h2', {
-      style: { color: '#dc2626', margin: '0 0 1rem 0' }
+      style: { color: '#dc2626', margin: '0 0 1rem 0' },
     }, 'Something went wrong'),
     React.createElement('p', {
-      style: { color: '#991b1b', margin: '0 0 1rem 0' }
+      style: { color: '#991b1b', margin: '0 0 1rem 0' },
     }, error.message || 'An unexpected error occurred'),
     React.createElement('button', {
       onClick: reset,
@@ -567,9 +567,9 @@ export function DefaultError({ error, reset }: { error: Error; reset: () => void
         color: 'white',
         border: 'none',
         borderRadius: '0.25rem',
-        cursor: 'pointer'
-      }
-    }, 'Try again')
+        cursor: 'pointer',
+      },
+    }, 'Try again'),
   ])
 }
 

@@ -300,7 +300,7 @@ if (import.meta.hot) {
     return newCode
   }
 
-  function transformClientModuleForClient(code: string, id: string): string {
+  function transformClientModuleForClient(code: string, _id: string): string {
     if (!hasTopLevelDirective(code, 'use client')) {
       return code
     }
@@ -361,8 +361,8 @@ if (import.meta.hot) {
         find: string | RegExp
         replacement: string
       }> = Array.isArray((config.resolve as any).alias)
-          ? (config.resolve as any).alias
-          : []
+        ? (config.resolve as any).alias
+        : []
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
         const reactPath = require.resolve('react')
@@ -494,7 +494,6 @@ if (import.meta.hot) {
         if (!config.environments.client.build.rollupOptions.input) {
           config.environments.client.build.rollupOptions.input = {}
         }
-
       }
 
       return config
@@ -590,10 +589,10 @@ ${clientTransformedCode}`
 
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
-          || (fs.existsSync(resolvedImportPath)
-            && fs
-              .readFileSync(resolvedImportPath, 'utf-8')
-              .includes('\'use client\''))
+            || (fs.existsSync(resolvedImportPath)
+              && fs
+                .readFileSync(resolvedImportPath, 'utf-8')
+                .includes('\'use client\''))
 
         if (isClientComponent) {
           componentTypeCache.set(resolvedImportPath, 'client')
@@ -654,10 +653,10 @@ const ${componentName} = registerClientReference(
       if (hasServerImports) {
         const hasReactImport
           = modifiedCode.includes('import React')
-          || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
-          || modifiedCode.match(
-            /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
-          )
+            || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
+            || modifiedCode.match(
+              /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
+            )
 
         const hasWrapperImport = modifiedCode.includes(
           'createServerComponentWrapper',
@@ -707,8 +706,8 @@ const ${componentName} = registerClientReference(
         const isDevMode = process.env.NODE_ENV !== 'production'
         const hasJsx
           = modifiedCode.includes('</')
-          || modifiedCode.includes('/>')
-          || /\bJSX\b/.test(modifiedCode)
+            || modifiedCode.includes('/>')
+            || /\bJSX\b/.test(modifiedCode)
 
         if (
           !modifiedCode.includes('\'use client\'')
@@ -1171,8 +1170,7 @@ const ${componentName} = registerClientReference(
           ...scannedClientComponents,
         ])
 
-
-        const clientComponentsArray = Array.from(allClientComponents).filter(componentPath => {
+        const clientComponentsArray = Array.from(allClientComponents).filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
             const lines = code.split('\n')
@@ -1181,18 +1179,18 @@ const ${componentName} = registerClientReference(
               if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
                 continue
               }
-              if (trimmed === "'use client'" || trimmed === '"use client"' ||
-                trimmed === "'use client';" || trimmed === '"use client";') {
+              if (trimmed === '\'use client\'' || trimmed === '"use client"'
+                || trimmed === '\'use client\';' || trimmed === '"use client";') {
                 return true
               }
               break
             }
             return false
-          } catch {
+          }
+          catch {
             return false
           }
         })
-
 
         const imports = clientComponentsArray.map((componentPath, index) => {
           const relativePath = path.relative(process.cwd(), componentPath)

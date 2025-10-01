@@ -23,15 +23,13 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   let server: ViteDevServer | undefined
   let watcher: FSWatcher | undefined
 
-
-
   const generateAppRoutes = async (root: string): Promise<void> => {
-
     const appDir = path.resolve(root, opts.appDir)
 
     try {
       await fs.access(appDir)
-    } catch {
+    }
+    catch {
       return
     }
 
@@ -54,7 +52,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     }
   }
 
-
   const setupWatcher = (root: string): void => {
     if (watcher) {
       watcher.close()
@@ -76,7 +73,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           if (server && filePath.includes(opts.appDir)) {
             server.ws.send({
               type: 'full-reload',
-              path: '*'
+              path: '*',
             })
           }
         }
@@ -90,7 +87,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   return {
     name: 'rari-router',
 
-
     async buildStart() {
       await generateAppRoutes(process.cwd())
     },
@@ -99,7 +95,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       server = devServer
 
       setupWatcher(devServer.config.root)
-
     },
 
     async handleHotUpdate(ctx: any) {
@@ -129,7 +124,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           fileName: 'app-routes.json',
           source: manifestContent,
         })
-      } catch (error) {
+      }
+      catch {
         console.warn('App router manifest not found, skipping emission')
       }
     },

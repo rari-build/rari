@@ -105,7 +105,6 @@ export default async function Markdown({
         </style>
         <div
           className="markdown-content"
-          // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>

@@ -64,13 +64,6 @@ export class ServerComponentBuilder {
       return false
     }
 
-    const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || ''
-    if (fileName === 'entry-client.tsx' || fileName === 'entry-client.ts' ||
-        fileName === 'entry-client.jsx' || fileName === 'entry-client.js' ||
-        fileName === 'main.tsx' || fileName === 'main.ts') {
-      return false
-    }
-
     try {
       if (!fs.existsSync(filePath)) {
         return false
@@ -91,8 +84,8 @@ export class ServerComponentBuilder {
         if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
           continue
         }
-        if (trimmed === '\'use client\'' || trimmed === '"use client"' ||
-            trimmed === '\'use client\';' || trimmed === '"use client";') {
+        if (trimmed === '\'use client\'' || trimmed === '"use client"'
+          || trimmed === '\'use client\';' || trimmed === '"use client";') {
           hasClientDirective = true
           break
         }
