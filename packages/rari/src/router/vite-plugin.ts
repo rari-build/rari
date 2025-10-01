@@ -22,33 +22,38 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
   let server: ViteDevServer | undefined
   let watcher: FSWatcher | undefined
+  let cachedManifestContent: string | null = null
 
-  const generateAppRoutes = async (root: string): Promise<void> => {
+  const generateAppRoutes = async (root: string): Promise<string | null> => {
     const appDir = path.resolve(root, opts.appDir)
 
     try {
       await fs.access(appDir)
     }
     catch {
-      return
+      return null
     }
 
     try {
-      const { generateAppRouteManifest, writeManifest } = await import('./app-routes')
+      const { generateAppRouteManifest } = await import('./app-routes')
 
       const manifest = await generateAppRouteManifest(appDir, {
         extensions: opts.extensions,
       })
 
+      const manifestContent = JSON.stringify(manifest, null, 2)
+
       const outDir = path.resolve(root, opts.outDir)
       await fs.mkdir(outDir, { recursive: true })
-
-      await writeManifest(manifest, path.join(outDir, 'app-routes.json'))
+      await fs.writeFile(path.join(outDir, 'app-routes.json'), manifestContent, 'utf-8')
 
       console.warn(`Generated app router manifest with ${manifest.routes.length} routes`)
+
+      return manifestContent
     }
     catch (error) {
       console.error('Failed to generate app routes:', error)
+      return null
     }
   }
 
@@ -88,7 +93,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     name: 'rari-router',
 
     async buildStart() {
-      await generateAppRoutes(process.cwd())
+      cachedManifestContent = await generateAppRoutes(process.cwd())
     },
 
     configureServer(devServer: ViteDevServer) {
@@ -107,7 +112,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           && opts.extensions.some(ext => file.endsWith(ext))
 
       if (isAppFile) {
-        await generateAppRoutes(server.config.root)
+        cachedManifestContent = await generateAppRoutes(server.config.root)
 
         console.warn(`App router file changed: ${path.relative(server.config.root, file)}`)
         return []
@@ -115,18 +120,15 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     },
 
     async generateBundle() {
-      try {
-        const manifestPath = path.join(opts.outDir, 'app-routes.json')
-        const manifestContent = await fs.readFile(manifestPath, 'utf-8')
-
+      if (cachedManifestContent) {
         this.emitFile({
           type: 'asset',
           fileName: 'app-routes.json',
-          source: manifestContent,
+          source: cachedManifestContent,
         })
       }
-      catch {
-        console.warn('App router manifest not found, skipping emission')
+      else {
+        console.warn('App router manifest not generated, skipping emission')
       }
     },
 

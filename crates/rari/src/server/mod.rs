@@ -175,6 +175,11 @@ impl Server {
 
         if has_app_router {
             info!("App router enabled - using app route handler");
+
+            if config.is_production() {
+                router = router.route("/assets/{*path}", get(serve_static_asset));
+            }
+
             router =
                 router.route("/", get(handle_app_route)).route("/{*path}", get(handle_app_route));
         } else if config.is_production() {
@@ -1353,6 +1358,34 @@ async fn static_or_spa_handler(
     Err(StatusCode::NOT_FOUND)
 }
 
+async fn serve_static_asset(
+    State(state): State<ServerState>,
+    Path(asset_path): Path<String>,
+) -> Result<Response, StatusCode> {
+    let file_path = state.config.public_dir().join("assets").join(&asset_path);
+
+    if !file_path.exists() || !file_path.is_file() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    match std::fs::read(&file_path) {
+        Ok(content) => {
+            let content_type = get_content_type(&asset_path);
+            let cache_control = &state.config.caching.static_files;
+
+            Ok(Response::builder()
+                .header("content-type", content_type)
+                .header("cache-control", cache_control)
+                .body(Body::from(content))
+                .expect("Valid static asset response"))
+        }
+        Err(e) => {
+            error!("Failed to read static asset {}: {}", file_path.display(), e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
 fn get_content_type(path: &str) -> &'static str {
     if path.ends_with(".js") {
         "application/javascript"
@@ -1456,6 +1489,8 @@ async fn handle_app_route(
 
             let wants_rsc = accept_header.contains("text/x-component");
 
+            debug!("Accept header: '{}', wants_rsc: {}", accept_header, wants_rsc);
+
             if wants_rsc {
                 debug!("Sending RSC wire format (Accept: text/x-component)");
                 Ok(Response::builder()
@@ -1466,9 +1501,26 @@ async fn handle_app_route(
             } else {
                 debug!("Sending HTML shell for initial page load");
 
-                let vite_port = state.config.vite.port;
-                let html_shell = format!(
-                    r#"<!DOCTYPE html>
+                let index_path = state.config.public_dir().join("index.html");
+                if index_path.exists() && state.config.is_production() {
+                    match std::fs::read_to_string(&index_path) {
+                        Ok(html_content) => {
+                            return Ok(Response::builder()
+                                .status(StatusCode::OK)
+                                .header("content-type", "text/html; charset=utf-8")
+                                .body(Body::from(html_content))
+                                .expect("Valid HTML response"));
+                        }
+                        Err(e) => {
+                            error!("Failed to read built index.html: {}", e);
+                        }
+                    }
+                }
+
+                if state.config.is_development() {
+                    let vite_port = state.config.vite.port;
+                    let html_shell = format!(
+                        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1482,13 +1534,38 @@ async fn handle_app_route(
   </script>
 </body>
 </html>"#,
-                    vite_port
-                );
+                        vite_port
+                    );
+
+                    return Ok(Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "text/html; charset=utf-8")
+                        .body(Body::from(html_shell))
+                        .expect("Valid HTML response"));
+                }
+
+                let error_html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Build Required</title>
+</head>
+<body>
+  <div style="padding: 40px; font-family: sans-serif;">
+    <h1>Build Required</h1>
+    <p>Please build your application first:</p>
+    <pre>npm run build</pre>
+    <p>Or run in development mode with Vite:</p>
+    <pre>npm run dev</pre>
+  </div>
+</body>
+</html>"#;
 
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(html_shell))
+                    .body(Body::from(error_html))
                     .expect("Valid HTML response"))
             }
         }
