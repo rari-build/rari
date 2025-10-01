@@ -1,15 +1,8 @@
 import { rari, rariRouter } from 'rari/server'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
-  plugins: [
-    ...rari(),
-    rariRouter({
-      appDir: 'src/app',
-      useAppRouter: true,
-      extensions: ['.tsx', '.jsx', '.ts', '.js'],
-    }),
-  ],
+  plugins: [rari(), rariRouter()],
   server: {
     port: 3001,
   },
