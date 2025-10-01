@@ -1234,7 +1234,7 @@ export async function renderApp() {
   }
 
   try {
-    const rariServerUrl = window.location.origin.includes(':3001')
+    const rariServerUrl = window.location.origin.includes(':5173')
       ? 'http://localhost:3000'
       : window.location.origin;
     const url = rariServerUrl + window.location.pathname + window.location.search;

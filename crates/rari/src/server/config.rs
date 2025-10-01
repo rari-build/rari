@@ -34,7 +34,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             host: "127.0.0.1".to_string(),
-            port: 3000,
+            port: 5173,
             origin: None,
             enable_logging: true,
             timeout_seconds: 30,
@@ -54,7 +54,7 @@ impl Default for ViteConfig {
     fn default() -> Self {
         Self {
             host: "127.0.0.1".to_string(),
-            port: 3001,
+            port: 5173,
             enable_hmr_proxy: true,
             ws_protocol: "vite-hmr".to_string(),
         }
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(config.mode, Mode::Development);
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 3000);
-        assert_eq!(config.vite.port, 3001);
+        assert_eq!(config.vite.port, 5173);
     }
 
     #[test]
@@ -322,7 +322,7 @@ mod tests {
     #[test]
     fn test_vite_address() {
         let config = Config::default();
-        assert_eq!(config.vite_address(), "127.0.0.1:3001");
+        assert_eq!(config.vite_address(), "127.0.0.1:5173");
     }
 
     #[test]

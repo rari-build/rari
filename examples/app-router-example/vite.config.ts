@@ -3,7 +3,4 @@ import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
   plugins: [rari(), rariRouter()],
-  server: {
-    port: 3001,
-  },
 })
