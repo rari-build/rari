@@ -93,59 +93,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       }
 
       const hasClientDirective = hasTopLevelDirective(code, 'use client')
-      if (hasClientDirective) {
-        return false
-      }
-
-      const hasClientPatterns
-        = code.includes('react-dom/client')
-        || code.includes('ReactDOM.createRoot')
-        || code.includes('document.')
-        || code.includes('window.')
-        || code.includes('localStorage')
-        || code.includes('sessionStorage')
-        || code.includes('navigator.')
-        || code.includes('history.')
-        || (code.includes('rari/client') && (code.includes('useRouter') || code.includes('RouterProvider')))
-        || /addEventListener\s*\(/.test(code)
-        || /removeEventListener\s*\(/.test(code)
-
-      if (hasClientPatterns) {
-        return false
-      }
-
-      const hasNodeImports
-        = code.includes('from \'node:')
-        || code.includes('from "node:')
-        || code.includes('from \'fs\'')
-        || code.includes('from "fs"')
-        || code.includes('from \'path\'')
-        || code.includes('from "path"')
-        || code.includes('from \'crypto\'')
-        || code.includes('from "crypto"')
-
-      const hasAsyncDefaultExport = /export\s+default\s+async\s+function/.test(code)
-
-      const hasServerOnlyPatterns
-        = code.includes('readFileSync')
-        || code.includes('writeFileSync')
-        || code.includes('process.env')
-        || code.includes('await fetch')
-
-      const hasReactImport = code.includes('react') || code.includes('React')
-      const hasJSX = /<[A-Z]/.test(code) || code.includes('jsx') || code.includes('tsx')
-
-      const hasDefaultExport = /export\s+default/.test(code)
-      const hasFunctionDeclaration = /function\s+\w+/.test(code) || /const\s+\w+\s*=\s*\([^)]*\)\s*=>/.test(code)
-      const hasReactComponent = (hasReactImport || hasJSX) && (hasDefaultExport || hasFunctionDeclaration)
-
-      const isServerComponent
-        = hasNodeImports
-        || hasAsyncDefaultExport
-        || hasServerOnlyPatterns
-        || (hasReactComponent && !hasClientDirective)
-
-      return isServerComponent
+      return !hasClientDirective
     }
     catch {
       return false
@@ -1189,10 +1137,6 @@ const ${componentName} = registerClientReference(
 
     resolveId(id) {
       if (id === 'virtual:rsc-integration') {
-        return id
-      }
-
-      if (id === 'virtual:rsc-client-components') {
         return id
       }
 
@@ -2667,12 +2611,6 @@ export {
   RscErrorComponent,
   rscClient
 };
-`
-      }
-
-      if (id === 'virtual:rsc-client-components') {
-        return `
-export {}
 `
       }
     },
