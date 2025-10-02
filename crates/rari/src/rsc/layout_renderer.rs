@@ -41,14 +41,17 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        renderer
+        let promise_result = renderer
             .runtime
             .execute_script("compose_and_render".to_string(), composition_script)
             .await?;
 
-        let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
-        let result =
-            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?;
+        let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
+            promise_result
+        } else {
+            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
+            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+        };
 
         debug!("Composition result: {:?}", result);
 
@@ -109,7 +112,7 @@ impl LayoutRenderer {
 
         let mut script = format!(
             r#"
-            (async function() {{
+            (async () => {{
                 const React = globalThis.React || require('react');
                 const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
 
@@ -157,7 +160,7 @@ impl LayoutRenderer {
                 }}
 
                 if (!globalThis.renderToRSC) {{
-                    globalThis.renderToRSC = function(element, clientComponents = {{}}) {{
+                    globalThis.renderToRSC = async function(element, clientComponents = {{}}) {{
                         if (!element) return null;
 
                         if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {{
@@ -165,7 +168,11 @@ impl LayoutRenderer {
                         }}
 
                         if (Array.isArray(element)) {{
-                            return element.map(child => globalThis.renderToRSC(child, clientComponents));
+                            const results = [];
+                            for (const child of element) {{
+                                results.push(await globalThis.renderToRSC(child, clientComponents));
+                            }}
+                            return results;
                         }}
 
                         if (element && typeof element === 'object') {{
@@ -180,14 +187,29 @@ impl LayoutRenderer {
 
                                     const rscProps = {{
                                         ...otherProps,
-                                        children: actualChildren ? globalThis.renderToRSC(actualChildren, clientComponents) : undefined
+                                        children: actualChildren ? await globalThis.renderToRSC(actualChildren, clientComponents) : undefined
                                     }};
                                     if (rscProps.children === undefined) {{
                                         delete rscProps.children;
                                     }}
                                     return ["$", element.type, uniqueKey, rscProps];
                                 }} else if (typeof element.type === 'function') {{
-                                    return ["$", "div", uniqueKey, {{ children: null }}];
+                                    try {{
+                                        const props = element.props || {{}};
+                                        let result = element.type(props);
+
+                                        if (result && typeof result.then === 'function') {{
+                                            result = await result;
+                                        }}
+
+                                        return await globalThis.renderToRSC(result, clientComponents);
+                                    }} catch (error) {{
+                                        console.error('Error rendering function component:', error);
+                                        return ["$", "div", uniqueKey, {{
+                                            children: `Error: ${{error.message}}`,
+                                            style: {{ color: 'red', border: '1px solid red', padding: '10px' }}
+                                        }}];
+                                    }}
                                 }}
                             }}
 
@@ -201,11 +223,11 @@ impl LayoutRenderer {
                     }};
                 }}
 
-                const rscData = traverseToRSC({});
+                const rscData = await traverseToRSC({});
 
                 globalThis.__rsc_render_result = {{ rsc: rscData }};
                 return globalThis.__rsc_render_result;
-            }})()
+            }})();
             "#,
             current_element
         ));

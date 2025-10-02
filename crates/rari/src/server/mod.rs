@@ -591,8 +591,7 @@ impl Server {
 
                     debug!("Loading component: {} from {:?}", component_id, path);
 
-                    let is_client_component = component_code.contains("'use client'")
-                        || component_code.contains("\"use client\"");
+                    let is_client_component = has_use_client_directive(&component_code);
 
                     let cleaned_code = strip_module_syntax(&component_code);
 
@@ -862,6 +861,38 @@ async fn register_component_direct(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+fn has_use_client_directive(code: &str) -> bool {
+    for line in code.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if trimmed.starts_with("//") {
+            continue;
+        }
+
+        if trimmed.starts_with("/*") {
+            continue;
+        }
+
+        if trimmed == "'use client';"
+            || trimmed == "\"use client\";"
+            || trimmed == "'use client'"
+            || trimmed == "\"use client\""
+        {
+            return true;
+        }
+
+        if !trimmed.starts_with("'use") && !trimmed.starts_with("\"use") {
+            break;
+        }
+    }
+
+    false
 }
 
 fn strip_module_syntax(code: &str) -> String {

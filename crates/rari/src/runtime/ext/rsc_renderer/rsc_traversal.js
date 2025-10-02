@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 
-function traverseToRSC(element, clientComponents = {}, depth = 0) {
+async function traverseToRSC(element, clientComponents = {}, depth = 0) {
   if (depth > 100) {
     console.error(
       'RSC traversal depth limit exceeded, returning null to prevent stack overflow',
@@ -9,6 +9,19 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
   }
   if (!element) {
     return null
+  }
+
+  if (element && typeof element === 'object' && typeof element.then === 'function') {
+    try {
+      element = await element
+    }
+    catch (error) {
+      console.error('Error awaiting Promise in RSC traversal:', error)
+      return createErrorElement(
+        error.message || String(error),
+        'AsyncComponent',
+      )
+    }
   }
 
   if (
@@ -20,9 +33,11 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
   }
 
   if (Array.isArray(element)) {
-    return element.map(child =>
-      traverseToRSC(child, clientComponents, depth + 1),
-    )
+    const results = []
+    for (const child of element) {
+      results.push(await traverseToRSC(child, clientComponents, depth + 1))
+    }
+    return results
   }
 
   if (
@@ -30,7 +45,7 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
     && typeof element === 'object'
     && element.$$typeof === Symbol.for('react.element')
   ) {
-    return traverseReactElement(element, clientComponents, depth + 1)
+    return await traverseReactElement(element, clientComponents, depth + 1)
   }
 
   if (
@@ -38,7 +53,7 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
     && typeof element === 'object'
     && element.$$typeof === Symbol.for('react.fragment')
   ) {
-    return traverseToRSC(element.props.children, clientComponents, depth + 1)
+    return await traverseToRSC(element.props.children, clientComponents, depth + 1)
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
@@ -55,7 +70,7 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
         props: mergedProps,
         key: element.key ?? null,
       }
-      return traverseReactElement(fakeElement, clientComponents, depth + 1)
+      return await traverseReactElement(fakeElement, clientComponents, depth + 1)
     }
 
     if (!element.type && element.props && Object.prototype.hasOwnProperty.call(element.props, 'fallback')) {
@@ -73,16 +88,20 @@ function traverseToRSC(element, clientComponents = {}, depth = 0) {
         key: element.key ?? null,
       }
 
-      return traverseReactElement(fakeSuspenseElement, clientComponents, depth + 1)
+      return await traverseReactElement(fakeSuspenseElement, clientComponents, depth + 1)
     }
 
-    return element
+    if (Object.keys(element).length > 0) {
+      console.warn('RSC: Encountered unhandled object type', Object.keys(element))
+    }
+
+    return null
   }
 
   return element
 }
 
-function traverseReactElement(element, clientComponents, depth = 0) {
+async function traverseReactElement(element, clientComponents, depth = 0) {
   const { type, props, key } = element
 
   const uniqueKey
@@ -137,7 +156,7 @@ function traverseReactElement(element, clientComponents, depth = 0) {
 
   if (isServerComponent(type)) {
     const rendered = renderServerComponent(element)
-    return traverseToRSC(rendered, clientComponents, depth + 1)
+    return await traverseToRSC(rendered, clientComponents, depth + 1)
   }
 
   if (isSuspenseComponent(type)) {
@@ -156,7 +175,7 @@ function traverseReactElement(element, clientComponents, depth = 0) {
 
     const defaultFallback = null
     const safeFallback = props?.fallback
-      ? traverseToRSC(props.fallback, clientComponents, depth + 1)
+      ? await traverseToRSC(props.fallback, clientComponents, depth + 1)
       : defaultFallback
 
     globalThis.__discovered_boundaries.push({
@@ -216,13 +235,13 @@ function traverseReactElement(element, clientComponents, depth = 0) {
         ...props,
         boundaryId,
         fallback: safeFallback,
-        children: traverseToRSC(props?.children, clientComponents, depth + 1),
+        children: await traverseToRSC(props?.children, clientComponents, depth + 1),
       },
     ]
   }
 
   if (typeof type === 'string') {
-    return createRSCHTMLElement(
+    return await createRSCHTMLElement(
       type,
       props,
       uniqueKey,
@@ -233,12 +252,16 @@ function traverseReactElement(element, clientComponents, depth = 0) {
 
   if (typeof type === 'function') {
     try {
-      const rendered = type(props)
+      let rendered = type(props)
+
+      if (rendered && typeof rendered.then === 'function') {
+        rendered = await rendered
+      }
 
       if (rendered === element) {
         return null
       }
-      return traverseToRSC(rendered, clientComponents, depth + 1)
+      return await traverseToRSC(rendered, clientComponents, depth + 1)
     }
     catch (error) {
       console.error('Error rendering function component:', error)
@@ -250,15 +273,15 @@ function traverseReactElement(element, clientComponents, depth = 0) {
   }
 
   if (type === React.Fragment) {
-    return traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRSC(props.children, clientComponents, depth + 1)
   }
 
   if (type && type.$$typeof === Symbol.for('react.provider')) {
-    return traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRSC(props.children, clientComponents, depth + 1)
   }
 
   if (type && type.$$typeof === Symbol.for('react.consumer')) {
-    return traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRSC(props.children, clientComponents, depth + 1)
   }
 
   return [
@@ -280,7 +303,7 @@ function traverseReactElement(element, clientComponents, depth = 0) {
   ]
 }
 
-function createRSCHTMLElement(
+async function createRSCHTMLElement(
   tagName,
   props,
   key,
@@ -292,7 +315,7 @@ function createRSCHTMLElement(
   const rscProps = {
     ...otherProps,
     children: children
-      ? traverseToRSC(children, clientComponents, depth + 1)
+      ? await traverseToRSC(children, clientComponents, depth + 1)
       : undefined,
   }
 
@@ -306,16 +329,21 @@ function createRSCHTMLElement(
   return ['$', tagName, uniqueKey, rscProps]
 }
 
-function renderServerComponent(element) {
+async function renderServerComponent(element) {
   const { type: Component, props } = element
 
   try {
+    let result
     if (Component.constructor.name === 'AsyncFunction') {
-      return Component(props)
+      result = await Component(props)
     }
     else {
-      return Component(props)
+      result = Component(props)
+      if (result && typeof result.then === 'function') {
+        result = await result
+      }
     }
+    return result
   }
   catch (error) {
     console.error('Error rendering server component:', error)
@@ -508,9 +536,9 @@ function createErrorElement(message, componentName) {
   ]
 }
 
-function renderToRSC(element, clientComponents = {}) {
+async function renderToRSC(element, clientComponents = {}) {
   try {
-    return traverseToRSC(element, clientComponents)
+    return await traverseToRSC(element, clientComponents)
   }
   catch (error) {
     console.error('Error in RSC traversal:', error)

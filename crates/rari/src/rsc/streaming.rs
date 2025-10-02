@@ -111,7 +111,7 @@ impl BackgroundPromiseResolver {
                             }});
                         }}
 
-                        return promise.then(function(resolvedElement) {{
+                        return promise.then(async function(resolvedElement) {{
                             if (resolvedElement === undefined || resolvedElement === null) {{
                                 return {{
                                     success: false,
@@ -126,7 +126,7 @@ impl BackgroundPromiseResolver {
                             let rscData;
                             try {{
                                 if (globalThis.renderToRSC) {{
-                                    rscData = globalThis.renderToRSC(resolvedElement, globalThis.__rsc_client_components || {{}});
+                                    rscData = await globalThis.renderToRSC(resolvedElement, globalThis.__rsc_client_components || {{}});
                                 }} else {{
                                     rscData = resolvedElement;
                                 }}
@@ -494,7 +494,7 @@ impl StreamingRenderer {
 
         let init_script = r#"
             if (!globalThis.renderToRSC) {
-                globalThis.renderToRSC = function(element, clientComponents = {}) {
+                globalThis.renderToRSC = async function(element, clientComponents = {}) {
                     if (!element) return null;
 
                     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
@@ -502,7 +502,11 @@ impl StreamingRenderer {
                     }
 
                     if (Array.isArray(element)) {
-                        return element.map(child => globalThis.renderToRSC(child, clientComponents));
+                        const results = [];
+                        for (const child of element) {
+                            results.push(await globalThis.renderToRSC(child, clientComponents));
+                        }
+                        return results;
                     }
 
                     if (element && typeof element === 'object') {
@@ -517,14 +521,29 @@ impl StreamingRenderer {
 
                                 const rscProps = {
                                     ...otherProps,
-                                    children: actualChildren ? globalThis.renderToRSC(actualChildren, clientComponents) : undefined
+                                    children: actualChildren ? await globalThis.renderToRSC(actualChildren, clientComponents) : undefined
                                 };
                                 if (rscProps.children === undefined) {
                                     delete rscProps.children;
                                 }
                                 return ["$", element.type, uniqueKey, rscProps];
                             } else if (typeof element.type === 'function') {
-                                return ["$", "div", uniqueKey, { children: null }];
+                                try {
+                                    const props = element.props || {};
+                                    let result = element.type(props);
+
+                                    if (result && typeof result.then === 'function') {
+                                        result = await result;
+                                    }
+
+                                    return await globalThis.renderToRSC(result, clientComponents);
+                                } catch (error) {
+                                    console.error('Error rendering function component:', error);
+                                    return ["$", "div", uniqueKey, {
+                                        children: `Error: ${error.message}`,
+                                        style: { color: 'red', border: '1px solid red', padding: '10px' }
+                                    }];
+                                }
                             }
                         }
 
@@ -796,7 +815,7 @@ impl StreamingRenderer {
                     let rscData;
                     try {{
                         rscData = globalThis.renderToRSC ?
-                            globalThis.renderToRSC(element, globalThis.__rsc_client_components || {{}}) :
+                            await globalThis.renderToRSC(element, globalThis.__rsc_client_components || {{}}) :
                             element;
                     }} catch (rscError) {{
                         console.error('Error in RSC conversion:', rscError);
