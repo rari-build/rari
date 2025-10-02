@@ -878,7 +878,7 @@ function registerClientReference(clientReference, id, exportName) {
       .replace(/\.(tsx?|jsx?)$/, '')
       .replace(/[^\w/-]/g, '_')
       .replace(/^src\//, '')
-      .replace(/^components\//, '')
+      .replace(/^components\//, 'components/')
   }
 }
 
