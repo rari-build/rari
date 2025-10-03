@@ -302,7 +302,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.mode, Mode::Development);
         assert_eq!(config.server.host, "127.0.0.1");
-        assert_eq!(config.server.port, 3000);
+        assert_eq!(config.server.port, 5173);
         assert_eq!(config.vite.port, 5173);
     }
 
@@ -316,7 +316,7 @@ mod tests {
     #[test]
     fn test_server_address() {
         let config = Config::default();
-        assert_eq!(config.server_address(), "127.0.0.1:3000");
+        assert_eq!(config.server_address(), "127.0.0.1:5173");
     }
 
     #[test]

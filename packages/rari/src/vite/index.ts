@@ -67,6 +67,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
       return false
     }
 
+    if (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')) {
+      return false
+    }
+
     let pathForFsOperations = filePath
     try {
       pathForFsOperations = fs.realpathSync(filePath)
@@ -83,12 +87,24 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
       const isInFunctionsDir
         = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
+      const isInActionsDir
+        = filePath.includes('/actions/') || filePath.includes('\\\\actions\\\\')
+      const isInRuntimeDir
+        = filePath.includes('/runtime/') || filePath.includes('\\\\runtime\\\\')
+      const isInHooksDir
+        = filePath.includes('/hooks/') || filePath.includes('\\\\hooks\\\\')
 
-      if (isInFunctionsDir) {
+      if (isInFunctionsDir || isInActionsDir || isInRuntimeDir || isInHooksDir) {
         return false
       }
 
       const hasClientDirective = hasTopLevelDirective(code, 'use client')
+      const hasServerDirective = hasTopLevelDirective(code, 'use server')
+
+      if (hasServerDirective) {
+        return false
+      }
+
       return !hasClientDirective
     }
     catch {
@@ -170,8 +186,14 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
   function transformServerModule(code: string, id: string): string {
     const isInFunctionsDir = id.includes('/functions/') || id.includes('\\\\functions\\\\')
+    const isInActionsDir = id.includes('/actions/') || id.includes('\\\\actions\\\\')
+    const hasUseServer = hasTopLevelDirective(code, 'use server')
 
-    if (isInFunctionsDir && !hasTopLevelDirective(code, 'use server')) {
+    if (!hasUseServer && !isInFunctionsDir && !isInActionsDir) {
+      return code
+    }
+
+    if ((isInFunctionsDir || isInActionsDir) && !hasUseServer) {
       return code
     }
 
@@ -236,7 +258,34 @@ if (import.meta.hot) {
     const isServerFunction = hasTopLevelDirective(code, 'use server')
     const isServerComp = isServerComponent(id)
 
-    if (isServerFunction || isServerComp) {
+    if (isServerFunction) {
+      const exportedNames = parseExportedNames(code)
+      if (exportedNames.length === 0) {
+        return ''
+      }
+
+      const relativePath = path.relative(process.cwd(), id)
+      const moduleId = relativePath
+        .replace(/\\/g, '/')
+        .replace(/\.(tsx?|jsx?)$/, '')
+        .replace(/[^\w/-]/g, '_')
+        .replace(/^src\//, '')
+
+      let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
+
+      for (const name of exportedNames) {
+        if (name === 'default') {
+          newCode += `export default createServerReference("default", ${JSON.stringify(moduleId)}, "default");\n`
+        }
+        else {
+          newCode += `export const ${name} = createServerReference("${name}", ${JSON.stringify(moduleId)}, "${name}");\n`
+        }
+      }
+
+      return newCode
+    }
+
+    if (isServerComp) {
       const exportedNames = parseExportedNames(code)
       if (exportedNames.length === 0) {
         return ''
@@ -789,6 +838,10 @@ const ${componentName} = registerClientReference(
                 continue
               }
 
+              if (component.code.includes('"use server"') || component.code.includes('\'use server\'')) {
+                continue
+              }
+
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
@@ -988,6 +1041,10 @@ const ${componentName} = registerClientReference(
 
       const handleServerComponentHMR = async (filePath: string) => {
         try {
+          if (!isServerComponent(filePath)) {
+            return
+          }
+
           const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'temp',
@@ -1254,10 +1311,22 @@ export async function renderApp() {
 
     const rscWireFormat = await response.text();
 
-    const { element } = parseRscWireFormat(rscWireFormat);
+    const { element, isFullDocument } = parseRscWireFormat(rscWireFormat);
 
-    const root = createRoot(rootElement);
-    root.render(element);
+    if (isFullDocument) {
+      const bodyContent = extractBodyContent(element);
+      if (bodyContent) {
+        const root = createRoot(rootElement);
+        root.render(bodyContent);
+      } else {
+        console.error('[Rari] Could not extract body content, falling back to full element');
+        const root = createRoot(rootElement);
+        root.render(element);
+      }
+    } else {
+      const root = createRoot(rootElement);
+      root.render(element);
+    }
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`
@@ -1269,9 +1338,89 @@ export async function renderApp() {
   }
 }
 
+function extractBodyContent(element) {
+  console.log('[Rari] extractBodyContent - element:', element);
+  console.log('[Rari] extractBodyContent - element.type:', element?.type);
+  console.log('[Rari] extractBodyContent - element.props:', element?.props);
+
+  if (element && element.type === 'html' && element.props && element.props.children) {
+    const children = Array.isArray(element.props.children)
+      ? element.props.children
+      : [element.props.children];
+
+    console.log('[Rari] extractBodyContent - children:', children);
+
+    let headElement = null;
+    let bodyElement = null;
+
+    for (const child of children) {
+      console.log('[Rari] extractBodyContent - checking child:', child, 'type:', child?.type);
+      if (child && child.type === 'head') {
+        headElement = child;
+      } else if (child && child.type === 'body') {
+        bodyElement = child;
+      }
+    }
+
+    if (bodyElement) {
+      console.log('[Rari] extractBodyContent - found body');
+
+      if (headElement && headElement.props && headElement.props.children) {
+        console.log('[Rari] extractBodyContent - found head, extracting styles');
+        injectHeadContent(headElement);
+      }
+
+      console.log('[Rari] extractBodyContent - returning body children:', bodyElement.props?.children);
+      return bodyElement.props?.children || null;
+    }
+  }
+
+  console.log('[Rari] extractBodyContent - no body found, returning null');
+  return null;
+}
+
+function injectHeadContent(headElement) {
+  const headChildren = Array.isArray(headElement.props.children)
+    ? headElement.props.children
+    : [headElement.props.children];
+
+  for (const child of headChildren) {
+    if (!child) continue;
+
+    if (child.type === 'style' && child.props && child.props.children) {
+      console.log('[Rari] Injecting style tag');
+      const styleElement = document.createElement('style');
+
+      const styleContent = Array.isArray(child.props.children)
+        ? child.props.children.join('')
+        : child.props.children;
+
+      styleElement.textContent = styleContent;
+      document.head.appendChild(styleElement);
+    }
+    else if (child.type === 'meta' && child.props) {
+      console.log('[Rari] Injecting meta tag');
+      const metaElement = document.createElement('meta');
+      Object.keys(child.props).forEach(key => {
+        if (key !== 'children') {
+          metaElement.setAttribute(key, child.props[key]);
+        }
+      });
+      document.head.appendChild(metaElement);
+    }
+    else if (child.type === 'title' && child.props && child.props.children) {
+      console.log('[Rari] Setting document title');
+      document.title = Array.isArray(child.props.children)
+        ? child.props.children.join('')
+        : child.props.children;
+    }
+  }
+}
+
 function parseRscWireFormat(wireFormat) {
   const lines = wireFormat.trim().split('\\n');
   let rootElement = null;
+  let isFullDocument = false;
   const modules = new Map();
 
   for (const line of lines) {
@@ -1296,6 +1445,9 @@ function parseRscWireFormat(wireFormat) {
         const elementData = JSON.parse(content);
         if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
           rootElement = rscToReact(elementData, modules);
+          if (elementData[1] === 'html') {
+            isFullDocument = true;
+          }
         }
       }
     } catch (e) {
@@ -1307,7 +1459,7 @@ function parseRscWireFormat(wireFormat) {
     throw new Error('No root element found in RSC wire format');
   }
 
-  return { element: rootElement, modules };
+  return { element: rootElement, modules, isFullDocument };
 }
 
 function rscToReact(rsc, modules) {

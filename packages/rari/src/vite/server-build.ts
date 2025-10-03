@@ -38,11 +38,21 @@ export class ServerComponentBuilder {
     }
   >()
 
+  private serverActions = new Map<
+    string,
+    {
+      filePath: string
+      originalCode: string
+      dependencies: string[]
+      hasNodeImports: boolean
+    }
+  >()
+
   private options: Required<ServerBuildOptions>
   private projectRoot: string
 
   getComponentCount(): number {
-    return this.serverComponents.size
+    return this.serverComponents.size + this.serverActions.size
   }
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
@@ -75,6 +85,7 @@ export class ServerComponentBuilder {
 
       const lines = code.split('\n')
       let hasClientDirective = false
+      let hasServerDirective = false
       for (const line of lines) {
         const trimmed = line.trim()
         if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
@@ -85,11 +96,16 @@ export class ServerComponentBuilder {
           hasClientDirective = true
           break
         }
+        if (trimmed === '\'use server\'' || trimmed === '"use server"'
+          || trimmed === '\'use server\';' || trimmed === '"use server";') {
+          hasServerDirective = true
+          break
+        }
         if (trimmed) {
           break
         }
       }
-      return !hasClientDirective
+      return !hasClientDirective && !hasServerDirective
     }
     catch {
       return false
@@ -125,11 +141,25 @@ export class ServerComponentBuilder {
   }
 
   addServerComponent(filePath: string) {
+    const code = fs.readFileSync(filePath, 'utf-8')
+
+    if (this.isServerAction(code)) {
+      const dependencies = this.extractDependencies(code)
+      const hasNodeImports = this.hasNodeImports(code)
+
+      this.serverActions.set(filePath, {
+        filePath,
+        originalCode: code,
+        dependencies,
+        hasNodeImports,
+      })
+      return
+    }
+
     if (!this.isServerComponent(filePath)) {
       return
     }
 
-    const code = fs.readFileSync(filePath, 'utf-8')
     const dependencies = this.extractDependencies(code)
     const hasNodeImports = this.hasNodeImports(code)
 
@@ -139,6 +169,24 @@ export class ServerComponentBuilder {
       dependencies,
       hasNodeImports,
     })
+  }
+
+  private isServerAction(code: string): boolean {
+    const lines = code.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+        continue
+      }
+      if (trimmed === '\'use server\'' || trimmed === '"use server"'
+        || trimmed === '\'use server\';' || trimmed === '"use server";') {
+        return true
+      }
+      if (trimmed) {
+        break
+      }
+    }
+    return false
   }
 
   private extractDependencies(code: string): string[] {
@@ -223,6 +271,18 @@ export class ServerComponentBuilder {
 
       components.push({
         id: componentId,
+        code: transformedCode,
+      })
+    }
+
+    for (const [filePath, action] of this.serverActions) {
+      const relativePath = path.relative(this.projectRoot, filePath)
+      const actionId = this.getComponentId(relativePath)
+
+      const transformedCode = await this.buildComponentCodeOnly(filePath, actionId, action)
+
+      components.push({
+        id: actionId,
         code: transformedCode,
       })
     }
@@ -392,6 +452,27 @@ export class ServerComponentBuilder {
         bundlePath,
         dependencies: component.dependencies,
         hasNodeImports: component.hasNodeImports,
+      }
+    }
+
+    for (const [filePath, action] of this.serverActions) {
+      const relativePath = path.relative(this.projectRoot, filePath)
+      const actionId = this.getComponentId(relativePath)
+      const bundlePath = path.join(this.options.serverDir, `${actionId}.js`)
+      const fullBundlePath = path.join(this.options.outDir, bundlePath)
+
+      const bundleDir = path.dirname(fullBundlePath)
+      await fs.promises.mkdir(bundleDir, { recursive: true })
+
+      await this.buildSingleComponent(filePath, fullBundlePath, action)
+
+      manifest.components[actionId] = {
+        id: actionId,
+        filePath,
+        relativePath,
+        bundlePath,
+        dependencies: action.dependencies,
+        hasNodeImports: action.hasNodeImports,
       }
     }
 
@@ -639,10 +720,7 @@ export class ServerComponentBuilder {
       }
     }
 
-    const mainExport = defaultExportName || componentId
-
     const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
-"use module";
 
 // Original component code with exports removed for self-registration
 ${transformedCode}
@@ -670,9 +748,11 @@ ${transformedCode}
           .join('')}
 
         // Set main export
-        if (typeof ${mainExport} !== 'undefined') {
-            mainExport = ${mainExport};
-        } else {
+        ${defaultExportName
+          ? `if (typeof ${defaultExportName} !== 'undefined') {
+            mainExport = ${defaultExportName};
+        } else `
+          : ''}{
             const potentialExports = {};
             ${namedExports.map(name => `if (typeof ${name} !== 'undefined') potentialExports.${name} = ${name};`).join('\n            ')}
 
@@ -895,6 +975,28 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
       try {
         if (builder.isServerComponent(fullPath)) {
           builder.addServerComponent(fullPath)
+        }
+        else {
+          const code = fs.readFileSync(fullPath, 'utf-8')
+          const lines = code.split('\n')
+          let hasServerDirective = false
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+              continue
+            }
+            if (trimmed === '\'use server\'' || trimmed === '"use server"'
+              || trimmed === '\'use server\';' || trimmed === '"use server";') {
+              hasServerDirective = true
+              break
+            }
+            if (trimmed) {
+              break
+            }
+          }
+          if (hasServerDirective) {
+            builder.addServerComponent(fullPath)
+          }
         }
       }
       catch (error) {

@@ -67,6 +67,7 @@ export default function RootLayout({ children }: LayoutProps) {
             <li><a href="/interactive">Interactive</a></li>
             <li><a href="/server-data">Server Data</a></li>
             <li><a href="/server-demo">Server Demo</a></li>
+            <li><a href="/actions">Server Actions</a></li>
           </ul>
         </nav>
         <main>{children}</main>

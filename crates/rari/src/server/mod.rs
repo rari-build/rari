@@ -3,6 +3,7 @@ use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 
 use crate::runtime::JsExecutionRuntime;
+use crate::server::actions::{handle_form_action, handle_server_action};
 use crate::server::config::Config;
 use crate::server::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
@@ -33,6 +34,7 @@ use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info, warn};
 
+pub mod actions;
 pub mod app_router;
 pub mod config;
 pub mod request_middleware;
@@ -90,6 +92,10 @@ impl Server {
         }
 
         Self::load_app_router_components(&mut renderer, &config).await?;
+
+        if config.is_development() {
+            Self::load_server_actions_from_source(&mut renderer).await?;
+        }
 
         let app_router = {
             let manifest_path = "dist/app-routes.json";
@@ -155,6 +161,8 @@ impl Server {
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
+            .route("/api/rsc/action", post(handle_server_action))
+            .route("/api/rsc/form-action", post(handle_form_action))
             .route("/api/{*path}", axum::routing::options(cors_preflight_ok));
 
         if config.is_development() {
@@ -520,6 +528,116 @@ impl Server {
             .map_err(|e| RariError::internal(format!("Failed to register component: {e}")))
     }
 
+    async fn load_server_actions_from_source(renderer: &mut RscRenderer) -> Result<(), RariError> {
+        info!("Loading server actions from source");
+
+        let src_dir = std::path::Path::new("src");
+        if !src_dir.exists() {
+            debug!("No src directory found, skipping server action loading");
+            return Ok(());
+        }
+
+        let mut loaded_count = 0;
+        Self::scan_for_server_actions(src_dir, renderer, &mut loaded_count).await?;
+
+        info!("Loaded {} server action files", loaded_count);
+        Ok(())
+    }
+
+    fn scan_for_server_actions<'a>(
+        dir: &'a std::path::Path,
+        renderer: &'a mut RscRenderer,
+        loaded_count: &'a mut usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
+        Box::pin(async move {
+            let entries = std::fs::read_dir(dir).map_err(|e| {
+                RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
+            })?;
+
+            for entry in entries {
+                let entry = entry
+                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    Self::scan_for_server_actions(&path, renderer, loaded_count).await?;
+                } else if path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s == "ts" || s == "tsx" || s == "js" || s == "jsx")
+                    .unwrap_or(false)
+                {
+                    let code = match std::fs::read_to_string(&path) {
+                        Ok(c) => c,
+                        Err(_) => continue,
+                    };
+
+                    if has_use_server_directive(&code) {
+                        let src_dir = std::path::Path::new("src");
+                        let relative_path = path.strip_prefix(src_dir).unwrap_or(&path);
+                        let action_id = relative_path
+                            .to_str()
+                            .unwrap_or("unknown")
+                            .replace(".ts", "")
+                            .replace(".tsx", "")
+                            .replace(".js", "")
+                            .replace(".jsx", "")
+                            .replace('\\', "/");
+
+                        debug!("Found server action file: {:?} with ID: {}", path, action_id);
+
+                        let dist_path = std::path::Path::new("dist")
+                            .join("server")
+                            .join(format!("{}.js", action_id));
+
+                        if dist_path.exists() {
+                            match std::fs::read_to_string(&dist_path) {
+                                Ok(dist_code) => {
+                                    let cleaned_code = strip_module_syntax(&dist_code);
+                                    match renderer
+                                        .runtime
+                                        .execute_script(
+                                            format!(
+                                                "load_action_{}.js",
+                                                action_id.replace('/', "_")
+                                            ),
+                                            cleaned_code,
+                                        )
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            debug!(
+                                                "Successfully loaded server action: {}",
+                                                action_id
+                                            );
+                                            *loaded_count += 1;
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                "Failed to load server action {}: {}",
+                                                action_id, e
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Failed to read built server action {:?}: {}",
+                                        dist_path, e
+                                    );
+                                }
+                            }
+                        } else {
+                            debug!("Server action not yet built: {:?}", dist_path);
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        })
+    }
+
     async fn load_app_router_components(
         renderer: &mut RscRenderer,
         _config: &Config,
@@ -571,6 +689,39 @@ impl Server {
                     let component_code = std::fs::read_to_string(&path).map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
                     })?;
+
+                    if has_use_server_directive(&component_code) {
+                        let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
+                        let relative_str = relative_path
+                            .to_str()
+                            .unwrap_or("unknown")
+                            .replace(".js", "")
+                            .replace('\\', "/");
+
+                        debug!("Loading server action file: {} from {:?}", relative_str, path);
+
+                        let cleaned_code = strip_module_syntax(&component_code);
+                        match renderer
+                            .runtime
+                            .execute_script(
+                                format!("load_{}.js", relative_str.replace('/', "_")),
+                                cleaned_code,
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                debug!("Successfully loaded server actions from: {}", relative_str);
+                                *loaded_count += 1;
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Failed to load server actions from {}: {}",
+                                    relative_str, e
+                                );
+                            }
+                        }
+                        continue;
+                    }
 
                     let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
                     let relative_str = relative_path
@@ -883,6 +1034,38 @@ fn has_use_client_directive(code: &str) -> bool {
             || trimmed == "\"use client\";"
             || trimmed == "'use client'"
             || trimmed == "\"use client\""
+        {
+            return true;
+        }
+
+        if !trimmed.starts_with("'use") && !trimmed.starts_with("\"use") {
+            break;
+        }
+    }
+
+    false
+}
+
+fn has_use_server_directive(code: &str) -> bool {
+    for line in code.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if trimmed.starts_with("//") {
+            continue;
+        }
+
+        if trimmed.starts_with("/*") {
+            continue;
+        }
+
+        if trimmed == "'use server';"
+            || trimmed == "\"use server\";"
+            || trimmed == "'use server'"
+            || trimmed == "\"use server\""
         {
             return true;
         }

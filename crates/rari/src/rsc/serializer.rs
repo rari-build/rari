@@ -352,6 +352,8 @@ impl RscSerializer {
     ) -> String {
         let mut element_props = props.clone().unwrap_or_default();
 
+        let is_document_element = matches!(tag, "html" | "head" | "body");
+
         if tag == "react.suspense" {
             if let Some(fallback_value) = element_props.get("fallback") {
                 return serde_json::to_string(fallback_value)
@@ -379,8 +381,11 @@ impl RscSerializer {
             }
         }
 
-        let key_json =
-            key.map(|k| serde_json::to_string(k).unwrap_or_default()).unwrap_or("null".to_string());
+        let key_json = if is_document_element {
+            "null".to_string()
+        } else {
+            key.map(|k| serde_json::to_string(k).unwrap_or_default()).unwrap_or("null".to_string())
+        };
 
         let props_json = serde_json::to_string(&element_props).unwrap_or("{}".to_string());
 

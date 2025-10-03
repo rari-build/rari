@@ -668,6 +668,8 @@ fn is_promise(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) -> bool 
 fn should_resolve_promises(script_name: &str) -> bool {
     script_name.starts_with("promise_test_")
         || script_name.starts_with("streaming_sim_")
+        || script_name.starts_with("execute_action_")
+        || script_name.starts_with("exec_func_")
         || script_name == "<streaming_init>"
         || script_name.starts_with("<partial_render_")
         || script_name.starts_with("<promise_resolution_")

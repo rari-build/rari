@@ -6,7 +6,6 @@ use crate::rsc::jsx_transform::{extract_dependencies, hash_string, transform_jsx
 use crate::rsc::serializer::{ReactElement, RscSerializer};
 use crate::rsc::streaming::{RscStream, StreamingRenderer};
 use crate::runtime::JsExecutionRuntime;
-use crate::server_fn::ServerFunctionExecutor;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use regex;
@@ -244,7 +243,6 @@ pub struct RscRenderer {
     pub(crate) runtime: Arc<JsExecutionRuntime>,
     pub(crate) timeout_ms: u64,
     pub(crate) initialized: bool,
-    pub(crate) server_fn_executor: Option<Arc<ServerFunctionExecutor>>,
     pub(crate) component_registry: Arc<Mutex<ComponentRegistry>>,
     pub(crate) script_cache: DashMap<String, String>,
     pub(crate) resource_limits: ResourceLimits,
@@ -265,7 +263,6 @@ impl RscRenderer {
             runtime,
             timeout_ms: 30000,
             initialized: false,
-            server_fn_executor: None,
             component_registry: Arc::new(Mutex::new(ComponentRegistry::new())),
             script_cache: DashMap::new(),
             resource_limits,
@@ -311,11 +308,6 @@ impl RscRenderer {
 
     pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
         self.timeout_ms = timeout_ms;
-        self
-    }
-
-    pub fn with_server_fn_executor(mut self, executor: Arc<ServerFunctionExecutor>) -> Self {
-        self.server_fn_executor = Some(executor);
         self
     }
 
@@ -1433,24 +1425,61 @@ impl RscRenderer {
     pub async fn execute_server_function(
         &self,
         function_id: &str,
+        export_name: &str,
         args: &[JsonValue],
     ) -> Result<JsonValue, RariError> {
-        let executor = self
-            .server_fn_executor
-            .as_ref()
-            .ok_or(RariError::internal("Server function executor not configured"))?;
+        debug!("Executing server function: {}::{}", function_id, export_name);
 
-        let validated_args = args
-            .iter()
-            .map(|v| serde_json::from_value(v.clone()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| RariError::validation(format!("Invalid arguments: {e}")))?;
+        let args_json = serde_json::to_string(args)
+            .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
 
-        let result = executor.execute(function_id, &validated_args).await.map_err(|e| {
-            RariError::js_execution(format!("Server function execution failed: {e}"))
-        })?;
+        let script = format!(
+            r#"
+            (async () => {{
+                try {{
+                    const fn = globalThis["{}"];
+                    if (typeof fn !== "function") {{
+                        throw new Error("Function '{}' not found in globalThis");
+                    }}
 
-        Ok(result)
+                    const rawArgs = {};
+                    const processedArgs = rawArgs.map(arg => {{
+                        if (arg && typeof arg === 'object' && !Array.isArray(arg) && !(arg instanceof FormData)) {{
+                            const formDataLike = {{
+                                data: arg,
+                                get(key) {{ return this.data[key]; }},
+                                has(key) {{ return key in this.data; }},
+                                set(key, value) {{ this.data[key] = value; }},
+                                append(key, value) {{ this.data[key] = value; }},
+                                delete(key) {{ delete this.data[key]; }},
+                                entries() {{ return Object.entries(this.data); }},
+                                keys() {{ return Object.keys(this.data); }},
+                                values() {{ return Object.values(this.data); }}
+                            }};
+                            return formDataLike;
+                        }}
+                        return arg;
+                    }});
+
+                    const result = await fn(...processedArgs);
+                    return JSON.parse(JSON.stringify(result));
+                }} catch (error) {{
+                    throw new Error(`Server action error: ${{error.message || String(error)}}`);
+                }}
+            }})()
+            "#,
+            export_name, export_name, args_json
+        );
+
+        self.runtime
+            .execute_script(
+                format!("execute_action_{}_{}.js", function_id.replace('/', "_"), export_name),
+                script,
+            )
+            .await
+            .map_err(|e| {
+                RariError::js_execution(format!("Server function execution failed: {}", e))
+            })
     }
 
     pub async fn render_with_streaming(
@@ -1903,7 +1932,6 @@ globalThis.__rsc_functions['{component_id}'] = {component_id};
                 runtime: Arc::clone(&self.runtime),
                 timeout_ms: self.timeout_ms,
                 initialized: self.initialized,
-                server_fn_executor: self.server_fn_executor.clone(),
                 component_registry: Arc::clone(&self.component_registry),
                 script_cache: self.script_cache.clone(),
                 resource_limits: self.resource_limits.clone(),

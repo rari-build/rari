@@ -40,6 +40,8 @@ pub struct LayoutEntry {
     pub file_path: String,
     #[serde(rename = "parentPath", skip_serializing_if = "Option::is_none")]
     pub parent_path: Option<String>,
+    #[serde(rename = "isRoot", default)]
+    pub is_root: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,7 +208,9 @@ impl AppRouter {
                 if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
 
             if let Some(layout) = self.manifest.layouts.iter().find(|l| l.path == current_path) {
-                layouts.push(layout.clone());
+                let mut layout_entry = layout.clone();
+                layout_entry.is_root = layout_entry.path == "/";
+                layouts.push(layout_entry);
             }
         }
 
@@ -328,11 +332,13 @@ mod tests {
                     path: "/".to_string(),
                     file_path: "layout.tsx".to_string(),
                     parent_path: None,
+                    is_root: false,
                 },
                 LayoutEntry {
                     path: "/blog".to_string(),
                     file_path: "blog/layout.tsx".to_string(),
                     parent_path: Some("/".to_string()),
+                    is_root: false,
                 },
             ],
             loading: vec![],
@@ -383,6 +389,28 @@ mod tests {
         assert_eq!(layouts.len(), 2);
         assert_eq!(layouts[0].path, "/");
         assert_eq!(layouts[1].path, "/blog");
+    }
+
+    #[test]
+    fn test_root_layout_detection() {
+        let router = AppRouter::new(create_test_manifest());
+        let layouts = router.resolve_layouts("/blog/[slug]");
+
+        assert_eq!(layouts.len(), 2);
+        assert!(layouts[0].is_root, "Root layout (/) should have is_root = true");
+        assert_eq!(layouts[0].path, "/");
+        assert!(!layouts[1].is_root, "Nested layout (/blog) should have is_root = false");
+        assert_eq!(layouts[1].path, "/blog");
+    }
+
+    #[test]
+    fn test_root_layout_only() {
+        let router = AppRouter::new(create_test_manifest());
+        let layouts = router.resolve_layouts("/");
+
+        assert_eq!(layouts.len(), 1);
+        assert!(layouts[0].is_root, "Root layout should have is_root = true");
+        assert_eq!(layouts[0].path, "/");
     }
 
     #[test]

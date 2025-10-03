@@ -46,8 +46,65 @@ export default function HomePage({ params, searchParams }: PageProps) {
         <li>✅ Loading states and error boundaries</li>
         <li>✅ Dynamic routes with params</li>
         <li>✅ Server-side data fetching</li>
+        <li>✅ React Server Actions</li>
         <li>✅ Metadata generation for SEO</li>
       </ul>
+
+      <div style={{
+        background: '#e6f7ff',
+        padding: '1.5rem',
+        borderRadius: '8px',
+        border: '2px solid #91d5ff',
+        marginBottom: '2rem',
+      }}>
+        <h3 style={{ marginBottom: '1rem', color: '#0050b3', fontSize: '1.3rem' }}>
+          🎯 Try the Examples:
+        </h3>
+        <div style={{
+          display: 'grid',
+          gap: '1rem',
+        }}>
+          <a href="/actions" style={{
+            display: 'block',
+            padding: '1rem',
+            background: 'white',
+            borderRadius: '6px',
+            textDecoration: 'none',
+            color: '#667eea',
+            fontWeight: 600,
+            border: '2px solid #667eea',
+            transition: 'all 0.2s',
+          }}>
+            → Server Actions Demo - Interactive todo app with useActionState
+          </a>
+          <a href="/server-data" style={{
+            display: 'block',
+            padding: '1rem',
+            background: 'white',
+            borderRadius: '6px',
+            textDecoration: 'none',
+            color: '#667eea',
+            fontWeight: 600,
+            border: '2px solid #667eea',
+            transition: 'all 0.2s',
+          }}>
+            → Server Data Fetching - Async server components
+          </a>
+          <a href="/interactive" style={{
+            display: 'block',
+            padding: '1rem',
+            background: 'white',
+            borderRadius: '6px',
+            textDecoration: 'none',
+            color: '#667eea',
+            fontWeight: 600,
+            border: '2px solid #667eea',
+            transition: 'all 0.2s',
+          }}>
+            → Interactive Components - Client components with RSC
+          </a>
+        </div>
+      </div>
 
       <div style={{
         background: '#f7fafc',

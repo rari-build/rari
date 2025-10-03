@@ -47,6 +47,14 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./runtime/actions": {
+      "types": "./dist/runtime/actions.d.ts",
+      "default": "./dist/runtime/actions.js"
+    },
+    "./hooks/useActionState": {
+      "types": "./dist/hooks/useActionState.d.ts",
+      "default": "./dist/hooks/useActionState.js"
+    },
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.ts",
