@@ -149,11 +149,9 @@ impl Server {
 
     async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
         let mut router = Router::new()
-            .route("/api/test", get(test_handler))
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
             .route("/api/rsc/register", post(register_component))
-            .route("/api/rsc/register-direct", post(register_component_direct))
             .route("/api/rsc/register-client", post(register_client_component))
             .route("/api/rsc/hmr-register", post(hmr_register_component))
             .route("/api/rsc/components", get(list_components))
@@ -861,11 +859,6 @@ pub struct StatusResponse {
 }
 
 #[axum::debug_handler]
-async fn test_handler() -> &'static str {
-    "Hello from Rari server!"
-}
-
-#[axum::debug_handler]
 async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
@@ -967,48 +960,6 @@ async fn register_component(
         }
         Err(e) => {
             error!("Failed to register component {}: {}", request.component_id, e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-async fn register_component_direct(
-    State(state): State<ServerState>,
-    Json(request): Json<RegisterRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    debug!("Registering component directly (no transform): {}", request.component_id);
-
-    if let Some(cache_config) = &request.cache_config {
-        let mut cache_configs = state.component_cache_configs.write().await;
-        cache_configs.insert(request.component_id.clone(), cache_config.clone());
-        debug!("Stored cache config for component: {}", request.component_id);
-    }
-
-    let result = {
-        let renderer = state.renderer.lock().await;
-
-        let cleaned_code = strip_module_syntax(&request.component_code);
-
-        renderer
-            .runtime
-            .execute_script(
-                format!("register_direct_{}.js", request.component_id.replace('/', "_")),
-                cleaned_code,
-            )
-            .await
-    };
-
-    match result {
-        Ok(_) => {
-            info!("Successfully registered component directly: {}", request.component_id);
-            #[allow(clippy::disallowed_methods)]
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "component_id": request.component_id
-            })))
-        }
-        Err(e) => {
-            error!("Failed to register component directly {}: {}", request.component_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
