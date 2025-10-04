@@ -15,7 +15,7 @@ pub trait RsStoredCallback: 'static {
     fn encode_args(
         &self,
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope<'_>,
+        scope: &v8::PinnedRef<v8::HandleScope<'_>>,
     ) -> Result<serde_json::Value, Error>;
 }
 
@@ -28,13 +28,13 @@ pub trait RsCallback: 'static {
     #[allow(unused)]
     fn args_from_v8(
         args: Vec<v8::Global<v8::Value>>,
-        scope: &mut v8::HandleScope,
+        scope: &v8::PinnedRef<'_, v8::HandleScope<'_>>,
     ) -> Result<Self::Arguments, Error>;
 
     #[allow(unused)]
-    fn slow_args_from_v8(
+    fn slow_args_from_v8<'s>(
         args: Vec<v8::Global<v8::Value>>,
-        scope: &mut v8::HandleScope,
+        scope: &v8::PinnedRef<'s, v8::HandleScope<'s>>,
     ) -> Result<serde_json::Value, Error> {
         let args = Self::args_from_v8(args, scope)?;
         serde_json::to_value(args)
@@ -44,7 +44,7 @@ pub trait RsCallback: 'static {
     #[allow(unused)]
     fn decode_v8(
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope,
+        scope: &v8::PinnedRef<'_, v8::HandleScope<'_>>,
     ) -> Result<Self::Arguments, Error> {
         let args = v8::Local::new(scope, args);
         let args = if args.is_array() {
@@ -64,20 +64,20 @@ pub trait RsCallback: 'static {
                 let arg = args.get(scope, index.into()).ok_or_else(|| {
                     Error::JsRuntime(format!("Invalid argument at index {i}"), None)
                 })?;
-                result.push(v8::Global::new(scope, arg));
+                result.push(v8::Global::new(scope.as_ref(), arg));
             }
             result
         } else {
-            vec![v8::Global::new(scope, args)]
+            vec![v8::Global::new(scope.as_ref(), args)]
         };
 
         Self::args_from_v8(args, scope)
     }
 
     #[allow(unused)]
-    async fn call(
+    async fn call<'s>(
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope<'_>,
+        scope: &v8::PinnedRef<'s, v8::HandleScope<'s>>,
     ) -> Result<Self::Return, Error> {
         let args = Self::decode_v8(args, scope)?;
         Self::body(args).await
@@ -97,7 +97,7 @@ macro_rules! codegen_function {
 
                 fn args_from_v8(
                     args: Vec<v8::Global<v8::Value>>,
-                    scope: &mut v8::HandleScope,
+                    scope: &v8::PinnedRef<'_, v8::HandleScope<'_>>,
                 ) -> Result<Self::Arguments, Error> {
                     let mut args = args.into_iter();
                     $(
@@ -123,7 +123,7 @@ macro_rules! codegen_function {
                     })
                 }
 
-                fn encode_args(&self, args: v8::Global<v8::Value>, scope: &mut v8::HandleScope<'_>) -> Result<serde_json::Value, Error> {
+                fn encode_args(&self, args: v8::Global<v8::Value>, scope: &v8::PinnedRef<v8::HandleScope<'_>>) -> Result<serde_json::Value, Error> {
                     let args = Self::decode_v8(args, scope)?;
                     serde_json::to_value(args).map_err(|e| Error::Serialization(format!("Error serializing arguments: {}", e), None))
                 }

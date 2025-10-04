@@ -8,6 +8,19 @@ export {
 export type * from './app-types'
 
 export {
+  determineAffectedRoutes,
+  extractRoutePathFromFile,
+  getAppRouterFileInfo,
+  getAppRouterFileType,
+  isAppRouterFile,
+} from './hmr-utils'
+
+export type {
+  AppRouterFileInfo,
+  AppRouterFileType,
+} from './hmr-utils'
+
+export {
   clearPropsCache,
   clearPropsCacheForComponent,
   extractMetadata,

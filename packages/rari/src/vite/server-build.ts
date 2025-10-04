@@ -1014,12 +1014,14 @@ export function createServerBuildPlugin(
 ): Plugin {
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
+  let isDev = false
 
   return {
     name: 'rari-server-build',
 
     configResolved(config) {
       projectRoot = config.root
+      isDev = config.command === 'serve'
       builder = new ServerComponentBuilder(projectRoot, options)
     },
 
@@ -1036,6 +1038,30 @@ export function createServerBuildPlugin(
     async closeBundle() {
       if (builder) {
         await builder.buildServerComponents()
+      }
+    },
+
+    async handleHotUpdate({ file, _server }) {
+      if (!builder || !isDev)
+        return
+
+      const relativePath = path.relative(projectRoot, file)
+      if (!relativePath.startsWith('src/') || !relativePath.match(/\.(tsx?|jsx?)$/)) {
+        return
+      }
+
+      try {
+        const content = await fs.promises.readFile(file, 'utf-8')
+        if (content.includes('use client')) {
+          return
+        }
+
+        console.warn(`[server-build] Rebuilding server component: ${relativePath}`)
+
+        await builder.buildServerComponents()
+      }
+      catch (error) {
+        console.error(`[server-build] Error rebuilding ${relativePath}:`, error)
       }
     },
   }

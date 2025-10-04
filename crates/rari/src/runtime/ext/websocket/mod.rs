@@ -21,12 +21,8 @@ impl ExtensionTrait<()> for init_websocket {
     }
 }
 impl ExtensionTrait<WebOptions> for deno_websocket::deno_websocket {
-    fn init(options: WebOptions) -> Extension {
-        deno_websocket::deno_websocket::init::<PermissionsContainer>(
-            options.user_agent,
-            options.root_cert_store_provider,
-            options.unsafely_ignore_certificate_errors,
-        )
+    fn init(_options: WebOptions) -> Extension {
+        deno_websocket::deno_websocket::init::<PermissionsContainer>()
     }
 }
 

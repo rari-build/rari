@@ -28,6 +28,7 @@ mod fs;
 mod http;
 mod io;
 mod kv;
+mod module_reload;
 mod napi;
 mod node;
 mod promise_manager;
@@ -79,6 +80,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
 
     extensions.extend(rari::extensions(is_snapshot));
     extensions.extend(promise_manager::extensions(is_snapshot));
+    extensions.extend(module_reload::extensions(is_snapshot));
     extensions.extend(rsc_modules::extensions(is_snapshot));
     extensions.extend(server_functions::extensions(is_snapshot));
     extensions.extend(react::extensions(is_snapshot));
@@ -104,6 +106,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(cron::extensions(is_snapshot));
     extensions.extend(napi::extensions(is_snapshot));
     extensions.extend(node::extensions(options.node_resolver.clone(), is_snapshot));
+    extensions.push(deno_bundle_runtime::deno_bundle_runtime::init(None));
     extensions.extend(runtime::extensions(options, None, is_snapshot));
 
     extensions

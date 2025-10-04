@@ -399,6 +399,15 @@ impl deno_web::TimersPermission for PermissionsContainer {
     }
 }
 impl deno_fetch::FetchPermissions for PermissionsContainer {
+    fn check_net(
+        &mut self,
+        _host: &str,
+        _port: u16,
+        _api_name: &str,
+    ) -> Result<(), PermissionCheckError> {
+        Ok(())
+    }
+
     fn check_net_url(
         &mut self,
         url: &reqwest::Url,

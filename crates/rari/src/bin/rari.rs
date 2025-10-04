@@ -170,12 +170,10 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
 
     if let Some(host) = matches.get_one::<String>("host") {
         config.server.host = host.to_string();
-        config.vite.host = host.to_string();
     }
 
     if let Some(&port) = matches.get_one::<u16>("port") {
         config.server.port = port;
-        config.vite.port = port + 1;
     }
 
     validate_configuration(&config)?;

@@ -34,7 +34,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             host: "127.0.0.1".to_string(),
-            port: 5173,
+            port: 3000,
             origin: None,
             enable_logging: true,
             timeout_seconds: 30,
@@ -53,7 +53,7 @@ pub struct ViteConfig {
 impl Default for ViteConfig {
     fn default() -> Self {
         Self {
-            host: "127.0.0.1".to_string(),
+            host: "localhost".to_string(),
             port: 5173,
             enable_hmr_proxy: true,
             ws_protocol: "vite-hmr".to_string(),
@@ -105,6 +105,13 @@ pub struct RscConfig {
     pub render_timeout_ms: u64,
     pub script_execution_timeout_ms: u64,
     pub enable_hot_reload: bool,
+    pub hmr_reload_enabled: bool,
+    pub hmr_max_retry_attempts: usize,
+    pub hmr_reload_timeout_ms: u64,
+    pub hmr_parallel_reloads: bool,
+    pub hmr_debounce_delay_ms: u64,
+    pub hmr_max_history_size: usize,
+    pub hmr_enable_memory_monitoring: bool,
 }
 
 impl Default for RscConfig {
@@ -116,6 +123,13 @@ impl Default for RscConfig {
             render_timeout_ms: 8000,
             script_execution_timeout_ms: 3000,
             enable_hot_reload: true,
+            hmr_reload_enabled: true,
+            hmr_max_retry_attempts: 3,
+            hmr_reload_timeout_ms: 5000,
+            hmr_parallel_reloads: true,
+            hmr_debounce_delay_ms: 150,
+            hmr_max_history_size: 100,
+            hmr_enable_memory_monitoring: true,
         }
     }
 }
@@ -136,11 +150,15 @@ impl Config {
         Self {
             mode,
             vite: ViteConfig {
-                port: default_config.server.port + 1,
+                port: default_config.vite.port,
                 host: default_config.server.host.clone(),
                 ..default_config.vite
             },
-            rsc: RscConfig { enable_hot_reload: mode != Mode::Production, ..default_config.rsc },
+            rsc: RscConfig {
+                enable_hot_reload: mode != Mode::Production,
+                hmr_reload_enabled: mode != Mode::Production,
+                ..default_config.rsc
+            },
             ..default_config
         }
     }
@@ -158,17 +176,19 @@ impl Config {
 
         if let Ok(host) = std::env::var("RARI_HOST") {
             config.server.host = host;
-            config.vite.host = config.server.host.clone();
         }
 
         if let Ok(port_str) = std::env::var("RARI_PORT") {
             config.server.port =
                 port_str.parse().map_err(|_| ConfigError::InvalidPort(port_str))?;
-            config.vite.port = config.server.port + 1;
         }
 
         if let Ok(origin) = std::env::var("RARI_ORIGIN") {
             config.server.origin = Some(origin);
+        }
+
+        if let Ok(vite_host) = std::env::var("RARI_VITE_HOST") {
+            config.vite.host = vite_host;
         }
 
         if let Ok(vite_port_str) = std::env::var("RARI_VITE_PORT") {
@@ -188,6 +208,49 @@ impl Config {
             config.rsc.script_execution_timeout_ms = timeout_str
                 .parse()
                 .map_err(|_| ConfigError::InvalidTimeout(timeout_str.clone()))?;
+        }
+
+        if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
+            config.rsc.hmr_reload_enabled = disable_hmr.to_lowercase() != "true"
+                && disable_hmr != "1"
+                && disable_hmr.to_lowercase() != "yes";
+        }
+
+        if let Ok(max_retry_str) = std::env::var("RARI_HMR_MAX_RETRY_ATTEMPTS") {
+            config.rsc.hmr_max_retry_attempts = max_retry_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string())
+            })?;
+        }
+
+        if let Ok(timeout_str) = std::env::var("RARI_HMR_RELOAD_TIMEOUT_MS") {
+            config.rsc.hmr_reload_timeout_ms = timeout_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_HMR_RELOAD_TIMEOUT_MS".to_string())
+            })?;
+        }
+
+        if let Ok(parallel_str) = std::env::var("RARI_HMR_PARALLEL_RELOADS") {
+            config.rsc.hmr_parallel_reloads = parallel_str.to_lowercase() == "true"
+                || parallel_str == "1"
+                || parallel_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(debounce_str) = std::env::var("RARI_HMR_DEBOUNCE_DELAY_MS") {
+            config.rsc.hmr_debounce_delay_ms = debounce_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_HMR_DEBOUNCE_DELAY_MS".to_string())
+            })?;
+        }
+
+        if let Ok(history_size_str) = std::env::var("RARI_HMR_MAX_HISTORY_SIZE") {
+            config.rsc.hmr_max_history_size = history_size_str
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
+        }
+
+        if let Ok(memory_monitoring_str) = std::env::var("RARI_HMR_ENABLE_MEMORY_MONITORING") {
+            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.to_lowercase()
+                == "true"
+                || memory_monitoring_str == "1"
+                || memory_monitoring_str.to_lowercase() == "yes";
         }
 
         Ok(config)
@@ -236,6 +299,10 @@ impl Config {
         self.mode == Mode::Production
     }
 
+    pub fn hmr_reload_enabled(&self) -> bool {
+        self.is_development() && self.rsc.hmr_reload_enabled
+    }
+
     pub fn get_cache_control_for_route(&self, path: &str) -> &str {
         if let Some(cache_control) = self.caching.routes.get(path) {
             return cache_control;
@@ -280,6 +347,9 @@ pub enum ConfigError {
     #[error("Invalid timeout: {0}")]
     InvalidTimeout(String),
 
+    #[error("Invalid config value for {0}")]
+    InvalidConfig(String),
+
     #[error("Failed to read config file: {0}")]
     FileRead(std::io::Error),
 
@@ -302,7 +372,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.mode, Mode::Development);
         assert_eq!(config.server.host, "127.0.0.1");
-        assert_eq!(config.server.port, 5173);
+        assert_eq!(config.server.port, 3000);
         assert_eq!(config.vite.port, 5173);
     }
 
@@ -316,13 +386,13 @@ mod tests {
     #[test]
     fn test_server_address() {
         let config = Config::default();
-        assert_eq!(config.server_address(), "127.0.0.1:5173");
+        assert_eq!(config.server_address(), "127.0.0.1:3000");
     }
 
     #[test]
     fn test_vite_address() {
         let config = Config::default();
-        assert_eq!(config.vite_address(), "127.0.0.1:5173");
+        assert_eq!(config.vite_address(), "localhost:5173");
     }
 
     #[test]

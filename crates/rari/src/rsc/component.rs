@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::sync::Mutex;
+use std::time::Instant;
 
 static CIRCULAR_DETECTION: std::sync::OnceLock<Mutex<FxHashSet<String>>> =
     std::sync::OnceLock::new();
@@ -38,6 +39,9 @@ pub struct TransformedComponent {
     pub is_client_reference: bool,
     pub client_reference_path: Option<String>,
     pub client_reference_export: Option<String>,
+    pub is_stale: bool,
+    pub last_reload_timestamp: Option<Instant>,
+    pub reload_attempt_count: usize,
 }
 
 pub struct ComponentRegistry {
@@ -81,6 +85,9 @@ impl ComponentRegistry {
                 is_client_reference: false,
                 client_reference_path: None,
                 client_reference_export: None,
+                is_stale: false,
+                last_reload_timestamp: None,
+                reload_attempt_count: 0,
             },
         );
 
@@ -258,6 +265,36 @@ impl ComponentRegistry {
 
     pub fn list_component_ids(&self) -> Vec<String> {
         self.components.keys().cloned().collect()
+    }
+
+    pub fn mark_module_stale(&mut self, id: &str) {
+        if let Some(component) = self.components.get_mut(id) {
+            component.is_stale = true;
+        }
+    }
+
+    pub fn is_module_stale(&self, id: &str) -> bool {
+        self.components.get(id).map(|c| c.is_stale).unwrap_or(false)
+    }
+
+    pub fn get_stale_modules(&self) -> Vec<String> {
+        self.components
+            .iter()
+            .filter(|(_, component)| component.is_stale)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn update_module_reload_timestamp(&mut self, id: &str, timestamp: Instant) {
+        if let Some(component) = self.components.get_mut(id) {
+            component.last_reload_timestamp = Some(timestamp);
+            component.is_stale = false;
+            component.reload_attempt_count += 1;
+        }
+    }
+
+    pub fn get_module_reload_timestamp(&self, id: &str) -> Option<Instant> {
+        self.components.get(id).and_then(|c| c.last_reload_timestamp)
     }
 
     pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {

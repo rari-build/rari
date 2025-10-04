@@ -18,8 +18,7 @@ const STRICT_TRANSPORT_SECURITY: &str = "Strict-Transport-Security";
 const CONTENT_SECURITY_POLICY: &str = "Content-Security-Policy";
 const ALLOW_ALL_ORIGINS: &str = "*";
 const ALLOWED_METHODS: &str = "GET, POST, PUT, DELETE, OPTIONS";
-const ALLOWED_HEADERS: &str =
-    "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming";
+const ALLOWED_HEADERS: &str = "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, Pragma, X-RSC-Streaming";
 const MAX_AGE_SECONDS: &str = "86400";
 const NOSNIFF: &str = "nosniff";
 const FRAME_DENY: &str = "DENY";

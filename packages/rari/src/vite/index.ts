@@ -1068,11 +1068,6 @@ const ${componentName} = registerClientReference(
 
           for (const component of components) {
             try {
-              const isAppRouterComponent = component.id.startsWith('app/')
-              if (isAppRouterComponent) {
-                continue
-              }
-
               const registerResponse = await fetch(
                 `${baseUrl}/api/rsc/register`,
                 {
@@ -1199,6 +1194,10 @@ const ${componentName} = registerClientReference(
         return id
       }
 
+      if (id === 'virtual:app-router-hmr-provider') {
+        return `${id}.tsx`
+      }
+
       if (id === 'react-server-dom-rari/server') {
         return id
       }
@@ -1271,9 +1270,13 @@ globalThis.__clientComponents["${componentId}"] = globalThis.__clientComponents[
 globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
+        const isDevelopment = process.env.NODE_ENV !== 'production'
+
         return `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import 'virtual:rsc-integration';
+${isDevelopment ? 'import { AppRouterHMRProvider } from \'virtual:app-router-hmr-provider\';' : ''}
 
 ${imports}
 
@@ -1313,20 +1316,31 @@ export async function renderApp() {
 
     const { element, isFullDocument } = parseRscWireFormat(rscWireFormat);
 
+    let contentToRender;
     if (isFullDocument) {
       const bodyContent = extractBodyContent(element);
       if (bodyContent) {
-        const root = createRoot(rootElement);
-        root.render(bodyContent);
+        contentToRender = bodyContent;
       } else {
         console.error('[Rari] Could not extract body content, falling back to full element');
-        const root = createRoot(rootElement);
-        root.render(element);
+        contentToRender = element;
       }
     } else {
-      const root = createRoot(rootElement);
-      root.render(element);
+      contentToRender = element;
     }
+
+    ${isDevelopment
+      ? `
+    const wrappedContent = React.createElement(
+      AppRouterHMRProvider,
+      { initialPayload: { element, rscWireFormat } },
+      contentToRender
+    );
+    `
+      : 'const wrappedContent = contentToRender;'}
+
+    const root = createRoot(rootElement);
+    root.render(wrappedContent);
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`
@@ -1658,9 +1672,31 @@ export function createClientModuleMap() {
 `
       }
 
+      if (id === 'virtual:app-router-hmr-provider.tsx') {
+        const possiblePaths = [
+          path.join(process.cwd(), 'packages/rari/src/runtime/AppRouterHMRProvider.tsx'),
+          path.join(process.cwd(), 'src/runtime/AppRouterHMRProvider.tsx'),
+          path.join(process.cwd(), 'node_modules/rari/src/runtime/AppRouterHMRProvider.tsx'),
+        ]
+
+        for (const providerSourcePath of possiblePaths) {
+          if (fs.existsSync(providerSourcePath)) {
+            return fs.readFileSync(providerSourcePath, 'utf-8')
+          }
+        }
+
+        return 'export function AppRouterHMRProvider({ children }) { return children; }'
+      }
+
       if (id === 'virtual:rsc-integration') {
+        const isDevelopment = process.env.NODE_ENV !== 'production'
         return `
 import { useState, useEffect, Suspense, createElement, isValidElement, cloneElement } from 'react';
+
+if (typeof globalThis.__rari === 'undefined') {
+  globalThis.__rari = {};
+}
+globalThis.__rari.isDevelopment = ${isDevelopment};
 
 if (typeof globalThis.__clientComponents === 'undefined') {
   globalThis.__clientComponents = {};
@@ -2695,62 +2731,326 @@ if (import.meta.hot) {
     }
   });
 
+  import.meta.hot.on('rari:app-router-updated', async (data) => {
+    console.log('[HMR] Received app-router-updated event:', data);
+    try {
+      if (!data) return;
 
+      await handleAppRouterUpdate(data);
+    } catch (error) {
+      console.error('[HMR] App router update failed:', error);
+    }
+  });
 
-  async function invalidateRscCache(data) {
-    const filePath = data?.filePath || data;
-
-    const waitForServerReady = async () => {
-      for (let i = 0; i < 20; i++) {
-        try {
-          const response = await fetch('/_rsc_status');
-          if (response.ok) {
-            return true;
-          }
-        } catch (e) {
-          // Server not ready yet
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      return false;
-    };
-
-    const serverReady = await waitForServerReady();
-    if (serverReady) {
+  import.meta.hot.on('rari:server-action-updated', async (data) => {
+    if (data?.filePath) {
+      console.log('[HMR] Server action updated:', data.filePath);
       rscClient.clearCache();
 
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('rari:rsc-invalidate', {
+          detail: { filePath: data.filePath, type: 'server-action' }
+        });
+        window.dispatchEvent(event);
+      }
+    }
+  });
+
+  async function handleAppRouterUpdate(data) {
+    const fileType = data.fileType;
+    const filePath = data.filePath;
+    const routePath = data.routePath;
+    const affectedRoutes = data.affectedRoutes;
+    const manifestUpdated = data.manifestUpdated;
+    const metadata = data.metadata;
+    const metadataChanged = data.metadataChanged;
+
+    console.log('[HMR] App router ' + fileType + ' updated: ' + filePath);
+    console.log('[HMR] Affected routes:', affectedRoutes);
+
+    if (metadataChanged && metadata) {
+      updateDocumentMetadata(metadata);
+    }
+
+    try {
+      const rariServerUrl = window.location.origin;
+      const reloadUrl = rariServerUrl + '/api/rsc/hmr-register';
+
+      console.log('[HMR] Reloading component:', filePath, '(from dist/server)');
+
+      let componentId = filePath;
+      if (componentId.startsWith('src/')) {
+        componentId = componentId.substring(4);
+      }
+      componentId = componentId.replace(/\.(tsx|ts|jsx|js)$/, '');
+
+      const reloadResponse = await fetch(reloadUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          file_path: filePath
+        })
+      });
+
+      if (reloadResponse.ok) {
+        const result = await reloadResponse.json();
+        console.log('[HMR] Reload response:', result);
+      } else {
+        console.warn('[HMR] Component reload failed:', reloadResponse.status);
+      }
+    } catch (error) {
+      console.error('[HMR] Failed to reload component:', error);
+    }
+
+    let routes = [routePath];
+    switch (fileType) {
+      case 'page':
+        routes = [routePath];
+        break;
+      case 'layout':
+      case 'loading':
+      case 'error':
+      case 'not-found':
+        routes = affectedRoutes;
+        break;
+      default:
+        console.warn('[HMR] Unknown file type: ' + fileType);
+    }
+
+    await invalidateAppRouterCache({ routes, fileType, filePath, componentId: routePath });
+
+    if (manifestUpdated) {
+      await reloadAppRouterManifest();
+    }
+
+    await triggerAppRouterRerender({ routePath, affectedRoutes });
+  }
+
+  function updateDocumentMetadata(metadata) {
+    if (typeof document === 'undefined') return;
+
+    if (metadata.title) {
+      document.title = metadata.title;
+    }
+
+    if (metadata.description) {
+      let metaDesc = document.querySelector('meta[name="description"]');
+      if (!metaDesc) {
+        metaDesc = document.createElement('meta');
+        metaDesc.setAttribute('name', 'description');
+        document.head.appendChild(metaDesc);
+      }
+      metaDesc.setAttribute('content', metadata.description);
+    }
+  }
+
+  function clearCacheForRoutes(routes) {
+    if (!routes || routes.length === 0) {
+      rscClient.clearCache();
+      return;
+    }
+
+    const keysToDelete = [];
+    for (const key of rscClient.componentCache.keys()) {
+      for (const route of routes) {
+        if (key.includes('route:' + route + ':') || key.startsWith(route + ':')) {
+          keysToDelete.push(key);
+          break;
+        }
+        if (route !== '/' && key.includes('route:' + route + '/')) {
+          keysToDelete.push(key);
+          break;
+        }
+      }
+    }
+
+    for (const key of keysToDelete) {
+      rscClient.componentCache.delete(key);
+    }
+
+    console.log('[HMR] Cleared cache for ' + keysToDelete.length + ' entries across ' + routes.length + ' route(s)');
+  }
+
+  async function invalidateAppRouterCache(data) {
+    const routes = data.routes || [];
+    const fileType = data.fileType;
+    const filePath = data.filePath;
+    const componentId = data.componentId;
+
+    console.log('[HMR] Invalidating cache for routes:', routes);
+
+    if (componentId || filePath) {
       try {
-        await fetch('/api/rsc/hmr-register', {
+        const rariServerUrl = window.location.origin.includes(':5173')
+          ? 'http://localhost:3000'
+          : window.location.origin;
+
+        const invalidateUrl = rariServerUrl + '/api/rsc/hmr-invalidate';
+
+        console.log('[HMR] Calling server invalidation endpoint for:', componentId || filePath);
+
+        const invalidateResponse = await fetch(invalidateUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            file_path: filePath
-          })
+            componentId: componentId || filePath,
+            filePath: filePath
+          }),
         });
 
-        await new Promise(resolve => setTimeout(resolve, 300));
-      } catch (error) {
-        // Fallback to existing timeout-based approach
-      }
-
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('rari:rsc-invalidate', {
-          detail: { filePath }
-        });
-        window.dispatchEvent(event);
-      }
-    } else {
-      setTimeout(() => {
-        rscClient.clearCache();
-        if (typeof window !== 'undefined') {
-          const event = new CustomEvent('rari:rsc-invalidate', {
-            detail: { filePath }
-          });
-          window.dispatchEvent(event);
+        if (invalidateResponse.ok) {
+          const result = await invalidateResponse.json();
+          console.log('[HMR] Server cache invalidated:', result);
+        } else {
+          console.warn('[HMR] Server cache invalidation failed:', invalidateResponse.status);
         }
-      }, 1200);
+      } catch (error) {
+        console.error('[HMR] Failed to call server invalidation endpoint:', error);
+      }
+    }
+
+    clearCacheForRoutes(routes);
+
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('rari:rsc-invalidate', {
+        detail: { routes, fileType }
+      });
+      window.dispatchEvent(event);
+
+      const currentPath = window.location.pathname;
+      if (routes.includes(currentPath) || routes.includes('/')) {
+        console.log('[HMR] Re-fetching current route:', currentPath);
+
+        try {
+          const rariServerUrl = window.location.origin.includes(':5173')
+            ? 'http://localhost:3000'
+            : window.location.origin;
+          const url = rariServerUrl + currentPath + window.location.search;
+
+          const response = await fetch(url, {
+            headers: {
+              'Accept': 'text/x-component',
+            },
+            cache: 'no-cache',
+          });
+
+          if (response.ok) {
+            console.log('[HMR] Successfully re-fetched route, triggering re-render');
+          }
+        } catch (error) {
+          console.error('[HMR] Failed to re-fetch route:', error);
+        }
+      }
+    }
+  }
+
+  async function triggerAppRouterRerender(data) {
+    const routePath = data.routePath;
+    const affectedRoutes = data.affectedRoutes || [routePath];
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const currentPath = window.location.pathname;
+
+      const isCurrentRouteAffected = affectedRoutes.some(route => {
+        if (route === currentPath) return true;
+        if (currentPath.startsWith(route + '/')) return true;
+        return false;
+      });
+
+      console.log('[HMR] App router HMR triggered for routes:', affectedRoutes);
+      console.log('[HMR] Current route affected:', isCurrentRouteAffected);
+
+      const event = new CustomEvent('rari:app-router-rerender', {
+        detail: {
+          routePath,
+          affectedRoutes,
+          currentPath,
+          preserveParams: true
+        }
+      });
+      window.dispatchEvent(event);
+
+      console.log('[HMR] Re-render triggered successfully');
+    } catch (error) {
+      console.error('[HMR] Failed to trigger re-render:', error);
+      throw error;
+    }
+  }
+
+  async function reloadAppRouterManifest() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    console.log('[HMR] Reloading app router manifest');
+
+    try {
+      const response = await fetch('/app-routes.json', {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch manifest: ' + response.status);
+      }
+
+      const manifest = await response.json();
+
+      console.log('[HMR] Loaded updated manifest with ' + (manifest.routes?.length || 0) + ' routes');
+
+      if (typeof globalThis !== 'undefined') {
+        globalThis.__rari_app_routes_manifest = manifest;
+      }
+
+      const event = new CustomEvent('rari:app-router-manifest-updated', {
+        detail: { manifest }
+      });
+      window.dispatchEvent(event);
+
+      const currentPath = window.location.pathname;
+      const currentRoute = manifest.routes?.find(r => {
+        if (r.path === currentPath) return true;
+        if (r.path.includes('[')) {
+          const pattern = r.path.replace(/\\[([^\\]]+)\\]/g, '([^/]+)');
+          const regex = new RegExp("^" + pattern + "$");
+          return regex.test(currentPath);
+        }
+        return false;
+      });
+
+      if (currentRoute) {
+        console.log('[HMR] Current route found in updated manifest:', currentRoute.path);
+      } else {
+        console.warn('[HMR] Current route not found in updated manifest, may need navigation update');
+      }
+
+    } catch (error) {
+      console.error('[HMR] Failed to reload app router manifest:', error);
+      throw error;
+    }
+  }
+
+  async function invalidateRscCache(data) {
+    const filePath = data?.filePath || data;
+
+    rscClient.clearCache();
+
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('rari:rsc-invalidate', {
+        detail: { filePath }
+      });
+      window.dispatchEvent(event);
     }
   }
 }
@@ -2769,10 +3069,35 @@ export {
       const isServerComp = isServerComponent(file)
 
       if (isReactFile && isServerComp) {
-        server.hot.send('rari:server-component-updated', {
-          type: 'rari-hmr',
-          path: file,
-        })
+        const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
+
+        if (isAppRouterFile) {
+          let fileType = 'page'
+          if (file.endsWith('layout.tsx') || file.endsWith('layout.jsx')) {
+            fileType = 'layout'
+          }
+          else if (file.endsWith('loading.tsx') || file.endsWith('loading.jsx')) {
+            fileType = 'loading'
+          }
+          else if (file.endsWith('error.tsx') || file.endsWith('error.jsx')) {
+            fileType = 'error'
+          }
+          else if (file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')) {
+            fileType = 'not-found'
+          }
+
+          server.hot.send('rari:app-router-updated', {
+            type: 'rari-hmr',
+            filePath: file,
+            fileType,
+          })
+        }
+        else {
+          server.hot.send('rari:server-component-updated', {
+            type: 'rari-hmr',
+            path: file,
+          })
+        }
         return []
       }
       return undefined

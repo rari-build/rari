@@ -51,6 +51,10 @@
       "types": "./dist/runtime/actions.d.ts",
       "default": "./dist/runtime/actions.js"
     },
+    "./runtime/AppRouterHMRProvider": {
+      "types": "./dist/runtime/AppRouterHMRProvider.d.ts",
+      "default": "./dist/runtime/AppRouterHMRProvider.js"
+    },
     "./hooks/useActionState": {
       "types": "./dist/hooks/useActionState.d.ts",
       "default": "./dist/hooks/useActionState.js"

@@ -324,13 +324,19 @@ impl PackageJsonCacheImpl {
     }
 }
 impl PackageJsonCache for PackageJsonCacheImpl {
-    fn get(&self, path: &Path) -> Option<PackageJsonRc> {
-        self.0.read().ok().and_then(|i| i.get(path))
+    fn get(&self, path: &Path) -> deno_package_json::PackageJsonCacheResult {
+        use deno_package_json::PackageJsonCacheResult;
+        match self.0.read().ok().and_then(|i| i.get(path)) {
+            Some(pkg) => PackageJsonCacheResult::Hit(Some(pkg)),
+            None => PackageJsonCacheResult::NotCached,
+        }
     }
 
-    fn set(&self, path: PathBuf, package_json: PackageJsonRc) {
-        if let Ok(mut i) = self.0.write() {
-            i.set(path, package_json);
+    fn set(&self, path: PathBuf, package_json: Option<PackageJsonRc>) {
+        if let Ok(mut i) = self.0.write()
+            && let Some(pkg) = package_json
+        {
+            i.set(path, pkg);
         }
     }
 }

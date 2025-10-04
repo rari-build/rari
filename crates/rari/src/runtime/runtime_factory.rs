@@ -68,16 +68,25 @@ fn create_graceful_error() -> RariError {
     RariError::js_runtime(RUNTIME_RESTART_MESSAGE.to_string())
 }
 
+macro_rules! with_scope {
+    ($runtime:expr, |$scope:ident| $body:expr) => {{
+        let context = $runtime.main_context();
+        v8::scope_with_context!($scope, $runtime.v8_isolate(), context);
+        $body
+    }};
+}
+
 fn get_module_namespace_as_json(
     runtime: &mut JsRuntime,
     module_id: deno_core::ModuleId,
 ) -> Result<JsonValue, RariError> {
     match runtime.get_module_namespace(module_id) {
         Ok(namespace) => {
-            let mut scope = runtime.handle_scope();
-            let local_namespace = v8::Local::new(&mut scope, namespace);
+            let context = runtime.main_context();
+            v8::scope_with_context!(scope, runtime.v8_isolate(), context);
+            let local_namespace = v8::Local::new(scope, namespace);
             let local_value: v8::Local<v8::Value> = local_namespace.into();
-            v8_to_json(&mut scope, local_value)
+            v8_to_json(scope, local_value)
         }
         Err(e) => Err(RariError::js_execution(format!("Failed to get module namespace: {e}"))),
     }
@@ -564,13 +573,14 @@ fn get_streaming_ops() -> Vec<deno_core::OpDecl> {
     crate::runtime::ops::get_streaming_ops()
 }
 
-fn v8_to_json(
-    scope: &mut v8::HandleScope,
-    value: v8::Local<v8::Value>,
+fn v8_to_json<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
 ) -> Result<JsonValue, RariError> {
     let try_json_stringify =
-        |scope: &mut v8::HandleScope, value: v8::Local<v8::Value>| -> Option<JsonValue> {
-            let global = scope.get_current_context().global(scope);
+        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<JsonValue> {
+            let context = scope.get_current_context();
+            let global = context.global(scope);
             let json_key = v8::String::new(scope, "JSON")?;
             let json_obj = global.get(scope, json_key.into())?.to_object(scope)?;
             let stringify_key = v8::String::new(scope, "stringify")?;
@@ -579,7 +589,7 @@ fn v8_to_json(
 
             let args = [value];
             let result = stringify_fn.call(scope, json_obj.into(), &args)?;
-            let json_string = result.to_string(scope)?.to_rust_string_lossy(scope);
+            let json_string = result.to_string(scope)?.to_rust_string_lossy(scope.as_ref());
 
             serde_json::from_str(&json_string).ok()
         };
@@ -593,14 +603,14 @@ fn v8_to_json(
                 return Ok(json_value);
             }
 
-            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope);
+            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
             let detailed_err_msg = format!(
                 "Failed to convert V8 value of type '{}' to JSON: {}. V8 value details: {}",
                 v8_type_str,
                 err,
                 value
                     .to_detail_string(scope)
-                    .map(|s| s.to_rust_string_lossy(scope))
+                    .map(|s| s.to_rust_string_lossy(scope.as_ref()))
                     .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
             );
             Err(RariError::js_execution(detailed_err_msg))
@@ -610,13 +620,13 @@ fn v8_to_json(
                 return Ok(json_value);
             }
 
-            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope);
+            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
             let fallback_msg = format!(
                 "V8 serialization panicked for type '{}', using fallback. V8 value details: {}",
                 v8_type_str,
                 value
                     .to_detail_string(scope)
-                    .map(|s| s.to_rust_string_lossy(scope))
+                    .map(|s| s.to_rust_string_lossy(scope.as_ref()))
                     .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
             );
 
@@ -633,13 +643,13 @@ fn v8_to_json(
     }
 }
 
-fn is_promise(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) -> bool {
+fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool {
     if !value.is_object() {
         return false;
     }
 
     if let Some(string_rep) = value.to_string(scope) {
-        let string_val = string_rep.to_rust_string_lossy(scope);
+        let string_val = string_rep.to_rust_string_lossy(scope.as_ref());
 
         if string_val == "[object Promise]"
             && let Ok(obj) = v8::Local::<v8::Object>::try_from(value)
@@ -668,6 +678,8 @@ fn is_promise(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) -> bool 
 fn should_resolve_promises(script_name: &str) -> bool {
     script_name.starts_with("promise_test_")
         || script_name.starts_with("streaming_sim_")
+        || script_name == "reload_module"
+        || script_name == "invalidate_cache"
         || script_name.starts_with("execute_action_")
         || script_name.starts_with("exec_func_")
         || script_name == "<streaming_init>"
@@ -711,11 +723,14 @@ fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> 
 
     match runtime.execute_script("promise_completion_check", check_script.to_string()) {
         Ok(result_val) => {
-            let mut scope = runtime.handle_scope();
-            let local_v8_val = v8::Local::new(&mut scope, result_val);
-
-            let boolean_val = local_v8_val.to_boolean(&mut scope);
-            Ok(boolean_val.is_true())
+            let context = runtime.main_context();
+            let result = {
+                v8::scope_with_context!(scope, runtime.v8_isolate(), context);
+                let local_v8_val = v8::Local::new(scope, result_val);
+                let boolean_val = local_v8_val.to_boolean(scope);
+                boolean_val.is_true()
+            };
+            Ok(result)
         }
         Err(_) => Ok(false),
     }
@@ -852,9 +867,12 @@ async fn execute_script(
             )
             .await?;
 
-            let mut scope = runtime.handle_scope();
-            let local_result = v8::Local::new(&mut scope, reg_result);
-            let json_result = v8_to_json(&mut scope, local_result)?;
+            let context = runtime.main_context();
+            let json_result = {
+                v8::scope_with_context!(scope, runtime.v8_isolate(), context);
+                let local_result = v8::Local::new(scope, reg_result);
+                v8_to_json(scope, local_result)?
+            };
 
             if let JsonValue::Object(result_obj) = &json_result
                 && let Some(JsonValue::Bool(success)) = result_obj.get("success")
@@ -884,10 +902,10 @@ async fn execute_script(
             let should_resolve = should_resolve_promises(script_name);
 
             let is_promise_result = if should_resolve {
-                let mut scope = runtime.handle_scope();
-                let local_v8_val = v8::Local::new(&mut scope, &_global_v8_val);
-
-                is_promise(&mut scope, local_v8_val)
+                with_scope!(runtime, |scope| {
+                    let local_v8_val = v8::Local::new(scope, &_global_v8_val);
+                    is_promise(scope, local_v8_val)
+                })
             } else {
                 false
             };
@@ -900,12 +918,12 @@ async fn execute_script(
                     })(globalThis.__current_promise_object)
                 "#;
 
-                {
-                    let mut scope = runtime.handle_scope();
-                    let local_v8_val = v8::Local::new(&mut scope, &_global_v8_val);
+                with_scope!(runtime, |scope| {
+                    let local_v8_val = v8::Local::new(scope, &_global_v8_val);
 
-                    let global = scope.get_current_context().global(&mut scope);
-                    let key = match v8::String::new(&mut scope, "__current_promise_object") {
+                    let context = scope.get_current_context();
+                    let global = context.global(scope);
+                    let key = match v8::String::new(scope, "__current_promise_object") {
                         Some(key) => key,
                         None => {
                             error!("Failed to create V8 string for __current_promise_object");
@@ -914,8 +932,9 @@ async fn execute_script(
                             ));
                         }
                     };
-                    global.set(&mut scope, key.into(), local_v8_val);
-                }
+                    global.set(scope, key.into(), local_v8_val);
+                    Ok::<(), RariError>(())
+                })?;
 
                 let setup_script = r#"
                     (function() {
@@ -996,27 +1015,31 @@ async fn execute_script(
                             extract_script.to_string(),
                         ) {
                             Ok(extracted_value) => {
-                                let mut scope = runtime.handle_scope();
-                                let local_v8_val = v8::Local::new(&mut scope, extracted_value);
-                                v8_to_json(&mut scope, local_v8_val)
+                                with_scope!(runtime, |scope| {
+                                    let local_v8_val = v8::Local::new(scope, extracted_value);
+                                    v8_to_json(scope, local_v8_val)
+                                })
                             }
                             Err(_) => {
-                                let mut scope = runtime.handle_scope();
-                                let local_v8_val = v8::Local::new(&mut scope, _global_v8_val);
-                                v8_to_json(&mut scope, local_v8_val)
+                                with_scope!(runtime, |scope| {
+                                    let local_v8_val = v8::Local::new(scope, _global_v8_val);
+                                    v8_to_json(scope, local_v8_val)
+                                })
                             }
                         }
                     }
                     Err(_) => {
-                        let mut scope = runtime.handle_scope();
-                        let local_v8_val = v8::Local::new(&mut scope, _global_v8_val);
-                        v8_to_json(&mut scope, local_v8_val)
+                        with_scope!(runtime, |scope| {
+                            let local_v8_val = v8::Local::new(scope, _global_v8_val);
+                            v8_to_json(scope, local_v8_val)
+                        })
                     }
                 }
             } else {
-                let mut scope = runtime.handle_scope();
-                let local_v8_val = v8::Local::new(&mut scope, _global_v8_val);
-                v8_to_json(&mut scope, local_v8_val)
+                with_scope!(runtime, |scope| {
+                    let local_v8_val = v8::Local::new(scope, _global_v8_val);
+                    v8_to_json(scope, local_v8_val)
+                })
             }
         }
         Err(e) => {

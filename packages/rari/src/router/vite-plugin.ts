@@ -17,6 +17,164 @@ const DEFAULT_OPTIONS: Required<RariRouterPluginOptions> = {
   outDir: 'dist',
 }
 
+type AppRouterFileType = 'page' | 'layout' | 'loading' | 'error' | 'not-found' | 'server-action'
+
+interface AppRouterHMRData {
+  fileType: AppRouterFileType
+  filePath: string
+  routePath: string
+  affectedRoutes: string[]
+  manifestUpdated: boolean
+  timestamp: number
+  metadata?: Record<string, any>
+  metadataChanged?: boolean
+  actionExports?: string[]
+}
+
+function getAppRouterFileType(filePath: string): AppRouterFileType | null {
+  const fileName = path.basename(filePath)
+  const nameWithoutExt = fileName.replace(/\.(tsx?|jsx?)$/, '')
+
+  switch (nameWithoutExt) {
+    case 'page':
+      return 'page'
+    case 'layout':
+      return 'layout'
+    case 'loading':
+      return 'loading'
+    case 'error':
+      return 'error'
+    case 'not-found':
+      return 'not-found'
+    default:
+      return null
+  }
+}
+
+function filePathToRoutePath(filePath: string, appDir: string): string {
+  const relativePath = path.relative(appDir, path.dirname(filePath))
+
+  if (!relativePath || relativePath === '.') {
+    return '/'
+  }
+
+  const normalized = relativePath.replace(/\\/g, '/')
+  const segments = normalized.split('/').filter(Boolean)
+
+  return `/${segments.join('/')}`
+}
+
+function getAffectedRoutes(
+  routePath: string,
+  fileType: AppRouterFileType,
+  allRoutes: string[],
+): string[] {
+  if (fileType === 'page') {
+    // Page changes only affect the specific route
+    return [routePath]
+  }
+
+  // Layout, loading, error, and not-found affect the route and all nested routes
+  const affected = allRoutes.filter((route) => {
+    return route === routePath || route.startsWith(`${routePath}/`)
+  })
+
+  return affected.length > 0 ? affected : [routePath]
+}
+
+function isServerActionFile(fileContent: string): boolean {
+  const lines = fileContent.trim().split('\n')
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed === '' || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+      continue
+    }
+    if (trimmed === '\'use server\'' || trimmed === '"use server"') {
+      return true
+    }
+    // Stop at first non-comment, non-empty line
+    break
+  }
+  return false
+}
+
+function extractServerActionExports(fileContent: string): string[] {
+  const exports: string[] = []
+
+  const asyncFunctionRegex = /export\s+async\s+function\s+(\w+)/g
+  let match = asyncFunctionRegex.exec(fileContent)
+  while (match) {
+    exports.push(match[1])
+    match = asyncFunctionRegex.exec(fileContent)
+  }
+
+  const functionRegex = /export\s+function\s+(\w+)/g
+  match = functionRegex.exec(fileContent)
+  while (match) {
+    exports.push(match[1])
+    match = functionRegex.exec(fileContent)
+  }
+
+  const constRegex = /export\s+const\s+(\w+)\s*=/g
+  match = constRegex.exec(fileContent)
+  while (match) {
+    exports.push(match[1])
+    match = constRegex.exec(fileContent)
+  }
+
+  return exports
+}
+
+function extractMetadata(fileContent: string): Record<string, any> | null {
+  try {
+    const metadataRegex = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
+    const match = fileContent.match(metadataRegex)
+
+    if (!match) {
+      return null
+    }
+
+    const metadataString = match[1]
+
+    const metadata: Record<string, any> = {}
+
+    const titleMatch = metadataString.match(/title\s*:\s*['"]([^'"]+)['"]/)
+    if (titleMatch) {
+      metadata.title = titleMatch[1]
+    }
+
+    const descMatch = metadataString.match(/description\s*:\s*['"]([^'"]+)['"]/)
+    if (descMatch) {
+      metadata.description = descMatch[1]
+    }
+
+    const keywordsMatch = metadataString.match(/keywords\s*:\s*\[([\s\S]*?)\]/)
+    if (keywordsMatch) {
+      const keywordsStr = keywordsMatch[1]
+      const keywords = keywordsStr
+        .split(',')
+        .map(k => k.trim().replace(/['"]/g, ''))
+        .filter(Boolean)
+      metadata.keywords = keywords
+    }
+
+    const fieldsToExtract = ['author', 'viewport', 'themeColor', 'robots', 'openGraph', 'twitter']
+    for (const field of fieldsToExtract) {
+      const fieldRegex = new RegExp(`${field}\\s*:\\s*['"]([^'"]+)['"]`, 'm')
+      const fieldMatch = metadataString.match(fieldRegex)
+      if (fieldMatch) {
+        metadata[field] = fieldMatch[1]
+      }
+    }
+
+    return Object.keys(metadata).length > 0 ? metadata : null
+  }
+  catch (error) {
+    console.error('Failed to extract metadata:', error)
+    return null
+  }
+}
+
 export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
@@ -24,7 +182,48 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   let watcher: FSWatcher | undefined
   let cachedManifestContent: string | null = null
 
-  const generateAppRoutes = async (root: string): Promise<string | null> => {
+  const pendingHMRUpdates = new Map<string, NodeJS.Timeout>()
+  const DEBOUNCE_DELAY = 200 // 200ms debounce window
+
+  let routeStructureHash: string | null = null
+  const routeFiles = new Set<string>() // Track all route-defining files
+
+  const computeRouteStructureHash = (files: Set<string>): string => {
+    const sortedFiles = Array.from(files).sort()
+    return sortedFiles.join('|')
+  }
+
+  const scanRouteFiles = async (appDir: string): Promise<Set<string>> => {
+    const files = new Set<string>()
+
+    const scanDir = async (dir: string): Promise<void> => {
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true })
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name)
+
+          if (entry.isDirectory()) {
+            await scanDir(fullPath)
+          }
+          else if (entry.isFile() && opts.extensions.some(ext => entry.name.endsWith(ext))) {
+            const fileType = getAppRouterFileType(fullPath)
+            if (fileType) {
+              files.add(fullPath)
+            }
+          }
+        }
+      }
+      catch {
+        // Directory might not exist or be accessible
+      }
+    }
+
+    await scanDir(appDir)
+    return files
+  }
+
+  const generateAppRoutes = async (root: string, forceRegenerate: boolean = false): Promise<string | null> => {
     const appDir = path.resolve(root, opts.appDir)
 
     try {
@@ -35,6 +234,14 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     }
 
     try {
+      const currentRouteFiles = await scanRouteFiles(appDir)
+      const currentHash = computeRouteStructureHash(currentRouteFiles)
+
+      if (!forceRegenerate && routeStructureHash === currentHash && cachedManifestContent) {
+        console.warn('[Manifest] Route structure unchanged, using cached manifest')
+        return cachedManifestContent
+      }
+
       const { generateAppRouteManifest } = await import('./app-routes')
 
       const manifest = await generateAppRouteManifest(appDir, {
@@ -46,6 +253,10 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       const outDir = path.resolve(root, opts.outDir)
       await fs.mkdir(outDir, { recursive: true })
       await fs.writeFile(path.join(outDir, 'app-routes.json'), manifestContent, 'utf-8')
+
+      routeStructureHash = currentHash
+      routeFiles.clear()
+      currentRouteFiles.forEach(file => routeFiles.add(file))
 
       console.warn(`Generated app router manifest with ${manifest.routes.length} routes`)
 
@@ -73,13 +284,22 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     watcher.on('all', async (event: string, filePath: string) => {
       if (opts.extensions.some(ext => filePath.endsWith(ext))) {
         try {
-          await generateAppRoutes(root)
+          const fileType = getAppRouterFileType(filePath)
 
-          if (server && filePath.includes(opts.appDir)) {
-            server.ws.send({
-              type: 'full-reload',
-              path: '*',
-            })
+          const isRouteFile = fileType !== null
+          const isAddOrUnlink = event === 'add' || event === 'unlink'
+          const isNewRouteFile = isRouteFile && !routeFiles.has(filePath)
+
+          if (isAddOrUnlink || isNewRouteFile) {
+            console.warn(`[Manifest] Route structure changed (${event}: ${path.relative(root, filePath)}), regenerating manifest`)
+            await generateAppRoutes(root, true)
+
+            if (server && filePath.includes(opts.appDir)) {
+              server.ws.send({
+                type: 'full-reload',
+                path: '*',
+              })
+            }
           }
         }
         catch (error) {
@@ -106,16 +326,187 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       const { file, server } = ctx
 
       const appDir = path.resolve(server.config.root, opts.appDir)
+      const actionsDir = path.resolve(server.config.root, 'src/actions')
 
       const isAppFile
         = file.startsWith(appDir)
           && opts.extensions.some(ext => file.endsWith(ext))
 
-      if (isAppFile) {
-        cachedManifestContent = await generateAppRoutes(server.config.root)
+      const isActionsFile
+        = file.startsWith(actionsDir)
+          && opts.extensions.some(ext => file.endsWith(ext))
 
+      if (isAppFile) {
+        const fileType = getAppRouterFileType(file)
+
+        if (fileType) {
+          const existingTimer = pendingHMRUpdates.get(file)
+          if (existingTimer) {
+            clearTimeout(existingTimer)
+          }
+
+          const timer = setTimeout(async () => {
+            pendingHMRUpdates.delete(file)
+
+            const isNewRouteFile = !routeFiles.has(file)
+
+            const previousManifest = cachedManifestContent
+            cachedManifestContent = await generateAppRoutes(server.config.root, isNewRouteFile)
+            const manifestUpdated = previousManifest !== cachedManifestContent
+
+            const routePath = filePathToRoutePath(file, appDir)
+
+            let allRoutes: string[] = [routePath]
+            if (cachedManifestContent) {
+              try {
+                const manifest = JSON.parse(cachedManifestContent)
+                allRoutes = manifest.routes.map((r: any) => r.path)
+              }
+              catch (error) {
+                console.error('Failed to parse manifest for affected routes:', error)
+              }
+            }
+
+            const affectedRoutes = getAffectedRoutes(routePath, fileType, allRoutes)
+
+            let metadata: Record<string, any> | undefined
+            let metadataChanged = false
+
+            if (fileType === 'page' || fileType === 'layout') {
+              try {
+                const fileContent = await fs.readFile(file, 'utf-8')
+                const extractedMetadata = extractMetadata(fileContent)
+
+                if (extractedMetadata) {
+                  metadata = extractedMetadata
+                  metadataChanged = true
+                  console.warn(`[HMR] Metadata detected in ${fileType}: ${JSON.stringify(metadata)}`)
+                }
+              }
+              catch (error) {
+                console.error('Failed to extract metadata:', error)
+              }
+            }
+
+            const hmrData: AppRouterHMRData = {
+              fileType,
+              filePath: path.relative(server.config.root, file),
+              routePath,
+              affectedRoutes,
+              manifestUpdated,
+              timestamp: Date.now(),
+              metadata,
+              metadataChanged,
+            }
+
+            server.ws.send({
+              type: 'custom',
+              event: 'rari:app-router-updated',
+              data: hmrData,
+            })
+
+            const metadataInfo = metadataChanged ? ' [metadata updated]' : ''
+            console.warn(
+              `[HMR] App router ${fileType} changed: ${hmrData.filePath} (affects ${affectedRoutes.length} route${affectedRoutes.length === 1 ? '' : 's'})${metadataInfo}`,
+            )
+          }, DEBOUNCE_DELAY)
+
+          pendingHMRUpdates.set(file, timer)
+
+          return []
+        }
+
+        // Temporarily disabled - debugging
+        // // Check if this is a server action file
+        // try {
+        //   const fileContent = await fs.readFile(file, 'utf-8')
+        //   if (isServerActionFile(fileContent)) {
+        //     // Clear any existing debounce timer for this file
+        //     const existingTimer = pendingHMRUpdates.get(file)
+        //     if (existingTimer) {
+        //       clearTimeout(existingTimer)
+        //     }
+
+        //     // Debounce HMR updates to batch rapid changes
+        //     const timer = setTimeout(async () => {
+        //       pendingHMRUpdates.delete(file)
+
+        //       const fileContent = await fs.readFile(file, 'utf-8')
+        //       const actionExports = extractServerActionExports(fileContent)
+
+        //       // Send custom HMR event to client for server action
+        //       const hmrData: AppRouterHMRData = {
+        //         fileType: 'server-action',
+        //         filePath: path.relative(server.config.root, file),
+        //         routePath: '/', // Server actions don't have a specific route
+        //         affectedRoutes: [], // Will be determined by client based on usage
+        //         manifestUpdated: false,
+        //         timestamp: Date.now(),
+        //         actionExports,
+        //       }
+
+        //       server.ws.send({
+        //         type: 'custom',
+        //         event: 'rari:server-action-updated',
+        //         data: hmrData,
+        //       })
+
+        //       console.warn(
+        //         `[HMR] Server action file changed: ${hmrData.filePath} (exports: ${actionExports.join(', ')})`,
+        //       )
+        //     }, DEBOUNCE_DELAY)
+
+        //     pendingHMRUpdates.set(file, timer)
+
+        //     return []
+        //   }
+        // } catch (error) {
+        //   // File might not exist or be readable, continue with normal flow
+        // }
+
+        // Non-special files in app directory
+        cachedManifestContent = await generateAppRoutes(server.config.root)
         console.warn(`App router file changed: ${path.relative(server.config.root, file)}`)
         return []
+      }
+
+      if (isActionsFile) {
+        try {
+          const fileContent = await fs.readFile(file, 'utf-8')
+          if (isServerActionFile(fileContent)) {
+            const existingTimer = pendingHMRUpdates.get(file)
+            if (existingTimer) {
+              clearTimeout(existingTimer)
+            }
+
+            const timer = setTimeout(async () => {
+              pendingHMRUpdates.delete(file)
+
+              const fileContent = await fs.readFile(file, 'utf-8')
+              const actionExports = extractServerActionExports(fileContent)
+
+              server.ws.send({
+                type: 'custom',
+                event: 'rari:server-action-updated',
+                data: {
+                  filePath: path.relative(server.config.root, file),
+                  actionExports,
+                },
+              })
+
+              console.warn(
+                `[HMR] Server action file changed: ${path.relative(server.config.root, file)} (exports: ${actionExports.join(', ')})`,
+              )
+            }, DEBOUNCE_DELAY)
+
+            pendingHMRUpdates.set(file, timer)
+
+            return []
+          }
+        }
+        catch {
+          // File might not exist or be readable, continue with normal flow
+        }
       }
     },
 
@@ -133,6 +524,11 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     },
 
     async closeBundle() {
+      for (const timer of pendingHMRUpdates.values()) {
+        clearTimeout(timer)
+      }
+      pendingHMRUpdates.clear()
+
       if (watcher) {
         await watcher.close()
       }
