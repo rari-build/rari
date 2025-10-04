@@ -11,9 +11,9 @@
   },
   "env": {
     "builtin": true,
+    "es2026": true,
     "browser": true,
     "commonjs": true,
-    "es2024": true,
     "node": true,
     "shared-node-browser": true
   },
@@ -23,7 +23,6 @@
     "**/node_modules/",
     "packages/*/bin/",
     "**/.pnpm-store/",
-    "**/.rari/",
     "**/node_modules",
     "**/dist",
     "**/package-lock.json",
@@ -195,6 +194,7 @@
     "no-useless-backreference": "off",
     "no-useless-call": "error",
     "no-useless-catch": "error",
+    "no-useless-computed-key": "error",
     "no-useless-constructor": "error",
     "no-useless-rename": "error",
     "no-var": "error",

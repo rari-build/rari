@@ -658,6 +658,7 @@ export function AppRouterHMRProvider({ children, initialPayload }: AppRouterHMRP
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handleManualRefresh}
+              type="button"
               style={{
                 padding: '8px 16px',
                 background: 'white',
@@ -673,6 +674,7 @@ export function AppRouterHMRProvider({ children, initialPayload }: AppRouterHMRP
             </button>
             <button
               onClick={handleDismissError}
+              type="button"
               style={{
                 padding: '8px 16px',
                 background: 'rgba(255, 255, 255, 0.2)',
