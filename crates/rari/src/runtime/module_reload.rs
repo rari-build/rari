@@ -2,8 +2,9 @@ use crate::error::{ModuleReloadError, RariError};
 use crate::rsc::component::ComponentRegistry;
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::dist_path_resolver::DistPathResolver;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -124,14 +125,15 @@ pub struct JsComponentVerification {
     pub timestamp: f64,
 }
 
+type DebouncePendingMap = FxHashMap<String, (ModuleReloadRequest, tokio::task::JoinHandle<()>)>;
+
 pub struct ModuleReloadManager {
     reload_queue: Arc<Mutex<VecDeque<ModuleReloadRequest>>>,
     reload_stats: Arc<RwLock<ReloadStats>>,
     config: ReloadConfig,
     runtime: Option<Arc<JsExecutionRuntime>>,
     component_registry: Option<Arc<parking_lot::Mutex<ComponentRegistry>>>,
-    debounce_pending:
-        Arc<Mutex<HashMap<String, (ModuleReloadRequest, tokio::task::JoinHandle<()>)>>>,
+    debounce_pending: Arc<Mutex<DebouncePendingMap>>,
     reload_history: Arc<Mutex<VecDeque<ReloadHistoryEntry>>>,
     dist_path_resolver: Option<Arc<DistPathResolver>>,
 }
@@ -159,7 +161,7 @@ impl ModuleReloadManager {
             config,
             runtime: None,
             component_registry: None,
-            debounce_pending: Arc::new(Mutex::new(HashMap::new())),
+            debounce_pending: Arc::new(Mutex::new(FxHashMap::default())),
             reload_history: Arc::new(Mutex::new(VecDeque::new())),
             dist_path_resolver: None,
         }
@@ -172,7 +174,7 @@ impl ModuleReloadManager {
             config,
             runtime: Some(runtime),
             component_registry: None,
-            debounce_pending: Arc::new(Mutex::new(HashMap::new())),
+            debounce_pending: Arc::new(Mutex::new(FxHashMap::default())),
             reload_history: Arc::new(Mutex::new(VecDeque::new())),
             dist_path_resolver: None,
         }

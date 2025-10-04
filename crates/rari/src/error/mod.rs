@@ -121,7 +121,7 @@ pub enum RariError {
     JsExecution(String, Option<ErrorMetadata>),
     JsRuntime(String, Option<ErrorMetadata>),
     IoError(String, Option<ErrorMetadata>),
-    ModuleReload(ModuleReloadError, Option<ErrorMetadata>),
+    ModuleReload(Box<ModuleReloadError>, Option<ErrorMetadata>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -485,7 +485,7 @@ impl RariError {
     }
 
     pub fn module_reload(error: ModuleReloadError) -> Self {
-        Self::ModuleReload(error, None)
+        Self::ModuleReload(Box::new(error), None)
     }
 
     pub fn module_reload_syntax_error(
@@ -495,12 +495,12 @@ impl RariError {
         column: Option<u32>,
     ) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::SyntaxError {
+            Box::new(ModuleReloadError::SyntaxError {
                 message: message.into(),
                 file_path: file_path.into(),
                 line,
                 column,
-            },
+            }),
             None,
         )
     }
@@ -512,12 +512,12 @@ impl RariError {
         error_name: Option<String>,
     ) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::RuntimeError {
+            Box::new(ModuleReloadError::RuntimeError {
                 message: message.into(),
                 file_path: file_path.into(),
                 stack,
                 error_name,
-            },
+            }),
             None,
         )
     }
@@ -528,11 +528,11 @@ impl RariError {
         timeout_ms: u64,
     ) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::Timeout {
+            Box::new(ModuleReloadError::Timeout {
                 message: message.into(),
                 file_path: file_path.into(),
                 timeout_ms,
-            },
+            }),
             None,
         )
     }
@@ -542,7 +542,10 @@ impl RariError {
         file_path: impl Into<String>,
     ) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::NotFound { message: message.into(), file_path: file_path.into() },
+            Box::new(ModuleReloadError::NotFound {
+                message: message.into(),
+                file_path: file_path.into(),
+            }),
             None,
         )
     }
@@ -554,29 +557,35 @@ impl RariError {
         last_error: Option<String>,
     ) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::MaxRetriesExceeded {
+            Box::new(ModuleReloadError::MaxRetriesExceeded {
                 message: message.into(),
                 file_path: file_path.into(),
                 attempts,
                 last_error,
-            },
+            }),
             None,
         )
     }
 
     pub fn module_reload_helpers_not_initialized(message: impl Into<String>) -> Self {
         Self::ModuleReload(
-            ModuleReloadError::HelpersNotInitialized { message: message.into() },
+            Box::new(ModuleReloadError::HelpersNotInitialized { message: message.into() }),
             None,
         )
     }
 
     pub fn module_reload_runtime_not_available(message: impl Into<String>) -> Self {
-        Self::ModuleReload(ModuleReloadError::RuntimeNotAvailable { message: message.into() }, None)
+        Self::ModuleReload(
+            Box::new(ModuleReloadError::RuntimeNotAvailable { message: message.into() }),
+            None,
+        )
     }
 
     pub fn module_reload_other(message: impl Into<String>, file_path: Option<String>) -> Self {
-        Self::ModuleReload(ModuleReloadError::Other { message: message.into(), file_path }, None)
+        Self::ModuleReload(
+            Box::new(ModuleReloadError::Other { message: message.into(), file_path }),
+            None,
+        )
     }
 
     pub fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync>) -> Self {
