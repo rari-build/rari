@@ -72,6 +72,288 @@ export function AppRouterHMRProvider({ children, initialPayload }: AppRouterHMRP
     })
   }
 
+  const trackHMRFailure = (error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
+    const failure: HMRFailure = {
+      timestamp: Date.now(),
+      error,
+      type,
+      details,
+      filePath,
+    }
+
+    failureHistoryRef.current.push(failure)
+    consecutiveFailuresRef.current += 1
+
+    if (failureHistoryRef.current.length > 10) {
+      failureHistoryRef.current.shift()
+    }
+
+    console.error('[HMR Failure]', {
+      type,
+      details,
+      filePath,
+      consecutiveFailures: consecutiveFailuresRef.current,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date(failure.timestamp).toISOString(),
+    })
+
+    if (consecutiveFailuresRef.current >= MAX_RETRIES - 1) {
+      setHmrError(failure)
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rari:hmr-failure', {
+        detail: failure,
+      }))
+    }
+  }
+
+  const handleFallbackReload = () => {
+    console.warn('[HMR] Initiating fallback full page reload...')
+    console.warn('[HMR] Preserving console logs for debugging')
+
+    setTimeout(() => {
+      window.location.reload()
+    }, 1000)
+  }
+
+  const resetFailureTracking = () => {
+    if (consecutiveFailuresRef.current > 0) {
+      console.warn(`[HMR] Recovered after ${consecutiveFailuresRef.current} consecutive failures`)
+      consecutiveFailuresRef.current = 0
+    }
+  }
+
+  const showSuccess = () => {
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current)
+    }
+    setShowSuccessIndicator(true)
+    successTimeoutRef.current = setTimeout(() => {
+      setShowSuccessIndicator(false)
+    }, 2000)
+  }
+
+  const showFailure = () => {
+    if (failureTimeoutRef.current) {
+      clearTimeout(failureTimeoutRef.current)
+    }
+    setShowFailureIndicator(true)
+    failureTimeoutRef.current = setTimeout(() => {
+      setShowFailureIndicator(false)
+    }, 3000)
+  }
+
+  const isStaleContent = (wireFormat: string): boolean => {
+    if (!lastSuccessfulPayloadRef.current) {
+      return false
+    }
+
+    if (wireFormat === lastSuccessfulPayloadRef.current) {
+      return true
+    }
+
+    const timestampMatch = wireFormat.match(/"timestamp":(\d+)/)
+    if (timestampMatch) {
+      const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
+      const now = Date.now()
+      if (now - payloadTimestamp > 5000) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  function rscToReact(rsc: any, modules: Map<string, any>): any {
+    if (!rsc)
+      return null
+
+    if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean') {
+      return rsc
+    }
+
+    if (Array.isArray(rsc)) {
+      if (rsc.length >= 4 && rsc[0] === '$') {
+        const [, type, key, props] = rsc
+
+        if (typeof type === 'string' && type.startsWith('$L')) {
+          const moduleInfo = modules.get(type)
+          if (moduleInfo) {
+            const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
+            if (Component) {
+              const childProps = {
+                ...props,
+                children: props.children ? rscToReact(props.children, modules) : undefined,
+              }
+              return React.createElement(Component, { key, ...childProps })
+            }
+          }
+          return null
+        }
+
+        const processedProps = processProps(props, modules)
+        return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+      }
+      return rsc.map(child => rscToReact(child, modules))
+    }
+
+    return rsc
+  }
+
+  function processProps(props: any, modules: Map<string, any>): any {
+    if (!props || typeof props !== 'object')
+      return props
+
+    const processed: any = {}
+    for (const key in props) {
+      if (Object.prototype.hasOwnProperty.call(props, key)) {
+        if (key === 'children') {
+          processed[key] = props.children ? rscToReact(props.children, modules) : undefined
+        }
+        else {
+          processed[key] = props[key]
+        }
+      }
+    }
+    return processed
+  }
+
+  const parseRscWireFormat = (wireFormat: string) => {
+    try {
+      const lines = wireFormat.trim().split('\n')
+      const modules = new Map()
+      let rootElement = null
+
+      for (const line of lines) {
+        const colonIndex = line.indexOf(':')
+        if (colonIndex === -1)
+          continue
+
+        const rowId = line.substring(0, colonIndex)
+        const content = line.substring(colonIndex + 1)
+
+        try {
+          if (content.startsWith('I[')) {
+            const importData = JSON.parse(content.substring(1))
+            if (Array.isArray(importData) && importData.length >= 3) {
+              const [path, chunks, exportName] = importData
+              modules.set(`$L${rowId}`, {
+                id: path,
+                chunks: Array.isArray(chunks) ? chunks : [chunks],
+                name: exportName || 'default',
+              })
+            }
+          }
+          else if (content.startsWith('[')) {
+            const elementData = JSON.parse(content)
+            if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
+              rootElement = rscToReact(elementData, modules)
+            }
+          }
+        }
+        catch (e) {
+          console.error('[AppRouterHMRProvider] Failed to parse RSC line:', line, e)
+        }
+      }
+
+      return {
+        element: rootElement,
+        modules,
+        wireFormat,
+      }
+    }
+    catch (error) {
+      console.error('[AppRouterHMRProvider] Failed to parse RSC wire format:', error)
+      throw error
+    }
+  }
+
+  const refetchRscPayload = async () => {
+    console.warn('[AppRouterHMRProvider] Fetching fresh RSC payload')
+
+    try {
+      const rariServerUrl = window.location.origin.includes(':5173')
+        ? 'http://localhost:3000'
+        : window.location.origin
+
+      const url = rariServerUrl + window.location.pathname + window.location.search
+
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/x-component',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`)
+        trackHMRFailure(
+          error,
+          'fetch',
+          `HTTP ${response.status} when fetching ${url}`,
+          window.location.pathname,
+        )
+        throw error
+      }
+
+      const rscWireFormat = await response.text()
+
+      if (isStaleContent(rscWireFormat)) {
+        const error = new Error('Server returned stale content')
+        trackHMRFailure(
+          error,
+          'stale',
+          'RSC payload appears to be stale (identical to previous or old timestamp)',
+          window.location.pathname,
+        )
+        console.warn('[HMR] Stale content detected, but continuing with update')
+      }
+
+      console.warn('[AppRouterHMRProvider] Successfully fetched RSC payload')
+
+      let parsedPayload
+      try {
+        parsedPayload = parseRscWireFormat(rscWireFormat)
+      }
+      catch (parseError) {
+        const error = parseError instanceof Error ? parseError : new Error(String(parseError))
+        trackHMRFailure(
+          error,
+          'parse',
+          `Failed to parse RSC wire format: ${error.message}`,
+          window.location.pathname,
+        )
+        throw error
+      }
+
+      console.warn('[AppRouterHMRProvider] Setting new RSC payload:', parsedPayload)
+      setRscPayload(parsedPayload)
+
+      lastSuccessfulPayloadRef.current = rscWireFormat
+
+      resetFailureTracking()
+
+      return parsedPayload
+    }
+    catch (error) {
+      if (error instanceof Error && !error.message.includes('Failed to fetch RSC data') && !error.message.includes('Failed to parse')) {
+        trackHMRFailure(
+          error,
+          'network',
+          `Network error: ${error.message}`,
+          window.location.pathname,
+        )
+      }
+
+      console.error('[AppRouterHMRProvider] Error fetching RSC payload:', error)
+      throw error
+    }
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined')
       return
@@ -192,52 +474,6 @@ export function AppRouterHMRProvider({ children, initialPayload }: AppRouterHMRP
     }
   }, [])
 
-  const trackHMRFailure = (error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
-    const failure: HMRFailure = {
-      timestamp: Date.now(),
-      error,
-      type,
-      details,
-      filePath,
-    }
-
-    failureHistoryRef.current.push(failure)
-    consecutiveFailuresRef.current += 1
-
-    if (failureHistoryRef.current.length > 10) {
-      failureHistoryRef.current.shift()
-    }
-
-    console.error('[HMR Failure]', {
-      type,
-      details,
-      filePath,
-      consecutiveFailures: consecutiveFailuresRef.current,
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date(failure.timestamp).toISOString(),
-    })
-
-    if (consecutiveFailuresRef.current >= MAX_RETRIES - 1) {
-      setHmrError(failure)
-    }
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('rari:hmr-failure', {
-        detail: failure,
-      }))
-    }
-  }
-
-  const handleFallbackReload = () => {
-    console.warn('[HMR] Initiating fallback full page reload...')
-    console.warn('[HMR] Preserving console logs for debugging')
-
-    setTimeout(() => {
-      window.location.reload()
-    }, 1000)
-  }
-
   const handleManualRefresh = () => {
     console.warn('[HMR] Manual refresh requested')
     window.location.reload()
@@ -245,243 +481,6 @@ export function AppRouterHMRProvider({ children, initialPayload }: AppRouterHMRP
 
   const handleDismissError = () => {
     setHmrError(null)
-  }
-
-  const resetFailureTracking = () => {
-    if (consecutiveFailuresRef.current > 0) {
-      console.warn(`[HMR] Recovered after ${consecutiveFailuresRef.current} consecutive failures`)
-      consecutiveFailuresRef.current = 0
-    }
-  }
-
-  const showSuccess = () => {
-    if (successTimeoutRef.current) {
-      clearTimeout(successTimeoutRef.current)
-    }
-    setShowSuccessIndicator(true)
-    successTimeoutRef.current = setTimeout(() => {
-      setShowSuccessIndicator(false)
-    }, 2000)
-  }
-
-  const showFailure = () => {
-    if (failureTimeoutRef.current) {
-      clearTimeout(failureTimeoutRef.current)
-    }
-    setShowFailureIndicator(true)
-    failureTimeoutRef.current = setTimeout(() => {
-      setShowFailureIndicator(false)
-    }, 3000)
-  }
-
-  const isStaleContent = (wireFormat: string): boolean => {
-    if (!lastSuccessfulPayloadRef.current) {
-      return false
-    }
-
-    if (wireFormat === lastSuccessfulPayloadRef.current) {
-      return true
-    }
-
-    const timestampMatch = wireFormat.match(/"timestamp":(\d+)/)
-    if (timestampMatch) {
-      const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
-      const now = Date.now()
-      if (now - payloadTimestamp > 5000) {
-        return true
-      }
-    }
-
-    return false
-  }
-
-  const refetchRscPayload = async () => {
-    console.warn('[AppRouterHMRProvider] Fetching fresh RSC payload')
-
-    try {
-      const rariServerUrl = window.location.origin.includes(':5173')
-        ? 'http://localhost:3000'
-        : window.location.origin
-
-      const url = rariServerUrl + window.location.pathname + window.location.search
-
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'text/x-component',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-        cache: 'no-store',
-      })
-
-      if (!response.ok) {
-        const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`)
-        trackHMRFailure(
-          error,
-          'fetch',
-          `HTTP ${response.status} when fetching ${url}`,
-          window.location.pathname,
-        )
-        throw error
-      }
-
-      const rscWireFormat = await response.text()
-
-      if (isStaleContent(rscWireFormat)) {
-        const error = new Error('Server returned stale content')
-        trackHMRFailure(
-          error,
-          'stale',
-          'RSC payload appears to be stale (identical to previous or old timestamp)',
-          window.location.pathname,
-        )
-        console.warn('[HMR] Stale content detected, but continuing with update')
-        // Don't throw - we'll still try to use it, but log the warning
-      }
-
-      console.warn('[AppRouterHMRProvider] Successfully fetched RSC payload')
-
-      let parsedPayload
-      try {
-        parsedPayload = parseRscWireFormat(rscWireFormat)
-      }
-      catch (parseError) {
-        const error = parseError instanceof Error ? parseError : new Error(String(parseError))
-        trackHMRFailure(
-          error,
-          'parse',
-          `Failed to parse RSC wire format: ${error.message}`,
-          window.location.pathname,
-        )
-        throw error
-      }
-
-      console.warn('[AppRouterHMRProvider] Setting new RSC payload:', parsedPayload)
-      setRscPayload(parsedPayload)
-
-      lastSuccessfulPayloadRef.current = rscWireFormat
-
-      resetFailureTracking()
-
-      return parsedPayload
-    }
-    catch (error) {
-      if (error instanceof Error && !error.message.includes('Failed to fetch RSC data') && !error.message.includes('Failed to parse')) {
-        trackHMRFailure(
-          error,
-          'network',
-          `Network error: ${error.message}`,
-          window.location.pathname,
-        )
-      }
-
-      console.error('[AppRouterHMRProvider] Error fetching RSC payload:', error)
-      throw error
-    }
-  }
-
-  const rscToReact = (rsc: any, modules: Map<string, any>): any => {
-    if (!rsc)
-      return null
-
-    if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean') {
-      return rsc
-    }
-
-    if (Array.isArray(rsc)) {
-      if (rsc.length >= 4 && rsc[0] === '$') {
-        const [, type, key, props] = rsc
-
-        if (typeof type === 'string' && type.startsWith('$L')) {
-          const moduleInfo = modules.get(type)
-          if (moduleInfo) {
-            const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
-            if (Component) {
-              const childProps = {
-                ...props,
-                children: props.children ? rscToReact(props.children, modules) : undefined,
-              }
-              return React.createElement(Component, { key, ...childProps })
-            }
-          }
-          return null
-        }
-
-        const processedProps = processProps(props, modules)
-        return React.createElement(type, key ? { ...processedProps, key } : processedProps)
-      }
-      return rsc.map(child => rscToReact(child, modules))
-    }
-
-    return rsc
-  }
-
-  const processProps = (props: any, modules: Map<string, any>): any => {
-    if (!props || typeof props !== 'object')
-      return props
-
-    const processed: any = {}
-    for (const key in props) {
-      if (Object.prototype.hasOwnProperty.call(props, key)) {
-        if (key === 'children') {
-          processed[key] = props.children ? rscToReact(props.children, modules) : undefined
-        }
-        else {
-          processed[key] = props[key]
-        }
-      }
-    }
-    return processed
-  }
-
-  const parseRscWireFormat = (wireFormat: string) => {
-    try {
-      const lines = wireFormat.trim().split('\n')
-      const modules = new Map()
-      let rootElement = null
-
-      for (const line of lines) {
-        const colonIndex = line.indexOf(':')
-        if (colonIndex === -1)
-          continue
-
-        const rowId = line.substring(0, colonIndex)
-        const content = line.substring(colonIndex + 1)
-
-        try {
-          if (content.startsWith('I[')) {
-            const importData = JSON.parse(content.substring(1))
-            if (Array.isArray(importData) && importData.length >= 3) {
-              const [path, chunks, exportName] = importData
-              modules.set(`$L${rowId}`, {
-                id: path,
-                chunks: Array.isArray(chunks) ? chunks : [chunks],
-                name: exportName || 'default',
-              })
-            }
-          }
-          else if (content.startsWith('[')) {
-            const elementData = JSON.parse(content)
-            if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
-              rootElement = rscToReact(elementData, modules)
-            }
-          }
-        }
-        catch (e) {
-          console.error('[AppRouterHMRProvider] Failed to parse RSC line:', line, e)
-        }
-      }
-
-      return {
-        element: rootElement,
-        modules,
-        wireFormat,
-      }
-    }
-    catch (error) {
-      console.error('[AppRouterHMRProvider] Failed to parse RSC wire format:', error)
-      throw error
-    }
   }
 
   const extractBodyContent = (element: any) => {

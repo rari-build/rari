@@ -1041,7 +1041,7 @@ export function createServerBuildPlugin(
       }
     },
 
-    async handleHotUpdate({ file, _server }) {
+    async handleHotUpdate({ file }) {
       if (!builder || !isDev)
         return
 
