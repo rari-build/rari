@@ -787,7 +787,7 @@ const ${componentName} = registerClientReference(
           )
 
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: '.rari',
+            outDir: 'dist',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
           })
@@ -1061,7 +1061,7 @@ const ${componentName} = registerClientReference(
 
           const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: '.rari',
+            outDir: 'dist',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
           })
@@ -3269,7 +3269,7 @@ export {
         return undefined
       }
 
-      if (file.includes('/.rari/') || file.includes('\\.rari\\')) {
+      if (file.includes('/dist/') || file.includes('\\dist\\')) {
         return []
       }
 
