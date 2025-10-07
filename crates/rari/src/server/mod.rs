@@ -47,6 +47,18 @@ const CHUNKED_ENCODING: &str = "chunked";
 const SERVER_MANIFEST_PATH: &str = "dist/server-manifest.json";
 const DIST_DIR: &str = "dist";
 
+#[derive(Debug, Deserialize)]
+pub struct ReloadComponentRequest {
+    pub component_id: String,
+    pub bundle_path: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReloadComponentResponse {
+    pub success: bool,
+    pub message: String,
+}
+
 #[derive(Clone)]
 pub struct ServerState {
     pub renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
@@ -215,6 +227,8 @@ impl Server {
                 .route("/api/rsc/hmr-invalidate", axum::routing::options(cors_preflight_ok))
                 .route("/api/rsc/hmr-reload", post(hmr_reload_component))
                 .route("/api/rsc/hmr-reload", axum::routing::options(cors_preflight_ok))
+                .route("/api/rsc/reload-component", post(reload_component))
+                .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
@@ -2063,6 +2077,51 @@ async fn hmr_reload_component(
                 "success": false,
                 "componentId": payload.component_id,
                 "error": e.to_string()
+            }))
+        }
+    }
+}
+
+#[axum::debug_handler]
+async fn reload_component(
+    State(state): State<ServerState>,
+    Json(payload): Json<ReloadComponentRequest>,
+) -> Result<Json<ReloadComponentResponse>, StatusCode> {
+    info!(
+        "Reload component request for: {} from bundle: {}",
+        payload.component_id, payload.bundle_path
+    );
+
+    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let bundle_full_path = project_root.join(&payload.bundle_path);
+
+    let invalidate_result = {
+        let renderer = state.renderer.lock().await;
+        renderer.runtime.invalidate_component(&payload.component_id).await
+    };
+
+    if let Err(e) = invalidate_result {
+        warn!("Failed to invalidate component (non-fatal): {}", e);
+    }
+
+    let load_result = {
+        let renderer = state.renderer.lock().await;
+        renderer.runtime.load_component(&payload.component_id, &bundle_full_path).await
+    };
+
+    match load_result {
+        Ok(()) => {
+            info!("Component reloaded successfully: {}", payload.component_id);
+            Ok(Json(ReloadComponentResponse {
+                success: true,
+                message: format!("Component {} reloaded successfully", payload.component_id),
+            }))
+        }
+        Err(e) => {
+            error!("Failed to reload component {}: {}", payload.component_id, e);
+            Ok(Json(ReloadComponentResponse {
+                success: false,
+                message: format!("Failed to reload component: {}", e),
             }))
         }
     }

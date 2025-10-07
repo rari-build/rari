@@ -27,6 +27,13 @@ export interface ServerBuildOptions {
   minify?: boolean
 }
 
+export interface ComponentRebuildResult {
+  componentId: string
+  bundlePath: string
+  success: boolean
+  error?: string
+}
+
 export class ServerComponentBuilder {
   private serverComponents = new Map<
     string,
@@ -50,6 +57,12 @@ export class ServerComponentBuilder {
 
   private options: Required<ServerBuildOptions>
   private projectRoot: string
+
+  private buildCache = new Map<string, {
+    code: string
+    timestamp: number
+    dependencies: string[]
+  }>()
 
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
@@ -959,6 +972,301 @@ function registerClientReference(clientReference, id, exportName) {
       .replace(/[^\w/-]/g, '_')
       .replace(/^src\//, '')
       .replace(/^components\//, 'components/')
+  }
+
+  async rebuildComponent(filePath: string): Promise<ComponentRebuildResult> {
+    const componentId = this.getComponentId(
+      path.relative(this.projectRoot, filePath),
+    )
+
+    const code = await fs.promises.readFile(filePath, 'utf-8')
+    const dependencies = this.extractDependencies(code)
+    const hasNodeImports = this.hasNodeImports(code)
+
+    const componentData = {
+      filePath,
+      originalCode: code,
+      dependencies,
+      hasNodeImports,
+    }
+
+    if (this.isServerAction(code)) {
+      this.serverActions.set(filePath, componentData)
+    }
+    else {
+      this.serverComponents.set(filePath, componentData)
+    }
+
+    const relativeBundlePath = path.join(
+      this.options.serverDir,
+      `${componentId}.js`,
+    )
+    const fullBundlePath = path.join(this.options.outDir, relativeBundlePath)
+
+    const cached = this.buildCache.get(filePath)
+    const fileStats = await fs.promises.stat(filePath)
+    const fileTimestamp = fileStats.mtimeMs
+
+    if (cached
+      && cached.timestamp >= fileTimestamp
+      && JSON.stringify(cached.dependencies) === JSON.stringify(dependencies)) {
+      await fs.promises.writeFile(fullBundlePath, cached.code, 'utf-8')
+
+      await this.updateManifestForComponent(componentId, filePath, relativeBundlePath)
+
+      return {
+        componentId,
+        bundlePath: path.join(this.options.outDir, relativeBundlePath),
+        success: true,
+      }
+    }
+
+    const bundleDir = path.dirname(fullBundlePath)
+    await fs.promises.mkdir(bundleDir, { recursive: true })
+
+    const builtCode = await this.buildSingleComponentOptimized(
+      filePath,
+      fullBundlePath,
+      componentData,
+    )
+
+    this.buildCache.set(filePath, {
+      code: builtCode,
+      timestamp: Date.now(),
+      dependencies,
+    })
+
+    await this.updateManifestForComponent(componentId, filePath, relativeBundlePath)
+
+    return {
+      componentId,
+      bundlePath: path.join(this.options.outDir, relativeBundlePath),
+      success: true,
+    }
+  }
+
+  private async buildSingleComponentOptimized(
+    inputPath: string,
+    outputPath: string,
+    _component: { dependencies: string[], hasNodeImports: boolean },
+  ): Promise<string> {
+    const componentId = this.getComponentId(
+      path.relative(this.projectRoot, inputPath),
+    )
+
+    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
+    const clientTransformedCode = this.transformClientImports(
+      originalCode,
+      inputPath,
+    )
+    const transformedCode = this.transformNodeImports(clientTransformedCode)
+
+    const ext = path.extname(inputPath)
+    let loader: string
+    if (ext === '.tsx') {
+      loader = 'tsx'
+    }
+    else if (ext === '.ts') {
+      loader = 'ts'
+    }
+    else if (ext === '.jsx') {
+      loader = 'jsx'
+    }
+    else {
+      loader = 'js'
+    }
+
+    try {
+      const result = await build({
+        stdin: {
+          contents: transformedCode,
+          resolveDir: path.dirname(inputPath),
+          sourcefile: inputPath,
+          loader: loader as any,
+        },
+        bundle: true,
+        platform: 'neutral',
+        target: 'es2022',
+        format: 'esm',
+        external: [],
+        mainFields: ['module', 'main'],
+        conditions: ['import', 'module', 'default'],
+        define: {
+          'global': 'globalThis',
+          'process.env.NODE_ENV': '"production"',
+        },
+        loader: {
+          '.ts': 'ts',
+          '.tsx': 'tsx',
+          '.js': 'js',
+          '.jsx': 'jsx',
+        },
+        resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
+        minify: false,
+        minifyIdentifiers: false,
+        sourcemap: false,
+        metafile: false,
+        write: false,
+        plugins: [
+          {
+            name: 'auto-external',
+            setup(build) {
+              build.onResolve({ filter: /^[^./]/ }, async (args) => {
+                return { path: args.path, external: true }
+              })
+            },
+          },
+          {
+            name: 'resolve-server-functions',
+            setup(build) {
+              build.onResolve(
+                { filter: /^\.\.?\/.*functions/ },
+                async (args) => {
+                  const resolvedPath = path.resolve(
+                    path.dirname(args.importer),
+                    args.path,
+                  )
+
+                  const possibleExtensions = [
+                    '.ts',
+                    '.js',
+                    '.tsx',
+                    '.jsx',
+                    '/index.ts',
+                    '/index.js',
+                  ]
+                  for (const ext of possibleExtensions) {
+                    const fullPath = resolvedPath + ext
+                    if (fs.existsSync(fullPath)) {
+                      return { path: fullPath }
+                    }
+                  }
+
+                  return null
+                },
+              )
+            },
+          },
+        ],
+        banner: {
+          js: `// Rari Server Component Bundle
+// Generated at: ${new Date().toISOString()}
+// Original file: ${path.relative(this.projectRoot, inputPath)}
+`,
+        },
+      })
+
+      if (result.outputFiles && result.outputFiles.length > 0) {
+        const outputFile = result.outputFiles[0]
+
+        const finalTransformedCode = this.createSelfRegisteringModule(
+          outputFile.text,
+          componentId,
+        )
+
+        await fs.promises.writeFile(outputPath, finalTransformedCode, 'utf-8')
+
+        return finalTransformedCode
+      }
+
+      if (result.errors.length > 0) {
+        console.error('ESBuild errors:', result.errors)
+        throw new Error(
+          `ESBuild compilation failed with ${result.errors.length} errors`,
+        )
+      }
+
+      throw new Error('No output generated from ESBuild')
+    }
+    catch (error) {
+      console.error(`ESBuild failed for ${inputPath}:`, error)
+      throw error
+    }
+  }
+
+  private manifestCache: ServerComponentManifest | null = null
+  private manifestDirty = false
+
+  async updateManifestForComponent(
+    componentId: string,
+    filePath: string,
+    bundlePath: string,
+  ): Promise<void> {
+    const manifestPath = path.join(
+      this.options.outDir,
+      this.options.manifestPath,
+    )
+
+    let manifest: ServerComponentManifest
+
+    if (this.manifestCache) {
+      manifest = this.manifestCache
+    }
+    else if (fs.existsSync(manifestPath)) {
+      const content = await fs.promises.readFile(manifestPath, 'utf-8')
+      manifest = JSON.parse(content)
+      this.manifestCache = manifest
+    }
+    else {
+      manifest = {
+        components: {},
+        version: '1.0.0',
+        buildTime: new Date().toISOString(),
+      }
+      this.manifestCache = manifest
+    }
+
+    const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
+
+    if (!componentData) {
+      const code = await fs.promises.readFile(filePath, 'utf-8')
+      manifest.components[componentId] = {
+        id: componentId,
+        filePath,
+        relativePath: path.relative(this.projectRoot, filePath),
+        bundlePath,
+        dependencies: this.extractDependencies(code),
+        hasNodeImports: this.hasNodeImports(code),
+      }
+    }
+    else {
+      manifest.components[componentId] = {
+        id: componentId,
+        filePath,
+        relativePath: path.relative(this.projectRoot, filePath),
+        bundlePath,
+        dependencies: componentData.dependencies,
+        hasNodeImports: componentData.hasNodeImports,
+      }
+    }
+
+    manifest.buildTime = new Date().toISOString()
+
+    await fs.promises.writeFile(
+      manifestPath,
+      JSON.stringify(manifest, null, 2),
+      'utf-8',
+    )
+
+    this.manifestCache = manifest
+  }
+
+  clearCache(): void {
+    this.buildCache.clear()
+    this.manifestCache = null
+  }
+
+  async getTransformedComponentCode(filePath: string): Promise<string> {
+    const relativePath = path.relative(this.projectRoot, filePath)
+    const componentId = this.getComponentId(relativePath)
+
+    const code = await fs.promises.readFile(filePath, 'utf-8')
+    const component = {
+      dependencies: this.extractDependencies(code),
+      hasNodeImports: this.hasNodeImports(code),
+    }
+
+    return await this.buildComponentCodeOnly(filePath, componentId, component)
   }
 }
 

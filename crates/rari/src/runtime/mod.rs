@@ -258,6 +258,90 @@ impl JsExecutionRuntime {
             ))),
         }
     }
+
+    pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
+        tracing::debug!("Invalidating component: {}", component_id);
+
+        let escaped_component_id = component_id.replace('"', r#"\""#);
+
+        let script = format!(
+            r#"
+            (function() {{
+                let deleted = false;
+
+                if (globalThis.{component_id}) {{
+                    delete globalThis.{component_id};
+                    deleted = true;
+                }}
+
+                if (globalThis.__rsc_functions && globalThis.__rsc_functions['{component_id}']) {{
+                    delete globalThis.__rsc_functions['{component_id}'];
+                    deleted = true;
+                }}
+
+                if (globalThis.RscModuleManager && globalThis.RscModuleManager.unregister) {{
+                    try {{
+                        globalThis.RscModuleManager.unregister('{component_id}');
+                        deleted = true;
+                    }} catch (e) {{
+                        console.warn('Failed to unregister from RscModuleManager:', e);
+                    }}
+                }}
+
+                return {{ success: true, deleted: deleted }};
+            }})()
+            "#,
+            component_id = escaped_component_id
+        );
+
+        match self.execute_script(format!("invalidate_{}", component_id), script).await {
+            Ok(_) => {
+                tracing::info!("Component invalidated successfully: {}", component_id);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to invalidate component {}: {}", component_id, e);
+                Err(RariError::js_runtime(format!(
+                    "Failed to invalidate component {}: {}",
+                    component_id, e
+                )))
+            }
+        }
+    }
+
+    pub async fn load_component(
+        &self,
+        component_id: &str,
+        bundle_path: &std::path::Path,
+    ) -> Result<(), RariError> {
+        tracing::debug!("Loading component: {} from {:?}", component_id, bundle_path);
+
+        if !bundle_path.exists() {
+            let error_msg = format!("Component bundle file not found: {:?}", bundle_path);
+            tracing::error!("{}", error_msg);
+            return Err(RariError::not_found(error_msg));
+        }
+
+        let component_code = tokio::fs::read_to_string(bundle_path).await.map_err(|e| {
+            let error_msg = format!("Failed to read component bundle file: {}", e);
+            tracing::error!("{}", error_msg);
+            RariError::io(error_msg)
+        })?;
+
+        let script_name = format!("load_component_{}", component_id.replace('/', "_"));
+        match self.execute_script(script_name, component_code).await {
+            Ok(_) => {
+                tracing::info!("Component loaded successfully: {}", component_id);
+                Ok(())
+            }
+            Err(e) => {
+                let error_msg =
+                    format!("Failed to execute component code for {}: {}", component_id, e);
+                tracing::error!("{}", error_msg);
+                Err(RariError::js_execution(error_msg))
+            }
+        }
+    }
 }
 
 impl From<crate::error::RariError> for JsError {

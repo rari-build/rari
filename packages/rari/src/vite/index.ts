@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import * as acorn from 'acorn'
+import { HMRCoordinator } from './hmr-coordinator'
 import { createServerBuildPlugin } from './server-build'
 
 interface RariOptions {
@@ -61,6 +62,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
   let rustServerProcess: any = null
 
   const serverImportedClientComponents = new Set<string>()
+
+  let hmrCoordinator: HMRCoordinator | null = null
 
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules')) {
@@ -775,6 +778,8 @@ const ${componentName} = registerClientReference(
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
 
+      let serverComponentBuilder: any = null
+
       const discoverAndRegisterComponents = async () => {
         try {
           const { ServerComponentBuilder, scanDirectory } = await import(
@@ -782,10 +787,19 @@ const ${componentName} = registerClientReference(
           )
 
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: 'temp',
+            outDir: '.rari',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
           })
+
+          serverComponentBuilder = builder
+
+          if (!hmrCoordinator && serverComponentBuilder) {
+            const serverPort = process.env.SERVER_PORT
+              ? Number(process.env.SERVER_PORT)
+              : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+            hmrCoordinator = new HMRCoordinator(serverComponentBuilder, serverPort)
+          }
 
           const srcDir = path.join(projectRoot, 'src')
           const serverComponentPaths: string[] = []
@@ -1047,7 +1061,7 @@ const ${componentName} = registerClientReference(
 
           const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: 'temp',
+            outDir: '.rari',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
           })
@@ -1178,6 +1192,11 @@ const ${componentName} = registerClientReference(
       })
 
       server.httpServer?.on('close', () => {
+        if (hmrCoordinator) {
+          hmrCoordinator.dispose()
+          hmrCoordinator = null
+        }
+
         if (rustServerProcess) {
           rustServerProcess.kill('SIGTERM')
           rustServerProcess = null
@@ -2726,7 +2745,30 @@ if (import.meta.hot) {
   });
 
   import.meta.hot.on('rari:server-component-updated', async (data) => {
-    if (data?.path && isServerComponent(data.path)) {
+    console.warn('[HMR] ⚡ Received rari:server-component-updated event!', data);
+
+    const componentId = data?.id || data?.componentId;
+    const timestamp = data?.t || data?.timestamp;
+
+    if (componentId) {
+      console.warn('[HMR] Server component updated: ' + componentId);
+
+      if (typeof window !== 'undefined') {
+        console.warn('[HMR] Dispatching window event rari:rsc-invalidate');
+        const event = new CustomEvent('rari:rsc-invalidate', {
+          detail: {
+            componentId: componentId,
+            filePath: data.filePath || data.file,
+            type: 'server-component',
+            timestamp: timestamp
+          }
+        });
+        window.dispatchEvent(event);
+        console.warn('[HMR] Window event dispatched');
+      }
+    }
+    else if (data?.path && isServerComponent(data.path)) {
+      console.warn('[HMR] Legacy format, invalidating cache for:', data.path);
       await invalidateRscCache({ filePath: data.path, forceReload: false });
     }
   });
@@ -3053,6 +3095,162 @@ if (import.meta.hot) {
       window.dispatchEvent(event);
     }
   }
+
+  function invalidateRSCCache(componentId) {
+    rscClient.clearCache();
+    console.log('[HMR] Cleared RSC cache for component: ' + componentId);
+  }
+
+  async function refetchCurrentRoute() {
+    try {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const currentPath = window.location.pathname;
+
+      const response = await fetch('/rsc' + currentPath, {
+        headers: {
+          'Accept': 'text/x-component',
+          'X-RSC-Refetch': 'true',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refetch RSC: ' + response.status);
+      }
+
+      console.log('[HMR] Re-fetched RSC for route: ' + currentPath);
+
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('rari:rsc-refetch-complete', {
+          detail: { path: currentPath, timestamp: Date.now() }
+        });
+        window.dispatchEvent(event);
+      }
+    } catch (error) {
+      console.error('[HMR] Failed to refetch RSC:', error);
+    }
+  }
+}
+
+class HMRErrorOverlay {
+  constructor() {
+    this.overlay = null;
+    this.currentError = null;
+  }
+
+  show(error) {
+    this.currentError = error;
+    if (this.overlay) {
+      this.updateOverlay(error);
+    } else {
+      this.createOverlay(error);
+    }
+  }
+
+  hide() {
+    if (this.overlay) {
+      this.overlay.remove();
+      this.overlay = null;
+      this.currentError = null;
+    }
+  }
+
+  isVisible() {
+    return this.overlay !== null;
+  }
+
+  createOverlay(error) {
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'rari-hmr-error-overlay';
+    this.updateOverlay(error);
+    document.body.appendChild(this.overlay);
+  }
+
+  updateOverlay(error) {
+    if (!this.overlay) return;
+
+    const fileInfo = error.filePath
+      ? '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem;"><strong>File:</strong> ' + this.escapeHtml(error.filePath) + '</div>'
+      : '';
+
+    const stackTrace = error.stack
+      ? '<details style="margin-top: 1rem; cursor: pointer;"><summary style="font-weight: 600; margin-bottom: 0.5rem; user-select: none;">Stack Trace</summary><pre style="margin: 0; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">' + this.escapeHtml(error.stack) + '</pre></details>'
+      : '';
+
+    this.overlay.innerHTML = '<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);"><div style="background: #1e1e1e; color: #e0e0e0; border-radius: 0.5rem; padding: 2rem; max-width: 50rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); border: 1px solid #ef4444;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"><div style="display: flex; align-items: center; gap: 0.75rem;"><svg style="width: 2rem; height: 2rem; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg><h1 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: #ef4444;">Build Error</h1></div><button onclick="document.getElementById(' + "'" + 'rari-hmr-error-overlay' + "'" + ').remove()" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.25rem; transition: all 0.2s; font-size: 1.5rem; line-height: 1; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background=' + "'" + 'rgba(255,255,255,0.1)' + "'" + '; this.style.color=' + "'" + '#e0e0e0' + "'" + '" onmouseout="this.style.background=' + "'" + 'transparent' + "'" + '; this.style.color=' + "'" + '#9ca3af' + "'" + '">×</button></div>' + fileInfo + '<div style="margin-bottom: 1.5rem;"><h2 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: #fca5a5;">Error Message:</h2><pre style="margin: 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 0.375rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #fca5a5;">' + this.escapeHtml(error.message) + '</pre></div>' + stackTrace + '<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #374151; display: flex; gap: 0.75rem; align-items: center;"><button onclick="window.location.reload()" style="padding: 0.625rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background=' + "'" + '#dc2626' + "'" + '" onmouseout="this.style.background=' + "'" + '#ef4444' + "'" + '">Reload Page</button><button onclick="document.getElementById(' + "'" + 'rari-hmr-error-overlay' + "'" + ').remove()" style="padding: 0.625rem 1.25rem; background: #374151; color: #e0e0e0; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background=' + "'" + '#4b5563' + "'" + '" onmouseout="this.style.background=' + "'" + '#374151' + "'" + '">Dismiss</button><span style="margin-left: auto; font-size: 0.75rem; color: #9ca3af;">' + new Date(error.timestamp).toLocaleTimeString() + '</span></div></div></div>';
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+}
+
+let hmrErrorOverlay = null;
+
+function getErrorOverlay() {
+  if (!hmrErrorOverlay) {
+    hmrErrorOverlay = new HMRErrorOverlay();
+  }
+  return hmrErrorOverlay;
+}
+
+if (import.meta.hot) {
+  const overlay = getErrorOverlay();
+
+  import.meta.hot.on('rari:hmr-error', (data) => {
+    const message = data.msg || data.message;
+    const filePath = data.file || data.filePath;
+    const timestamp = data.t || data.timestamp;
+    const errorCount = data.count || data.errorCount;
+    const maxErrors = data.max || data.maxErrors;
+
+    console.error('[HMR] Build error:', message);
+
+    if (filePath) {
+      console.error('[HMR] File:', filePath);
+    }
+
+    if (data.stack) {
+      console.error('[HMR] Stack:', data.stack);
+    }
+
+    overlay.show({
+      message: message,
+      stack: data.stack,
+      filePath: filePath,
+      timestamp: timestamp,
+    });
+
+    if (errorCount && maxErrors) {
+      if (errorCount >= maxErrors) {
+        console.error('[HMR] Maximum error count (' + maxErrors + ') reached. Consider restarting the dev server if issues persist.');
+      } else if (errorCount >= maxErrors - 2) {
+        console.warn('[HMR] Error count: ' + errorCount + '/' + maxErrors + '. Approaching maximum error threshold.');
+      }
+    }
+  });
+
+  import.meta.hot.on('rari:hmr-error-cleared', (data) => {
+    console.log('[HMR] Error cleared, build successful');
+    overlay.hide();
+  });
+
+  import.meta.hot.on('vite:error', (data) => {
+    console.error('[HMR] Vite error:', data);
+
+    overlay.show({
+      message: data.err?.message || 'Unknown Vite error',
+      stack: data.err?.stack,
+      filePath: data.err?.file,
+      timestamp: Date.now(),
+    });
+  });
+
+  console.log('[HMR] Error handling initialized');
 }
 
 export {
@@ -3064,42 +3262,64 @@ export {
       }
     },
 
-    handleHotUpdate({ file, server }) {
+    async handleHotUpdate({ file, server }) {
       const isReactFile = /\.(?:tsx?|jsx?)$/.test(file)
-      const isServerComp = isServerComponent(file)
 
-      if (isReactFile && isServerComp) {
-        const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
+      if (!isReactFile) {
+        return undefined
+      }
 
-        if (isAppRouterFile) {
-          let fileType = 'page'
-          if (file.endsWith('layout.tsx') || file.endsWith('layout.jsx')) {
-            fileType = 'layout'
-          }
-          else if (file.endsWith('loading.tsx') || file.endsWith('loading.jsx')) {
-            fileType = 'loading'
-          }
-          else if (file.endsWith('error.tsx') || file.endsWith('error.jsx')) {
-            fileType = 'error'
-          }
-          else if (file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')) {
-            fileType = 'not-found'
-          }
+      if (file.includes('/.rari/') || file.includes('\\.rari\\')) {
+        return []
+      }
 
-          server.hot.send('rari:app-router-updated', {
-            type: 'rari-hmr',
-            filePath: file,
-            fileType,
-          })
+      const componentType = hmrCoordinator?.detectComponentType(file) || 'unknown'
+
+      const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
+      const isPageFile = file.endsWith('page.tsx') || file.endsWith('page.jsx')
+      const isLayoutFile = file.endsWith('layout.tsx') || file.endsWith('layout.jsx')
+      const isLoadingFile = file.endsWith('loading.tsx') || file.endsWith('loading.jsx')
+      const isErrorFile = file.endsWith('error.tsx') || file.endsWith('error.jsx')
+      const isNotFoundFile = file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')
+      const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
+
+      if (isAppRouterFile && isSpecialRouteFile) {
+        let fileType = 'page'
+        if (isLayoutFile) {
+          fileType = 'layout'
         }
-        else {
-          server.hot.send('rari:server-component-updated', {
-            type: 'rari-hmr',
-            path: file,
-          })
+        else if (isLoadingFile) {
+          fileType = 'loading'
+        }
+        else if (isErrorFile) {
+          fileType = 'error'
+        }
+        else if (isNotFoundFile) {
+          fileType = 'not-found'
+        }
+
+        server.hot.send('rari:app-router-updated', {
+          type: 'rari-hmr',
+          filePath: file,
+          fileType,
+        })
+        return []
+      }
+
+      if (componentType === 'client') {
+        if (hmrCoordinator) {
+          await hmrCoordinator.handleClientComponentUpdate(file, server)
+        }
+        return undefined
+      }
+
+      if (componentType === 'server') {
+        if (hmrCoordinator) {
+          await hmrCoordinator.handleServerComponentUpdate(file, server)
         }
         return []
       }
+
       return undefined
     },
   }
