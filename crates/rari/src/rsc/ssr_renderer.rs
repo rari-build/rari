@@ -107,7 +107,14 @@ impl SsrRenderer {
             }
 
             const attributes = renderAttributes(props, rowId);
-            const children = renderChildren(props.children, rendered);
+
+            const rawContentTags = ['style', 'script'];
+            let children;
+            if (rawContentTags.includes(tag)) {
+                children = renderChildrenRaw(props.children, rendered);
+            } else {
+                children = renderChildren(props.children, rendered);
+            }
 
             const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'];
             if (selfClosingTags.includes(tag)) {
@@ -150,7 +157,7 @@ impl SsrRenderer {
             const attributes = [];
 
             for (const [key, value] of Object.entries(props)) {
-                if (key === 'children') {
+                if (key === 'children' || key === 'key' || key === 'ref') {
                     continue;
                 }
 
@@ -196,6 +203,34 @@ impl SsrRenderer {
             return attributes.length > 0 ? ' ' + attributes.join(' ') : '';
         }
 
+        function renderChildrenRaw(children, rendered) {
+            if (children === null || children === undefined) {
+                return '';
+            }
+
+            if (typeof children === 'string') {
+                return children;
+            }
+
+            if (typeof children === 'number' || typeof children === 'boolean') {
+                return String(children);
+            }
+
+            if (Array.isArray(children)) {
+                return children.map(child => {
+                    if (typeof child === 'string') {
+                        return child;
+                    }
+                    if (typeof child === 'number' || typeof child === 'boolean') {
+                        return String(child);
+                    }
+                    return '';
+                }).join('');
+            }
+
+            return '';
+        }
+
         function renderChildren(children, rendered) {
             if (children === null || children === undefined) {
                 return '';
@@ -213,7 +248,33 @@ impl SsrRenderer {
                 if (children.length >= 4 && children[0] === '$') {
                     return renderElement(children, rendered, undefined);
                 }
-                return children.map(child => renderElement(child, rendered, undefined)).join('');
+
+                const renderedChildren = [];
+                let hasMultipleTextNodes = false;
+                let textNodeCount = 0;
+
+                for (const child of children) {
+                    if (typeof child === 'string' || typeof child === 'number') {
+                        textNodeCount++;
+                    }
+                }
+                hasMultipleTextNodes = textNodeCount > 1;
+
+                for (let i = 0; i < children.length; i++) {
+                    const child = children[i];
+                    const isTextNode = typeof child === 'string' || typeof child === 'number';
+
+                    if (isTextNode && hasMultipleTextNodes) {
+                        const rendered = renderElement(child, rendered, undefined);
+                        if (rendered) {
+                            renderedChildren.push('<!-- -->' + rendered + '<!-- -->');
+                        }
+                    } else {
+                        renderedChildren.push(renderElement(child, rendered, undefined));
+                    }
+                }
+
+                return renderedChildren.join('');
             }
 
             return renderElement(children, rendered, undefined);

@@ -1308,6 +1308,8 @@ if (typeof globalThis.__clientComponentPaths === 'undefined') {
 
 ${registrations}
 
+let isInitialHydration = true;
+
 export async function renderApp() {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
@@ -1316,7 +1318,7 @@ export async function renderApp() {
   }
 
   try {
-    const hasSSRContent = rootElement.innerHTML.trim().length > 0;
+    const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
 
     let rscWireFormat = null;
     const nextDataScript = document.getElementById('__RARI_DATA__');
@@ -1364,7 +1366,7 @@ export async function renderApp() {
 
     let contentToRender;
     if (isFullDocument) {
-      const bodyContent = extractBodyContent(element);
+      const bodyContent = extractBodyContent(element, hasSSRContent);
       if (bodyContent) {
         contentToRender = bodyContent;
       } else {
@@ -1387,7 +1389,12 @@ export async function renderApp() {
 
     if (hasSSRContent) {
       console.log('[Rari] Hydrating SSR content');
-      hydrateRoot(rootElement, wrappedContent);
+      hydrateRoot(rootElement, wrappedContent, {
+        onRecoverableError: (error) => {
+          console.warn('[Rari] Recoverable hydration error:', error);
+        }
+      });
+      isInitialHydration = false;
     } else {
       console.log('[Rari] Client-side rendering');
       const root = createRoot(rootElement);
@@ -1404,7 +1411,7 @@ export async function renderApp() {
   }
 }
 
-function extractBodyContent(element) {
+function extractBodyContent(element, skipHeadInjection = false) {
   console.log('[Rari] extractBodyContent - element:', element);
   console.log('[Rari] extractBodyContent - element.type:', element?.type);
   console.log('[Rari] extractBodyContent - element.props:', element?.props);
@@ -1431,9 +1438,11 @@ function extractBodyContent(element) {
     if (bodyElement) {
       console.log('[Rari] extractBodyContent - found body');
 
-      if (headElement && headElement.props && headElement.props.children) {
+      if (!skipHeadInjection && headElement && headElement.props && headElement.props.children) {
         console.log('[Rari] extractBodyContent - found head, extracting styles');
         injectHeadContent(headElement);
+      } else if (skipHeadInjection) {
+        console.log('[Rari] extractBodyContent - skipping head injection (SSR hydration)');
       }
 
       console.log('[Rari] extractBodyContent - returning body children:', bodyElement.props?.children);
