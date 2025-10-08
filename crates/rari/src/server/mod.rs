@@ -2,6 +2,7 @@ use crate::error::RariError;
 use crate::rsc::jsx_transform::{extract_dependencies, transform_jsx};
 use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
+use crate::rsc::ssr_renderer::SsrRenderer;
 
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::dist_path_resolver::DistPathResolver;
@@ -2321,6 +2322,80 @@ fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, String>
     header_map
 }
 
+async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Response, StatusCode> {
+    debug!("Rendering fallback HTML shell for path: {}", path);
+
+    let index_path = state.config.public_dir().join("index.html");
+    if index_path.exists() && state.config.is_production() {
+        match std::fs::read_to_string(&index_path) {
+            Ok(html_content) => {
+                debug!("Serving built index.html as fallback");
+                return Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .body(Body::from(html_content))
+                    .expect("Valid HTML response"));
+            }
+            Err(e) => {
+                error!("Failed to read built index.html: {}", e);
+            }
+        }
+    }
+
+    if state.config.is_development() {
+        let vite_port = state.config.vite.port;
+        let html_shell = format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rari App Router</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+  </script>
+</body>
+</html>"#,
+            vite_port
+        );
+
+        debug!("Serving development HTML shell as fallback");
+        return Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/html; charset=utf-8")
+            .body(Body::from(html_shell))
+            .expect("Valid HTML response"));
+    }
+
+    let error_html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Build Required</title>
+</head>
+<body>
+  <div style="padding: 40px; font-family: sans-serif;">
+    <h1>Build Required</h1>
+    <p>Please build your application first:</p>
+    <pre>npm run build</pre>
+    <p>Or run in development mode with Vite:</p>
+    <pre>npm run dev</pre>
+  </div>
+</body>
+</html>"#;
+
+    warn!("No built files found, serving error page");
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/html; charset=utf-8")
+        .body(Body::from(error_html))
+        .expect("Valid HTML response"))
+}
+
 #[axum::debug_handler]
 async fn handle_app_route(
     State(state): State<ServerState>,
@@ -2371,74 +2446,52 @@ async fn handle_app_route(
                     .body(Body::from(rsc_wire_format))
                     .expect("Valid RSC response"))
             } else {
-                debug!("Sending HTML shell for initial page load");
+                debug!("Rendering HTML with SSR");
 
-                let index_path = state.config.public_dir().join("index.html");
-                if index_path.exists() && state.config.is_production() {
-                    match std::fs::read_to_string(&index_path) {
-                        Ok(html_content) => {
-                            return Ok(Response::builder()
-                                .status(StatusCode::OK)
-                                .header("content-type", "text/html; charset=utf-8")
-                                .body(Body::from(html_content))
-                                .expect("Valid HTML response"));
+                let renderer = state.renderer.lock().await;
+                let ssr_renderer = SsrRenderer::new(renderer.runtime.clone());
+                drop(renderer);
+
+                if let Err(e) = ssr_renderer.initialize().await {
+                    error!(
+                        path = path,
+                        error = %e,
+                        "Failed to initialize SSR renderer, falling back to HTML shell"
+                    );
+                    return render_fallback_html(&state, path).await;
+                }
+
+                match ssr_renderer.render_to_html(&rsc_wire_format, &state.config).await {
+                    Ok(html) => {
+                        debug!("Successfully rendered HTML with SSR ({} bytes)", html.len());
+
+                        let mut response_builder = Response::builder()
+                            .status(StatusCode::OK)
+                            .header("content-type", "text/html; charset=utf-8");
+
+                        let page_configs = state.page_cache_configs.read().await;
+                        if let Some(page_cache_config) =
+                            Server::find_matching_cache_config(&page_configs, path)
+                        {
+                            for (key, value) in page_cache_config {
+                                response_builder =
+                                    response_builder.header(key.to_lowercase(), value);
+                            }
+                            debug!("Applied cache headers for route: {}", path);
                         }
-                        Err(e) => {
-                            error!("Failed to read built index.html: {}", e);
-                        }
+
+                        Ok(response_builder.body(Body::from(html)).expect("Valid HTML response"))
+                    }
+                    Err(e) => {
+                        error!(
+                            path = path,
+                            error = %e,
+                            rsc_size = rsc_wire_format.len(),
+                            "SSR rendering failed, falling back to HTML shell"
+                        );
+                        render_fallback_html(&state, path).await
                     }
                 }
-
-                if state.config.is_development() {
-                    let vite_port = state.config.vite.port;
-                    let html_shell = format!(
-                        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rari App Router Example</title>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module">
-    import 'http://localhost:{}/@id/virtual:rari-entry-client';
-  </script>
-</body>
-</html>"#,
-                        vite_port
-                    );
-
-                    return Ok(Response::builder()
-                        .status(StatusCode::OK)
-                        .header("content-type", "text/html; charset=utf-8")
-                        .body(Body::from(html_shell))
-                        .expect("Valid HTML response"));
-                }
-
-                let error_html = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Build Required</title>
-</head>
-<body>
-  <div style="padding: 40px; font-family: sans-serif;">
-    <h1>Build Required</h1>
-    <p>Please build your application first:</p>
-    <pre>npm run build</pre>
-    <p>Or run in development mode with Vite:</p>
-    <pre>npm run dev</pre>
-  </div>
-</body>
-</html>"#;
-
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(error_html))
-                    .expect("Valid HTML response"))
             }
         }
         Err(e) => {

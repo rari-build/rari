@@ -98,6 +98,20 @@ impl Default for CacheConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SsrConfig {
+    pub enabled: bool,
+    pub timeout_ms: u64,
+    pub cache_template: bool,
+    pub pretty_print: bool,
+}
+
+impl Default for SsrConfig {
+    fn default() -> Self {
+        Self { enabled: true, timeout_ms: 5000, cache_template: true, pretty_print: false }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RscConfig {
     pub enable_ssr: bool,
     pub enable_streaming: bool,
@@ -141,6 +155,7 @@ pub struct Config {
     pub vite: ViteConfig,
     pub static_files: StaticConfig,
     pub rsc: RscConfig,
+    pub ssr: SsrConfig,
     pub caching: CacheConfig,
 }
 
@@ -159,6 +174,7 @@ impl Config {
                 hmr_reload_enabled: mode != Mode::Production,
                 ..default_config.rsc
             },
+            ssr: SsrConfig { pretty_print: mode == Mode::Development, ..default_config.ssr },
             ..default_config
         }
     }
@@ -251,6 +267,30 @@ impl Config {
                 == "true"
                 || memory_monitoring_str == "1"
                 || memory_monitoring_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(ssr_enabled_str) = std::env::var("RARI_SSR_ENABLED") {
+            config.ssr.enabled = ssr_enabled_str.to_lowercase() == "true"
+                || ssr_enabled_str == "1"
+                || ssr_enabled_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(ssr_timeout_str) = std::env::var("RARI_SSR_TIMEOUT_MS") {
+            config.ssr.timeout_ms = ssr_timeout_str
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_SSR_TIMEOUT_MS".to_string()))?;
+        }
+
+        if let Ok(ssr_cache_template_str) = std::env::var("RARI_SSR_CACHE_TEMPLATE") {
+            config.ssr.cache_template = ssr_cache_template_str.to_lowercase() == "true"
+                || ssr_cache_template_str == "1"
+                || ssr_cache_template_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(ssr_pretty_print_str) = std::env::var("RARI_SSR_PRETTY_PRINT") {
+            config.ssr.pretty_print = ssr_pretty_print_str.to_lowercase() == "true"
+                || ssr_pretty_print_str == "1"
+                || ssr_pretty_print_str.to_lowercase() == "yes";
         }
 
         Ok(config)

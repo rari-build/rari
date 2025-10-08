@@ -1253,6 +1253,13 @@ impl JsRuntimeInterface for DenoRuntime {
             let args_json = serde_json::to_string(&args)
                 .map_err(|e| RariError::js_runtime(format!("Failed to serialize args: {e}")))?;
 
+            let escaped_json = args_json
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t");
+
             let script = format!(
                 r#"
                 (function() {{
@@ -1269,10 +1276,7 @@ impl JsRuntimeInterface for DenoRuntime {
                     }}
                 }})();
                 "#,
-                args_json.replace('\'', "\\'"),
-                function_name,
-                function_name,
-                function_name
+                escaped_json, function_name, function_name, function_name
             );
 
             let (response_sender, response_receiver) = oneshot::channel();
