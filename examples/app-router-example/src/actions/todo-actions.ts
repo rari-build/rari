@@ -20,6 +20,15 @@ export async function getTodos() {
 
 export async function addTodo(_prevState: any, formData: FormData) {
   try {
+    if (!formData || typeof formData.get !== 'function') {
+      console.error('[addTodo] Invalid formData:', formData)
+      return {
+        success: false,
+        error: 'Invalid form data provided.',
+        todos,
+      }
+    }
+
     const text = formData.get('text') as string
 
     if (!text || text.trim().length === 0) {
@@ -58,6 +67,15 @@ export async function addTodo(_prevState: any, formData: FormData) {
 
 export async function toggleTodo(_prevState: any, formData: FormData) {
   try {
+    if (!formData || typeof formData.get !== 'function') {
+      console.error('[toggleTodo] Invalid formData:', formData)
+      return {
+        success: false,
+        error: 'Invalid form data provided.',
+        todos,
+      }
+    }
+
     const id = formData.get('id') as string
 
     if (!id) {
@@ -99,6 +117,15 @@ export async function toggleTodo(_prevState: any, formData: FormData) {
 
 export async function deleteTodo(_prevState: any, formData: FormData) {
   try {
+    if (!formData || typeof formData.get !== 'function') {
+      console.error('[deleteTodo] Invalid formData:', formData)
+      return {
+        success: false,
+        error: 'Invalid form data provided.',
+        todos,
+      }
+    }
+
     const id = formData.get('id') as string
 
     if (!id) {

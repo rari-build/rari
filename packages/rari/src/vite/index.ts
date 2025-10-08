@@ -1793,6 +1793,7 @@ export function createClientModuleMap() {
         const isDevelopment = process.env.NODE_ENV !== 'production'
         return `
 import { useState, useEffect, Suspense, createElement, isValidElement, cloneElement } from 'react';
+import * as ReactDOMClient from 'react-dom/client';
 
 if (typeof globalThis.__rari === 'undefined') {
   globalThis.__rari = {};
@@ -1895,8 +1896,8 @@ export function createClientModuleMap() {
   return moduleMap;
 }
 
-let createFromFetch = null;
-let createFromReadableStream = null;
+let createFromFetch = ReactDOMClient.createFromFetch || null;
+let createFromReadableStream = ReactDOMClient.createFromReadableStream || null;
 let rscClientLoadPromise = null;
 
 async function loadRscClient() {
@@ -1906,9 +1907,8 @@ async function loadRscClient() {
 
   rscClientLoadPromise = (async () => {
     try {
-      const rscModule = await import('react-dom/client');
-      createFromFetch = rscModule.createFromFetch;
-      createFromReadableStream = rscModule.createFromReadableStream;
+      createFromFetch = ReactDOMClient.createFromFetch;
+      createFromReadableStream = ReactDOMClient.createFromReadableStream;
 
       if (typeof createFromReadableStream !== 'function') {
         createFromReadableStream = null;
@@ -1917,7 +1917,7 @@ async function loadRscClient() {
         createFromFetch = null;
       }
 
-      return rscModule;
+      return ReactDOMClient;
     } catch (error) {
       console.error('Failed to load react-dom/client RSC functions:', error);
       createFromFetch = null;

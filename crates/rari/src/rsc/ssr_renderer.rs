@@ -26,24 +26,6 @@ pub struct SsrRenderer {
 
 impl SsrRenderer {
     const RENDER_SCRIPT: &'static str = r#"
-        globalThis.renderRscToHtml = function(rscRows) {
-            const rendered = new Map();
-
-            let maxId = -1;
-            for (const row of rscRows) {
-                if (row.id > maxId) {
-                    maxId = row.id;
-                }
-            }
-
-            for (const row of rscRows) {
-                const html = renderElement(row.data, rendered, row.id);
-                rendered.set(row.id, html);
-            }
-
-            return rendered.get(maxId) || rendered.get(0) || '';
-        };
-
         function renderElement(element, rendered, rowId) {
             if (typeof element === 'string') {
                 return escapeHtml(element);
@@ -265,9 +247,9 @@ impl SsrRenderer {
                     const isTextNode = typeof child === 'string' || typeof child === 'number';
 
                     if (isTextNode && hasMultipleTextNodes) {
-                        const rendered = renderElement(child, rendered, undefined);
-                        if (rendered) {
-                            renderedChildren.push('<!-- -->' + rendered + '<!-- -->');
+                        const renderedChild = renderElement(child, rendered, undefined);
+                        if (renderedChild) {
+                            renderedChildren.push('<!-- -->' + renderedChild + '<!-- -->');
                         }
                     } else {
                         renderedChildren.push(renderElement(child, rendered, undefined));
@@ -295,6 +277,24 @@ impl SsrRenderer {
 
             return text.replace(/[&<>"']/g, char => htmlEscapeMap[char]);
         }
+
+        globalThis.renderRscToHtml = function(rscRows) {
+            const rendered = new Map();
+
+            let maxId = -1;
+            for (const row of rscRows) {
+                if (row.id > maxId) {
+                    maxId = row.id;
+                }
+            }
+
+            for (const row of rscRows) {
+                const html = renderElement(row.data, rendered, row.id);
+                rendered.set(row.id, html);
+            }
+
+            return rendered.get(maxId) || rendered.get(0) || '';
+        };
     "#;
 
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {

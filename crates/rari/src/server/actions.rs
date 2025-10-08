@@ -163,16 +163,18 @@ fn parse_form_data(body: &Bytes) -> Result<FxHashMap<String, String>, RariError>
 }
 
 fn convert_form_data_to_args(form_data: &FxHashMap<String, String>) -> Vec<JsonValue> {
-    let mut form_object = serde_json::Map::new();
+    let mut form_entries = serde_json::Map::new();
 
     for (key, value) in form_data {
         if key.starts_with("__") {
             continue;
         }
-        form_object.insert(key.clone(), JsonValue::String(value.clone()));
+        form_entries.insert(key.clone(), JsonValue::String(value.clone()));
     }
 
-    vec![JsonValue::Object(form_object)]
+    let form_data_object = JsonValue::Object(form_entries);
+
+    vec![JsonValue::Null, form_data_object]
 }
 
 fn percent_decode(input: &str) -> Result<String, RariError> {

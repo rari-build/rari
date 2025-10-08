@@ -1263,17 +1263,13 @@ impl JsRuntimeInterface for DenoRuntime {
             let script = format!(
                 r#"
                 (function() {{
-                    try {{
-                        const args = JSON.parse('{}');
+                    const args = JSON.parse('{}');
 
-                        if (typeof {} !== 'function') {{
-                            throw new Error("Function not found: {}");
-                        }}
-
-                        return {}(...args);
-                    }} catch (e) {{
-                        throw new Error(`Error executing function: ${{e.message}}`);
+                    if (typeof globalThis.{} !== 'function') {{
+                        throw new Error("Function not found: {}");
                     }}
+
+                    return globalThis.{}(...args);
                 }})();
                 "#,
                 escaped_json, function_name, function_name, function_name
