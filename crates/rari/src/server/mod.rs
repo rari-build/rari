@@ -2,7 +2,6 @@ use crate::error::RariError;
 use crate::rsc::jsx_transform::{extract_dependencies, transform_jsx};
 use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
-use crate::rsc::ssr_renderer::SsrRenderer;
 
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::dist_path_resolver::DistPathResolver;
@@ -63,6 +62,7 @@ pub struct ReloadComponentResponse {
 #[derive(Clone)]
 pub struct ServerState {
     pub renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+    pub ssr_renderer: Arc<crate::rsc::ssr_renderer::SsrRenderer>,
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
     pub start_time: std::time::Instant,
@@ -171,8 +171,18 @@ impl Server {
             );
         }
 
+        let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
+
+        let ssr_renderer = {
+            let runtime = renderer_arc.lock().await.runtime.clone();
+            let ssr = crate::rsc::ssr_renderer::SsrRenderer::new(runtime);
+            ssr.initialize().await?;
+            Arc::new(ssr)
+        };
+
         let state = ServerState {
-            renderer: Arc::new(tokio::sync::Mutex::new(renderer)),
+            renderer: renderer_arc,
+            ssr_renderer,
             config: Arc::new(config.clone()),
             request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             start_time: std::time::Instant::now(),
@@ -2428,114 +2438,125 @@ async fn handle_app_route(
 
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
-    match layout_renderer.render_route(&route_match, &context).await {
-        Ok(rsc_wire_format) => {
-            debug!("Successfully rendered route with layouts");
+    let accept_header = headers.get("accept").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let wants_rsc = accept_header.contains("text/x-component");
 
-            let accept_header = headers.get("accept").and_then(|v| v.to_str().ok()).unwrap_or("");
+    debug!("Accept header: '{}', wants_rsc: {}", accept_header, wants_rsc);
 
-            let wants_rsc = accept_header.contains("text/x-component");
-
-            debug!("Accept header: '{}', wants_rsc: {}", accept_header, wants_rsc);
-
-            if wants_rsc {
-                debug!("Sending RSC wire format (Accept: text/x-component)");
+    if wants_rsc {
+        match layout_renderer.render_route(&route_match, &context).await {
+            Ok(rsc_wire_format) => {
+                debug!("Successfully rendered RSC wire format ({} bytes)", rsc_wire_format.len());
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/x-component")
                     .body(Body::from(rsc_wire_format))
                     .expect("Valid RSC response"))
-            } else {
-                debug!("Rendering HTML with SSR");
-
-                let renderer = state.renderer.lock().await;
-                let ssr_renderer = SsrRenderer::new(renderer.runtime.clone());
-                drop(renderer);
-
-                if let Err(e) = ssr_renderer.initialize().await {
-                    error!(
-                        path = path,
-                        error = %e,
-                        "Failed to initialize SSR renderer, falling back to HTML shell"
-                    );
-                    return render_fallback_html(&state, path).await;
-                }
-
-                match ssr_renderer.render_to_html(&rsc_wire_format, &state.config).await {
-                    Ok(html) => {
-                        debug!("Successfully rendered HTML with SSR ({} bytes)", html.len());
-
-                        let mut response_builder = Response::builder()
-                            .status(StatusCode::OK)
-                            .header("content-type", "text/html; charset=utf-8");
-
-                        let page_configs = state.page_cache_configs.read().await;
-                        if let Some(page_cache_config) =
-                            Server::find_matching_cache_config(&page_configs, path)
-                        {
-                            for (key, value) in page_cache_config {
-                                response_builder =
-                                    response_builder.header(key.to_lowercase(), value);
-                            }
-                            debug!("Applied cache headers for route: {}", path);
-                        }
-
-                        Ok(response_builder.body(Body::from(html)).expect("Valid HTML response"))
-                    }
-                    Err(e) => {
-                        error!(
-                            path = path,
-                            error = %e,
-                            rsc_size = rsc_wire_format.len(),
-                            "SSR rendering failed, falling back to HTML shell"
-                        );
-                        render_fallback_html(&state, path).await
-                    }
-                }
             }
-        }
-        Err(e) => {
-            error!("Failed to render route: {}", e);
-
-            if let Some(error_entry) = &route_match.error {
-                match layout_renderer
-                    .render_error(&error_entry.file_path, &e.to_string(), &context)
-                    .await
-                {
-                    Ok(error_html) => Ok(Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .header("content-type", "text/html; charset=utf-8")
-                        .body(Body::from(error_html))
-                        .expect("Valid HTML response")),
-                    Err(_) => {
-                        let fallback_html = format!(
-                            r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>Error - Rari App Router</title>
-    <meta charset="utf-8">
-</head>
-<body>
-    <h1>Error</h1>
-    <p>Failed to render route: {}</p>
-    <p>Route: {}</p>
-</body>
-</html>"#,
-                            e, route_match.route.path
-                        );
-
-                        Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .header("content-type", "text/html; charset=utf-8")
-                            .body(Body::from(fallback_html))
-                            .expect("Valid HTML response"))
-                    }
-                }
-            } else {
+            Err(e) => {
+                error!("Failed to render RSC: {}", e);
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }
+    } else {
+        let total_start = std::time::Instant::now();
+
+        let rsc_start = std::time::Instant::now();
+        let rsc_wire_format = match layout_renderer.render_route(&route_match, &context).await {
+            Ok(rsc) => rsc,
+            Err(e) => {
+                error!("RSC rendering failed: {}, falling back to shell", e);
+                return render_fallback_html(&state, path).await;
+            }
+        };
+        let rsc_duration = rsc_start.elapsed();
+        debug!("⚡ RSC render took: {:?}", rsc_duration);
+
+        let ssr_start = std::time::Instant::now();
+        let (html, ssr_timing) = match state
+            .ssr_renderer
+            .render_to_html_with_timing(&rsc_wire_format, &state.config)
+            .await
+        {
+            Ok((html, timing)) => (html, timing),
+            Err(e) => {
+                error!("SSR rendering failed: {}, falling back to shell", e);
+                return render_fallback_html(&state, path).await;
+            }
+        };
+        let ssr_duration = ssr_start.elapsed();
+        debug!(
+            "⚡ SSR render took: {:?} (parse: {:.2}ms, serialize: {:.2}ms, v8: {:.2}ms, template: {:.2}ms, inject: {:.2}ms)",
+            ssr_duration,
+            ssr_timing.parse_rsc_ms,
+            ssr_timing.serialize_to_v8_ms,
+            ssr_timing.v8_execution_ms,
+            ssr_timing.load_template_ms,
+            ssr_timing.inject_template_ms
+        );
+
+        let total_duration = total_start.elapsed();
+        debug!(
+            "⚡⚡⚡ Total render took: {:?} (RSC: {:?}, SSR: {:?})",
+            total_duration, rsc_duration, ssr_duration
+        );
+
+        let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
+            Ok(html) => html,
+            Err(_) => html,
+        };
+
+        let mut response_builder = Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/html; charset=utf-8");
+
+        let page_configs = state.page_cache_configs.read().await;
+        if let Some(page_cache_config) = Server::find_matching_cache_config(&page_configs, path) {
+            for (key, value) in page_cache_config {
+                response_builder = response_builder.header(key.to_lowercase(), value);
+            }
+        }
+
+        Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
     }
+}
+
+async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, StatusCode> {
+    let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
+
+    let template = match tokio::fs::read_to_string(template_path).await {
+        Ok(t) => t,
+        Err(_) => {
+            if html.trim_start().starts_with("<html") {
+                return Ok(format!("<!DOCTYPE html>\n{}", html));
+            }
+            return Ok(html.to_string());
+        }
+    };
+
+    let mut tags = Vec::new();
+
+    for line in template.lines() {
+        if line.contains("<link") && line.contains("stylesheet") {
+            tags.push(line.trim().to_string());
+        }
+        if line.contains("<script") {
+            tags.push(line.trim().to_string());
+        }
+    }
+
+    let assets = tags.join("\n");
+
+    let mut final_html = html.to_string();
+    if let Some(body_end) = final_html.rfind("</body>") {
+        final_html.insert_str(body_end, &format!("\n{}\n", assets));
+    }
+
+    if !final_html.trim_start().starts_with("<!DOCTYPE") {
+        final_html = format!("<!DOCTYPE html>\n{}", final_html);
+    }
+
+    Ok(final_html)
 }
 
 #[cfg(test)]

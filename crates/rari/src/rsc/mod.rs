@@ -5,6 +5,7 @@ pub mod layout_renderer;
 pub mod renderer;
 pub mod rsc_tree;
 pub mod serializer;
+pub mod ssr_metrics;
 pub mod ssr_renderer;
 pub mod streaming;
 pub mod suspense;
@@ -30,6 +31,7 @@ pub use jsx_transform::{extract_dependencies, transform_jsx};
 pub use renderer::RscRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
+pub use ssr_metrics::{SsrTiming, TimingScope};
 pub use ssr_renderer::SsrRenderer;
 pub use streaming::{RscStream, RscStreamChunk};
 

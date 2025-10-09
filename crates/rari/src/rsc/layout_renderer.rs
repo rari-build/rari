@@ -29,22 +29,32 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
     ) -> Result<String, RariError> {
+        use crate::rsc::TimingScope;
+
+        let total_timer = TimingScope::new();
+
         debug!(
             "Rendering route {} with {} layouts",
             route_match.route.path,
             route_match.layouts.len()
         );
 
+        let script_timer = TimingScope::new();
         let composition_script = self.build_composition_script(route_match, context)?;
+        let script_time = script_timer.elapsed_ms();
 
         debug!("Executing composition script to render composed component tree");
 
+        let lock_timer = TimingScope::new();
         let renderer = self.renderer.lock().await;
+        let lock_time = lock_timer.elapsed_ms();
 
+        let execute_timer = TimingScope::new();
         let promise_result = renderer
             .runtime
             .execute_script("compose_and_render".to_string(), composition_script)
             .await?;
+        let execute_time = execute_timer.elapsed_ms();
 
         let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
             promise_result
@@ -53,25 +63,127 @@ impl LayoutRenderer {
             renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
         };
 
-        debug!("Composition result: {:?}", result);
-
         let rsc_data = result.get("rsc").ok_or_else(|| {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
             RariError::internal("No RSC data in composition result")
         })?;
 
+        let serialize_timer = TimingScope::new();
         let rsc_wire_format = {
             let mut serializer = renderer.serializer.lock();
             serializer
                 .serialize_rsc_json(rsc_data)
                 .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {e}")))?
         };
+        let serialize_time = serialize_timer.elapsed_ms();
 
         if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
             tracing::warn!("HTML structure validation warning: {}", e);
         }
 
+        let total_time = total_timer.elapsed_ms();
+
+        debug!(
+            "RSC render timing: total={:.2}ms (script={:.2}ms, lock={:.2}ms, execute={:.2}ms, serialize={:.2}ms)",
+            total_time, script_time, lock_time, execute_time, serialize_time
+        );
+
+        if total_time > 30.0 {
+            tracing::warn!(
+                "Slow RSC render: {:.2}ms total (script={:.2}ms, lock={:.2}ms, execute={:.2}ms, serialize={:.2}ms) for {}",
+                total_time,
+                script_time,
+                lock_time,
+                execute_time,
+                serialize_time,
+                route_match.route.path
+            );
+        }
+
         Ok(rsc_wire_format)
+    }
+
+    pub async fn render_route_to_html_direct(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+    ) -> Result<String, RariError> {
+        use crate::rsc::TimingScope;
+
+        let total_timer = TimingScope::new();
+
+        debug!("render_route_to_html_direct START for {}", route_match.route.path);
+
+        let prep_timer = TimingScope::new();
+        let page_props = self.create_page_props(route_match, context)?;
+        let page_component_id = self.create_component_id(&route_match.route.file_path);
+
+        let layouts: Vec<serde_json::Value> = route_match
+            .layouts
+            .iter()
+            .map(|layout| {
+                serde_json::json!({
+                    "componentId": self.create_component_id(&layout.file_path),
+                    "isRoot": layout.is_root
+                })
+            })
+            .collect();
+        let prep_time = prep_timer.elapsed_ms();
+
+        let lock_timer = TimingScope::new();
+        let renderer = self.renderer.lock().await;
+        let lock_time = lock_timer.elapsed_ms();
+
+        debug!("Calling renderRouteToHtmlDirect...");
+        let v8_timer = TimingScope::new();
+        let result = renderer
+            .runtime
+            .execute_function(
+                "renderRouteToHtmlDirect",
+                vec![
+                    serde_json::Value::String(page_component_id.clone()),
+                    page_props.clone(),
+                    serde_json::Value::Array(layouts),
+                ],
+            )
+            .await?;
+        let v8_time = v8_timer.elapsed_ms();
+
+        if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
+            if !error.is_empty() && error != "null" {
+                tracing::error!("JavaScript error: {}", error);
+                return Err(RariError::internal(format!("JavaScript error: {}", error)));
+            }
+        }
+
+        let html = result
+            .get("html")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                tracing::error!("Failed to extract HTML from result: {:?}", result);
+                RariError::internal("No HTML in render result")
+            })?
+            .to_string();
+
+        let total_time = total_timer.elapsed_ms();
+
+        debug!(
+            "Layout render timing: total={:.2}ms (prep={:.2}ms, lock={:.2}ms, v8={:.2}ms)",
+            total_time, prep_time, lock_time, v8_time
+        );
+
+        if total_time > 30.0 {
+            tracing::warn!(
+                "Slow layout render: {:.2}ms total (prep={:.2}ms, lock={:.2}ms, v8={:.2}ms) for {}",
+                total_time,
+                prep_time,
+                lock_time,
+                v8_time,
+                route_match.route.path
+            );
+        }
+
+        Ok(html)
     }
 
     fn validate_html_structure(html: &str, route_match: &AppRouteMatch) -> Result<(), RariError> {

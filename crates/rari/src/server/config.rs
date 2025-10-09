@@ -103,11 +103,26 @@ pub struct SsrConfig {
     pub timeout_ms: u64,
     pub cache_template: bool,
     pub pretty_print: bool,
+    #[serde(default)]
+    pub debug_timing: bool,
+    #[serde(default = "default_slow_threshold")]
+    pub slow_threshold_ms: f64,
+}
+
+fn default_slow_threshold() -> f64 {
+    50.0
 }
 
 impl Default for SsrConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_ms: 5000, cache_template: true, pretty_print: false }
+        Self {
+            enabled: true,
+            timeout_ms: 5000,
+            cache_template: true,
+            pretty_print: false,
+            debug_timing: false,
+            slow_threshold_ms: 50.0,
+        }
     }
 }
 
@@ -291,6 +306,18 @@ impl Config {
             config.ssr.pretty_print = ssr_pretty_print_str.to_lowercase() == "true"
                 || ssr_pretty_print_str == "1"
                 || ssr_pretty_print_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(ssr_debug_timing_str) = std::env::var("RARI_SSR_DEBUG_TIMING") {
+            config.ssr.debug_timing = ssr_debug_timing_str.to_lowercase() == "true"
+                || ssr_debug_timing_str == "1"
+                || ssr_debug_timing_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(ssr_slow_threshold_str) = std::env::var("RARI_SSR_SLOW_THRESHOLD_MS") {
+            config.ssr.slow_threshold_ms = ssr_slow_threshold_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_SSR_SLOW_THRESHOLD_MS".to_string())
+            })?;
         }
 
         Ok(config)
