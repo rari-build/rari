@@ -305,8 +305,19 @@ impl SsrRenderer {
         use regex::Regex;
 
         let script_regex = Regex::new(r#"(?s)<script[^>]*>.*?</script>|<script[^>]*/>"#).unwrap();
+        let link_regex = Regex::new(r#"<link[^>]*/?>"#).unwrap();
 
-        script_regex.find_iter(template).map(|m| m.as_str()).collect::<Vec<_>>().join("\n")
+        let mut tags = Vec::new();
+
+        for m in link_regex.find_iter(template) {
+            tags.push(m.as_str().to_string());
+        }
+
+        for m in script_regex.find_iter(template) {
+            tags.push(m.as_str().to_string());
+        }
+
+        tags.join("\n")
     }
 
     pub async fn initialize(&self) -> Result<(), RariError> {

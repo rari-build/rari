@@ -1618,6 +1618,9 @@ function processProps(props, modules) {
   const processed = {};
   for (const key in props) {
     if (Object.prototype.hasOwnProperty.call(props, key)) {
+      if (key.startsWith('$$') || key === 'ref') {
+        continue;
+      }
       if (key === 'children') {
         processed[key] = props.children ? rscToReact(props.children, modules) : undefined;
       } else {

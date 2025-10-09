@@ -1253,17 +1253,21 @@ impl JsRuntimeInterface for DenoRuntime {
             let args_json = serde_json::to_string(&args)
                 .map_err(|e| RariError::js_runtime(format!("Failed to serialize args: {e}")))?;
 
-            let escaped_json = args_json
-                .replace('\\', "\\\\")
-                .replace('\'', "\\'")
-                .replace('\n', "\\n")
-                .replace('\r', "\\r")
-                .replace('\t', "\\t");
+            let unique_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+
+            let args_base64 = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                args_json.as_bytes(),
+            );
 
             let script = format!(
                 r#"
                 (function() {{
-                    const args = JSON.parse('{}');
+                    const argsJson = atob("{}");
+                    const args = JSON.parse(argsJson);
 
                     if (typeof globalThis.{} !== 'function') {{
                         throw new Error("Function not found: {}");
@@ -1272,14 +1276,14 @@ impl JsRuntimeInterface for DenoRuntime {
                     return globalThis.{}(...args);
                 }})();
                 "#,
-                escaped_json, function_name, function_name, function_name
+                args_base64, function_name, function_name, function_name
             );
 
             let (response_sender, response_receiver) = oneshot::channel();
 
             request_sender
                 .send(JsRequest::ExecuteScript {
-                    script_name: format!("exec_func_{function_name}.js"),
+                    script_name: format!("exec_func_{}_{}.js", function_name, unique_id),
                     script_code: script,
                     result_tx: response_sender,
                 })
