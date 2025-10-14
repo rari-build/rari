@@ -3,7 +3,6 @@ use crate::rsc::jsx_transform::{extract_dependencies, transform_jsx};
 use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 
-use crate::runtime::JsExecutionRuntime;
 use crate::runtime::dist_path_resolver::DistPathResolver;
 use crate::server::actions::{handle_form_action, handle_server_action};
 use crate::server::config::Config;
@@ -25,6 +24,7 @@ use axum::{
     routing::{any, get, post},
 };
 use colored::Colorize;
+use futures::future;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,9 @@ use tracing::{debug, error, info, warn};
 pub mod actions;
 pub mod app_router;
 pub mod config;
+pub mod html_diagnostics;
 pub mod request_middleware;
+pub mod request_type;
 pub mod vite_proxy;
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
@@ -61,7 +63,7 @@ pub struct ReloadComponentResponse {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+    pub renderer_pool: Arc<crate::rsc::RendererPool>,
     pub ssr_renderer: Arc<crate::rsc::ssr_renderer::SsrRenderer>,
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
@@ -71,6 +73,7 @@ pub struct ServerState {
     pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<app_router::AppRouter>>,
     pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
+    pub html_cache: Arc<dashmap::DashMap<String, String>>,
 }
 
 pub struct Server {
@@ -91,26 +94,41 @@ impl Server {
             debug!("No .env file found or error loading .env: {}", e);
         }
 
-        let env_vars: FxHashMap<String, String> = std::env::vars().collect();
-
-        let js_runtime = Arc::new(JsExecutionRuntime::new(Some(env_vars)));
-
         let resource_limits = ResourceLimits {
             max_script_execution_time_ms: config.rsc.script_execution_timeout_ms,
             ..ResourceLimits::default()
         };
 
-        let mut renderer = RscRenderer::with_resource_limits(js_runtime, resource_limits);
-        renderer.initialize().await?;
+        let cpu_count = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+
+        let pool_size = if let Ok(size_str) = std::env::var("RARI_RENDERER_POOL_SIZE") {
+            size_str.parse::<usize>().unwrap_or_else(|_| {
+                warn!("Invalid RARI_RENDERER_POOL_SIZE value: {}, using default", size_str);
+                cpu_count
+            })
+        } else if config.is_production() {
+            (cpu_count * 4).min(32)
+        } else {
+            cpu_count.min(8)
+        };
+        info!(
+            "Creating renderer pool with {} renderers (CPUs: {}, mode: {})",
+            pool_size, cpu_count, config.mode
+        );
+
+        let renderer_pool = crate::rsc::RendererPool::new(pool_size, resource_limits).await?;
 
         if config.is_production() {
-            Self::load_production_components(&mut renderer).await?;
+            Self::load_production_components_to_pool(&renderer_pool).await?;
+            info!("Warming up {} renderers...", pool_size);
+            Self::warmup_renderer_pool(&renderer_pool).await?;
+        } else {
+            // In development, load app router components from source
+            Self::load_app_router_components_to_pool(&renderer_pool, &config).await?;
         }
 
-        Self::load_app_router_components(&mut renderer, &config).await?;
-
         if config.is_development() {
-            Self::load_server_actions_from_source(&mut renderer).await?;
+            Self::load_server_actions_from_source_to_pool(&renderer_pool).await?;
         }
 
         let app_router = {
@@ -144,8 +162,13 @@ impl Server {
         let mut module_reload_manager =
             crate::runtime::module_reload::ModuleReloadManager::new(reload_config);
 
-        module_reload_manager.set_runtime(Arc::clone(&renderer.runtime));
-        module_reload_manager.set_component_registry(Arc::clone(&renderer.component_registry));
+        let first_renderer =
+            renderer_pool.get(0).ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
+        let first_renderer_lock = first_renderer.lock().await;
+        module_reload_manager.set_runtime(Arc::clone(&first_renderer_lock.runtime));
+        module_reload_manager
+            .set_component_registry(Arc::clone(&first_renderer_lock.component_registry));
+        drop(first_renderer_lock);
 
         let project_root =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -171,17 +194,20 @@ impl Server {
             );
         }
 
-        let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
+        let renderer_pool_arc = Arc::new(renderer_pool);
 
         let ssr_renderer = {
-            let runtime = renderer_arc.lock().await.runtime.clone();
+            let first_renderer = renderer_pool_arc
+                .get(0)
+                .ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
+            let runtime = first_renderer.lock().await.runtime.clone();
             let ssr = crate::rsc::ssr_renderer::SsrRenderer::new(runtime);
             ssr.initialize().await?;
             Arc::new(ssr)
         };
 
         let state = ServerState {
-            renderer: renderer_arc,
+            renderer_pool: renderer_pool_arc,
             ssr_renderer,
             config: Arc::new(config.clone()),
             request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -190,6 +216,7 @@ impl Server {
             page_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             app_router,
             module_reload_manager,
+            html_cache: Arc::new(dashmap::DashMap::new()),
         };
 
         if config.is_production() {
@@ -334,6 +361,7 @@ impl Server {
         self.address
     }
 
+    #[allow(dead_code)]
     async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
         info!("Loading production components from manifest");
 
@@ -363,6 +391,134 @@ impl Server {
         }
 
         info!("Loaded {} production components", loaded_count);
+        Ok(())
+    }
+
+    async fn load_production_components_to_pool(
+        renderer_pool: &crate::rsc::RendererPool,
+    ) -> Result<(), RariError> {
+        info!("Loading production components to renderer pool");
+
+        let manifest_path = std::path::Path::new(SERVER_MANIFEST_PATH);
+        if !manifest_path.exists() {
+            warn!(
+                "No server manifest found at {}, production components will not be available",
+                manifest_path.display()
+            );
+            return Ok(());
+        }
+
+        let manifest = Self::read_manifest(manifest_path)?;
+        let components = Self::parse_manifest_components(&manifest)?;
+
+        let mut sorted_components: Vec<_> = components.iter().collect();
+        sorted_components.sort_by_key(|(id, _)| if id.starts_with("components/") { 0 } else { 1 });
+
+        let mut loaded_count = 0;
+        for (component_id, component_info) in sorted_components {
+            let bundle_path =
+                component_info.get("bundlePath").and_then(|p| p.as_str()).ok_or_else(|| {
+                    RariError::configuration(format!("Component {component_id} missing bundlePath"))
+                })?;
+
+            let component_file = std::path::Path::new(DIST_DIR).join(bundle_path);
+            if !component_file.exists() {
+                error!("Component file not found: {}", component_file.display());
+                continue;
+            }
+
+            let component_code = std::fs::read_to_string(&component_file)
+                .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
+
+            let mut tasks = Vec::new();
+            for i in 0..renderer_pool.size() {
+                let renderer_arc = renderer_pool
+                    .get(i)
+                    .ok_or_else(|| RariError::internal(format!("Renderer {} not found", i)))?;
+                let code = component_code.clone();
+                let id = component_id.to_string();
+
+                let task = tokio::spawn(async move {
+                    let renderer = renderer_arc.lock().await;
+                    renderer
+                        .runtime
+                        .execute_script(format!("load_{}.js", id.replace('/', "_")), code)
+                        .await
+                        .map_err(|e| (i, e))
+                });
+                tasks.push(task);
+            }
+
+            let results = future::join_all(tasks).await;
+            let mut success = true;
+            for result in results {
+                match result {
+                    Ok(Ok(_)) => {}
+                    Ok(Err((i, e))) => {
+                        error!(
+                            "Failed to load component {} on renderer {}: {}",
+                            component_id, i, e
+                        );
+                        success = false;
+                    }
+                    Err(e) => {
+                        error!("Task panicked loading component {}: {}", component_id, e);
+                        success = false;
+                    }
+                }
+            }
+
+            if success {
+                debug!("Loaded production component to all renderers: {}", component_id);
+                loaded_count += 1;
+            }
+        }
+
+        info!("Loaded {} production components to pool", loaded_count);
+        Ok(())
+    }
+
+    async fn warmup_renderer_pool(
+        renderer_pool: &crate::rsc::RendererPool,
+    ) -> Result<(), RariError> {
+        let warmup_script = r#"
+            // Simple warmup to trigger JIT
+            const arr = Array.from({ length: 100 }, (_, i) => i);
+            arr.map(x => x * 2).filter(x => x > 50).reduce((a, b) => a + b, 0);
+        "#;
+
+        let mut tasks = Vec::new();
+        for i in 0..renderer_pool.size() {
+            let renderer_arc = renderer_pool
+                .get(i)
+                .ok_or_else(|| RariError::internal(format!("Renderer {} not found", i)))?;
+            let code = warmup_script.to_string();
+
+            let task = tokio::spawn(async move {
+                let renderer = renderer_arc.lock().await;
+                renderer
+                    .runtime
+                    .execute_script("warmup.js".to_string(), code)
+                    .await
+                    .map_err(|e| (i, e))
+            });
+            tasks.push(task);
+        }
+
+        let results = future::join_all(tasks).await;
+        for result in results {
+            match result {
+                Ok(Ok(_)) => {}
+                Ok(Err((i, e))) => {
+                    warn!("Failed to warm up renderer {}: {}", i, e);
+                }
+                Err(e) => {
+                    warn!("Task panicked during warmup: {}", e);
+                }
+            }
+        }
+
+        info!("Renderer pool warmup completed");
         Ok(())
     }
 
@@ -574,6 +730,7 @@ impl Server {
         })
     }
 
+    #[allow(dead_code)]
     async fn load_component_from_manifest(
         component_id: &str,
         component_info: &serde_json::Value,
@@ -602,6 +759,7 @@ impl Server {
             .map_err(|e| RariError::internal(format!("Failed to register component: {e}")))
     }
 
+    #[allow(dead_code)]
     async fn load_server_actions_from_source(renderer: &mut RscRenderer) -> Result<(), RariError> {
         info!("Loading server actions from source");
 
@@ -615,6 +773,29 @@ impl Server {
         Self::scan_for_server_actions(src_dir, renderer, &mut loaded_count).await?;
 
         info!("Loaded {} server action files", loaded_count);
+        Ok(())
+    }
+
+    async fn load_server_actions_from_source_to_pool(
+        renderer_pool: &crate::rsc::RendererPool,
+    ) -> Result<(), RariError> {
+        info!("Loading server actions from source to renderer pool");
+
+        let src_dir = std::path::Path::new("src");
+        if !src_dir.exists() {
+            debug!("No src directory found, skipping server action loading");
+            return Ok(());
+        }
+
+        let first_renderer =
+            renderer_pool.get(0).ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
+
+        let mut renderer = first_renderer.lock().await;
+        let mut loaded_count = 0;
+        Self::scan_for_server_actions(src_dir, &mut renderer, &mut loaded_count).await?;
+        drop(renderer);
+
+        info!("Loaded {} server action files to pool", loaded_count);
         Ok(())
     }
 
@@ -712,6 +893,7 @@ impl Server {
         })
     }
 
+    #[allow(dead_code)]
     async fn load_app_router_components(
         renderer: &mut RscRenderer,
         _config: &Config,
@@ -737,6 +919,146 @@ impl Server {
         .await?;
 
         info!("Loaded {} app router components", loaded_count);
+        Ok(())
+    }
+
+    async fn load_app_router_components_to_pool(
+        renderer_pool: &crate::rsc::RendererPool,
+        _config: &Config,
+    ) -> Result<(), RariError> {
+        info!("Loading app router components to renderer pool");
+
+        let server_dir = std::path::Path::new(DIST_DIR).join("server");
+        if !server_dir.exists() {
+            debug!(
+                "No server directory found at {}, skipping app router component loading",
+                server_dir.display()
+            );
+            return Ok(());
+        }
+
+        let mut components_to_load = Vec::new();
+        Self::collect_server_components(&server_dir, &server_dir, &mut components_to_load)?;
+
+        info!(
+            "Found {} component files to load on all {} renderers",
+            components_to_load.len(),
+            renderer_pool.size()
+        );
+
+        let pool_size = renderer_pool.size();
+        let mut tasks = Vec::new();
+
+        for i in 0..pool_size {
+            let renderer_arc = renderer_pool
+                .get(i)
+                .ok_or_else(|| RariError::internal(format!("Renderer {} not found in pool", i)))?;
+
+            let components = components_to_load.clone();
+
+            let task = tokio::spawn(async move {
+                let renderer = renderer_arc.lock().await;
+                let mut loaded = 0;
+
+                for (component_id, component_code) in components {
+                    match renderer
+                        .runtime
+                        .execute_script(
+                            format!("load_{}.js", component_id.replace('/', "_")),
+                            component_code,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            loaded += 1;
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to execute component {} on renderer {}: {}",
+                                component_id,
+                                i,
+                                e
+                            );
+                        }
+                    }
+                }
+
+                (i, loaded)
+            });
+
+            tasks.push(task);
+        }
+
+        let results = futures::future::join_all(tasks).await;
+
+        let mut total_loaded = 0;
+        for result in results {
+            match result {
+                Ok((renderer_id, loaded_count)) => {
+                    debug!("Renderer {} loaded {} components", renderer_id, loaded_count);
+                    if renderer_id == 0 {
+                        total_loaded = loaded_count;
+                    }
+                }
+                Err(e) => {
+                    error!("Task panicked while loading components: {}", e);
+                }
+            }
+        }
+
+        info!(
+            "Successfully loaded {} app router components on all {} renderers in parallel",
+            total_loaded, pool_size
+        );
+        Ok(())
+    }
+
+    fn collect_server_components(
+        dir: &std::path::Path,
+        base_dir: &std::path::Path,
+        components: &mut Vec<(String, String)>,
+    ) -> Result<(), RariError> {
+        let entries = std::fs::read_dir(dir).map_err(|e| {
+            RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
+        })?;
+
+        for entry in entries {
+            let entry =
+                entry.map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::collect_server_components(&path, base_dir, components)?;
+            } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
+                let component_code = std::fs::read_to_string(&path)
+                    .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
+
+                if has_use_server_directive(&component_code) {
+                    continue;
+                }
+
+                let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
+                let relative_str = relative_path
+                    .to_str()
+                    .unwrap_or("unknown")
+                    .replace(".js", "")
+                    .replace('\\', "/");
+
+                let component_id = if relative_str.starts_with("app/") {
+                    relative_str.clone()
+                } else {
+                    relative_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                };
+
+                debug!("Collected component: {} from {:?}", component_id, path);
+                components.push((component_id, component_code));
+            }
+        }
+
         Ok(())
     }
 
@@ -955,7 +1277,8 @@ async fn stream_component(
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let stream_result = {
-        let renderer = state.renderer.lock().await;
+        let renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         renderer.render_with_streaming(&request.component_id, props_str.as_deref()).await
     };
 
@@ -1007,8 +1330,10 @@ async fn register_component(
     }
 
     let result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.register_component(&request.component_id, &request.component_code).await
+        state
+            .renderer_pool
+            .register_component_on_all(&request.component_id, &request.component_code)
+            .await
     };
 
     match result {
@@ -1019,7 +1344,11 @@ async fn register_component(
                 info!("Successfully registered component: {}", request.component_id);
             }
 
-            let renderer = state.renderer.lock().await;
+            let renderer = state
+                .renderer_pool
+                .acquire()
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let is_client =
                 renderer.serializer.lock().is_client_component_registered(&request.component_id);
 
@@ -1181,7 +1510,8 @@ async fn register_client_component(
     );
 
     {
-        let renderer = state.renderer.lock().await;
+        let renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         renderer.register_client_component(
             &request.component_id,
             &request.file_path,
@@ -1260,7 +1590,11 @@ async fn reload_component_from_dist(
 
     let cleaned_code = strip_module_syntax(&dist_code);
 
-    let renderer = state.renderer.lock().await;
+    let renderer = state
+        .renderer_pool
+        .acquire()
+        .await
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
 
     let execution_result = renderer
         .runtime
@@ -1447,7 +1781,8 @@ async fn hmr_register_component(
     let path = std::path::Path::new(&file_path);
 
     {
-        let renderer = state.renderer.lock().await;
+        let renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let mut registry = renderer.component_registry.lock();
         registry.mark_module_stale(&component_id);
         debug!("Marked component {} as stale", component_id);
@@ -1593,15 +1928,19 @@ async fn immediate_component_reregistration(
     );
 
     {
-        let mut renderer = state.renderer.lock().await;
-        renderer.clear_script_cache();
+        for i in 0..state.renderer_pool.size() {
+            if let Some(renderer_arc) = state.renderer_pool.get(i) {
+                let mut renderer = renderer_arc.lock().await;
+                renderer.clear_script_cache();
 
-        if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-            warn!(
-                component_name = component_name,
-                error = %e,
-                "Failed to clear component module cache, continuing anyway"
-            );
+                if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+                    warn!(
+                        component_name = component_name,
+                        error = %e,
+                        "Failed to clear component module cache, continuing anyway"
+                    );
+                }
+            }
         }
     }
 
@@ -1620,9 +1959,9 @@ async fn immediate_component_reregistration(
     };
 
     {
-        let mut renderer = state.renderer.lock().await;
-
-        if let Err(e) = renderer.register_component(component_name, &content).await {
+        if let Err(e) =
+            state.renderer_pool.register_component_on_all(component_name, &content).await
+        {
             error!(
                 component_name = component_name,
                 error = %e,
@@ -1632,17 +1971,25 @@ async fn immediate_component_reregistration(
         } else {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-            if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                warn!(
-                    component_name = component_name,
-                    error = %e,
-                    "Failed to clear component module cache after initial registration"
-                );
+            for i in 0..state.renderer_pool.size() {
+                if let Some(renderer_arc) = state.renderer_pool.get(i) {
+                    let mut renderer = renderer_arc.lock().await;
+
+                    if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+                        warn!(
+                            component_name = component_name,
+                            error = %e,
+                            "Failed to clear component module cache after initial registration"
+                        );
+                    }
+                }
             }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-            if let Err(e) = renderer.register_component(component_name, &content).await {
+            if let Err(e) =
+                state.renderer_pool.register_component_on_all(component_name, &content).await
+            {
                 error!(
                     component_name = component_name,
                     error = %e,
@@ -1654,6 +2001,12 @@ async fn immediate_component_reregistration(
             }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+            let renderer_arc = match state.renderer_pool.get(0) {
+                Some(r) => r,
+                None => return Err("Renderer pool is empty".into()),
+            };
+            let renderer = renderer_arc.lock().await;
 
             let verification_attempts = 3;
             for attempt in 1..=verification_attempts {
@@ -1743,7 +2096,13 @@ async fn immediate_component_reregistration(
 #[axum::debug_handler]
 async fn list_components(State(state): State<ServerState>) -> Json<Value> {
     let components = {
-        let renderer = state.renderer.lock().await;
+        let renderer = match state.renderer_pool.acquire().await {
+            Ok(r) => r,
+            Err(_) => {
+                #[allow(clippy::disallowed_methods)]
+                return Json(serde_json::json!({"error": "Failed to acquire renderer"}));
+            }
+        };
         renderer.list_components()
     };
 
@@ -1790,7 +2149,8 @@ async fn rsc_render_handler(
     let props_str = props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let result = {
-        let mut renderer = state.renderer.lock().await;
+        let mut renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         renderer.render_to_rsc_format(&component_id, props_str.as_deref()).await
     };
 
@@ -1830,7 +2190,19 @@ async fn server_status(State(state): State<ServerState>) -> Json<StatusResponse>
     let uptime = state.start_time.elapsed().as_secs();
     let request_count = state.request_count.load(std::sync::atomic::Ordering::Relaxed);
     let components = {
-        let renderer = state.renderer.lock().await;
+        let renderer = match state.renderer_pool.acquire().await {
+            Ok(r) => r,
+            Err(_) => {
+                return Json(StatusResponse {
+                    status: "degraded".to_string(),
+                    mode: state.config.mode.to_string(),
+                    uptime_seconds: uptime,
+                    request_count,
+                    components_registered: 0,
+                    memory_usage: get_memory_usage(),
+                });
+            }
+        };
         renderer.list_components()
     };
 
@@ -1876,7 +2248,16 @@ async fn hmr_invalidate_component(
     info!("HMR invalidate request for component: {}", payload.component_id);
 
     let result = {
-        let renderer = state.renderer.lock().await;
+        let renderer = match state.renderer_pool.acquire().await {
+            Ok(r) => r,
+            Err(_) => {
+                #[allow(clippy::disallowed_methods)]
+                return Json(serde_json::json!({
+                    "success": false,
+                    "error": "Failed to acquire renderer"
+                }));
+            }
+        };
 
         {
             let mut registry = renderer.component_registry.lock();
@@ -2067,8 +2448,7 @@ async fn hmr_reload_component(
     debug!("Fetched {} bytes of transpiled code", transpiled_code.len());
 
     let result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.register_component(&payload.component_id, &transpiled_code).await
+        state.renderer_pool.register_component_on_all(&payload.component_id, &transpiled_code).await
     };
 
     match result {
@@ -2107,7 +2487,8 @@ async fn reload_component(
     let bundle_full_path = project_root.join(&payload.bundle_path);
 
     let invalidate_result = {
-        let renderer = state.renderer.lock().await;
+        let renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         renderer.runtime.invalidate_component(&payload.component_id).await
     };
 
@@ -2116,7 +2497,8 @@ async fn reload_component(
     }
 
     let load_result = {
-        let renderer = state.renderer.lock().await;
+        let renderer =
+            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         renderer.runtime.load_component(&payload.component_id, &bundle_full_path).await
     };
 
@@ -2337,9 +2719,22 @@ async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Respons
 
     let index_path = state.config.public_dir().join("index.html");
     if index_path.exists() && state.config.is_production() {
+        if let Some(cached_html) = state.html_cache.get(path) {
+            debug!("✅ Cache HIT for fallback HTML: {}", path);
+            let html = cached_html.clone();
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(html))
+                .expect("Valid HTML response"));
+        }
+
         match std::fs::read_to_string(&index_path) {
             Ok(html_content) => {
-                debug!("Serving built index.html as fallback");
+                debug!("Serving built index.html as fallback (caching for future requests)");
+
+                state.html_cache.insert(path.to_string(), html_content.clone());
+
                 return Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
@@ -2413,6 +2808,8 @@ async fn handle_app_route(
     axum::extract::Query(query_params): axum::extract::Query<FxHashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
+    use crate::server::request_type::{RenderMode, RequestTypeDetector};
+
     let path = uri.path();
     let app_router = match &state.app_router {
         Some(router) => router,
@@ -2426,6 +2823,9 @@ async fn handle_app_route(
 
     debug!("App route matched: {} -> {}", path, route_match.route.path);
 
+    let render_mode = RequestTypeDetector::detect_render_mode(&headers);
+    debug!("Detected render mode: {:?}", render_mode);
+
     let search_params = extract_search_params(query_params);
 
     let request_headers = extract_headers(&headers);
@@ -2436,126 +2836,379 @@ async fn handle_app_route(
         request_headers,
     );
 
-    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let layout_renderer = LayoutRenderer::new_with_pool(state.renderer_pool.clone());
 
-    let accept_header = headers.get("accept").and_then(|v| v.to_str().ok()).unwrap_or("");
-    let wants_rsc = accept_header.contains("text/x-component");
-
-    debug!("Accept header: '{}', wants_rsc: {}", accept_header, wants_rsc);
-
-    if wants_rsc {
-        match layout_renderer.render_route(&route_match, &context).await {
-            Ok(rsc_wire_format) => {
-                debug!("Successfully rendered RSC wire format ({} bytes)", rsc_wire_format.len());
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/x-component")
-                    .body(Body::from(rsc_wire_format))
-                    .expect("Valid RSC response"))
-            }
-            Err(e) => {
-                error!("Failed to render RSC: {}", e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        }
-    } else {
-        let total_start = std::time::Instant::now();
-
-        let rsc_start = std::time::Instant::now();
-        let rsc_wire_format = match layout_renderer.render_route(&route_match, &context).await {
-            Ok(rsc) => rsc,
-            Err(e) => {
-                error!("RSC rendering failed: {}, falling back to shell", e);
-                return render_fallback_html(&state, path).await;
-            }
-        };
-        let rsc_duration = rsc_start.elapsed();
-        debug!("⚡ RSC render took: {:?}", rsc_duration);
-
-        let ssr_start = std::time::Instant::now();
-        let (html, ssr_timing) = match state
-            .ssr_renderer
-            .render_to_html_with_timing(&rsc_wire_format, &state.config)
-            .await
-        {
-            Ok((html, timing)) => (html, timing),
-            Err(e) => {
-                error!("SSR rendering failed: {}, falling back to shell", e);
-                return render_fallback_html(&state, path).await;
-            }
-        };
-        let ssr_duration = ssr_start.elapsed();
-        debug!(
-            "⚡ SSR render took: {:?} (parse: {:.2}ms, serialize: {:.2}ms, v8: {:.2}ms, template: {:.2}ms, inject: {:.2}ms)",
-            ssr_duration,
-            ssr_timing.parse_rsc_ms,
-            ssr_timing.serialize_to_v8_ms,
-            ssr_timing.v8_execution_ms,
-            ssr_timing.load_template_ms,
-            ssr_timing.inject_template_ms
-        );
-
-        let total_duration = total_start.elapsed();
-        debug!(
-            "⚡⚡⚡ Total render took: {:?} (RSC: {:?}, SSR: {:?})",
-            total_duration, rsc_duration, ssr_duration
-        );
-
-        let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
-            Ok(html) => html,
-            Err(_) => html,
-        };
-
-        let mut response_builder = Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "text/html; charset=utf-8");
-
-        let page_configs = state.page_cache_configs.read().await;
-        if let Some(page_cache_config) = Server::find_matching_cache_config(&page_configs, path) {
-            for (key, value) in page_cache_config {
-                response_builder = response_builder.header(key.to_lowercase(), value);
+    match render_mode {
+        RenderMode::RscNavigation => {
+            debug!("Rendering RSC wire format for client navigation");
+            match layout_renderer.render_route_optimized(&route_match, &context, render_mode).await
+            {
+                Ok(rsc_wire_format) => {
+                    debug!(
+                        "Successfully rendered RSC wire format ({} bytes)",
+                        rsc_wire_format.len()
+                    );
+                    Ok(Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "text/x-component")
+                        .body(Body::from(rsc_wire_format))
+                        .expect("Valid RSC response"))
+                }
+                Err(e) => {
+                    error!("Failed to render RSC: {}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
             }
         }
+        RenderMode::Ssr => {
+            debug!("Rendering HTML for SSR (initial page load) using direct HTML path");
+            let total_start = std::time::Instant::now();
 
-        Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
+            let render_start = std::time::Instant::now();
+            let html_content =
+                match layout_renderer.render_route_to_html_direct(&route_match, &context).await {
+                    Ok(html) => html,
+                    Err(e) => {
+                        error!("Direct HTML rendering failed: {}, falling back to shell", e);
+                        return render_fallback_html(&state, path).await;
+                    }
+                };
+            let render_duration = render_start.elapsed();
+            debug!("⚡ Direct HTML render took: {:?}", render_duration);
+
+            let total_duration = total_start.elapsed();
+            debug!(
+                "⚡⚡⚡ Total SSR render took: {:?} (direct HTML: {:?})",
+                total_duration, render_duration
+            );
+
+            use crate::server::html_diagnostics::HtmlDiagnostics;
+            HtmlDiagnostics::log_html_snippet(&html_content, "Before inject_assets_into_html", 300);
+            HtmlDiagnostics::check_root_element(&html_content, "Before inject_assets_into_html");
+
+            let html_with_assets = match inject_assets_into_html(&html_content, &state.config).await
+            {
+                Ok(html) => {
+                    HtmlDiagnostics::log_transformation(
+                        &html_content,
+                        &html,
+                        "inject_assets_into_html",
+                    );
+
+                    html
+                }
+                Err(_) => html_content,
+            };
+
+            let mut response_builder = Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8");
+
+            let page_configs = state.page_cache_configs.read().await;
+            if let Some(page_cache_config) = Server::find_matching_cache_config(&page_configs, path)
+            {
+                for (key, value) in page_cache_config {
+                    response_builder = response_builder.header(key.to_lowercase(), value);
+                }
+            }
+
+            Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
+        }
     }
 }
 
 async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, StatusCode> {
+    use crate::server::html_diagnostics::HtmlDiagnostics;
+
+    let has_root_before = html.contains(r#"id="root""#);
+
+    if has_root_before {
+        debug!("Root element verified before asset injection");
+    } else {
+        warn!("Root element NOT found before asset injection - this may cause hydration issues");
+    }
+
+    let is_complete_document = is_complete_html_document(html);
+
+    debug!(
+        "inject_assets_into_html: is_complete_document={}, has_root_before={}, html_length={}",
+        is_complete_document,
+        has_root_before,
+        html.len()
+    );
+
+    let result = if is_complete_document {
+        debug!("Routing to inject_assets_into_complete_document");
+        inject_assets_into_complete_document(html, config).await
+    } else {
+        debug!("Content fragment - routing to template injection");
+        inject_content_into_template(html, config).await
+    };
+
+    match &result {
+        Ok(final_html) => {
+            let has_root_after = final_html.contains(r#"id="root""#);
+
+            if has_root_before && !has_root_after {
+                error!("CRITICAL: Root element was LOST during asset injection!");
+                error!("This will cause hydration to fail in the browser.");
+
+                HtmlDiagnostics::log_html_snippet(
+                    final_html,
+                    "HTML after injection (ROOT ELEMENT MISSING)",
+                    1000,
+                );
+
+                warn!("Attempting recovery: returning original HTML without asset injection");
+
+                let recovered_html = if html.trim_start().starts_with("<!DOCTYPE") {
+                    html.to_string()
+                } else {
+                    format!("<!DOCTYPE html>\n{}", html)
+                };
+
+                warn!("Recovery completed: original HTML returned to preserve root element");
+                return Ok(recovered_html);
+            }
+
+            if has_root_after {
+                debug!("Root element successfully preserved after asset injection");
+            } else if !has_root_before {
+                debug!("No root element before or after injection (content fragment path)");
+            }
+        }
+        Err(e) => {
+            error!("Asset injection failed with error: {:?}", e);
+        }
+    }
+
+    result
+}
+
+fn is_complete_html_document(html: &str) -> bool {
+    let trimmed = html.trim_start();
+    let has_doctype_or_html = trimmed.starts_with("<!DOCTYPE") || trimmed.starts_with("<html");
+    let has_body = html.contains("<body");
+
+    has_doctype_or_html && has_body
+}
+
+async fn inject_assets_into_complete_document(
+    html: &str,
+    config: &Config,
+) -> Result<String, StatusCode> {
+    use crate::server::html_diagnostics::HtmlDiagnostics;
+
+    debug!("Injecting assets into complete HTML document");
+
+    let has_root_before = HtmlDiagnostics::check_root_element(html, "Before asset injection");
+    if !has_root_before {
+        warn!("Root element missing before asset injection - this may cause hydration issues");
+    }
+
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,
-        Err(_) => {
-            if html.trim_start().starts_with("<html") {
-                return Ok(format!("<!DOCTYPE html>\n{}", html));
+        Err(e) => {
+            debug!("Could not read template file {}: {}", template_path, e);
+            if html.trim_start().starts_with("<!DOCTYPE") {
+                return Ok(html.to_string());
             }
-            return Ok(html.to_string());
+            return Ok(format!("<!DOCTYPE html>\n{}", html));
         }
     };
 
-    let mut tags = Vec::new();
-
+    let mut asset_tags = Vec::new();
     for line in template.lines() {
-        if line.contains("<link") && line.contains("stylesheet") {
-            tags.push(line.trim().to_string());
-        }
-        if line.contains("<script") {
-            tags.push(line.trim().to_string());
+        let trimmed = line.trim();
+        if (trimmed.contains("<link") && trimmed.contains("stylesheet"))
+            || trimmed.contains("<script")
+        {
+            let asset_signature = extract_asset_signature(trimmed);
+            if !html.contains(&asset_signature) {
+                asset_tags.push(trimmed.to_string());
+                debug!("Will inject asset: {}", &trimmed[..trimmed.len().min(60)]);
+            } else {
+                debug!(
+                    "Asset already exists in HTML, skipping: {}",
+                    &trimmed[..trimmed.len().min(50)]
+                );
+            }
         }
     }
 
-    let assets = tags.join("\n");
+    if asset_tags.is_empty() {
+        debug!("No new assets to inject, all assets already present");
+        if html.trim_start().starts_with("<!DOCTYPE") {
+            return Ok(html.to_string());
+        }
+        return Ok(format!("<!DOCTYPE html>\n{}", html));
+    }
+
+    let assets = asset_tags.join("\n    ");
+    debug!("Injecting {} new asset tags", asset_tags.len());
 
     let mut final_html = html.to_string();
     if let Some(body_end) = final_html.rfind("</body>") {
-        final_html.insert_str(body_end, &format!("\n{}\n", assets));
+        final_html.insert_str(body_end, &format!("\n    {}\n  ", assets));
+        debug!("Injected assets before </body> tag at position {}", body_end);
+    } else {
+        warn!("No </body> tag found in complete HTML document - cannot inject assets");
     }
 
     if !final_html.trim_start().starts_with("<!DOCTYPE") {
         final_html = format!("<!DOCTYPE html>\n{}", final_html);
     }
 
+    let has_root_after = HtmlDiagnostics::check_root_element(&final_html, "After asset injection");
+    if has_root_before && !has_root_after {
+        error!("Root element was lost during asset injection!");
+        HtmlDiagnostics::log_transformation(html, &final_html, "Asset injection (CORRUPTED)");
+
+        warn!("Returning original HTML to preserve root element");
+        if html.trim_start().starts_with("<!DOCTYPE") {
+            return Ok(html.to_string());
+        }
+        return Ok(format!("<!DOCTYPE html>\n{}", html));
+    }
+
+    debug!("Asset injection completed successfully, root element preserved");
+    Ok(final_html)
+}
+
+fn extract_asset_signature(asset_tag: &str) -> String {
+    if asset_tag.contains("<script")
+        && let Some(src_start) = asset_tag.find("src=\"")
+    {
+        let src_start = src_start + 5;
+        if let Some(src_end) = asset_tag[src_start..].find('"') {
+            return format!("src=\"{}\"", &asset_tag[src_start..src_start + src_end]);
+        }
+    }
+
+    if asset_tag.contains("<link")
+        && let Some(href_start) = asset_tag.find("href=\"")
+    {
+        let href_start = href_start + 6;
+        if let Some(href_end) = asset_tag[href_start..].find('"') {
+            return format!("href=\"{}\"", &asset_tag[href_start..href_start + href_end]);
+        }
+    }
+
+    asset_tag.trim().to_string()
+}
+
+async fn inject_content_into_template(
+    content: &str,
+    config: &Config,
+) -> Result<String, StatusCode> {
+    debug!("Injecting content fragment into template");
+
+    let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
+
+    let template = match tokio::fs::read_to_string(template_path).await {
+        Ok(t) => t,
+        Err(e) => {
+            warn!("Could not read template file {}: {}", template_path, e);
+            return Ok(format!(
+                r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+  <div id="root">{}</div>
+</body>
+</html>"#,
+                content
+            ));
+        }
+    };
+
+    let final_html = if let Some(root_start) = template.find(r#"<div id="root""#) {
+        if let Some(root_close) = template[root_start..].find('>') {
+            let close_pos = root_start + root_close + 1;
+
+            if let Some(root_end) = template[close_pos..].find("</div>") {
+                let end_pos = close_pos + root_end;
+
+                let mut result = String::new();
+                result.push_str(&template[..close_pos]);
+                result.push_str(content);
+                result.push_str(&template[end_pos..]);
+
+                debug!("Injected content into <div id=\"root\"> in template");
+                result
+            } else {
+                warn!("Could not find closing </div> for root element in template");
+                template.replace(
+                    r#"<div id="root"></div>"#,
+                    &format!(r#"<div id="root">{}</div>"#, content),
+                )
+            }
+        } else {
+            warn!("Malformed root div in template");
+            template.replace(
+                r#"<div id="root"></div>"#,
+                &format!(r#"<div id="root">{}</div>"#, content),
+            )
+        }
+    } else {
+        warn!("No <div id=\"root\"> found in template, using fallback");
+        if let Some(body_end) = template.rfind("</body>") {
+            let mut result = template.clone();
+            result.insert_str(body_end, &format!(r#"<div id="root">{}</div>"#, content));
+            result
+        } else {
+            format!(
+                r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+  <div id="root">{}</div>
+</body>
+</html>"#,
+                content
+            )
+        }
+    };
+
+    if !final_html.contains(r#"id="root""#) {
+        error!("CRITICAL: Root element missing in final HTML after template injection!");
+        error!("This should never happen as template injection should always create root element");
+
+        use crate::server::html_diagnostics::HtmlDiagnostics;
+        HtmlDiagnostics::log_html_snippet(
+            &final_html,
+            "Template injection result (ROOT ELEMENT MISSING)",
+            1000,
+        );
+
+        warn!("Attempting recovery with fallback HTML structure");
+        let recovered_html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+  <div id="root">{}</div>
+</body>
+</html>"#,
+            content
+        );
+
+        warn!("Recovery completed: fallback HTML with root element returned");
+        return Ok(recovered_html);
+    }
+
+    debug!("Template injection completed successfully with root element present");
     Ok(final_html)
 }
 
@@ -2592,5 +3245,55 @@ mod tests {
         let json = serde_json::to_string(&response).expect("Valid response JSON");
         assert!(json.contains("TestComponent"));
         assert!(json.contains("test data"));
+    }
+
+    #[test]
+    fn test_request_type_detection_integration() {
+        use crate::server::request_type::{RenderMode, RequestTypeDetector};
+        use axum::http::{HeaderMap, HeaderValue};
+
+        let mut headers = HeaderMap::new();
+        headers.insert("accept", HeaderValue::from_static("text/html"));
+        let mode = RequestTypeDetector::detect_render_mode(&headers);
+        assert_eq!(mode, RenderMode::Ssr);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("accept", HeaderValue::from_static("text/x-component"));
+        let mode = RequestTypeDetector::detect_render_mode(&headers);
+        assert_eq!(mode, RenderMode::RscNavigation);
+
+        let headers = HeaderMap::new();
+        let mode = RequestTypeDetector::detect_render_mode(&headers);
+        assert_eq!(mode, RenderMode::Ssr);
+    }
+
+    #[test]
+    fn test_is_complete_html_document() {
+        let complete_with_doctype = r#"<!DOCTYPE html>
+<html>
+<head><title>Test</title></head>
+<body><div id="root">Content</div></body>
+</html>"#;
+        assert!(is_complete_html_document(complete_with_doctype));
+
+        let complete_without_doctype = r#"<html>
+<head><title>Test</title></head>
+<body><div id="root">Content</div></body>
+</html>"#;
+        assert!(is_complete_html_document(complete_without_doctype));
+
+        let fragment = r#"<div id="root">Content</div>"#;
+        assert!(!is_complete_html_document(fragment));
+
+        let partial = r#"<html><head><title>Test</title></head></html>"#;
+        assert!(!is_complete_html_document(partial));
+
+        // Test with whitespace
+        let with_whitespace = r#"
+        <!DOCTYPE html>
+<html>
+<body>Content</body>
+</html>"#;
+        assert!(is_complete_html_document(with_whitespace));
     }
 }

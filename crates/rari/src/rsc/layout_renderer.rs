@@ -2,8 +2,12 @@ use crate::error::RariError;
 use crate::rsc::renderer::RscRenderer;
 use crate::rsc::streaming::RscStream;
 use crate::server::app_router::AppRouteMatch;
+use crate::server::request_type::RenderMode;
+use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -15,13 +19,62 @@ pub struct LayoutRenderContext {
     pub headers: FxHashMap<String, String>,
 }
 
+struct HtmlCache {
+    cache: DashMap<u64, String>,
+}
+
+impl HtmlCache {
+    fn new() -> Self {
+        Self { cache: DashMap::new() }
+    }
+
+    fn get(&self, key: u64) -> Option<String> {
+        self.cache.get(&key).map(|v| v.clone())
+    }
+
+    fn insert(&self, key: u64, html: String) {
+        self.cache.insert(key, html);
+    }
+}
+
 pub struct LayoutRenderer {
-    renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+    renderer_pool: Arc<crate::rsc::RendererPool>,
+    html_cache: Arc<HtmlCache>,
 }
 
 impl LayoutRenderer {
-    pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
-        Self { renderer }
+    pub fn new(_renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
+        panic!("LayoutRenderer::new is deprecated, use new_with_pool instead");
+    }
+
+    pub fn new_with_pool(renderer_pool: Arc<crate::rsc::RendererPool>) -> Self {
+        Self { renderer_pool, html_cache: Arc::new(HtmlCache::new()) }
+    }
+
+    fn generate_cache_key(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+    ) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        route_match.route.path.hash(&mut hasher);
+
+        let mut params: Vec<_> = context.params.iter().collect();
+        params.sort_by_key(|(k, _)| *k);
+        for (k, v) in params {
+            k.hash(&mut hasher);
+            v.hash(&mut hasher);
+        }
+
+        let mut search_params: Vec<_> = context.search_params.iter().collect();
+        search_params.sort_by_key(|(k, _)| *k);
+        for (k, v) in search_params {
+            k.hash(&mut hasher);
+            v.hash(&mut hasher);
+        }
+
+        hasher.finish()
     }
 
     pub async fn render_route(
@@ -34,20 +87,20 @@ impl LayoutRenderer {
         let total_timer = TimingScope::new();
 
         debug!(
-            "Rendering route {} with {} layouts",
+            "Rendering route {} with {} layouts (RSC wire format path for client navigation)",
             route_match.route.path,
             route_match.layouts.len()
         );
 
-        let script_timer = TimingScope::new();
+        let prep_timer = TimingScope::new();
         let composition_script = self.build_composition_script(route_match, context)?;
-        let script_time = script_timer.elapsed_ms();
+        let prep_time = prep_timer.elapsed_ms();
 
         debug!("Executing composition script to render composed component tree");
 
-        let lock_timer = TimingScope::new();
-        let renderer = self.renderer.lock().await;
-        let lock_time = lock_timer.elapsed_ms();
+        let acquire_timer = TimingScope::new();
+        let renderer = self.renderer_pool.acquire().await?;
+        let acquire_time = acquire_timer.elapsed_ms();
 
         let execute_timer = TimingScope::new();
         let promise_result = renderer
@@ -65,7 +118,7 @@ impl LayoutRenderer {
 
         let rsc_data = result.get("rsc").ok_or_else(|| {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
-            RariError::internal("No RSC data in composition result")
+            RariError::internal("No RSC data in render result")
         })?;
 
         let serialize_timer = TimingScope::new();
@@ -83,24 +136,117 @@ impl LayoutRenderer {
 
         let total_time = total_timer.elapsed_ms();
 
-        debug!(
-            "RSC render timing: total={:.2}ms (script={:.2}ms, lock={:.2}ms, execute={:.2}ms, serialize={:.2}ms)",
-            total_time, script_time, lock_time, execute_time, serialize_time
-        );
+        let v8_timings = result.get("timings");
+        if let Some(timings) = v8_timings {
+            let page_render = timings.get("pageRender").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let rsc_conversion =
+                timings.get("rscConversion").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let v8_total = timings.get("total").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-        if total_time > 30.0 {
-            tracing::warn!(
-                "Slow RSC render: {:.2}ms total (script={:.2}ms, lock={:.2}ms, execute={:.2}ms, serialize={:.2}ms) for {}",
-                total_time,
-                script_time,
-                lock_time,
-                execute_time,
-                serialize_time,
-                route_match.route.path
+            debug!(
+                "V8 execution breakdown: total={:.2}ms (page={:.2}ms, rsc={:.2}ms)",
+                v8_total, page_render, rsc_conversion
             );
+
+            if total_time > 30.0 {
+                tracing::warn!(
+                    "Slow RSC render: {:.2}ms total | Rust: prep={:.2}ms, acquire={:.2}ms, serialize={:.2}ms | V8: execute={:.2}ms (page={:.2}ms, rsc={:.2}ms) for {}",
+                    total_time,
+                    prep_time,
+                    acquire_time,
+                    serialize_time,
+                    execute_time,
+                    page_render,
+                    rsc_conversion,
+                    route_match.route.path
+                );
+            }
+        } else {
+            debug!(
+                "RSC render timing: total={:.2}ms (prep={:.2}ms, acquire={:.2}ms, execute={:.2}ms, serialize={:.2}ms)",
+                total_time, prep_time, acquire_time, execute_time, serialize_time
+            );
+
+            if total_time > 30.0 {
+                tracing::warn!(
+                    "Slow RSC render: {:.2}ms total (prep={:.2}ms, acquire={:.2}ms, execute={:.2}ms, serialize={:.2}ms) for {}",
+                    total_time,
+                    prep_time,
+                    acquire_time,
+                    execute_time,
+                    serialize_time,
+                    route_match.route.path
+                );
+            }
         }
 
+        debug!(
+            "RSC wire format generation completed for {} ({:.2}ms)",
+            route_match.route.path, total_time
+        );
+
         Ok(rsc_wire_format)
+    }
+
+    pub async fn render_route_optimized(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        mode: RenderMode,
+    ) -> Result<String, RariError> {
+        use crate::rsc::TimingScope;
+
+        let total_timer = TimingScope::new();
+
+        debug!("Rendering route {} in {:?} mode", route_match.route.path, mode);
+
+        let render_timer = TimingScope::new();
+        let result = match mode {
+            RenderMode::Ssr => {
+                debug!("Using direct HTML rendering path for SSR");
+                self.render_route_to_html_direct(route_match, context).await
+            }
+            RenderMode::RscNavigation => {
+                debug!("Using RSC wire format path for client navigation");
+                self.render_route(route_match, context).await
+            }
+        };
+        let render_time = render_timer.elapsed_ms();
+
+        let total_time = total_timer.elapsed_ms();
+
+        match mode {
+            RenderMode::Ssr => {
+                debug!(
+                    "SSR direct HTML path completed: {:.2}ms total (render: {:.2}ms) for {}",
+                    total_time, render_time, route_match.route.path
+                );
+
+                if total_time > 20.0 {
+                    tracing::warn!(
+                        "Slow SSR render: {:.2}ms (target: <20ms) for {}",
+                        total_time,
+                        route_match.route.path
+                    );
+                }
+            }
+            RenderMode::RscNavigation => {
+                debug!(
+                    "RSC navigation path completed: {:.2}ms total (render: {:.2}ms) for {}",
+                    total_time, render_time, route_match.route.path
+                );
+
+                if total_time > 50.0 {
+                    tracing::warn!(
+                        "Slow RSC navigation render: {:.2}ms for {}",
+                        total_time,
+                        route_match.route.path
+                    );
+                }
+            }
+        }
+
+        result
     }
 
     pub async fn render_route_to_html_direct(
@@ -112,12 +258,25 @@ impl LayoutRenderer {
 
         let total_timer = TimingScope::new();
 
-        debug!("render_route_to_html_direct START for {}", route_match.route.path);
+        let cache_key = self.generate_cache_key(route_match, context);
+
+        if let Some(cached_html) = self.html_cache.get(cache_key) {
+            debug!("Cache HIT for route {} (key: {})", route_match.route.path, cache_key);
+            return Ok(cached_html);
+        }
+
+        debug!("Cache MISS for route {} (key: {})", route_match.route.path, cache_key);
+
+        debug!(
+            "Direct HTML rendering START for {} (SSR path - bypasses RSC wire format)",
+            route_match.route.path
+        );
 
         let prep_timer = TimingScope::new();
         let page_props = self.create_page_props(route_match, context)?;
         let page_component_id = self.create_component_id(&route_match.route.file_path);
 
+        #[allow(clippy::disallowed_methods)]
         let layouts: Vec<serde_json::Value> = route_match
             .layouts
             .iter()
@@ -130,9 +289,9 @@ impl LayoutRenderer {
             .collect();
         let prep_time = prep_timer.elapsed_ms();
 
-        let lock_timer = TimingScope::new();
-        let renderer = self.renderer.lock().await;
-        let lock_time = lock_timer.elapsed_ms();
+        let acquire_timer = TimingScope::new();
+        let renderer = self.renderer_pool.acquire().await?;
+        let acquire_time = acquire_timer.elapsed_ms();
 
         debug!("Calling renderRouteToHtmlDirect...");
         let v8_timer = TimingScope::new();
@@ -149,11 +308,12 @@ impl LayoutRenderer {
             .await?;
         let v8_time = v8_timer.elapsed_ms();
 
-        if let Some(error) = result.get("error").and_then(|v| v.as_str()) {
-            if !error.is_empty() && error != "null" {
-                tracing::error!("JavaScript error: {}", error);
-                return Err(RariError::internal(format!("JavaScript error: {}", error)));
-            }
+        if let Some(error) = result.get("error").and_then(|v| v.as_str())
+            && !error.is_empty()
+            && error != "null"
+        {
+            tracing::error!("JavaScript error: {}", error);
+            return Err(RariError::internal(format!("JavaScript error: {}", error)));
         }
 
         let html = result
@@ -168,20 +328,31 @@ impl LayoutRenderer {
         let total_time = total_timer.elapsed_ms();
 
         debug!(
-            "Layout render timing: total={:.2}ms (prep={:.2}ms, lock={:.2}ms, v8={:.2}ms)",
-            total_time, prep_time, lock_time, v8_time
+            "Direct HTML render timing: total={:.2}ms (prep={:.2}ms, acquire={:.2}ms, v8={:.2}ms)",
+            total_time, prep_time, acquire_time, v8_time
         );
 
         if total_time > 30.0 {
             tracing::warn!(
-                "Slow layout render: {:.2}ms total (prep={:.2}ms, lock={:.2}ms, v8={:.2}ms) for {}",
+                "Slow direct HTML render: {:.2}ms total (prep={:.2}ms, acquire={:.2}ms, v8={:.2}ms) for {}",
                 total_time,
                 prep_time,
-                lock_time,
+                acquire_time,
                 v8_time,
                 route_match.route.path
             );
         }
+
+        debug!(
+            "Direct HTML rendering completed for {} ({:.2}ms)",
+            route_match.route.path, total_time
+        );
+
+        use crate::server::html_diagnostics::HtmlDiagnostics;
+        HtmlDiagnostics::log_html_snippet(&html, "After renderRouteToHtmlDirect", 300);
+        HtmlDiagnostics::check_root_element(&html, "After renderRouteToHtmlDirect");
+
+        self.html_cache.insert(cache_key, html.clone());
 
         Ok(html)
     }
@@ -583,9 +754,13 @@ impl LayoutRenderer {
         let mut script = format!(
             r#"
             (async () => {{
+                const timings = {{}};
+                const startTotal = performance.now();
+
                 const React = globalThis.React || require('react');
                 const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
 
+                const startPage = performance.now();
                 const PageComponent = globalThis["{}"];
                 if (!PageComponent || typeof PageComponent !== 'function') {{
                     throw new Error('Page component {} not found');
@@ -596,6 +771,7 @@ impl LayoutRenderer {
                 const pageElement = pageResult && typeof pageResult.then === 'function'
                     ? await pageResult
                     : pageResult;
+                timings.pageRender = performance.now() - startPage;
             "#,
             page_component_id, page_component_id, page_props_json
         );
@@ -608,13 +784,16 @@ impl LayoutRenderer {
             if layout.is_root {
                 script.push_str(&format!(
                     r#"
+                const startLayout{} = performance.now();
                 const LayoutComponent{} = globalThis["{}"];
                 if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
                     throw new Error('Root layout component {} not found');
                 }}
 
                 const {} = LayoutComponent{}({{ children: {} }});
+                timings.layout{} = performance.now() - startLayout{};
                 "#,
+                    i,
                     i,
                     layout_component_id,
                     i,
@@ -622,18 +801,23 @@ impl LayoutRenderer {
                     layout_component_id,
                     layout_var,
                     i,
-                    current_element
+                    current_element,
+                    i,
+                    i
                 ));
             } else {
                 script.push_str(&format!(
                     r#"
+                const startLayout{} = performance.now();
                 const LayoutComponent{} = globalThis["{}"];
                 if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
                     throw new Error('Layout component {} not found');
                 }}
 
                 const {} = LayoutComponent{}({{ children: {} }});
+                timings.layout{} = performance.now() - startLayout{};
                 "#,
+                    i,
                     i,
                     layout_component_id,
                     i,
@@ -641,7 +825,9 @@ impl LayoutRenderer {
                     layout_component_id,
                     layout_var,
                     i,
-                    current_element
+                    current_element,
+                    i,
+                    i
                 ));
             }
 
@@ -721,9 +907,13 @@ impl LayoutRenderer {
                     }};
                 }}
 
+                const startRSC = performance.now();
                 const rscData = await traverseToRSC({});
+                timings.rscConversion = performance.now() - startRSC;
 
-                globalThis.__rsc_render_result = {{ rsc: rscData }};
+                timings.total = performance.now() - startTotal;
+
+                globalThis.__rsc_render_result = {{ rsc: rscData, timings }};
                 return globalThis.__rsc_render_result;
             }})();
             "#,
@@ -755,15 +945,24 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
     ) -> Result<Value, RariError> {
-        let mut props = serde_json::Map::new();
+        let params_value = if route_match.params.is_empty() {
+            Value::Object(serde_json::Map::new())
+        } else {
+            serde_json::to_value(&route_match.params)?
+        };
 
-        let params: FxHashMap<String, String> = route_match.params.clone();
-        props.insert("params".to_string(), serde_json::to_value(params)?);
+        let search_params_value = if context.search_params.is_empty() {
+            Value::Object(serde_json::Map::new())
+        } else {
+            serde_json::to_value(&context.search_params)?
+        };
 
-        let search_params: FxHashMap<String, Vec<String>> = context.search_params.clone();
-        props.insert("searchParams".to_string(), serde_json::to_value(search_params)?);
-
-        Ok(Value::Object(props))
+        #[allow(clippy::disallowed_methods)]
+        let result = serde_json::json!({
+            "params": params_value,
+            "searchParams": search_params_value
+        });
+        Ok(result)
     }
 
     pub async fn render_loading(
@@ -775,7 +974,7 @@ impl LayoutRenderer {
 
         debug!("Rendering loading component: {}", component_id);
 
-        let mut renderer = self.renderer.lock().await;
+        let mut renderer = self.renderer_pool.acquire().await?;
         renderer.render_to_string(&component_id, None).await
     }
 
@@ -799,7 +998,7 @@ impl LayoutRenderer {
 
         debug!("Rendering error component: {} with error: {}", component_id, error);
 
-        let mut renderer = self.renderer.lock().await;
+        let mut renderer = self.renderer_pool.acquire().await?;
         renderer.render_to_string(&component_id, Some(&props_json)).await
     }
 
@@ -812,12 +1011,15 @@ impl LayoutRenderer {
 
         debug!("Rendering not-found component: {}", component_id);
 
-        let mut renderer = self.renderer.lock().await;
+        let mut renderer = self.renderer_pool.acquire().await?;
         renderer.render_to_string(&component_id, None).await
     }
 
     pub async fn component_exists(&self, component_id: &str) -> bool {
-        let renderer = self.renderer.lock().await;
+        let renderer = match self.renderer_pool.acquire().await {
+            Ok(r) => r,
+            Err(_) => return false,
+        };
         renderer.component_exists(component_id)
     }
 
@@ -826,8 +1028,7 @@ impl LayoutRenderer {
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let mut renderer = self.renderer.lock().await;
-        renderer.register_component(component_id, component_code).await
+        self.renderer_pool.register_component_on_all(component_id, component_code).await
     }
 }
 

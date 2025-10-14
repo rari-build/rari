@@ -409,8 +409,8 @@ if (import.meta.hot) {
         find: string | RegExp
         replacement: string
       }> = Array.isArray((config.resolve as any).alias)
-          ? (config.resolve as any).alias
-          : []
+        ? (config.resolve as any).alias
+        : []
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
         const reactPath = require.resolve('react')
@@ -637,10 +637,10 @@ ${clientTransformedCode}`
 
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
-          || (fs.existsSync(resolvedImportPath)
-            && fs
-              .readFileSync(resolvedImportPath, 'utf-8')
-              .includes('\'use client\''))
+            || (fs.existsSync(resolvedImportPath)
+              && fs
+                .readFileSync(resolvedImportPath, 'utf-8')
+                .includes('\'use client\''))
 
         if (isClientComponent) {
           componentTypeCache.set(resolvedImportPath, 'client')
@@ -701,10 +701,10 @@ const ${componentName} = registerClientReference(
       if (hasServerImports) {
         const hasReactImport
           = modifiedCode.includes('import React')
-          || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
-          || modifiedCode.match(
-            /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
-          )
+            || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
+            || modifiedCode.match(
+              /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
+            )
 
         const hasWrapperImport = modifiedCode.includes(
           'createServerComponentWrapper',
@@ -754,8 +754,8 @@ const ${componentName} = registerClientReference(
         const isDevMode = process.env.NODE_ENV !== 'production'
         const hasJsx
           = modifiedCode.includes('</')
-          || modifiedCode.includes('/>')
-          || /\bJSX\b/.test(modifiedCode)
+            || modifiedCode.includes('/>')
+            || /\bJSX\b/.test(modifiedCode)
 
         if (
           !modifiedCode.includes('\'use client\'')
@@ -1320,47 +1320,22 @@ export async function renderApp() {
   try {
     const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
 
-    let rscWireFormat = null;
-    const nextDataScript = document.getElementById('__RARI_DATA__');
-    if (nextDataScript) {
-      try {
-        const nextData = JSON.parse(nextDataScript.textContent || '{}');
-        const pageProps = nextData?.props?.pageProps;
+    const rariServerUrl = window.location.origin.includes(':5173')
+      ? 'http://localhost:3000'
+      : window.location.origin;
+    const url = rariServerUrl + window.location.pathname + window.location.search;
 
-        if (pageProps?.__RSC_PAYLOAD_BASE64__) {
-          const base64Payload = pageProps.__RSC_PAYLOAD_BASE64__;
-          const binaryString = atob(base64Payload);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          rscWireFormat = new TextDecoder('utf-8').decode(bytes);
-        } else if (pageProps?.__RSC_PAYLOAD__) {
-          rscWireFormat = pageProps.__RSC_PAYLOAD__;
-        }
-      } catch (e) {
-        console.warn('[Rari] Failed to parse embedded RSC payload:', e);
-      }
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'text/x-component',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(\`Failed to fetch RSC data: \${response.status}\`);
     }
 
-    if (!rscWireFormat) {
-      const rariServerUrl = window.location.origin.includes(':5173')
-        ? 'http://localhost:3000'
-        : window.location.origin;
-      const url = rariServerUrl + window.location.pathname + window.location.search;
-
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'text/x-component',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(\`Failed to fetch RSC data: \${response.status}\`);
-      }
-
-      rscWireFormat = await response.text();
-    }
+    const rscWireFormat = await response.text();
 
     const { element, isFullDocument } = parseRscWireFormat(rscWireFormat);
 
@@ -1378,14 +1353,14 @@ export async function renderApp() {
     }
 
     ${isDevelopment
-            ? `
+      ? `
     const wrappedContent = React.createElement(
       AppRouterHMRProvider,
       { initialPayload: { element, rscWireFormat } },
       contentToRender
     );
     `
-            : 'const wrappedContent = contentToRender;'}
+      : 'const wrappedContent = contentToRender;'}
 
     if (hasSSRContent) {
       console.log('[Rari] Hydrating SSR content');
@@ -1445,8 +1420,20 @@ function extractBodyContent(element, skipHeadInjection = false) {
         console.log('[Rari] extractBodyContent - skipping head injection (SSR hydration)');
       }
 
-      console.log('[Rari] extractBodyContent - returning body children:', bodyElement.props?.children);
-      return bodyElement.props?.children || null;
+      const bodyChildren = bodyElement.props?.children;
+      console.log('[Rari] extractBodyContent - body children:', bodyChildren);
+
+      if (bodyChildren &&
+          typeof bodyChildren === 'object' &&
+          !Array.isArray(bodyChildren) &&
+          bodyChildren.type === 'div' &&
+          bodyChildren.props?.id === 'root') {
+        console.log('[Rari] extractBodyContent - found root div in body, returning its children to avoid nesting');
+        return bodyChildren.props?.children || null;
+      }
+
+      console.log('[Rari] extractBodyContent - returning body children as-is');
+      return bodyChildren || null;
     }
   }
 

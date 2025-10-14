@@ -49,7 +49,10 @@ pub async fn handle_server_action(
 
     debug!("Executing server action: {} (export: {})", request.id, request.export_name);
 
-    let renderer = state.renderer.lock().await;
+    let renderer = match state.renderer_pool.acquire().await {
+        Ok(r) => r,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
     let result =
         renderer.execute_server_function(&request.id, &request.export_name, &request.args).await;
 
@@ -101,7 +104,8 @@ pub async fn handle_form_action(
 
     debug!("Executing form action: {} (export: {})", action_id, export_name);
 
-    let renderer = state.renderer.lock().await;
+    let renderer =
+        state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let result = renderer.execute_server_function(action_id, export_name, &args).await;
 
     match result {

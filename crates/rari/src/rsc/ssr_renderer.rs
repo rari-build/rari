@@ -302,7 +302,9 @@ impl SsrRenderer {
     fn extract_script_tags(template: &str) -> String {
         use regex::Regex;
 
+        #[allow(clippy::disallowed_methods)]
         let script_regex = Regex::new(r#"(?s)<script[^>]*>.*?</script>|<script[^>]*/>"#).unwrap();
+        #[allow(clippy::disallowed_methods)]
         let link_regex = Regex::new(r#"<link[^>]*/?>"#).unwrap();
 
         let mut tags = Vec::new();
@@ -480,46 +482,6 @@ impl SsrRenderer {
         Ok((result.to_string(), elapsed))
     }
 
-    pub fn inject_into_template_with_payload(
-        &self,
-        html_content: &str,
-        template: &str,
-        rsc_payload: &str,
-    ) -> Result<String, RariError> {
-        use regex::Regex;
-
-        let root_div_regex =
-            Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-                .map_err(|e| RariError::internal(format!("Failed to create regex: {}", e)))?;
-
-        if !root_div_regex.is_match(template) {
-            return Err(RariError::internal(
-                "Template does not contain a root div with id='root'".to_string(),
-            ));
-        }
-
-        let mut replacement = format!(r#"<div id="root">{}</div>"#, html_content);
-
-        use base64::{Engine as _, engine::general_purpose};
-        let base64_payload = general_purpose::STANDARD.encode(rsc_payload.as_bytes());
-
-        replacement.push_str(&format!(
-            r#"<script id="__RARI_DATA__" type="application/json">{}</script>"#,
-            serde_json::json!({
-                "props": {
-                    "pageProps": {
-                        "__RSC_PAYLOAD_BASE64__": base64_payload
-                    }
-                }
-            })
-            .to_string()
-        ));
-
-        let result = root_div_regex.replace(template, replacement.as_str());
-
-        Ok(result.to_string())
-    }
-
     pub fn parse_rsc_wire_format(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
         use crate::rsc::TimingScope;
 
@@ -610,10 +572,10 @@ impl SsrRenderer {
                     return Err(RariError::internal("Empty array in RSC element".to_string()));
                 }
 
-                if let Some(JsonValue::String(marker)) = arr.first() {
-                    if marker == "$" {
-                        return self.parse_react_element(arr);
-                    }
+                if let Some(JsonValue::String(marker)) = arr.first()
+                    && marker == "$"
+                {
+                    return self.parse_react_element(arr);
                 }
 
                 Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
@@ -692,19 +654,18 @@ impl SsrRenderer {
 
                 let mut final_html = html_content.clone();
 
-                if let Some(body_start) = final_html.find("<body") {
-                    if let Some(body_content_start) = final_html[body_start..].find('>') {
-                        let body_content_start = body_start + body_content_start + 1;
+                if let Some(body_start) = final_html.find("<body")
+                    && let Some(body_content_start) = final_html[body_start..].find('>')
+                {
+                    let body_content_start = body_start + body_content_start + 1;
 
-                        if let Some(body_end) = final_html.rfind("</body>") {
-                            let body_content = &final_html[body_content_start..body_end];
+                    if let Some(body_end) = final_html.rfind("</body>") {
+                        let body_content = &final_html[body_content_start..body_end];
 
-                            let new_body_content =
-                                format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
+                        let new_body_content =
+                            format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
 
-                            final_html
-                                .replace_range(body_content_start..body_end, &new_body_content);
-                        }
+                        final_html.replace_range(body_content_start..body_end, &new_body_content);
                     }
                 }
 
@@ -807,19 +768,18 @@ impl SsrRenderer {
                 let inject_timer = TimingScope::new();
                 let mut final_html = html_content.clone();
 
-                if let Some(body_start) = final_html.find("<body") {
-                    if let Some(body_content_start) = final_html[body_start..].find('>') {
-                        let body_content_start = body_start + body_content_start + 1;
+                if let Some(body_start) = final_html.find("<body")
+                    && let Some(body_content_start) = final_html[body_start..].find('>')
+                {
+                    let body_content_start = body_start + body_content_start + 1;
 
-                        if let Some(body_end) = final_html.rfind("</body>") {
-                            let body_content = &final_html[body_content_start..body_end];
+                    if let Some(body_end) = final_html.rfind("</body>") {
+                        let body_content = &final_html[body_content_start..body_end];
 
-                            let new_body_content =
-                                format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
+                        let new_body_content =
+                            format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
 
-                            final_html
-                                .replace_range(body_content_start..body_end, &new_body_content);
-                        }
+                        final_html.replace_range(body_content_start..body_end, &new_body_content);
                     }
                 }
 
@@ -885,6 +845,7 @@ impl SsrRenderer {
         &self,
         rsc_rows: &[RscRow],
     ) -> Result<String, RariError> {
+        #[allow(clippy::disallowed_methods)]
         let rows_json: Vec<serde_json::Value> = rsc_rows
             .iter()
             .map(|row| {
@@ -943,6 +904,7 @@ impl SsrRenderer {
         use crate::rsc::TimingScope;
 
         let serialize_timer = TimingScope::new();
+        #[allow(clippy::disallowed_methods)]
         let rows_json: Vec<serde_json::Value> = rsc_rows
             .iter()
             .map(|row| {
@@ -1369,24 +1331,6 @@ mod tests {
 
         let html = result.unwrap();
         assert!(html.contains(r#"<div id="root"><span>Text</span></div>"#));
-    }
-
-    #[test]
-    fn test_inject_into_template_with_rsc_payload() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"></div></body></html>"#;
-        let content = "<h1>Hello</h1>";
-        let rsc_payload = r#"0:["$","div",null,{"children":"test"}]"#;
-
-        let result = renderer.inject_into_template_with_payload(content, template, rsc_payload);
-        assert!(result.is_ok());
-
-        let html = result.unwrap();
-        assert!(html.contains(r#"<div id="root"><h1>Hello</h1></div>"#));
-        assert!(html.contains(r#"<script id="__RARI_DATA__""#));
-        assert!(html.contains("__RSC_PAYLOAD_BASE64__"));
     }
 
     #[test]

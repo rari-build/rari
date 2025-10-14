@@ -58,19 +58,21 @@ export default function RootLayout({ children }: LayoutProps) {
         </style>
       </head>
       <body>
-        <nav>
-          <ul>
-            <li><a href="/">Home</a></li>
-            <li><a href="/about">About</a></li>
-            <li><a href="/blog">Blog</a></li>
-            <li><a href="/products">Products</a></li>
-            <li><a href="/interactive">Interactive</a></li>
-            <li><a href="/server-data">Server Data</a></li>
-            <li><a href="/server-demo">Server Demo</a></li>
-            <li><a href="/actions">Server Actions</a></li>
-          </ul>
-        </nav>
-        <main>{children}</main>
+        <div id="root">
+          <nav>
+            <ul>
+              <li><a href="/">Home</a></li>
+              <li><a href="/about">About</a></li>
+              <li><a href="/blog">Blog</a></li>
+              <li><a href="/products">Products</a></li>
+              <li><a href="/interactive">Interactive</a></li>
+              <li><a href="/server-data">Server Data</a></li>
+              <li><a href="/server-demo">Server Demo</a></li>
+              <li><a href="/actions">Server Actions</a></li>
+            </ul>
+          </nav>
+          <main>{children}</main>
+        </div>
       </body>
     </html>
   )

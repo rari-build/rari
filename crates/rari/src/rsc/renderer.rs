@@ -484,84 +484,102 @@ impl RscRenderer {
             .execute_script("extension-checks".to_string(), extension_checks.to_string())
             .await?;
 
-        let fetch_cache_script = r#"
-            if (!globalThis.__fetch_cache) {
-                globalThis.__fetch_cache = new Map();
-                const originalFetch = globalThis.fetch;
-                globalThis.fetch = async function(url, options) {
-                    const shouldCache = (!options || !options.method || options.method === 'GET') &&
-                                       (!options || !options.cache || options.cache !== 'no-store');
-
-                    if (shouldCache) {
-                        const cacheKey = typeof url === 'string' ? url : url.toString();
-                        if (globalThis.__fetch_cache.has(cacheKey)) {
-                            const cached = globalThis.__fetch_cache.get(cacheKey);
-                            return Promise.resolve(cached.clone());
-                        }
-
-                        const response = await originalFetch(url, options);
-                        const cloned = response.clone();
-                        globalThis.__fetch_cache.set(cacheKey, cloned);
-                        return response;
-                    }
-
-                    return originalFetch(url, options);
-                };
+        let react_globals_script = r#"
+if (typeof globalThis.React === 'undefined') {
+    globalThis.React = {
+        createElement: function(type, props, ...children) {
+            return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children };
+        },
+        Fragment: function(props) { return props?.children || null; },
+        Suspense: function(props) { return props?.children || props?.fallback || null; },
+        Component: class Component {
+            constructor(props) {
+                this.props = props;
+                this.state = {};
             }
+            setState(updater) {
+                if (typeof updater === 'function') {
+                    this.state = { ...this.state, ...updater(this.state, this.props) };
+                } else {
+                    this.state = { ...this.state, ...updater };
+                }
+            }
+            render() {
+                return null;
+            }
+        }
+    };
+}
+
+if (!globalThis.React.Component) {
+    globalThis.React.Component = class Component {
+        constructor(props) {
+            this.props = props;
+            this.state = {};
+        }
+        setState(updater) {
+            if (typeof updater === 'function') {
+                this.state = { ...this.state, ...updater(this.state, this.props) };
+            } else {
+                this.state = { ...this.state, ...updater };
+            }
+        }
+        render() {
+            return null;
+        }
+    };
+}
+
+if (typeof globalThis.Component === 'undefined') {
+    globalThis.Component = globalThis.React.Component;
+}
+
+if (typeof globalThis.Suspense === 'undefined') {
+    globalThis.Suspense = globalThis.React.Suspense;
+}
+
+if (typeof globalThis.Fragment === 'undefined') {
+    globalThis.Fragment = globalThis.React.Fragment;
+}
+
+if (typeof globalThis.useState === 'undefined') {
+    globalThis.useState = function() {
+        console.warn('useState called in server component - this will not work');
+        return [null, () => {}];
+    };
+}
+
+if (typeof globalThis.useEffect === 'undefined') {
+    globalThis.useEffect = function() {
+        console.warn('useEffect called in server component - this will not work');
+    };
+}
+
+if (typeof globalThis.jsx === 'undefined') {
+    globalThis.jsx = function(type, props, key) {
+        return globalThis.React.createElement(type, { ...props, key });
+    };
+}
+
+if (typeof globalThis.jsxs === 'undefined') {
+    globalThis.jsxs = function(type, props, key) {
+        return globalThis.React.createElement(type, { ...props, key });
+    };
+}
         "#;
 
         self.runtime
-            .execute_script("init_fetch_cache".to_string(), fetch_cache_script.to_string())
+            .execute_script("init_react_globals".to_string(), react_globals_script.to_string())
             .await?;
 
-        let direct_render_script = r#"
-            globalThis.renderRouteToHtmlDirect = async function(pageComponentId, pageProps, layouts) {
-                try {
-                    const React = globalThis.React || require('react');
-                    const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
-
-                    if (!ReactDOMServer || !ReactDOMServer.renderToString) {
-                        return { html: '', error: 'ReactDOMServer.renderToString not available' };
-                    }
-
-                    const PageComponent = globalThis[pageComponentId];
-                    if (!PageComponent) {
-                        const availableKeys = Object.keys(globalThis).filter(k => k.includes('app/') || k.includes('page'));
-                        return { html: '', error: 'Page component not found: ' + pageComponentId + ', available: ' + availableKeys.join(', ') };
-                    }
-
-                    if (typeof PageComponent !== 'function') {
-                        return { html: '', error: 'Page component is not a function: ' + typeof PageComponent };
-                    }
-
-                    const pageResult = PageComponent(pageProps);
-                    let currentElement = pageResult && typeof pageResult.then === 'function'
-                        ? await pageResult
-                        : pageResult;
-
-                    if (!currentElement) {
-                        return { html: '', error: 'Page component returned null/undefined' };
-                    }
-
-                    for (let i = layouts.length - 1; i >= 0; i--) {
-                        const layout = layouts[i];
-                        const LayoutComponent = globalThis[layout.componentId];
-                        if (!LayoutComponent || typeof LayoutComponent !== 'function') {
-                            return { html: '', error: 'Layout component not found: ' + layout.componentId };
-                        }
-                        currentElement = LayoutComponent({ children: currentElement });
-                    }
-
-                    const html = ReactDOMServer.renderToString(currentElement);
-                    return { html: html, error: html.length === 0 ? 'renderToString returned empty' : null };
-                } catch (error) {
-                    return { html: '', error: error.message || String(error) };
-                }
-            };
-        "#;
-
+        let direct_html_render_script = include_str!("js/direct_html_render.js");
         self.runtime
-            .execute_script("init_direct_render".to_string(), direct_render_script.to_string())
+            .execute_script("direct_html_render".to_string(), direct_html_render_script.to_string())
+            .await?;
+
+        let optimized_render_script = include_str!("js/optimized_render.js");
+        self.runtime
+            .execute_script("optimized_render".to_string(), optimized_render_script.to_string())
             .await?;
 
         self.initialized = true;
@@ -1888,12 +1906,47 @@ if (typeof globalThis.React === 'undefined') {
             return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children };
         },
         Fragment: function(props) { return props?.children || null; },
-        Suspense: function(props) { return props?.children || props?.fallback || null; }
+        Suspense: function(props) { return props?.children || props?.fallback || null; },
+        Component: class Component {
+            constructor(props) {
+                this.props = props;
+                this.state = {};
+            }
+            setState(updater) {
+                if (typeof updater === 'function') {
+                    this.state = { ...this.state, ...updater(this.state, this.props) };
+                } else {
+                    this.state = { ...this.state, ...updater };
+                }
+            }
+            render() {
+                return null;
+            }
+        }
     };
 }
 
 if (!globalThis.React.Suspense) {
     globalThis.React.Suspense = function(props) { return props?.children || props?.fallback || null; };
+}
+
+if (!globalThis.React.Component) {
+    globalThis.React.Component = class Component {
+        constructor(props) {
+            this.props = props;
+            this.state = {};
+        }
+        setState(updater) {
+            if (typeof updater === 'function') {
+                this.state = { ...this.state, ...updater(this.state, this.props) };
+            } else {
+                this.state = { ...this.state, ...updater };
+            }
+        }
+        render() {
+            return null;
+        }
+    };
 }
 
 if (typeof globalThis.Suspense === 'undefined') {
@@ -1904,6 +1957,50 @@ if (typeof globalThis.Fragment === 'undefined') {
     globalThis.Fragment = globalThis.React.Fragment;
 }
 
+if (typeof globalThis.Component === 'undefined') {
+    globalThis.Component = globalThis.React.Component;
+}
+
+if (typeof globalThis.jsx === 'undefined') {
+    globalThis.jsx = function(type, props, key) {
+        return globalThis.React.createElement(type, { ...props, key });
+    };
+}
+
+if (typeof globalThis.jsxs === 'undefined') {
+    globalThis.jsxs = function(type, props, key) {
+        return globalThis.React.createElement(type, { ...props, key });
+    };
+}
+
+if (typeof globalThis.LoadingSpinner === 'undefined') {
+    globalThis.LoadingSpinner = function() {
+        return globalThis.React.createElement('div', {
+            style: {
+                width: '40px',
+                height: '40px',
+                border: '4px solid #f3f4f6',
+                borderTop: '4px solid #3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+            }
+        });
+    };
+}
+
+if (typeof globalThis.DefaultLoading === 'undefined') {
+    globalThis.DefaultLoading = function() {
+        return globalThis.React.createElement('div', {
+            style: {
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '2rem',
+                minHeight: '200px'
+            }
+        }, globalThis.React.createElement(globalThis.LoadingSpinner));
+    };
+}
 
 if (!globalThis.readFileSync && globalThis.__nodeModules && globalThis.__nodeModules.get) {
     const nodeFs = globalThis.__nodeModules.get('node:fs');

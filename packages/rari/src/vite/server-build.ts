@@ -303,6 +303,17 @@ export class ServerComponentBuilder {
     return components
   }
 
+  private transformComponentImportsToGlobal(code: string): string {
+    const componentImportRegex = /import\s+(\w+)\s+from\s+['"]\.\.\/components\/(\w+)(?:\.tsx?|\.jsx?)?['"]/g
+    return code.replace(componentImportRegex, (match, importName, componentName) => {
+      return `// Component reference: ${componentName}\nconst ${importName} = globalThis.__rsc_components?.['components/${componentName}'] || (() => { throw new Error('Component components/${componentName} not loaded'); })`
+    })
+  }
+
+  private isPageComponent(inputPath: string): boolean {
+    return inputPath.includes('/app/') || inputPath.includes('\\app\\')
+  }
+
   private async buildComponentCodeOnly(
     inputPath: string,
     componentId: string,
@@ -313,7 +324,11 @@ export class ServerComponentBuilder {
       originalCode,
       inputPath,
     )
-    const transformedCode = this.transformNodeImports(clientTransformedCode)
+    const isPage = this.isPageComponent(inputPath)
+    const componentGlobalCode = isPage
+      ? this.transformComponentImportsToGlobal(clientTransformedCode)
+      : clientTransformedCode
+    const transformedCode = this.transformNodeImports(componentGlobalCode)
 
     const ext = path.extname(inputPath)
     let loader: string
@@ -345,6 +360,9 @@ export class ServerComponentBuilder {
         external: [],
         mainFields: ['module', 'main'],
         conditions: ['import', 'module', 'default'],
+        jsx: 'transform',
+        jsxFactory: 'React.createElement',
+        jsxFragment: 'React.Fragment',
         define: {
           'global': 'globalThis',
           'process.env.NODE_ENV': '"production"',
@@ -357,16 +375,56 @@ export class ServerComponentBuilder {
         },
         resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
         minify: false,
-        minifyIdentifiers: false,
+        minifyWhitespace: true,
+        minifyIdentifiers: true,
+        minifySyntax: true,
         sourcemap: false,
         metafile: false,
         write: false,
         plugins: [
           {
+            name: 'replace-react-imports',
+            setup(build) {
+              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
+                const fs = await import('node:fs/promises')
+                let contents = await fs.readFile(args.path, 'utf-8')
+                contents = contents.replace(
+                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
+                  '// React is available as globalThis.React',
+                )
+                contents = contents.replace(/React2/g, 'React')
+                return { contents, loader: 'js' }
+              })
+            },
+          },
+          {
             name: 'hmr-auto-external',
             setup(build) {
-              build.onResolve({ filter: /^[^./]/ }, async (args) => {
-                return { path: args.path, external: true }
+              build.onResolve({ filter: /.*/ }, async (args) => {
+                if (args.path.includes('../components/') || args.path.includes('./components/')) {
+                  return { path: args.path, namespace: 'component-stub' }
+                }
+
+                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                  return { path: args.path, external: true }
+                }
+                if (args.path === 'rari/client') {
+                  return null
+                }
+                if (/^[^./]/.test(args.path)) {
+                  return { path: args.path, external: true }
+                }
+
+                return null
+              })
+
+              build.onLoad({ filter: /.*/, namespace: 'component-stub' }, async (args) => {
+                const match = args.path.match(/\/components\/(\w+)/)
+                const componentName = match ? match[1] : 'Unknown'
+                return {
+                  contents: `// Component stub for ${componentName} - replaced by global reference`,
+                  loader: 'js',
+                }
               })
             },
           },
@@ -374,7 +432,7 @@ export class ServerComponentBuilder {
             name: 'resolve-server-functions',
             setup(build) {
               build.onResolve(
-                { filter: /^\.\.?\/.*functions/ },
+                { filter: /^\.\.?\/.*(functions|actions)/ },
                 async (args) => {
                   const resolvedPath = path.resolve(
                     path.dirname(args.importer),
@@ -516,7 +574,11 @@ export class ServerComponentBuilder {
       originalCode,
       inputPath,
     )
-    const transformedCode = this.transformNodeImports(clientTransformedCode)
+    const isPage = this.isPageComponent(inputPath)
+    const componentGlobalCode = isPage
+      ? this.transformComponentImportsToGlobal(clientTransformedCode)
+      : clientTransformedCode
+    const transformedCode = this.transformNodeImports(componentGlobalCode)
 
     const ext = path.extname(inputPath)
     let loader: string
@@ -549,6 +611,9 @@ export class ServerComponentBuilder {
         external: [],
         mainFields: ['module', 'main'],
         conditions: ['import', 'module', 'default'],
+        jsx: 'transform',
+        jsxFactory: 'React.createElement',
+        jsxFragment: 'React.Fragment',
         define: {
           'global': 'globalThis',
           'process.env.NODE_ENV': '"production"',
@@ -567,9 +632,30 @@ export class ServerComponentBuilder {
         write: false,
         plugins: [
           {
+            name: 'replace-react-imports',
+            setup(build) {
+              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
+                const fs = await import('node:fs/promises')
+                let contents = await fs.readFile(args.path, 'utf-8')
+                contents = contents.replace(
+                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
+                  '// React is available as globalThis.React',
+                )
+                contents = contents.replace(/React2/g, 'React')
+                return { contents, loader: 'js' }
+              })
+            },
+          },
+          {
             name: 'auto-external',
             setup(build) {
               build.onResolve({ filter: /^[^./]/ }, async (args) => {
+                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                  return { path: args.path, external: true }
+                }
+                if (args.path === 'rari/client') {
+                  return null
+                }
                 return { path: args.path, external: true }
               })
             },
@@ -578,7 +664,7 @@ export class ServerComponentBuilder {
             name: 'resolve-server-functions',
             setup(build) {
               build.onResolve(
-                { filter: /^\.\.?\/.*functions/ },
+                { filter: /^\.\.?\/.*(functions|actions)/ },
                 async (args) => {
                   const resolvedPath = path.resolve(
                     path.dirname(args.importer),
@@ -616,9 +702,35 @@ export class ServerComponentBuilder {
 
       if (result.outputFiles && result.outputFiles.length > 0) {
         const outputFile = result.outputFiles[0]
+        let code = outputFile.text
+
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-runtime['"];?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-dev-runtime['"];?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?\s*/g,
+          '// React is available as globalThis.React\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
+          '// React is available as globalThis.React\n',
+        )
+        code = code.replace(
+          /import\s+\w+\s+from\s+['"]node:[^'"]+['"];?\s*/g,
+          '// Node.js built-ins are available in Deno runtime\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]node:[^'"]+['"];?\s*/g,
+          '// Node.js built-ins are available in Deno runtime\n',
+        )
 
         const finalTransformedCode = this.createSelfRegisteringModule(
-          outputFile.text,
+          code,
           componentId,
         )
 
@@ -691,22 +803,26 @@ export class ServerComponentBuilder {
       /^export\s*\{([^}]+)\};?\s*$/gm,
       (match, exports) => {
         const exportList = exports.split(',').map((exp: string) => exp.trim())
+        const exportNames: string[] = []
         exportList.forEach((exp: string) => {
           if (exp.includes('as default')) {
             const actualName = exp.replace('as default', '').trim()
             defaultExportName = actualName
+            exportNames.push(`${actualName} (default)`)
           }
           else if (exp === 'default') {
             const possibleDefault = `${componentId}_default`
             if (transformedCode.includes(`var ${possibleDefault}`)) {
               defaultExportName = possibleDefault
             }
+            exportNames.push('default')
           }
           else {
             namedExports.push(exp)
+            exportNames.push(exp)
           }
         })
-        return `// Exports: ${exports}`
+        return `// Exports: ${exportNames.join(', ')}`
       },
     )
 
@@ -735,20 +851,18 @@ export class ServerComponentBuilder {
 
     const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
 
-// Original component code with exports removed for self-registration
-${transformedCode}
+if (!globalThis["${componentId}"]) {
+    (function() {
+        ${transformedCode}
 
-// Self-registration logic
-(function() {
-    try {
-        const moduleKey = "${componentId}";
-        const registrationKey = "Component_${Math.random().toString(36).substr(2, 8)}";
-        let mainExport = null;
-        let exportedFunctions = {};
+        try {
+            const moduleKey = "${componentId}";
+            const registrationKey = "Component_${Math.random().toString(36).substr(2, 8)}";
+            let mainExport = null;
+            let exportedFunctions = {};
 
-        globalThis.__rsc_functions = globalThis.__rsc_functions || {};
+            globalThis.__rsc_functions = globalThis.__rsc_functions || {};
 
-        // Register named exports
         ${namedExports
           .map(
             name => `
@@ -760,7 +874,6 @@ ${transformedCode}
           )
           .join('')}
 
-        // Set main export
         ${defaultExportName
           ? `if (typeof ${defaultExportName} !== 'undefined') {
             mainExport = ${defaultExportName};
@@ -787,14 +900,18 @@ ${transformedCode}
                 globalThis[registrationKey] = mainExport;
             }
 
+            globalThis.__rsc_components = globalThis.__rsc_components || {};
+            globalThis.__rsc_components[moduleKey] = mainExport;
+
             if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
                 globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
             }
         }
-    } catch (error) {
-        console.error('Error in self-registration for ${componentId}:', error);
-    }
-})();`
+        } catch (error) {
+            console.error('Error in self-registration for ${componentId}:', error);
+        }
+    })();
+}`
 
     return selfRegisteringCode
   }
@@ -834,7 +951,6 @@ ${transformedCode}
 
     if (hasClientComponents) {
       const functionDefinition = `
-// registerClientReference function for client components
 function registerClientReference(clientReference, id, exportName) {
   const key = id + '#' + exportName;
 
@@ -1059,7 +1175,11 @@ function registerClientReference(clientReference, id, exportName) {
       originalCode,
       inputPath,
     )
-    const transformedCode = this.transformNodeImports(clientTransformedCode)
+    const isPage = this.isPageComponent(inputPath)
+    const componentGlobalCode = isPage
+      ? this.transformComponentImportsToGlobal(clientTransformedCode)
+      : clientTransformedCode
+    const transformedCode = this.transformNodeImports(componentGlobalCode)
 
     const ext = path.extname(inputPath)
     let loader: string
@@ -1091,6 +1211,9 @@ function registerClientReference(clientReference, id, exportName) {
         external: [],
         mainFields: ['module', 'main'],
         conditions: ['import', 'module', 'default'],
+        jsx: 'transform',
+        jsxFactory: 'React.createElement',
+        jsxFragment: 'React.Fragment',
         define: {
           'global': 'globalThis',
           'process.env.NODE_ENV': '"production"',
@@ -1109,9 +1232,30 @@ function registerClientReference(clientReference, id, exportName) {
         write: false,
         plugins: [
           {
+            name: 'replace-react-imports',
+            setup(build) {
+              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
+                const fs = await import('node:fs/promises')
+                let contents = await fs.readFile(args.path, 'utf-8')
+                contents = contents.replace(
+                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
+                  '// React is available as globalThis.React',
+                )
+                contents = contents.replace(/React2/g, 'React')
+                return { contents, loader: 'js' }
+              })
+            },
+          },
+          {
             name: 'auto-external',
             setup(build) {
               build.onResolve({ filter: /^[^./]/ }, async (args) => {
+                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                  return { path: args.path, external: true }
+                }
+                if (args.path === 'rari/client') {
+                  return null
+                }
                 return { path: args.path, external: true }
               })
             },
@@ -1120,7 +1264,7 @@ function registerClientReference(clientReference, id, exportName) {
             name: 'resolve-server-functions',
             setup(build) {
               build.onResolve(
-                { filter: /^\.\.?\/.*functions/ },
+                { filter: /^\.\.?\/.*(functions|actions)/ },
                 async (args) => {
                   const resolvedPath = path.resolve(
                     path.dirname(args.importer),
@@ -1158,9 +1302,35 @@ function registerClientReference(clientReference, id, exportName) {
 
       if (result.outputFiles && result.outputFiles.length > 0) {
         const outputFile = result.outputFiles[0]
+        let code = outputFile.text
+
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-runtime['"];?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-dev-runtime['"];?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?\s*/g,
+          '// React is available as globalThis.React\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
+          '// React is available as globalThis.React\n',
+        )
+        code = code.replace(
+          /import\s+\w+\s+from\s+['"]node:[^'"]+['"];?\s*/g,
+          '// Node.js built-ins are available in Deno runtime\n',
+        )
+        code = code.replace(
+          /import\s+\{[^}]*\}\s+from\s+['"]node:[^'"]+['"];?\s*/g,
+          '// Node.js built-ins are available in Deno runtime\n',
+        )
 
         const finalTransformedCode = this.createSelfRegisteringModule(
-          outputFile.text,
+          code,
           componentId,
         )
 

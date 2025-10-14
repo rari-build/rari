@@ -44,6 +44,7 @@ impl RscJsLoader {
                 globalThis.__rsc_modules = globalThis.__rsc_modules || {};
                 globalThis.__rsc_module_dependencies = globalThis.__rsc_module_dependencies || {};
                 globalThis.__rsc_exported_functions = globalThis.__rsc_exported_functions || {};
+                globalThis.__rsc_components = globalThis.__rsc_components || {};
 
                 globalThis.__rsc_component_functions = globalThis.__rsc_component_functions || new Map();
                 globalThis.__rsc_component_server_functions = globalThis.__rsc_component_server_functions || new Map();

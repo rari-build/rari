@@ -18,6 +18,7 @@ path = "src/bin/rari.rs"
 deno_core = "0.362.0"
 deno_error = "=0.7.0"
 deno_features = "0.14.0"
+deno_bundle_runtime = "0.4.0"
 deno_runtime = "0.225.0"
 deno_permissions = "0.76.0"
 deno_process = "0.32.0"
@@ -30,7 +31,6 @@ deno_url = "0.217.0"
 deno_web = "0.248.0"
 deno_webidl = "0.217.0"
 deno_broadcast_channel = "0.211.0"
-deno_bundle_runtime = "0.4.0"
 deno_cache = "0.149.0"
 deno_webstorage = "0.212.0"
 
@@ -108,6 +108,7 @@ parking_lot = "0.12.4"
 smallvec = { version = "1.15.1", features = [ "serde" ] }
 regex = "1.11.2"
 rustc-hash = "2.1.1"
+lru = "0.16.1"
 uuid = { version = "1.18.1", features = [
   "v4",
   "serde"
