@@ -81,6 +81,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
+        _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         use crate::rsc::TimingScope;
 
@@ -101,6 +102,12 @@ impl LayoutRenderer {
         let acquire_timer = TimingScope::new();
         let renderer = self.renderer_pool.acquire().await?;
         let acquire_time = acquire_timer.elapsed_ms();
+
+        if let Some(ref ctx) = _request_context {
+            if let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await {
+                tracing::warn!("Failed to set request context in runtime: {}", e);
+            }
+        }
 
         let execute_timer = TimingScope::new();
         let promise_result = renderer
@@ -193,6 +200,7 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         mode: RenderMode,
+        request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         use crate::rsc::TimingScope;
 
@@ -204,11 +212,11 @@ impl LayoutRenderer {
         let result = match mode {
             RenderMode::Ssr => {
                 debug!("Using direct HTML rendering path for SSR");
-                self.render_route_to_html_direct(route_match, context).await
+                self.render_route_to_html_direct(route_match, context, request_context).await
             }
             RenderMode::RscNavigation => {
                 debug!("Using RSC wire format path for client navigation");
-                self.render_route(route_match, context).await
+                self.render_route(route_match, context, request_context).await
             }
         };
         let render_time = render_timer.elapsed_ms();
@@ -253,6 +261,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
+        _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         use crate::rsc::TimingScope;
 
@@ -292,6 +301,12 @@ impl LayoutRenderer {
         let acquire_timer = TimingScope::new();
         let renderer = self.renderer_pool.acquire().await?;
         let acquire_time = acquire_timer.elapsed_ms();
+
+        if let Some(ref ctx) = _request_context {
+            if let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await {
+                tracing::warn!("Failed to set request context in runtime: {}", e);
+            }
+        }
 
         debug!("Calling renderRouteToHtmlDirect...");
         let v8_timer = TimingScope::new();
@@ -691,7 +706,7 @@ impl LayoutRenderer {
         if has_root_layout {
             debug!("Route has root layout - streaming entire document as single unit");
 
-            let html = self.render_route(route_match, context).await?;
+            let html = self.render_route(route_match, context, None).await?;
 
             Self::validate_rsc_wire_format(&html)?;
 
@@ -722,7 +737,7 @@ impl LayoutRenderer {
     ) -> Result<RscStream, RariError> {
         debug!("Progressive streaming not yet implemented - falling back to synchronous render");
 
-        let html = self.render_route(route_match, context).await?;
+        let html = self.render_route(route_match, context, None).await?;
 
         Self::validate_rsc_wire_format(&html)?;
 

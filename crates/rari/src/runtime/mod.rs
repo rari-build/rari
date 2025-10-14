@@ -342,6 +342,26 @@ impl JsExecutionRuntime {
             }
         }
     }
+
+    pub async fn set_request_context(
+        &self,
+        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+    ) -> Result<(), RariError> {
+        let runtime = self.runtime.clone();
+
+        match tokio::time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            runtime.set_request_context(request_context),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(RariError::timeout(format!(
+                "Setting request context timed out after {} ms",
+                self.timeout_ms
+            ))),
+        }
+    }
 }
 
 impl From<crate::error::RariError> for JsError {

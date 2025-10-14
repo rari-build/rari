@@ -215,6 +215,103 @@ pub fn op_internal_log(#[string] message: &str) {
     error!("[RARI_INTERNAL_LOG] {message}");
 }
 
+pub struct FetchOpState {
+    pub request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+}
+
+impl Default for FetchOpState {
+    fn default() -> Self {
+        Self { request_context: None }
+    }
+}
+
+#[allow(clippy::disallowed_methods)]
+#[deno_core::op2(async)]
+#[serde]
+pub async fn op_fetch_with_cache(
+    state: Rc<RefCell<OpState>>,
+    #[string] url: String,
+    #[string] options_json: String,
+) -> Result<serde_json::Value, ResourceError> {
+    let options: rustc_hash::FxHashMap<String, String> = serde_json::from_str(&options_json)
+        .map_err(|e| ResourceError::Other(format!("Invalid options JSON: {}", e)))?;
+
+    let request_context = {
+        let op_state_ref = state.borrow();
+        op_state_ref
+            .try_borrow::<FetchOpState>()
+            .and_then(|fetch_state| fetch_state.request_context.clone())
+    };
+
+    if let Some(ctx) = request_context {
+        match ctx.fetch_with_cache(&url, options).await {
+            Ok(result) => {
+                let body_str = String::from_utf8_lossy(&result.body).to_string();
+                Ok(serde_json::json!({
+                    "ok": true,
+                    "status": result.status,
+                    "body": body_str,
+                    "cached": true
+                }))
+            }
+            Err(e) => {
+                error!("Fetch failed for {}: {}", url, e);
+                Ok(serde_json::json!({
+                    "ok": false,
+                    "status": 500,
+                    "error": e.to_string(),
+                    "cached": false
+                }))
+            }
+        }
+    } else {
+        match perform_simple_fetch(&url, &options).await {
+            Ok((status, body)) => Ok(serde_json::json!({
+                "ok": status >= 200 && status < 300,
+                "status": status,
+                "body": body,
+                "cached": false
+            })),
+            Err(e) => {
+                error!("Fetch failed for {}: {}", url, e);
+                Ok(serde_json::json!({
+                    "ok": false,
+                    "status": 500,
+                    "error": e,
+                    "cached": false
+                }))
+            }
+        }
+    }
+}
+
+async fn perform_simple_fetch(
+    url: &str,
+    options: &rustc_hash::FxHashMap<String, String>,
+) -> Result<(u16, String), String> {
+    let client = reqwest::Client::new();
+    let mut request = client.get(url);
+
+    if let Some(headers_str) = options.get("headers") {
+        for header_pair in headers_str.split(',') {
+            if let Some((key, value)) = header_pair.split_once(':') {
+                request = request.header(key.trim(), value.trim());
+            }
+        }
+    }
+
+    let timeout = options.get("timeout").and_then(|t| t.parse::<u64>().ok()).unwrap_or(5000);
+
+    request = request.timeout(std::time::Duration::from_millis(timeout));
+
+    let response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = response.status().as_u16();
+    let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+
+    Ok((status, body))
+}
+
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod tests {

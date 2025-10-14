@@ -40,8 +40,10 @@ pub mod actions;
 pub mod app_router;
 pub mod config;
 pub mod html_diagnostics;
+pub mod request_context;
 pub mod request_middleware;
 pub mod request_type;
+pub mod response_cache;
 pub mod vite_proxy;
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
@@ -74,6 +76,7 @@ pub struct ServerState {
     pub app_router: Option<Arc<app_router::AppRouter>>,
     pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
+    pub response_cache: Arc<response_cache::ResponseCache>,
 }
 
 pub struct Server {
@@ -206,6 +209,16 @@ impl Server {
             Arc::new(ssr)
         };
 
+        let cache_config = response_cache::CacheConfig::from_env(config.is_production());
+        let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
+
+        info!(
+            "Response cache initialized: enabled={}, max_entries={}, default_ttl={}s",
+            response_cache.config.enabled,
+            response_cache.config.max_entries,
+            response_cache.config.default_ttl
+        );
+
         let state = ServerState {
             renderer_pool: renderer_pool_arc,
             ssr_renderer,
@@ -217,6 +230,7 @@ impl Server {
             app_router,
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
+            response_cache,
         };
 
         if config.is_production() {
@@ -482,7 +496,6 @@ impl Server {
         renderer_pool: &crate::rsc::RendererPool,
     ) -> Result<(), RariError> {
         let warmup_script = r#"
-            // Simple warmup to trigger JIT
             const arr = Array.from({ length: 100 }, (_, i) => i);
             arr.map(x => x * 2).filter(x => x > 50).reduce((a, b) => a + b, 0);
         "#;
@@ -2823,9 +2836,13 @@ async fn handle_app_route(
 
     debug!("App route matched: {} -> {}", path, route_match.route.path);
 
+    let request_context =
+        std::sync::Arc::new(crate::server::request_context::RequestContext::new(path.to_string()));
+
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     debug!("Detected render mode: {:?}", render_mode);
 
+    let query_params_for_cache = query_params.clone();
     let search_params = extract_search_params(query_params);
 
     let request_headers = extract_headers(&headers);
@@ -2841,7 +2858,14 @@ async fn handle_app_route(
     match render_mode {
         RenderMode::RscNavigation => {
             debug!("Rendering RSC wire format for client navigation");
-            match layout_renderer.render_route_optimized(&route_match, &context, render_mode).await
+            match layout_renderer
+                .render_route_optimized(
+                    &route_match,
+                    &context,
+                    render_mode,
+                    Some(request_context.clone()),
+                )
+                .await
             {
                 Ok(rsc_wire_format) => {
                     debug!(
@@ -2862,17 +2886,65 @@ async fn handle_app_route(
         }
         RenderMode::Ssr => {
             debug!("Rendering HTML for SSR (initial page load) using direct HTML path");
+
+            let cache_key = response_cache::ResponseCache::generate_cache_key(
+                path,
+                if query_params_for_cache.is_empty() {
+                    None
+                } else {
+                    Some(&query_params_for_cache)
+                },
+            );
+
+            let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
+
+            if let Some(cached) = state.response_cache.get(&cache_key).await {
+                debug!("Cache hit for route: {}", path);
+
+                if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
+                {
+                    if cached_etag == client_etag {
+                        debug!("ETag match, returning 304 Not Modified");
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header("etag", cached_etag)
+                            .body(Body::empty())
+                            .expect("Valid 304 response"));
+                    }
+                }
+
+                let mut response_builder = Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .header("x-cache", "HIT");
+
+                if let Some(etag) = &cached.metadata.etag {
+                    response_builder = response_builder.header("etag", etag);
+                }
+
+                for (key, value) in cached.headers.iter() {
+                    response_builder = response_builder.header(key, value);
+                }
+
+                return Ok(response_builder
+                    .body(Body::from(cached.body))
+                    .expect("Valid cached response"));
+            }
+
+            debug!("Cache miss for route: {}", path);
             let total_start = std::time::Instant::now();
 
             let render_start = std::time::Instant::now();
-            let html_content =
-                match layout_renderer.render_route_to_html_direct(&route_match, &context).await {
-                    Ok(html) => html,
-                    Err(e) => {
-                        error!("Direct HTML rendering failed: {}, falling back to shell", e);
-                        return render_fallback_html(&state, path).await;
-                    }
-                };
+            let html_content = match layout_renderer
+                .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
+                .await
+            {
+                Ok(html) => html,
+                Err(e) => {
+                    error!("Direct HTML rendering failed: {}, falling back to shell", e);
+                    return render_fallback_html(&state, path).await;
+                }
+            };
             let render_duration = render_start.elapsed();
             debug!("⚡ Direct HTML render took: {:?}", render_duration);
 
@@ -2900,16 +2972,63 @@ async fn handle_app_route(
                 Err(_) => html_content,
             };
 
+            let etag = response_cache::ResponseCache::generate_etag(html_with_assets.as_bytes());
+
             let mut response_builder = Response::builder()
                 .status(StatusCode::OK)
-                .header("content-type", "text/html; charset=utf-8");
+                .header("content-type", "text/html; charset=utf-8")
+                .header("etag", &etag)
+                .header("x-cache", "MISS");
 
             let page_configs = state.page_cache_configs.read().await;
+            let mut cache_control_value = None;
+            let mut response_headers = axum::http::HeaderMap::new();
+
             if let Some(page_cache_config) = Server::find_matching_cache_config(&page_configs, path)
             {
                 for (key, value) in page_cache_config {
-                    response_builder = response_builder.header(key.to_lowercase(), value);
+                    let header_name = key.to_lowercase();
+                    response_builder = response_builder.header(&header_name, value);
+
+                    if header_name == "cache-control" {
+                        cache_control_value = Some(value.clone());
+                    }
+
+                    if let Ok(header_name) =
+                        axum::http::HeaderName::from_bytes(header_name.as_bytes())
+                    {
+                        if let Ok(header_value) = axum::http::HeaderValue::from_str(value) {
+                            response_headers.insert(header_name, header_value);
+                        }
+                    }
                 }
+            }
+
+            let cache_policy = if let Some(cc) = cache_control_value.as_deref() {
+                response_cache::RouteCachePolicy::from_cache_control(cc, path)
+            } else {
+                let mut policy = response_cache::RouteCachePolicy::default();
+                policy.ttl = state.response_cache.config.default_ttl;
+                policy.tags.push(path.to_string());
+                policy
+            };
+
+            if cache_policy.enabled {
+                let cached_response = response_cache::CachedResponse {
+                    body: bytes::Bytes::from(html_with_assets.clone()),
+                    headers: response_headers,
+                    metadata: response_cache::CacheMetadata {
+                        cached_at: std::time::Instant::now(),
+                        ttl: cache_policy.ttl,
+                        etag: Some(etag),
+                        tags: cache_policy.tags,
+                    },
+                };
+
+                state.response_cache.set(cache_key, cached_response).await;
+                debug!("Stored response in cache for route: {} (ttl={}s)", path, cache_policy.ttl);
+            } else {
+                debug!("Caching disabled for route: {}", path);
             }
 
             Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))

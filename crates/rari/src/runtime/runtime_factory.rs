@@ -210,6 +210,11 @@ pub trait JsRuntimeInterface: Send + Sync {
         &self,
         component_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
+
+    fn set_request_context(
+        &self,
+        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 }
 
 enum JsRequest {
@@ -248,6 +253,10 @@ enum JsRequest {
     },
     ClearModuleLoaderCaches {
         component_id: String,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
+    SetRequestContext {
+        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
 }
@@ -480,6 +489,16 @@ impl DenoRuntime {
                     },
                     JsRequest::ClearModuleLoaderCaches { component_id, result_tx } => {
                         module_loader.clear_component_caches(&component_id);
+                        let _ = result_tx.send(Ok(()));
+                        Ok::<(), RariError>(())
+                    },
+                    JsRequest::SetRequestContext { request_context, result_tx } => {
+                        use crate::runtime::ops::FetchOpState;
+                        let op_state = deno_runtime.op_state();
+                        let mut op_state_borrow = op_state.borrow_mut();
+                        if let Some(fetch_state) = op_state_borrow.try_borrow_mut::<FetchOpState>() {
+                            fetch_state.request_context = Some(request_context);
+                        }
                         let _ = result_tx.send(Ok(()));
                         Ok::<(), RariError>(())
                     },
@@ -1468,6 +1487,30 @@ impl JsRuntimeInterface for DenoRuntime {
             })?
         })
     }
+
+    fn set_request_context(
+        &self,
+        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let request_sender = self.request_sender.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+            request_sender
+                .send(JsRequest::SetRequestContext { request_context, result_tx: response_sender })
+                .await
+                .map_err(|_| {
+                    RariError::js_runtime(
+                        "JS executor channel closed (set_request_context)".to_string(),
+                    )
+                })?;
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (set_request_context)".to_string(),
+                )
+            })?
+        })
+    }
 }
 
 pub fn create_lazy_runtime() -> Box<dyn JsRuntimeInterface> {
@@ -1721,6 +1764,30 @@ pub fn create_lazy_runtime() -> Box<dyn JsRuntimeInterface> {
 
                 if let Some(runtime) = &*runtime {
                     runtime.clear_module_loader_caches(&component_id).await
+                } else {
+                    Err(RariError::js_execution("Runtime not initialized".to_string()))
+                }
+            })
+        }
+
+        fn set_request_context(
+            &self,
+            request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+            let inner = self.inner.clone();
+
+            Box::pin(async move {
+                let initialized_result = {
+                    let this = LazyRuntime { inner: inner.clone() };
+                    this.ensure_initialized().await
+                };
+
+                initialized_result?;
+
+                let runtime = inner.lock().await;
+
+                if let Some(runtime) = &*runtime {
+                    runtime.set_request_context(request_context).await
                 } else {
                     Err(RariError::js_execution("Runtime not initialized".to_string()))
                 }
@@ -1989,6 +2056,30 @@ pub fn create_lazy_runtime_with_env(
 
                 if let Some(runtime) = &*runtime {
                     runtime.clear_module_loader_caches(&component_id).await
+                } else {
+                    Err(RariError::js_execution("Runtime not initialized".to_string()))
+                }
+            })
+        }
+
+        fn set_request_context(
+            &self,
+            request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+            let inner = self.inner.clone();
+
+            Box::pin(async move {
+                let initialized_result = {
+                    let this = LazyRuntimeWithEnv { inner: inner.clone(), env_vars: None };
+                    this.ensure_initialized().await
+                };
+
+                initialized_result?;
+
+                let runtime = inner.lock().await;
+
+                if let Some(runtime) = &*runtime {
+                    runtime.set_request_context(request_context).await
                 } else {
                     Err(RariError::js_execution("Runtime not initialized".to_string()))
                 }

@@ -1059,8 +1059,18 @@ if (typeof globalThis.jsxs === 'undefined') {
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
+        self.render_to_rsc_format_with_context(component_id, props, None).await
+    }
+
+    pub async fn render_to_rsc_format_with_context(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+    ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
-        let result = self.internal_render_to_rsc(component_id, props).await;
+        let result =
+            self.internal_render_to_rsc_with_context(component_id, props, request_context).await;
         self.resource_tracker.decrement_active_renders();
         result
     }
@@ -1070,8 +1080,18 @@ if (typeof globalThis.jsxs === 'undefined') {
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
+        self.render_to_string_with_context(component_id, props, None).await
+    }
+
+    pub async fn render_to_string_with_context(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+    ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
-        let result = self.internal_render_to_string(component_id, props).await;
+        let result =
+            self.internal_render_to_string_with_context(component_id, props, request_context).await;
         self.resource_tracker.decrement_active_renders();
         result
     }
@@ -1188,6 +1208,24 @@ if (typeof globalThis.jsxs === 'undefined') {
             .map_err(|e| RariError::js_execution(format!("Failed to serialize RSC data: {e}")))?;
 
         Ok(rsc_payload)
+    }
+
+    async fn internal_render_to_rsc_with_context(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+    ) -> Result<String, RariError> {
+        self.internal_render_to_rsc(component_id, props).await
+    }
+
+    async fn internal_render_to_string_with_context(
+        &mut self,
+        component_id: &str,
+        props: Option<&str>,
+        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+    ) -> Result<String, RariError> {
+        self.internal_render_to_string(component_id, props).await
     }
 
     async fn internal_render_to_string(
@@ -1584,6 +1622,15 @@ if (typeof globalThis.jsxs === 'undefined') {
         &self,
         component_id: &str,
         props: Option<&str>,
+    ) -> Result<RscStream, RariError> {
+        self.render_with_streaming_and_context(component_id, props, None).await
+    }
+
+    pub async fn render_with_streaming_and_context(
+        &self,
+        component_id: &str,
+        props: Option<&str>,
+        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<RscStream, RariError> {
         if !self.initialized {
             return Err(RariError::internal("RSC renderer not initialized"));

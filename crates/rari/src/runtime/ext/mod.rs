@@ -23,6 +23,7 @@ mod cache;
 mod console;
 mod cron;
 mod crypto;
+mod fetch;
 mod ffi;
 mod fs;
 mod http;
@@ -100,6 +101,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(websocket::extensions(options.web.clone(), is_snapshot));
     extensions.extend(http::extensions((), is_snapshot));
     extensions.extend(streaming::extensions(is_snapshot));
+    extensions.extend(fetch::extensions(is_snapshot));
     extensions.extend(ffi::extensions(is_snapshot));
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
     extensions.extend(webgpu::extensions(is_snapshot));
