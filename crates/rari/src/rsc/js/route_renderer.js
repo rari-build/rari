@@ -1,4 +1,4 @@
-globalThis.renderRouteOptimized = async function (pageComponentId, pageProps, layouts) {
+globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   const PageComponent = globalThis[pageComponentId]
   if (!PageComponent || typeof PageComponent !== 'function') {
     throw new TypeError(`Page component ${pageComponentId} not found`)
@@ -104,7 +104,7 @@ globalThis.renderRouteToHtmlDirect = async function (pageComponentId, pageProps,
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    renderRouteOptimized: globalThis.renderRouteOptimized,
+    renderRoute: globalThis.renderRoute,
     renderRouteToHtmlDirect: globalThis.renderRouteToHtmlDirect,
   }
 }

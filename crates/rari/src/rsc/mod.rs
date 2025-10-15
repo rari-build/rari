@@ -1,13 +1,11 @@
 pub mod component;
-pub mod direct_html_renderer;
 pub mod js_loader;
 pub mod jsx_transform;
 pub mod layout_renderer;
 pub mod renderer;
+pub mod rsc_html_renderer;
 pub mod rsc_tree;
 pub mod serializer;
-pub mod ssr_metrics;
-pub mod ssr_renderer;
 pub mod streaming;
 pub mod suspense;
 
@@ -27,14 +25,12 @@ pub enum ComponentValue {
 pub use component::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
-pub use direct_html_renderer::{CacheStatistics, DirectHtmlRenderer, DirectRenderConfig};
 pub use js_loader::RscJsLoader;
 pub use jsx_transform::{extract_dependencies, transform_jsx};
 pub use renderer::RscRenderer;
+pub use rsc_html_renderer::RscHtmlRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
-pub use ssr_metrics::{SsrTiming, TimingScope};
-pub use ssr_renderer::SsrRenderer;
 pub use streaming::{RscStream, RscStreamChunk};
 
 #[cfg(test)]

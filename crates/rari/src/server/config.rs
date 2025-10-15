@@ -98,31 +98,16 @@ impl Default for CacheConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SsrConfig {
+pub struct RscHtmlConfig {
     pub enabled: bool,
     pub timeout_ms: u64,
     pub cache_template: bool,
     pub pretty_print: bool,
-    #[serde(default)]
-    pub debug_timing: bool,
-    #[serde(default = "default_slow_threshold")]
-    pub slow_threshold_ms: f64,
 }
 
-fn default_slow_threshold() -> f64 {
-    50.0
-}
-
-impl Default for SsrConfig {
+impl Default for RscHtmlConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            timeout_ms: 5000,
-            cache_template: true,
-            pretty_print: false,
-            debug_timing: false,
-            slow_threshold_ms: 50.0,
-        }
+        Self { enabled: true, timeout_ms: 5000, cache_template: true, pretty_print: false }
     }
 }
 
@@ -170,7 +155,7 @@ pub struct Config {
     pub vite: ViteConfig,
     pub static_files: StaticConfig,
     pub rsc: RscConfig,
-    pub ssr: SsrConfig,
+    pub rsc_html: RscHtmlConfig,
     pub caching: CacheConfig,
 }
 
@@ -189,7 +174,10 @@ impl Config {
                 hmr_reload_enabled: mode != Mode::Production,
                 ..default_config.rsc
             },
-            ssr: SsrConfig { pretty_print: mode == Mode::Development, ..default_config.ssr },
+            rsc_html: RscHtmlConfig {
+                pretty_print: mode == Mode::Development,
+                ..default_config.rsc_html
+            },
             ..default_config
         }
     }
@@ -284,40 +272,28 @@ impl Config {
                 || memory_monitoring_str.to_lowercase() == "yes";
         }
 
-        if let Ok(ssr_enabled_str) = std::env::var("RARI_SSR_ENABLED") {
-            config.ssr.enabled = ssr_enabled_str.to_lowercase() == "true"
-                || ssr_enabled_str == "1"
-                || ssr_enabled_str.to_lowercase() == "yes";
+        if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
+            config.rsc_html.enabled = rsc_html_enabled_str.to_lowercase() == "true"
+                || rsc_html_enabled_str == "1"
+                || rsc_html_enabled_str.to_lowercase() == "yes";
         }
 
-        if let Ok(ssr_timeout_str) = std::env::var("RARI_SSR_TIMEOUT_MS") {
-            config.ssr.timeout_ms = ssr_timeout_str
+        if let Ok(rsc_html_timeout_str) = std::env::var("RARI_RSC_HTML_TIMEOUT_MS") {
+            config.rsc_html.timeout_ms = rsc_html_timeout_str
                 .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_SSR_TIMEOUT_MS".to_string()))?;
+                .map_err(|_| ConfigError::InvalidConfig("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
         }
 
-        if let Ok(ssr_cache_template_str) = std::env::var("RARI_SSR_CACHE_TEMPLATE") {
-            config.ssr.cache_template = ssr_cache_template_str.to_lowercase() == "true"
-                || ssr_cache_template_str == "1"
-                || ssr_cache_template_str.to_lowercase() == "yes";
+        if let Ok(rsc_html_cache_template_str) = std::env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
+            config.rsc_html.cache_template = rsc_html_cache_template_str.to_lowercase() == "true"
+                || rsc_html_cache_template_str == "1"
+                || rsc_html_cache_template_str.to_lowercase() == "yes";
         }
 
-        if let Ok(ssr_pretty_print_str) = std::env::var("RARI_SSR_PRETTY_PRINT") {
-            config.ssr.pretty_print = ssr_pretty_print_str.to_lowercase() == "true"
-                || ssr_pretty_print_str == "1"
-                || ssr_pretty_print_str.to_lowercase() == "yes";
-        }
-
-        if let Ok(ssr_debug_timing_str) = std::env::var("RARI_SSR_DEBUG_TIMING") {
-            config.ssr.debug_timing = ssr_debug_timing_str.to_lowercase() == "true"
-                || ssr_debug_timing_str == "1"
-                || ssr_debug_timing_str.to_lowercase() == "yes";
-        }
-
-        if let Ok(ssr_slow_threshold_str) = std::env::var("RARI_SSR_SLOW_THRESHOLD_MS") {
-            config.ssr.slow_threshold_ms = ssr_slow_threshold_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_SSR_SLOW_THRESHOLD_MS".to_string())
-            })?;
+        if let Ok(rsc_html_pretty_print_str) = std::env::var("RARI_RSC_HTML_PRETTY_PRINT") {
+            config.rsc_html.pretty_print = rsc_html_pretty_print_str.to_lowercase() == "true"
+                || rsc_html_pretty_print_str == "1"
+                || rsc_html_pretty_print_str.to_lowercase() == "yes";
         }
 
         Ok(config)

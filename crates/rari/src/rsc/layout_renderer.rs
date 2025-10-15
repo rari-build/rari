@@ -79,25 +79,17 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
-        use crate::rsc::TimingScope;
-
-        let total_timer = TimingScope::new();
-
         debug!(
             "Rendering route {} with {} layouts (RSC wire format path for client navigation)",
             route_match.route.path,
             route_match.layouts.len()
         );
 
-        let prep_timer = TimingScope::new();
         let composition_script = self.build_composition_script(route_match, context)?;
-        let prep_time = prep_timer.elapsed_ms();
 
         debug!("Executing composition script to render composed component tree");
 
-        let acquire_timer = TimingScope::new();
         let renderer = self.renderer.lock().await;
-        let acquire_time = acquire_timer.elapsed_ms();
 
         if let Some(ref ctx) = _request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
@@ -105,12 +97,10 @@ impl LayoutRenderer {
             tracing::warn!("Failed to set request context in runtime: {}", e);
         }
 
-        let execute_timer = TimingScope::new();
         let promise_result = renderer
             .runtime
             .execute_script("compose_and_render".to_string(), composition_script)
             .await?;
-        let execute_time = execute_timer.elapsed_ms();
 
         let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
             promise_result
@@ -124,69 +114,18 @@ impl LayoutRenderer {
             RariError::internal("No RSC data in render result")
         })?;
 
-        let serialize_timer = TimingScope::new();
         let rsc_wire_format = {
             let mut serializer = renderer.serializer.lock();
             serializer
                 .serialize_rsc_json(rsc_data)
                 .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {e}")))?
         };
-        let serialize_time = serialize_timer.elapsed_ms();
 
         if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
             tracing::warn!("HTML structure validation warning: {}", e);
         }
 
-        let total_time = total_timer.elapsed_ms();
-
-        let v8_timings = result.get("timings");
-        if let Some(timings) = v8_timings {
-            let page_render = timings.get("pageRender").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let rsc_conversion =
-                timings.get("rscConversion").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let v8_total = timings.get("total").and_then(|v| v.as_f64()).unwrap_or(0.0);
-
-            debug!(
-                "V8 execution breakdown: total={:.2}ms (page={:.2}ms, rsc={:.2}ms)",
-                v8_total, page_render, rsc_conversion
-            );
-
-            if total_time > 30.0 {
-                tracing::warn!(
-                    "Slow RSC render: {:.2}ms total | Rust: prep={:.2}ms, acquire={:.2}ms, serialize={:.2}ms | V8: execute={:.2}ms (page={:.2}ms, rsc={:.2}ms) for {}",
-                    total_time,
-                    prep_time,
-                    acquire_time,
-                    serialize_time,
-                    execute_time,
-                    page_render,
-                    rsc_conversion,
-                    route_match.route.path
-                );
-            }
-        } else {
-            debug!(
-                "RSC render timing: total={:.2}ms (prep={:.2}ms, acquire={:.2}ms, execute={:.2}ms, serialize={:.2}ms)",
-                total_time, prep_time, acquire_time, execute_time, serialize_time
-            );
-
-            if total_time > 30.0 {
-                tracing::warn!(
-                    "Slow RSC render: {:.2}ms total (prep={:.2}ms, acquire={:.2}ms, execute={:.2}ms, serialize={:.2}ms) for {}",
-                    total_time,
-                    prep_time,
-                    acquire_time,
-                    execute_time,
-                    serialize_time,
-                    route_match.route.path
-                );
-            }
-        }
-
-        debug!(
-            "RSC wire format generation completed for {} ({:.2}ms)",
-            route_match.route.path, total_time
-        );
+        debug!("RSC wire format generation completed for {}", route_match.route.path);
 
         Ok(rsc_wire_format)
     }
@@ -198,13 +137,8 @@ impl LayoutRenderer {
         mode: RenderMode,
         request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
-        use crate::rsc::TimingScope;
-
-        let total_timer = TimingScope::new();
-
         debug!("Rendering route {} in {:?} mode", route_match.route.path, mode);
 
-        let render_timer = TimingScope::new();
         let result = match mode {
             RenderMode::Ssr => {
                 debug!("Using direct HTML rendering path for SSR");
@@ -215,38 +149,13 @@ impl LayoutRenderer {
                 self.render_route(route_match, context, request_context).await
             }
         };
-        let render_time = render_timer.elapsed_ms();
-
-        let total_time = total_timer.elapsed_ms();
 
         match mode {
             RenderMode::Ssr => {
-                debug!(
-                    "SSR direct HTML path completed: {:.2}ms total (render: {:.2}ms) for {}",
-                    total_time, render_time, route_match.route.path
-                );
-
-                if total_time > 20.0 {
-                    tracing::warn!(
-                        "Slow SSR render: {:.2}ms (target: <20ms) for {}",
-                        total_time,
-                        route_match.route.path
-                    );
-                }
+                debug!("SSR direct HTML path completed for {}", route_match.route.path);
             }
             RenderMode::RscNavigation => {
-                debug!(
-                    "RSC navigation path completed: {:.2}ms total (render: {:.2}ms) for {}",
-                    total_time, render_time, route_match.route.path
-                );
-
-                if total_time > 50.0 {
-                    tracing::warn!(
-                        "Slow RSC navigation render: {:.2}ms for {}",
-                        total_time,
-                        route_match.route.path
-                    );
-                }
+                debug!("RSC navigation path completed for {}", route_match.route.path);
             }
         }
 
@@ -259,10 +168,6 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
-        use crate::rsc::TimingScope;
-
-        let total_timer = TimingScope::new();
-
         let cache_key = self.generate_cache_key(route_match, context);
 
         let should_skip_cache = route_match.route.path.contains("/actions")
@@ -280,7 +185,6 @@ impl LayoutRenderer {
             route_match.route.path
         );
 
-        let prep_timer = TimingScope::new();
         let page_props = self.create_page_props(route_match, context)?;
         let page_component_id = self.create_component_id(&route_match.route.file_path);
 
@@ -295,11 +199,8 @@ impl LayoutRenderer {
                 })
             })
             .collect();
-        let prep_time = prep_timer.elapsed_ms();
 
-        let acquire_timer = TimingScope::new();
         let renderer = self.renderer.lock().await;
-        let acquire_time = acquire_timer.elapsed_ms();
 
         if let Some(ref ctx) = _request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
@@ -308,7 +209,6 @@ impl LayoutRenderer {
         }
 
         debug!("Calling renderRouteToHtmlDirect...");
-        let v8_timer = TimingScope::new();
         let result = renderer
             .runtime
             .execute_function(
@@ -320,7 +220,6 @@ impl LayoutRenderer {
                 ],
             )
             .await?;
-        let v8_time = v8_timer.elapsed_ms();
 
         if let Some(error) = result.get("error").and_then(|v| v.as_str())
             && !error.is_empty()
@@ -339,28 +238,7 @@ impl LayoutRenderer {
             })?
             .to_string();
 
-        let total_time = total_timer.elapsed_ms();
-
-        debug!(
-            "Direct HTML render timing: total={:.2}ms (prep={:.2}ms, acquire={:.2}ms, v8={:.2}ms)",
-            total_time, prep_time, acquire_time, v8_time
-        );
-
-        if total_time > 30.0 {
-            tracing::warn!(
-                "Slow direct HTML render: {:.2}ms total (prep={:.2}ms, acquire={:.2}ms, v8={:.2}ms) for {}",
-                total_time,
-                prep_time,
-                acquire_time,
-                v8_time,
-                route_match.route.path
-            );
-        }
-
-        debug!(
-            "Direct HTML rendering completed for {} ({:.2}ms)",
-            route_match.route.path, total_time
-        );
+        debug!("Direct HTML rendering completed for {}", route_match.route.path);
 
         use crate::server::html_diagnostics::HtmlDiagnostics;
         HtmlDiagnostics::log_html_snippet(&html, "After renderRouteToHtmlDirect", 300);

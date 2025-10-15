@@ -1,10 +1,8 @@
-use crate::runtime::JsExecutionRuntime;
-use std::sync::Arc;
-
-#[allow(unused_imports)]
 use crate::error::RariError;
+use crate::runtime::JsExecutionRuntime;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct RscRow {
@@ -19,12 +17,12 @@ pub enum RscElement {
     Reference(String),
 }
 
-pub struct SsrRenderer {
+pub struct RscHtmlRenderer {
     runtime: Arc<JsExecutionRuntime>,
     template_cache: parking_lot::Mutex<Option<String>>,
 }
 
-impl SsrRenderer {
+impl RscHtmlRenderer {
     const RENDER_SCRIPT: &'static str = r#"
         function renderElement(element, rendered, rowId) {
             if (typeof element === 'string') {
@@ -322,10 +320,10 @@ impl SsrRenderer {
 
     pub async fn initialize(&self) -> Result<(), RariError> {
         self.runtime
-            .execute_script("ssr_renderer_init".to_string(), Self::RENDER_SCRIPT.to_string())
+            .execute_script("rsc_html_renderer_init".to_string(), Self::RENDER_SCRIPT.to_string())
             .await
             .map_err(|e| {
-                RariError::internal(format!("Failed to initialize SSR renderer: {}", e))
+                RariError::internal(format!("Failed to initialize RSC-to-HTML renderer: {}", e))
             })?;
 
         Ok(())
@@ -364,38 +362,6 @@ impl SsrRenderer {
         }
 
         Ok(template)
-    }
-
-    pub async fn load_template_with_timing(
-        &self,
-        cache_enabled: bool,
-        is_dev_mode: bool,
-    ) -> Result<(String, f64), RariError> {
-        use crate::rsc::TimingScope;
-
-        let timer = TimingScope::new();
-
-        if cache_enabled {
-            let cache = self.template_cache.lock();
-            if let Some(cached_template) = cache.as_ref() {
-                let elapsed = timer.elapsed_ms();
-                return Ok((cached_template.clone(), elapsed));
-            }
-        }
-
-        let template = if is_dev_mode {
-            self.generate_dev_template()
-        } else {
-            self.read_template_file().await?
-        };
-
-        if cache_enabled {
-            let mut cache = self.template_cache.lock();
-            *cache = Some(template.clone());
-        }
-
-        let elapsed = timer.elapsed_ms();
-        Ok((template, elapsed))
     }
 
     fn generate_dev_template(&self) -> String {
@@ -454,38 +420,7 @@ impl SsrRenderer {
         Ok(result.to_string())
     }
 
-    pub fn inject_into_template_with_timing(
-        &self,
-        html_content: &str,
-        template: &str,
-    ) -> Result<(String, f64), RariError> {
-        use crate::rsc::TimingScope;
-        use regex::Regex;
-
-        let timer = TimingScope::new();
-
-        let root_div_regex =
-            Regex::new(r#"<div\s+id=["']root["'](?:\s+[^>]*)?\s*(?:/>|>\s*</div>)"#)
-                .map_err(|e| RariError::internal(format!("Failed to create regex: {}", e)))?;
-
-        if !root_div_regex.is_match(template) {
-            return Err(RariError::internal(
-                "Template does not contain a root div with id='root'".to_string(),
-            ));
-        }
-
-        let replacement = format!(r#"<div id="root">{}</div>"#, html_content);
-
-        let result = root_div_regex.replace(template, replacement.as_str());
-
-        let elapsed = timer.elapsed_ms();
-        Ok((result.to_string(), elapsed))
-    }
-
     pub fn parse_rsc_wire_format(&self, rsc_data: &str) -> Result<Vec<RscRow>, RariError> {
-        use crate::rsc::TimingScope;
-
-        let timer = TimingScope::new();
         let mut rows = Vec::new();
 
         for line in rsc_data.lines() {
@@ -496,41 +431,9 @@ impl SsrRenderer {
 
             let row = self.parse_rsc_line(line)?;
             rows.push(row);
-        }
-
-        let elapsed = timer.elapsed_ms();
-        if elapsed > 10.0 {
-            tracing::warn!("Slow RSC parsing: {:.2}ms for {} rows", elapsed, rows.len());
         }
 
         Ok(rows)
-    }
-
-    pub fn parse_rsc_wire_format_with_timing(
-        &self,
-        rsc_data: &str,
-    ) -> Result<(Vec<RscRow>, f64), RariError> {
-        use crate::rsc::TimingScope;
-
-        let timer = TimingScope::new();
-        let mut rows = Vec::new();
-
-        for line in rsc_data.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-
-            let row = self.parse_rsc_line(line)?;
-            rows.push(row);
-        }
-
-        let elapsed = timer.elapsed_ms();
-        if elapsed > 10.0 {
-            tracing::warn!("Slow RSC parsing: {:.2}ms for {} rows", elapsed, rows.len());
-        }
-
-        Ok((rows, elapsed))
     }
 
     fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
@@ -621,11 +524,13 @@ impl SsrRenderer {
         rsc_wire_format: &str,
         config: &crate::server::config::Config,
     ) -> Result<String, RariError> {
-        if !config.ssr.enabled {
-            return Err(RariError::internal("SSR is disabled in configuration".to_string()));
+        if !config.rsc_html.enabled {
+            return Err(RariError::internal(
+                "RSC-to-HTML rendering is disabled in configuration".to_string(),
+            ));
         }
-        let timeout_ms = config.ssr.timeout_ms;
-        let cache_template = config.ssr.cache_template;
+        let timeout_ms = config.rsc_html.timeout_ms;
+        let cache_template = config.rsc_html.cache_template;
         let is_dev_mode = config.is_development();
 
         let render_future = async {
@@ -695,7 +600,7 @@ impl SsrRenderer {
                 Ok(result) => result,
                 Err(_) => {
                     return Err(RariError::timeout(format!(
-                        "SSR rendering timed out after {}ms",
+                        "RSC-to-HTML rendering timed out after {}ms",
                         timeout_ms
                     )));
                 }
@@ -707,136 +612,10 @@ impl SsrRenderer {
         match result {
             Ok(html) => Ok(html),
             Err(e) => {
-                eprintln!("SSR rendering failed: {}, falling back to shell", e);
+                eprintln!("RSC-to-HTML rendering failed: {}, falling back to shell", e);
 
                 let fallback_template = self.load_template(cache_template, is_dev_mode).await?;
                 Ok(fallback_template)
-            }
-        }
-    }
-
-    pub async fn render_to_html_with_timing(
-        &self,
-        rsc_wire_format: &str,
-        config: &crate::server::config::Config,
-    ) -> Result<(String, crate::rsc::SsrTiming), RariError> {
-        use crate::rsc::{SsrTiming, TimingScope};
-
-        if !config.ssr.enabled {
-            return Err(RariError::internal("SSR is disabled in configuration".to_string()));
-        }
-
-        let timeout_ms = config.ssr.timeout_ms;
-        let cache_template = config.ssr.cache_template;
-        let is_dev_mode = config.is_development();
-        let debug_timing = config.ssr.debug_timing;
-        let slow_threshold = config.ssr.slow_threshold_ms;
-
-        let total_timer = TimingScope::new();
-        let mut timing = SsrTiming::new();
-
-        let render_future = async {
-            let (rsc_rows, parse_time) =
-                self.parse_rsc_wire_format_with_timing(rsc_wire_format).map_err(|e| {
-                    RariError::internal(format!("Failed to parse RSC wire format: {}", e))
-                })?;
-            timing.parse_rsc_ms = parse_time;
-
-            let (html_content, serialize_time, v8_time) = self
-                .render_rsc_to_html_string_with_timing(&rsc_rows)
-                .await
-                .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {}", e)))?;
-            timing.serialize_to_v8_ms = serialize_time;
-            timing.v8_execution_ms = v8_time;
-
-            let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
-                || html_content.trim_start().to_lowercase().starts_with("<html");
-
-            if is_complete_document {
-                let script_tags = if !is_dev_mode {
-                    let (template, load_time) =
-                        self.load_template_with_timing(cache_template, is_dev_mode).await.map_err(
-                            |e| RariError::internal(format!("Failed to load HTML template: {}", e)),
-                        )?;
-                    timing.load_template_ms = load_time;
-                    Self::extract_script_tags(&template)
-                } else {
-                    timing.load_template_ms = 0.0;
-                    String::new()
-                };
-
-                let inject_timer = TimingScope::new();
-                let mut final_html = html_content.clone();
-
-                if let Some(body_start) = final_html.find("<body")
-                    && let Some(body_content_start) = final_html[body_start..].find('>')
-                {
-                    let body_content_start = body_start + body_content_start + 1;
-
-                    if let Some(body_end) = final_html.rfind("</body>") {
-                        let body_content = &final_html[body_content_start..body_end];
-
-                        let new_body_content =
-                            format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
-
-                        final_html.replace_range(body_content_start..body_end, &new_body_content);
-                    }
-                }
-
-                if !final_html.trim_start().starts_with("<!DOCTYPE") {
-                    final_html = format!("<!DOCTYPE html>\n{}", final_html);
-                }
-
-                timing.inject_template_ms = inject_timer.elapsed_ms();
-
-                return Ok::<String, RariError>(final_html);
-            }
-
-            let (template, load_time) = self
-                .load_template_with_timing(cache_template, is_dev_mode)
-                .await
-                .map_err(|e| RariError::internal(format!("Failed to load HTML template: {}", e)))?;
-            timing.load_template_ms = load_time;
-
-            let (final_html, inject_time) =
-                self.inject_into_template_with_timing(&html_content, &template).map_err(|e| {
-                    RariError::internal(format!("Failed to inject HTML into template: {}", e))
-                })?;
-            timing.inject_template_ms = inject_time;
-
-            Ok::<String, RariError>(final_html)
-        };
-
-        let result = if timeout_ms > 0 {
-            match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), render_future)
-                .await
-            {
-                Ok(result) => result,
-                Err(_) => {
-                    return Err(RariError::timeout(format!(
-                        "SSR rendering timed out after {}ms",
-                        timeout_ms
-                    )));
-                }
-            }
-        } else {
-            render_future.await
-        };
-
-        timing.total_ms = total_timer.elapsed_ms();
-
-        timing.log_if_slow(slow_threshold);
-        if debug_timing {
-            timing.log_breakdown();
-        }
-
-        match result {
-            Ok(html) => Ok((html, timing)),
-            Err(e) => {
-                tracing::error!("SSR rendering failed: {}, falling back to shell", e);
-
-                let fallback_template = self.load_template(cache_template, is_dev_mode).await?;
-                Ok((fallback_template, timing))
             }
         }
     }
@@ -896,69 +675,6 @@ impl SsrRenderer {
 
         Ok(html)
     }
-
-    pub async fn render_rsc_to_html_string_with_timing(
-        &self,
-        rsc_rows: &[RscRow],
-    ) -> Result<(String, f64, f64), RariError> {
-        use crate::rsc::TimingScope;
-
-        let serialize_timer = TimingScope::new();
-        #[allow(clippy::disallowed_methods)]
-        let rows_json: Vec<serde_json::Value> = rsc_rows
-            .iter()
-            .map(|row| {
-                let data_json = match &row.data {
-                    RscElement::Component { tag, key, props } => {
-                        serde_json::json!({
-                            "Component": {
-                                "tag": tag,
-                                "key": key,
-                                "props": props
-                            }
-                        })
-                    }
-                    RscElement::Text(text) => {
-                        serde_json::json!({
-                            "Text": text
-                        })
-                    }
-                    RscElement::Reference(ref_str) => {
-                        serde_json::json!({
-                            "Reference": ref_str
-                        })
-                    }
-                };
-
-                serde_json::json!({
-                    "id": row.id,
-                    "data": data_json
-                })
-            })
-            .collect();
-
-        let rows_array = serde_json::Value::Array(rows_json);
-        let serialize_time = serialize_timer.elapsed_ms();
-
-        let v8_timer = TimingScope::new();
-        let result =
-            self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
-                |e| RariError::internal(format!("Failed to execute renderRscToHtml: {}", e)),
-            )?;
-        let v8_execution_time = v8_timer.elapsed_ms();
-
-        let html = result
-            .as_str()
-            .ok_or_else(|| {
-                RariError::internal(format!(
-                    "renderRscToHtml did not return a string: {:?}",
-                    result
-                ))
-            })?
-            .to_string();
-
-        Ok((html, serialize_time, v8_execution_time))
-    }
 }
 
 #[cfg(test)]
@@ -966,9 +682,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ssr_renderer_creation() {
+    fn test_rsc_html_renderer_creation() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime.clone());
+        let renderer = RscHtmlRenderer::new(runtime.clone());
 
         assert!(Arc::ptr_eq(renderer.runtime(), &runtime));
     }
@@ -976,7 +692,7 @@ mod tests {
     #[test]
     fn test_template_cache_clear() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         {
             let mut cache = renderer.template_cache.lock();
@@ -999,7 +715,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_wire_format_valid() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"children":"Hello"}]
 1:["$","span",null,{"children":"World"}]"#;
@@ -1016,7 +732,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_line_missing_colon() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result = renderer.parse_rsc_line("0invalid");
         assert!(result.is_err());
@@ -1027,7 +743,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_line_invalid_row_id() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result = renderer.parse_rsc_line("abc:{}");
         assert!(result.is_err());
@@ -1038,7 +754,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_line_invalid_json() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result = renderer.parse_rsc_line("0:{invalid json}");
         assert!(result.is_err());
@@ -1049,7 +765,7 @@ mod tests {
     #[test]
     fn test_parse_react_element_invalid_structure() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let arr = vec![JsonValue::String("$".to_string()), JsonValue::String("div".to_string())];
 
@@ -1062,7 +778,7 @@ mod tests {
     #[test]
     fn test_parse_react_element_non_string_tag() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let arr = vec![
             JsonValue::String("$".to_string()),
@@ -1080,7 +796,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_element_text() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let value = JsonValue::String("Hello World".to_string());
         let result = renderer.parse_rsc_element(&value);
@@ -1096,7 +812,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_element_reference() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let value = JsonValue::String("$L1".to_string());
         let result = renderer.parse_rsc_element(&value);
@@ -1112,7 +828,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_element_component() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let mut props = serde_json::Map::new();
         props.insert("children".to_string(), JsonValue::String("Hello".to_string()));
@@ -1139,7 +855,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_element_empty_array() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let value = JsonValue::Array(vec![]);
         let result = renderer.parse_rsc_element(&value);
@@ -1151,7 +867,7 @@ mod tests {
     #[test]
     fn test_parse_rsc_wire_format_with_empty_lines() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let rsc_data = r#"0:["$","div",null,{"children":"Hello"}]
 
@@ -1168,7 +884,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_rsc_to_html_integration() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let init_result = renderer.initialize().await;
         assert!(init_result.is_ok(), "Failed to initialize renderer: {:?}", init_result.err());
@@ -1190,7 +906,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_nested_elements() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1209,7 +925,7 @@ mod tests {
     #[tokio::test]
     async fn test_html_escaping() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1225,7 +941,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_with_attributes() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1244,7 +960,7 @@ mod tests {
     #[test]
     fn test_inject_into_template_basic() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = r#"<html><body><div id="root"></div></body></html>"#;
         let content = "<h1>Hello World</h1>";
@@ -1261,7 +977,7 @@ mod tests {
     #[test]
     fn test_inject_into_template_self_closing() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = r#"<html><body><div id="root" /></body></html>"#;
         let content = "<p>Content</p>";
@@ -1276,7 +992,7 @@ mod tests {
     #[test]
     fn test_inject_into_template_with_scripts_and_styles() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = r#"<!DOCTYPE html>
 <html>
@@ -1306,7 +1022,7 @@ mod tests {
     #[test]
     fn test_inject_into_template_missing_root_div() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = r#"<html><body><div id="app"></div></body></html>"#;
         let content = "<h1>Hello</h1>";
@@ -1321,7 +1037,7 @@ mod tests {
     #[test]
     fn test_inject_into_template_with_extra_attributes() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = r#"<html><body><div id="root" class="container"></div></body></html>"#;
         let content = "<span>Text</span>";
@@ -1336,7 +1052,7 @@ mod tests {
     #[test]
     fn test_generate_dev_template() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let template = renderer.generate_dev_template();
 
@@ -1350,7 +1066,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_template_dev_mode() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result = renderer.load_template(false, true).await;
         assert!(result.is_ok());
@@ -1364,7 +1080,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_template_caching() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result1 = renderer.load_template(true, true).await;
         assert!(result1.is_ok());
@@ -1389,7 +1105,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_template_no_caching() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         let result = renderer.load_template(false, true).await;
         assert!(result.is_ok());
@@ -1403,7 +1119,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_success() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1425,7 +1141,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_complex_structure() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1447,7 +1163,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_with_timeout() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1455,7 +1171,7 @@ mod tests {
 
         let mut config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.cache_template = false;
+        config.rsc_html.cache_template = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok(), "Should succeed with reasonable timeout");
@@ -1464,7 +1180,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_no_timeout() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1472,8 +1188,8 @@ mod tests {
 
         let mut config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.timeout_ms = 0;
-        config.ssr.cache_template = false;
+        config.rsc_html.timeout_ms = 0;
+        config.rsc_html.cache_template = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok(), "Should succeed with no timeout");
@@ -1482,7 +1198,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_invalid_rsc_fallback() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1490,7 +1206,7 @@ mod tests {
 
         let mut config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.cache_template = false;
+        config.rsc_html.cache_template = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok(), "Should fall back to shell on error");
@@ -1507,7 +1223,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_preserves_template_structure() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1529,7 +1245,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_caching_behavior() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1554,7 +1270,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_ssr_disabled() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1562,7 +1278,7 @@ mod tests {
 
         let mut config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.enabled = false;
+        config.rsc_html.enabled = false;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_err(), "Should fail when SSR is disabled");
@@ -1574,7 +1290,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_respects_timeout_config() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1582,7 +1298,7 @@ mod tests {
 
         let mut config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.timeout_ms = 10000;
+        config.rsc_html.timeout_ms = 10000;
 
         let result = renderer.render_to_html(rsc_wire_format, &config).await;
         assert!(result.is_ok(), "Should succeed with custom timeout");
@@ -1591,7 +1307,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_to_html_production_vs_dev_mode() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
+        let renderer = RscHtmlRenderer::new(runtime);
 
         renderer.initialize().await.unwrap();
 
@@ -1599,7 +1315,7 @@ mod tests {
 
         let mut dev_config =
             crate::server::config::Config::new(crate::server::config::Mode::Development);
-        dev_config.ssr.cache_template = false;
+        dev_config.rsc_html.cache_template = false;
 
         let dev_result = renderer.render_to_html(rsc_wire_format, &dev_config).await;
         assert!(dev_result.is_ok());
@@ -1608,89 +1324,5 @@ mod tests {
         assert!(dev_html.contains("/@vite/client"), "Dev mode should have Vite client");
 
         renderer.clear_template_cache();
-    }
-
-    #[test]
-    fn test_parse_rsc_wire_format_with_timing() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
-
-        let rsc_data = r#"0:["$","div",null,{"children":"Hello"}]
-1:["$","span",null,{"children":"World"}]"#;
-
-        let result = renderer.parse_rsc_wire_format_with_timing(rsc_data);
-        assert!(result.is_ok());
-
-        let (rows, elapsed) = result.unwrap();
-        assert_eq!(rows.len(), 2);
-        assert!(elapsed >= 0.0, "Elapsed time should be non-negative");
-        assert!(elapsed < 100.0, "Parsing should be fast (< 100ms)");
-    }
-
-    #[test]
-    fn test_inject_into_template_with_timing() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
-
-        let template = r#"<html><body><div id="root"></div></body></html>"#;
-        let content = "<h1>Hello World</h1>";
-
-        let result = renderer.inject_into_template_with_timing(content, template);
-        assert!(result.is_ok());
-
-        let (html, elapsed) = result.unwrap();
-        assert!(html.contains(r#"<div id="root"><h1>Hello World</h1></div>"#));
-        assert!(elapsed >= 0.0, "Elapsed time should be non-negative");
-        assert!(elapsed < 100.0, "Injection should be fast (< 100ms)");
-    }
-
-    #[tokio::test]
-    async fn test_load_template_with_timing() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
-
-        let result = renderer.load_template_with_timing(false, true).await;
-        assert!(result.is_ok());
-
-        let (template, elapsed) = result.unwrap();
-        assert!(template.contains(r#"<div id="root"></div>"#));
-        assert!(elapsed >= 0.0, "Elapsed time should be non-negative");
-        assert!(elapsed < 100.0, "Template loading should be fast (< 100ms)");
-    }
-
-    #[tokio::test]
-    async fn test_render_to_html_with_timing() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let renderer = SsrRenderer::new(runtime);
-        renderer.initialize().await.unwrap();
-
-        let rsc_wire_format = r#"0:["$","div",null,{"children":"Hello World"}]"#;
-
-        let mut config =
-            crate::server::config::Config::new(crate::server::config::Mode::Development);
-        config.ssr.debug_timing = true;
-        config.ssr.slow_threshold_ms = 50.0;
-
-        let result = renderer.render_to_html_with_timing(rsc_wire_format, &config).await;
-        assert!(result.is_ok());
-
-        let (html, timing) = result.unwrap();
-        assert!(html.contains("Hello World"));
-
-        // Verify timing fields are populated
-        assert!(timing.parse_rsc_ms >= 0.0);
-        assert!(timing.serialize_to_v8_ms >= 0.0);
-        assert!(timing.v8_execution_ms >= 0.0);
-        assert!(timing.load_template_ms >= 0.0);
-        assert!(timing.inject_template_ms >= 0.0);
-        assert!(timing.total_ms >= 0.0);
-
-        // Total should be sum of all parts (approximately)
-        let sum = timing.parse_rsc_ms
-            + timing.serialize_to_v8_ms
-            + timing.v8_execution_ms
-            + timing.load_template_ms
-            + timing.inject_template_ms;
-        assert!(timing.total_ms >= sum * 0.9, "Total time should be at least the sum of parts");
     }
 }

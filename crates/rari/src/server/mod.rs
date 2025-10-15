@@ -65,7 +65,7 @@ pub struct ReloadComponentResponse {
 #[derive(Clone)]
 pub struct ServerState {
     pub renderer: Arc<tokio::sync::Mutex<crate::rsc::RscRenderer>>,
-    pub ssr_renderer: Arc<crate::rsc::ssr_renderer::SsrRenderer>,
+    pub ssr_renderer: Arc<crate::rsc::RscHtmlRenderer>,
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
     pub start_time: std::time::Instant,
@@ -178,7 +178,7 @@ impl Server {
 
         let ssr_renderer = {
             let runtime = renderer.runtime.clone();
-            let ssr = crate::rsc::ssr_renderer::SsrRenderer::new(runtime);
+            let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
             ssr.initialize().await?;
             Arc::new(ssr)
         };
