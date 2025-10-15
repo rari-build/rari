@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 
 export type ActionFunction<State, Payload = FormData> = (
   prevState: State,
@@ -20,7 +20,9 @@ export function useActionState<State>(
   const [isPending, startTransition] = useTransition()
   const currentStateRef = useRef<State>(initialState)
 
-  currentStateRef.current = state
+  useEffect(() => {
+    currentStateRef.current = state
+  }, [state])
 
   const dispatch = useCallback(
     (payload: FormData) => {
@@ -28,7 +30,6 @@ export function useActionState<State>(
         try {
           const newState = await action(currentStateRef.current, payload)
           setState(newState)
-          currentStateRef.current = newState
         }
         catch (error) {
           console.error('Action failed:', error)

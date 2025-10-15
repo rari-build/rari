@@ -151,6 +151,7 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
   return (
     <article className="prose max-w-none">
       <h1>{title}</h1>
+      {/* eslint-disable-next-line react-dom/no-dangerously-set-innerhtml */}
       <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </article>
   )
@@ -368,6 +369,7 @@ export default function Navigation() {
 Your main `App.tsx` uses the `RouterProvider`:
 
 ```tsx
+/* eslint-disable react-refresh/only-export-components */
 import { RouterProvider, useRouter } from 'rari/client'
 import { routes } from '../.rari/routes' // Auto-generated
 
@@ -545,11 +547,17 @@ export default function LoginForm() {
 
 ```tsx
 export default async function DataComponent() {
+  let data
+  let error
+
   try {
-    const data = await fetchSomeData()
-    return <div>{data.content}</div>
+    data = await fetchSomeData()
   }
-  catch (error) {
+  catch (err) {
+    error = err
+  }
+
+  if (error) {
     return (
       <div className="error">
         <h2>Something went wrong</h2>
@@ -557,5 +565,7 @@ export default async function DataComponent() {
       </div>
     )
   }
+
+  return <div>{data.content}</div>
 }
 ```

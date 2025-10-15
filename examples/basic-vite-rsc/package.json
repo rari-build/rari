@@ -11,8 +11,6 @@
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
     "start": "rari start",
     "clean": "rm -rf .rari && rm -rf dist",
-    "lint": "oxlint && eslint",
-    "lint:fix": "oxlint --fix && eslint --fix",
     "typecheck": "tsgo"
   },
   "dependencies": {

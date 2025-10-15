@@ -39,6 +39,9 @@ export default async function MarkdownRenderer({
   filePath,
   className = '',
 }: MarkdownRendererProps) {
+  let html: string | null = null
+  let error: Error | null = null
+
   try {
     const distPath = join(cwd(), 'dist', 'content', filePath)
     const contentPath = join(cwd(), 'content', filePath)
@@ -71,8 +74,8 @@ export default async function MarkdownRenderer({
                   theme: 'github-dark',
                 })
               }
-              catch (error) {
-                console.warn(`Failed to highlight ${lang}:`, error)
+              catch (highlightError) {
+                console.warn(`Failed to highlight ${lang}:`, highlightError)
                 return `<pre><code class="language-${lang}">${str}</code></pre>`
               }
             }
@@ -81,21 +84,14 @@ export default async function MarkdownRenderer({
         : undefined,
     })
 
-    const html = md.render(content)
-
-    return (
-      <div
-        className={`prose prose-invert max-w-none overflow-hidden ${className}`}
-        dangerouslySetInnerHTML={{ __html: html }}
-        style={{
-          wordWrap: 'break-word',
-          overflowWrap: 'break-word',
-        }}
-      />
-    )
+    html = md.render(content)
   }
-  catch (error) {
-    console.error('Error in MarkdownRenderer:', error)
+  catch (err) {
+    console.error('Error in MarkdownRenderer:', err)
+    error = err instanceof Error ? err : new Error(String(err))
+  }
+
+  if (error || !html) {
     return (
       <div className="prose prose-invert max-w-none">
         <p>
@@ -105,4 +101,16 @@ export default async function MarkdownRenderer({
       </div>
     )
   }
+
+  return (
+    <div
+      className={`prose prose-invert max-w-none overflow-hidden ${className}`}
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+      dangerouslySetInnerHTML={{ __html: html }}
+      style={{
+        wordWrap: 'break-word',
+        overflowWrap: 'break-word',
+      }}
+    />
+  )
 }
