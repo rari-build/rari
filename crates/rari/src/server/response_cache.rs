@@ -89,10 +89,10 @@ impl RouteCachePolicy {
                 return policy;
             }
 
-            if let Some(max_age_str) = directive.strip_prefix("max-age=") {
-                if let Ok(max_age) = max_age_str.trim().parse::<u64>() {
-                    policy.ttl = max_age;
-                }
+            if let Some(max_age_str) = directive.strip_prefix("max-age=")
+                && let Ok(max_age) = max_age_str.trim().parse::<u64>()
+            {
+                policy.ttl = max_age;
             }
         }
 
@@ -126,8 +126,8 @@ pub struct ResponseCache {
 
 impl ResponseCache {
     pub fn new(config: CacheConfig) -> Self {
-        let max_entries =
-            NonZeroUsize::new(config.max_entries).unwrap_or(NonZeroUsize::new(1000).unwrap());
+        let max_entries = NonZeroUsize::new(config.max_entries)
+            .unwrap_or(NonZeroUsize::new(1000).expect("1000 is non-zero"));
 
         Self {
             cache: Arc::new(DashMap::new()),
@@ -138,9 +138,9 @@ impl ResponseCache {
         }
     }
 
-    pub fn generate_cache_key<S: std::hash::BuildHasher>(
+    pub fn generate_cache_key(
         route: &str,
-        params: Option<&std::collections::HashMap<String, String, S>>,
+        params: Option<&rustc_hash::FxHashMap<String, String>>,
     ) -> String {
         if let Some(params) = params {
             if params.is_empty() {
@@ -370,16 +370,13 @@ mod tests {
 
     #[test]
     fn test_generate_cache_key_without_params() {
-        let key = ResponseCache::generate_cache_key::<std::collections::hash_map::RandomState>(
-            "/blog/post",
-            None,
-        );
+        let key = ResponseCache::generate_cache_key("/blog/post", None);
         assert_eq!(key, "/blog/post");
     }
 
     #[test]
     fn test_generate_cache_key_with_params() {
-        let mut params = std::collections::HashMap::new();
+        let mut params = rustc_hash::FxHashMap::default();
         params.insert("page".to_string(), "1".to_string());
         params.insert("sort".to_string(), "date".to_string());
 
@@ -390,11 +387,11 @@ mod tests {
 
     #[test]
     fn test_generate_cache_key_consistency() {
-        let mut params1 = std::collections::HashMap::new();
+        let mut params1 = rustc_hash::FxHashMap::default();
         params1.insert("b".to_string(), "2".to_string());
         params1.insert("a".to_string(), "1".to_string());
 
-        let mut params2 = std::collections::HashMap::new();
+        let mut params2 = rustc_hash::FxHashMap::default();
         params2.insert("a".to_string(), "1".to_string());
         params2.insert("b".to_string(), "2".to_string());
 

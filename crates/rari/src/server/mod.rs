@@ -24,7 +24,6 @@ use axum::{
     routing::{any, get, post},
 };
 use colored::Colorize;
-use futures::future;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -65,7 +64,7 @@ pub struct ReloadComponentResponse {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub renderer_pool: Arc<crate::rsc::RendererPool>,
+    pub renderer: Arc<tokio::sync::Mutex<crate::rsc::RscRenderer>>,
     pub ssr_renderer: Arc<crate::rsc::ssr_renderer::SsrRenderer>,
     pub config: Arc<Config>,
     pub request_count: Arc<std::sync::atomic::AtomicU64>,
@@ -102,36 +101,21 @@ impl Server {
             ..ResourceLimits::default()
         };
 
-        let cpu_count = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        info!("Initializing RSC renderer (mode: {})", config.mode);
 
-        let pool_size = if let Ok(size_str) = std::env::var("RARI_RENDERER_POOL_SIZE") {
-            size_str.parse::<usize>().unwrap_or_else(|_| {
-                warn!("Invalid RARI_RENDERER_POOL_SIZE value: {}, using default", size_str);
-                cpu_count
-            })
-        } else if config.is_production() {
-            (cpu_count * 4).min(32)
-        } else {
-            cpu_count.min(8)
-        };
-        info!(
-            "Creating renderer pool with {} renderers (CPUs: {}, mode: {})",
-            pool_size, cpu_count, config.mode
-        );
-
-        let renderer_pool = crate::rsc::RendererPool::new(pool_size, resource_limits).await?;
+        let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
+        let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
+        let mut renderer =
+            crate::rsc::RscRenderer::with_resource_limits(js_runtime, resource_limits);
+        renderer.initialize().await?;
 
         if config.is_production() {
-            Self::load_production_components_to_pool(&renderer_pool).await?;
-            info!("Warming up {} renderers...", pool_size);
-            Self::warmup_renderer_pool(&renderer_pool).await?;
+            Self::load_production_components(&mut renderer).await?;
+            Self::load_production_server_actions(&mut renderer).await?;
         } else {
             // In development, load app router components from source
-            Self::load_app_router_components_to_pool(&renderer_pool, &config).await?;
-        }
-
-        if config.is_development() {
-            Self::load_server_actions_from_source_to_pool(&renderer_pool).await?;
+            Self::load_app_router_components(&mut renderer, &config).await?;
+            Self::load_server_actions_from_source(&mut renderer).await?;
         }
 
         let app_router = {
@@ -165,13 +149,8 @@ impl Server {
         let mut module_reload_manager =
             crate::runtime::module_reload::ModuleReloadManager::new(reload_config);
 
-        let first_renderer =
-            renderer_pool.get(0).ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
-        let first_renderer_lock = first_renderer.lock().await;
-        module_reload_manager.set_runtime(Arc::clone(&first_renderer_lock.runtime));
-        module_reload_manager
-            .set_component_registry(Arc::clone(&first_renderer_lock.component_registry));
-        drop(first_renderer_lock);
+        module_reload_manager.set_runtime(Arc::clone(&renderer.runtime));
+        module_reload_manager.set_component_registry(Arc::clone(&renderer.component_registry));
 
         let project_root =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -197,17 +176,14 @@ impl Server {
             );
         }
 
-        let renderer_pool_arc = Arc::new(renderer_pool);
-
         let ssr_renderer = {
-            let first_renderer = renderer_pool_arc
-                .get(0)
-                .ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
-            let runtime = first_renderer.lock().await.runtime.clone();
+            let runtime = renderer.runtime.clone();
             let ssr = crate::rsc::ssr_renderer::SsrRenderer::new(runtime);
             ssr.initialize().await?;
             Arc::new(ssr)
         };
+
+        let renderer_arc = Arc::new(tokio::sync::Mutex::new(renderer));
 
         let cache_config = response_cache::CacheConfig::from_env(config.is_production());
         let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
@@ -220,7 +196,7 @@ impl Server {
         );
 
         let state = ServerState {
-            renderer_pool: renderer_pool_arc,
+            renderer: renderer_arc,
             ssr_renderer,
             config: Arc::new(config.clone()),
             request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -375,43 +351,10 @@ impl Server {
         self.address
     }
 
-    #[allow(dead_code)]
-    async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        info!("Loading production components from manifest");
-
-        let manifest_path = std::path::Path::new(SERVER_MANIFEST_PATH);
-        if !manifest_path.exists() {
-            warn!(
-                "No server manifest found at {}, production components will not be available",
-                manifest_path.display()
-            );
-            return Ok(());
-        }
-
-        let manifest = Self::read_manifest(manifest_path)?;
-        let components = Self::parse_manifest_components(&manifest)?;
-
-        let mut loaded_count = 0;
-        for (component_id, component_info) in components {
-            match Self::load_component_from_manifest(component_id, component_info, renderer).await {
-                Ok(()) => {
-                    debug!("Loaded production component: {}", component_id);
-                    loaded_count += 1;
-                }
-                Err(e) => {
-                    error!("Failed to load component {}: {}", component_id, e);
-                }
-            }
-        }
-
-        info!("Loaded {} production components", loaded_count);
-        Ok(())
-    }
-
-    async fn load_production_components_to_pool(
-        renderer_pool: &crate::rsc::RendererPool,
+    async fn load_production_components(
+        renderer: &mut crate::rsc::RscRenderer,
     ) -> Result<(), RariError> {
-        info!("Loading production components to renderer pool");
+        info!("Loading production components");
 
         let manifest_path = std::path::Path::new(SERVER_MANIFEST_PATH);
         if !manifest_path.exists() {
@@ -444,95 +387,103 @@ impl Server {
             let component_code = std::fs::read_to_string(&component_file)
                 .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
 
-            let mut tasks = Vec::new();
-            for i in 0..renderer_pool.size() {
-                let renderer_arc = renderer_pool
-                    .get(i)
-                    .ok_or_else(|| RariError::internal(format!("Renderer {} not found", i)))?;
-                let code = component_code.clone();
-                let id = component_id.to_string();
-
-                let task = tokio::spawn(async move {
-                    let renderer = renderer_arc.lock().await;
-                    renderer
-                        .runtime
-                        .execute_script(format!("load_{}.js", id.replace('/', "_")), code)
-                        .await
-                        .map_err(|e| (i, e))
-                });
-                tasks.push(task);
-            }
-
-            let results = future::join_all(tasks).await;
-            let mut success = true;
-            for result in results {
-                match result {
-                    Ok(Ok(_)) => {}
-                    Ok(Err((i, e))) => {
-                        error!(
-                            "Failed to load component {} on renderer {}: {}",
-                            component_id, i, e
-                        );
-                        success = false;
-                    }
-                    Err(e) => {
-                        error!("Task panicked loading component {}: {}", component_id, e);
-                        success = false;
-                    }
+            match renderer
+                .runtime
+                .execute_script(
+                    format!("load_{}.js", component_id.replace('/', "_")),
+                    component_code,
+                )
+                .await
+            {
+                Ok(_) => {
+                    debug!("Loaded production component: {}", component_id);
+                    loaded_count += 1;
                 }
-            }
-
-            if success {
-                debug!("Loaded production component to all renderers: {}", component_id);
-                loaded_count += 1;
+                Err(e) => {
+                    error!("Failed to load component {}: {}", component_id, e);
+                }
             }
         }
 
-        info!("Loaded {} production components to pool", loaded_count);
+        info!("Loaded {} production components", loaded_count);
         Ok(())
     }
 
-    async fn warmup_renderer_pool(
-        renderer_pool: &crate::rsc::RendererPool,
+    async fn load_production_server_actions(
+        renderer: &mut crate::rsc::RscRenderer,
     ) -> Result<(), RariError> {
-        let warmup_script = r#"
-            const arr = Array.from({ length: 100 }, (_, i) => i);
-            arr.map(x => x * 2).filter(x => x > 50).reduce((a, b) => a + b, 0);
-        "#;
+        info!("Loading production server actions");
 
-        let mut tasks = Vec::new();
-        for i in 0..renderer_pool.size() {
-            let renderer_arc = renderer_pool
-                .get(i)
-                .ok_or_else(|| RariError::internal(format!("Renderer {} not found", i)))?;
-            let code = warmup_script.to_string();
-
-            let task = tokio::spawn(async move {
-                let renderer = renderer_arc.lock().await;
-                renderer
-                    .runtime
-                    .execute_script("warmup.js".to_string(), code)
-                    .await
-                    .map_err(|e| (i, e))
-            });
-            tasks.push(task);
+        let actions_dir = std::path::Path::new("dist/server/actions");
+        if !actions_dir.exists() {
+            debug!("No server actions directory found at dist/server/actions");
+            return Ok(());
         }
 
-        let results = future::join_all(tasks).await;
-        for result in results {
-            match result {
-                Ok(Ok(_)) => {}
-                Ok(Err((i, e))) => {
-                    warn!("Failed to warm up renderer {}: {}", i, e);
-                }
-                Err(e) => {
-                    warn!("Task panicked during warmup: {}", e);
+        let mut loaded_count = 0;
+        Self::load_server_actions_from_dir(actions_dir, actions_dir, renderer, &mut loaded_count)
+            .await?;
+
+        info!("Loaded {} production server actions", loaded_count);
+        Ok(())
+    }
+
+    fn load_server_actions_from_dir<'a>(
+        dir: &'a std::path::Path,
+        base_dir: &'a std::path::Path,
+        renderer: &'a mut RscRenderer,
+        loaded_count: &'a mut usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
+        Box::pin(async move {
+            let entries = std::fs::read_dir(dir).map_err(|e| {
+                RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
+            })?;
+
+            for entry in entries {
+                let entry = entry
+                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    Self::load_server_actions_from_dir(&path, base_dir, renderer, loaded_count)
+                        .await?;
+                } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
+                    let action_code = std::fs::read_to_string(&path)
+                        .map_err(|e| RariError::io(format!("Failed to read action file: {e}")))?;
+
+                    let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
+                    let action_id = relative_path
+                        .to_str()
+                        .unwrap_or("unknown")
+                        .replace(".js", "")
+                        .replace('\\', "/");
+
+                    debug!("Loading production server action: {}", action_id);
+
+                    let cleaned_code = strip_module_syntax(&action_code);
+                    let wrapped_code = wrap_server_action_module(&cleaned_code, &action_id);
+
+                    match renderer
+                        .runtime
+                        .execute_script(
+                            format!("load_action_{}.js", action_id.replace('/', "_")),
+                            wrapped_code,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            debug!("Successfully loaded production server action: {}", action_id);
+                            *loaded_count += 1;
+                        }
+                        Err(e) => {
+                            error!("Failed to load production server action {}: {}", action_id, e);
+                        }
+                    }
                 }
             }
-        }
 
-        info!("Renderer pool warmup completed");
-        Ok(())
+            Ok(())
+        })
     }
 
     async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
@@ -772,7 +723,6 @@ impl Server {
             .map_err(|e| RariError::internal(format!("Failed to register component: {e}")))
     }
 
-    #[allow(dead_code)]
     async fn load_server_actions_from_source(renderer: &mut RscRenderer) -> Result<(), RariError> {
         info!("Loading server actions from source");
 
@@ -786,29 +736,6 @@ impl Server {
         Self::scan_for_server_actions(src_dir, renderer, &mut loaded_count).await?;
 
         info!("Loaded {} server action files", loaded_count);
-        Ok(())
-    }
-
-    async fn load_server_actions_from_source_to_pool(
-        renderer_pool: &crate::rsc::RendererPool,
-    ) -> Result<(), RariError> {
-        info!("Loading server actions from source to renderer pool");
-
-        let src_dir = std::path::Path::new("src");
-        if !src_dir.exists() {
-            debug!("No src directory found, skipping server action loading");
-            return Ok(());
-        }
-
-        let first_renderer =
-            renderer_pool.get(0).ok_or_else(|| RariError::internal("Renderer pool is empty"))?;
-
-        let mut renderer = first_renderer.lock().await;
-        let mut loaded_count = 0;
-        Self::scan_for_server_actions(src_dir, &mut renderer, &mut loaded_count).await?;
-        drop(renderer);
-
-        info!("Loaded {} server action files to pool", loaded_count);
         Ok(())
     }
 
@@ -862,6 +789,8 @@ impl Server {
                             match std::fs::read_to_string(&dist_path) {
                                 Ok(dist_code) => {
                                     let cleaned_code = strip_module_syntax(&dist_code);
+                                    let wrapped_code =
+                                        wrap_server_action_module(&cleaned_code, &action_id);
                                     match renderer
                                         .runtime
                                         .execute_script(
@@ -869,7 +798,7 @@ impl Server {
                                                 "load_action_{}.js",
                                                 action_id.replace('/', "_")
                                             ),
-                                            cleaned_code,
+                                            wrapped_code,
                                         )
                                         .await
                                     {
@@ -906,7 +835,6 @@ impl Server {
         })
     }
 
-    #[allow(dead_code)]
     async fn load_app_router_components(
         renderer: &mut RscRenderer,
         _config: &Config,
@@ -932,146 +860,6 @@ impl Server {
         .await?;
 
         info!("Loaded {} app router components", loaded_count);
-        Ok(())
-    }
-
-    async fn load_app_router_components_to_pool(
-        renderer_pool: &crate::rsc::RendererPool,
-        _config: &Config,
-    ) -> Result<(), RariError> {
-        info!("Loading app router components to renderer pool");
-
-        let server_dir = std::path::Path::new(DIST_DIR).join("server");
-        if !server_dir.exists() {
-            debug!(
-                "No server directory found at {}, skipping app router component loading",
-                server_dir.display()
-            );
-            return Ok(());
-        }
-
-        let mut components_to_load = Vec::new();
-        Self::collect_server_components(&server_dir, &server_dir, &mut components_to_load)?;
-
-        info!(
-            "Found {} component files to load on all {} renderers",
-            components_to_load.len(),
-            renderer_pool.size()
-        );
-
-        let pool_size = renderer_pool.size();
-        let mut tasks = Vec::new();
-
-        for i in 0..pool_size {
-            let renderer_arc = renderer_pool
-                .get(i)
-                .ok_or_else(|| RariError::internal(format!("Renderer {} not found in pool", i)))?;
-
-            let components = components_to_load.clone();
-
-            let task = tokio::spawn(async move {
-                let renderer = renderer_arc.lock().await;
-                let mut loaded = 0;
-
-                for (component_id, component_code) in components {
-                    match renderer
-                        .runtime
-                        .execute_script(
-                            format!("load_{}.js", component_id.replace('/', "_")),
-                            component_code,
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            loaded += 1;
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "Failed to execute component {} on renderer {}: {}",
-                                component_id,
-                                i,
-                                e
-                            );
-                        }
-                    }
-                }
-
-                (i, loaded)
-            });
-
-            tasks.push(task);
-        }
-
-        let results = futures::future::join_all(tasks).await;
-
-        let mut total_loaded = 0;
-        for result in results {
-            match result {
-                Ok((renderer_id, loaded_count)) => {
-                    debug!("Renderer {} loaded {} components", renderer_id, loaded_count);
-                    if renderer_id == 0 {
-                        total_loaded = loaded_count;
-                    }
-                }
-                Err(e) => {
-                    error!("Task panicked while loading components: {}", e);
-                }
-            }
-        }
-
-        info!(
-            "Successfully loaded {} app router components on all {} renderers in parallel",
-            total_loaded, pool_size
-        );
-        Ok(())
-    }
-
-    fn collect_server_components(
-        dir: &std::path::Path,
-        base_dir: &std::path::Path,
-        components: &mut Vec<(String, String)>,
-    ) -> Result<(), RariError> {
-        let entries = std::fs::read_dir(dir).map_err(|e| {
-            RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
-        })?;
-
-        for entry in entries {
-            let entry =
-                entry.map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                Self::collect_server_components(&path, base_dir, components)?;
-            } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
-                let component_code = std::fs::read_to_string(&path)
-                    .map_err(|e| RariError::io(format!("Failed to read component file: {e}")))?;
-
-                if has_use_server_directive(&component_code) {
-                    continue;
-                }
-
-                let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
-                let relative_str = relative_path
-                    .to_str()
-                    .unwrap_or("unknown")
-                    .replace(".js", "")
-                    .replace('\\', "/");
-
-                let component_id = if relative_str.starts_with("app/") {
-                    relative_str.clone()
-                } else {
-                    relative_path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("unknown")
-                        .to_string()
-                };
-
-                debug!("Collected component: {} from {:?}", component_id, path);
-                components.push((component_id, component_code));
-            }
-        }
-
         Ok(())
     }
 
@@ -1110,11 +898,12 @@ impl Server {
                         debug!("Loading server action file: {} from {:?}", relative_str, path);
 
                         let cleaned_code = strip_module_syntax(&component_code);
+                        let wrapped_code = wrap_server_action_module(&cleaned_code, &relative_str);
                         match renderer
                             .runtime
                             .execute_script(
                                 format!("load_{}.js", relative_str.replace('/', "_")),
-                                cleaned_code,
+                                wrapped_code,
                             )
                             .await
                         {
@@ -1290,8 +1079,7 @@ async fn stream_component(
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let stream_result = {
-        let renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let renderer = state.renderer.lock().await;
         renderer.render_with_streaming(&request.component_id, props_str.as_deref()).await
     };
 
@@ -1343,10 +1131,8 @@ async fn register_component(
     }
 
     let result = {
-        state
-            .renderer_pool
-            .register_component_on_all(&request.component_id, &request.component_code)
-            .await
+        let mut renderer = state.renderer.lock().await;
+        renderer.register_component(&request.component_id, &request.component_code).await
     };
 
     match result {
@@ -1357,11 +1143,7 @@ async fn register_component(
                 info!("Successfully registered component: {}", request.component_id);
             }
 
-            let renderer = state
-                .renderer_pool
-                .acquire()
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let renderer = state.renderer.lock().await;
             let is_client =
                 renderer.serializer.lock().is_client_component_registered(&request.component_id);
 
@@ -1512,6 +1294,33 @@ fn strip_module_syntax(code: &str) -> String {
     result
 }
 
+fn wrap_server_action_module(code: &str, module_id: &str) -> String {
+    if code.contains("Self-registering Production Component") {
+        debug!(
+            "Server action {} already has self-registration wrapper, skipping additional wrap",
+            module_id
+        );
+        return code.to_string();
+    }
+
+    let module_key = format!("__module_loaded_{}", module_id.replace(['/', '-'], "_"));
+
+    format!(
+        r#"
+if (!globalThis.{module_key}) {{
+    console.log('[Rari] Loading server action module: {module_id}');
+    globalThis.{module_key} = true;
+    {code}
+}} else {{
+    console.log('[Rari] Server action module already loaded, skipping: {module_id}');
+}}
+"#,
+        module_key = module_key,
+        module_id = module_id,
+        code = code
+    )
+}
+
 #[axum::debug_handler]
 async fn register_client_component(
     State(state): State<ServerState>,
@@ -1523,8 +1332,7 @@ async fn register_client_component(
     );
 
     {
-        let renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let renderer = state.renderer.lock().await;
         renderer.register_client_component(
             &request.component_id,
             &request.file_path,
@@ -1602,18 +1410,15 @@ async fn reload_component_from_dist(
     debug!("Read {} bytes from dist file", dist_code.len());
 
     let cleaned_code = strip_module_syntax(&dist_code);
+    let wrapped_code = wrap_server_action_module(&cleaned_code, component_id);
 
-    let renderer = state
-        .renderer_pool
-        .acquire()
-        .await
-        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+    let renderer = state.renderer.lock().await;
 
     let execution_result = renderer
         .runtime
         .execute_script(
             format!("hmr_reload_{}.js", component_id.replace('/', "_")),
-            cleaned_code.clone(),
+            wrapped_code.clone(),
         )
         .await;
 
@@ -1794,8 +1599,7 @@ async fn hmr_register_component(
     let path = std::path::Path::new(&file_path);
 
     {
-        let renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let renderer = state.renderer.lock().await;
         let mut registry = renderer.component_registry.lock();
         registry.mark_module_stale(&component_id);
         debug!("Marked component {} as stale", component_id);
@@ -1941,19 +1745,15 @@ async fn immediate_component_reregistration(
     );
 
     {
-        for i in 0..state.renderer_pool.size() {
-            if let Some(renderer_arc) = state.renderer_pool.get(i) {
-                let mut renderer = renderer_arc.lock().await;
-                renderer.clear_script_cache();
+        let mut renderer = state.renderer.lock().await;
+        renderer.clear_script_cache();
 
-                if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                    warn!(
-                        component_name = component_name,
-                        error = %e,
-                        "Failed to clear component module cache, continuing anyway"
-                    );
-                }
-            }
+        if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+            warn!(
+                component_name = component_name,
+                error = %e,
+                "Failed to clear component module cache, continuing anyway"
+            );
         }
     }
 
@@ -1973,7 +1773,7 @@ async fn immediate_component_reregistration(
 
     {
         if let Err(e) =
-            state.renderer_pool.register_component_on_all(component_name, &content).await
+            state.renderer.lock().await.register_component(component_name, &content).await
         {
             error!(
                 component_name = component_name,
@@ -1984,24 +1784,20 @@ async fn immediate_component_reregistration(
         } else {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-            for i in 0..state.renderer_pool.size() {
-                if let Some(renderer_arc) = state.renderer_pool.get(i) {
-                    let mut renderer = renderer_arc.lock().await;
-
-                    if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                        warn!(
-                            component_name = component_name,
-                            error = %e,
-                            "Failed to clear component module cache after initial registration"
-                        );
-                    }
-                }
+            let mut renderer = state.renderer.lock().await;
+            if let Err(e) = renderer.clear_component_module_cache(component_name).await {
+                warn!(
+                    component_name = component_name,
+                    error = %e,
+                    "Failed to clear component module cache after initial registration"
+                );
             }
+            drop(renderer);
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             if let Err(e) =
-                state.renderer_pool.register_component_on_all(component_name, &content).await
+                state.renderer.lock().await.register_component(component_name, &content).await
             {
                 error!(
                     component_name = component_name,
@@ -2015,11 +1811,7 @@ async fn immediate_component_reregistration(
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-            let renderer_arc = match state.renderer_pool.get(0) {
-                Some(r) => r,
-                None => return Err("Renderer pool is empty".into()),
-            };
-            let renderer = renderer_arc.lock().await;
+            let renderer = state.renderer.lock().await;
 
             let verification_attempts = 3;
             for attempt in 1..=verification_attempts {
@@ -2109,13 +1901,7 @@ async fn immediate_component_reregistration(
 #[axum::debug_handler]
 async fn list_components(State(state): State<ServerState>) -> Json<Value> {
     let components = {
-        let renderer = match state.renderer_pool.acquire().await {
-            Ok(r) => r,
-            Err(_) => {
-                #[allow(clippy::disallowed_methods)]
-                return Json(serde_json::json!({"error": "Failed to acquire renderer"}));
-            }
-        };
+        let renderer = state.renderer.lock().await;
         renderer.list_components()
     };
 
@@ -2162,8 +1948,7 @@ async fn rsc_render_handler(
     let props_str = props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let result = {
-        let mut renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut renderer = state.renderer.lock().await;
         renderer.render_to_rsc_format(&component_id, props_str.as_deref()).await
     };
 
@@ -2203,19 +1988,7 @@ async fn server_status(State(state): State<ServerState>) -> Json<StatusResponse>
     let uptime = state.start_time.elapsed().as_secs();
     let request_count = state.request_count.load(std::sync::atomic::Ordering::Relaxed);
     let components = {
-        let renderer = match state.renderer_pool.acquire().await {
-            Ok(r) => r,
-            Err(_) => {
-                return Json(StatusResponse {
-                    status: "degraded".to_string(),
-                    mode: state.config.mode.to_string(),
-                    uptime_seconds: uptime,
-                    request_count,
-                    components_registered: 0,
-                    memory_usage: get_memory_usage(),
-                });
-            }
-        };
+        let renderer = state.renderer.lock().await;
         renderer.list_components()
     };
 
@@ -2261,16 +2034,7 @@ async fn hmr_invalidate_component(
     info!("HMR invalidate request for component: {}", payload.component_id);
 
     let result = {
-        let renderer = match state.renderer_pool.acquire().await {
-            Ok(r) => r,
-            Err(_) => {
-                #[allow(clippy::disallowed_methods)]
-                return Json(serde_json::json!({
-                    "success": false,
-                    "error": "Failed to acquire renderer"
-                }));
-            }
-        };
+        let renderer = state.renderer.lock().await;
 
         {
             let mut registry = renderer.component_registry.lock();
@@ -2461,7 +2225,12 @@ async fn hmr_reload_component(
     debug!("Fetched {} bytes of transpiled code", transpiled_code.len());
 
     let result = {
-        state.renderer_pool.register_component_on_all(&payload.component_id, &transpiled_code).await
+        state
+            .renderer
+            .lock()
+            .await
+            .register_component(&payload.component_id, &transpiled_code)
+            .await
     };
 
     match result {
@@ -2500,8 +2269,7 @@ async fn reload_component(
     let bundle_full_path = project_root.join(&payload.bundle_path);
 
     let invalidate_result = {
-        let renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let renderer = state.renderer.lock().await;
         renderer.runtime.invalidate_component(&payload.component_id).await
     };
 
@@ -2510,8 +2278,7 @@ async fn reload_component(
     }
 
     let load_result = {
-        let renderer =
-            state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let renderer = state.renderer.lock().await;
         renderer.runtime.load_component(&payload.component_id, &bundle_full_path).await
     };
 
@@ -2853,7 +2620,7 @@ async fn handle_app_route(
         request_headers,
     );
 
-    let layout_renderer = LayoutRenderer::new_with_pool(state.renderer_pool.clone());
+    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
     match render_mode {
         RenderMode::RscNavigation => {
@@ -2887,6 +2654,8 @@ async fn handle_app_route(
         RenderMode::Ssr => {
             debug!("Rendering HTML for SSR (initial page load) using direct HTML path");
 
+            let should_skip_cache = path.contains("/actions") || path.contains("/interactive");
+
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
@@ -2898,19 +2667,18 @@ async fn handle_app_route(
 
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
 
-            if let Some(cached) = state.response_cache.get(&cache_key).await {
+            if !should_skip_cache && let Some(cached) = state.response_cache.get(&cache_key).await {
                 debug!("Cache hit for route: {}", path);
 
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
+                    && cached_etag == client_etag
                 {
-                    if cached_etag == client_etag {
-                        debug!("ETag match, returning 304 Not Modified");
-                        return Ok(Response::builder()
-                            .status(StatusCode::NOT_MODIFIED)
-                            .header("etag", cached_etag)
-                            .body(Body::empty())
-                            .expect("Valid 304 response"));
-                    }
+                    debug!("ETag match, returning 304 Not Modified");
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header("etag", cached_etag)
+                        .body(Body::empty())
+                        .expect("Valid 304 response"));
                 }
 
                 let mut response_builder = Response::builder()
@@ -2996,10 +2764,9 @@ async fn handle_app_route(
 
                     if let Ok(header_name) =
                         axum::http::HeaderName::from_bytes(header_name.as_bytes())
+                        && let Ok(header_value) = axum::http::HeaderValue::from_str(value)
                     {
-                        if let Ok(header_value) = axum::http::HeaderValue::from_str(value) {
-                            response_headers.insert(header_name, header_value);
-                        }
+                        response_headers.insert(header_name, header_value);
                     }
                 }
             }
@@ -3007,9 +2774,16 @@ async fn handle_app_route(
             let cache_policy = if let Some(cc) = cache_control_value.as_deref() {
                 response_cache::RouteCachePolicy::from_cache_control(cc, path)
             } else {
-                let mut policy = response_cache::RouteCachePolicy::default();
-                policy.ttl = state.response_cache.config.default_ttl;
+                let mut policy = response_cache::RouteCachePolicy {
+                    ttl: state.response_cache.config.default_ttl,
+                    ..Default::default()
+                };
                 policy.tags.push(path.to_string());
+
+                if path.contains("/actions") || path.contains("/interactive") {
+                    policy.enabled = false;
+                }
+
                 policy
             };
 
@@ -3407,7 +3181,6 @@ mod tests {
         let partial = r#"<html><head><title>Test</title></head></html>"#;
         assert!(!is_complete_html_document(partial));
 
-        // Test with whitespace
         let with_whitespace = r#"
         <!DOCTYPE html>
 <html>

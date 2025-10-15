@@ -38,17 +38,13 @@ impl HtmlCache {
 }
 
 pub struct LayoutRenderer {
-    renderer_pool: Arc<crate::rsc::RendererPool>,
+    renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
     html_cache: Arc<HtmlCache>,
 }
 
 impl LayoutRenderer {
-    pub fn new(_renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
-        panic!("LayoutRenderer::new is deprecated, use new_with_pool instead");
-    }
-
-    pub fn new_with_pool(renderer_pool: Arc<crate::rsc::RendererPool>) -> Self {
-        Self { renderer_pool, html_cache: Arc::new(HtmlCache::new()) }
+    pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
+        Self { renderer, html_cache: Arc::new(HtmlCache::new()) }
     }
 
     fn generate_cache_key(
@@ -100,13 +96,13 @@ impl LayoutRenderer {
         debug!("Executing composition script to render composed component tree");
 
         let acquire_timer = TimingScope::new();
-        let renderer = self.renderer_pool.acquire().await?;
+        let renderer = self.renderer.lock().await;
         let acquire_time = acquire_timer.elapsed_ms();
 
-        if let Some(ref ctx) = _request_context {
-            if let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await {
-                tracing::warn!("Failed to set request context in runtime: {}", e);
-            }
+        if let Some(ref ctx) = _request_context
+            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
+        {
+            tracing::warn!("Failed to set request context in runtime: {}", e);
         }
 
         let execute_timer = TimingScope::new();
@@ -269,7 +265,10 @@ impl LayoutRenderer {
 
         let cache_key = self.generate_cache_key(route_match, context);
 
-        if let Some(cached_html) = self.html_cache.get(cache_key) {
+        let should_skip_cache = route_match.route.path.contains("/actions")
+            || route_match.route.path.contains("/interactive");
+
+        if !should_skip_cache && let Some(cached_html) = self.html_cache.get(cache_key) {
             debug!("Cache HIT for route {} (key: {})", route_match.route.path, cache_key);
             return Ok(cached_html);
         }
@@ -299,13 +298,13 @@ impl LayoutRenderer {
         let prep_time = prep_timer.elapsed_ms();
 
         let acquire_timer = TimingScope::new();
-        let renderer = self.renderer_pool.acquire().await?;
+        let renderer = self.renderer.lock().await;
         let acquire_time = acquire_timer.elapsed_ms();
 
-        if let Some(ref ctx) = _request_context {
-            if let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await {
-                tracing::warn!("Failed to set request context in runtime: {}", e);
-            }
+        if let Some(ref ctx) = _request_context
+            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
+        {
+            tracing::warn!("Failed to set request context in runtime: {}", e);
         }
 
         debug!("Calling renderRouteToHtmlDirect...");
@@ -367,7 +366,9 @@ impl LayoutRenderer {
         HtmlDiagnostics::log_html_snippet(&html, "After renderRouteToHtmlDirect", 300);
         HtmlDiagnostics::check_root_element(&html, "After renderRouteToHtmlDirect");
 
-        self.html_cache.insert(cache_key, html.clone());
+        if !should_skip_cache {
+            self.html_cache.insert(cache_key, html.clone());
+        }
 
         Ok(html)
     }
@@ -989,7 +990,7 @@ impl LayoutRenderer {
 
         debug!("Rendering loading component: {}", component_id);
 
-        let mut renderer = self.renderer_pool.acquire().await?;
+        let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 
@@ -1013,7 +1014,7 @@ impl LayoutRenderer {
 
         debug!("Rendering error component: {} with error: {}", component_id, error);
 
-        let mut renderer = self.renderer_pool.acquire().await?;
+        let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, Some(&props_json)).await
     }
 
@@ -1026,15 +1027,12 @@ impl LayoutRenderer {
 
         debug!("Rendering not-found component: {}", component_id);
 
-        let mut renderer = self.renderer_pool.acquire().await?;
+        let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
     }
 
     pub async fn component_exists(&self, component_id: &str) -> bool {
-        let renderer = match self.renderer_pool.acquire().await {
-            Ok(r) => r,
-            Err(_) => return false,
-        };
+        let renderer = self.renderer.lock().await;
         renderer.component_exists(component_id)
     }
 
@@ -1043,7 +1041,7 @@ impl LayoutRenderer {
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        self.renderer_pool.register_component_on_all(component_id, component_code).await
+        self.renderer.lock().await.register_component(component_id, component_code).await
     }
 }
 

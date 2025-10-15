@@ -852,8 +852,7 @@ export class ServerComponentBuilder {
     const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
 
 if (!globalThis["${componentId}"]) {
-    (function() {
-        ${transformedCode}
+    ${transformedCode}
 
         try {
             const moduleKey = "${componentId}";
@@ -910,7 +909,6 @@ if (!globalThis["${componentId}"]) {
         } catch (error) {
             console.error('Error in self-registration for ${componentId}:', error);
         }
-    })();
 }`
 
     return selfRegisteringCode

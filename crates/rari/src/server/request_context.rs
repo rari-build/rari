@@ -15,10 +15,12 @@ pub struct CachedFetchResult {
     pub headers: HeaderMap,
     pub cached_at: Instant,
 }
+type InFlightFetches =
+    Arc<DashMap<String, Arc<Mutex<Option<Result<CachedFetchResult, RariError>>>>>>;
+
 pub struct RequestContext {
     fetch_cache: Arc<DashMap<String, CachedFetchResult>>,
-    in_flight_fetches:
-        Arc<DashMap<String, Arc<Mutex<Option<Result<CachedFetchResult, RariError>>>>>>,
+    in_flight_fetches: InFlightFetches,
     request_id: String,
     start_time: Instant,
     route_path: String,

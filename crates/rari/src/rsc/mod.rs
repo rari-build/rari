@@ -4,7 +4,6 @@ pub mod js_loader;
 pub mod jsx_transform;
 pub mod layout_renderer;
 pub mod renderer;
-pub mod renderer_pool;
 pub mod rsc_tree;
 pub mod serializer;
 pub mod ssr_metrics;
@@ -32,7 +31,6 @@ pub use direct_html_renderer::{CacheStatistics, DirectHtmlRenderer, DirectRender
 pub use js_loader::RscJsLoader;
 pub use jsx_transform::{extract_dependencies, transform_jsx};
 pub use renderer::RscRenderer;
-pub use renderer_pool::{PoolStats, RendererPool};
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
 pub use ssr_metrics::{SsrTiming, TimingScope};

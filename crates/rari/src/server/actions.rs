@@ -3,7 +3,7 @@ use crate::server::ServerState;
 use axum::{
     body::Bytes,
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
 };
 use rustc_hash::FxHashMap;
@@ -37,22 +37,26 @@ pub async fn handle_server_action(
         Ok(req) => req,
         Err(e) => {
             error!("Failed to parse server action request: {}", e);
-            return Ok(Json(ServerActionResponse {
+            let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
                 error: Some("Invalid request format".to_string()),
                 redirect: None,
             })
-            .into_response());
+            .into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                "no-store, no-cache, must-revalidate, private"
+                    .parse()
+                    .expect("Valid cache-control header"),
+            );
+            return Ok(response);
         }
     };
 
     debug!("Executing server action: {} (export: {})", request.id, request.export_name);
 
-    let renderer = match state.renderer_pool.acquire().await {
-        Ok(r) => r,
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    let renderer = state.renderer.lock().await;
     let result =
         renderer.execute_server_function(&request.id, &request.export_name, &request.args).await;
 
@@ -67,17 +71,31 @@ pub async fn handle_server_action(
 
             debug!("Sending response: {:?}", response);
 
-            Ok(Json(response).into_response())
+            let mut response = Json(response).into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                "no-store, no-cache, must-revalidate, private"
+                    .parse()
+                    .expect("Valid cache-control header"),
+            );
+            Ok(response)
         }
         Err(e) => {
             error!("Server action execution failed: {}", e);
-            Ok(Json(ServerActionResponse {
+            let mut response = Json(ServerActionResponse {
                 success: false,
                 result: None,
                 error: Some(e.to_string()),
                 redirect: None,
             })
-            .into_response())
+            .into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                "no-store, no-cache, must-revalidate, private"
+                    .parse()
+                    .expect("Valid cache-control header"),
+            );
+            Ok(response)
         }
     }
 }
@@ -104,8 +122,7 @@ pub async fn handle_form_action(
 
     debug!("Executing form action: {} (export: {})", action_id, export_name);
 
-    let renderer =
-        state.renderer_pool.acquire().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let renderer = state.renderer.lock().await;
     let result = renderer.execute_server_function(action_id, export_name, &args).await;
 
     match result {
@@ -114,6 +131,7 @@ pub async fn handle_form_action(
                 return Response::builder()
                     .status(StatusCode::SEE_OTHER)
                     .header("Location", redirect_url)
+                    .header("Cache-Control", "no-store, no-cache, must-revalidate")
                     .body("".into())
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
             }
@@ -123,6 +141,7 @@ pub async fn handle_form_action(
             Response::builder()
                 .status(StatusCode::SEE_OTHER)
                 .header("Location", redirect_url)
+                .header("Cache-Control", "no-store, no-cache, must-revalidate")
                 .body("".into())
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
         }

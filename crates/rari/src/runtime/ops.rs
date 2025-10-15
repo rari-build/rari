@@ -215,14 +215,9 @@ pub fn op_internal_log(#[string] message: &str) {
     error!("[RARI_INTERNAL_LOG] {message}");
 }
 
+#[derive(Default)]
 pub struct FetchOpState {
     pub request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
-}
-
-impl Default for FetchOpState {
-    fn default() -> Self {
-        Self { request_context: None }
-    }
 }
 
 #[allow(clippy::disallowed_methods)]
@@ -267,7 +262,7 @@ pub async fn op_fetch_with_cache(
     } else {
         match perform_simple_fetch(&url, &options).await {
             Ok((status, body)) => Ok(serde_json::json!({
-                "ok": status >= 200 && status < 300,
+                "ok": (200..300).contains(&status),
                 "status": status,
                 "body": body,
                 "cached": false
