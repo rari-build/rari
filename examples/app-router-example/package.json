@@ -16,9 +16,9 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.1",
-    "@types/react-dom": "^19.2.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "@typescript/native-preview": "7.0.0-dev.20251006.1",
-    "rolldown-vite": "^7.1.15"
+    "rolldown-vite": "^7.1.17"
   }
 }

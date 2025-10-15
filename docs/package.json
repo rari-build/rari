@@ -25,13 +25,13 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^24.7.0",
-    "@types/react": "^19.2.1",
-    "@types/react-dom": "^19.2.0",
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "@typescript/native-preview": "7.0.0-dev.20250923.1",
     "eslint": "^9.37.0",
-    "oxlint": "^1.20.0",
+    "oxlint": "^1.23.0",
     "tailwindcss": "^4.1.14",
-    "vite": "^7.1.9"
+    "vite": "^7.1.10"
   }
 }
