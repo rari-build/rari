@@ -853,14 +853,14 @@ if (!globalThis["${componentId}"]) {
             let mainExport = null;
             let exportedFunctions = {};
 
-            globalThis.__rsc_functions = globalThis.__rsc_functions || {};
+            globalThis.__server_functions = globalThis.__server_functions || {};
 
         ${namedExports
           .map(
             name => `
         if (typeof ${name} !== 'undefined') {
             globalThis.${name} = ${name};
-            globalThis.__rsc_functions['${name}'] = ${name};
+            globalThis.__server_functions['${name}'] = ${name};
             exportedFunctions['${name}'] = ${name};
         }`,
           )

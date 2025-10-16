@@ -60,7 +60,7 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
 
     if jsx_code.contains("// Self-registering Production Component:")
         || jsx_code.contains("// Self-registering Non-JSX Module:")
-        || (jsx_code.contains("globalThis.__rsc_functions")
+        || (jsx_code.contains("globalThis.__server_functions")
             && jsx_code.contains("globalThis.__rari_manual_register"))
     {
         return Ok(jsx_code.to_string());
@@ -363,19 +363,19 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
             globalThis[registrationKey] = mainExport;
         }}
 
-        globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+        globalThis.__server_functions = globalThis.__server_functions || {{}};
 
         if (typeof mainExport === 'object') {{
             for (const exportName in mainExport) {{
                 if (typeof mainExport[exportName] === 'function') {{
-                    globalThis.__rsc_functions[exportName] = mainExport[exportName];
+                    globalThis.__server_functions[exportName] = mainExport[exportName];
                 }}
             }}
         }}
         else if (typeof mainExport === 'function') {{
             const fnName = mainExport.name || `fn_${component_id}`;
 
-            globalThis.__rsc_functions[fnName] = mainExport;
+            globalThis.__server_functions[fnName] = mainExport;
         }}
   }} else {{
     }}
@@ -396,8 +396,8 @@ export function __rari_register() {{ /* Compatibility stub */ return true; }}
 
 export const __registry_proxy = new Proxy({{}}, {{
   get: function(target, prop) {{
-    if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions[prop] === 'function') {{
-      return globalThis.__rsc_functions[prop];
+    if (globalThis.__server_functions && typeof globalThis.__server_functions[prop] === 'function') {{
+      return globalThis.__server_functions[prop];
     }}
     if (typeof globalThis[prop] === 'function') {{
       return globalThis[prop];
@@ -610,8 +610,8 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
                         if (typeof {name} !== 'undefined') {{
                 globalThis.{name} = {name};
 
-                globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
-                globalThis.__rsc_functions['{name}'] = {name};
+                globalThis.__server_functions = globalThis.__server_functions || {{}};
+                globalThis.__server_functions['{name}'] = {name};
 
                 registeredAny = true;
             }}"
@@ -635,7 +635,7 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
         let mainExport = null;
         let exportedFunctions = {{}};
 
-        globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+        globalThis.__server_functions = globalThis.__server_functions || {{}};
 
         {exported_names_server_fn_register}
 
@@ -662,19 +662,19 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
             globalThis[registrationKey] = mainExport;
         }}
 
-        globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+        globalThis.__server_functions = globalThis.__server_functions || {{}};
 
         if (typeof mainExport === 'object') {{
             for (const exportName in mainExport) {{
                 if (typeof mainExport[exportName] === 'function') {{
-                    globalThis.__rsc_functions[exportName] = mainExport[exportName];
+                    globalThis.__server_functions[exportName] = mainExport[exportName];
                 }}
             }}
         }}
         else if (typeof mainExport === 'function') {{
             const fnName = mainExport.name || `fn_\${module_id}`;
 
-            globalThis.__rsc_functions[fnName] = mainExport;
+            globalThis.__server_functions[fnName] = mainExport;
         }}
     }} else {{
         if (Object.keys(exportedFunctions).length > 0) {{
@@ -690,13 +690,13 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
         }}
 }}
 
-    globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+    globalThis.__server_functions = globalThis.__server_functions || {{}};
 
     for (const key in globalThis) {{
         if (typeof globalThis[key] === 'function' &&
             !key.startsWith('__')) {{
 
-            globalThis.__rsc_functions[key] = globalThis[key];
+            globalThis.__server_functions[key] = globalThis[key];
         }}
     }}
 
@@ -714,32 +714,32 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
         for (const key in globalThis) {{
             if (typeof globalThis[key] === 'function' &&
                 !key.startsWith('__') &&
-                key !== '__rsc_functions') {{
+                key !== '__server_functions') {{
 
-                globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
-                globalThis.__rsc_functions[key] = globalThis[key];
+                globalThis.__server_functions = globalThis.__server_functions || {{}};
+                globalThis.__server_functions[key] = globalThis[key];
 
                 registeredAnyFunction = true;
             }}
         }}
 
-        const hasRscFunctions = globalThis.__rsc_functions && Object.keys(globalThis.__rsc_functions).length > 0;
+        const hasRscFunctions = globalThis.__server_functions && Object.keys(globalThis.__server_functions).length > 0;
 
         if (hasRscFunctions) {{
-            globalThis[moduleKey] = globalThis.__rsc_functions;
-            globalThis[registrationKey] = globalThis.__rsc_functions;
+            globalThis[moduleKey] = globalThis.__server_functions;
+            globalThis[registrationKey] = globalThis.__server_functions;
             return true;
         }}
 
         return false;
     }};
     }} catch (error) {{
-        globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
+        globalThis.__server_functions = globalThis.__server_functions || {{}};
         globalThis.__rsc_modules = globalThis.__rsc_modules || {{}};
 
         for (const key in globalThis) {{
             if (typeof globalThis[key] === 'function' && !key.startsWith('__')) {{
-                globalThis.__rsc_functions[key] = globalThis[key];
+                globalThis.__server_functions[key] = globalThis[key];
             }}
         }}
     }}
@@ -758,8 +758,8 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
                 r#"        // Register individual function: {name}
         if (typeof {name} === 'function') {{
             // Register in generic registry
-            globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
-            globalThis.__rsc_functions['{name}'] = {name};
+            globalThis.__server_functions = globalThis.__server_functions || {{}};
+            globalThis.__server_functions['{name}'] = {name};
 
         }} else {{
         }}"#
@@ -820,7 +820,7 @@ mod tests {
 
         assert!(js_code.contains("_jsx") || js_code.contains("React.createElement"));
 
-        assert!(js_code.contains("__rsc_modules") || js_code.contains("__rsc_functions"));
+        assert!(js_code.contains("__rsc_modules") || js_code.contains("__server_functions"));
     }
 
     #[test]
@@ -857,7 +857,7 @@ mod tests {
 
         assert!(
             js_code.contains("globalThis.__rsc_modules")
-                || js_code.contains("__rsc_functions")
+                || js_code.contains("__server_functions")
                 || js_code.contains("__registry_proxy")
         );
     }

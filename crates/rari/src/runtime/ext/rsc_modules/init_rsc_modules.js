@@ -3,20 +3,16 @@
     globalThis.__rsc_modules = {}
   }
 
-  if (!globalThis.__rsc_exported_functions) {
-    globalThis.__rsc_exported_functions = {}
+  if (!globalThis.__exported_server_functions) {
+    globalThis.__exported_server_functions = {}
   }
 
-  if (!globalThis.__rsc_functions) {
-    globalThis.__rsc_functions = {}
+  if (!globalThis.__server_functions) {
+    globalThis.__server_functions = {}
   }
 
-  if (!globalThis.__rsc_resolved_promises) {
-    globalThis.__rsc_resolved_promises = new Map()
-  }
-
-  if (!globalThis.__rsc_registered_functions) {
-    globalThis.__rsc_registered_functions = new Set()
+  if (!globalThis.__registered_server_functions) {
+    globalThis.__registered_server_functions = new Set()
   }
 
   globalThis.registerModule = function (
@@ -50,14 +46,10 @@
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        globalThis.__rsc_functions[key] = module[key]
-        globalThis.__rsc_exported_functions[key] = module[key]
+        globalThis.__server_functions[key] = module[key]
+        globalThis.__exported_server_functions[key] = module[key]
         exportCount++
       }
-    }
-
-    if (exportCount > 0) {
-      globalThis.wrapServerFunctions()
     }
 
     return { success: true, exportCount }
@@ -80,17 +72,17 @@
 
   globalThis.getServerFunction = function (name) {
     if (
-      globalThis.__rsc_exported_functions
-      && typeof globalThis.__rsc_exported_functions[name] === 'function'
+      globalThis.__exported_server_functions
+      && typeof globalThis.__exported_server_functions[name] === 'function'
     ) {
-      return globalThis.__rsc_exported_functions[name]
+      return globalThis.__exported_server_functions[name]
     }
 
     if (
-      globalThis.__rsc_functions
-      && typeof globalThis.__rsc_functions[name] === 'function'
+      globalThis.__server_functions
+      && typeof globalThis.__server_functions[name] === 'function'
     ) {
-      return globalThis.__rsc_functions[name]
+      return globalThis.__server_functions[name]
     }
 
     return undefined
@@ -117,21 +109,6 @@
           `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
         return cachedPromise
       }
-    }
-
-    if (
-      globalThis.__rsc_resolved_promises
-      && globalThis.__rsc_resolved_promises.has(cacheKey)
-    ) {
-      const cachedValue = globalThis.__rsc_resolved_promises.get(cacheKey)
-      const cachedPromise = Promise.resolve(cachedValue)
-      cachedPromise.__rsc_function_name = functionName
-      cachedPromise.__rsc_function_args = args
-      cachedPromise.__rsc_cache_key = cacheKey
-      cachedPromise.__rsc_promise_id = promiseId
-      cachedPromise.toString = () =>
-        `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
-      return cachedPromise
     }
 
     const serverFunction = globalThis.getServerFunction(functionName)
@@ -170,11 +147,6 @@
         ) {
           globalThis.PromiseManager.registerFunction(functionName, args, value)
         }
-
-        if (!globalThis.__rsc_resolved_promises) {
-          globalThis.__rsc_resolved_promises = new Map()
-        }
-        globalThis.__rsc_resolved_promises.set(cacheKey, value)
         return value
       },
       (error) => {
@@ -183,40 +155,6 @@
     )
 
     return promise
-  }
-
-  globalThis.wrapServerFunctions = function () {
-    const functionsToWrap = []
-
-    if (globalThis.__rsc_functions) {
-      for (const [name, fn] of Object.entries(globalThis.__rsc_functions)) {
-        if (typeof fn === 'function' && !fn.__rsc_wrapped) {
-          functionsToWrap.push([name, fn, '__rsc_functions'])
-        }
-      }
-    }
-
-    if (globalThis.__rsc_exported_functions) {
-      for (const [name, fn] of Object.entries(
-        globalThis.__rsc_exported_functions,
-      )) {
-        if (typeof fn === 'function' && !fn.__rsc_wrapped) {
-          functionsToWrap.push([name, fn, '__rsc_exported_functions'])
-        }
-      }
-    }
-
-    for (const [name, originalFunction, registry] of functionsToWrap) {
-      const wrappedFunction = function (...args) {
-        return globalThis.createServerFunctionPromise(name, args)
-      }
-
-      wrappedFunction.__rsc_wrapped = true
-      wrappedFunction.__rsc_original = originalFunction
-      wrappedFunction.__rsc_function_name = name
-
-      globalThis[registry][name] = wrappedFunction
-    }
   }
 
   globalThis.createDependencyStub = function (moduleName, originalPath) {
@@ -244,8 +182,8 @@ if (typeof globalThis.registerModule === 'function') {
 }
 
 // Initialize registries if they don't exist
-if (typeof globalThis.__rsc_functions === 'undefined') {
-    globalThis.__rsc_functions = {};
+if (typeof globalThis.__server_functions === 'undefined') {
+    globalThis.__server_functions = {};
 }
 
 if (typeof globalThis.__rsc_modules === 'undefined') {
@@ -304,8 +242,8 @@ export function __rari_register() {
     }
 
     // Initialize registries if they don't exist
-    if (typeof globalThis.__rsc_functions === 'undefined') {
-        globalThis.__rsc_functions = {};
+    if (typeof globalThis.__server_functions === 'undefined') {
+        globalThis.__server_functions = {};
     }
 
     if (typeof globalThis.__rsc_modules === 'undefined') {
@@ -325,7 +263,6 @@ export default moduleExports;
     register: globalThis.registerModule,
     getFunction: globalThis.getServerFunction,
     createPromise: globalThis.createServerFunctionPromise,
-    wrapFunctions: globalThis.wrapServerFunctions,
     discoverExports: globalThis.discoverModuleExports,
     stubs: {
       dependency: globalThis.createDependencyStub,

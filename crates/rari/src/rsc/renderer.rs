@@ -1350,10 +1350,6 @@ if (typeof globalThis.jsxs === 'undefined') {
             r#"
             (async function() {{
                 try {{
-                    if (typeof globalThis.enhanceReactUseForServerFunctions === 'function') {{
-                        globalThis.enhanceReactUseForServerFunctions();
-                    }}
-
                     if (typeof globalThis.resolveServerFunctionsForComponent === 'function') {{
                         await globalThis.resolveServerFunctionsForComponent("{component_id}");
                     }}
