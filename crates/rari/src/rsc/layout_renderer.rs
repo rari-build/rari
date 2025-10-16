@@ -237,10 +237,6 @@ impl LayoutRenderer {
 
         debug!("Direct HTML rendering completed for {}", route_match.route.path);
 
-        use crate::server::html_diagnostics::HtmlDiagnostics;
-        HtmlDiagnostics::log_html_snippet(&html, "After renderRouteToHtmlDirect", 300);
-        HtmlDiagnostics::check_root_element(&html, "After renderRouteToHtmlDirect");
-
         self.html_cache.insert(cache_key, html.clone());
 
         Ok(html)

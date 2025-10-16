@@ -38,7 +38,6 @@ use tracing::{debug, error, info, warn};
 pub mod actions;
 pub mod app_router;
 pub mod config;
-pub mod html_diagnostics;
 pub mod request_context;
 pub mod request_middleware;
 pub mod request_type;
@@ -2720,21 +2719,9 @@ async fn handle_app_route(
                 total_duration, render_duration
             );
 
-            use crate::server::html_diagnostics::HtmlDiagnostics;
-            HtmlDiagnostics::log_html_snippet(&html_content, "Before inject_assets_into_html", 300);
-            HtmlDiagnostics::check_root_element(&html_content, "Before inject_assets_into_html");
-
             let html_with_assets = match inject_assets_into_html(&html_content, &state.config).await
             {
-                Ok(html) => {
-                    HtmlDiagnostics::log_transformation(
-                        &html_content,
-                        &html,
-                        "inject_assets_into_html",
-                    );
-
-                    html
-                }
+                Ok(html) => html,
                 Err(_) => html_content,
             };
 
@@ -2805,8 +2792,6 @@ async fn handle_app_route(
 }
 
 async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, StatusCode> {
-    use crate::server::html_diagnostics::HtmlDiagnostics;
-
     let has_root_before = html.contains(r#"id="root""#);
 
     if has_root_before {
@@ -2839,12 +2824,6 @@ async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, 
             if has_root_before && !has_root_after {
                 error!("CRITICAL: Root element was LOST during asset injection!");
                 error!("This will cause hydration to fail in the browser.");
-
-                HtmlDiagnostics::log_html_snippet(
-                    final_html,
-                    "HTML after injection (ROOT ELEMENT MISSING)",
-                    1000,
-                );
 
                 warn!("Attempting recovery: returning original HTML without asset injection");
 
@@ -2884,11 +2863,9 @@ async fn inject_assets_into_complete_document(
     html: &str,
     config: &Config,
 ) -> Result<String, StatusCode> {
-    use crate::server::html_diagnostics::HtmlDiagnostics;
-
     debug!("Injecting assets into complete HTML document");
 
-    let has_root_before = HtmlDiagnostics::check_root_element(html, "Before asset injection");
+    let has_root_before = html.contains(r#"id="root""#);
     if !has_root_before {
         warn!("Root element missing before asset injection - this may cause hydration issues");
     }
@@ -2948,10 +2925,9 @@ async fn inject_assets_into_complete_document(
         final_html = format!("<!DOCTYPE html>\n{}", final_html);
     }
 
-    let has_root_after = HtmlDiagnostics::check_root_element(&final_html, "After asset injection");
+    let has_root_after = final_html.contains(r#"id="root""#);
     if has_root_before && !has_root_after {
         error!("Root element was lost during asset injection!");
-        HtmlDiagnostics::log_transformation(html, &final_html, "Asset injection (CORRUPTED)");
 
         warn!("Returning original HTML to preserve root element");
         if html.trim_start().starts_with("<!DOCTYPE") {
@@ -3068,13 +3044,6 @@ async fn inject_content_into_template(
     if !final_html.contains(r#"id="root""#) {
         error!("CRITICAL: Root element missing in final HTML after template injection!");
         error!("This should never happen as template injection should always create root element");
-
-        use crate::server::html_diagnostics::HtmlDiagnostics;
-        HtmlDiagnostics::log_html_snippet(
-            &final_html,
-            "Template injection result (ROOT ELEMENT MISSING)",
-            1000,
-        );
 
         warn!("Attempting recovery with fallback HTML structure");
         let recovered_html = format!(
