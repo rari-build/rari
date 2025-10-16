@@ -125,8 +125,8 @@ impl BackgroundPromiseResolver {
 
                             let rscData;
                             try {{
-                                if (globalThis.renderToRSC) {{
-                                    rscData = await globalThis.renderToRSC(resolvedElement, globalThis.__rsc_client_components || {{}});
+                                if (globalThis.renderToRsc) {{
+                                    rscData = await globalThis.renderToRsc(resolvedElement, globalThis.__rsc_client_components || {{}});
                                 }} else {{
                                     rscData = resolvedElement;
                                 }}
@@ -493,8 +493,8 @@ impl StreamingRenderer {
         }
 
         let init_script = r#"
-            if (!globalThis.renderToRSC) {
-                globalThis.renderToRSC = async function(element, clientComponents = {}) {
+            if (!globalThis.renderToRsc) {
+                globalThis.renderToRsc = async function(element, clientComponents = {}) {
                     if (!element) return null;
 
                     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
@@ -504,7 +504,7 @@ impl StreamingRenderer {
                     if (Array.isArray(element)) {
                         const results = [];
                         for (const child of element) {
-                            results.push(await globalThis.renderToRSC(child, clientComponents));
+                            results.push(await globalThis.renderToRsc(child, clientComponents));
                         }
                         return results;
                     }
@@ -521,7 +521,7 @@ impl StreamingRenderer {
 
                                 const rscProps = {
                                     ...otherProps,
-                                    children: actualChildren ? await globalThis.renderToRSC(actualChildren, clientComponents) : undefined
+                                    children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
                                 };
                                 if (rscProps.children === undefined) {
                                     delete rscProps.children;
@@ -536,7 +536,7 @@ impl StreamingRenderer {
                                         result = await result;
                                     }
 
-                                    return await globalThis.renderToRSC(result, clientComponents);
+                                    return await globalThis.renderToRsc(result, clientComponents);
                                 } catch (error) {
                                     console.error('Error rendering function component:', error);
                                     return ["$", "div", uniqueKey, {
@@ -729,7 +729,7 @@ impl StreamingRenderer {
                                                     }});
                                                     return safeFallback;
                                                 }} else {{
-                                                    return globalThis.renderToRSC(result, globalThis.__rsc_client_components || {{}});
+                                                    return globalThis.renderToRsc(result, globalThis.__rsc_client_components || {{}});
                                                 }}
                                             }}
                                         }} catch (error) {{
@@ -811,8 +811,8 @@ impl StreamingRenderer {
 
                     let rscData;
                     try {{
-                        rscData = globalThis.renderToRSC ?
-                            await globalThis.renderToRSC(element, globalThis.__rsc_client_components || {{}}) :
+                        rscData = globalThis.renderToRsc ?
+                            await globalThis.renderToRsc(element, globalThis.__rsc_client_components || {{}}) :
                             element;
                     }} catch (rscError) {{
                         console.error('Error in RSC conversion:', rscError);

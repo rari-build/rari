@@ -723,13 +723,13 @@ impl LayoutRenderer {
             r#"
                 globalThis.__rsc_render_result = null;
 
-                const traverseToRSC = globalThis.traverseToRSC;
-                if (!traverseToRSC) {{
-                    throw new Error('traverseToRSC not available - RSC runtime not initialized');
+                const traverseToRsc = globalThis.traverseToRsc;
+                if (!traverseToRsc) {{
+                    throw new Error('traverseToRsc not available - RSC runtime not initialized');
                 }}
 
-                if (!globalThis.renderToRSC) {{
-                    globalThis.renderToRSC = async function(element, clientComponents = {{}}) {{
+                if (!globalThis.renderToRsc) {{
+                    globalThis.renderToRsc = async function(element, clientComponents = {{}}) {{
                         if (!element) return null;
 
                         if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {{
@@ -739,7 +739,7 @@ impl LayoutRenderer {
                         if (Array.isArray(element)) {{
                             const results = [];
                             for (const child of element) {{
-                                results.push(await globalThis.renderToRSC(child, clientComponents));
+                                results.push(await globalThis.renderToRsc(child, clientComponents));
                             }}
                             return results;
                         }}
@@ -756,7 +756,7 @@ impl LayoutRenderer {
 
                                     const rscProps = {{
                                         ...otherProps,
-                                        children: actualChildren ? await globalThis.renderToRSC(actualChildren, clientComponents) : undefined
+                                        children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
                                     }};
                                     if (rscProps.children === undefined) {{
                                         delete rscProps.children;
@@ -771,7 +771,7 @@ impl LayoutRenderer {
                                             result = await result;
                                         }}
 
-                                        return await globalThis.renderToRSC(result, clientComponents);
+                                        return await globalThis.renderToRsc(result, clientComponents);
                                     }} catch (error) {{
                                         console.error('Error rendering function component:', error);
                                         return ["$", "div", uniqueKey, {{
@@ -793,7 +793,7 @@ impl LayoutRenderer {
                 }}
 
                 const startRSC = performance.now();
-                const rscData = await traverseToRSC({});
+                const rscData = await traverseToRsc({});
                 timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;

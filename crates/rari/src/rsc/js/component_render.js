@@ -53,11 +53,11 @@
       const clientComponents = globalThis.__rsc_client_components || {}
 
       let rscResult
-      if (typeof globalThis.renderToRSC === 'function') {
-        rscResult = globalThis.renderToRSC(element, clientComponents)
+      if (typeof globalThis.renderToRsc === 'function') {
+        rscResult = globalThis.renderToRsc(element, clientComponents)
       }
-      else if (typeof globalThis.traverseToRSC === 'function') {
-        rscResult = globalThis.traverseToRSC(element, clientComponents)
+      else if (typeof globalThis.traverseToRsc === 'function') {
+        rscResult = globalThis.traverseToRsc(element, clientComponents)
       }
       else {
         rscResult = {

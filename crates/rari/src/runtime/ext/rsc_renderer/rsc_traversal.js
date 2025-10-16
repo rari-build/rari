@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 
-async function traverseToRSC(element, clientComponents = {}, depth = 0) {
+async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   if (depth > 100) {
     console.error(
       'RSC traversal depth limit exceeded, returning null to prevent stack overflow',
@@ -35,7 +35,7 @@ async function traverseToRSC(element, clientComponents = {}, depth = 0) {
   if (Array.isArray(element)) {
     const results = []
     for (const child of element) {
-      results.push(await traverseToRSC(child, clientComponents, depth + 1))
+      results.push(await traverseToRsc(child, clientComponents, depth + 1))
     }
     return results
   }
@@ -53,7 +53,7 @@ async function traverseToRSC(element, clientComponents = {}, depth = 0) {
     && typeof element === 'object'
     && element.$$typeof === Symbol.for('react.fragment')
   ) {
-    return await traverseToRSC(element.props.children, clientComponents, depth + 1)
+    return await traverseToRsc(element.props.children, clientComponents, depth + 1)
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
@@ -156,7 +156,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
   if (isServerComponent(type)) {
     const rendered = renderServerComponent(element)
-    return await traverseToRSC(rendered, clientComponents, depth + 1)
+    return await traverseToRsc(rendered, clientComponents, depth + 1)
   }
 
   if (isSuspenseComponent(type)) {
@@ -175,7 +175,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
     const defaultFallback = null
     const safeFallback = props?.fallback
-      ? await traverseToRSC(props.fallback, clientComponents, depth + 1)
+      ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
       : defaultFallback
 
     globalThis.__discovered_boundaries.push({
@@ -235,7 +235,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
         ...props,
         boundaryId,
         fallback: safeFallback,
-        children: await traverseToRSC(props?.children, clientComponents, depth + 1),
+        children: await traverseToRsc(props?.children, clientComponents, depth + 1),
       },
     ]
   }
@@ -261,7 +261,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       if (rendered === element) {
         return null
       }
-      return await traverseToRSC(rendered, clientComponents, depth + 1)
+      return await traverseToRsc(rendered, clientComponents, depth + 1)
     }
     catch (error) {
       console.error('Error rendering function component:', error)
@@ -273,15 +273,15 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   }
 
   if (type === React.Fragment) {
-    return await traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRsc(props.children, clientComponents, depth + 1)
   }
 
   if (type && type.$$typeof === Symbol.for('react.provider')) {
-    return await traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRsc(props.children, clientComponents, depth + 1)
   }
 
   if (type && type.$$typeof === Symbol.for('react.consumer')) {
-    return await traverseToRSC(props.children, clientComponents, depth + 1)
+    return await traverseToRsc(props.children, clientComponents, depth + 1)
   }
 
   return [
@@ -315,7 +315,7 @@ async function createRSCHTMLElement(
   const rscProps = {
     ...otherProps,
     children: children
-      ? await traverseToRSC(children, clientComponents, depth + 1)
+      ? await traverseToRsc(children, clientComponents, depth + 1)
       : undefined,
   }
 
@@ -536,9 +536,9 @@ function createErrorElement(message, componentName) {
   ]
 }
 
-async function renderToRSC(element, clientComponents = {}) {
+async function renderToRsc(element, clientComponents = {}) {
   try {
-    return await traverseToRSC(element, clientComponents)
+    return await traverseToRsc(element, clientComponents)
   }
   catch (error) {
     console.error('Error in RSC traversal:', error)
@@ -574,8 +574,8 @@ function isSuspenseComponent(type) {
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.traverseToRSC = traverseToRSC
-  globalThis.renderToRSC = renderToRSC
+  globalThis.traverseToRsc = traverseToRsc
+  globalThis.renderToRsc = renderToRsc
   globalThis.isClientComponent = isClientComponent
   globalThis.isServerComponent = isServerComponent
   globalThis.getClientComponentId = getClientComponentId

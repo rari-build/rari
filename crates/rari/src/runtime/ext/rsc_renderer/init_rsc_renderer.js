@@ -8,9 +8,9 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
   )
 }
 
-if (typeof globalThis.renderToRSC === 'undefined') {
+if (typeof globalThis.renderToRsc === 'undefined') {
   throw new TypeError(
-    'renderToRSC not initialized - rsc_traversal.js may have failed to load',
+    'renderToRsc not initialized - rsc_traversal.js may have failed to load',
   )
 }
 

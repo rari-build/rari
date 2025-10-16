@@ -26,14 +26,14 @@ globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   const clientComponents = globalThis.__rsc_client_components || {}
   let rscResult
 
-  if (typeof globalThis.renderToRSC === 'function') {
-    rscResult = globalThis.renderToRSC(currentElement, clientComponents)
+  if (typeof globalThis.renderToRsc === 'function') {
+    rscResult = globalThis.renderToRsc(currentElement, clientComponents)
   }
-  else if (typeof globalThis.traverseToRSC === 'function') {
-    rscResult = globalThis.traverseToRSC(currentElement, clientComponents)
+  else if (typeof globalThis.traverseToRsc === 'function') {
+    rscResult = globalThis.traverseToRsc(currentElement, clientComponents)
   }
   else {
-    throw new TypeError('No RSC renderer available (renderToRSC or traverseToRSC)')
+    throw new TypeError('No RSC renderer available (renderToRsc or traverseToRsc)')
   }
 
   return {
