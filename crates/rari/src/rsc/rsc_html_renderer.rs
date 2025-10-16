@@ -3,6 +3,7 @@ use crate::runtime::JsExecutionRuntime;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
 pub struct RscRow {
@@ -350,10 +351,22 @@ impl RscHtmlRenderer {
             }
         }
 
-        let template = if is_dev_mode {
-            self.generate_dev_template()
-        } else {
-            self.read_template_file().await?
+        let template = match self.read_template_file().await {
+            Ok(content) => {
+                if is_dev_mode {
+                    self.inject_vite_client_if_needed(&content)
+                } else {
+                    content
+                }
+            }
+            Err(e) => {
+                if is_dev_mode {
+                    warn!("index.html not found, using generated template: {}", e);
+                    self.generate_dev_template_fallback()
+                } else {
+                    return Err(e);
+                }
+            }
         };
 
         if cache_enabled {
@@ -364,7 +377,44 @@ impl RscHtmlRenderer {
         Ok(template)
     }
 
-    fn generate_dev_template(&self) -> String {
+    fn inject_vite_client_if_needed(&self, html: &str) -> String {
+        if html.contains("/@vite/client") || html.contains("@vite/client") {
+            return html.to_string();
+        }
+
+        if let Some(head_end) = html.find("</head>") {
+            let mut result = String::new();
+            result.push_str(&html[..head_end]);
+            result.push_str(
+                r#"    <script type="module" src="/@vite/client"></script>
+    <script type="module" src="/src/main.tsx"></script>
+"#,
+            );
+            result.push_str(&html[head_end..]);
+            return result;
+        }
+
+        if let Some(body_end) = html.find("</body>") {
+            let mut result = String::new();
+            result.push_str(&html[..body_end]);
+            result.push_str(
+                r#"    <script type="module" src="/@vite/client"></script>
+    <script type="module" src="/src/main.tsx"></script>
+"#,
+            );
+            result.push_str(&html[body_end..]);
+            return result;
+        }
+
+        format!(
+            r#"<script type="module" src="/@vite/client"></script>
+<script type="module" src="/src/main.tsx"></script>
+{}"#,
+            html
+        )
+    }
+
+    fn generate_dev_template_fallback(&self) -> String {
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -383,16 +433,17 @@ impl RscHtmlRenderer {
 
     async fn read_template_file(&self) -> Result<String, RariError> {
         let possible_paths =
-            vec!["public/index.html", "dist/index.html", "build/index.html", "index.html"];
+            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"];
 
         for path in possible_paths {
             if let Ok(content) = tokio::fs::read_to_string(path).await {
+                debug!("Successfully read template from: {}", path);
                 return Ok(content);
             }
         }
 
         Err(RariError::internal(
-            "Template file not found. Tried: public/index.html, dist/index.html, build/index.html, index.html"
+            "Template file not found. Tried: index.html, public/index.html, dist/index.html, build/index.html"
                 .to_string(),
         ))
     }
@@ -1050,11 +1101,11 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_dev_template() {
+    fn test_generate_dev_template_fallback() {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
         let renderer = RscHtmlRenderer::new(runtime);
 
-        let template = renderer.generate_dev_template();
+        let template = renderer.generate_dev_template_fallback();
 
         assert!(template.contains("<!DOCTYPE html>"));
         assert!(template.contains(r#"<div id="root"></div>"#));

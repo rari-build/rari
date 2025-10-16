@@ -112,7 +112,6 @@ impl Server {
             Self::load_production_components(&mut renderer).await?;
             Self::load_production_server_actions(&mut renderer).await?;
         } else {
-            // In development, load app router components from source
             Self::load_app_router_components(&mut renderer, &config).await?;
             Self::load_server_actions_from_source(&mut renderer).await?;
         }
@@ -2493,35 +2492,96 @@ fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, String>
     header_map
 }
 
+fn inject_vite_client(html: &str, vite_port: u16) -> String {
+    if html.contains("/@vite/client") || html.contains("@vite/client") {
+        return html.to_string();
+    }
+
+    if let Some(head_end) = html.find("</head>") {
+        let mut result = String::new();
+        result.push_str(&html[..head_end]);
+        result.push_str(&format!(
+            r#"  <script type="module" src="http://localhost:{}/@vite/client"></script>
+  <script type="module">
+    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+  </script>
+"#,
+            vite_port, vite_port
+        ));
+        result.push_str(&html[head_end..]);
+        return result;
+    }
+
+    if let Some(body_end) = html.find("</body>") {
+        let mut result = String::new();
+        result.push_str(&html[..body_end]);
+        result.push_str(&format!(
+            r#"  <script type="module" src="http://localhost:{}/@vite/client"></script>
+  <script type="module">
+    import 'http://localhost:{}/@id/virtual:rari-entry-client';
+  </script>
+"#,
+            vite_port, vite_port
+        ));
+        result.push_str(&html[body_end..]);
+        return result;
+    }
+
+    format!(
+        r#"<script type="module" src="http://localhost:{}/@vite/client"></script>
+<script type="module">
+  import 'http://localhost:{}/@id/virtual:rari-entry-client';
+</script>
+{}"#,
+        vite_port, vite_port, html
+    )
+}
+
 async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Response, StatusCode> {
     debug!("Rendering fallback HTML shell for path: {}", path);
 
-    let index_path = state.config.public_dir().join("index.html");
-    if index_path.exists() && state.config.is_production() {
-        if let Some(cached_html) = state.html_cache.get(path) {
-            debug!("✅ Cache HIT for fallback HTML: {}", path);
-            let html = cached_html.clone();
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", "text/html; charset=utf-8")
-                .body(Body::from(html))
-                .expect("Valid HTML response"));
+    let index_path = if state.config.is_development() {
+        let root_index = std::path::PathBuf::from("index.html");
+        if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
+    } else {
+        state.config.public_dir().join("index.html")
+    };
+
+    if index_path.exists() {
+        if state.config.is_production() {
+            if let Some(cached_html) = state.html_cache.get(path) {
+                debug!("✅ Cache HIT for fallback HTML: {}", path);
+                let html = cached_html.clone();
+                return Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .body(Body::from(html))
+                    .expect("Valid HTML response"));
+            }
         }
 
         match std::fs::read_to_string(&index_path) {
             Ok(html_content) => {
-                debug!("Serving built index.html as fallback (caching for future requests)");
+                let final_html = if state.config.is_development() {
+                    debug!("Reading index.html and injecting Vite client for development");
+                    inject_vite_client(&html_content, state.config.vite.port)
+                } else {
+                    debug!("Serving built index.html as fallback");
+                    html_content
+                };
 
-                state.html_cache.insert(path.to_string(), html_content.clone());
+                if state.config.is_production() {
+                    state.html_cache.insert(path.to_string(), final_html.clone());
+                }
 
                 return Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(html_content))
+                    .body(Body::from(final_html))
                     .expect("Valid HTML response"));
             }
             Err(e) => {
-                error!("Failed to read built index.html: {}", e);
+                warn!("Failed to read index.html from {:?}: {}", index_path, e);
             }
         }
     }
@@ -2538,15 +2598,16 @@ async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Respons
 </head>
 <body>
   <div id="root"></div>
+  <script type="module" src="http://localhost:{}/@vite/client"></script>
   <script type="module">
     import 'http://localhost:{}/@id/virtual:rari-entry-client';
   </script>
 </body>
 </html>"#,
-            vite_port
+            vite_port, vite_port
         );
 
-        debug!("Serving development HTML shell as fallback");
+        debug!("index.html not found, serving generated development HTML shell as fallback");
         return Ok(Response::builder()
             .status(StatusCode::OK)
             .header("content-type", "text/html; charset=utf-8")
