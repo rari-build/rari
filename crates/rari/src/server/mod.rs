@@ -2654,8 +2654,6 @@ async fn handle_app_route(
         RenderMode::Ssr => {
             debug!("Rendering HTML for SSR (initial page load) using direct HTML path");
 
-            let should_skip_cache = path.contains("/actions") || path.contains("/interactive");
-
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
@@ -2667,7 +2665,7 @@ async fn handle_app_route(
 
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
 
-            if !should_skip_cache && let Some(cached) = state.response_cache.get(&cache_key).await {
+            if let Some(cached) = state.response_cache.get(&cache_key).await {
                 debug!("Cache hit for route: {}", path);
 
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
@@ -2779,10 +2777,6 @@ async fn handle_app_route(
                     ..Default::default()
                 };
                 policy.tags.push(path.to_string());
-
-                if path.contains("/actions") || path.contains("/interactive") {
-                    policy.enabled = false;
-                }
 
                 policy
             };

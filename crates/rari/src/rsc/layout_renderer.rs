@@ -170,10 +170,7 @@ impl LayoutRenderer {
     ) -> Result<String, RariError> {
         let cache_key = self.generate_cache_key(route_match, context);
 
-        let should_skip_cache = route_match.route.path.contains("/actions")
-            || route_match.route.path.contains("/interactive");
-
-        if !should_skip_cache && let Some(cached_html) = self.html_cache.get(cache_key) {
+        if let Some(cached_html) = self.html_cache.get(cache_key) {
             debug!("Cache HIT for route {} (key: {})", route_match.route.path, cache_key);
             return Ok(cached_html);
         }
@@ -244,9 +241,7 @@ impl LayoutRenderer {
         HtmlDiagnostics::log_html_snippet(&html, "After renderRouteToHtmlDirect", 300);
         HtmlDiagnostics::check_root_element(&html, "After renderRouteToHtmlDirect");
 
-        if !should_skip_cache {
-            self.html_cache.insert(cache_key, html.clone());
-        }
+        self.html_cache.insert(cache_key, html.clone());
 
         Ok(html)
     }

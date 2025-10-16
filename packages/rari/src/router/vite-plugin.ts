@@ -70,59 +70,14 @@ function getAffectedRoutes(
   allRoutes: string[],
 ): string[] {
   if (fileType === 'page') {
-    // Page changes only affect the specific route
     return [routePath]
   }
 
-  // Layout, loading, error, and not-found affect the route and all nested routes
   const affected = allRoutes.filter((route) => {
     return route === routePath || route.startsWith(`${routePath}/`)
   })
 
   return affected.length > 0 ? affected : [routePath]
-}
-
-function isServerActionFile(fileContent: string): boolean {
-  const lines = fileContent.trim().split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed === '' || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
-      continue
-    }
-    if (trimmed === '\'use server\'' || trimmed === '"use server"') {
-      return true
-    }
-    // Stop at first non-comment, non-empty line
-    break
-  }
-  return false
-}
-
-function extractServerActionExports(fileContent: string): string[] {
-  const exports: string[] = []
-
-  const asyncFunctionRegex = /export\s+async\s+function\s+(\w+)/g
-  let match = asyncFunctionRegex.exec(fileContent)
-  while (match) {
-    exports.push(match[1])
-    match = asyncFunctionRegex.exec(fileContent)
-  }
-
-  const functionRegex = /export\s+function\s+(\w+)/g
-  match = functionRegex.exec(fileContent)
-  while (match) {
-    exports.push(match[1])
-    match = functionRegex.exec(fileContent)
-  }
-
-  const constRegex = /export\s+const\s+(\w+)\s*=/g
-  match = constRegex.exec(fileContent)
-  while (match) {
-    exports.push(match[1])
-    match = constRegex.exec(fileContent)
-  }
-
-  return exports
 }
 
 function extractMetadata(fileContent: string): Record<string, any> | null {
@@ -183,10 +138,10 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   let cachedManifestContent: string | null = null
 
   const pendingHMRUpdates = new Map<string, NodeJS.Timeout>()
-  const DEBOUNCE_DELAY = 200 // 200ms debounce window
+  const DEBOUNCE_DELAY = 200
 
   let routeStructureHash: string | null = null
-  const routeFiles = new Set<string>() // Track all route-defining files
+  const routeFiles = new Set<string>()
 
   const computeRouteStructureHash = (files: Set<string>): string => {
     const sortedFiles = Array.from(files).sort()
@@ -326,14 +281,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       const { file, server } = ctx
 
       const appDir = path.resolve(server.config.root, opts.appDir)
-      const actionsDir = path.resolve(server.config.root, 'src/actions')
 
       const isAppFile
         = file.startsWith(appDir)
-          && opts.extensions.some(ext => file.endsWith(ext))
-
-      const isActionsFile
-        = file.startsWith(actionsDir)
           && opts.extensions.some(ext => file.endsWith(ext))
 
       if (isAppFile) {
@@ -416,97 +366,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           return []
         }
 
-        // Temporarily disabled - debugging
-        // // Check if this is a server action file
-        // try {
-        //   const fileContent = await fs.readFile(file, 'utf-8')
-        //   if (isServerActionFile(fileContent)) {
-        //     // Clear any existing debounce timer for this file
-        //     const existingTimer = pendingHMRUpdates.get(file)
-        //     if (existingTimer) {
-        //       clearTimeout(existingTimer)
-        //     }
-
-        //     // Debounce HMR updates to batch rapid changes
-        //     const timer = setTimeout(async () => {
-        //       pendingHMRUpdates.delete(file)
-
-        //       const fileContent = await fs.readFile(file, 'utf-8')
-        //       const actionExports = extractServerActionExports(fileContent)
-
-        //       // Send custom HMR event to client for server action
-        //       const hmrData: AppRouterHMRData = {
-        //         fileType: 'server-action',
-        //         filePath: path.relative(server.config.root, file),
-        //         routePath: '/', // Server actions don't have a specific route
-        //         affectedRoutes: [], // Will be determined by client based on usage
-        //         manifestUpdated: false,
-        //         timestamp: Date.now(),
-        //         actionExports,
-        //       }
-
-        //       server.ws.send({
-        //         type: 'custom',
-        //         event: 'rari:server-action-updated',
-        //         data: hmrData,
-        //       })
-
-        //       console.warn(
-        //         `[HMR] Server action file changed: ${hmrData.filePath} (exports: ${actionExports.join(', ')})`,
-        //       )
-        //     }, DEBOUNCE_DELAY)
-
-        //     pendingHMRUpdates.set(file, timer)
-
-        //     return []
-        //   }
-        // } catch (error) {
-        //   // File might not exist or be readable, continue with normal flow
-        // }
-
-        // Non-special files in app directory
         cachedManifestContent = await generateAppRoutes(server.config.root)
         console.warn(`App router file changed: ${path.relative(server.config.root, file)}`)
         return []
-      }
-
-      if (isActionsFile) {
-        try {
-          const fileContent = await fs.readFile(file, 'utf-8')
-          if (isServerActionFile(fileContent)) {
-            const existingTimer = pendingHMRUpdates.get(file)
-            if (existingTimer) {
-              clearTimeout(existingTimer)
-            }
-
-            const timer = setTimeout(async () => {
-              pendingHMRUpdates.delete(file)
-
-              const fileContent = await fs.readFile(file, 'utf-8')
-              const actionExports = extractServerActionExports(fileContent)
-
-              server.ws.send({
-                type: 'custom',
-                event: 'rari:server-action-updated',
-                data: {
-                  filePath: path.relative(server.config.root, file),
-                  actionExports,
-                },
-              })
-
-              console.warn(
-                `[HMR] Server action file changed: ${path.relative(server.config.root, file)} (exports: ${actionExports.join(', ')})`,
-              )
-            }, DEBOUNCE_DELAY)
-
-            pendingHMRUpdates.set(file, timer)
-
-            return []
-          }
-        }
-        catch {
-          // File might not exist or be readable, continue with normal flow
-        }
       }
     },
 
