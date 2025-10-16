@@ -315,9 +315,6 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
         }
     }
 
-    let component_hash = hash_string(component_id);
-    let registration_key = format!("Component_{component_hash}");
-
     let default_export_expression_or_fallback_val = if default_export_expression != "null" {
         default_export_expression.clone()
     } else if named_exports.len() == 1 {
@@ -347,7 +344,6 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
 
 (function() {{
     const componentKey = "{component_id}";
-    const registrationKey = "{registration_key}";
     let mainExport = null;
 
     if (typeof {default_export_expression_or_fallback} !== 'undefined') {{
@@ -357,10 +353,6 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
     if (mainExport !== null) {{
         if (!globalThis[componentKey]) {{
             globalThis[componentKey] = mainExport;
-        }}
-
-        if (!globalThis[registrationKey]) {{
-            globalThis[registrationKey] = mainExport;
         }}
 
         globalThis.__server_functions = globalThis.__server_functions || {{}};
@@ -384,7 +376,6 @@ pub fn transform_jsx(jsx_code: &str, component_id: &str) -> Result<String, RariE
     globalThis.__rari_manual_register[componentKey] = () => {{
         if (mainExport !== null) {{
             globalThis[componentKey] = mainExport;
-            globalThis[registrationKey] = mainExport;
             return true;
         }}
         return false;
@@ -410,8 +401,7 @@ export const __registry_proxy = new Proxy({{}}, {{
         code_without_imports = code_without_imports.trim(),
         default_export_expression_or_fallback = default_export_expression_or_fallback_val,
         export_expression_for_direct_import = export_expression_for_direct_import_val,
-        component_id = component_id,
-        registration_key = registration_key
+        component_id = component_id
     );
 
     Ok(module_code)
@@ -577,8 +567,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
     processed_code_without_exports =
         export_default_regex.replace_all(&processed_code_without_exports, "$1").to_string();
 
-    let registration_key_val = format!("Component_{}", hash_string(module_id_arg));
-
     let main_export_expression_val = if default_export_name != "null" {
         default_export_name.clone()
     } else if exported_names.len() == 1 {
@@ -631,7 +619,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
 (function() {{
     try {{
         const moduleKey = "{module_id}";
-        const registrationKey = "{registration_key}";
         let mainExport = null;
         let exportedFunctions = {{}};
 
@@ -658,10 +645,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
             globalThis[moduleKey] = mainExport;
         }}
 
-        if (!globalThis[registrationKey]) {{
-            globalThis[registrationKey] = mainExport;
-        }}
-
         globalThis.__server_functions = globalThis.__server_functions || {{}};
 
         if (typeof mainExport === 'object') {{
@@ -682,10 +665,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
                 globalThis[moduleKey] = exportedFunctions;
             }}
 
-            if (!globalThis[registrationKey]) {{
-                globalThis[registrationKey] = exportedFunctions;
-            }}
-
             mainExport = exportedFunctions;
         }}
 }}
@@ -704,7 +683,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
     globalThis.__rari_manual_register[moduleKey] = () => {{
         if (mainExport !== null) {{
             globalThis[moduleKey] = mainExport;
-            globalThis[registrationKey] = mainExport;
             return true;
         }}
         let registeredAnyFunction = false;
@@ -727,7 +705,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
 
         if (hasRscFunctions) {{
             globalThis[moduleKey] = globalThis.__server_functions;
-            globalThis[registrationKey] = globalThis.__server_functions;
             return true;
         }}
 
@@ -747,7 +724,6 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
 "#,
         module_id = module_id_arg,
         processed_code_without_exports = processed_code_without_exports,
-        registration_key = registration_key_val,
         main_export_expression_or_fallback = main_export_expression_or_fallback_val,
         exported_names_check_and_assign = exported_names_check_and_assign_val,
         self_registration_script_for_individual_server_fns =

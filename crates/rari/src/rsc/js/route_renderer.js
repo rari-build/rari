@@ -42,7 +42,7 @@ globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   }
 }
 
-globalThis.renderRouteToHtmlDirect = async function (pageComponentId, pageProps, layouts) {
+globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layouts) {
   const PageComponent = globalThis[pageComponentId]
   if (!PageComponent || typeof PageComponent !== 'function') {
     return {
@@ -93,7 +93,7 @@ globalThis.renderRouteToHtmlDirect = async function (pageComponentId, pageProps,
     }
   }
   catch (error) {
-    console.error('Error in renderRouteToHtmlDirect:', error)
+    console.error('Error in renderRouteToHtml:', error)
     return {
       html: '',
       error: error.message || String(error),
@@ -105,6 +105,6 @@ globalThis.renderRouteToHtmlDirect = async function (pageComponentId, pageProps,
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     renderRoute: globalThis.renderRoute,
-    renderRouteToHtmlDirect: globalThis.renderRouteToHtmlDirect,
+    renderRouteToHtml: globalThis.renderRouteToHtml,
   }
 }

@@ -618,15 +618,12 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
 
-        let component_hash = crate::rsc::jsx_transform::hash_string(component_id);
         let render_script = format!(
             r#"
             (async function() {{
                 try {{
                     let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default) ||
                                     globalThis['{component_id}'] ||
-                                    globalThis['Component_{component_id}'] ||
-                                    globalThis['Component_{component_hash}'] ||
                                     (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']);
 
                     if (Component && typeof Component === 'object' && typeof Component.default === 'function') {{
@@ -860,7 +857,6 @@ impl StreamingRenderer {
             }})()
             "#,
             component_id = component_id,
-            component_hash = component_hash,
             props_json = props.unwrap_or("{}")
         );
 

@@ -1,4 +1,4 @@
-if (typeof globalThis.renderToHTML === 'undefined') {
+if (typeof globalThis.renderElementToHtml === 'undefined') {
   const safeStringify = (obj, maxDepth = 3) => {
     const seen = new WeakSet()
 
@@ -63,7 +63,7 @@ if (typeof globalThis.renderToHTML === 'undefined') {
     }
   }
 
-  globalThis.renderToHTML = function (element) {
+  globalThis.renderElementToHtml = function (element) {
     try {
       if (
         globalThis.ReactDOMServer
@@ -80,7 +80,7 @@ if (typeof globalThis.renderToHTML === 'undefined') {
           ) {
             throw reactError
           }
-          console.warn('renderToHTML: ReactDOMServer failed, falling back to custom renderer:', reactError.message)
+          console.warn('renderElementToHtml: ReactDOMServer failed, falling back to custom renderer:', reactError.message)
         }
       }
 
@@ -135,14 +135,14 @@ if (typeof globalThis.renderToHTML === 'undefined') {
                 html += ' '
               }
 
-              html += globalThis.renderToHTML(child)
+              html += globalThis.renderElementToHtml(child)
 
               lastChildWasString = isString
               lastWasElement = isElement
             }
           }
           else if (children !== null && children !== undefined) {
-            html += globalThis.renderToHTML(children)
+            html += globalThis.renderElementToHtml(children)
           }
 
           html += `</${type}>`
@@ -172,14 +172,14 @@ if (typeof globalThis.renderToHTML === 'undefined') {
                 html += ' '
               }
 
-              html += globalThis.renderToHTML(child)
+              html += globalThis.renderElementToHtml(child)
 
               lastChildWasString = isString
               lastWasElement = isElement
             }
           }
           else if (children !== null && children !== undefined) {
-            html += globalThis.renderToHTML(children)
+            html += globalThis.renderElementToHtml(children)
           }
 
           return html
@@ -196,7 +196,7 @@ if (typeof globalThis.renderToHTML === 'undefined') {
               return result
             }
 
-            return globalThis.renderToHTML(result)
+            return globalThis.renderElementToHtml(result)
           }
           catch (error) {
             if (
@@ -226,26 +226,26 @@ if (typeof globalThis.renderToHTML === 'undefined') {
           if (lastWasString && isString) {
             const stringValue = String(item)
             if (stringValue.startsWith(' ') || stringValue.endsWith(' ')) {
-              html += globalThis.renderToHTML(item)
+              html += globalThis.renderElementToHtml(item)
             }
             else {
-              html += ` ${globalThis.renderToHTML(item)}`
+              html += ` ${globalThis.renderElementToHtml(item)}`
             }
           }
           else if (lastWasString && isElement) {
-            html += ` ${globalThis.renderToHTML(item)}`
+            html += ` ${globalThis.renderElementToHtml(item)}`
           }
           else if (lastWasElement && isString) {
             const stringValue = String(item)
             if (stringValue.startsWith(' ')) {
-              html += ` ${globalThis.renderToHTML(item)}`
+              html += ` ${globalThis.renderElementToHtml(item)}`
             }
             else {
-              html += globalThis.renderToHTML(item)
+              html += globalThis.renderElementToHtml(item)
             }
           }
           else {
-            html += globalThis.renderToHTML(item)
+            html += globalThis.renderElementToHtml(item)
           }
 
           lastWasString = isString

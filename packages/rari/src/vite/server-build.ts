@@ -755,6 +755,8 @@ export class ServerComponentBuilder {
       return code
     }
 
+    const isServerAction = code.includes('"use server"') || code.includes('\'use server\'')
+
     let transformedCode = code
 
     let defaultExportName: string | null = null
@@ -842,14 +844,16 @@ export class ServerComponentBuilder {
       }
     }
 
+    const wrapStart = isServerAction ? '' : '(() => {\n    '
+    const wrapEnd = isServerAction ? '' : '})();'
+
     const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
 
 if (!globalThis["${componentId}"]) {
-    ${transformedCode}
+    ${wrapStart}${transformedCode}
 
         try {
             const moduleKey = "${componentId}";
-            const registrationKey = "Component_${Math.random().toString(36).substr(2, 8)}";
             let mainExport = null;
             let exportedFunctions = {};
 
@@ -888,10 +892,6 @@ if (!globalThis["${componentId}"]) {
                 globalThis[moduleKey] = mainExport;
             }
 
-            if (!globalThis[registrationKey]) {
-                globalThis[registrationKey] = mainExport;
-            }
-
             globalThis.__rsc_components = globalThis.__rsc_components || {};
             globalThis.__rsc_components[moduleKey] = mainExport;
 
@@ -902,6 +902,7 @@ if (!globalThis["${componentId}"]) {
         } catch (error) {
             console.error('Error in self-registration for ${componentId}:', error);
         }
+    ${wrapEnd}
 }`
 
     return selfRegisteringCode

@@ -456,8 +456,8 @@ impl RscRenderer {
             (function() {
                 const checks = {};
 
-                if (typeof globalThis.renderToHTML === 'undefined') {
-                    throw new Error('RSC Renderer extension not loaded - renderToHTML not available');
+                if (typeof globalThis.renderElementToHtml === 'undefined') {
+                    throw new Error('RSC Renderer extension not loaded - renderElementToHtml not available');
                 }
                 checks.rsc_renderer = true;
 
@@ -540,19 +540,6 @@ if (typeof globalThis.Suspense === 'undefined') {
 
 if (typeof globalThis.Fragment === 'undefined') {
     globalThis.Fragment = globalThis.React.Fragment;
-}
-
-if (typeof globalThis.useState === 'undefined') {
-    globalThis.useState = function() {
-        console.warn('useState called in server component - this will not work');
-        return [null, () => {}];
-    };
-}
-
-if (typeof globalThis.useEffect === 'undefined') {
-    globalThis.useEffect = function() {
-        console.warn('useEffect called in server component - this will not work');
-    };
 }
 
 if (typeof globalThis.jsx === 'undefined') {

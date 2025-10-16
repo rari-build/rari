@@ -205,11 +205,11 @@ impl LayoutRenderer {
             tracing::warn!("Failed to set request context in runtime: {}", e);
         }
 
-        debug!("Calling renderRouteToHtmlDirect...");
+        debug!("Calling renderRouteToHtml...");
         let result = renderer
             .runtime
             .execute_function(
-                "renderRouteToHtmlDirect",
+                "renderRouteToHtml",
                 vec![
                     serde_json::Value::String(page_component_id.clone()),
                     page_props.clone(),

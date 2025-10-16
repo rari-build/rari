@@ -93,10 +93,6 @@
     return globalThis.executeServerFunction(functionName, args, options)
   }
 
-  globalThis.getRegisteredServerFunctions = function () {
-    return Array.from(globalThis.__registered_server_functions || [])
-  }
-
   globalThis.isServerFunctionRegistered = function (functionName) {
     return globalThis.__registered_server_functions?.has(functionName) || false
   }
@@ -118,7 +114,6 @@
     resolve: globalThis.resolveServerFunctionsForComponent,
     execute: globalThis.executeServerFunction,
     createPromise: globalThis.createEnhancedServerFunctionPromise,
-    getRegistered: globalThis.getRegisteredServerFunctions,
     isRegistered: globalThis.isServerFunctionRegistered,
     clear: globalThis.clearServerFunctionCache,
   }

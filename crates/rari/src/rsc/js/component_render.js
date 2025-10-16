@@ -8,10 +8,6 @@
     Component = globalThis['{component_id}']
     componentSource = 'global.{component_id}'
   }
-  else if (typeof globalThis['Component_{component_hash}'] === 'function') {
-    Component = globalThis['Component_{component_hash}']
-    componentSource = 'global.Component_{component_hash}'
-  }
   else if (
     globalThis.__rsc_modules
     && globalThis.__rsc_modules['{component_id}']
