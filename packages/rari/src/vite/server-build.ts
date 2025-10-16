@@ -89,13 +89,6 @@ export class ServerComponentBuilder {
       }
       const code = fs.readFileSync(filePath, 'utf-8')
 
-      const isInFunctionsDir
-        = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
-
-      if (isInFunctionsDir) {
-        return false
-      }
-
       const lines = code.split('\n')
       let hasClientDirective = false
       let hasServerDirective = false

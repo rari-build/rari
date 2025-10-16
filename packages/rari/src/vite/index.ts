@@ -88,19 +88,6 @@ export function rari(options: RariOptions = {}): Plugin[] {
       }
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
 
-      const isInFunctionsDir
-        = filePath.includes('/functions/') || filePath.includes('\\\\functions\\\\')
-      const isInActionsDir
-        = filePath.includes('/actions/') || filePath.includes('\\\\actions\\\\')
-      const isInRuntimeDir
-        = filePath.includes('/runtime/') || filePath.includes('\\\\runtime\\\\')
-      const isInHooksDir
-        = filePath.includes('/hooks/') || filePath.includes('\\\\hooks\\\\')
-
-      if (isInFunctionsDir || isInActionsDir || isInRuntimeDir || isInHooksDir) {
-        return false
-      }
-
       const hasClientDirective = hasTopLevelDirective(code, 'use client')
       const hasServerDirective = hasTopLevelDirective(code, 'use server')
 
@@ -188,15 +175,9 @@ export function rari(options: RariOptions = {}): Plugin[] {
   }
 
   function transformServerModule(code: string, id: string): string {
-    const isInFunctionsDir = id.includes('/functions/') || id.includes('\\\\functions\\\\')
-    const isInActionsDir = id.includes('/actions/') || id.includes('\\\\actions\\\\')
     const hasUseServer = hasTopLevelDirective(code, 'use server')
 
-    if (!hasUseServer && !isInFunctionsDir && !isInActionsDir) {
-      return code
-    }
-
-    if ((isInFunctionsDir || isInActionsDir) && !hasUseServer) {
+    if (!hasUseServer) {
       return code
     }
 
@@ -247,10 +228,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     newCode += `
 
-// HMR acceptance for server components
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
-    // Server component updated, no need to reload
   });
 }`
 
@@ -2777,12 +2756,7 @@ function isServerComponent(filePath) {
       return globalThis.__rari_server_components.has(filePath);
     }
 
-    const hasServerPattern = (
-      filePath.includes('/functions/') ||
-      filePath.includes('\\\\functions\\\\')
-    );
-
-    return hasServerPattern;
+    return false;
   } catch (error) {
     console.error('Error checking if file is server component:', error);
     return false;
