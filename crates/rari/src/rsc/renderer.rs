@@ -572,9 +572,9 @@ if (typeof globalThis.jsxs === 'undefined') {
             .execute_script("init_react_globals".to_string(), react_globals_script.to_string())
             .await?;
 
-        let direct_html_render_script = include_str!("../ssr/js/direct_html_render.js");
+        let html_render_script = include_str!("../ssr/js/html_render.js");
         self.runtime
-            .execute_script("direct_html_render".to_string(), direct_html_render_script.to_string())
+            .execute_script("html_render".to_string(), html_render_script.to_string())
             .await?;
 
         let route_renderer_script = include_str!("js/route_renderer.js");

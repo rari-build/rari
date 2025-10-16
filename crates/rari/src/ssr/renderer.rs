@@ -9,14 +9,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
-pub struct DirectRenderConfig {
+pub struct RenderConfig {
     pub enable_cache: bool,
     pub cache_static_only: bool,
     pub debug_timing: bool,
     pub max_cache_size: usize,
 }
 
-impl Default for DirectRenderConfig {
+impl Default for RenderConfig {
     fn default() -> Self {
         Self {
             enable_cache: true,
@@ -107,12 +107,12 @@ impl HtmlCache {
     }
 }
 
-pub struct DirectHtmlRenderer {
+pub struct Renderer {
     runtime: Arc<JsExecutionRuntime>,
     cache: Arc<Mutex<HtmlCache>>,
 }
 
-impl DirectHtmlRenderer {
+impl Renderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self::with_cache_size(runtime, 1000)
     }
@@ -121,10 +121,10 @@ impl DirectHtmlRenderer {
         Self { runtime, cache: Arc::new(Mutex::new(HtmlCache::new(cache_size))) }
     }
 
-    pub async fn render_to_html_direct(
+    pub async fn render_to_html(
         &self,
         component_tree: JsonValue,
-        config: &DirectRenderConfig,
+        config: &RenderConfig,
     ) -> Result<String, RariError> {
         let start_time = Instant::now();
 
@@ -137,7 +137,7 @@ impl DirectHtmlRenderer {
             if let Some(html) = cached {
                 if config.debug_timing {
                     tracing::debug!(
-                        "Direct HTML render: cache hit ({:.2}ms)",
+                        "HTML render: cache hit ({:.2}ms)",
                         start_time.elapsed().as_secs_f64() * 1000.0
                     );
                 }
@@ -146,14 +146,12 @@ impl DirectHtmlRenderer {
         }
 
         let render_start = Instant::now();
-        let result = self
-            .runtime
-            .execute_function("renderToHtmlDirect", vec![component_tree.clone()])
-            .await?;
+        let result =
+            self.runtime.execute_function("renderToHtml", vec![component_tree.clone()]).await?;
 
         let html = result
             .as_str()
-            .ok_or_else(|| RariError::internal("renderToHtmlDirect did not return string"))?
+            .ok_or_else(|| RariError::internal("renderToHtml did not return string"))?
             .to_string();
 
         let render_time = render_start.elapsed().as_secs_f64() * 1000.0;
@@ -166,11 +164,7 @@ impl DirectHtmlRenderer {
         let total_time = start_time.elapsed().as_secs_f64() * 1000.0;
 
         if config.debug_timing {
-            tracing::debug!(
-                "Direct HTML render: {:.2}ms (render: {:.2}ms)",
-                total_time,
-                render_time
-            );
+            tracing::debug!("HTML render: {:.2}ms (render: {:.2}ms)", total_time, render_time);
         }
 
         Ok(html)
@@ -179,12 +173,12 @@ impl DirectHtmlRenderer {
     pub async fn render_with_fallback(
         &self,
         component_tree: JsonValue,
-        config: &DirectRenderConfig,
+        config: &RenderConfig,
     ) -> Result<String, RariError> {
-        match self.render_to_html_direct(component_tree.clone(), config).await {
+        match self.render_to_html(component_tree.clone(), config).await {
             Ok(html) => Ok(html),
             Err(e) => {
-                tracing::warn!("Direct HTML rendering failed, would fall back to RSC path: {}", e);
+                tracing::warn!("HTML rendering failed, would fall back to RSC path: {}", e);
                 Err(e)
             }
         }
@@ -262,8 +256,8 @@ mod tests {
     }
 
     #[test]
-    fn test_direct_render_config_default() {
-        let config = DirectRenderConfig::default();
+    fn test_render_config_default() {
+        let config = RenderConfig::default();
 
         assert!(config.enable_cache);
         assert!(!config.cache_static_only);

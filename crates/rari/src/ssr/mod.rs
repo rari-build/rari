@@ -1,3 +1,3 @@
-pub mod direct_html_renderer;
+pub mod renderer;
 
-pub use direct_html_renderer::{CacheStatistics, DirectHtmlRenderer, DirectRenderConfig};
+pub use renderer::{CacheStatistics, RenderConfig, Renderer};

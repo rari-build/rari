@@ -76,15 +76,15 @@ globalThis.renderRouteToHtmlDirect = async function (pageComponentId, pageProps,
         : layoutResult
     }
 
-    if (typeof globalThis.renderToHtmlDirect !== 'function') {
+    if (typeof globalThis.renderToHtml !== 'function') {
       return {
         html: '',
-        error: 'renderToHtmlDirect function not available',
+        error: 'renderToHtml function not available',
         success: false,
       }
     }
 
-    const html = await globalThis.renderToHtmlDirect(currentElement)
+    const html = await globalThis.renderToHtml(currentElement)
 
     return {
       html,

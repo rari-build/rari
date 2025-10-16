@@ -87,7 +87,7 @@ async function renderHtmlElement(tagName, props, depth) {
   html += '>'
 
   if (children !== undefined && children !== null) {
-    html += await renderToHtmlDirect(children, depth + 1)
+    html += await renderToHtml(children, depth + 1)
   }
 
   html += `</${tagName}>`
@@ -95,7 +95,7 @@ async function renderHtmlElement(tagName, props, depth) {
   return html
 }
 
-async function renderToHtmlDirect(element, depth = 0) {
+async function renderToHtml(element, depth = 0) {
   if (depth > 100) {
     console.error('HTML render depth limit exceeded')
     return '<div style="color:red">Error: Render depth limit exceeded</div>'
@@ -108,7 +108,7 @@ async function renderToHtmlDirect(element, depth = 0) {
   if (element && typeof element === 'object' && typeof element.then === 'function') {
     try {
       element = await element
-      return await renderToHtmlDirect(element, depth)
+      return await renderToHtml(element, depth)
     }
     catch (error) {
       console.error('Error awaiting Promise in HTML render:', error)
@@ -127,7 +127,7 @@ async function renderToHtmlDirect(element, depth = 0) {
   if (Array.isArray(element)) {
     const results = []
     for (const child of element) {
-      results.push(await renderToHtmlDirect(child, depth + 1))
+      results.push(await renderToHtml(child, depth + 1))
     }
     return results.join('')
   }
@@ -141,7 +141,7 @@ async function renderToHtmlDirect(element, depth = 0) {
     }
 
     if (type === Symbol.for('react.fragment') || (type && type === globalThis.React?.Fragment)) {
-      return await renderToHtmlDirect(props.children, depth + 1)
+      return await renderToHtml(props.children, depth + 1)
     }
 
     if (typeof type === 'function') {
@@ -152,7 +152,7 @@ async function renderToHtmlDirect(element, depth = 0) {
           rendered = await rendered
         }
 
-        return await renderToHtmlDirect(rendered, depth + 1)
+        return await renderToHtml(rendered, depth + 1)
       }
       catch (error) {
         console.error('Error rendering function component:', error)
@@ -161,7 +161,7 @@ async function renderToHtmlDirect(element, depth = 0) {
     }
 
     if (props.children !== undefined) {
-      return await renderToHtmlDirect(props.children, depth + 1)
+      return await renderToHtml(props.children, depth + 1)
     }
   }
 
@@ -169,7 +169,7 @@ async function renderToHtmlDirect(element, depth = 0) {
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.renderToHtmlDirect = renderToHtmlDirect
+  globalThis.renderToHtml = renderToHtml
   globalThis.escapeHtml = escapeHtml
   globalThis.kebabCase = kebabCase
 }

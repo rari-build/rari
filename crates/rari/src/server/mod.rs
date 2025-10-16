@@ -2548,16 +2548,16 @@ async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Respons
     };
 
     if index_path.exists() {
-        if state.config.is_production() {
-            if let Some(cached_html) = state.html_cache.get(path) {
-                debug!("✅ Cache HIT for fallback HTML: {}", path);
-                let html = cached_html.clone();
-                return Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(html))
-                    .expect("Valid HTML response"));
-            }
+        if state.config.is_production()
+            && let Some(cached_html) = state.html_cache.get(path)
+        {
+            debug!("✅ Cache HIT for fallback HTML: {}", path);
+            let html = cached_html.clone();
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(html))
+                .expect("Valid HTML response"));
         }
 
         match std::fs::read_to_string(&index_path) {
