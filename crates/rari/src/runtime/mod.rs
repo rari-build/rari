@@ -262,26 +262,46 @@ impl JsExecutionRuntime {
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
         tracing::debug!("Invalidating component: {}", component_id);
 
-        let escaped_component_id = component_id.replace('"', r#"\""#);
+        let escaped_component_id = component_id
+            .replace('\\', "\\\\")
+            .replace('"', r#"\""#)
+            .replace('\n', "\\n")
+            .replace('\r', "\\r");
 
         let script = format!(
             r#"
             (function() {{
+                const componentId = "{escaped_id}";
                 let deleted = false;
 
-                if (globalThis.{component_id}) {{
-                    delete globalThis.{component_id};
+                if (globalThis[componentId]) {{
+                    delete globalThis[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_functions && globalThis.__rsc_functions['{component_id}']) {{
-                    delete globalThis.__rsc_functions['{component_id}'];
+                if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
+                    delete globalThis.__rsc_functions[componentId];
+                    deleted = true;
+                }}
+
+                if (globalThis.__server_functions && globalThis.__server_functions[componentId]) {{
+                    delete globalThis.__server_functions[componentId];
+                    deleted = true;
+                }}
+
+                if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
+                    delete globalThis.__rsc_modules[componentId];
+                    deleted = true;
+                }}
+
+                if (globalThis.__rsc_components && globalThis.__rsc_components[componentId]) {{
+                    delete globalThis.__rsc_components[componentId];
                     deleted = true;
                 }}
 
                 if (globalThis.RscModuleManager && globalThis.RscModuleManager.unregister) {{
                     try {{
-                        globalThis.RscModuleManager.unregister('{component_id}');
+                        globalThis.RscModuleManager.unregister(componentId);
                         deleted = true;
                     }} catch (e) {{
                         console.warn('Failed to unregister from RscModuleManager:', e);
@@ -291,10 +311,13 @@ impl JsExecutionRuntime {
                 return {{ success: true, deleted: deleted }};
             }})()
             "#,
-            component_id = escaped_component_id
+            escaped_id = escaped_component_id
         );
 
-        match self.execute_script(format!("invalidate_{}", component_id), script).await {
+        match self
+            .execute_script(format!("invalidate_{}", component_id.replace('/', "_")), script)
+            .await
+        {
             Ok(_) => {
                 tracing::info!("Component invalidated successfully: {}", component_id);
                 Ok(())

@@ -596,7 +596,7 @@ fn transform_non_jsx_module(ts_code: &str, module_id_arg: &str) -> Result<String
             format!(
                 "
                         if (typeof {name} !== 'undefined') {{
-                globalThis.{name} = {name};
+                globalThis['{name}'] = {name};
 
                 globalThis.__server_functions = globalThis.__server_functions || {{}};
                 globalThis.__server_functions['{name}'] = {name};
