@@ -16,6 +16,9 @@ function escapeHtml(text) {
 }
 
 function kebabCase(str) {
+  if (/^(?:Webkit|Moz|Ms|O)[A-Z]/.test(str)) {
+    return `-${str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}`
+  }
   return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
 }
 
@@ -87,7 +90,8 @@ async function renderHtmlElement(tagName, props, depth) {
   html += '>'
 
   if (children !== undefined && children !== null) {
-    html += await renderToHtml(children, depth + 1)
+    const isRawContentTag = tagName === 'style' || tagName === 'script'
+    html += await renderToHtml(children, depth + 1, isRawContentTag)
   }
 
   html += `</${tagName}>`
@@ -95,7 +99,7 @@ async function renderHtmlElement(tagName, props, depth) {
   return html
 }
 
-async function renderToHtml(element, depth = 0) {
+async function renderToHtml(element, depth = 0, isRawContent = false) {
   if (depth > 100) {
     console.error('HTML render depth limit exceeded')
     return '<div style="color:red">Error: Render depth limit exceeded</div>'
@@ -108,7 +112,7 @@ async function renderToHtml(element, depth = 0) {
   if (element && typeof element === 'object' && typeof element.then === 'function') {
     try {
       element = await element
-      return await renderToHtml(element, depth)
+      return await renderToHtml(element, depth, isRawContent)
     }
     catch (error) {
       console.error('Error awaiting Promise in HTML render:', error)
@@ -117,7 +121,7 @@ async function renderToHtml(element, depth = 0) {
   }
 
   if (typeof element === 'string' || typeof element === 'number') {
-    return escapeHtml(String(element))
+    return isRawContent ? String(element) : escapeHtml(String(element))
   }
 
   if (typeof element === 'boolean') {
@@ -127,7 +131,7 @@ async function renderToHtml(element, depth = 0) {
   if (Array.isArray(element)) {
     const results = []
     for (const child of element) {
-      results.push(await renderToHtml(child, depth + 1))
+      results.push(await renderToHtml(child, depth + 1, isRawContent))
     }
     return results.join('')
   }
@@ -141,7 +145,7 @@ async function renderToHtml(element, depth = 0) {
     }
 
     if (type === Symbol.for('react.fragment') || (type && type === globalThis.React?.Fragment)) {
-      return await renderToHtml(props.children, depth + 1)
+      return await renderToHtml(props.children, depth + 1, isRawContent)
     }
 
     if (typeof type === 'function') {
@@ -152,7 +156,7 @@ async function renderToHtml(element, depth = 0) {
           rendered = await rendered
         }
 
-        return await renderToHtml(rendered, depth + 1)
+        return await renderToHtml(rendered, depth + 1, isRawContent)
       }
       catch (error) {
         console.error('Error rendering function component:', error)
@@ -161,7 +165,7 @@ async function renderToHtml(element, depth = 0) {
     }
 
     if (props.children !== undefined) {
-      return await renderToHtml(props.children, depth + 1)
+      return await renderToHtml(props.children, depth + 1, isRawContent)
     }
   }
 
