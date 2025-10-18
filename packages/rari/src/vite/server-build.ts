@@ -299,7 +299,16 @@ export class ServerComponentBuilder {
   private transformComponentImportsToGlobal(code: string): string {
     const componentImportRegex = /import\s+(\w+)\s+from\s+['"]\.\.\/components\/(\w+)(?:\.tsx?|\.jsx?)?['"]/g
     return code.replace(componentImportRegex, (match, importName, componentName) => {
-      return `// Component reference: ${componentName}\nconst ${importName} = globalThis.__rsc_components?.['components/${componentName}'] || (() => { throw new Error('Component components/${componentName} not loaded'); })`
+      return `// Component reference: ${componentName}
+const ${importName} = (props) => {
+  const Component = globalThis.__rsc_components?.['components/${componentName}']
+    || globalThis.__rsc_modules?.['components/${componentName}']?.default
+    || globalThis['components/${componentName}'];
+  if (!Component) {
+    throw new Error('Component components/${componentName} not loaded');
+  }
+  return Component(props);
+}`
     })
   }
 
