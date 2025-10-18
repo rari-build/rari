@@ -40,25 +40,18 @@ export default function ProgressiveFormExample() {
   }, [])
 
   return (
-    <div style={{
-      background: 'white',
-      padding: '2rem',
-      borderRadius: '0.5rem',
-      border: '2px solid #10b981',
-      marginBottom: '2rem',
-    }}
-    >
-      <h3 style={{ color: '#10b981', marginBottom: '1rem' }}>
+    <div className="bg-white p-8 rounded-lg border-2 border-green-600 mb-8">
+      <h3 className="text-green-600 mb-4 text-xl font-semibold">
         Progressive Enhancement Example
       </h3>
 
-      <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+      <p className="text-gray-600 mb-6">
         This form works even without JavaScript! Try disabling JS and submitting.
       </p>
 
-      <form ref={formRef} key={formId} style={{ marginBottom: '1rem' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor={`${formId}-text`} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#374151' }}>
+      <form ref={formRef} key={formId} className="mb-4">
+        <div className="mb-4">
+          <label htmlFor={`${formId}-text`} className="block mb-2 font-semibold text-gray-700">
             Todo Text:
           </label>
           <input
@@ -69,89 +62,54 @@ export default function ProgressiveFormExample() {
             required
             disabled={status === 'submitting'}
             autoComplete="off"
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '2px solid #e2e8f0',
-              borderRadius: '0.5rem',
-              fontSize: '1rem',
-            }}
+            className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg text-base"
           />
         </div>
 
         <button
           type="submit"
           disabled={status === 'submitting'}
-          style={{
-            width: '100%',
-            padding: '0.75rem',
-            background: status === 'submitting' ? '#cbd5e0' : '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '0.5rem',
-            fontSize: '1rem',
-            fontWeight: 600,
-            cursor: status === 'submitting' ? 'not-allowed' : 'pointer',
-          }}
+          className={`w-full px-3 py-3 text-white border-none rounded-lg text-base font-semibold ${
+            status === 'submitting'
+              ? 'bg-gray-300 cursor-not-allowed'
+              : 'bg-green-600 cursor-pointer hover:bg-green-700'
+          }`}
         >
           {status === 'submitting' ? 'Creating...' : 'Create Todo & Redirect'}
         </button>
 
         {message && (
-          <div style={{
-            marginTop: '1rem',
-            padding: '0.75rem',
-            background: status === 'error' ? '#fed7d7' : '#c6f6d5',
-            color: status === 'error' ? '#e53e3e' : '#38a169',
-            borderRadius: '0.25rem',
-            fontSize: '0.9rem',
-          }}
+          <div
+            className={`mt-4 p-3 rounded text-sm ${
+              status === 'error'
+                ? 'bg-red-100 text-red-600'
+                : 'bg-green-100 text-green-600'
+            }`}
           >
             {message}
           </div>
         )}
       </form>
 
-      <div style={{
-        background: '#f0f9ff',
-        padding: '1.5rem',
-        borderRadius: '0.5rem',
-        border: '1px solid #bae6fd',
-      }}
-      >
-        <h4 style={{ margin: '0 0 1rem 0', color: '#0369a1' }}>
+      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <h4 className="m-0 mb-4 text-blue-700 font-semibold">
           How it works:
         </h4>
-        <ul style={{ margin: 0, paddingLeft: '1.5rem', lineHeight: '1.8' }}>
+        <ul className="m-0 pl-6 leading-loose">
           <li>
-            <strong>Without JS:</strong>
-            {' '}
-            Form posts to
-            <code style={{
-              background: '#e0e7ff',
-              padding: '0.125rem 0.25rem',
-              borderRadius: '0.25rem',
-              fontFamily: 'monospace',
-              fontSize: '0.9rem',
-            }}
-            >
+            <strong>Without JS:</strong> Form posts to{' '}
+            <code className="bg-indigo-100 px-1 py-0.5 rounded font-mono text-sm">
               /api/rsc/form-action
             </code>
           </li>
           <li>
-            <strong>With JS:</strong>
-            {' '}
-            Enhanced with client-side handling and better UX
+            <strong>With JS:</strong> Enhanced with client-side handling and better UX
           </li>
           <li>
-            <strong>Progressive:</strong>
-            {' '}
-            Works in both scenarios seamlessly
+            <strong>Progressive:</strong> Works in both scenarios seamlessly
           </li>
           <li>
-            <strong>Redirect:</strong>
-            {' '}
-            Server action returns redirect instruction
+            <strong>Redirect:</strong> Server action returns redirect instruction
           </li>
         </ul>
       </div>

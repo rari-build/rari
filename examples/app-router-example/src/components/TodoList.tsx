@@ -28,84 +28,46 @@ export default function TodoList() {
   }
 
   return (
-    <div style={{
-      background: 'white',
-      padding: '2rem',
-      borderRadius: '8px',
-      border: '2px solid #667eea',
-    }}>
-      <h2 style={{ color: '#667eea', marginBottom: '1.5rem' }}>
+    <div className="bg-white p-8 rounded-lg border-2 border-blue-600">
+      <h2 className="text-blue-600 mb-6 text-2xl font-semibold">
         Interactive Todo List (Client Component)
       </h2>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+      <div className="flex gap-2 mb-6">
         <input
           type="text"
           value={newTodo}
           onChange={(e) => setNewTodo(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && addTodo()}
           placeholder="Add a new todo..."
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            fontSize: '1rem',
-            border: '2px solid #e2e8f0',
-            borderRadius: '4px',
-          }}
+          className="flex-1 px-3 py-3 text-base border-2 border-gray-200 rounded"
         />
         <button
           onClick={addTodo}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            background: '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
+          className="px-6 py-3 text-base bg-blue-600 text-white border-none rounded cursor-pointer hover:bg-blue-700 transition-colors"
         >
           Add
         </button>
       </div>
 
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul className="list-none p-0">
         {todos.map(todo => (
           <li
             key={todo.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem',
-              padding: '1rem',
-              background: '#f7fafc',
-              borderRadius: '4px',
-              marginBottom: '0.5rem',
-            }}
+            className="flex items-center gap-4 p-4 bg-gray-50 rounded mb-2"
           >
             <input
               type="checkbox"
               checked={todo.done}
               onChange={() => toggleTodo(todo.id)}
-              style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              className="w-5 h-5 cursor-pointer"
             />
-            <span style={{
-              flex: 1,
-              textDecoration: todo.done ? 'line-through' : 'none',
-              color: todo.done ? '#999' : '#333',
-            }}>
+            <span className={`flex-1 ${todo.done ? 'line-through text-gray-400' : 'text-gray-900'}`}>
               {todo.text}
             </span>
             <button
               onClick={() => deleteTodo(todo.id)}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#f56565',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
+              className="px-4 py-2 bg-red-500 text-white border-none rounded cursor-pointer hover:bg-red-600 transition-colors"
             >
               Delete
             </button>
@@ -113,7 +75,7 @@ export default function TodoList() {
         ))}
       </ul>
 
-      <p style={{ marginTop: '1rem', color: '#666', fontSize: '0.9rem' }}>
+      <p className="mt-4 text-gray-600 text-sm">
         {todos.filter(t => !t.done).length} of {todos.length} todos remaining
       </p>
     </div>

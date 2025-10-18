@@ -15,54 +15,27 @@ export default async function ServerDataPage() {
   const data = await fetchData()
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '3rem',
-      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-    }}>
-      <h1 style={{
-        fontSize: '2.5rem',
-        marginBottom: '2rem',
-        color: '#667eea',
-      }}>
+    <div className="bg-white rounded-xl p-12 shadow-2xl">
+      <h1 className="text-4xl font-bold mb-8 text-blue-600">
         Server Component with Async Data
       </h1>
 
-      <div style={{
-        background: '#f7fafc',
-        padding: '2rem',
-        borderRadius: '8px',
-        border: '2px solid #e2e8f0',
-        marginBottom: '2rem',
-      }}>
-        <h2 style={{ color: '#667eea', marginBottom: '1rem' }}>
+      <div className="bg-gray-50 p-8 rounded-lg border-2 border-gray-200 mb-8">
+        <h2 className="text-blue-600 mb-4 text-2xl font-semibold">
           Data Fetched on Server
         </h2>
-        <pre style={{
-          background: '#2d3748',
-          color: '#68d391',
-          padding: '1.5rem',
-          borderRadius: '4px',
-          overflow: 'auto',
-          fontSize: '0.9rem',
-        }}>
+        <pre className="bg-gray-800 text-green-400 p-6 rounded overflow-auto text-sm">
           {JSON.stringify(data, null, 2)}
         </pre>
       </div>
 
-      <div style={{
-        background: '#edf2f7',
-        padding: '1.5rem',
-        borderRadius: '8px',
-        border: '1px solid #cbd5e0',
-      }}>
-        <h3 style={{ color: '#667eea', marginBottom: '0.5rem' }}>
+      <div className="bg-gray-100 p-6 rounded-lg border border-gray-300">
+        <h3 className="text-blue-600 mb-2 text-xl font-semibold">
           🚀 How This Works
         </h3>
-        <ul style={{ lineHeight: '1.8', color: '#666', paddingLeft: '1.5rem' }}>
+        <ul className="leading-loose text-gray-600 pl-6">
           <li>
-            <strong>This component runs only on the server</strong> - it has access to Node.js APIs like <code>process</code>
+            <strong>This component runs only on the server</strong> - it has access to Node.js APIs like <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">process</code>
           </li>
           <li>
             <strong>The fetchData() function executes during render</strong> - before any HTML is sent to the client
@@ -76,20 +49,14 @@ export default async function ServerDataPage() {
         </ul>
       </div>
 
-      <div style={{
-        marginTop: '2rem',
-        padding: '1.5rem',
-        background: '#fef5e7',
-        border: '2px solid #f9e79f',
-        borderRadius: '8px',
-      }}>
-        <h3 style={{ color: '#d68910', marginBottom: '0.5rem' }}>
+      <div className="mt-8 p-6 bg-amber-50 border-2 border-amber-200 rounded-lg">
+        <h3 className="text-amber-700 mb-2 text-xl font-semibold">
           💡 With RSC Wire Format
         </h3>
-        <p style={{ color: '#666', lineHeight: '1.6' }}>
+        <p className="text-gray-600 leading-relaxed">
           If we implemented the full RSC wire format, this server component could:
         </p>
-        <ul style={{ lineHeight: '1.8', color: '#666', paddingLeft: '1.5rem', marginTop: '0.5rem' }}>
+        <ul className="leading-loose text-gray-600 pl-6 mt-2">
           <li>Stream progressively as data loads</li>
           <li>Show Suspense boundaries during async operations</li>
           <li>Mix with client components for interactivity</li>

@@ -28,68 +28,31 @@ export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
   }
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '3rem',
-      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-    }}
-    >
+    <div className="bg-white rounded-xl p-12 shadow-2xl">
       <a
         href="/blog"
-        style={{
-          color: '#667eea',
-          textDecoration: 'none',
-          fontSize: '0.95rem',
-          marginBottom: '1rem',
-          display: 'inline-block',
-        }}
+        className="text-blue-600 no-underline text-sm mb-4 inline-block hover:text-cyan-600 transition-colors"
       >
         ← Back to Blog
       </a>
 
-      <h1 style={{
-        fontSize: '2.5rem',
-        marginBottom: '0.5rem',
-        color: '#667eea',
-      }}
-      >
+      <h1 className="text-4xl mb-2 text-blue-600 font-bold">
         {post.title}
       </h1>
 
       {post.date && (
-        <p style={{
-          color: '#999',
-          fontSize: '0.9rem',
-          marginBottom: '2rem',
-        }}
-        >
-          Published on
-          {' '}
-          {post.date}
+        <p className="text-gray-400 text-sm mb-8">
+          Published on {post.date}
         </p>
       )}
 
-      <div style={{
-        fontSize: '1.1rem',
-        color: '#666',
-        lineHeight: '1.8',
-        marginBottom: '2rem',
-      }}
-      >
+      <div className="text-lg text-gray-600 leading-loose mb-8">
         {post.content}
       </div>
 
-      <div style={{
-        background: '#f7fafc',
-        padding: '1.5rem',
-        borderRadius: '8px',
-        border: '1px solid #e2e8f0',
-        marginTop: '2rem',
-      }}
-      >
-        <h3 style={{ marginBottom: '0.5rem', color: '#667eea' }}>Route Info:</h3>
-        <pre style={{ fontSize: '0.9rem', color: '#4a5568' }}>
+      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mt-8">
+        <h3 className="mb-2 text-blue-600 font-semibold">Route Info:</h3>
+        <pre className="text-sm text-gray-700">
           {JSON.stringify({ slug }, null, 2)}
         </pre>
       </div>

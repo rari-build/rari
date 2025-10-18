@@ -6,64 +6,34 @@ export default function Counter() {
   const [count, setCount] = useState(0)
 
   return (
-    <div style={{
-      background: 'white',
-      padding: '2rem',
-      borderRadius: '8px',
-      border: '2px solid #667eea',
-      textAlign: 'center',
-    }}>
-      <h2 style={{ color: '#667eea', marginBottom: '1rem' }}>
+    <div className="bg-white p-8 rounded-lg border-2 border-blue-600 text-center">
+      <h2 className="text-blue-600 mb-4 text-2xl font-semibold">
         Interactive Counter (Client Component)
       </h2>
-      <p style={{ fontSize: '3rem', margin: '1rem 0', fontWeight: 'bold', color: '#764ba2' }}>
+      <p className="text-5xl my-4 font-bold text-cyan-600">
         {count}
       </p>
-      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+      <div className="flex gap-4 justify-center">
         <button
           onClick={() => setCount(count - 1)}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            background: '#764ba2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
+          className="px-6 py-3 text-base bg-cyan-600 text-white border-none rounded cursor-pointer hover:bg-cyan-700 transition-colors"
         >
           Decrement
         </button>
         <button
           onClick={() => setCount(0)}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            background: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
+          className="px-6 py-3 text-base bg-gray-600 text-white border-none rounded cursor-pointer hover:bg-gray-700 transition-colors"
         >
           Reset
         </button>
         <button
           onClick={() => setCount(count + 1)}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            background: '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
+          className="px-6 py-3 text-base bg-blue-600 text-white border-none rounded cursor-pointer hover:bg-blue-700 transition-colors"
         >
           Increment
         </button>
       </div>
-      <p style={{ marginTop: '1rem', color: '#666', fontSize: '0.9rem' }}>
+      <p className="mt-4 text-gray-600 text-sm">
         This component runs on the client and maintains state
       </p>
     </div>

@@ -6,53 +6,24 @@ export default function ProductsPage() {
   ]
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '3rem',
-      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-    }}>
-      <h1 style={{
-        fontSize: '2.5rem',
-        marginBottom: '2rem',
-        color: '#667eea',
-      }}>
+    <div className="bg-white rounded-xl p-12 shadow-2xl">
+      <h1 className="text-4xl font-bold mb-8 text-blue-600">
         Our Products
       </h1>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '1.5rem',
-      }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6">
         {products.map(product => (
           <div
             key={product.id}
-            style={{
-              padding: '2rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '12px',
-              color: 'white',
-              boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-            }}
+            className="p-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-xl text-white shadow-lg shadow-blue-400/40"
           >
-            <h2 style={{
-              fontSize: '1.5rem',
-              marginBottom: '0.5rem',
-            }}>
+            <h2 className="text-2xl mb-2 font-semibold">
               {product.name}
             </h2>
-            <p style={{
-              fontSize: '1.25rem',
-              fontWeight: 'bold',
-              marginBottom: '1rem',
-              opacity: 0.9,
-            }}>
+            <p className="text-xl font-bold mb-4 opacity-90">
               {product.price}
             </p>
-            <p style={{
-              opacity: 0.9,
-            }}>
+            <p className="opacity-90">
               {product.description}
             </p>
           </div>

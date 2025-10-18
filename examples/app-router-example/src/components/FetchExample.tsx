@@ -10,78 +10,40 @@ async function FetchExample() {
   const currentTime = new Date().toLocaleTimeString()
 
   return (
-    <div style={{
-      padding: '20px',
-      backgroundColor: 'white',
-      border: '1px solid #e5e7eb',
-      borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      marginBottom: '16px'
-    }}>
-      <h1 style={{
-        fontSize: '24px',
-        fontWeight: 'bold',
-        color: '#1d4ed8',
-        marginBottom: '8px'
-      }}>
+    <div className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm mb-4">
+      <h1 className="text-2xl font-bold text-blue-700 mb-2">
         Fetch Example (External API)
       </h1>
 
-      <div style={{
-        marginBottom: '16px',
-        fontSize: '14px',
-        color: '#6b7280'
-      }}>
+      <div className="mb-4 text-sm text-gray-500">
         Server time: {currentTime}
       </div>
 
-      <div style={{
-        backgroundColor: '#f9fafb',
-        padding: '16px',
-        borderRadius: '6px',
-        border: '1px solid #e5e7eb'
-      }}>
-        <h2 style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: '#1f2937',
-          marginBottom: '12px'
-        }}>
+      <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-800 mb-3">
           Real Post from JSONPlaceholder:
         </h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="flex flex-col gap-2">
           <div>
-            <span style={{ fontWeight: '500', color: '#374151' }}>Title:</span>
-            {' '}
-            {post.title}
+            <span className="font-medium text-gray-700">Title:</span> {post.title}
           </div>
 
           <div>
-            <span style={{ fontWeight: '500', color: '#374151' }}>Body:</span>
-            {' '}
-            {post.body}
+            <span className="font-medium text-gray-700">Body:</span> {post.body}
           </div>
 
           <div>
-            <span style={{ fontWeight: '500', color: '#374151' }}>User ID:</span>
-            {' '}
-            {post.userId}
+            <span className="font-medium text-gray-700">User ID:</span> {post.userId}
           </div>
 
           <div>
-            <span style={{ fontWeight: '500', color: '#374151' }}>Post ID:</span>
-            {' '}
-            {post.id}
+            <span className="font-medium text-gray-700">Post ID:</span> {post.id}
           </div>
         </div>
       </div>
 
-      <div style={{
-        marginTop: '16px',
-        fontSize: '12px',
-        color: '#9ca3af'
-      }}>
+      <div className="mt-4 text-xs text-gray-400">
         This component uses async/await and fetch() to load data from an external API.
       </div>
     </div>

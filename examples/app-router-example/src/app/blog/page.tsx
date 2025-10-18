@@ -6,49 +6,22 @@ export default function BlogPage() {
   ]
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '3rem',
-      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-    }}>
-      <h1 style={{
-        fontSize: '2.5rem',
-        marginBottom: '2rem',
-        color: '#667eea',
-      }}>
+    <div className="bg-white rounded-xl p-12 shadow-2xl">
+      <h1 className="text-4xl font-bold mb-8 text-blue-600">
         Blog Posts
       </h1>
 
-      <div style={{
-        display: 'grid',
-        gap: '1.5rem',
-      }}>
+      <div className="grid gap-6">
         {posts.map(post => (
           <a
             key={post.slug}
             href={`/blog/${post.slug}`}
-            style={{
-              display: 'block',
-              padding: '1.5rem',
-              background: '#f7fafc',
-              borderRadius: '8px',
-              border: '2px solid #e2e8f0',
-              textDecoration: 'none',
-              transition: 'all 0.2s',
-            }}
+            className="block p-6 bg-gray-50 rounded-lg border-2 border-gray-200 no-underline hover:border-blue-400 hover:bg-blue-50 transition-all"
           >
-            <h2 style={{
-              fontSize: '1.5rem',
-              color: '#667eea',
-              marginBottom: '0.5rem',
-            }}>
+            <h2 className="text-2xl text-blue-600 mb-2 font-semibold">
               {post.title}
             </h2>
-            <p style={{
-              color: '#666',
-              fontSize: '0.9rem',
-            }}>
+            <p className="text-gray-600 text-sm">
               Published on {post.date}
             </p>
           </a>

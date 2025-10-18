@@ -6,57 +6,20 @@ export default async function ActionsPage() {
   const initialTodos = await getTodos()
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '3rem',
-      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-    }}
-    >
-      <header style={{
-        textAlign: 'center',
-        marginBottom: '3rem',
-        paddingBottom: '2rem',
-        borderBottom: '2px solid #e2e8f0',
-      }}
-      >
-        <h1 style={{
-          fontSize: '3rem',
-          marginBottom: '1rem',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-        }}
-        >
+    <div className="bg-white rounded-xl p-12 shadow-2xl">
+      <header className="text-center mb-12 pb-8 border-b-2 border-gray-200">
+        <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
           React Server Actions Demo
         </h1>
-        <p style={{
-          fontSize: '1.2rem',
-          color: '#666',
-          maxWidth: '600px',
-          margin: '0 auto',
-          lineHeight: '1.6',
-        }}
-        >
+        <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
           This page demonstrates React Server Actions working with Rari.
           All patterns follow React's official server function specifications.
         </p>
       </header>
 
-      <main style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2rem',
-      }}
-      >
+      <main className="flex flex-col gap-8">
         <section>
-          <h2 style={{
-            fontSize: '2rem',
-            color: '#667eea',
-            marginBottom: '1.5rem',
-          }}
-          >
+          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
             Interactive Todo App
           </h2>
 
@@ -64,349 +27,125 @@ export default async function ActionsPage() {
         </section>
 
         <section>
-          <h2 style={{
-            fontSize: '2rem',
-            color: '#667eea',
-            marginBottom: '1.5rem',
-          }}
-          >
+          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
             Progressive Enhancement
           </h2>
 
           <ProgressiveFormExample />
         </section>
 
-        <section style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '1rem',
-          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-        }}
-        >
-          <h2 style={{
-            fontSize: '2rem',
-            color: '#667eea',
-            marginBottom: '1.5rem',
-          }}
-          >
+        <section className="bg-white p-8 rounded-2xl shadow-2xl">
+          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
             Server Action Patterns Demonstrated
           </h2>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '1.5rem',
-          }}
-          >
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6">
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ useActionState Hook
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Manage server action state with pending states and error handling.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ useTransition Hook
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Track pending states across multiple actions for better UX.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ Form Actions
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Server functions that work with HTML forms and FormData.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ Progressive Enhancement
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Forms that work without JavaScript and enhance with it.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ Error Handling
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Proper error states and user feedback for failed actions.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#f8fafc',
-              borderRadius: '0.5rem',
-              border: '1px solid #e2e8f0',
-            }}
-            >
-              <h3 style={{
-                color: '#10b981',
-                marginBottom: '0.5rem',
-                fontSize: '1.2rem',
-              }}
-              >
+            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-green-600 mb-2 text-xl font-semibold">
                 ✅ Redirects
               </h3>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Server actions can redirect after successful completion.
               </p>
             </div>
           </div>
         </section>
 
-        <section style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '1rem',
-          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-        }}
-        >
-          <h2 style={{
-            fontSize: '2rem',
-            color: '#667eea',
-            marginBottom: '1.5rem',
-          }}
-          >
+        <section className="bg-white p-8 rounded-2xl shadow-2xl">
+          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
             Technical Implementation
           </h2>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '1.5rem',
-          }}
-          >
-            <div style={{
-              padding: '1.5rem',
-              background: '#fef5e7',
-              borderRadius: '0.5rem',
-              border: '1px solid #f9e79f',
-            }}
-            >
-              <h4 style={{
-                color: '#d68910',
-                marginBottom: '0.5rem',
-                fontSize: '1.1rem',
-              }}
-              >
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-6">
+            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
                 Server Functions
               </h4>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
-                Functions marked with
-                {' '}
-                <code style={{
-                  background: '#e2e8f0',
-                  padding: '0.125rem 0.25rem',
-                  borderRadius: '0.25rem',
-                  fontFamily: 'monospace',
-                  fontSize: '0.9em',
-                }}
-                >
+              <p className="text-gray-600 m-0 leading-relaxed">
+                Functions marked with{' '}
+                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
                   'use server'
-                </code>
-                {' '}
+                </code>{' '}
                 are automatically transformed into callable references.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#fef5e7',
-              borderRadius: '0.5rem',
-              border: '1px solid #f9e79f',
-            }}
-            >
-              <h4 style={{
-                color: '#d68910',
-                marginBottom: '0.5rem',
-                fontSize: '1.1rem',
-              }}
-              >
+            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
                 HTTP Endpoints
               </h4>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
-                Server actions are called via
-                {' '}
-                <code style={{
-                  background: '#e2e8f0',
-                  padding: '0.125rem 0.25rem',
-                  borderRadius: '0.25rem',
-                  fontFamily: 'monospace',
-                  fontSize: '0.9em',
-                }}
-                >
+              <p className="text-gray-600 m-0 leading-relaxed">
+                Server actions are called via{' '}
+                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
                   POST /api/rsc/action
-                </code>
-                {' '}
+                </code>{' '}
                 with JSON payloads.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#fef5e7',
-              borderRadius: '0.5rem',
-              border: '1px solid #f9e79f',
-            }}
-            >
-              <h4 style={{
-                color: '#d68910',
-                marginBottom: '0.5rem',
-                fontSize: '1.1rem',
-              }}
-              >
+            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
                 Form Enhancement
               </h4>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
-                Forms can post to
-                {' '}
-                <code style={{
-                  background: '#e2e8f0',
-                  padding: '0.125rem 0.25rem',
-                  borderRadius: '0.25rem',
-                  fontFamily: 'monospace',
-                  fontSize: '0.9em',
-                }}
-                >
+              <p className="text-gray-600 m-0 leading-relaxed">
+                Forms can post to{' '}
+                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
                   /api/rsc/form-action
-                </code>
-                {' '}
+                </code>{' '}
                 for progressive enhancement.
               </p>
             </div>
 
-            <div style={{
-              padding: '1.5rem',
-              background: '#fef5e7',
-              borderRadius: '0.5rem',
-              border: '1px solid #f9e79f',
-            }}
-            >
-              <h4 style={{
-                color: '#d68910',
-                marginBottom: '0.5rem',
-                fontSize: '1.1rem',
-              }}
-              >
+            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
                 Wire Format
               </h4>
-              <p style={{
-                color: '#666',
-                margin: 0,
-                lineHeight: '1.5',
-              }}
-              >
+              <p className="text-gray-600 m-0 leading-relaxed">
                 Actions return JSON responses that can include redirects and error states.
               </p>
             </div>

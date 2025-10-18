@@ -92,120 +92,61 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
   }
 
   return (
-    <div style={{
-      background: 'white',
-      padding: '2rem',
-      borderRadius: '0.5rem',
-      border: '2px solid #667eea',
-    }}
-    >
-      <h3 style={{ color: '#667eea', marginBottom: '1rem' }}>
+    <div className="bg-white p-8 rounded-lg border-2 border-blue-600">
+      <h3 className="text-blue-600 mb-4 text-xl font-semibold">
         Todo List (with Server Actions)
       </h3>
 
       {error && (
-        <div style={{
-          color: '#e53e3e',
-          fontSize: '0.9rem',
-          padding: '0.75rem',
-          background: '#fed7d7',
-          borderRadius: '0.25rem',
-          marginBottom: '1rem',
-          border: '1px solid #fc8181',
-        }}
-        >
-          <strong>Error:</strong>
-          {' '}
-          {error}
+        <div className="text-red-600 text-sm p-3 bg-red-100 rounded mb-4 border border-red-300">
+          <strong>Error:</strong> {error}
         </div>
       )}
 
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '1rem',
-        padding: '1rem',
-        background: '#f7fafc',
-        borderRadius: '0.5rem',
-        fontSize: '0.9rem',
-        color: '#666',
-      }}
-      >
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
         <span>
-          <strong>{activeCount}</strong>
-          {' '}
-          active
+          <strong>{activeCount}</strong> active
         </span>
         <span>
-          <strong>{completedCount}</strong>
-          {' '}
-          completed
+          <strong>{completedCount}</strong> completed
         </span>
         {completedCount > 0 && (
           <button
             onClick={handleClearCompleted}
             disabled={isPending}
-            style={{
-              padding: '0.5rem 1rem',
-              background: '#e53e3e',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.25rem',
-              fontSize: '0.8rem',
-              cursor: isPending ? 'not-allowed' : 'pointer',
-              opacity: isPending ? 0.6 : 1,
-            }}
+            className={`px-4 py-2 text-white border-none rounded text-xs ${
+              isPending ? 'bg-red-300 cursor-not-allowed opacity-60' : 'bg-red-600 cursor-pointer hover:bg-red-700'
+            }`}
           >
             Clear Completed
           </button>
         )}
       </div>
 
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ul className="list-none p-0 m-0">
         {todos.map(todo => (
           <li
             key={todo.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem',
-              padding: '1rem',
-              border: '1px solid #e2e8f0',
-              borderRadius: '0.5rem',
-              marginBottom: '0.5rem',
-              background: todo.completed ? '#f7fafc' : 'white',
-              opacity: isPending ? 0.7 : 1,
-              transition: 'all 0.2s',
-            }}
+            className={`flex items-center gap-4 p-4 border border-gray-200 rounded-lg mb-2 transition-all ${
+              todo.completed ? 'bg-gray-50' : 'bg-white'
+            } ${isPending ? 'opacity-70' : ''}`}
           >
             <button
               onClick={() => handleToggle(todo.id)}
               disabled={isPending}
-              style={{
-                width: '2rem',
-                height: '2rem',
-                border: '2px solid #667eea',
-                borderRadius: '50%',
-                background: todo.completed ? '#667eea' : 'white',
-                color: todo.completed ? 'white' : '#667eea',
-                cursor: isPending ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                fontSize: '1rem',
-              }}
+              className={`w-8 h-8 border-2 rounded-full flex items-center justify-center font-bold text-base ${
+                todo.completed
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-blue-600 bg-white text-blue-600'
+              } ${isPending ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             >
               {todo.completed ? '✓' : '○'}
             </button>
 
-            <span style={{
-              flex: 1,
-              fontSize: '1rem',
-              textDecoration: todo.completed ? 'line-through' : 'none',
-              color: todo.completed ? '#999' : '#333',
-            }}
+            <span
+              className={`flex-1 text-base ${
+                todo.completed ? 'line-through text-gray-400' : 'text-gray-900'
+              }`}
             >
               {todo.text}
             </span>
@@ -213,20 +154,9 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
             <button
               onClick={() => handleDelete(todo.id)}
               disabled={isPending}
-              style={{
-                width: '2rem',
-                height: '2rem',
-                border: '1px solid #e53e3e',
-                borderRadius: '0.25rem',
-                background: 'white',
-                color: '#e53e3e',
-                cursor: isPending ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem',
-                fontWeight: 'bold',
-              }}
+              className={`w-8 h-8 border border-red-600 rounded bg-white text-red-600 flex items-center justify-center text-xl font-bold ${
+                isPending ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-red-50'
+              }`}
             >
               ×
             </button>
@@ -235,28 +165,14 @@ export default function TodoListWithActions({ initialTodos, onUpdate }: TodoList
       </ul>
 
       {todos.length === 0 && (
-        <div style={{
-          textAlign: 'center',
-          padding: '3rem',
-          color: '#666',
-          fontStyle: 'italic',
-        }}
-        >
+        <div className="text-center p-12 text-gray-600 italic">
           No todos yet. Add one above!
         </div>
       )}
 
-      <div style={{
-        fontSize: '0.85rem',
-        color: '#666',
-        padding: '1rem',
-        background: '#f7fafc',
-        borderRadius: '0.25rem',
-        marginTop: '1rem',
-      }}
-      >
+      <div className="text-sm text-gray-600 p-4 bg-gray-50 rounded mt-4">
         <strong>Features demonstrated:</strong>
-        <ul style={{ margin: '0.5rem 0 0 1.5rem', lineHeight: '1.6' }}>
+        <ul className="mt-2 ml-6 leading-relaxed">
           <li>Multiple server actions in one component</li>
           <li>Pending states during execution</li>
           <li>Optimistic UI updates</li>
