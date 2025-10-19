@@ -1,6 +1,6 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
@@ -8,7 +8,10 @@
       content="Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure."
     />
     <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
-    <link rel="stylesheet" href="/src/index.css" />
+    <script type="module">
+      import "/src/app/globals.css";
+      import "virtual:rari-entry-client";
+    </script>
 
     <script
       async
@@ -24,9 +27,7 @@
     </script>
   </head>
 
-  <body>
+  <body class="min-h-screen bg-[#0d1117] text-gray-200">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
-
-  </html>
+</html>

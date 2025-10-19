@@ -1,3 +1,5 @@
+'use client'
+
 import type { SVGProps } from 'react'
 
 export default function Github(props: SVGProps<SVGSVGElement>) {

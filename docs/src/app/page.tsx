@@ -1,6 +1,7 @@
-import Version from '../components/Version'
+/* eslint-disable react-refresh/only-export-components */
+import type { PageProps } from 'rari/client'
 
-export default function HomePage() {
+export default function HomePage(_params: PageProps) {
   return (
     <div className="space-y-8 lg:space-y-12">
       <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">
@@ -12,9 +13,6 @@ export default function HomePage() {
             <h1 className="text-4xl lg:text-6xl font-bold text-[#f0f6fc] font-mono">
               rari
             </h1>
-            <div className="text-base lg:text-lg text-gray-400 font-mono">
-              <Version />
-            </div>
           </div>
         </div>
 
@@ -64,4 +62,10 @@ export default function HomePage() {
       </div>
     </div>
   )
+}
+
+export const metadata = {
+  title: 'Home | Rari',
+  description:
+    'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
 }

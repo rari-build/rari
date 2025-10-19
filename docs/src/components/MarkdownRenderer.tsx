@@ -1,18 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cwd } from 'node:process'
-import MarkdownIt from 'markdown-it'
-import { createHighlighter } from 'shiki'
 
 interface MarkdownRendererProps {
   filePath: string
   className?: string
 }
 
-let shikiHighlighter: Awaited<ReturnType<typeof createHighlighter>> | null
-  = null
+let shikiHighlighter: any | null = null
 
-async function getHighlighter() {
+async function getHighlighter(createHighlighter: any) {
   if (!shikiHighlighter) {
     try {
       shikiHighlighter = await createHighlighter({
@@ -43,6 +40,9 @@ export default async function MarkdownRenderer({
   let error: Error | null = null
 
   try {
+    const MarkdownIt = (await import('markdown-it')).default
+    const { createHighlighter } = await import('shiki')
+
     const distPath = join(cwd(), 'dist', 'content', filePath)
     const contentPath = join(cwd(), 'content', filePath)
     const publicPath = join(cwd(), 'public', 'content', filePath)
@@ -58,7 +58,7 @@ export default async function MarkdownRenderer({
       content = readFileSync(publicPath, 'utf-8')
     }
 
-    const highlighter = await getHighlighter()
+    const highlighter = await getHighlighter(createHighlighter)
 
     const md = new MarkdownIt({
       html: true,

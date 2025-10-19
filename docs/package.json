@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm clean && pnpm typecheck && vite build",
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
-    "start": "node node_modules/rari/dist/cli.js start",
+    "start": "NODE_ENV=production rari start",
     "clean": "rm -rf .rari && rm -rf dist",
     "lint": "oxlint && eslint",
     "lint:fix": "oxlint --fix && eslint --fix",
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "markdown-it": "^14.1.0",
-    "rari": "^0.2.24",
+    "rari": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "shiki": "^3.13.0"
@@ -31,7 +31,7 @@
     "@typescript/native-preview": "7.0.0-dev.20250923.1",
     "eslint": "^9.37.0",
     "oxlint": "^1.23.0",
-    "tailwindcss": "^4.1.14",
-    "vite": "^7.1.10"
+    "rolldown-vite": "^7.1.17",
+    "tailwindcss": "^4.1.14"
   }
 }
