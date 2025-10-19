@@ -351,7 +351,7 @@ impl RscHtmlRenderer {
             }
         }
 
-        let template = match self.read_template_file().await {
+        let template = match self.read_template_file(is_dev_mode).await {
             Ok(content) => {
                 if is_dev_mode {
                     self.inject_vite_client_if_needed(&content)
@@ -431,9 +431,12 @@ impl RscHtmlRenderer {
             .to_string()
     }
 
-    async fn read_template_file(&self) -> Result<String, RariError> {
-        let possible_paths =
-            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"];
+    async fn read_template_file(&self, is_dev_mode: bool) -> Result<String, RariError> {
+        let possible_paths = if is_dev_mode {
+            vec!["index.html", "public/index.html", "dist/index.html", "build/index.html"]
+        } else {
+            vec!["dist/index.html", "build/index.html", "index.html", "public/index.html"]
+        };
 
         for path in possible_paths {
             if let Ok(content) = tokio::fs::read_to_string(path).await {

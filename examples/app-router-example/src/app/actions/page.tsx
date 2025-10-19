@@ -6,152 +6,186 @@ export default async function ActionsPage() {
   const initialTodos = await getTodos()
 
   return (
-    <div className="bg-white rounded-xl p-12 shadow-2xl">
-      <header className="text-center mb-12 pb-8 border-b-2 border-gray-200">
-        <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-          React Server Actions Demo
-        </h1>
-        <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-          This page demonstrates React Server Actions working with Rari.
-          All patterns follow React's official server function specifications.
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
+        <div className="flex items-center gap-3 mb-4">
+          <h1 className="text-4xl font-bold text-gray-900">
+            React Server Actions Demo
+          </h1>
+          <span className="text-3xl">⚡</span>
+        </div>
+        <p className="text-lg text-gray-600 max-w-3xl leading-relaxed">
+          This page demonstrates React Server Actions working with Rari. All
+          patterns follow React's official server function specifications.
         </p>
-      </header>
+      </div>
 
-      <main className="flex flex-col gap-8">
-        <section>
-          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
-            Interactive Todo App
-          </h2>
+      {/* Interactive Todo App */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          Interactive Todo Application
+        </h2>
+        <TodoAppWithActions initialTodos={initialTodos} />
+      </div>
 
-          <TodoAppWithActions initialTodos={initialTodos} />
-        </section>
+      {/* Progressive Enhancement */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          Progressive Enhancement Form
+        </h2>
+        <ProgressiveFormExample />
+      </div>
 
-        <section>
-          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
-            Progressive Enhancement
-          </h2>
-
-          <ProgressiveFormExample />
-        </section>
-
-        <section className="bg-white p-8 rounded-2xl shadow-2xl">
-          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
-            Server Action Patterns Demonstrated
-          </h2>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6">
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ useActionState Hook
+      {/* Server Action Patterns */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          Server Action Patterns Demonstrated
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">
+                useActionState Hook
               </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Manage server action state with pending states and error handling.
-              </p>
             </div>
-
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ useTransition Hook
-              </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Track pending states across multiple actions for better UX.
-              </p>
-            </div>
-
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ Form Actions
-              </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Server functions that work with HTML forms and FormData.
-              </p>
-            </div>
-
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ Progressive Enhancement
-              </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Forms that work without JavaScript and enhance with it.
-              </p>
-            </div>
-
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ Error Handling
-              </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Proper error states and user feedback for failed actions.
-              </p>
-            </div>
-
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-green-600 mb-2 text-xl font-semibold">
-                ✅ Redirects
-              </h3>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Server actions can redirect after successful completion.
-              </p>
-            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Manage server action state with pending states and error handling.
+            </p>
           </div>
-        </section>
 
-        <section className="bg-white p-8 rounded-2xl shadow-2xl">
-          <h2 className="text-3xl text-blue-600 mb-6 font-bold">
-            Technical Implementation
-          </h2>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-6">
-            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
-              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
-                Server Functions
-              </h4>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Functions marked with{' '}
-                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
-                  'use server'
-                </code>{' '}
-                are automatically transformed into callable references.
-              </p>
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">
+                useTransition Hook
+              </h3>
             </div>
-
-            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
-              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
-                HTTP Endpoints
-              </h4>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Server actions are called via{' '}
-                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
-                  POST /api/rsc/action
-                </code>{' '}
-                with JSON payloads.
-              </p>
-            </div>
-
-            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
-              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
-                Form Enhancement
-              </h4>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Forms can post to{' '}
-                <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-sm">
-                  /api/rsc/form-action
-                </code>{' '}
-                for progressive enhancement.
-              </p>
-            </div>
-
-            <div className="p-6 bg-amber-50 rounded-lg border border-amber-200">
-              <h4 className="text-amber-700 mb-2 text-lg font-semibold">
-                Wire Format
-              </h4>
-              <p className="text-gray-600 m-0 leading-relaxed">
-                Actions return JSON responses that can include redirects and error states.
-              </p>
-            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Track pending states across multiple actions for better UX.
+            </p>
           </div>
-        </section>
-      </main>
+
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">Form Actions</h3>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Server functions that work with HTML forms and FormData.
+            </p>
+          </div>
+
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">
+                Progressive Enhancement
+              </h3>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Forms that work without JavaScript and enhance with it.
+            </p>
+          </div>
+
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">Error Handling</h3>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Proper error states and user feedback for failed actions.
+            </p>
+          </div>
+
+          <div className="p-5 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-600 text-xl">✓</span>
+              <h3 className="text-green-900 font-semibold">Redirects</h3>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Server actions can redirect after successful completion.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Technical Implementation */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          Technical Implementation
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
+                <span className="text-indigo-600 font-bold">1</span>
+              </div>
+              <h4 className="text-gray-900 font-semibold">Server Functions</h4>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Functions marked with
+              {' '}
+              <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
+                'use server'
+              </code>
+              {' '}
+              are automatically transformed into callable references that can be
+              invoked from client components.
+            </p>
+          </div>
+
+          <div className="p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
+                <span className="text-indigo-600 font-bold">2</span>
+              </div>
+              <h4 className="text-gray-900 font-semibold">HTTP Endpoints</h4>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Server actions are called via
+              {' '}
+              <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
+                POST /api/rsc/action
+              </code>
+              {' '}
+              with JSON payloads containing serialized arguments.
+            </p>
+          </div>
+
+          <div className="p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
+                <span className="text-indigo-600 font-bold">3</span>
+              </div>
+              <h4 className="text-gray-900 font-semibold">Form Enhancement</h4>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Forms can post to
+              {' '}
+              <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
+                /api/rsc/form-action
+              </code>
+              {' '}
+              for progressive enhancement, working without JavaScript.
+            </p>
+          </div>
+
+          <div className="p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
+                <span className="text-indigo-600 font-bold">4</span>
+              </div>
+              <h4 className="text-gray-900 font-semibold">Wire Format</h4>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Actions return JSON responses that can include redirects, error
+              states, and updated data for optimistic UI updates.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
