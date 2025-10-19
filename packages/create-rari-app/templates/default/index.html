@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{PROJECT_NAME}}</title>
+  <script type="module">
+    import '/src/app/globals.css';
+    import 'virtual:rari-entry-client';
+  </script>
 </head>
-<body>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
   <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
 </body>
+
 </html>

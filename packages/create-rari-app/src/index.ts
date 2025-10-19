@@ -163,20 +163,18 @@ async function copyTemplate(
     'README.md',
     'railway.toml',
     'render.yaml',
-    'src/main.tsx',
-    'src/App.tsx',
     'src/vite-env.d.ts',
-    'src/styles/index.css',
+    'src/app/globals.css',
+    'src/app/layout.tsx',
+    'src/app/page.tsx',
+    'src/app/about/page.tsx',
     'src/components/Welcome.tsx',
     'src/components/ServerTime.tsx',
-    'src/pages/index.tsx',
-    'src/pages/about.tsx',
     'gitignore',
   ]
 
+  await mkdir(join(projectPath, 'src', 'app', 'about'), { recursive: true })
   await mkdir(join(projectPath, 'src', 'components'), { recursive: true })
-  await mkdir(join(projectPath, 'src', 'styles'), { recursive: true })
-  await mkdir(join(projectPath, 'src', 'pages'), { recursive: true })
 
   for (const file of templateFiles) {
     const sourcePath = join(templatePath, file)
