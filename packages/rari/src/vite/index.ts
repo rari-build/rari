@@ -1299,6 +1299,16 @@ export async function renderApp() {
   try {
     const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
 
+    if (hasSSRContent) {
+      hydrateRoot(rootElement, null, {
+        onRecoverableError: (error) => {
+          console.warn('[Rari] Recoverable hydration error:', error);
+        }
+      });
+      isInitialHydration = false;
+      return;
+    }
+
     const rariServerUrl = window.location.origin.includes(':5173')
       ? 'http://localhost:3000'
       : window.location.origin;
@@ -1320,7 +1330,7 @@ export async function renderApp() {
 
     let contentToRender;
     if (isFullDocument) {
-      const bodyContent = extractBodyContent(element, hasSSRContent);
+      const bodyContent = extractBodyContent(element, false);
       if (bodyContent) {
         contentToRender = bodyContent;
       } else {
@@ -1341,19 +1351,9 @@ export async function renderApp() {
     `
       : 'const wrappedContent = contentToRender;'}
 
-    if (hasSSRContent) {
-      console.log('[Rari] Hydrating SSR content');
-      hydrateRoot(rootElement, wrappedContent, {
-        onRecoverableError: (error) => {
-          console.warn('[Rari] Recoverable hydration error:', error);
-        }
-      });
-      isInitialHydration = false;
-    } else {
-      console.log('[Rari] Client-side rendering');
-      const root = createRoot(rootElement);
-      root.render(wrappedContent);
-    }
+    console.log('[Rari] Client-side rendering');
+    const root = createRoot(rootElement);
+    root.render(wrappedContent);
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`
