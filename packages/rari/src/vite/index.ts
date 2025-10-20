@@ -1299,16 +1299,6 @@ export async function renderApp() {
   try {
     const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
 
-    if (hasSSRContent) {
-      hydrateRoot(rootElement, null, {
-        onRecoverableError: (error) => {
-          console.warn('[Rari] Recoverable hydration error:', error);
-        }
-      });
-      isInitialHydration = false;
-      return;
-    }
-
     const rariServerUrl = window.location.origin.includes(':5173')
       ? 'http://localhost:3000'
       : window.location.origin;
