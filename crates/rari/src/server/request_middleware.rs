@@ -24,7 +24,7 @@ const NOSNIFF: &str = "nosniff";
 const FRAME_DENY: &str = "DENY";
 const XSS_PROTECTION: &str = "1; mode=block";
 const HSTS_HEADER: &str = "max-age=31536000; includeSubDomains";
-const CSP_POLICY: &str = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:";
+const CSP_POLICY: &str = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss: https://www.google-analytics.com";
 
 pub async fn request_logger(
     request: Request<axum::body::Body>,
