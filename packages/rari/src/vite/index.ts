@@ -954,7 +954,7 @@ const ${componentName} = registerClientReference(
           cwd: process.cwd(),
           env: {
             ...process.env,
-            RUST_LOG: process.env.RUST_LOG || 'info',
+            RUST_LOG: process.env.RUST_LOG || 'error',
             RARI_VITE_PORT: vitePort.toString(),
           },
         })
@@ -1341,7 +1341,6 @@ export async function renderApp() {
     `
       : 'const wrappedContent = contentToRender;'}
 
-    console.log('[Rari] Client-side rendering');
     const root = createRoot(rootElement);
     root.render(wrappedContent);
   } catch (error) {

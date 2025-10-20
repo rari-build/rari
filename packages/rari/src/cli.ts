@@ -88,7 +88,7 @@ async function startRustServer(): Promise<void> {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      RUST_LOG: process.env.RUST_LOG || 'info',
+      RUST_LOG: process.env.RUST_LOG || 'error',
     },
   })
 

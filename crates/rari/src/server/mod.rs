@@ -2651,6 +2651,35 @@ async fn handle_app_route(
     use crate::server::request_type::{RenderMode, RequestTypeDetector};
 
     let path = uri.path();
+
+    if path.len() > 1 {
+        let path_without_leading_slash = &path[1..];
+
+        if path_without_leading_slash.contains('.') {
+            let file_path = state.config.public_dir().join(path_without_leading_slash);
+
+            if file_path.exists() && file_path.is_file() {
+                match std::fs::read(&file_path) {
+                    Ok(content) => {
+                        let content_type = get_content_type(path_without_leading_slash);
+                        let cache_control = &state.config.caching.static_files;
+                        return Ok(Response::builder()
+                            .header("content-type", content_type)
+                            .header("cache-control", cache_control)
+                            .body(Body::from(content))
+                            .expect("Valid static file response"));
+                    }
+                    Err(e) => {
+                        error!("Failed to read static file {}: {}", file_path.display(), e);
+                    }
+                }
+            }
+
+            debug!("Static file not found: {}", path);
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
     let app_router = match &state.app_router {
         Some(router) => router,
         None => return Err(StatusCode::NOT_FOUND),
