@@ -8,9 +8,6 @@ export default function RootLayout({ children }: LayoutProps) {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
               <span className="text-2xl font-bold text-gray-900">Rari</span>
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                DEMO
-              </span>
             </div>
             <ul className="flex gap-1 list-none m-0">
               <li>
@@ -35,14 +32,6 @@ export default function RootLayout({ children }: LayoutProps) {
                   className="px-4 py-2 text-sm font-medium text-gray-700 no-underline hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
                 >
                   Blog
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/products"
-                  className="px-4 py-2 text-sm font-medium text-gray-700 no-underline hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-                >
-                  Products
                 </a>
               </li>
               <li>

@@ -11,12 +11,14 @@ async function FetchExample() {
 
   return (
     <div className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm mb-4">
-      <h1 className="text-2xl font-bold text-blue-700 mb-2">
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">
         Fetch Example (External API)
       </h1>
 
       <div className="mb-4 text-sm text-gray-500">
-        Server time: {currentTime}
+        Server time:
+        {' '}
+        {currentTime}
       </div>
 
       <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
@@ -26,29 +28,37 @@ async function FetchExample() {
 
         <div className="flex flex-col gap-2">
           <div>
-            <span className="font-medium text-gray-700">Title:</span> {post.title}
+            <span className="font-medium text-gray-700">Title:</span>
+            {' '}
+            {post.title}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">Body:</span> {post.body}
+            <span className="font-medium text-gray-700">Body:</span>
+            {' '}
+            {post.body}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">User ID:</span> {post.userId}
+            <span className="font-medium text-gray-700">User ID:</span>
+            {' '}
+            {post.userId}
           </div>
 
           <div>
-            <span className="font-medium text-gray-700">Post ID:</span> {post.id}
+            <span className="font-medium text-gray-700">Post ID:</span>
+            {' '}
+            {post.id}
           </div>
         </div>
       </div>
 
       <div className="mt-4 text-xs text-gray-400">
-        This component uses async/await and fetch() to load data from an external API.
+        This component uses async/await and fetch() to load data from an
+        external API.
       </div>
     </div>
   )
 }
 
 export default FetchExample
-
