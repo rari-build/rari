@@ -47,75 +47,105 @@ npm install rari
 Update your `vite.config.ts`:
 
 ```typescript
-import { rari } from 'rari'
+import { rari, rariRouter } from 'rari/server'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(), // Add Rari plugin
+    rari(),       // Core Rari plugin
+    rariRouter(), // App router support
   ],
 })
 ```
 
-## Your First Server Component
+## Your First App Router Page
 
-Create `src/components/ServerTime.tsx`:
+With the app router, your application structure is based on the `src/app/` directory. Let's create your first page.
+
+Create `src/app/layout.tsx` (root layout):
 
 ```tsx
-// This is a React Server Component
-export default async function ServerTime() {
-  // This runs on the server!
+import type { LayoutProps } from 'rari/client'
+
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow-sm p-4">
+        <div className="max-w-7xl mx-auto flex gap-4">
+          <a href="/" className="text-blue-600 hover:text-blue-800">Home</a>
+          <a href="/about" className="text-blue-600 hover:text-blue-800">About</a>
+        </div>
+      </nav>
+      <main className="max-w-7xl mx-auto py-8 px-4">
+        {children}
+      </main>
+    </div>
+  )
+}
+
+export const metadata = {
+  title: 'My Rari App',
+  description: 'Built with Rari',
+}
+```
+
+Create `src/app/page.tsx` (home page):
+
+```tsx
+import type { PageProps } from 'rari/client'
+import Counter from '../components/Counter'
+
+// This is a React Server Component - runs on the server!
+export default async function HomePage({ params, searchParams }: PageProps) {
   const timestamp = new Date().toISOString()
 
   // Simulate async work
   await new Promise(resolve => setTimeout(resolve, 100))
 
   return (
-    <div className="p-4 bg-blue-50 rounded-lg">
-      <h2 className="text-lg font-semibold">Server Time</h2>
-      <p className="text-gray-600">
-        Generated on server at:
-        {' '}
-        {timestamp}
-      </p>
+    <div className="space-y-8">
+      <h1 className="text-3xl font-bold">Welcome to Rari</h1>
+
+      {/* Server-rendered content */}
+      <div className="p-4 bg-blue-50 rounded-lg">
+        <h2 className="text-lg font-semibold">Server Time</h2>
+        <p className="text-gray-600">
+          Generated on server at: {timestamp}
+        </p>
+      </div>
+
+      {/* Client Component */}
+      <Counter />
     </div>
   )
 }
+
+export const metadata = {
+  title: 'Home | My Rari App',
+  description: 'Welcome to my Rari application',
+}
 ```
 
-Use it in your `src/App.tsx`:
+Create `src/components/Counter.tsx` (client component):
 
 ```tsx
-import { useState } from 'react'
-import ServerTime from './components/ServerTime'
+'use client'
 
-export default function App() {
+import { useState } from 'react'
+
+export default function Counter() {
   const [count, setCount] = useState(0)
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-8">
-          My First Rari App
-        </h1>
-
-        {/* Server Component */}
-        <ServerTime />
-
-        {/* Client Component */}
-        <div className="mt-8 p-4 bg-white rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Client Interaction</h2>
-          <button
-            onClick={() => setCount(count + 1)}
-            type="button"
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Count:
-            {' '}
-            {count}
-          </button>
-        </div>
-      </div>
+    <div className="p-4 bg-white rounded-lg shadow">
+      <h2 className="text-lg font-semibold mb-4">Client Interaction</h2>
+      <button
+        onClick={() => setCount(count + 1)}
+        type="button"
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Count: {count}
+      </button>
     </div>
   )
 }
@@ -158,10 +188,11 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
 }
 ```
 
-Use it in your app:
+Use it in a page:
 
 ```tsx
-import MarkdownPost from './components/MarkdownPost'
+// src/app/blog/page.tsx
+import MarkdownPost from '../../components/MarkdownPost'
 
 const blogPost = `
 # Welcome to Rari!
@@ -173,15 +204,20 @@ This markdown is processed **on the server** using the \`markdown-it\` package.
 - Zero configuration required
 `
 
-export default function App() {
+export default function BlogPage() {
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="max-w-4xl mx-auto">
       <MarkdownPost
         title="My Blog Post"
         content={blogPost}
       />
     </div>
   )
+}
+
+export const metadata = {
+  title: 'Blog | My Rari App',
+  description: 'Read our latest posts',
 }
 ```
 
@@ -225,21 +261,23 @@ A typical Rari project (created with `create-rari-app`) looks like this:
 ```
 my-rari-app/
 ├── src/
-│   ├── components/          # Reusable React components
-│   │   ├── ServerTime.tsx   # Server components
-│   │   └── Welcome.tsx      # Client components ('use client')
-│   ├── pages/               # File-based routing
-│   │   ├── index.tsx        # Home page (/)
-│   │   ├── about.tsx        # About page (/about)
+│   ├── app/                 # App router directory
+│   │   ├── layout.tsx       # Root layout (wraps all pages)
+│   │   ├── page.tsx         # Home page (/)
+│   │   ├── globals.css      # Global styles
+│   │   ├── about/
+│   │   │   └── page.tsx     # About page (/about)
 │   │   ├── blog/
-│   │   │   ├── index.tsx    # Blog index (/blog)
-│   │   │   └── [slug].tsx   # Blog post (/blog/[slug])
+│   │   │   ├── page.tsx     # Blog index (/blog)
+│   │   │   └── [slug]/
+│   │   │       └── page.tsx # Blog post (/blog/[slug])
 │   │   └── users/
-│   │       └── [id].tsx     # User profile (/users/[id])
-│   ├── styles/              # CSS files
-│   │   └── index.css        # Main stylesheet with Tailwind
-│   ├── App.tsx              # Root component with RouterProvider
-│   ├── main.tsx             # Client entry point
+│   │       └── [id]/
+│   │           └── page.tsx # User profile (/users/[id])
+│   ├── components/          # Reusable React components
+│   │   └── Counter.tsx      # Client components ('use client')
+│   ├── actions/             # Server actions
+│   │   └── todo-actions.ts  # Server functions ('use server')
 │   └── vite-env.d.ts       # Vite types
 ├── public/                  # Static assets (optional)
 ├── index.html              # HTML template
@@ -251,21 +289,23 @@ my-rari-app/
 └── .gitignore              # Git ignore rules
 ```
 
-## File-Based Routing
+## App Router
 
-Rari uses file-based routing where your file structure automatically determines your application routes. This makes organizing your application intuitive and scalable.
+Rari uses the app router pattern where your file structure in `src/app/` automatically determines your application routes. This makes organizing your application intuitive and scalable.
 
 ### Basic Routes
 
-Static routes are created by adding files to your `src/pages/` directory:
+Routes are created by adding `page.tsx` files in the `src/app/` directory:
 
-- `src/pages/index.tsx` → `/`
-- `src/pages/about.tsx` → `/about`
-- `src/pages/contact.tsx` → `/contact`
+- `src/app/page.tsx` → `/`
+- `src/app/about/page.tsx` → `/about`
+- `src/app/contact/page.tsx` → `/contact`
 
 ```tsx
-// src/pages/about.tsx
-export default function AboutPage() {
+// src/app/about/page.tsx
+import type { PageProps } from 'rari/client'
+
+export default function AboutPage({ params, searchParams }: PageProps) {
   return (
     <div>
       <h1>About Us</h1>
@@ -273,66 +313,84 @@ export default function AboutPage() {
     </div>
   )
 }
+
+export const metadata = {
+  title: 'About | My App',
+  description: 'Learn more about us',
+}
 ```
 
 ### Dynamic Routes
 
 Use square brackets for dynamic route parameters:
 
-- `src/pages/users/[id].tsx` → `/users/123`
-- `src/pages/blog/[slug].tsx` → `/blog/my-post`
+- `src/app/users/[id]/page.tsx` → `/users/123`
+- `src/app/blog/[slug]/page.tsx` → `/blog/my-post`
 
 ```tsx
-// src/pages/users/[id].tsx
-export default function UserPage({
-  params
-}: {
-  params: { id: string }
-}) {
+// src/app/users/[id]/page.tsx
+import type { PageProps } from 'rari/client'
+
+export default function UserPage({ params }: PageProps<{ id: string }>) {
   const { id } = params
 
   return (
     <div>
       <h1>User Profile</h1>
-      <p>
-        User ID:
-        {id}
-      </p>
+      <p>User ID: {id}</p>
     </div>
   )
 }
+
+export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+  return {
+    title: `User ${params.id} | My App`,
+    description: `Profile page for user ${params.id}`,
+  }
+}
 ```
 
-### Nested Routes
+### Layouts
 
-Create nested routes using directories:
-
-- `src/pages/dashboard/index.tsx` → `/dashboard`
-- `src/pages/dashboard/analytics.tsx` → `/dashboard/analytics`
-- `src/pages/dashboard/settings.tsx` → `/dashboard/settings`
-
-### Catch-All Routes
-
-Use spread syntax for catch-all routes:
-
-- `src/pages/docs/[...slug].tsx` → `/docs/getting-started/installation`
+Layouts wrap pages and can be nested. They persist across route changes:
 
 ```tsx
-// src/pages/docs/[...slug].tsx
-export default function DocsPage({
-  params
-}: {
-  params: { slug: string[] }
-}) {
-  const { slug } = params // slug is an array: ['getting-started', 'installation']
+// src/app/layout.tsx - Root layout (required)
+import type { LayoutProps } from 'rari/client'
 
+export default function RootLayout({ children }: LayoutProps) {
   return (
-    <div>
-      <h1>Documentation</h1>
-      <p>
-        Path:
-        {slug.join('/')}
-      </p>
+    <div className="min-h-screen">
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+      </nav>
+      <main>{children}</main>
+    </div>
+  )
+}
+
+export const metadata = {
+  title: 'My App',
+  description: 'Built with Rari',
+}
+```
+
+```tsx
+// src/app/dashboard/layout.tsx - Nested layout
+import type { LayoutProps } from 'rari/client'
+
+export default function DashboardLayout({ children }: LayoutProps) {
+  return (
+    <div className="flex">
+      <aside className="w-64 bg-gray-100">
+        <nav>
+          <a href="/dashboard">Overview</a>
+          <a href="/dashboard/analytics">Analytics</a>
+          <a href="/dashboard/settings">Settings</a>
+        </nav>
+      </aside>
+      <div className="flex-1">{children}</div>
     </div>
   )
 }
@@ -340,62 +398,16 @@ export default function DocsPage({
 
 ### Navigation
 
-Use Rari's navigation components for client-side routing:
+Use standard HTML links for navigation - the app router handles client-side navigation automatically:
 
 ```tsx
-import { Link, NavLink } from 'rari/client'
-
 export default function Navigation() {
   return (
     <nav>
-      <Link to="/">Home</Link>
-      <Link to="/about">About</Link>
-
-      {/* NavLink provides active state */}
-      <NavLink
-        to="/blog"
-        activeClassName="text-blue-500"
-        className="text-gray-600"
-      >
-        Blog
-      </NavLink>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
     </nav>
-  )
-}
-```
-
-### Router Setup
-
-Your main `App.tsx` uses the `RouterProvider`:
-
-```tsx
-/* eslint-disable react-refresh/only-export-components */
-import { RouterProvider, useRouter } from 'rari/client'
-import { routes } from '../.rari/routes' // Auto-generated
-
-function App() {
-  return (
-    <RouterProvider routes={routes}>
-      <Routes />
-    </RouterProvider>
-  )
-}
-
-function Routes() {
-  const { currentRoute } = useRouter()
-
-  if (!currentRoute) {
-    return <div>Page not found</div>
-  }
-
-  const Component = currentRoute.route.component
-  const { params, searchParams } = currentRoute
-
-  return (
-    <Component
-      params={params}
-      searchParams={searchParams}
-    />
   )
 }
 ```
@@ -446,11 +458,12 @@ export default function ClientComponent() {
 }
 ```
 
-### Server Functions/Actions
+### Server Actions
 - Use `'use server'` directive for server functions that can be called from client components
-- Place in `/functions/` directory for organization
+- Place in `src/actions/` directory for organization
 
 ```tsx
+// src/actions/user-actions.ts
 'use server'
 
 export async function createUser(formData: FormData) {
@@ -458,21 +471,49 @@ export async function createUser(formData: FormData) {
   const email = formData.get('email') as string
 
   const user = await database.users.create({ name, email })
-  return user
+  return { success: true, user }
+}
+
+export async function deleteUser(id: string) {
+  await database.users.delete(id)
+  return { success: true }
+}
+```
+
+Use server actions in client components with `useActionState`:
+
+```tsx
+// src/components/UserForm.tsx
+'use client'
+
+import { useActionState } from 'react'
+import { createUser } from '../actions/user-actions'
+
+export default function UserForm() {
+  const [state, formAction, isPending] = useActionState(createUser, null)
+
+  return (
+    <form action={formAction}>
+      <input name="name" required />
+      <input name="email" type="email" required />
+      <button disabled={isPending}>
+        {isPending ? 'Creating...' : 'Create User'}
+      </button>
+      {state?.success && <p>User created successfully!</p>}
+    </form>
+  )
 }
 ```
 
 ## Common Patterns
 
-### Loading Data in Routes
+### Loading Data in Pages
 
 ```tsx
-// src/pages/users/[id].tsx
-export default async function UserProfile({
-  params
-}: {
-  params: { id: string }
-}) {
+// src/app/users/[id]/page.tsx
+import type { PageProps } from 'rari/client'
+
+export default async function UserProfile({ params }: PageProps<{ id: string }>) {
   const { id } = params
 
   // Fetch data on the server
@@ -483,63 +524,44 @@ export default async function UserProfile({
     <div>
       <h1>{user.name}</h1>
       <p>{user.email}</p>
-      <p>
-        Joined:
-        {user.createdAt}
-      </p>
+      <p>Joined: {user.createdAt}</p>
     </div>
   )
+}
+
+export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+  const user = await fetch(`https://api.example.com/users/${params.id}`)
+    .then(r => r.json())
+
+  return {
+    title: `${user.name} | Users`,
+    description: `Profile page for ${user.name}`,
+  }
 }
 ```
 
 ### Combining Server and Client
 
 ```tsx
-// Server component that includes client components
-import ClientCounter from '../components/ClientCounter'
+// src/app/dashboard/page.tsx - Server component that includes client components
+import type { PageProps } from 'rari/client'
+import ClientCounter from '../../components/ClientCounter'
 
-export default async function Dashboard() {
+export default async function Dashboard({ params, searchParams }: PageProps) {
   const stats = await getServerStats()
 
   return (
     <div>
       <h1>Dashboard</h1>
-      <div>
-        Server stats:
-        {' '}
-        {stats.totalUsers}
-      </div>
-      <ClientCounter />
-      {' '}
-      {/* Client component */}
+      <div>Server stats: {stats.totalUsers}</div>
+      <ClientCounter /> {/* Client component */}
     </div>
   )
 }
-```
 
-### Programmatic Navigation
-
-```tsx
-import { useRouter } from 'rari/client'
-
-export default function LoginForm() {
-  const { navigate } = useRouter()
-
-  const handleSubmit = async (formData: FormData) => {
-    const success = await login(formData)
-
-    if (success) {
-      navigate('/dashboard') // Redirect after login
-    }
-  }
-
-  return (
-    <form action={handleSubmit}>
-      <input name="email" type="email" required />
-      <input name="password" type="password" required />
-      <button type="submit">Login</button>
-    </form>
-  )
+export const metadata = {
+  title: 'Dashboard | My App',
+  description: 'Your dashboard',
 }
 ```
 

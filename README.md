@@ -117,13 +117,18 @@ my-rari-app/
 │   ├── app/
 │   │   ├── layout.tsx        # Root layout (server component)
 │   │   ├── page.tsx          # Home page (server component)
-│   │   └── about/
-│   │       └── page.tsx      # About page
+│   │   ├── about/
+│   │   │   └── page.tsx      # About page
+│   │   └── blog/
+│   │       ├── page.tsx      # Blog index
+│   │       └── [slug]/
+│   │           └── page.tsx  # Dynamic blog post route
 │   ├── components/
-│   │   ├── ServerTime.tsx    # Server components (default)
 │   │   └── Counter.tsx       # Client components ('use client')
-│   └── styles/
-│       └── index.css
+│   ├── actions/
+│   │   └── todo-actions.ts   # Server actions ('use server')
+│   └── app/
+│       └── globals.css       # Global styles
 ├── vite.config.ts            # Vite + Rari configuration
 └── package.json
 ```
@@ -132,20 +137,33 @@ my-rari-app/
 
 ### App Router Layout
 ```tsx
-// app/layout.tsx - Server component by default
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// src/app/layout.tsx - Server component by default
+import type { LayoutProps } from 'rari/client'
+
+export default function RootLayout({ children }: LayoutProps) {
   return (
-    <html>
-      <body>{children}</body>
-    </html>
+    <div className="min-h-screen">
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+      </nav>
+      <main>{children}</main>
+    </div>
   )
+}
+
+export const metadata = {
+  title: 'My Rari App',
+  description: 'Built with Rari',
 }
 ```
 
 ### Server Component (Default)
 ```tsx
-// app/page.tsx - Runs on the server, no directive needed
-export default async function HomePage() {
+// src/app/page.tsx - Runs on the server, no directive needed
+import type { PageProps } from 'rari/client'
+
+export default async function HomePage({ params, searchParams }: PageProps) {
   const data = await fetch('https://api.example.com/data').then(r => r.json())
 
   return (
@@ -155,11 +173,37 @@ export default async function HomePage() {
     </div>
   )
 }
+
+export const metadata = {
+  title: 'Home | My App',
+  description: 'Welcome to my app',
+}
+```
+
+### Dynamic Routes
+```tsx
+// src/app/blog/[slug]/page.tsx - Dynamic route with params
+import type { PageProps } from 'rari/client'
+
+export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
+  return (
+    <article>
+      <h1>Blog Post: {params.slug}</h1>
+    </article>
+  )
+}
+
+export async function generateMetadata({ params }: PageProps<{ slug: string }>) {
+  return {
+    title: `${params.slug} | Blog`,
+    description: `Read about ${params.slug}`,
+  }
+}
 ```
 
 ### Client Component
 ```tsx
-// components/Counter.tsx - Interactive component
+// src/components/Counter.tsx - Interactive component
 'use client'
 
 import { useState } from 'react'
@@ -175,14 +219,42 @@ export default function Counter({ initialValue }: { initialValue: number }) {
 }
 ```
 
-### Server Function
+### Server Actions
 ```tsx
-// Server function for mutations
+// src/actions/todo-actions.ts - Server functions for mutations
 'use server'
 
-export async function updateUser(userId: string, data: FormData) {
-  await db.users.update(userId, Object.fromEntries(data))
-  revalidatePath('/dashboard')
+export async function addTodo(formData: FormData) {
+  const title = formData.get('title') as string
+  await db.todos.create({ title })
+  return { success: true }
+}
+
+export async function deleteTodo(id: string) {
+  await db.todos.delete(id)
+  return { success: true }
+}
+```
+
+### Using Server Actions in Client Components
+```tsx
+// src/components/TodoForm.tsx
+'use client'
+
+import { useActionState } from 'react'
+import { addTodo } from '../actions/todo-actions'
+
+export default function TodoForm() {
+  const [state, formAction, isPending] = useActionState(addTodo, null)
+
+  return (
+    <form action={formAction}>
+      <input name="title" required />
+      <button disabled={isPending}>
+        {isPending ? 'Adding...' : 'Add Todo'}
+      </button>
+    </form>
+  )
 }
 ```
 
@@ -192,14 +264,13 @@ Rari works with zero configuration, but you can customize it:
 
 ```typescript
 // vite.config.ts
-import { rari } from 'rari'
+import { rari, rariRouter } from 'rari/server'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari({
-      // Optional configuration
-    })
+    rari(),      // Core Rari plugin
+    rariRouter() // App router support
   ]
 })
 ```
