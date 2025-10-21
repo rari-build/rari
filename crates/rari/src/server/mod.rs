@@ -2687,7 +2687,10 @@ async fn handle_app_route(
 
     let route_match = match app_router.match_route(path) {
         Ok(m) => m,
-        Err(_) => return Err(StatusCode::NOT_FOUND),
+        Err(_) => match app_router.create_not_found_match(path) {
+            Some(not_found_match) => not_found_match,
+            None => return Err(StatusCode::NOT_FOUND),
+        },
     };
 
     debug!("App route matched: {} -> {}", path, route_match.route.path);

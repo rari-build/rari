@@ -83,6 +83,7 @@ pub struct AppRouteMatch {
     pub layouts: Vec<LayoutEntry>,
     pub loading: Option<LoadingEntry>,
     pub error: Option<ErrorEntry>,
+    pub not_found: Option<NotFoundEntry>,
     pub pathname: String,
 }
 
@@ -120,18 +121,49 @@ impl AppRouter {
 
                 let error = self.find_error(&route.path);
 
+                let not_found = self.find_not_found(&route.path);
+
                 return Ok(AppRouteMatch {
                     route: route.clone(),
                     params,
                     layouts,
                     loading,
                     error,
+                    not_found,
                     pathname: normalized_path,
                 });
             }
         }
 
         Err(RariError::not_found(format!("No route found for path: {}", path)))
+    }
+
+    pub fn create_not_found_match(&self, path: &str) -> Option<AppRouteMatch> {
+        let normalized_path = Self::normalize_path(path);
+
+        let not_found_entry = self.find_not_found("/")?;
+
+        let layouts = self.resolve_layouts("/");
+        let loading = self.find_loading("/");
+        let error = self.find_error("/");
+
+        let not_found_route = AppRouteEntry {
+            path: normalized_path.clone(),
+            file_path: not_found_entry.file_path.clone(),
+            segments: vec![],
+            params: vec![],
+            is_dynamic: false,
+        };
+
+        Some(AppRouteMatch {
+            route: not_found_route,
+            params: FxHashMap::default(),
+            layouts,
+            loading,
+            error,
+            not_found: Some(not_found_entry),
+            pathname: normalized_path,
+        })
     }
 
     fn match_route_pattern(
@@ -241,6 +273,22 @@ impl AppRouter {
 
             if let Some(error) = self.manifest.errors.iter().find(|e| e.path == current_path) {
                 return Some(error.clone());
+            }
+        }
+
+        None
+    }
+
+    pub fn find_not_found(&self, route_path: &str) -> Option<NotFoundEntry> {
+        let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+
+        for i in (0..=segments.len()).rev() {
+            let current_path =
+                if i == 0 { "/".to_string() } else { format!("/{}", segments[..i].join("/")) };
+
+            if let Some(not_found) = self.manifest.not_found.iter().find(|n| n.path == current_path)
+            {
+                return Some(not_found.clone());
             }
         }
 
