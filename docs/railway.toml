@@ -1,8 +1,8 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm run build"
+buildCommand = "pnpm install --shamefully-hoist && pnpm run build"
 nixpacksPlan = { phases = { setup = { nixPkgs = [
-  "nodejs_22",
+  "nodejs-22_x",
   "pnpm"
 ] } } }
 
