@@ -115,7 +115,7 @@ export default function TodoListWithActions({
       {error && (
         <div className="flex items-start gap-2 text-sm text-red-700 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
           <svg
-            className="w-5 h-5 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 shrink-0 mt-0.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -176,7 +176,7 @@ export default function TodoListWithActions({
             <button
               onClick={() => handleToggle(todo.id)}
               disabled={isPending}
-              className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${todo.completed
+              className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${todo.completed
                 ? 'bg-indigo-600 border-indigo-600'
                 : 'border-gray-300 hover:border-indigo-500'
               } ${isPending ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -205,7 +205,7 @@ export default function TodoListWithActions({
             <button
               onClick={() => handleDelete(todo.id)}
               disabled={isPending}
-              className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isPending
+              className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isPending
                 ? 'text-gray-300 cursor-not-allowed'
                 : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
               }`}

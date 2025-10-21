@@ -102,7 +102,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
         {state.error && (
           <div className="flex items-start gap-2 text-sm text-red-700 p-3 bg-red-50 border border-red-200 rounded-lg">
             <svg
-              className="w-5 h-5 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 shrink-0 mt-0.5"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -119,7 +119,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
         {state.success && (
           <div className="flex items-start gap-2 text-sm text-green-700 p-3 bg-green-50 border border-green-200 rounded-lg">
             <svg
-              className="w-5 h-5 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 shrink-0 mt-0.5"
               fill="currentColor"
               viewBox="0 0 20 20"
             >

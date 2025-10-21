@@ -122,7 +122,7 @@ export default function ProgressiveFormExample() {
             }`}
           >
             <svg
-              className="w-5 h-5 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 shrink-0 mt-0.5"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -154,7 +154,7 @@ export default function ProgressiveFormExample() {
           </summary>
           <div className="mt-4 space-y-3">
             <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+              <div className="shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
                 <span className="text-xs font-semibold text-gray-600">1</span>
               </div>
               <div>
@@ -174,7 +174,7 @@ export default function ProgressiveFormExample() {
             </div>
 
             <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+              <div className="shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
                 <span className="text-xs font-semibold text-gray-600">2</span>
               </div>
               <div>
@@ -189,7 +189,7 @@ export default function ProgressiveFormExample() {
             </div>
 
             <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+              <div className="shrink-0 w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
                 <span className="text-xs font-semibold text-gray-600">3</span>
               </div>
               <div>

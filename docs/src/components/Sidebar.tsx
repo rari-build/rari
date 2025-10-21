@@ -54,11 +54,11 @@ export default function Sidebar({ version }: SidebarProps) {
         className={`fixed lg:relative lg:translate-x-0 transform transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto ${isMobileMenuOpen
           ? 'translate-x-0'
           : '-translate-x-full lg:translate-x-0'
-        } w-64 flex-shrink-0`}
+        } w-64 shrink-0`}
       >
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg">
+            <div className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-lg">R</span>
             </div>
             <div>

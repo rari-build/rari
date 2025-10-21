@@ -6,7 +6,7 @@ export default function HomePage(_params: PageProps) {
     <div className="space-y-8 lg:space-y-12">
       <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">
         <div className="flex flex-col lg:flex-row items-center justify-center lg:space-x-4 space-y-4 lg:space-y-0 mb-6 lg:mb-8">
-          <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl flex items-center justify-center shadow-xl">
+          <div className="w-16 h-16 lg:w-20 lg:h-20 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl flex items-center justify-center shadow-xl">
             <span className="text-white font-bold text-2xl lg:text-3xl">R</span>
           </div>
           <div className="text-center lg:text-left">
@@ -19,7 +19,7 @@ export default function HomePage(_params: PageProps) {
         <p className="text-lg lg:text-xl text-gray-400 mb-2 max-w-3xl mx-auto leading-relaxed font-light px-4">
           Runtime Accelerated Rendering Infrastructure
         </p>
-        <p className="text-xl lg:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto leading-relaxed px-4 min-h-[2.5rem] lg:min-h-[3rem]">
+        <p className="text-xl lg:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto leading-relaxed px-4 min-h-10 lg:min-h-12">
           Performance-first React framework powered by Rust
         </p>
 
@@ -41,16 +41,16 @@ export default function HomePage(_params: PageProps) {
         </div>
       </div>
 
-      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 lg:p-8 min-h-[12rem] lg:min-h-[14rem]">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 lg:p-8 min-h-4 lg:min-h-56">
         <h2 className="text-xl lg:text-2xl font-bold text-[#f0f6fc] mb-4 lg:mb-6 font-mono">
           Quick Start
         </h2>
-        <div className="bg-[#0d1117] border border-[#30363d] rounded-md p-3 lg:p-4 mb-4 lg:mb-6 overflow-x-auto min-h-[2.5rem] lg:min-h-[3rem]">
+        <div className="bg-[#0d1117] border border-[#30363d] rounded-md p-3 lg:p-4 mb-4 lg:mb-6 overflow-x-auto min-h-10 lg:min-h-12">
           <code className="text-[#fd7e14] font-mono text-xs lg:text-sm whitespace-nowrap block">
             npm create rari-app@latest my-app
           </code>
         </div>
-        <p className="text-gray-400 mb-4 min-h-[1.5rem]">
+        <p className="text-gray-400 mb-4 min-h-6">
           Create a new Rari project in seconds with our zero-config generator.
         </p>
         <a
