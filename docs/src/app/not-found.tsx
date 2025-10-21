@@ -6,7 +6,7 @@ export default function NotFound() {
         <p className="text-gray-400 mb-8">The page you're looking for doesn't exist.</p>
         <a
           href="/"
-          className="inline-block bg-[#fd7e14] hover:bg-[#e8590c] !text-white px-6 py-3 rounded-lg font-semibold transition-colors !no-underline hover:!no-underline"
+          className="inline-block bg-[#fd7e14] hover:bg-[#e8590c] text-white! px-6 py-3 rounded-lg font-semibold transition-colors no-underline! hover:no-underline!"
         >
           Go Home
         </a>
