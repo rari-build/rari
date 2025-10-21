@@ -52,7 +52,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(),       // Core Rari plugin
+    rari(), // Core Rari plugin
     rariRouter(), // App router support
   ],
 })
@@ -110,7 +110,9 @@ export default async function HomePage({ params, searchParams }: PageProps) {
       <div className="p-4 bg-blue-50 rounded-lg">
         <h2 className="text-lg font-semibold">Server Time</h2>
         <p className="text-gray-600">
-          Generated on server at: {timestamp}
+          Generated on server at:
+          {' '}
+          {timestamp}
         </p>
       </div>
 
@@ -144,7 +146,9 @@ export default function Counter() {
         type="button"
         className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
       >
-        Count: {count}
+        Count:
+        {' '}
+        {count}
       </button>
     </div>
   )
@@ -337,7 +341,10 @@ export default function UserPage({ params }: PageProps<{ id: string }>) {
   return (
     <div>
       <h1>User Profile</h1>
-      <p>User ID: {id}</p>
+      <p>
+        User ID:
+        {id}
+      </p>
     </div>
   )
 }
@@ -496,7 +503,7 @@ export default function UserForm() {
     <form action={formAction}>
       <input name="name" required />
       <input name="email" type="email" required />
-      <button disabled={isPending}>
+      <button type="button" disabled={isPending}>
         {isPending ? 'Creating...' : 'Create User'}
       </button>
       {state?.success && <p>User created successfully!</p>}
@@ -524,7 +531,10 @@ export default async function UserProfile({ params }: PageProps<{ id: string }>)
     <div>
       <h1>{user.name}</h1>
       <p>{user.email}</p>
-      <p>Joined: {user.createdAt}</p>
+      <p>
+        Joined:
+        {user.createdAt}
+      </p>
     </div>
   )
 }
@@ -553,8 +563,13 @@ export default async function Dashboard({ params, searchParams }: PageProps) {
   return (
     <div>
       <h1>Dashboard</h1>
-      <div>Server stats: {stats.totalUsers}</div>
-      <ClientCounter /> {/* Client component */}
+      <div>
+        Server stats:
+        {stats.totalUsers}
+      </div>
+      <ClientCounter />
+      {' '}
+      {/* Client component */}
     </div>
   )
 }
