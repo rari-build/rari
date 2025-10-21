@@ -970,6 +970,7 @@ mod tests {
             layouts: vec![],
             loading: None,
             error: None,
+            not_found: None,
             pathname: "/test".to_string(),
         };
 
@@ -999,6 +1000,7 @@ mod tests {
             }],
             loading: None,
             error: None,
+            not_found: None,
             pathname: "/test".to_string(),
         };
 
