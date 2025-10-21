@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cwd } from 'node:process'
+import NotFoundPage from '../app/not-found'
 
 interface MarkdownRendererProps {
   filePath: string
@@ -54,8 +55,11 @@ export default async function MarkdownRenderer({
     else if (existsSync(contentPath)) {
       content = readFileSync(contentPath, 'utf-8')
     }
-    else {
+    else if (existsSync(publicPath)) {
       content = readFileSync(publicPath, 'utf-8')
+    }
+    else {
+      return <NotFoundPage />
     }
 
     const highlighter = await getHighlighter(createHighlighter)
@@ -92,14 +96,7 @@ export default async function MarkdownRenderer({
   }
 
   if (error || !html) {
-    return (
-      <div className="prose prose-invert max-w-none">
-        <p>
-          Error loading markdown file:
-          {filePath}
-        </p>
-      </div>
-    )
+    return <NotFoundPage />
   }
 
   return (
