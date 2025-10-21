@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 
 export type ActionFunction<State, Payload = FormData> = (
   prevState: State,
-  payload: Payload
+  payload: Payload,
 ) => Promise<State>
 
 export type ActionState<State> = [

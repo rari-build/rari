@@ -128,11 +128,11 @@ export type GenerateStaticParams<TParams extends Record<string, string | string[
   | Promise<TParams[]>
 
 export type PageComponent<TParams extends Record<string, string | string[]> = Record<string, string | string[]>, TSearchParams extends Record<string, string | string[] | undefined> = Record<string, string | string[] | undefined>> = (
-  props: PageProps<TParams, TSearchParams>
+  props: PageProps<TParams, TSearchParams>,
 ) => ReactNode | Promise<ReactNode>
 
 export type LayoutComponent<TParams extends Record<string, string | string[]> = Record<string, string | string[]>> = (
-  props: LayoutProps & { params?: TParams }
+  props: LayoutProps & { params?: TParams },
 ) => ReactNode | Promise<ReactNode>
 
 export type ErrorComponent = (props: ErrorProps) => ReactNode
