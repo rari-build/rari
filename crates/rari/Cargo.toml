@@ -5,6 +5,21 @@ authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
+description = "Runtime Accelerated Rendering Infrastructure - A high-performance React Server Components framework powered by Rust"
+keywords = [
+  "react",
+  "server-components",
+  "rsc",
+  "ssr",
+  "framework"
+]
+categories = [
+  "web-programming",
+  "web-programming::http-server"
+]
+readme = "../../README.md"
+homepage = "https://github.com/rari-build/rari"
+documentation = "https://github.com/rari-build/rari/tree/main/docs"
 
 [lib]
 crate-type = [ "rlib" ]
