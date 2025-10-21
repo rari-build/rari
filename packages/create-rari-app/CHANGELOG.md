@@ -1,3 +1,19 @@
+## [0.2.1] - 2025-10-21
+
+### 🚀 Features
+
+- *(create-rari-app)* Enhance project creation and build process
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update rari package dependency to latest
+- *(railway)* Update build configuration for Railway deployment
+- *(railway)* Update Node.js version for deployment
+## [create-rari-app@0.2.0] - 2025-10-21
+
+### 💼 Other
+
+- Create-rari-app@0.2.0
 ## [rari@0.3.0] - 2025-10-21
 
 ### 💼 Other
@@ -312,7 +328,7 @@
 ### 💼 Other
 
 - Rari@0.2.2
-## [0.2.1] - 2025-08-15
+## [0.2.1] - 2025-10-21
 
 ### 🚀 Features
 
@@ -376,7 +392,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(release)* Support RELEASE_VERSION/RELEASE_TYPE env for non-interactive
-## [0.2.0] - 2025-10-21
+## [0.2.0] - 2025-08-13
 
 ### 🚀 Features
 
