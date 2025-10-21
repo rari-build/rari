@@ -8,23 +8,23 @@
 
 **Rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 
-> **⚠️ Note: Rari is in active development**
->
-> We're actively working on Rari and welcome contributions and issues! You may occasionally encounter an "Unknown Component" error during rendering, which is likely a race condition that we're aware of and investigating. Please report any issues you encounter on our [GitHub repository](https://github.com/rari-build/rari).
+With proper app router support, true server-side rendering, and correct RSC semantics, Rari delivers 12x faster P99 latency and 10.5x higher throughput than Next.js.
 
 ## Features
 
-- **Performance-optimized React Server Components** with Rust runtime
-- **Zero-config setup** - works out of the box with pre-built binaries
-- **Hot module reloading** for instant development feedback
-- **Universal NPM package support** - use any npm package seamlessly
-- **TypeScript-first** with full type safety
-- **Memory efficient** with automatic optimizations
-- **Cross-platform** - supports macOS, Linux, and Windows
+- **App Router** - File-based routing with layouts, loading states, and error boundaries
+- **True Server-Side Rendering** - Pre-rendered HTML with instant hydration
+- **React Server Components** - Server components by default, client components when you need them
+- **Rust-powered runtime** - Persistent runtime for maximum performance
+- **Zero-config setup** - Works out of the box with pre-built binaries
+- **Hot module reloading** - Instant feedback during development
+- **Universal NPM package support** - Use any npm package seamlessly
+- **TypeScript-first** - Full type safety across server/client boundary
+- **Cross-platform** - Supports macOS, Linux, and Windows
 
 ### In Progress
-- **React Suspense support** - Basic functionality implemented, full testing in progress
-- **Streaming RSC** - Framework support added, comprehensive testing needed
+- **Streaming RSC** - Framework support added, testing in progress
+- **React Suspense** - Basic functionality implemented, full testing in progress
 
 ## Quick Start
 
@@ -66,23 +66,19 @@ The Rari binary is automatically downloaded and configured during installation. 
 ## Why Rari?
 
 ### Performance That Matters
-- **Rust-powered runtime** - 4.04x faster response times under load vs Next.js
-- **Memory efficient** - Superior garbage collection and resource management
-- **Streaming RSC** - Components render as they resolve, no waiting (in progress)
+- **3.8x faster response times** - 0.69ms vs 2.58ms average response
+- **10.5x higher throughput** - 20,226 req/sec vs 1,934 req/sec under load
+- **12x faster P99 latency** - 4ms vs 48ms under concurrent load
+- **68% smaller bundles** - 27.6 KB vs 85.9 KB client JavaScript
+- **5.6x faster builds** - 1.64s vs 9.11s production builds
 
 ### Developer Experience
+- **App Router** - File-based routing with automatic code splitting
 - **Zero configuration** - Create projects instantly with `create-rari-app`
 - **Hot module reloading** - See changes instantly during development
-- **Full TypeScript support** - Complete type safety out of the box
-- **Universal package support** - Use any npm package seamlessly
+- **Full TypeScript support** - Complete type safety across server/client boundary
+- **Correct RSC semantics** - Server components by default, `'use client'` for interactivity
 - **Cross-platform** - Works on macOS, Linux, and Windows
-
-### React Server Components Done Right
-- **True server-side rendering** with async/await support
-- **Automatic serialization** between server and client
-- **Error boundaries** for graceful error handling
-- **React Suspense support** (in progress - basic functionality implemented)
-- **Streaming RSC** (in progress - framework support added)
 
 ## Performance
 
@@ -90,73 +86,72 @@ Rari delivers exceptional performance that significantly outperforms traditional
 
 ### Head-to-Head Comparison vs Next.js
 
-**Server Response Performance:**
-- **Single Request**: Rari 2.15ms vs Next.js 4.88ms (**2.27x faster**)
-- **Concurrent Load Latency**: Rari 4.23ms vs Next.js 17.11ms (**4.04x faster**)
-- **Throughput**: Rari 10,586 req/s vs Next.js 2,832 req/s (**3.74x more requests**)
+**Response Time (Single Request):**
+| Metric | Rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Average** | **0.69ms** | 2.58ms | **3.8x faster** |
+| **P95** | 1.15ms | 3.37ms | **2.9x faster** |
+| **Bundle Size** | 27.6 KB | 85.9 KB | **68% smaller** |
 
-**Development & Build Performance:**
-- **Build Time**: Rari 1.59s vs Next.js 9.22s (**5.80x faster**)
-- **Bundle Size**: Rari 400KB vs Next.js 742KB (**46% smaller**)
+**Throughput Under Load (50 concurrent connections, 30s):**
+| Metric | Rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Requests/sec** | **20,226** | 1,934 | **10.5x higher** |
+| **Avg Latency** | **2.04ms** | 25.25ms | **12.4x faster** |
+| **P99 Latency** | **4ms** | 48ms | **12x faster** |
+| **Errors** | 0 | 0 | Stable |
 
-**Production Metrics:**
-```
-Single Request Response:   2.15ms           (individual requests)
-Concurrent Load Latency:   4.23ms           (50 connections)
-Sustained Throughput:      10,586 req/sec   (30s load test)
-Build Performance:         1.59s            (production build)
-Bundle Optimization:       400KB            (optimized output)
-Zero Errors:              100% success      (all test scenarios)
-```
+**Build Performance:**
+| Metric | Rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Build Time** | **1.64s** | 9.11s | **5.6x faster** |
+| **Bundle Size** | 273 KB | 742 KB | **63% smaller** |
 
-**Detailed Performance Metrics:**
-
-**Response Time Analysis:**
-- **Individual requests**: 2.15ms average (range: 1.34-3.09ms)
-- **Under load (50 concurrent)**: 4.23ms average latency
-- **Throughput capacity**: 10,586 requests/second sustained
-- **Response consistency**: 99th percentile under 46ms
-
-**Concurrent Load Testing:**
-- **Sustained throughput**: 10,586 requests/second with 100% success rate
-- **Load test duration**: 30 seconds with 50 concurrent connections
-- **Latency under load**: 4.23ms average, 4.04x faster than Next.js
-- **Perfect reliability**: Zero errors or timeouts across all tests
-
-**Development & Production:**
-- **Build performance**: 5.80x faster builds (1.59s vs 9.22s)
-- **Bundle efficiency**: 46% smaller output with same functionality
-- **Hot reload**: Instant feedback during development
-- **Bundle optimization**: Automatic tree shaking and code splitting
+All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/rari/tree/main/benchmarks) for methodology and scripts.
 
 ## Project Structure
 
 ```
 my-rari-app/
 ├── src/
+│   ├── app/
+│   │   ├── layout.tsx        # Root layout (server component)
+│   │   ├── page.tsx          # Home page (server component)
+│   │   └── about/
+│   │       └── page.tsx      # About page
 │   ├── components/
-│   │   ├── ServerTime.tsx    # Server components
-│   │   └── Welcome.tsx       # Client components ('use client')
-│   ├── styles/
-│   │   └── index.css
-│   ├── App.tsx               # Root component
-│   └── main.tsx              # Client entry
+│   │   ├── ServerTime.tsx    # Server components (default)
+│   │   └── Counter.tsx       # Client components ('use client')
+│   └── styles/
+│       └── index.css
 ├── vite.config.ts            # Vite + Rari configuration
 └── package.json
 ```
 
 ## Examples
 
-### Server Component
+### App Router Layout
 ```tsx
-export default async function UserProfile({ userId }: { userId: string }) {
-  // This runs on the server
-  const user = await fetch(`/api/users/${userId}`).then(r => r.json())
+// app/layout.tsx - Server component by default
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+### Server Component (Default)
+```tsx
+// app/page.tsx - Runs on the server, no directive needed
+export default async function HomePage() {
+  const data = await fetch('https://api.example.com/data').then(r => r.json())
 
   return (
     <div>
-      <h1>{user.name}</h1>
-      <p>{user.email}</p>
+      <h1>{data.title}</h1>
+      <Counter initialValue={data.count} />
     </div>
   )
 }
@@ -164,32 +159,30 @@ export default async function UserProfile({ userId }: { userId: string }) {
 
 ### Client Component
 ```tsx
+// components/Counter.tsx - Interactive component
 'use client'
 
 import { useState } from 'react'
 
-export default function Counter() {
-  const [count, setCount] = useState(0)
+export default function Counter({ initialValue }: { initialValue: number }) {
+  const [count, setCount] = useState(initialValue)
 
   return (
     <button onClick={() => setCount(count + 1)}>
-      Count:
-      {' '}
-      {count}
+      Count: {count}
     </button>
   )
 }
 ```
 
-### NPM Package Usage
+### Server Function
 ```tsx
-import MarkdownIt from 'markdown-it'
+// Server function for mutations
+'use server'
 
-export default async function BlogPost({ content }: { content: string }) {
-  const md = MarkdownIt()
-  const html = md.render(content)
-
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
+export async function updateUser(userId: string, data: FormData) {
+  await db.users.update(userId, Object.fromEntries(data))
+  revalidatePath('/dashboard')
 }
 ```
 
