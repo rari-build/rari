@@ -1,3 +1,103 @@
+## [rari@0.3.0] - 2025-10-21
+
+### 💼 Other
+
+- Rari@0.3.0
+## [0.3.0] - 2025-10-21
+
+### 🚀 Features
+
+- Implement app router with dynamic routing, layouts, and error handling; add example application
+- Add static asset serving and production handling in server
+- Implement server actions and enhance form handling with progressive enhancement in example app
+- *(HMR)* Implement component reload functionality and error handling
+- *(ssr)* Introduce server-side rendering capabilities and configuration options
+- *(ssr)* Enhance SSR rendering with raw content handling and improved child rendering logic
+- *(ssr)* Enhance script and link tag extraction with improved handling
+- *(rsc)* Enhance layout rendering with performance metrics and direct HTML rendering
+- *(rsc)* Introduce direct HTML rendering and enhance layout rendering with caching
+- *(runtime)* Enhance request context handling and runtime integration
+- *(rsc)* Introduce RSC HTML rendering and refactor SSR components
+- *(example)* Upgrade app-router example with Tailwind CSS and styling improvements
+- *(docs)* Migrate documentation to App Router structure
+- *(template)* Migrate default template to App Router structure
+- *(router)* Add support for global and scoped not-found routes
+- *(build)* Add React OXC plugin and update Vite config
+
+### 🐛 Bug Fixes
+
+- Correct component path replacement
+- *(docs)* Improve error handling and styling in markdown rendering
+
+### 🚜 Refactor
+
+- Remove 'use server' directives from components and update documentation to clarify server/client component usage
+- Replace entry-client.tsx with virtual import for client components
+- Simplify server component detection logic by removing redundant checks
+- Streamline rari router plugin by removing unused options and simplifying route generation logic
+- Clean up routing code by deleting obsolete files
+- Remove obsolete '.rari' directory references and streamline routing logic
+- Unify cache configuration types and simplify route matching logic in server module
+- Enhance middleware handling and dynamic Vite port config
+- Enhance async handling in layout and streaming renderers, update RSC traversal logic for better error handling
+- Remove unused test handler and direct registration route
+- Expanding HMR for app router support
+- *(error)* Improve ModuleReloadError handling with boxed error variant
+- *(AppRouterHMRProvider)* Streamline event handling and enhance RSC payload management
+- *(ssr)* Reorganize SSR rendering logic and improve error handling
+- *(rsc)* Remove renderer pool and simplify layout rendering
+- *(rari)* Simplify server component checks and remove unused directory validations
+- *(rsc)* Simplify caching logic and remove route-specific cache exclusions
+- *(rsc)* Rename RSC function registration global to improve clarity
+- *(rsc)* Remove HTML diagnostics and simplify rendering logging
+- *(rsc)* Enhance HTML template handling and logging
+- *(rsc)* Consolidate HTML rendering logic and improve cache management
+- *(rsc)* Simplify component registration and remove redundant hash-based keys
+- *(rsc)* Rename RSC rendering functions to follow consistent naming convention
+- *(rsc)* Improve component invalidation and registration mechanisms
+- *(rsc)* Improve component import transformation for global component resolution
+- *(rsc)* Enhance HTML rendering with raw content support and vendor prefix handling
+- *(example)* Revamp app-router example with enhanced layout, styling
+- *(rsc)* Improve client-side rendering and hydration logic
+- *(rsc)* Fix hydration logic in renderApp
+- *(server)* Enhance static file handling and security configuration
+- *(server)* Enhance Content Security Policy configuration
+- *(example)* Enhance blog and interactive pages with improved styling
+- *(rsc)* Enhance layout renderer test cases with not_found support
+
+### 📚 Documentation
+
+- *(readme)* Update performance metrics and project overview
+- *(readme)* Update project structure and example code
+- *(rari)* Add comprehensive package metadata for Cargo.toml
+
+### 🎨 Styling
+
+- *(not-found)* Update 404 page styling and color scheme
+- *(tailwind)* Replace deprecated flex-shrink-0 with shrink-0 utility class
+- *(not-found)* Update 404 page link styling and hover states
+
+### ⚙️ Miscellaneous Tasks
+
+- Update rari dependency to version 0.2.24
+- Update build command and node version in railway.toml
+- Update dependencies in pnpm-lock.yaml and package.json, and modify build command in railway.toml
+- Update dependencies in examples and pnpm-lock.yaml, replace vite with rolldown-vite in app-router-example
+- Update server and Vite configuration ports to 5173
+- *(linting)* Update ESLint and Oxlint configuration
+- *(build)* Update build output directory from .rari to dist
+- *(dependencies)* Update project dependencies to latest versions
+- *(dependencies)* Update project dependencies
+- Fix linting errors
+- *(docs)* Remove unused Vite environment type declarations
+- *(dependencies)* Update project dependencies and linting config
+- *(rari)* Bump package version to 0.3.0
+- *(rari)* Bump package version to 0.3.0
+## [create-rari-app@0.1.12] - 2025-09-23
+
+### 💼 Other
+
+- Create-rari-app@0.1.12
 ## [rari@0.2.24] - 2025-09-23
 
 ### 💼 Other
@@ -276,7 +376,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(release)* Support RELEASE_VERSION/RELEASE_TYPE env for non-interactive
-## [0.2.0] - 2025-08-13
+## [0.2.0] - 2025-10-21
 
 ### 🚀 Features
 
