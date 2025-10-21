@@ -140,6 +140,10 @@ async function createProject(options: ProjectOptions) {
       s.start('Installing dependencies...')
       await installDependencies(projectPath, options.packageManager)
       s.stop('Dependencies installed.')
+
+      s.start('Building project...')
+      await buildProject(projectPath, options.packageManager)
+      s.stop('Project built.')
     }
   }
   catch (error) {
@@ -213,6 +217,29 @@ async function installDependencies(
       }
       else {
         reject(new Error(`${packageManager} install failed with code ${code}`))
+      }
+    })
+
+    child.on('error', reject)
+  })
+}
+
+async function buildProject(
+  projectPath: string,
+  packageManager: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(packageManager, ['run', 'build'], {
+      cwd: projectPath,
+      stdio: 'pipe',
+    })
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+      }
+      else {
+        reject(new Error(`${packageManager} run build failed with code ${code}`))
       }
     })
 

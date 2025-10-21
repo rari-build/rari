@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "{{PACKAGE_MANAGER}} clean && {{PACKAGE_MANAGER}} typecheck && vite build",
-    "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
+    "dev": "vite",
     "start": "NODE_ENV=production rari start",
     "deploy:railway": "rari deploy railway",
     "deploy:render": "rari deploy render",
