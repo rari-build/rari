@@ -107,7 +107,7 @@ Rari delivers exceptional performance that significantly outperforms traditional
 | **Build Time** | **1.64s** | 9.11s | **5.6x faster** |
 | **Bundle Size** | 273 KB | 742 KB | **63% smaller** |
 
-All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/rari/tree/main/benchmarks) for methodology and scripts.
+All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and scripts.
 
 ## Project Structure
 
@@ -188,7 +188,10 @@ import type { PageProps } from 'rari/client'
 export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
   return (
     <article>
-      <h1>Blog Post: {params.slug}</h1>
+      <h1>
+        Blog Post:
+        {params.slug}
+      </h1>
     </article>
   )
 }
@@ -213,7 +216,9 @@ export default function Counter({ initialValue }: { initialValue: number }) {
 
   return (
     <button onClick={() => setCount(count + 1)}>
-      Count: {count}
+      Count:
+      {' '}
+      {count}
     </button>
   )
 }
@@ -269,7 +274,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(),      // Core Rari plugin
+    rari(), // Core Rari plugin
     rariRouter() // App router support
   ]
 })
