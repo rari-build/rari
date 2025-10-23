@@ -1,5 +1,3 @@
-'use client'
-
 import type { SVGProps } from 'react'
 
 export default function Npm(props: SVGProps<SVGSVGElement>) {

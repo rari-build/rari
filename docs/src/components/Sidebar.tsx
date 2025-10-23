@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import Bluesky from './icons/Bluesky'
 import Github from './icons/Github'
 import Npm from './icons/Npm'
@@ -15,25 +12,18 @@ const navigation = [
 ]
 
 export default function Sidebar({ version }: SidebarProps) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-
   return (
     <>
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          style={{ willChange: 'opacity' }}
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
+      <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" />
 
-      <button
-        type="button"
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        aria-label={
-          isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'
-        }
-        className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200"
+      <label
+        htmlFor="mobile-menu-toggle"
+        className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-black peer-checked:bg-opacity-50 peer-checked:z-40 hidden peer-checked:block lg:hidden"
+      />
+
+      <label
+        htmlFor="mobile-menu-toggle"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer"
       >
         <svg
           className="w-6 h-6"
@@ -48,14 +38,9 @@ export default function Sidebar({ version }: SidebarProps) {
             d="M4 6h16M4 12h16M4 18h16"
           />
         </svg>
-      </button>
+      </label>
 
-      <nav
-        className={`fixed lg:relative lg:translate-x-0 transform transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto ${isMobileMenuOpen
-          ? 'translate-x-0'
-          : '-translate-x-full lg:translate-x-0'
-        } w-64 shrink-0`}
-      >
+      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
             <div className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg">
@@ -78,7 +63,6 @@ export default function Sidebar({ version }: SidebarProps) {
                 <a
                   href={item.href}
                   className="block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 text-gray-300 hover:bg-[#21262d] hover:text-gray-100"
-                  style={{ willChange: 'background-color, color' }}
                 >
                   {item.label}
                 </a>
