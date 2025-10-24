@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import type { LayoutProps } from 'rari/client'
+import type { LayoutProps } from 'rari/server'
 import Sidebar from '../components/Sidebar'
 
 interface NpmPackageInfo {
@@ -24,12 +24,12 @@ async function fetchRariVersion(): Promise<string> {
   }
 }
 
-export default async function RootLayout({ children }: LayoutProps) {
+export default async function RootLayout({ children, pathname }: LayoutProps) {
   const version = await fetchRariVersion()
   return (
     <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans">
       <div className="flex min-h-screen">
-        <Sidebar version={version} />
+        <Sidebar version={version} pathname={pathname} />
         <main className="flex-1 min-h-screen bg-[#0d1117]">
           <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
             {children}

@@ -1,3 +1,46 @@
+## [0.3.1] - 2025-10-24
+
+### 🚀 Features
+
+- *(rari)* Add pathname support for layouts and server components
+
+### 💼 Other
+
+- Rari@0.3.1
+- Rari@0.3.1
+
+### 🚜 Refactor
+
+- *(docs)* Simplify mobile navigation using CSS checkbox toggle
+
+### 📚 Documentation
+
+- *(readme)* Update docs
+## [create-rari-app@0.2.1] - 2025-10-21
+
+### 🚀 Features
+
+- *(create-rari-app)* Enhance project creation and build process
+
+### 💼 Other
+
+- Create-rari-app@0.2.1
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update rari package dependency to latest
+- *(railway)* Update build configuration for Railway deployment
+- *(railway)* Update Node.js version for deployment
+## [create-rari-app@0.2.0] - 2025-10-21
+
+### 💼 Other
+
+- Create-rari-app@0.2.0
+## [rari@0.3.0] - 2025-10-21
+
+### 💼 Other
+
+- Rari@0.3.0
 ## [0.3.0] - 2025-10-21
 
 ### 🚀 Features

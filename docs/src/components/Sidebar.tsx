@@ -4,6 +4,7 @@ import Npm from './icons/Npm'
 
 interface SidebarProps {
   version: string
+  pathname?: string
 }
 
 const navigation = [
@@ -11,7 +12,7 @@ const navigation = [
   { href: '/getting-started', label: 'Getting Started', id: 'getting-started' },
 ]
 
-export default function Sidebar({ version }: SidebarProps) {
+export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   return (
     <>
       <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" />
@@ -58,16 +59,23 @@ export default function Sidebar({ version }: SidebarProps) {
           </div>
 
           <ul className="space-y-1">
-            {navigation.map(item => (
-              <li key={item.id}>
-                <a
-                  href={item.href}
-                  className="block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 text-gray-300 hover:bg-[#21262d] hover:text-gray-100"
-                >
-                  {item.label}
-                </a>
-              </li>
-            ))}
+            {navigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <li key={item.id}>
+                  <a
+                    href={item.href}
+                    className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${isActive
+                      ? 'bg-[#21262d] text-white'
+                      : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                    }`}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              )
+            })}
           </ul>
 
           <div className="mt-8 pt-6 border-t border-[#30363d]">

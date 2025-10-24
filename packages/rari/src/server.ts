@@ -1,3 +1,5 @@
+export { headers } from './async-context'
+
 export type {
   AppRouteEntry,
   AppRouteManifest,
