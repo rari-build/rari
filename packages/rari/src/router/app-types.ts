@@ -78,6 +78,7 @@ export interface PageProps<
 export interface LayoutProps {
   children: ReactNode
   params?: Record<string, string | string[]>
+  pathname?: string
 }
 
 export interface ErrorProps {

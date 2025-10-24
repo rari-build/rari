@@ -17,6 +17,7 @@ pub struct LayoutRenderContext {
     pub params: FxHashMap<String, String>,
     pub search_params: FxHashMap<String, Vec<String>>,
     pub headers: FxHashMap<String, String>,
+    pub pathname: String,
 }
 
 struct HtmlCache {
@@ -675,7 +676,7 @@ impl LayoutRenderer {
                     throw new Error('Root layout component {} not found');
                 }}
 
-                const {} = LayoutComponent{}({{ children: {} }});
+                const {} = LayoutComponent{}({{ children: {}, pathname: {} }});
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
                     i,
@@ -687,6 +688,7 @@ impl LayoutRenderer {
                     layout_var,
                     i,
                     current_element,
+                    serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
                     i,
                     i
                 ));
@@ -699,7 +701,7 @@ impl LayoutRenderer {
                     throw new Error('Layout component {} not found');
                 }}
 
-                const {} = LayoutComponent{}({{ children: {} }});
+                const {} = LayoutComponent{}({{ children: {}, pathname: {} }});
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
                     i,
@@ -711,6 +713,7 @@ impl LayoutRenderer {
                     layout_var,
                     i,
                     current_element,
+                    serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
                     i,
                     i
                 ));
@@ -918,8 +921,9 @@ pub fn create_layout_context(
     params: FxHashMap<String, String>,
     search_params: FxHashMap<String, Vec<String>>,
     headers: FxHashMap<String, String>,
+    pathname: String,
 ) -> LayoutRenderContext {
-    LayoutRenderContext { params, search_params, headers }
+    LayoutRenderContext { params, search_params, headers, pathname }
 }
 
 #[cfg(test)]
@@ -956,6 +960,7 @@ mod tests {
             params: params.clone(),
             search_params: search_params.clone(),
             headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
         };
 
         let route_match = AppRouteMatch {

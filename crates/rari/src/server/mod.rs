@@ -2710,6 +2710,7 @@ async fn handle_app_route(
         route_match.params.clone(),
         search_params,
         request_headers,
+        route_match.pathname.clone(),
     );
 
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
