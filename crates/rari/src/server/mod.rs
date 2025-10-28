@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::jsx_transform::{extract_dependencies, transform_jsx};
+use crate::rsc::dependency_utils::extract_dependencies;
 use crate::rsc::layout_renderer::LayoutRenderer;
 use crate::rsc::renderer::{ResourceLimits, RscRenderer};
 
@@ -458,8 +458,7 @@ impl Server {
 
                     debug!("Loading production server action: {}", action_id);
 
-                    let cleaned_code = strip_module_syntax(&action_code);
-                    let wrapped_code = wrap_server_action_module(&cleaned_code, &action_id);
+                    let wrapped_code = wrap_server_action_module(&action_code, &action_id);
 
                     match renderer
                         .runtime
@@ -786,9 +785,8 @@ impl Server {
                         if dist_path.exists() {
                             match std::fs::read_to_string(&dist_path) {
                                 Ok(dist_code) => {
-                                    let cleaned_code = strip_module_syntax(&dist_code);
                                     let wrapped_code =
-                                        wrap_server_action_module(&cleaned_code, &action_id);
+                                        wrap_server_action_module(&dist_code, &action_id);
                                     match renderer
                                         .runtime
                                         .execute_script(
@@ -895,8 +893,8 @@ impl Server {
 
                         debug!("Loading server action file: {} from {:?}", relative_str, path);
 
-                        let cleaned_code = strip_module_syntax(&component_code);
-                        let wrapped_code = wrap_server_action_module(&cleaned_code, &relative_str);
+                        let wrapped_code =
+                            wrap_server_action_module(&component_code, &relative_str);
                         match renderer
                             .runtime
                             .execute_script(
@@ -940,17 +938,7 @@ impl Server {
 
                     let is_client_component = has_use_client_directive(&component_code);
 
-                    let transformed_module_code =
-                        match transform_jsx(&component_code, &component_id) {
-                            Ok(code) => code,
-                            Err(e) => {
-                                error!(
-                                    "Failed to transform JSX for component {}: {}",
-                                    component_id, e
-                                );
-                                continue;
-                            }
-                        };
+                    let transformed_module_code = component_code.clone();
 
                     let dependencies = extract_dependencies(&component_code);
 
@@ -964,13 +952,11 @@ impl Server {
                         );
                     }
 
-                    let cleaned_code = strip_module_syntax(&transformed_module_code);
-
                     match renderer
                         .runtime
                         .execute_script(
                             format!("load_{}.js", component_id.replace('/', "_")),
-                            cleaned_code,
+                            transformed_module_code,
                         )
                         .await
                     {
@@ -1248,50 +1234,6 @@ fn has_use_server_directive(code: &str) -> bool {
     false
 }
 
-fn strip_module_syntax(code: &str) -> String {
-    let mut result = String::new();
-    let mut in_exports_comment = false;
-
-    for line in code.lines() {
-        let trimmed = line.trim();
-
-        if trimmed == "\"use module\";" || trimmed == "'use module';" {
-            continue;
-        }
-
-        if trimmed.starts_with("// Exports:") {
-            in_exports_comment = true;
-            continue;
-        }
-
-        if in_exports_comment {
-            if trimmed.is_empty() || trimmed.starts_with("//") && !trimmed.contains("Exports:") {
-                in_exports_comment = false;
-                result.push_str(line);
-                result.push('\n');
-            }
-            continue;
-        }
-
-        if trimmed.starts_with("import ") || trimmed.starts_with("import{") {
-            continue;
-        }
-
-        if trimmed.starts_with("export ") {
-            let without_export = line.replacen("export ", "", 1);
-            result.push_str(&without_export);
-            result.push('\n');
-        } else if trimmed.starts_with("export{") || trimmed.starts_with("export {") {
-            continue;
-        } else {
-            result.push_str(line);
-            result.push('\n');
-        }
-    }
-
-    result
-}
-
 fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     if code.contains("Self-registering Production Component") {
         debug!(
@@ -1407,8 +1349,7 @@ async fn reload_component_from_dist(
 
     debug!("Read {} bytes from dist file", dist_code.len());
 
-    let cleaned_code = strip_module_syntax(&dist_code);
-    let wrapped_code = wrap_server_action_module(&cleaned_code, component_id);
+    let wrapped_code = wrap_server_action_module(&dist_code, component_id);
 
     let renderer = state.renderer.lock().await;
 
@@ -1425,7 +1366,7 @@ async fn reload_component_from_dist(
             component_id = component_id,
             dist_path = %dist_path.display(),
             error = %e,
-            code_length = cleaned_code.len(),
+            code_length = dist_code.len(),
             "Failed to execute component code during reload. Last known good version will be preserved."
         );
         return Err(format!(

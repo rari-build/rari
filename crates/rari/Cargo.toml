@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.3.2"
+version = "0.3.3"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -81,13 +81,6 @@ async-trait = "0.1.89"
 futures = { version = "0.3.31", features = [ "std" ] }
 futures-util = "0.3.31"
 tokio = { version = "1.47.1", features = [ "full" ] }
-
-# === JavaScript Transformation ===
-oxc = { version = "0.93.0", features = [
-  "codegen",
-  "transformer",
-  "semantic"
-] }
 
 # === Serialization ===
 serde = { version = "1.0.219", features = [ "derive" ] }

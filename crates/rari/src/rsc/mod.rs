@@ -1,6 +1,6 @@
 pub mod component;
+pub mod dependency_utils;
 pub mod js_loader;
-pub mod jsx_transform;
 pub mod layout_renderer;
 pub mod renderer;
 pub mod rsc_html_renderer;
@@ -25,8 +25,8 @@ pub enum ComponentValue {
 pub use component::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
+pub use dependency_utils::extract_dependencies;
 pub use js_loader::RscJsLoader;
-pub use jsx_transform::{extract_dependencies, transform_jsx};
 pub use renderer::RscRenderer;
 pub use rsc_html_renderer::RscHtmlRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};

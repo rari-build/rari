@@ -1,7 +1,7 @@
 use crate::error::RariError;
 use crate::rsc::component::ComponentRegistry;
+use crate::rsc::dependency_utils::{extract_dependencies, hash_string};
 use crate::rsc::js_loader::{ModuleOperation, RscJsLoader};
-use crate::rsc::jsx_transform::{extract_dependencies, hash_string, transform_jsx};
 
 use crate::rsc::serializer::{ReactElement, RscSerializer};
 use crate::rsc::streaming::{RscStream, StreamingRenderer};
@@ -820,7 +820,7 @@ if (typeof globalThis.jsxs === 'undefined') {
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        let transformed_module_code = transform_jsx(component_code, component_id)?;
+        let transformed_module_code = component_code.to_string();
 
         let dependencies = extract_dependencies(component_code);
 
