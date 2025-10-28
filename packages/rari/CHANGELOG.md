@@ -1,3 +1,17 @@
+## [0.3.3] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.3
+
+### 🚜 Refactor
+
+- *(rsc)* Remove JSX transformation from core  and simplify dependency extraction
+## [rari@0.3.2] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.2
 ## [0.3.2] - 2025-10-28
 
 ### 🐛 Bug Fixes
