@@ -782,6 +782,29 @@ async fn run_event_loop_with_promise_timeout(
     Ok(())
 }
 
+fn has_export_statement(code: &str) -> bool {
+    for line in code.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") {
+            continue;
+        }
+
+        if trimmed.starts_with("export ")
+            || trimmed.starts_with("export{")
+            || trimmed.starts_with("export {")
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
 async fn execute_script(
     runtime: &mut JsRuntime,
     module_loader: &Rc<RariModuleLoader>,
@@ -801,11 +824,11 @@ async fn execute_script(
         return Ok(create_already_evaluated_response(script_name));
     }
 
-    if is_registrable_module
-        || script_code.trim().starts_with("import ")
-        || script_code.trim().contains("export ")
+    let has_actual_module_syntax = script_code.trim().starts_with("import ")
         || script_code.contains("\"use module\"")
-    {
+        || has_export_statement(script_code);
+
+    if is_registrable_module || has_actual_module_syntax {
         let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
 
         module_loader.add_module(&specifier_str, script_name, script_code_string.clone());
