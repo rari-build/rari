@@ -1,3 +1,17 @@
+## [0.3.2] - 2025-10-28
+
+### 🐛 Bug Fixes
+
+- Prevent false ES module detection when code contains "export" in strings
+
+### 💼 Other
+
+- Rari@0.3.2
+## [rari@0.3.1] - 2025-10-24
+
+### 💼 Other
+
+- Rari@0.3.1
 ## [0.3.1] - 2025-10-24
 
 ### 🚀 Features
