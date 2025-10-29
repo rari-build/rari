@@ -8,15 +8,15 @@
       content="Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure."
     />
     <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
+
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+
     <script type="module">
       import "/src/app/globals.css";
       import "virtual:rari-entry-client";
     </script>
 
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG"
-    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {
@@ -24,6 +24,19 @@
       }
       gtag("js", new Date());
       gtag("config", "G-6MR283BBWG");
+
+      if (document.readyState === 'complete') {
+        loadGTM();
+      } else {
+        window.addEventListener('load', loadGTM);
+      }
+
+      function loadGTM() {
+        const script = document.createElement('script');
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG';
+        script.async = true;
+        document.head.appendChild(script);
+      }
     </script>
   </head>
 
