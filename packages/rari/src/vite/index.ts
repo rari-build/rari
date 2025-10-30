@@ -1341,8 +1341,13 @@ export async function renderApp() {
     `
       : 'const wrappedContent = contentToRender;'}
 
-    const root = createRoot(rootElement);
-    root.render(wrappedContent);
+    if (hasSSRContent) {
+      hydrateRoot(rootElement, wrappedContent);
+      isInitialHydration = false;
+    } else {
+      const root = createRoot(rootElement);
+      root.render(wrappedContent);
+    }
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`

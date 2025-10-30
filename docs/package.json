@@ -20,19 +20,19 @@
     "rari": "latest",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "shiki": "^3.13.0"
+    "shiki": "^3.14.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.15",
+    "@tailwindcss/vite": "^4.1.16",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^24.9.1",
+    "@types/node": "^24.9.2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@typescript/native-preview": "7.0.0-dev.20250923.1",
     "@vitejs/plugin-react-oxc": "^0.2.3",
     "eslint": "^9.38.0",
-    "oxlint": "^1.23.0",
-    "rolldown-vite": "^7.1.19",
-    "tailwindcss": "^4.1.15"
+    "oxlint": "^1.25.0",
+    "rolldown-vite": "^7.1.20",
+    "tailwindcss": "^4.1.16"
   }
 }

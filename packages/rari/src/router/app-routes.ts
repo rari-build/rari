@@ -1,4 +1,5 @@
 import type {
+  ApiRouteEntry,
   AppRouteEntry,
   AppRouteManifest,
   ErrorEntry,
@@ -25,6 +26,7 @@ const SPECIAL_FILES = {
   NOT_FOUND: 'not-found',
   TEMPLATE: 'template',
   DEFAULT: 'default',
+  ROUTE: 'route',
 } as const
 
 const SEGMENT_PATTERNS = {
@@ -32,6 +34,8 @@ const SEGMENT_PATTERNS = {
   CATCH_ALL: /^\[\.\.\.([^\]]+)\]$/,
   OPTIONAL_CATCH_ALL: /^\[\[\.\.\.([^\]]+)\]\]$/,
 } as const
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const
 
 export class AppRouteGenerator {
   private appDir: string
@@ -54,14 +58,16 @@ export class AppRouteGenerator {
     const loading: LoadingEntry[] = []
     const errors: ErrorEntry[] = []
     const notFound: NotFoundEntry[] = []
+    const apiRoutes: ApiRouteEntry[] = []
 
-    await this.scanDirectory('', routes, layouts, loading, errors, notFound)
+    await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes)
 
     if (this.verbose) {
       console.warn(`[AppRouter] Found ${routes.length} routes`)
       console.warn(`[AppRouter] Found ${layouts.length} layouts`)
       console.warn(`[AppRouter] Found ${loading.length} loading components`)
       console.warn(`[AppRouter] Found ${errors.length} error boundaries`)
+      console.warn(`[AppRouter] Found ${apiRoutes.length} API routes`)
     }
 
     return {
@@ -70,6 +76,7 @@ export class AppRouteGenerator {
       loading,
       errors,
       notFound,
+      apiRoutes: this.sortApiRoutes(apiRoutes),
       generated: new Date().toISOString(),
     }
   }
@@ -81,6 +88,7 @@ export class AppRouteGenerator {
     loading: LoadingEntry[],
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
+    apiRoutes: ApiRouteEntry[],
   ): Promise<void> {
     const fullPath = path.join(this.appDir, relativePath)
 
@@ -117,11 +125,12 @@ export class AppRouteGenerator {
       loading,
       errors,
       notFound,
+      apiRoutes,
     )
 
     for (const dir of dirs) {
       const subPath = relativePath ? path.join(relativePath, dir) : dir
-      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound)
+      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, apiRoutes)
     }
   }
 
@@ -133,6 +142,7 @@ export class AppRouteGenerator {
     loading: LoadingEntry[],
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
+    apiRoutes: ApiRouteEntry[],
   ): Promise<void> {
     const routePath = this.pathToRoute(relativePath)
 
@@ -182,6 +192,12 @@ export class AppRouteGenerator {
         path: routePath,
         filePath: path.join(relativePath, notFoundFile),
       })
+    }
+
+    const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
+    if (routeFile) {
+      const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
+      apiRoutes.push(apiRoute)
     }
   }
 
@@ -327,6 +343,22 @@ export class AppRouteGenerator {
     })
   }
 
+  private sortApiRoutes(routes: ApiRouteEntry[]): ApiRouteEntry[] {
+    return routes.sort((a, b) => {
+      if (!a.isDynamic && b.isDynamic)
+        return -1
+      if (a.isDynamic && !b.isDynamic)
+        return 1
+
+      const aDepth = a.path.split('/').length
+      const bDepth = b.path.split('/').length
+      if (aDepth !== bDepth)
+        return aDepth - bDepth
+
+      return a.path.localeCompare(b.path)
+    })
+  }
+
   private sortLayouts(layouts: LayoutEntry[]): LayoutEntry[] {
     return layouts.sort((a, b) => {
       if (a.path === '/' && b.path !== '/')
@@ -338,6 +370,47 @@ export class AppRouteGenerator {
       const bDepth = b.path.split('/').length
       return aDepth - bDepth
     })
+  }
+
+  private async detectHttpMethods(filePath: string): Promise<string[]> {
+    const fullPath = path.join(this.appDir, filePath)
+    const content = await fs.readFile(fullPath, 'utf-8')
+    const methods: string[] = []
+
+    for (const method of HTTP_METHODS) {
+      const functionExportRegex = new RegExp(
+        `export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`,
+      )
+      const constExportRegex = new RegExp(
+        `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
+      )
+
+      if (functionExportRegex.test(content) || constExportRegex.test(content)) {
+        methods.push(method)
+      }
+    }
+
+    return methods
+  }
+
+  private async processApiRouteFile(
+    relativePath: string,
+    fileName: string,
+  ): Promise<ApiRouteEntry> {
+    const filePath = path.join(relativePath, fileName)
+    const routePath = this.pathToRoute(relativePath)
+    const segments = this.parseRouteSegments(relativePath)
+    const params = this.extractParams(segments)
+    const methods = await this.detectHttpMethods(filePath)
+
+    return {
+      path: routePath,
+      filePath,
+      segments,
+      params,
+      isDynamic: params.length > 0,
+      methods,
+    }
   }
 }
 

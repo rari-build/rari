@@ -36,6 +36,8 @@ use tower_http::services::ServeDir;
 use tracing::{debug, error, info, warn};
 
 pub mod actions;
+pub mod api_error;
+pub mod api_routes;
 pub mod app_router;
 pub mod config;
 pub mod request_context;
@@ -72,6 +74,7 @@ pub struct ServerState {
         Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub page_cache_configs: Arc<tokio::sync::RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<app_router::AppRouter>>,
+    pub api_route_handler: Option<Arc<api_routes::ApiRouteHandler>>,
     pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub response_cache: Arc<response_cache::ResponseCache>,
@@ -130,6 +133,27 @@ impl Server {
                 }
                 Err(e) => {
                     debug!("No app router manifest found at {}: {}", manifest_path, e);
+                    None
+                }
+            }
+        };
+
+        let api_route_handler = {
+            let manifest_path = "dist/app-routes.json";
+
+            match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
+                .await
+            {
+                Ok(handler) => {
+                    info!(
+                        "Loaded API route handler from {} with {} API routes",
+                        manifest_path,
+                        handler.manifest().api_routes.len()
+                    );
+                    Some(Arc::new(handler))
+                }
+                Err(e) => {
+                    debug!("No API routes found in manifest at {}: {}", manifest_path, e);
                     None
                 }
             }
@@ -202,6 +226,7 @@ impl Server {
             component_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             page_cache_configs: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             app_router,
+            api_route_handler,
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
             response_cache,
@@ -242,8 +267,7 @@ impl Server {
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/action", post(handle_server_action))
-            .route("/api/rsc/form-action", post(handle_form_action))
-            .route("/api/{*path}", axum::routing::options(cors_preflight_ok));
+            .route("/api/rsc/form-action", post(handle_form_action));
 
         if config.is_development() {
             info!("Adding development routes");
@@ -255,6 +279,11 @@ impl Server {
                 .route("/api/rsc/hmr-reload", axum::routing::options(cors_preflight_ok))
                 .route("/api/rsc/reload-component", post(reload_component))
                 .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
+                .route("/api/rsc/hmr-invalidate-api-route", post(hmr_invalidate_api_route))
+                .route(
+                    "/api/rsc/hmr-invalidate-api-route",
+                    axum::routing::options(cors_preflight_ok),
+                )
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
@@ -266,6 +295,13 @@ impl Server {
         }
 
         let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
+
+        if has_app_router {
+            info!("Registering API route handler");
+            router = router
+                .route("/api/{*path}", axum::routing::options(api_cors_preflight))
+                .route("/api/{*path}", any(handle_api_route));
+        }
 
         if has_app_router {
             info!("App router enabled - using app route handler");
@@ -2077,6 +2113,43 @@ async fn hmr_invalidate_component(
 }
 
 #[derive(Debug, Deserialize)]
+struct HmrInvalidateApiRouteRequest {
+    #[serde(rename = "filePath")]
+    file_path: String,
+}
+
+#[axum::debug_handler]
+async fn hmr_invalidate_api_route(
+    State(state): State<ServerState>,
+    Json(payload): Json<HmrInvalidateApiRouteRequest>,
+) -> Json<Value> {
+    info!("HMR invalidate request for API route: {}", payload.file_path);
+
+    let api_handler = match &state.api_route_handler {
+        Some(handler) => handler,
+        None => {
+            warn!("No API route handler available for HMR invalidation");
+            #[allow(clippy::disallowed_methods)]
+            return Json(serde_json::json!({
+                "success": false,
+                "filePath": payload.file_path,
+                "error": "API route handler not available"
+            }));
+        }
+    };
+
+    api_handler.invalidate_handler(&payload.file_path);
+    info!("Invalidated API route handler cache for: {}", payload.file_path);
+
+    #[allow(clippy::disallowed_methods)]
+    Json(serde_json::json!({
+        "success": true,
+        "filePath": payload.file_path,
+        "message": "API route handler cache invalidated"
+    }))
+}
+
+#[derive(Debug, Deserialize)]
 struct HmrReloadRequest {
     #[serde(rename = "componentId")]
     component_id: String,
@@ -2396,7 +2469,7 @@ fn cors_preflight_response() -> Response {
     headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
     headers.insert(
         "Access-Control-Allow-Methods",
-        HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+        HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS"),
     );
     headers.insert(
         "Access-Control-Allow-Headers",
@@ -2411,6 +2484,267 @@ fn cors_preflight_response() -> Response {
 #[axum::debug_handler]
 async fn cors_preflight_ok() -> Response {
     cors_preflight_response()
+}
+
+fn add_api_cors_headers(headers: &mut axum::http::HeaderMap) {
+    if !headers.contains_key("Access-Control-Allow-Origin") {
+        headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    }
+
+    if !headers.contains_key("Access-Control-Allow-Methods") {
+        headers.insert(
+            "Access-Control-Allow-Methods",
+            HeaderValue::from_static("GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS"),
+        );
+    }
+
+    if !headers.contains_key("Access-Control-Allow-Headers") {
+        headers.insert(
+            "Access-Control-Allow-Headers",
+            HeaderValue::from_static(
+                "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
+            ),
+        );
+    }
+
+    if !headers.contains_key("Access-Control-Allow-Credentials") {
+        headers.insert("Access-Control-Allow-Credentials", HeaderValue::from_static("true"));
+    }
+}
+
+fn add_api_security_headers(headers: &mut axum::http::HeaderMap) {
+    if !headers.contains_key("X-Content-Type-Options") {
+        headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
+    }
+
+    if !headers.contains_key("X-Frame-Options") {
+        headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
+    }
+
+    if !headers.contains_key("X-XSS-Protection") {
+        headers.insert("X-XSS-Protection", HeaderValue::from_static("1; mode=block"));
+    }
+
+    if !headers.contains_key("Strict-Transport-Security") {
+        headers.insert(
+            "Strict-Transport-Security",
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        );
+    }
+
+    if !headers.contains_key("Content-Security-Policy") {
+        headers.insert(
+            "Content-Security-Policy",
+            HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'"),
+        );
+    }
+
+    if !headers.contains_key("Referrer-Policy") {
+        headers.insert("Referrer-Policy", HeaderValue::from_static("no-referrer"));
+    }
+
+    if !headers.contains_key("Permissions-Policy") {
+        headers.insert(
+            "Permissions-Policy",
+            HeaderValue::from_static("geolocation=(), microphone=(), camera=()"),
+        );
+    }
+}
+
+#[axum::debug_handler]
+async fn api_cors_preflight(
+    State(state): State<ServerState>,
+    req: axum::http::Request<Body>,
+) -> Response {
+    let path = req.uri().path();
+
+    if let Some(api_handler) = &state.api_route_handler
+        && let Some(methods) = api_handler.get_supported_methods(path)
+    {
+        let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
+        let headers = builder.headers_mut().expect("Response builder should have headers");
+
+        headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+
+        let mut all_methods = methods.clone();
+        if !all_methods.contains(&"OPTIONS".to_string()) {
+            all_methods.push("OPTIONS".to_string());
+        }
+        let methods_str = all_methods.join(", ");
+
+        if let Ok(methods_value) = HeaderValue::from_str(&methods_str) {
+            headers.insert("Access-Control-Allow-Methods", methods_value);
+        }
+
+        headers.insert(
+                "Access-Control-Allow-Headers",
+                HeaderValue::from_static(
+                    "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
+                ),
+            );
+        headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
+
+        debug!(
+            path = %path,
+            allowed_methods = %methods_str,
+            "Returning CORS preflight response for API route"
+        );
+
+        return builder.body(Body::empty()).expect("Valid preflight response");
+    }
+
+    cors_preflight_response()
+}
+
+#[axum::debug_handler]
+async fn handle_api_route(
+    State(state): State<ServerState>,
+    req: axum::http::Request<Body>,
+) -> Result<axum::http::Response<Body>, StatusCode> {
+    use crate::server::api_error::{ApiRouteError, create_generic_error_response};
+
+    let path = req.uri().path().to_string();
+    let method = req.method().to_string();
+    let is_development = state.config.is_development();
+
+    debug!(
+        path = %path,
+        method = %method,
+        "Received API route request"
+    );
+
+    let api_handler = match &state.api_route_handler {
+        Some(handler) => handler,
+        None => {
+            debug!("No API route handler available");
+            return Ok(create_generic_error_response(
+                StatusCode::NOT_FOUND,
+                "API routes not configured",
+                is_development,
+            ));
+        }
+    };
+
+    let route_match = match api_handler.match_route(&path, &method) {
+        Ok(m) => m,
+        Err(e) => {
+            if let Some(error_type) = e.get_property("error_type")
+                && error_type == "method_not_allowed"
+            {
+                let allowed_methods = e
+                    .get_property("allowed_methods")
+                    .unwrap_or("")
+                    .split(',')
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+
+                let api_error = ApiRouteError::MethodNotAllowed {
+                    path: path.to_string(),
+                    method: method.to_string(),
+                    allowed_methods: allowed_methods.clone(),
+                    message: e.message(),
+                };
+
+                info!(
+                    path = %path,
+                    method = %method,
+                    allowed_methods = ?allowed_methods,
+                    "Method not allowed for API route"
+                );
+
+                let mut response = api_error.to_http_response(is_development);
+                if is_development {
+                    add_api_cors_headers(response.headers_mut());
+                }
+                return Ok(response);
+            }
+
+            debug!(
+                path = %path,
+                method = %method,
+                error = %e,
+                "No matching API route found"
+            );
+
+            let api_error = ApiRouteError::NotFound {
+                path: path.to_string(),
+                message: format!("No API route found for path: {}", path),
+            };
+
+            let mut response = api_error.to_http_response(is_development);
+            if is_development {
+                add_api_cors_headers(response.headers_mut());
+            }
+            return Ok(response);
+        }
+    };
+
+    debug!(
+        request_path = %path,
+        route_path = %route_match.route.path,
+        method = %method,
+        "Matched API route"
+    );
+
+    match api_handler.execute_handler(&route_match, req, is_development).await {
+        Ok(mut response) => {
+            debug!(
+                route_path = %route_match.route.path,
+                method = %method,
+                status = response.status().as_u16(),
+                "API route handler executed successfully"
+            );
+
+            let headers = response.headers_mut();
+            if is_development {
+                add_api_cors_headers(headers);
+            } else {
+                add_api_security_headers(headers);
+            }
+
+            Ok(response)
+        }
+        Err(e) => {
+            error!(
+                route_path = %route_match.route.path,
+                method = %method,
+                error = %e,
+                error_code = %e.code(),
+                "API route handler execution failed"
+            );
+
+            let api_error = if e.code() == "JS_EXECUTION_ERROR" {
+                ApiRouteError::HandlerError {
+                    path: route_match.route.path.clone(),
+                    method: method.to_string(),
+                    message: e.message(),
+                    stack: None,
+                }
+            } else if e.code() == "BAD_REQUEST" {
+                ApiRouteError::BodyParseError {
+                    path: route_match.route.path.clone(),
+                    method: method.to_string(),
+                    message: e.message(),
+                }
+            } else {
+                ApiRouteError::HandlerError {
+                    path: route_match.route.path.clone(),
+                    method: method.to_string(),
+                    message: e.message(),
+                    stack: None,
+                }
+            };
+
+            let mut response = api_error.to_http_response(is_development);
+            let headers = response.headers_mut();
+            if is_development {
+                add_api_cors_headers(headers);
+            } else {
+                add_api_security_headers(headers);
+            }
+            Ok(response)
+        }
+    }
 }
 
 fn extract_search_params(

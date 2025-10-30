@@ -17,7 +17,7 @@ const DEFAULT_OPTIONS: Required<RariRouterPluginOptions> = {
   outDir: 'dist',
 }
 
-type AppRouterFileType = 'page' | 'layout' | 'loading' | 'error' | 'not-found' | 'server-action'
+type AppRouterFileType = 'page' | 'layout' | 'loading' | 'error' | 'not-found' | 'route' | 'server-action'
 
 interface AppRouterHMRData {
   fileType: AppRouterFileType
@@ -29,6 +29,7 @@ interface AppRouterHMRData {
   metadata?: Record<string, any>
   metadataChanged?: boolean
   actionExports?: string[]
+  methods?: string[]
 }
 
 function getAppRouterFileType(filePath: string): AppRouterFileType | null {
@@ -46,6 +47,8 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
       return 'error'
     case 'not-found':
       return 'not-found'
+    case 'route':
+      return 'route'
     default:
       return null
   }
@@ -127,6 +130,56 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
   catch (error) {
     console.error('Failed to extract metadata:', error)
     return null
+  }
+}
+
+function detectHttpMethods(fileContent: string): string[] {
+  const methods: string[] = []
+  const httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+
+  for (const method of httpMethods) {
+    const functionExportRegex = new RegExp(
+      `export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`,
+    )
+    const constExportRegex = new RegExp(
+      `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
+    )
+
+    if (functionExportRegex.test(fileContent) || constExportRegex.test(fileContent)) {
+      methods.push(method)
+    }
+  }
+
+  return methods
+}
+
+async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
+  try {
+    const response = await fetch('http://localhost:3000/api/rsc/hmr-invalidate-api-route', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filePath,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to invalidate API route cache: ${response.statusText}`)
+      return
+    }
+
+    const result = await response.json()
+    if (result.success) {
+      console.warn(`[HMR] API route handler cache invalidated: ${filePath}`)
+    }
+    else {
+      console.error(`[HMR] Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
+    }
+  }
+  catch (error) {
+    console.error('Failed to notify API route invalidation:', error)
   }
 }
 
@@ -321,6 +374,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
             let metadata: Record<string, any> | undefined
             let metadataChanged = false
+            let methods: string[] | undefined
 
             if (fileType === 'page' || fileType === 'layout') {
               try {
@@ -338,6 +392,19 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
               }
             }
 
+            if (fileType === 'route') {
+              try {
+                const fileContent = await fs.readFile(file, 'utf-8')
+                methods = detectHttpMethods(fileContent)
+                console.warn(`[HMR] API route methods detected: ${methods.join(', ')}`)
+
+                await notifyApiRouteInvalidation(path.relative(appDir, file))
+              }
+              catch (error) {
+                console.error('Failed to detect HTTP methods:', error)
+              }
+            }
+
             const hmrData: AppRouterHMRData = {
               fileType,
               filePath: path.relative(server.config.root, file),
@@ -347,6 +414,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
               timestamp: Date.now(),
               metadata,
               metadataChanged,
+              methods,
             }
 
             server.ws.send({
@@ -356,8 +424,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
             })
 
             const metadataInfo = metadataChanged ? ' [metadata updated]' : ''
+            const methodsInfo = methods ? ` [methods: ${methods.join(', ')}]` : ''
             console.warn(
-              `[HMR] App router ${fileType} changed: ${hmrData.filePath} (affects ${affectedRoutes.length} route${affectedRoutes.length === 1 ? '' : 's'})${metadataInfo}`,
+              `[HMR] App router ${fileType} changed: ${hmrData.filePath} (affects ${affectedRoutes.length} route${affectedRoutes.length === 1 ? '' : 's'})${metadataInfo}${methodsInfo}`,
             )
           }, DEBOUNCE_DELAY)
 

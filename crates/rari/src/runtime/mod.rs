@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+pub mod api_bridge;
 pub mod dist_path_resolver;
 pub mod ext;
 pub mod module_loader;

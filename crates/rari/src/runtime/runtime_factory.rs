@@ -697,6 +697,7 @@ fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool {
 fn should_resolve_promises(script_name: &str) -> bool {
     script_name.starts_with("promise_test_")
         || script_name.starts_with("streaming_sim_")
+        || script_name.starts_with("api_route_")
         || script_name == "reload_module"
         || script_name == "invalidate_cache"
         || script_name.starts_with("execute_action_")

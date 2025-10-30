@@ -42,12 +42,22 @@ export interface NotFoundEntry {
   filePath: string
 }
 
+export interface ApiRouteEntry {
+  path: string
+  filePath: string
+  segments: RouteSegment[]
+  params: string[]
+  isDynamic: boolean
+  methods: string[]
+}
+
 export interface AppRouteManifest {
   routes: AppRouteEntry[]
   layouts: LayoutEntry[]
   loading: LoadingEntry[]
   errors: ErrorEntry[]
   notFound: NotFoundEntry[]
+  apiRoutes: ApiRouteEntry[]
   generated: string
 }
 
