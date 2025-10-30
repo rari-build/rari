@@ -1,8 +1,8 @@
 use crate::error::RariError;
 use dashmap::DashMap;
 use deno_core::{
-    FastString, ModuleLoadResponse, ModuleLoader, ModuleSource, ModuleSourceCode, ModuleSpecifier,
-    ModuleType, RequestedModuleType, ResolutionKind,
+    FastString, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader, ModuleSource,
+    ModuleSourceCode, ModuleSpecifier, ModuleType, RequestedModuleType, ResolutionKind,
 };
 use deno_error::JsErrorBox;
 use parking_lot::{Mutex, RwLock};
@@ -2398,7 +2398,7 @@ impl ModuleLoader for RariModuleLoader {
     fn load(
         &self,
         module_specifier: &ModuleSpecifier,
-        maybe_referrer: Option<&ModuleSpecifier>,
+        maybe_referrer: Option<&ModuleLoadReferrer>,
         is_dyn_import: bool,
         _requested_module_type: RequestedModuleType,
     ) -> ModuleLoadResponse {
@@ -2412,9 +2412,12 @@ impl ModuleLoader for RariModuleLoader {
             return response;
         }
 
-        if let Some(response) =
-            self.handle_dynamic_import_validation(&specifier_str, maybe_referrer, is_dyn_import)
-        {
+        let maybe_referrer_spec = maybe_referrer.map(|r| r.specifier.clone());
+        if let Some(response) = self.handle_dynamic_import_validation(
+            &specifier_str,
+            maybe_referrer_spec.as_ref(),
+            is_dyn_import,
+        ) {
             let load_duration = load_start.elapsed().as_millis() as u64;
             self.record_module_load(load_duration);
             self.record_operation();

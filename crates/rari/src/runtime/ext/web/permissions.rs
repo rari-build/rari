@@ -17,7 +17,7 @@ fn to_io_err(err: PermissionDeniedError) -> std::io::Error {
 
 pub fn oops<T>(msg: impl std::fmt::Display) -> Result<T, PermissionDeniedError> {
     use deno_permissions::PermissionDeniedError;
-    Err(PermissionDeniedError { access: msg.to_string(), name: "oops" })
+    Err(PermissionDeniedError { access: msg.to_string(), name: "oops", custom_message: None })
 }
 
 #[derive(Debug, Clone, Copy, Default)]

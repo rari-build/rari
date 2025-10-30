@@ -417,35 +417,33 @@ impl ApiRouteHandler {
                             }
                         }
                     }
-                } else {
+                } else if chars.peek() == Some(&'.') {
+                    chars.next();
                     if chars.peek() == Some(&'.') {
                         chars.next();
                         if chars.peek() == Some(&'.') {
                             chars.next();
-                            if chars.peek() == Some(&'.') {
-                                chars.next();
-                                result.push_str("____");
+                            result.push_str("____");
 
-                                while let Some(ch) = chars.next() {
-                                    if ch == ']' {
-                                        result.push('_');
-                                        break;
-                                    } else {
-                                        result.push(ch);
-                                    }
+                            for ch in chars.by_ref() {
+                                if ch == ']' {
+                                    result.push('_');
+                                    break;
+                                } else {
+                                    result.push(ch);
                                 }
                             }
                         }
-                    } else {
-                        result.push('_');
+                    }
+                } else {
+                    result.push('_');
 
-                        while let Some(ch) = chars.next() {
-                            if ch == ']' {
-                                result.push('_');
-                                break;
-                            } else {
-                                result.push(ch);
-                            }
+                    for ch in chars.by_ref() {
+                        if ch == ']' {
+                            result.push('_');
+                            break;
+                        } else {
+                            result.push(ch);
                         }
                     }
                 }
@@ -486,33 +484,31 @@ impl ApiRouteHandler {
                             }
                         }
                     }
-                } else {
+                } else if chars.peek() == Some(&'.') {
+                    chars.next();
                     if chars.peek() == Some(&'.') {
                         chars.next();
                         if chars.peek() == Some(&'.') {
                             chars.next();
-                            if chars.peek() == Some(&'.') {
-                                chars.next();
-                                normalized_path.push_str("____");
-                                while let Some(ch) = chars.next() {
-                                    if ch == ']' {
-                                        normalized_path.push('_');
-                                        break;
-                                    } else {
-                                        normalized_path.push(ch);
-                                    }
+                            normalized_path.push_str("____");
+                            for ch in chars.by_ref() {
+                                if ch == ']' {
+                                    normalized_path.push('_');
+                                    break;
+                                } else {
+                                    normalized_path.push(ch);
                                 }
                             }
                         }
-                    } else {
-                        normalized_path.push('_');
-                        while let Some(ch) = chars.next() {
-                            if ch == ']' {
-                                normalized_path.push('_');
-                                break;
-                            } else {
-                                normalized_path.push(ch);
-                            }
+                    }
+                } else {
+                    normalized_path.push('_');
+                    for ch in chars.by_ref() {
+                        if ch == ']' {
+                            normalized_path.push('_');
+                            break;
+                        } else {
+                            normalized_path.push(ch);
                         }
                     }
                 }
