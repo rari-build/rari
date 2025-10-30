@@ -1,3 +1,23 @@
+## [0.4.0] - 2025-10-30
+
+### 🚀 Features
+
+- *(runtime)* Add API request bridge for Rari server runtime
+- *(runtime)* Upgrade Deno dependencies and improve module loading
+
+### 🎨 Styling
+
+- *(template)* Add eslint-disable comment for object-curly-spacing rule
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Optimize Google Analytics and performance loading
+- Bump version to 0.4.0
+## [rari@0.3.3] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.3
 ## [0.3.3] - 2025-10-28
 
 ### 💼 Other
