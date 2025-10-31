@@ -1,8 +1,83 @@
-## [0.2.1] - 2025-10-21
+## [rari@0.4.0] - 2025-10-30
+
+### 💼 Other
+
+- Rari@0.4.0
+## [0.4.0] - 2025-10-30
+
+### 🚀 Features
+
+- *(runtime)* Add API request bridge for Rari server runtime
+- *(runtime)* Upgrade Deno dependencies and improve module loading
+
+### 🎨 Styling
+
+- *(template)* Add eslint-disable comment for object-curly-spacing rule
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Optimize Google Analytics and performance loading
+- Bump version to 0.4.0
+## [rari@0.3.3] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.3
+## [0.3.3] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.3
+
+### 🚜 Refactor
+
+- *(rsc)* Remove JSX transformation from core  and simplify dependency extraction
+## [rari@0.3.2] - 2025-10-28
+
+### 💼 Other
+
+- Rari@0.3.2
+## [0.3.2] - 2025-10-28
+
+### 🐛 Bug Fixes
+
+- Prevent false ES module detection when code contains "export" in strings
+
+### 💼 Other
+
+- Rari@0.3.2
+## [rari@0.3.1] - 2025-10-24
+
+### 💼 Other
+
+- Rari@0.3.1
+## [0.3.1] - 2025-10-24
+
+### 🚀 Features
+
+- *(rari)* Add pathname support for layouts and server components
+
+### 💼 Other
+
+- Rari@0.3.1
+- Rari@0.3.1
+
+### 🚜 Refactor
+
+- *(docs)* Simplify mobile navigation using CSS checkbox toggle
+
+### 📚 Documentation
+
+- *(readme)* Update docs
+## [create-rari-app@0.2.1] - 2025-10-21
 
 ### 🚀 Features
 
 - *(create-rari-app)* Enhance project creation and build process
+
+### 💼 Other
+
+- Create-rari-app@0.2.1
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -311,7 +386,7 @@
 - Bump create-rari-app version to 0.1.9
 - Bump rari package version to 0.2.14
 - Update rari package version to 0.2.14 in pnpm-lock.yaml and package.json
-## [0.2.2] - 2025-08-15
+## [0.2.2] - 2025-10-30
 
 ### 🚜 Refactor
 
@@ -328,7 +403,7 @@
 ### 💼 Other
 
 - Rari@0.2.2
-## [0.2.1] - 2025-10-21
+## [0.2.1] - 2025-08-15
 
 ### 🚀 Features
 
