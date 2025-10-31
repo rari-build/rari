@@ -118,7 +118,7 @@ function buildBinary(target) {
     const buildCommand = `cargo build --release --target ${target} --bin rari`
     const buildOptions = {
       cwd: projectRoot,
-      stdio: 'pipe',
+      stdio: 'inherit',
       env: {
         ...process.env,
         ...(target === 'aarch64-unknown-linux-gnu' && {
