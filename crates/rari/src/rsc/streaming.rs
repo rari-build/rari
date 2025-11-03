@@ -39,6 +39,13 @@ pub struct BoundaryUpdate {
     pub row_id: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct BoundaryError {
+    pub boundary_id: String,
+    pub error_message: String,
+    pub row_id: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct RscStreamChunk {
     pub data: Vec<u8>,
@@ -60,6 +67,7 @@ pub struct BackgroundPromiseResolver {
     runtime: Arc<JsExecutionRuntime>,
     active_promises: Arc<Mutex<FxHashMap<String, PendingSuspensePromise>>>,
     update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
+    error_sender: mpsc::UnboundedSender<BoundaryError>,
     shared_row_counter: Arc<Mutex<u32>>,
 }
 
@@ -67,12 +75,14 @@ impl BackgroundPromiseResolver {
     pub fn new(
         runtime: Arc<JsExecutionRuntime>,
         update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
+        error_sender: mpsc::UnboundedSender<BoundaryError>,
         shared_row_counter: Arc<Mutex<u32>>,
     ) -> Self {
         Self {
             runtime,
             active_promises: Arc::new(Mutex::new(FxHashMap::default())),
             update_sender,
+            error_sender,
             shared_row_counter,
         }
     }
@@ -81,6 +91,12 @@ impl BackgroundPromiseResolver {
         let promise_id = promise.id.clone();
         let boundary_id = promise.boundary_id.clone();
 
+        tracing::debug!(
+            "Promise registered: promise_id={}, boundary_id={}",
+            promise_id,
+            boundary_id
+        );
+
         {
             let mut active = self.active_promises.lock().await;
             active.insert(promise_id.clone(), promise.clone());
@@ -88,6 +104,7 @@ impl BackgroundPromiseResolver {
 
         let runtime = Arc::clone(&self.runtime);
         let update_sender = self.update_sender.clone();
+        let error_sender = self.error_sender.clone();
         let shared_row_counter = Arc::clone(&self.shared_row_counter);
         let active_promises = Arc::clone(&self.active_promises);
 
@@ -181,6 +198,12 @@ impl BackgroundPromiseResolver {
                     match serde_json::from_str::<serde_json::Value>(&result_string) {
                         Ok(result_data) => {
                             if result_data["success"].as_bool().unwrap_or(false) {
+                                tracing::debug!(
+                                    "Promise resolved: promise_id={}, boundary_id={}",
+                                    promise_id,
+                                    boundary_id
+                                );
+
                                 let row_id = {
                                     let mut counter = shared_row_counter.lock().await;
                                     *counter += 1;
@@ -193,26 +216,44 @@ impl BackgroundPromiseResolver {
                                     row_id,
                                 };
 
-                                match update_sender.send(update) {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        error!(
-                                            "Failed to send boundary update for {}: {}",
-                                            boundary_id, e
-                                        );
-                                    }
+                                if let Err(e) = update_sender.send(update) {
+                                    error!(
+                                        "Failed to send boundary update for {}: {}",
+                                        boundary_id, e
+                                    );
                                 }
                             } else {
+                                let error_message =
+                                    result_data["error"].as_str().unwrap_or("Unknown error");
                                 error!(
                                     "Promise resolution failed for boundary {}: {} (Details: error={}, stack={}, errorName={}, errorToString={}, debug_info={:?})",
                                     boundary_id,
-                                    result_data["error"].as_str().unwrap_or("Unknown error"),
+                                    error_message,
                                     result_data["error"].as_str().unwrap_or("N/A"),
                                     result_data["stack"].as_str().unwrap_or("N/A"),
                                     result_data["errorName"].as_str().unwrap_or("N/A"),
                                     result_data["errorToString"].as_str().unwrap_or("N/A"),
                                     result_data
                                 );
+
+                                let row_id = {
+                                    let mut counter = shared_row_counter.lock().await;
+                                    *counter += 1;
+                                    *counter
+                                };
+
+                                let error_update = BoundaryError {
+                                    boundary_id: boundary_id.clone(),
+                                    error_message: error_message.to_string(),
+                                    row_id,
+                                };
+
+                                if let Err(e) = error_sender.send(error_update) {
+                                    error!(
+                                        "Failed to send boundary error for {}: {}",
+                                        boundary_id, e
+                                    );
+                                }
                             }
                         }
                         Err(e) => {
@@ -220,6 +261,20 @@ impl BackgroundPromiseResolver {
                                 "Failed to parse promise resolution result for {}: {} - Raw result: {} - Script: {}",
                                 boundary_id, e, result_string, script_name
                             );
+
+                            let row_id = {
+                                let mut counter = shared_row_counter.lock().await;
+                                *counter += 1;
+                                *counter
+                            };
+
+                            let error_update = BoundaryError {
+                                boundary_id: boundary_id.clone(),
+                                error_message: format!("Failed to parse promise result: {}", e),
+                                row_id,
+                            };
+
+                            let _ = error_sender.send(error_update);
                         }
                     }
                 }
@@ -228,6 +283,20 @@ impl BackgroundPromiseResolver {
                         "Failed to execute promise resolution script {} for boundary {}: {}",
                         script_name, boundary_id, e
                     );
+
+                    let row_id = {
+                        let mut counter = shared_row_counter.lock().await;
+                        *counter += 1;
+                        *counter
+                    };
+
+                    let error_update = BoundaryError {
+                        boundary_id: boundary_id.clone(),
+                        error_message: format!("Failed to execute promise: {}", e),
+                        row_id,
+                    };
+
+                    let _ = error_sender.send(error_update);
                 }
             }
 
@@ -326,24 +395,125 @@ impl StreamingRenderer {
         props: Option<&str>,
     ) -> Result<RscStream, RariError> {
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
+        let (error_sender, error_receiver) = mpsc::unbounded_channel::<BoundaryError>();
         let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunk>(64);
 
         self.promise_resolver = Some(Arc::new(BackgroundPromiseResolver::new(
             Arc::clone(&self.runtime),
             update_sender,
+            error_sender,
             Arc::clone(&self.shared_row_counter),
         )));
 
-        self.module_path = Some(format!("app/{component_id}.js"));
+        self.module_path = Some(format!("{component_id}.js"));
 
         let partial_result = self.render_partial(component_id, props).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
         if let Some(resolver) = &self.promise_resolver {
-            for promise in partial_result.pending_promises {
-                resolver.resolve_async(promise).await;
-            }
+            let runtime = Arc::clone(&self.runtime);
+            let resolver_clone = Arc::clone(resolver);
+            let pending_promises = partial_result.pending_promises.clone();
+
+            tokio::spawn(async move {
+                let execute_script = r#"
+                    (async function() {
+                        if (globalThis.__deferred_async_components && globalThis.__deferred_async_components.length > 0) {
+                            console.log('🔍 JS: Executing', globalThis.__deferred_async_components.length, 'deferred async components');
+
+                            const results = [];
+                            for (const deferred of globalThis.__deferred_async_components) {
+                                try {
+                                    console.log('🔍 JS: Calling async component for promise:', deferred.promiseId, 'path:', deferred.componentPath);
+
+                                    if (typeof deferred.component !== 'function') {
+                                        console.error('🔍 JS: Deferred component is not a function:', typeof deferred.component);
+                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a function' });
+                                        continue;
+                                    }
+
+                                    const componentPromise = deferred.component(deferred.props);
+
+                                    if (!componentPromise || typeof componentPromise.then !== 'function') {
+                                        console.error('🔍 JS: Component did not return a promise:', typeof componentPromise);
+                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a promise' });
+                                        continue;
+                                    }
+
+                                    globalThis.__suspense_promises = globalThis.__suspense_promises || {};
+                                    globalThis.__suspense_promises[deferred.promiseId] = componentPromise;
+                                    console.log('🔍 JS: Promise registered:', deferred.promiseId);
+                                    results.push({ promiseId: deferred.promiseId, success: true });
+                                } catch (e) {
+                                    console.error('🔍 JS: Error calling deferred component:', e);
+                                    results.push({
+                                        promiseId: deferred.promiseId,
+                                        success: false,
+                                        error: e.message || 'Unknown error',
+                                        stack: e.stack
+                                    });
+                                }
+                            }
+
+                            const successCount = results.filter(r => r.success).length;
+                            globalThis.__deferred_async_components = [];
+                            return {
+                                success: true,
+                                count: successCount,
+                                total: results.length,
+                                results: results
+                            };
+                        }
+                        return { success: true, count: 0, total: 0 };
+                    })()
+                "#;
+
+                match runtime
+                    .execute_script(
+                        "<execute_deferred_components>".to_string(),
+                        execute_script.to_string(),
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        let result_str = result.to_string();
+                        match serde_json::from_str::<serde_json::Value>(&result_str) {
+                            Ok(data) => {
+                                let success_count = data["count"].as_u64().unwrap_or(0);
+                                let total_count = data["total"].as_u64().unwrap_or(0);
+                                tracing::debug!(
+                                    "Deferred components executed: {}/{} successful",
+                                    success_count,
+                                    total_count
+                                );
+
+                                if let Some(results) = data["results"].as_array() {
+                                    for result in results {
+                                        if !result["success"].as_bool().unwrap_or(false) {
+                                            tracing::warn!(
+                                                "Deferred component failed: promiseId={}, error={}",
+                                                result["promiseId"].as_str().unwrap_or("unknown"),
+                                                result["error"].as_str().unwrap_or("unknown")
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to parse deferred execution result: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to execute deferred components: {}", e);
+                    }
+                }
+
+                for promise in pending_promises {
+                    resolver_clone.resolve_async(promise).await;
+                }
+            });
         } else {
             return Err(RariError::internal(
                 "No promise resolver available - this should not happen",
@@ -354,15 +524,30 @@ impl StreamingRenderer {
         let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
+            let mut error_receiver = error_receiver;
 
-            while let Some(update) = update_receiver.recv().await {
-                Self::send_boundary_update_with_map(
-                    &chunk_sender_clone,
-                    update,
-                    Arc::clone(&boundary_rows_map),
-                )
-                .await;
+            loop {
+                tokio::select! {
+                    Some(update) = update_receiver.recv() => {
+                        Self::send_boundary_update_with_map(
+                            &chunk_sender_clone,
+                            update,
+                            Arc::clone(&boundary_rows_map),
+                        )
+                        .await;
+                    }
+                    Some(error) = error_receiver.recv() => {
+                        Self::send_boundary_error(
+                            &chunk_sender_clone,
+                            error,
+                        )
+                        .await;
+                    }
+                    else => break,
+                }
             }
+
+            tracing::debug!("Stream completed");
 
             let final_chunk = RscStreamChunk {
                 data: b"STREAM_COMPLETE\n".to_vec(),
@@ -371,7 +556,9 @@ impl StreamingRenderer {
                 is_final: true,
             };
 
-            let _ = chunk_sender_clone.send(final_chunk).await;
+            if let Err(e) = chunk_sender_clone.send(final_chunk).await {
+                tracing::error!("Failed to send stream completion signal: {}", e);
+            }
         });
 
         Ok(RscStream::new(chunk_receiver))
@@ -618,10 +805,13 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
 
-        let render_script = format!(
+        let setup_script = format!(
             r#"
-            (async function() {{
+            globalThis.__render_component_async = async function() {{
                 try {{
+                    console.log('🔍 JS: Looking for component:', '{component_id}');
+                    console.log('🔍 JS: Available modules:', Object.keys(globalThis.__rsc_modules || {{}}));
+
                     let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default) ||
                                     globalThis['{component_id}'] ||
                                     (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']);
@@ -682,17 +872,239 @@ impl StreamingRenderer {
                             }};
                         }}
 
+                        const isAsyncFunction = Component.constructor.name === 'AsyncFunction' ||
+                                              Component[Symbol.toStringTag] === 'AsyncFunction' ||
+                                              (Component.toString && Component.toString().trim().startsWith('async'));
+                        console.log('🔍 JS: Component is async?', isAsyncFunction, 'constructor:', Component.constructor.name);
+
+                        if (isAsyncFunction) {{
+                            console.log('🔍 JS: Async component detected, returning loading state immediately');
+
+                            const boundaryId = 'async_boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                            const promiseId = 'async_promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+                            let loadingComponent = null;
+                            const componentPath = '{component_id}';
+
+                            const loadingPaths = [
+                                componentPath.replace('/page', '/loading'),  // app/foo/page -> app/foo/loading
+                                componentPath.replace(/\/[^/]+$/, '/loading'),  // app/foo/bar -> app/foo/loading
+                                componentPath + '-loading',  // app/foo/page -> app/foo/page-loading
+                                'app/loading'  // fallback to root loading
+                            ];
+
+                            console.log('🔍 JS: Trying loading component paths:', loadingPaths);
+
+                            for (const loadingPath of loadingPaths) {{
+                                if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {{
+                                    const LoadingModule = globalThis.__rsc_modules[loadingPath];
+                                    const LoadingComp = LoadingModule.default || LoadingModule;
+                                    if (typeof LoadingComp === 'function') {{
+                                        try {{
+                                            loadingComponent = LoadingComp({{}});
+                                            console.log('🔍 JS: Loading component found at:', loadingPath);
+                                            break;
+                                        }} catch (e) {{
+                                            console.log('🔍 JS: Error rendering loading component from', loadingPath, ':', e);
+                                        }}
+                                    }}
+                                }}
+                            }}
+
+                            let fallbackContent;
+                            if (loadingComponent) {{
+                                if (loadingComponent && typeof loadingComponent === 'object' &&
+                                    (loadingComponent.type || loadingComponent.$$typeof)) {{
+                                    fallbackContent = loadingComponent;
+                                }} else {{
+                                    console.warn('🔍 JS: Loading component is not a valid React element, using default');
+                                    fallbackContent = globalThis.__original_create_element('div', {{
+                                        className: 'rari-loading',
+                                        children: 'Loading...'
+                                    }});
+                                }}
+                            }} else {{
+                                fallbackContent = globalThis.__original_create_element('div', {{
+                                    className: 'rari-loading',
+                                    children: 'Loading...'
+                                }});
+                            }}
+
+                            // Register the boundary
+                            globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
+                            globalThis.__discovered_boundaries.push({{
+                                id: boundaryId,
+                                fallback: globalThis.__safeSerializeElement(fallbackContent),
+                                parentId: null
+                            }});
+
+                            globalThis.__pending_promises = globalThis.__pending_promises || [];
+                            globalThis.__pending_promises.push({{
+                                id: promiseId,
+                                boundaryId: boundaryId,
+                                componentPath: '{component_id}'
+                            }});
+
+                            const serializedFallback = globalThis.__safeSerializeElement(fallbackContent);
+
+                            const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
+                                id: boundary.id,
+                                fallback: globalThis.__safeSerializeElement(boundary.fallback),
+                                parentId: boundary.parentId
+                            }}));
+
+                            const fallbackRsc = ["$", "react.suspense", null, {{
+                                boundaryId: boundaryId,
+                                __boundary_id: boundaryId,
+                                fallback: ["$", serializedFallback.type, serializedFallback.key, serializedFallback.props],
+                                children: null
+                            }}];
+
+                            const initialResult = {{
+                                success: true,
+                                rsc_data: fallbackRsc,
+                                boundaries: safeBoundaries,
+                                pending_promises: globalThis.__pending_promises || [],
+                                has_suspense: true,
+                                error: null,
+                                error_stack: null
+                            }};
+
+                            globalThis.__streaming_result = initialResult;
+                            globalThis.__initial_render_complete = true;
+
+                            console.log('🔍 JS: Initial result stored with loading state, Rust can return immediately');
+                            console.log('🔍 JS: Result structure:', JSON.stringify({{
+                                success: initialResult.success,
+                                has_rsc_data: !!initialResult.rsc_data,
+                                boundaries_count: initialResult.boundaries.length,
+                                pending_count: initialResult.pending_promises.length
+                            }}));
+                            console.log('🔍 JS: Returning immediately WITHOUT executing async component');
+
+                            globalThis.__deferred_async_components = globalThis.__deferred_async_components || [];
+                            globalThis.__deferred_async_components.push({{
+                                component: Component,
+                                props: props,
+                                promiseId: promiseId,
+                                boundaryId: boundaryId,
+                                componentPath: '{component_id}'
+                            }});
+
+                            return;
+                        }}
+
+                        console.log('🔍 JS: Calling component function...');
                         element = Component(props);
+                        console.log('🔍 JS: Component returned:', typeof element, element);
 
                         if (element && typeof element.then === 'function') {{
-                            try {{
-                                element = await element;
-                            }} catch (asyncError) {{
-                                console.error('Async component execution failed:', asyncError);
-                                element = globalThis.__original_create_element ?
-                                    globalThis.__original_create_element('div', null, 'Async Error: ' + asyncError.message) :
-                                    {{'type': 'div', 'props': {{'children': 'Async Error: ' + asyncError.message}}}};
+                            console.log('🔍 JS: Element is a promise, creating Suspense boundary...');
+                            isAsyncResult = true;
+
+                            const boundaryId = 'async_boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                            const promiseId = 'async_promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+                            globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+                            globalThis.__suspense_promises[promiseId] = element;
+
+                            globalThis.__pending_promises = globalThis.__pending_promises || [];
+                            globalThis.__pending_promises.push({{
+                                id: promiseId,
+                                boundaryId: boundaryId,
+                                componentPath: '{component_id}'
+                            }});
+
+                            let loadingComponent = null;
+                            const componentPath = '{component_id}';
+
+                            const loadingPaths = [
+                                componentPath.replace('/page', '/loading'),
+                                componentPath.replace(/\/[^/]+$/, '/loading'),
+                                componentPath + '-loading',
+                                'app/loading'
+                            ];
+
+                            console.log('🔍 JS: Trying loading component paths:', loadingPaths);
+
+                            for (const loadingPath of loadingPaths) {{
+                                if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {{
+                                    const LoadingModule = globalThis.__rsc_modules[loadingPath];
+                                    const LoadingComp = LoadingModule.default || LoadingModule;
+                                    if (typeof LoadingComp === 'function') {{
+                                        try {{
+                                            loadingComponent = LoadingComp({{}});
+                                            console.log('🔍 JS: Loading component found at:', loadingPath);
+                                            break;
+                                        }} catch (e) {{
+                                            console.log('🔍 JS: Error rendering loading component from', loadingPath, ':', e);
+                                        }}
+                                    }}
+                                }}
                             }}
+
+                            let fallbackContent;
+                            if (loadingComponent && typeof loadingComponent === 'object' &&
+                                (loadingComponent.type || loadingComponent.$$typeof)) {{
+                                fallbackContent = loadingComponent;
+                            }} else {{
+                                if (loadingComponent) {{
+                                    console.warn('🔍 JS: Loading component is not a valid React element, using default');
+                                }}
+                                fallbackContent = globalThis.__original_create_element('div', {{
+                                    className: 'rari-loading',
+                                    children: 'Loading...'
+                                }});
+                            }}
+
+                            globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
+                            globalThis.__discovered_boundaries.push({{
+                                id: boundaryId,
+                                fallback: globalThis.__safeSerializeElement(fallbackContent),
+                                parentId: null
+                            }});
+
+                            element = fallbackContent;
+                            console.log('🔍 JS: Returning fallback content for streaming');
+
+                            const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
+                                id: boundary.id,
+                                fallback: globalThis.__safeSerializeElement(boundary.fallback),
+                                parentId: boundary.parentId
+                            }}));
+
+                            const serializedFallback = globalThis.__safeSerializeElement(fallbackContent);
+                            const simpleFallbackRsc = {{
+                                type: "react.suspense",
+                                key: null,
+                                props: {{
+                                    boundaryId: boundaryId,
+                                    __boundary_id: boundaryId,
+                                    fallback: {{
+                                        type: serializedFallback.type,
+                                        key: serializedFallback.key,
+                                        props: serializedFallback.props
+                                    }},
+                                    children: null
+                                }}
+                            }};
+
+                            const initialResult = {{
+                                success: true,
+                                rsc_data: simpleFallbackRsc,
+                                boundaries: safeBoundaries,
+                                pending_promises: globalThis.__pending_promises || [],
+                                has_suspense: true,
+                                error: null,
+                                error_stack: null
+                            }};
+
+                            globalThis.__streaming_result = initialResult;
+                            globalThis.__initial_render_complete = true;
+
+                            console.log('🔍 JS: Initial result stored with fallback, Rust can return immediately');
+
+                            return;
                         }}
 
                         const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
@@ -809,11 +1221,13 @@ impl StreamingRenderer {
                         }}
                     }}
 
+                    console.log('🔍 JS: Converting element to RSC...');
                     let rscData;
                     try {{
                         rscData = globalThis.renderToRsc ?
                             await globalThis.renderToRsc(element, globalThis.__rsc_client_components || {{}}) :
                             element;
+                        console.log('🔍 JS: RSC conversion complete');
                     }} catch (rscError) {{
                         console.error('Error in RSC conversion:', rscError);
                         rscData = {{
@@ -841,8 +1255,14 @@ impl StreamingRenderer {
                         error_stack: renderError ? renderError.stack : null
                     }};
 
+                    console.log('🔍 JS: Storing final result');
                     globalThis.__streaming_result = finalResult;
-                    return finalResult;
+
+                    if (!globalThis.__initial_render_complete) {{
+                        globalThis.__initial_render_complete = true;
+                    }}
+
+                    globalThis.__streaming_complete = true;
                 }} catch (error) {{
                     console.error('Fatal error in component rendering:', error);
                     const errorResult = {{
@@ -852,26 +1272,101 @@ impl StreamingRenderer {
                         fatal: true
                     }};
                     globalThis.__streaming_result = errorResult;
-                    return errorResult;
+                    globalThis.__streaming_complete = true;
                 }}
-            }})()
+            }};
+
+            console.log('🔍 JS: Render function set up');
+            ({{ __setup_complete: true }})
             "#,
             component_id = component_id,
             props_json = props.unwrap_or("{}")
         );
 
-        let result = self
+        let _setup_result = self
             .runtime
-            .execute_script(format!("<partial_render_{component_id}>"), render_script)
+            .execute_script(format!("<setup_render_{component_id}>"), setup_script)
+            .await
+            .map_err(|e| RariError::internal(format!("Setup render failed: {e}")))?;
+        let start_script = r#"
+            globalThis.__streaming_complete = false;
+            globalThis.__initial_render_complete = false;
+            globalThis.__should_start_render = true;
+            true
+        "#;
+
+        self.runtime
+            .execute_script(format!("<start_render_{component_id}>"), start_script.to_string())
             .await
             .map_err(|e| RariError::internal(format!("Partial render failed: {e}")))?;
 
-        let result_data: serde_json::Value =
-            serde_json::from_str(&result.to_string()).map_err(|e| {
-                RariError::internal(format!(
-                    "Failed to parse render result: {e} - Raw result: {result}"
-                ))
-            })?;
+        let result_data = {
+            let poll_script = r#"
+                JSON.stringify((function() {
+                    if (globalThis.__should_start_render) {
+                        globalThis.__should_start_render = false;
+                        const renderStart = Date.now();
+                        globalThis.__render_component_async().then(() => {
+                            const renderCallTime = Date.now() - renderStart;
+                            console.log('🔍 JS: __render_component_async() completed in:', renderCallTime, 'ms');
+                        });
+                    }
+
+                    if (globalThis.__initial_render_complete) {
+                        const result = globalThis.__streaming_result;
+                        console.log('🔍 JS: Returning result, keys:', Object.keys(result || {}));
+                        console.log('🔍 JS: Result.success:', result?.success);
+                        return result;
+                    } else {
+                        return { __still_pending: true };
+                    }
+                })())
+            "#;
+
+            let mut attempts = 0;
+
+            loop {
+                let poll_result = self
+                    .runtime
+                    .execute_script(
+                        format!("<poll_result_{component_id}>"),
+                        poll_script.to_string(),
+                    )
+                    .await
+                    .map_err(|e| RariError::internal(format!("Failed to poll for result: {e}")))?;
+
+                let poll_result_str = poll_result.to_string();
+
+                let poll_string_value: serde_json::Value = serde_json::from_str(&poll_result_str)
+                    .map_err(|e| {
+                    RariError::internal(format!("Failed to parse poll result (first parse): {e}"))
+                })?;
+
+                let poll_data: serde_json::Value =
+                    if let Some(json_str) = poll_string_value.as_str() {
+                        serde_json::from_str(json_str).map_err(|e| {
+                            RariError::internal(format!(
+                                "Failed to parse JSON string (second parse): {e}"
+                            ))
+                        })?
+                    } else {
+                        poll_string_value
+                    };
+
+                if !poll_data.get("__still_pending").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    break poll_data;
+                }
+
+                attempts += 1;
+                if attempts >= 300 {
+                    return Err(RariError::internal(
+                        "Initial render timed out after 3 seconds".to_string(),
+                    ));
+                }
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            }
+        };
 
         if !result_data["success"].as_bool().unwrap_or(false) {
             return Err(RariError::internal(format!(
@@ -984,30 +1479,17 @@ impl StreamingRenderer {
     async fn send_boundary_update_with_map(
         sender: &mpsc::Sender<RscStreamChunk>,
         update: BoundaryUpdate,
-        boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
+        _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
     ) {
-        let id_value = {
-            let map = boundary_rows_map.lock().await;
-            if let Some(row) = map.get(&update.boundary_id) {
-                format!("$L{row}")
-            } else if update.boundary_id.starts_with("$L") {
-                update.boundary_id.clone()
-            } else if update.boundary_id.chars().all(|c| c.is_ascii_digit()) {
-                format!("$L{}", update.boundary_id)
-            } else {
-                update.boundary_id.clone()
-            }
-        };
-        let element = serde_json::Value::Array(vec![
-            serde_json::Value::String("$".to_string()),
-            serde_json::Value::String(id_value),
-            serde_json::Value::Null,
-            serde_json::Value::Object({
-                let mut map = serde_json::Map::new();
-                map.insert("children".to_string(), update.content);
-                map
-            }),
-        ]);
+        let element = serde_json::Value::Object({
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "boundary_id".to_string(),
+                serde_json::Value::String(update.boundary_id.clone()),
+            );
+            map.insert("content".to_string(), update.content);
+            map
+        });
 
         let update_row = format!("{}:{}\n", update.row_id, element);
 
@@ -1019,7 +1501,40 @@ impl StreamingRenderer {
         };
 
         if let Err(e) = sender.send(chunk).await {
-            error!("Failed to send boundary update: {}", e);
+            error!(
+                "Failed to send boundary update chunk, boundary_id={}, row_id={}, error={}",
+                update.boundary_id, update.row_id, e
+            );
+        }
+    }
+
+    async fn send_boundary_error(sender: &mpsc::Sender<RscStreamChunk>, error: BoundaryError) {
+        tracing::error!(
+            "Boundary error: boundary_id={}, error={}",
+            error.boundary_id,
+            error.error_message
+        );
+
+        #[allow(clippy::disallowed_methods)]
+        let error_data = serde_json::json!({
+            "boundary_id": error.boundary_id,
+            "error": error.error_message,
+        });
+
+        let error_row = format!("{}:E{}\n", error.row_id, error_data);
+
+        let chunk = RscStreamChunk {
+            data: error_row.into_bytes(),
+            chunk_type: RscChunkType::BoundaryError,
+            row_id: error.row_id,
+            is_final: false,
+        };
+
+        if let Err(e) = sender.send(chunk).await {
+            error!(
+                "Failed to send boundary error chunk, boundary_id={}, row_id={}, error={}",
+                error.boundary_id, error.row_id, e
+            );
         }
     }
 
@@ -1042,17 +1557,10 @@ impl StreamingRenderer {
     fn create_shell_chunk_with_module(
         &self,
         content: &serde_json::Value,
-        module_row_id: u32,
+        _module_row_id: u32,
     ) -> Result<RscStreamChunk, RariError> {
-        let mut props = serde_json::Map::new();
-        props.insert("children".to_string(), content.clone());
-        let element = serde_json::Value::Array(vec![
-            serde_json::Value::String("$".to_string()),
-            serde_json::Value::String(format!("$L{module_row_id}")),
-            serde_json::Value::Null,
-            serde_json::Value::Object(props),
-        ]);
-        let row = format!("{}:{}\n", self.row_counter, element);
+        let rsc_element = self.json_to_rsc_element(content)?;
+        let row = format!("{}:{}\n", self.row_counter, rsc_element);
 
         Ok(RscStreamChunk {
             data: row.into_bytes(),
@@ -1060,6 +1568,52 @@ impl StreamingRenderer {
             row_id: self.row_counter,
             is_final: false,
         })
+    }
+
+    fn json_to_rsc_element(
+        &self,
+        json: &serde_json::Value,
+    ) -> Result<serde_json::Value, RariError> {
+        if let Some(obj) = json.as_object()
+            && let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
+        {
+            let mut converted_props = serde_json::Map::new();
+
+            if let Some(props_obj) = props.as_object() {
+                for (key, value) in props_obj {
+                    if key == "children" {
+                        converted_props.insert(key.clone(), self.convert_children(value)?);
+                    } else {
+                        converted_props.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+
+            return Ok(serde_json::Value::Array(vec![
+                serde_json::Value::String("$".to_string()),
+                element_type.clone(),
+                serde_json::Value::Null,
+                serde_json::Value::Object(converted_props),
+            ]));
+        }
+
+        Ok(json.clone())
+    }
+
+    fn convert_children(
+        &self,
+        children: &serde_json::Value,
+    ) -> Result<serde_json::Value, RariError> {
+        match children {
+            serde_json::Value::Array(arr) => {
+                let mut converted = Vec::new();
+                for child in arr {
+                    converted.push(self.json_to_rsc_element(child)?);
+                }
+                Ok(serde_json::Value::Array(converted))
+            }
+            _ => self.json_to_rsc_element(children),
+        }
     }
 
     fn create_symbol_chunk(&self, symbol_ref: &str) -> Result<RscStreamChunk, RariError> {

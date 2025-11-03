@@ -1,5 +1,6 @@
 pub mod component;
 pub mod dependency_utils;
+pub mod elements;
 pub mod js_loader;
 pub mod layout_renderer;
 pub mod renderer;
@@ -26,6 +27,7 @@ pub use component::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
 pub use dependency_utils::extract_dependencies;
+pub use elements::ReactElement as LoadingReactElement;
 pub use js_loader::RscJsLoader;
 pub use renderer::RscRenderer;
 pub use rsc_html_renderer::RscHtmlRenderer;

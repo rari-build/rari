@@ -691,3 +691,169 @@ impl From<serde_json::Error> for RariError {
         )
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum StreamingError {
+    StreamInitError { message: String, component_id: Option<String> },
+    ChunkConversionError { message: String, chunk_type: Option<String> },
+    BoundaryTimeout { message: String, boundary_id: String, timeout_ms: u64 },
+    ClientDisconnected { message: String },
+}
+
+impl std::fmt::Display for StreamingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StreamInitError { message, component_id } => {
+                write!(f, "Failed to initialize streaming: {}", message)?;
+                if let Some(id) = component_id {
+                    write!(f, " (component: {})", id)?;
+                }
+                Ok(())
+            }
+            Self::ChunkConversionError { message, chunk_type } => {
+                write!(f, "Error converting chunk to HTML: {}", message)?;
+                if let Some(ct) = chunk_type {
+                    write!(f, " (chunk type: {})", ct)?;
+                }
+                Ok(())
+            }
+            Self::BoundaryTimeout { message, boundary_id, timeout_ms } => {
+                write!(
+                    f,
+                    "Suspense boundary '{}' timed out after {}ms: {}",
+                    boundary_id, timeout_ms, message
+                )
+            }
+            Self::ClientDisconnected { message } => {
+                write!(f, "Client disconnected during streaming: {}", message)
+            }
+        }
+    }
+}
+
+impl std::error::Error for StreamingError {}
+
+impl From<StreamingError> for RariError {
+    fn from(error: StreamingError) -> Self {
+        let message = error.to_string();
+        let mut details = FxHashMap::default();
+
+        match &error {
+            StreamingError::StreamInitError { component_id, .. } => {
+                details.insert("error_type".to_string(), "stream_init_error".to_string());
+                if let Some(id) = component_id {
+                    details.insert("component_id".to_string(), id.clone());
+                }
+            }
+            StreamingError::ChunkConversionError { chunk_type, .. } => {
+                details.insert("error_type".to_string(), "chunk_conversion_error".to_string());
+                if let Some(ct) = chunk_type {
+                    details.insert("chunk_type".to_string(), ct.clone());
+                }
+            }
+            StreamingError::BoundaryTimeout { boundary_id, timeout_ms, .. } => {
+                details.insert("error_type".to_string(), "boundary_timeout".to_string());
+                details.insert("boundary_id".to_string(), boundary_id.clone());
+                details.insert("timeout_ms".to_string(), timeout_ms.to_string());
+            }
+            StreamingError::ClientDisconnected { .. } => {
+                details.insert("error_type".to_string(), "client_disconnected".to_string());
+            }
+        }
+
+        RariError::Internal(
+            message,
+            Some(ErrorMetadata {
+                code: "STREAMING_ERROR".to_string(),
+                details: Some(details),
+                source: Some("streaming_ssr".to_string()),
+                error_source: None,
+            }),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum LoadingStateError {
+    LoadingNotFound { path: String, message: String },
+    RenderError { path: String, message: String, source: Option<String> },
+    SuspenseError { message: String, boundary_id: Option<String> },
+    InvalidOutput { path: String, message: String, details: Option<String> },
+}
+
+impl std::fmt::Display for LoadingStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LoadingNotFound { path, message } => {
+                write!(f, "Loading component not found at '{}': {}", path, message)
+            }
+            Self::RenderError { path, message, source } => {
+                write!(f, "Failed to render loading component at '{}': {}", path, message)?;
+                if let Some(src) = source {
+                    write!(f, " (source: {})", src)?;
+                }
+                Ok(())
+            }
+            Self::SuspenseError { message, boundary_id } => {
+                write!(f, "Suspense boundary error: {}", message)?;
+                if let Some(id) = boundary_id {
+                    write!(f, " (boundary ID: {})", id)?;
+                }
+                Ok(())
+            }
+            Self::InvalidOutput { path, message, details } => {
+                write!(f, "Invalid loading component output from '{}': {}", path, message)?;
+                if let Some(d) = details {
+                    write!(f, " ({})", d)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl std::error::Error for LoadingStateError {}
+
+impl From<LoadingStateError> for RariError {
+    fn from(error: LoadingStateError) -> Self {
+        let message = error.to_string();
+        let mut details = FxHashMap::default();
+
+        match &error {
+            LoadingStateError::LoadingNotFound { path, .. } => {
+                details.insert("path".to_string(), path.clone());
+                details.insert("error_type".to_string(), "loading_not_found".to_string());
+            }
+            LoadingStateError::RenderError { path, source, .. } => {
+                details.insert("path".to_string(), path.clone());
+                details.insert("error_type".to_string(), "render_error".to_string());
+                if let Some(src) = source {
+                    details.insert("source".to_string(), src.clone());
+                }
+            }
+            LoadingStateError::SuspenseError { boundary_id, .. } => {
+                details.insert("error_type".to_string(), "suspense_error".to_string());
+                if let Some(id) = boundary_id {
+                    details.insert("boundary_id".to_string(), id.clone());
+                }
+            }
+            LoadingStateError::InvalidOutput { path, details: output_details, .. } => {
+                details.insert("path".to_string(), path.clone());
+                details.insert("error_type".to_string(), "invalid_output".to_string());
+                if let Some(d) = output_details {
+                    details.insert("output_details".to_string(), d.clone());
+                }
+            }
+        }
+
+        RariError::Internal(
+            message,
+            Some(ErrorMetadata {
+                code: "LOADING_STATE_ERROR".to_string(),
+                details: Some(details),
+                source: Some("loading_state".to_string()),
+                error_source: None,
+            }),
+        )
+    }
+}

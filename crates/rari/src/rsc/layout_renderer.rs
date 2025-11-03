@@ -1,7 +1,9 @@
-use crate::error::RariError;
+use crate::error::{LoadingStateError, RariError};
+use crate::rsc::elements::ReactElement;
 use crate::rsc::renderer::RscRenderer;
 use crate::rsc::streaming::RscStream;
 use crate::server::app_router::AppRouteMatch;
+use crate::server::config::Config;
 use crate::server::request_type::RenderMode;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
@@ -10,7 +12,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 #[derive(Debug, Clone)]
 pub struct LayoutRenderContext {
@@ -86,7 +88,27 @@ impl LayoutRenderer {
             route_match.layouts.len()
         );
 
-        let composition_script = self.build_composition_script(route_match, context)?;
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
+
+        let loading_component_id = if loading_enabled {
+            if let Some(loading_entry) = &route_match.loading {
+                let loading_id = self.create_component_id(&loading_entry.file_path);
+                debug!(
+                    "Loading component found at {} (ID: {}) for route {}",
+                    loading_entry.file_path, loading_id, route_match.route.path
+                );
+                Some(loading_id)
+            } else {
+                debug!("No loading component found for route {}", route_match.route.path);
+                None
+            }
+        } else {
+            debug!("Loading states are disabled in configuration");
+            None
+        };
+
+        let composition_script =
+            self.build_composition_script(route_match, context, loading_component_id.as_deref())?;
 
         debug!("Executing composition script to render composed component tree");
 
@@ -630,12 +652,66 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
+        loading_component_id: Option<&str>,
     ) -> Result<String, RariError> {
         let page_props = self.create_page_props(route_match, context)?;
         let page_props_json = serde_json::to_string(&page_props)
             .map_err(|e| RariError::internal(format!("Failed to serialize page props: {e}")))?;
 
         let page_component_id = self.create_component_id(&route_match.route.file_path);
+
+        let page_render_script = if let Some(loading_id) = loading_component_id {
+            format!(
+                r#"
+                const startPage = performance.now();
+                const PageComponent = globalThis["{}"];
+                if (!PageComponent || typeof PageComponent !== 'function') {{
+                    throw new Error('Page component {} not found');
+                }}
+
+                const LoadingComponent = globalThis["{}"];
+                if (!LoadingComponent || typeof LoadingComponent !== 'function') {{
+                    console.warn('Loading component {} not found, rendering page without Suspense');
+                    const pageProps = {};
+                    const pageResult = PageComponent(pageProps);
+                    var pageElement = pageResult && typeof pageResult.then === 'function'
+                        ? await pageResult
+                        : pageResult;
+                }} else {{
+                    const pageProps = {};
+                    const pageResult = PageComponent(pageProps);
+                    var pageElement = pageResult && typeof pageResult.then === 'function'
+                        ? await pageResult
+                        : pageResult;
+                }}
+                timings.pageRender = performance.now() - startPage;
+                "#,
+                page_component_id,
+                page_component_id,
+                loading_id,
+                loading_id,
+                page_props_json,
+                page_props_json
+            )
+        } else {
+            format!(
+                r#"
+                const startPage = performance.now();
+                const PageComponent = globalThis["{}"];
+                if (!PageComponent || typeof PageComponent !== 'function') {{
+                    throw new Error('Page component {} not found');
+                }}
+
+                const pageProps = {};
+                const pageResult = PageComponent(pageProps);
+                var pageElement = pageResult && typeof pageResult.then === 'function'
+                    ? await pageResult
+                    : pageResult;
+                timings.pageRender = performance.now() - startPage;
+                "#,
+                page_component_id, page_component_id, page_props_json
+            )
+        };
 
         let mut script = format!(
             r#"
@@ -646,20 +722,9 @@ impl LayoutRenderer {
                 const React = globalThis.React || require('react');
                 const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
 
-                const startPage = performance.now();
-                const PageComponent = globalThis["{}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {} not found');
-                }}
-
-                const pageProps = {};
-                const pageResult = PageComponent(pageProps);
-                const pageElement = pageResult && typeof pageResult.then === 'function'
-                    ? await pageResult
-                    : pageResult;
-                timings.pageRender = performance.now() - startPage;
+                {}
             "#,
-            page_component_id, page_component_id, page_props_json
+            page_render_script
         );
 
         let mut current_element = "pageElement".to_string();
@@ -851,6 +916,592 @@ impl LayoutRenderer {
             "searchParams": search_params_value
         });
         Ok(result)
+    }
+
+    #[allow(dead_code)]
+    async fn render_loading_fallback(
+        &self,
+        loading_path: &str,
+        context: &LayoutRenderContext,
+    ) -> Result<ReactElement, RariError> {
+        // Note: Loading component caching has been removed as it's no longer needed
+        // with the simplified async component handling
+
+        let component_id = self.create_component_id(loading_path);
+
+        debug!("Rendering loading fallback: {}", component_id);
+
+        let renderer = self.renderer.lock().await;
+
+        if !renderer.component_exists(&component_id) {
+            let error = LoadingStateError::LoadingNotFound {
+                path: loading_path.to_string(),
+                message: format!("Component '{}' not found in runtime", component_id),
+            };
+            error!(
+                "Loading component not found: {} (component ID: {})",
+                loading_path, component_id
+            );
+            return Err(error.into());
+        }
+
+        let page_props = self.create_page_props(
+            &AppRouteMatch {
+                route: crate::server::app_router::AppRouteEntry {
+                    path: String::new(),
+                    file_path: loading_path.to_string(),
+                    segments: vec![],
+                    params: vec![],
+                    is_dynamic: false,
+                },
+                params: FxHashMap::default(),
+                layouts: vec![],
+                loading: None,
+                error: None,
+                not_found: None,
+                pathname: context.pathname.clone(),
+            },
+            context,
+        )?;
+
+        let page_props_json = serde_json::to_string(&page_props)
+            .map_err(|e| RariError::internal(format!("Failed to serialize props: {}", e)))?;
+
+        let script = format!(
+            r#"
+            (function() {{
+                const props = {};
+                const component = globalThis["{}"];
+                if (!component || typeof component !== 'function') {{
+                    throw new Error("Component not found: {}");
+                }}
+
+                const element = component(props);
+
+                function serializeElement(el) {{
+                    if (!el || typeof el !== 'object') {{
+                        return el;
+                    }}
+
+                    if (Array.isArray(el)) {{
+                        return el.map(serializeElement);
+                    }}
+
+                    if (el.type !== undefined && el.props !== undefined) {{
+                        const result = {{
+                            type: el.type,
+                            props: {{}},
+                            key: el.key || null,
+                            ref: el.ref || null
+                        }};
+
+                        for (const [key, value] of Object.entries(el.props)) {{
+                            if (key === 'children') {{
+                                if (Array.isArray(value)) {{
+                                    result.props.children = value.map(serializeElement);
+                                }} else {{
+                                    result.props.children = serializeElement(value);
+                                }}
+                            }} else {{
+                                result.props[key] = value;
+                            }}
+                        }}
+
+                        return result;
+                    }}
+
+                    return el;
+                }}
+
+                return serializeElement(element);
+            }})();
+            "#,
+            page_props_json, component_id, component_id
+        );
+
+        let result = renderer
+            .runtime
+            .execute_script(format!("render_{}", component_id), script)
+            .await
+            .map_err(|e| {
+                let error = LoadingStateError::RenderError {
+                    path: loading_path.to_string(),
+                    message: format!("Failed to execute loading component: {}", e),
+                    source: Some(e.to_string()),
+                };
+                error!(
+                    "Loading component render error at {}: {} (component ID: {})",
+                    loading_path, e, component_id
+                );
+                RariError::from(error)
+            })?;
+
+        let element: ReactElement = serde_json::from_value(result.clone()).map_err(|e| {
+            let error = LoadingStateError::InvalidOutput {
+                path: loading_path.to_string(),
+                message: format!("Failed to parse loading component output as ReactElement: {}", e),
+                details: Some(format!("Output: {:?}", result)),
+            };
+            error!(
+                "Invalid loading component output from {}: {} (component ID: {})",
+                loading_path, e, component_id
+            );
+            RariError::from(error)
+        })?;
+
+        // Note: Loading component caching has been removed
+
+        Ok(element)
+    }
+
+    #[allow(dead_code)]
+    async fn render_page_element(
+        &self,
+        page_path: &str,
+        context: &LayoutRenderContext,
+    ) -> Result<ReactElement, RariError> {
+        let component_id = self.create_component_id(page_path);
+
+        debug!("Rendering page element: {}", component_id);
+
+        let renderer = self.renderer.lock().await;
+
+        let page_props = self.create_page_props(
+            &AppRouteMatch {
+                route: crate::server::app_router::AppRouteEntry {
+                    path: String::new(),
+                    file_path: page_path.to_string(),
+                    segments: vec![],
+                    params: vec![],
+                    is_dynamic: false,
+                },
+                params: context.params.clone(),
+                layouts: vec![],
+                loading: None,
+                error: None,
+                not_found: None,
+                pathname: context.pathname.clone(),
+            },
+            context,
+        )?;
+
+        let page_props_json = serde_json::to_string(&page_props)
+            .map_err(|e| RariError::internal(format!("Failed to serialize props: {}", e)))?;
+
+        let script = format!(
+            r#"
+            (function() {{
+                const props = {};
+                const component = globalThis["{}"];
+                if (!component || typeof component !== 'function') {{
+                    throw new Error("Component not found: {}");
+                }}
+
+                const element = component(props);
+
+                function serializeElement(el) {{
+                    if (!el || typeof el !== 'object') {{
+                        return el;
+                    }}
+
+                    if (Array.isArray(el)) {{
+                        return el.map(serializeElement);
+                    }}
+
+                    if (el.type !== undefined && el.props !== undefined) {{
+                        const result = {{
+                            type: el.type,
+                            props: {{}},
+                            key: el.key || null,
+                            ref: el.ref || null
+                        }};
+
+                        for (const [key, value] of Object.entries(el.props)) {{
+                            if (key === 'children') {{
+                                if (Array.isArray(value)) {{
+                                    result.props.children = value.map(serializeElement);
+                                }} else {{
+                                    result.props.children = serializeElement(value);
+                                }}
+                            }} else {{
+                                result.props[key] = value;
+                            }}
+                        }}
+
+                        return result;
+                    }}
+
+                    return el;
+                }}
+
+                return serializeElement(element);
+            }})();
+            "#,
+            page_props_json, component_id, component_id
+        );
+
+        let result =
+            renderer.runtime.execute_script(format!("render_{}", component_id), script).await?;
+
+        let element: ReactElement = serde_json::from_value(result).map_err(|e| {
+            RariError::internal(format!("Failed to parse page component result: {}", e))
+        })?;
+
+        Ok(element)
+    }
+
+    #[allow(dead_code)]
+    async fn render_page_with_suspense(
+        &self,
+        page_path: &str,
+        loading_fallback: ReactElement,
+        context: &LayoutRenderContext,
+    ) -> Result<ReactElement, RariError> {
+        let boundary_id = format!("suspense_{}", uuid::Uuid::new_v4());
+
+        debug!("Creating Suspense boundary with ID: {} for page: {}", boundary_id, page_path);
+
+        let page_element = self.render_page_element(page_path, context).await.map_err(|e| {
+            let error = LoadingStateError::SuspenseError {
+                message: format!("Failed to render page component for Suspense boundary: {}", e),
+                boundary_id: Some(boundary_id.clone()),
+            };
+            error!(
+                "Suspense boundary creation failed for page '{}' (boundary ID: {}): {}",
+                page_path, boundary_id, e
+            );
+            RariError::from(error)
+        })?;
+
+        let mut props = FxHashMap::default();
+
+        let fallback_value = serde_json::to_value(&loading_fallback).map_err(|e| {
+            let error = LoadingStateError::SuspenseError {
+                message: format!(
+                    "Failed to serialize loading fallback for Suspense boundary: {}",
+                    e
+                ),
+                boundary_id: Some(boundary_id.clone()),
+            };
+            error!(
+                "Failed to serialize loading fallback for Suspense boundary '{}': {}",
+                boundary_id, e
+            );
+            RariError::from(error)
+        })?;
+
+        let children_value = serde_json::to_value(&page_element).map_err(|e| {
+            let error = LoadingStateError::SuspenseError {
+                message: format!("Failed to serialize page element for Suspense boundary: {}", e),
+                boundary_id: Some(boundary_id.clone()),
+            };
+            error!(
+                "Failed to serialize page element for Suspense boundary '{}': {}",
+                boundary_id, e
+            );
+            RariError::from(error)
+        })?;
+
+        props.insert("fallback".to_string(), fallback_value);
+        props.insert("children".to_string(), children_value);
+        props.insert("__boundary_id".to_string(), serde_json::Value::String(boundary_id.clone()));
+
+        debug!("Successfully created Suspense boundary '{}' for page '{}'", boundary_id, page_path);
+
+        Ok(ReactElement { tag: "react.suspense".to_string(), props, key: None })
+    }
+
+    #[allow(dead_code)]
+    fn create_default_loading_element(&self) -> ReactElement {
+        let mut props = FxHashMap::default();
+        props.insert("className".to_string(), serde_json::Value::String("loading".to_string()));
+        props.insert("children".to_string(), serde_json::Value::String("Loading...".to_string()));
+
+        ReactElement { tag: "div".to_string(), props, key: None }
+    }
+
+    #[allow(dead_code)]
+    async fn render_loading_fallback_safe(
+        &self,
+        loading_path: &str,
+        context: &LayoutRenderContext,
+    ) -> ReactElement {
+        match self.render_loading_fallback(loading_path, context).await {
+            Ok(element) => {
+                debug!("Successfully rendered loading component from: {}", loading_path);
+                element
+            }
+            Err(e) => {
+                if let Some(error_type) = e.get_property("error_type") {
+                    match error_type {
+                        "loading_not_found" => {
+                            warn!(
+                                "Loading component not found at '{}'. Using default loading element. Error: {}",
+                                loading_path, e
+                            );
+                        }
+                        "render_error" => {
+                            error!(
+                                "Loading component at '{}' failed to render. Using default loading element. Error: {}",
+                                loading_path, e
+                            );
+                        }
+                        "invalid_output" => {
+                            error!(
+                                "Loading component at '{}' produced invalid output. Using default loading element. Error: {}",
+                                loading_path, e
+                            );
+                        }
+                        _ => {
+                            error!(
+                                "Unknown error rendering loading component at '{}'. Using default loading element. Error: {}",
+                                loading_path, e
+                            );
+                        }
+                    }
+                } else {
+                    error!(
+                        "Failed to render loading component at '{}'. Using default loading element. Error: {}",
+                        loading_path, e
+                    );
+                }
+
+                debug!("Falling back to default loading element");
+                self.create_default_loading_element()
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    async fn render_route_with_suspense_element(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        suspense_element: ReactElement,
+        _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+    ) -> Result<String, RariError> {
+        let composition_script =
+            self.build_composition_script_with_element(route_match, context, suspense_element)?;
+
+        debug!("Executing composition script with Suspense boundary");
+
+        let renderer = self.renderer.lock().await;
+
+        if let Some(ref ctx) = _request_context
+            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
+        {
+            tracing::warn!("Failed to set request context in runtime: {}", e);
+        }
+
+        let promise_result = renderer
+            .runtime
+            .execute_script("compose_and_render_suspense".to_string(), composition_script)
+            .await?;
+
+        let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
+            promise_result
+        } else {
+            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
+            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+        };
+
+        let rsc_data = result.get("rsc").ok_or_else(|| {
+            tracing::error!("Failed to extract RSC data from result: {:?}", result);
+            RariError::internal("No RSC data in render result")
+        })?;
+
+        let rsc_wire_format = {
+            let mut serializer = renderer.serializer.lock();
+            serializer
+                .serialize_rsc_json(rsc_data)
+                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {e}")))?
+        };
+
+        if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
+            tracing::warn!("HTML structure validation warning: {}", e);
+        }
+
+        debug!("RSC wire format generation completed with Suspense for {}", route_match.route.path);
+
+        Ok(rsc_wire_format)
+    }
+
+    #[allow(dead_code)]
+    fn build_composition_script_with_element(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        element: ReactElement,
+    ) -> Result<String, RariError> {
+        let element_json = serde_json::to_string(&element)
+            .map_err(|e| RariError::internal(format!("Failed to serialize element: {e}")))?;
+
+        let mut script = format!(
+            r#"
+            (async () => {{
+                const timings = {{}};
+                const startTotal = performance.now();
+
+                const React = globalThis.React || require('react');
+
+                function reconstructReactElement(obj) {{
+                    if (!obj || typeof obj !== 'object') {{
+                        return obj;
+                    }}
+
+                    if (obj.$$typeof) {{
+                        return obj;
+                    }}
+
+                    if (obj.type && obj.props) {{
+                        const {{ type, props, key }} = obj;
+
+                        let reconstructedProps = {{}};
+                        for (const [propKey, propValue] of Object.entries(props)) {{
+                            if (propValue && typeof propValue === 'object') {{
+                                reconstructedProps[propKey] = reconstructReactElement(propValue);
+                            }} else {{
+                                reconstructedProps[propKey] = propValue;
+                            }}
+                        }}
+
+                        return React.createElement(type, {{ key, ...reconstructedProps }});
+                    }}
+
+                    if (Array.isArray(obj)) {{
+                        return obj.map(reconstructReactElement);
+                    }}
+
+                    return obj;
+                }}
+
+                const pageElementData = {};
+                const pageElement = reconstructReactElement(pageElementData);
+                timings.pageRender = 0;
+            "#,
+            element_json
+        );
+
+        let mut current_element = "pageElement".to_string();
+        for (i, layout) in route_match.layouts.iter().rev().enumerate() {
+            let layout_component_id = self.create_component_id(&layout.file_path);
+            let layout_var = format!("layout{}", i);
+
+            script.push_str(&format!(
+                r#"
+                const startLayout{} = performance.now();
+                const LayoutComponent{} = globalThis["{}"];
+                if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
+                    throw new Error('Layout component {} not found');
+                }}
+
+                const {} = LayoutComponent{}({{ children: {}, pathname: {} }});
+                timings.layout{} = performance.now() - startLayout{};
+                "#,
+                i,
+                i,
+                layout_component_id,
+                i,
+                i,
+                layout_component_id,
+                layout_var,
+                i,
+                current_element,
+                serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
+                i,
+                i
+            ));
+
+            current_element = layout_var;
+        }
+
+        script.push_str(&format!(
+            r#"
+                globalThis.__rsc_render_result = null;
+
+                const traverseToRsc = globalThis.traverseToRsc;
+                if (!traverseToRsc) {{
+                    throw new Error('traverseToRsc not available - RSC runtime not initialized');
+                }}
+
+                if (!globalThis.renderToRsc) {{
+                    globalThis.renderToRsc = async function(element, clientComponents = {{}}) {{
+                        if (!element) return null;
+
+                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {{
+                            return element;
+                        }}
+
+                        if (Array.isArray(element)) {{
+                            const results = [];
+                            for (const child of element) {{
+                                results.push(await globalThis.renderToRsc(child, clientComponents));
+                            }}
+                            return results;
+                        }}
+
+                        if (element && typeof element === 'object') {{
+                            const uniqueKey = element.key || null;
+
+                            if (element.type) {{
+                                if (typeof element.type === 'string') {{
+                                    const props = element.props || {{}};
+                                    const {{ children: propsChildren, ...otherProps }} = props;
+
+                                    const actualChildren = element.children || propsChildren;
+
+                                    const rscProps = {{
+                                        ...otherProps,
+                                        children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
+                                    }};
+                                    if (rscProps.children === undefined) {{
+                                        delete rscProps.children;
+                                    }}
+                                    return ["$", element.type, uniqueKey, rscProps];
+                                }} else if (typeof element.type === 'function') {{
+                                    try {{
+                                        const props = element.props || {{}};
+                                        let result = element.type(props);
+
+                                        if (result && typeof result.then === 'function') {{
+                                            result = await result;
+                                        }}
+
+                                        return await globalThis.renderToRsc(result, clientComponents);
+                                    }} catch (error) {{
+                                        console.error('Error rendering function component:', error);
+                                        return ["$", "div", uniqueKey, {{
+                                            children: `Error: ${{error.message}}`,
+                                            style: {{ color: 'red', border: '1px solid red', padding: '10px' }}
+                                        }}];
+                                    }}
+                                }}
+                            }}
+
+                            return ["$", "div", uniqueKey, {{
+                                className: "rsc-unknown",
+                                children: "Unknown element type"
+                            }}];
+                        }}
+
+                        return element;
+                    }};
+                }}
+
+                const startRSC = performance.now();
+                const rscData = await traverseToRsc({});
+                timings.rscConversion = performance.now() - startRSC;
+
+                timings.total = performance.now() - startTotal;
+
+                globalThis.__rsc_render_result = {{ rsc: rscData, timings }};
+                return globalThis.__rsc_render_result;
+            }})();
+            "#,
+            current_element
+        ));
+
+        Ok(script)
     }
 
     pub async fn render_loading(

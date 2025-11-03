@@ -1312,11 +1312,11 @@ impl JsRuntimeInterface for DenoRuntime {
                     const argsJson = atob("{}");
                     const args = JSON.parse(argsJson);
 
-                    if (typeof globalThis.{} !== 'function') {{
+                    if (typeof globalThis["{}"] !== 'function') {{
                         throw new Error("Function not found: {}");
                     }}
 
-                    return globalThis.{}(...args);
+                    return globalThis["{}"](...args);
                 }})();
                 "#,
                 args_base64, function_name, function_name, function_name
