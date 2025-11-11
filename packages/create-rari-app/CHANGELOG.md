@@ -1,3 +1,12 @@
+## [0.2.3] - 2025-11-11
+
+### 💼 Other
+
+- Create-rari-app@0.2.2
+
+### ⚙️ Miscellaneous Tasks
+
+- Show compiler output in `prepare-binaries.js`
 ## [rari@0.4.0] - 2025-10-30
 
 ### 💼 Other
@@ -386,7 +395,7 @@
 - Bump create-rari-app version to 0.1.9
 - Bump rari package version to 0.2.14
 - Update rari package version to 0.2.14 in pnpm-lock.yaml and package.json
-## [0.2.2] - 2025-10-30
+## [0.2.2] - 2025-08-15
 
 ### 🚜 Refactor
 
