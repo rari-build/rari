@@ -1287,8 +1287,6 @@ if (typeof globalThis.__clientComponentPaths === 'undefined') {
 
 ${registrations}
 
-let isInitialHydration = true;
-
 export async function renderApp() {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
@@ -1297,8 +1295,6 @@ export async function renderApp() {
   }
 
   try {
-    const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
-
     const rariServerUrl = window.location.origin.includes(':5173')
       ? 'http://localhost:3000'
       : window.location.origin;
@@ -1341,13 +1337,8 @@ export async function renderApp() {
     `
       : 'const wrappedContent = contentToRender;'}
 
-    if (hasSSRContent) {
-      hydrateRoot(rootElement, wrappedContent);
-      isInitialHydration = false;
-    } else {
-      const root = createRoot(rootElement);
-      root.render(wrappedContent);
-    }
+    const root = createRoot(rootElement);
+    root.render(wrappedContent);
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`
@@ -1360,22 +1351,17 @@ export async function renderApp() {
 }
 
 function extractBodyContent(element, skipHeadInjection = false) {
-  console.log('[Rari] extractBodyContent - element:', element);
-  console.log('[Rari] extractBodyContent - element.type:', element?.type);
-  console.log('[Rari] extractBodyContent - element.props:', element?.props);
 
   if (element && element.type === 'html' && element.props && element.props.children) {
     const children = Array.isArray(element.props.children)
       ? element.props.children
       : [element.props.children];
 
-    console.log('[Rari] extractBodyContent - children:', children);
 
     let headElement = null;
     let bodyElement = null;
 
     for (const child of children) {
-      console.log('[Rari] extractBodyContent - checking child:', child, 'type:', child?.type);
       if (child && child.type === 'head') {
         headElement = child;
       } else if (child && child.type === 'body') {
@@ -1384,33 +1370,24 @@ function extractBodyContent(element, skipHeadInjection = false) {
     }
 
     if (bodyElement) {
-      console.log('[Rari] extractBodyContent - found body');
-
       if (!skipHeadInjection && headElement && headElement.props && headElement.props.children) {
-        console.log('[Rari] extractBodyContent - found head, extracting styles');
         injectHeadContent(headElement);
-      } else if (skipHeadInjection) {
-        console.log('[Rari] extractBodyContent - skipping head injection (SSR hydration)');
       }
 
       const bodyChildren = bodyElement.props?.children;
-      console.log('[Rari] extractBodyContent - body children:', bodyChildren);
 
       if (bodyChildren &&
           typeof bodyChildren === 'object' &&
           !Array.isArray(bodyChildren) &&
           bodyChildren.type === 'div' &&
           bodyChildren.props?.id === 'root') {
-        console.log('[Rari] extractBodyContent - found root div in body, returning its children to avoid nesting');
         return bodyChildren.props?.children || null;
       }
 
-      console.log('[Rari] extractBodyContent - returning body children as-is');
       return bodyChildren || null;
     }
   }
 
-  console.log('[Rari] extractBodyContent - no body found, returning null');
   return null;
 }
 
