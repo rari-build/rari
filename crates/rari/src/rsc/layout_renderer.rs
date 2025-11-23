@@ -12,7 +12,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 #[derive(Debug, Clone)]
 pub struct LayoutRenderContext {
@@ -20,6 +20,104 @@ pub struct LayoutRenderContext {
     pub search_params: FxHashMap<String, Vec<String>>,
     pub headers: FxHashMap<String, String>,
     pub pathname: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundaryInfo {
+    pub id: String,
+    pub has_fallback: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SuspenseDetectionResult {
+    pub has_suspense: bool,
+    pub boundary_count: usize,
+    pub boundaries: Vec<BoundaryInfo>,
+}
+
+pub enum RenderResult {
+    Static(String),
+    StaticWithPayload { html: String, rsc_payload: String },
+    Streaming(RscStream),
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundaryPosition {
+    pub boundary_id: String,
+    pub parent_path: Vec<usize>,
+    pub is_in_content_area: bool,
+    pub dom_path: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LayoutStructure {
+    pub has_navigation: bool,
+    pub navigation_position: Option<usize>,
+    pub content_position: Option<usize>,
+    pub suspense_boundaries: Vec<BoundaryPosition>,
+}
+
+impl LayoutStructure {
+    pub fn new() -> Self {
+        Self {
+            has_navigation: false,
+            navigation_position: None,
+            content_position: None,
+            suspense_boundaries: Vec::new(),
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        if self.has_navigation
+            && let (Some(nav_pos), Some(content_pos)) =
+                (self.navigation_position, self.content_position)
+            && nav_pos >= content_pos
+        {
+            return false;
+        }
+
+        for boundary in &self.suspense_boundaries {
+            if !boundary.is_in_content_area {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl Default for LayoutStructure {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn calculate_boundary_positions(
+    layout_structure: &LayoutStructure,
+) -> FxHashMap<String, Vec<usize>> {
+    let mut positions = FxHashMap::default();
+
+    for boundary in &layout_structure.suspense_boundaries {
+        let mut dom_path = Vec::new();
+
+        if layout_structure.has_navigation {
+            if let Some(_nav_pos) = layout_structure.navigation_position
+                && boundary.is_in_content_area
+            {
+                dom_path.push(1);
+            }
+        } else if boundary.is_in_content_area {
+            dom_path.push(0);
+        }
+
+        for &index in &boundary.parent_path {
+            dom_path.push(index);
+        }
+
+        positions.insert(boundary.boundary_id.clone(), dom_path);
+    }
+
+    positions
 }
 
 struct HtmlCache {
@@ -82,35 +180,24 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
-        debug!(
-            "Rendering route {} with {} layouts (RSC wire format path for client navigation)",
-            route_match.route.path,
-            route_match.layouts.len()
-        );
-
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
             if let Some(loading_entry) = &route_match.loading {
                 let loading_id = self.create_component_id(&loading_entry.file_path);
-                debug!(
-                    "Loading component found at {} (ID: {}) for route {}",
-                    loading_entry.file_path, loading_id, route_match.route.path
-                );
                 Some(loading_id)
             } else {
-                debug!("No loading component found for route {}", route_match.route.path);
                 None
             }
         } else {
-            debug!("Loading states are disabled in configuration");
             None
         };
-
-        let composition_script =
-            self.build_composition_script(route_match, context, loading_component_id.as_deref())?;
-
-        debug!("Executing composition script to render composed component tree");
+        let composition_script = self.build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            false,
+        )?;
 
         let renderer = self.renderer.lock().await;
 
@@ -125,14 +212,14 @@ impl LayoutRenderer {
             .execute_script("compose_and_render".to_string(), composition_script)
             .await?;
 
-        let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             promise_result
         } else {
             let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
             renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
         };
 
-        let rsc_data = result.get("rsc").ok_or_else(|| {
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
             RariError::internal("No RSC data in render result")
         })?;
@@ -148,8 +235,6 @@ impl LayoutRenderer {
             tracing::warn!("HTML structure validation warning: {}", e);
         }
 
-        debug!("RSC wire format generation completed for {}", route_match.route.path);
-
         Ok(rsc_wire_format)
     }
 
@@ -160,29 +245,307 @@ impl LayoutRenderer {
         mode: RenderMode,
         request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
-        debug!("Rendering route {} in {:?} mode", route_match.route.path, mode);
-
-        let result = match mode {
-            RenderMode::Ssr => {
-                debug!("Using direct HTML rendering path for SSR");
-                self.render_route_to_html_direct(route_match, context, request_context).await
-            }
-            RenderMode::RscNavigation => {
-                debug!("Using RSC wire format path for client navigation");
-                self.render_route(route_match, context, request_context).await
-            }
-        };
-
         match mode {
             RenderMode::Ssr => {
-                debug!("SSR direct HTML path completed for {}", route_match.route.path);
+                match self
+                    .render_route_to_html_direct(route_match, context, request_context)
+                    .await?
+                {
+                    RenderResult::Static(html) => Ok(html),
+                    RenderResult::StaticWithPayload { html, .. } => Ok(html),
+                    RenderResult::Streaming(_) => Err(RariError::internal(
+                        "Streaming result not supported in render_route_optimized",
+                    )),
+                }
             }
             RenderMode::RscNavigation => {
-                debug!("RSC navigation path completed for {}", route_match.route.path);
+                self.render_route(route_match, context, request_context).await
+            }
+        }
+    }
+
+    fn validate_skeleton_positions(
+        &self,
+        layout_structure: &LayoutStructure,
+    ) -> Result<(), RariError> {
+        for boundary in &layout_structure.suspense_boundaries {
+            if !boundary.is_in_content_area {
+                warn!(
+                    "Skeleton position validation failed: boundary '{}' is not in content area. This may cause layout shifts.",
+                    boundary.boundary_id
+                );
+                return Err(RariError::internal(format!(
+                    "Skeleton position validation failed: boundary '{}' is not in content area",
+                    boundary.boundary_id
+                )));
+            }
+
+            if boundary.dom_path.is_empty() {
+                warn!(
+                    "Skeleton position validation failed: boundary '{}' has empty DOM path. Cannot ensure position stability.",
+                    boundary.boundary_id
+                );
+                return Err(RariError::internal(format!(
+                    "Skeleton position validation failed: boundary '{}' has empty DOM path",
+                    boundary.boundary_id
+                )));
             }
         }
 
-        result
+        Ok(())
+    }
+
+    fn validate_layout_structure(
+        &self,
+        rsc_data: &serde_json::Value,
+        route_match: &AppRouteMatch,
+    ) -> Result<LayoutStructure, RariError> {
+        let mut layout_structure = LayoutStructure::new();
+
+        fn traverse(
+            value: &serde_json::Value,
+            structure: &mut LayoutStructure,
+            path: &mut Vec<usize>,
+            position: &mut usize,
+            in_content_area: bool,
+        ) {
+            match value {
+                serde_json::Value::Array(arr) => {
+                    if arr.len() >= 4 && arr[0].as_str() == Some("$") {
+                        let tag = arr[1].as_str().unwrap_or("");
+
+                        if tag == "nav"
+                            || (tag == "header"
+                                && arr.get(3).and_then(|p| p.get("role")).and_then(|r| r.as_str())
+                                    == Some("navigation"))
+                        {
+                            structure.has_navigation = true;
+                            if structure.navigation_position.is_none() {
+                                structure.navigation_position = Some(*position);
+                            }
+                        }
+
+                        if (tag == "main"
+                            || tag == "article"
+                            || (tag == "section"
+                                && arr.get(3).and_then(|p| p.get("role")).and_then(|r| r.as_str())
+                                    == Some("main")))
+                            && structure.content_position.is_none()
+                        {
+                            structure.content_position = Some(*position);
+                        }
+
+                        if (tag == "react.suspense" || tag == "Suspense")
+                            && let Some(props) = arr.get(3).and_then(|v| v.as_object())
+                            && let Some(boundary_id) = props
+                                .get("boundaryId")
+                                .or_else(|| props.get("__boundary_id"))
+                                .and_then(|v| v.as_str())
+                        {
+                            structure.suspense_boundaries.push(BoundaryPosition {
+                                boundary_id: boundary_id.to_string(),
+                                parent_path: path.clone(),
+                                is_in_content_area: in_content_area
+                                    || structure.content_position.is_some(),
+                                dom_path: Vec::new(),
+                            });
+                        }
+
+                        *position += 1;
+                    }
+
+                    for (idx, item) in arr.iter().enumerate() {
+                        path.push(idx);
+                        traverse(
+                            item,
+                            structure,
+                            path,
+                            position,
+                            in_content_area || structure.content_position.is_some(),
+                        );
+                        path.pop();
+                    }
+                }
+                serde_json::Value::Object(obj) => {
+                    if obj.contains_key("__preSerializedSuspense") {
+                        if let Some(rsc_array) = obj.get("rscArray") {
+                            traverse(rsc_array, structure, path, position, in_content_area);
+                        }
+                    } else {
+                        for (_key, value) in obj.iter() {
+                            path.push(0);
+                            traverse(value, structure, path, position, in_content_area);
+                            path.pop();
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut path = Vec::new();
+        let mut position = 0;
+        traverse(rsc_data, &mut layout_structure, &mut path, &mut position, false);
+
+        let boundary_positions = calculate_boundary_positions(&layout_structure);
+
+        for boundary in &mut layout_structure.suspense_boundaries {
+            if let Some(dom_path) = boundary_positions.get(&boundary.boundary_id) {
+                boundary.dom_path = dom_path.clone();
+            }
+        }
+
+        if !layout_structure.is_valid() {
+            error!(
+                "❌ INVALID LAYOUT STRUCTURE for route '{}'\n\
+                 \n\
+                 ╔═══════════════════════════════════════════════════════════════════════════╗\n\
+                 ║ LAYOUT VALIDATION FAILED                                                  ║\n\
+                 ╚═══════════════════════════════════════════════════════════════════════════╝\n\
+                 \n\
+                 📊 LAYOUT STRUCTURE:\n\
+                 • Has navigation: {}\n\
+                 • Navigation position: {:?}\n\
+                 • Content position: {:?}\n\
+                 • Suspense boundaries: {}\n\
+                 \n\
+                 🎯 BOUNDARY POSITIONS:",
+                route_match.route.path,
+                layout_structure.has_navigation,
+                layout_structure.navigation_position,
+                layout_structure.content_position,
+                layout_structure.suspense_boundaries.len()
+            );
+
+            for (idx, boundary) in layout_structure.suspense_boundaries.iter().enumerate() {
+                error!(
+                    "   {}. Boundary '{}'\n\
+                     • Parent path: {:?}\n\
+                     • DOM path: {:?}\n\
+                     • In content area: {}\n\
+                     • Position: {}",
+                    idx + 1,
+                    boundary.boundary_id,
+                    boundary.parent_path,
+                    boundary.dom_path,
+                    boundary.is_in_content_area,
+                    idx
+                );
+            }
+
+            if layout_structure.has_navigation
+                && let (Some(nav_pos), Some(content_pos)) =
+                    (layout_structure.navigation_position, layout_structure.content_position)
+                && nav_pos >= content_pos
+            {
+                error!(
+                    "\n\
+                     ❌ ISSUE: Navigation position ({}) is not before content position ({})\n\
+                     \n\
+                     🔍 TROUBLESHOOTING:\n\
+                     • Navigation elements must appear before main content in the DOM\n\
+                     • Check your layout component structure\n\
+                     • Ensure <nav> or navigation elements come before <main>\n\
+                     \n\
+                     💡 SOLUTION:\n\
+                     • Reorder your layout components so navigation comes first\n\
+                     • Use semantic HTML: <nav> before <main>",
+                    nav_pos, content_pos
+                );
+            }
+
+            for boundary in &layout_structure.suspense_boundaries {
+                if !boundary.is_in_content_area {
+                    error!(
+                        "\n\
+                         ❌ ISSUE: Suspense boundary '{}' is not in content area\n\
+                         • Parent path: {:?}\n\
+                         • DOM path: {:?}\n\
+                         \n\
+                         🔍 TROUBLESHOOTING:\n\
+                         • Suspense boundaries must be inside the main content area\n\
+                         • Boundaries outside content area can cause layout shifts\n\
+                         • This violates proper Suspense boundary positioning\n\
+                         \n\
+                         💡 SOLUTION:\n\
+                         • Move Suspense boundaries inside <main> or content area\n\
+                         • Ensure boundaries are wrapped by content-area elements\n\
+                         • Check that boundaries aren't in navigation or header",
+                        boundary.boundary_id, boundary.parent_path, boundary.dom_path
+                    );
+                }
+            }
+
+            error!(
+                "\n\
+                 📚 REQUIREMENTS:\n\
+                 • Navigation must precede content (layout best practice)\n\
+                 • Suspense boundaries must be in content area\n\
+                 • Proper positioning prevents layout shifts and hydration errors\n\
+                 \n\
+                 ═══════════════════════════════════════════════════════════════════════════"
+            );
+        }
+
+        Ok(layout_structure)
+    }
+
+    fn detect_suspense_boundaries(
+        &self,
+        rsc_json: &serde_json::Value,
+    ) -> Result<SuspenseDetectionResult, RariError> {
+        let mut boundary_count = 0;
+        let mut boundaries = Vec::new();
+
+        fn traverse(
+            value: &serde_json::Value,
+            boundaries: &mut Vec<BoundaryInfo>,
+            count: &mut usize,
+        ) {
+            match value {
+                serde_json::Value::Array(arr) => {
+                    if arr.len() >= 4
+                        && arr[0].as_str() == Some("$")
+                        && (arr[1].as_str() == Some("react.suspense")
+                            || arr[1].as_str() == Some("Suspense"))
+                    {
+                        *count += 1;
+
+                        if let Some(props) = arr.get(3).and_then(|v| v.as_object())
+                            && let Some(boundary_id) = props
+                                .get("boundaryId")
+                                .or_else(|| props.get("__boundary_id"))
+                                .and_then(|v| v.as_str())
+                        {
+                            boundaries.push(BoundaryInfo {
+                                id: boundary_id.to_string(),
+                                has_fallback: props.contains_key("fallback"),
+                            });
+                        }
+                    }
+
+                    for item in arr {
+                        traverse(item, boundaries, count);
+                    }
+                }
+                serde_json::Value::Object(obj) => {
+                    if obj.contains_key("__preSerializedSuspense") {
+                        if let Some(rsc_array) = obj.get("rscArray") {
+                            traverse(rsc_array, boundaries, count);
+                        }
+                    } else {
+                        for value in obj.values() {
+                            traverse(value, boundaries, count);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        traverse(rsc_json, &mut boundaries, &mut boundary_count);
+
+        Ok(SuspenseDetectionResult { has_suspense: boundary_count > 0, boundary_count, boundaries })
     }
 
     pub async fn render_route_to_html_direct(
@@ -190,20 +553,157 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
-    ) -> Result<String, RariError> {
+    ) -> Result<RenderResult, RariError> {
         let cache_key = self.generate_cache_key(route_match, context);
 
         if let Some(cached_html) = self.html_cache.get(cache_key) {
-            debug!("Cache HIT for route {} (key: {})", route_match.route.path, cache_key);
-            return Ok(cached_html);
+            return Ok(RenderResult::Static(cached_html));
         }
 
-        debug!("Cache MISS for route {} (key: {})", route_match.route.path, cache_key);
+        let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
-        debug!(
-            "Direct HTML rendering START for {} (SSR path - bypasses RSC wire format)",
-            route_match.route.path
-        );
+        let loading_component_id = if loading_enabled {
+            if let Some(loading_entry) = &route_match.loading {
+                let loading_id = self.create_component_id(&loading_entry.file_path);
+                Some(loading_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let composition_script = self.build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            true,
+        )?;
+
+        let renderer = self.renderer.lock().await;
+
+        if let Some(ref ctx) = _request_context
+            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
+        {
+            tracing::warn!("Failed to set request context in runtime: {}", e);
+        }
+
+        let promise_result = renderer
+            .runtime
+            .execute_script("compose_and_render".to_string(), composition_script.clone())
+            .await?;
+
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
+            promise_result
+        } else {
+            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
+            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+        };
+
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
+            tracing::error!("Failed to extract RSC data from result: {:?}", result);
+            RariError::internal("No RSC data in render result")
+        })?;
+
+        let layout_structure = match self.validate_layout_structure(rsc_data, route_match) {
+            Ok(structure) => {
+                if !structure.is_valid() {
+                    warn!(
+                        "Layout structure validation failed for route '{}'. Falling back to non-streaming rendering.",
+                        route_match.route.path
+                    );
+
+                    warn!(
+                        "Component tree for route '{}': {} layouts, page: {}",
+                        route_match.route.path,
+                        route_match.layouts.len(),
+                        route_match.route.file_path
+                    );
+
+                    for (idx, layout) in route_match.layouts.iter().enumerate() {
+                        warn!(
+                            "  Layout {}: {} (is_root: {})",
+                            idx, layout.file_path, layout.is_root
+                        );
+                    }
+
+                    structure
+                } else {
+                    if let Err(e) = self.validate_skeleton_positions(&structure) {
+                        warn!(
+                            "Skeleton position validation failed for route '{}': {}. Falling back to non-streaming rendering.",
+                            route_match.route.path, e
+                        );
+                    }
+
+                    structure
+                }
+            }
+            Err(e) => {
+                error!(
+                    "Layout structure validation error for route '{}': {}",
+                    route_match.route.path, e
+                );
+
+                error!(
+                    "Component tree for route '{}': {} layouts, page: {}",
+                    route_match.route.path,
+                    route_match.layouts.len(),
+                    route_match.route.file_path
+                );
+
+                for (idx, layout) in route_match.layouts.iter().enumerate() {
+                    error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
+                }
+
+                warn!(
+                    "Falling back to static rendering for route {} due to validation error",
+                    route_match.route.path
+                );
+
+                LayoutStructure::new()
+            }
+        };
+
+        let suspense_detection = self.detect_suspense_boundaries(rsc_data)?;
+
+        if suspense_detection.boundary_count > 0 {
+            let rsc_str = serde_json::to_string(rsc_data).unwrap_or_default();
+            let boundary_occurrences = rsc_str.matches("react.suspense").count();
+            if boundary_occurrences != suspense_detection.boundary_count {
+                tracing::warn!(
+                    "⚠️ RSC data contains {} occurrences of 'react.suspense' but detected {} unique boundaries. Possible duplicates in RSC data!",
+                    boundary_occurrences,
+                    suspense_detection.boundary_count
+                );
+            }
+        }
+
+        if suspense_detection.has_suspense && layout_structure.is_valid() {
+            tracing::info!(
+                "Found {} Suspense boundaries with valid layout structure, enabling streaming for route {}",
+                suspense_detection.boundary_count,
+                route_match.route.path
+            );
+
+            let mut streaming_renderer =
+                crate::rsc::streaming::StreamingRenderer::new(Arc::clone(&renderer.runtime));
+
+            let stream = streaming_renderer
+                .start_streaming_with_precomputed_data(
+                    rsc_data.clone(),
+                    suspense_detection.boundaries.clone(),
+                    layout_structure,
+                )
+                .await?;
+
+            return Ok(RenderResult::Streaming(stream));
+        } else if suspense_detection.has_suspense && !layout_structure.is_valid() {
+            warn!(
+                "Found {} Suspense boundaries but layout structure is invalid, falling back to static rendering for route {}",
+                suspense_detection.boundary_count, route_match.route.path
+            );
+        }
 
         let page_props = self.create_page_props(route_match, context)?;
         let page_component_id = self.create_component_id(&route_match.route.file_path);
@@ -220,15 +720,6 @@ impl LayoutRenderer {
             })
             .collect();
 
-        let renderer = self.renderer.lock().await;
-
-        if let Some(ref ctx) = _request_context
-            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
-        {
-            tracing::warn!("Failed to set request context in runtime: {}", e);
-        }
-
-        debug!("Calling renderRouteToHtml...");
         let result = renderer
             .runtime
             .execute_function(
@@ -258,11 +749,15 @@ impl LayoutRenderer {
             })?
             .to_string();
 
-        debug!("Direct HTML rendering completed for {}", route_match.route.path);
+        let rsc_payload = result.get("rsc").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
         self.html_cache.insert(cache_key, html.clone());
 
-        Ok(html)
+        if !rsc_payload.is_empty() {
+            Ok(RenderResult::StaticWithPayload { html, rsc_payload })
+        } else {
+            Ok(RenderResult::Static(html))
+        }
     }
 
     fn validate_html_structure(html: &str, route_match: &AppRouteMatch) -> Result<(), RariError> {
@@ -588,17 +1083,9 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
     ) -> Result<RscStream, RariError> {
-        debug!(
-            "Streaming route {} with {} layouts",
-            route_match.route.path,
-            route_match.layouts.len()
-        );
-
         let has_root_layout = route_match.layouts.iter().any(|l| l.is_root);
 
         if has_root_layout {
-            debug!("Route has root layout - streaming entire document as single unit");
-
             let html = self.render_route(route_match, context, None).await?;
 
             Self::validate_rsc_wire_format(&html)?;
@@ -616,9 +1103,6 @@ impl LayoutRenderer {
 
             Ok(RscStream::new(rx))
         } else {
-            // TODO: Implement true progressive streaming for nested layouts
-            debug!("Route has no root layout - using standard streaming");
-
             self.render_route_streaming_progressive(route_match, context).await
         }
     }
@@ -628,8 +1112,6 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
     ) -> Result<RscStream, RariError> {
-        debug!("Progressive streaming not yet implemented - falling back to synchronous render");
-
         let html = self.render_route(route_match, context, None).await?;
 
         Self::validate_rsc_wire_format(&html)?;
@@ -648,15 +1130,28 @@ impl LayoutRenderer {
         Ok(RscStream::new(rx))
     }
 
-    fn build_composition_script(
+    pub fn build_composition_script(
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         loading_component_id: Option<&str>,
+        use_suspense: bool,
     ) -> Result<String, RariError> {
-        let page_props = self.create_page_props(route_match, context)?;
-        let page_props_json = serde_json::to_string(&page_props)
-            .map_err(|e| RariError::internal(format!("Failed to serialize page props: {e}")))?;
+        let page_props = self.create_page_props(route_match, context).map_err(|e| {
+            error!("Failed to create page props for route '{}': {}", route_match.route.path, e);
+            RariError::internal(format!(
+                "Failed to create page props for route '{}' (component: {}): {}",
+                route_match.route.path, route_match.route.file_path, e
+            ))
+        })?;
+
+        let page_props_json = serde_json::to_string(&page_props).map_err(|e| {
+            error!("Failed to serialize page props for route '{}': {}", route_match.route.path, e);
+            RariError::internal(format!(
+                "Failed to serialize page props for route '{}' (component: {}): {}",
+                route_match.route.path, route_match.route.file_path, e
+            ))
+        })?;
 
         let page_component_id = self.create_component_id(&route_match.route.file_path);
 
@@ -679,10 +1174,105 @@ impl LayoutRenderer {
                         : pageResult;
                 }} else {{
                     const pageProps = {};
-                    const pageResult = PageComponent(pageProps);
-                    var pageElement = pageResult && typeof pageResult.then === 'function'
-                        ? await pageResult
-                        : pageResult;
+                    const useSuspense = {};
+
+                    const isAsync = PageComponent.constructor.name === 'AsyncFunction';
+
+                    if (isAsync && useSuspense) {{
+                        try {{
+                            const componentPathHash = '{}';
+                            const boundaryId = 'page_boundary_' + componentPathHash;
+                            const promiseId = 'page_promise_' + componentPathHash;
+
+                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
+
+                        globalThis.__deferred_async_components = globalThis.__deferred_async_components || [];
+                        globalThis.__deferred_async_components.push({{
+                            promiseId: promiseId,
+                            boundaryId: boundaryId,
+                            component: PageComponent,
+                            props: pageProps,
+                            componentPath: '{}'
+                        }});
+
+                        globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
+
+                        globalThis.__pending_promises = globalThis.__pending_promises || [];
+                        globalThis.__pending_promises.push({{
+                            id: promiseId,
+                            boundaryId: boundaryId,
+                            componentPath: '{}'
+                        }});
+
+                        let loadingFallback;
+                        try {{
+                            loadingFallback = LoadingComponent();
+                        }} catch (loadingError) {{
+                            throw new Error('Failed to call LoadingComponent: ' + (loadingError.message || String(loadingError)));
+                        }}
+
+                        const fallbackForBoundary = {{
+                            type: loadingFallback?.type || 'div',
+                            props: loadingFallback?.props ? {{...loadingFallback.props}} : {{ children: 'Loading...' }},
+                            key: null
+                        }};
+
+                        globalThis.__discovered_boundaries.push({{
+                            id: boundaryId,
+                            fallback: fallbackForBoundary,
+                            parentId: 'content-slot',
+                            parentPath: ['content-slot'],
+                            isInContentArea: true,
+                            positionHints: {{
+                                inContentArea: true,
+                                domPath: ['content-slot'],
+                                isStable: true
+                            }}
+                        }});
+
+                        const childrenPlaceholder = React.createElement('div', {{
+                            'data-promise-ref': promiseId,
+                            className: 'suspense-placeholder'
+                        }}, 'Loading...');
+                        let suspenseRscProps;
+                        try {{
+                            const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis.__rsc_client_components || {{}});
+
+                            suspenseRscProps = {{
+                                fallback: fallbackRsc,
+                                boundaryId: boundaryId
+                            }};
+                        }} catch (renderError) {{
+                            throw new Error('Failed to render Suspense boundary: ' + (renderError.message || String(renderError)));
+                        }}
+
+                        var pageElement = {{
+                            __preSerializedSuspense: true,
+                            rscArray: ["$", "react.suspense", null, suspenseRscProps]
+                        }};
+
+                        }} catch (asyncWrapError) {{
+                            throw new Error('Failed to wrap async component in Suspense: ' + (asyncWrapError.message || String(asyncWrapError)));
+                        }}
+                    }} else if (isAsync && !useSuspense) {{
+                        try {{
+                            const pageResult = PageComponent(pageProps);
+
+                            if (pageResult && typeof pageResult.then === 'function') {{
+                                var pageElement = await pageResult;
+                            }} else {{
+                                var pageElement = pageResult;
+                            }}
+                        }} catch (asyncError) {{
+                            throw new Error('Failed to await async component: ' + (asyncError.message || String(asyncError)));
+                        }}
+                    }} else {{
+                        const pageResult = PageComponent(pageProps);
+
+                        var pageElement = pageResult && typeof pageResult.then === 'function'
+                            ? await pageResult
+                            : pageResult;
+                    }}
                 }}
                 timings.pageRender = performance.now() - startPage;
                 "#,
@@ -691,7 +1281,11 @@ impl LayoutRenderer {
                 loading_id,
                 loading_id,
                 page_props_json,
-                page_props_json
+                page_props_json,
+                if use_suspense { "true" } else { "false" },
+                route_match.route.file_path,
+                route_match.route.file_path,
+                route_match.route.file_path,
             )
         } else {
             format!(
@@ -722,12 +1316,17 @@ impl LayoutRenderer {
                 const React = globalThis.React || require('react');
                 const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
 
+                globalThis.__discovered_boundaries = [];
+                globalThis.__pending_promises = [];
+                globalThis.__deferred_async_components = [];
+
                 {}
             "#,
             page_render_script
         );
 
         let mut current_element = "pageElement".to_string();
+
         for (i, layout) in route_match.layouts.iter().rev().enumerate() {
             let layout_component_id = self.create_component_id(&layout.file_path);
             let layout_var = format!("layout{}", i);
@@ -741,7 +1340,7 @@ impl LayoutRenderer {
                     throw new Error('Root layout component {} not found');
                 }}
 
-                const {} = LayoutComponent{}({{ children: {}, pathname: {} }});
+                const {} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
                     i,
@@ -766,7 +1365,7 @@ impl LayoutRenderer {
                     throw new Error('Layout component {} not found');
                 }}
 
-                const {} = LayoutComponent{}({{ children: {}, pathname: {} }});
+                const {} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
                     i,
@@ -787,91 +1386,135 @@ impl LayoutRenderer {
             current_element = layout_var;
         }
 
-        script.push_str(&format!(
-            r#"
+        script.push_str(r#"
                 globalThis.__rsc_render_result = null;
 
-                const traverseToRsc = globalThis.traverseToRsc;
-                if (!traverseToRsc) {{
-                    throw new Error('traverseToRsc not available - RSC runtime not initialized');
-                }}
+                if (!globalThis.renderToRsc) {
+                    globalThis.renderToRsc = async function(element, clientComponents = {}) {
+                        if (element && typeof element === 'object' && element.__preSerializedSuspense) {
+                            return element.rscArray;
+                        }
 
-                if (!globalThis.renderToRsc) {{
-                    globalThis.renderToRsc = async function(element, clientComponents = {{}}) {{
                         if (!element) return null;
 
-                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {{
+                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
                             return element;
-                        }}
+                        }
 
-                        if (Array.isArray(element)) {{
+                        if (Array.isArray(element)) {
                             const results = [];
-                            for (const child of element) {{
+                            for (const child of element) {
                                 results.push(await globalThis.renderToRsc(child, clientComponents));
-                            }}
+                            }
                             return results;
-                        }}
+                        }
 
-                        if (element && typeof element === 'object') {{
+                        if (element && typeof element === 'object') {
                             const uniqueKey = element.key || null;
+                            const props = element.props || {};
 
-                            if (element.type) {{
-                                if (typeof element.type === 'string') {{
-                                    const props = element.props || {{}};
-                                    const {{ children: propsChildren, ...otherProps }} = props;
+                            const typeCheck = element.type === React.Suspense;
+                            const nameCheck = typeof element.type === 'function' && element.type.name === 'Suspense';
+                            const stringCheck = element.type === 'react.suspense' || element.type === 'Suspense';
+                            const propsCheck = props.boundaryId || props.__boundary_id;
+                            const isSuspense = typeCheck || nameCheck || stringCheck || propsCheck;
 
+                            if (isSuspense) {
+                                const rscProps = {
+                                    fallback: props.fallback ? await globalThis.renderToRsc(props.fallback, clientComponents) : null,
+                                    children: props.children ? await globalThis.renderToRsc(props.children, clientComponents) : null,
+                                    boundaryId: props.boundaryId || props.__boundary_id
+                                };
+
+                                if (rscProps.fallback === null) delete rscProps.fallback;
+                                if (rscProps.children === null) delete rscProps.children;
+                                if (!rscProps.boundaryId) delete rscProps.boundaryId;
+
+                                return ["$", "react.suspense", uniqueKey, rscProps];
+                            }
+
+                            if (element.type) {
+                                if (typeof element.type === 'string') {
+                                    const { children: propsChildren, ...otherProps } = props;
                                     const actualChildren = element.children || propsChildren;
 
-                                    const rscProps = {{
+                                    const rscProps = {
                                         ...otherProps,
                                         children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
-                                    }};
-                                    if (rscProps.children === undefined) {{
+                                    };
+
+                                    if (rscProps.children === undefined) {
                                         delete rscProps.children;
-                                    }}
+                                    }
+
                                     return ["$", element.type, uniqueKey, rscProps];
-                                }} else if (typeof element.type === 'function') {{
-                                    try {{
-                                        const props = element.props || {{}};
+                                } else if (typeof element.type === 'function') {
+                                    try {
                                         let result = element.type(props);
 
-                                        if (result && typeof result.then === 'function') {{
+                                        if (result && typeof result.then === 'function') {
                                             result = await result;
-                                        }}
+                                        }
 
                                         return await globalThis.renderToRsc(result, clientComponents);
-                                    }} catch (error) {{
+                                    } catch (error) {
                                         console.error('Error rendering function component:', error);
-                                        return ["$", "div", uniqueKey, {{
-                                            children: `Error: ${{error.message}}`,
-                                            style: {{ color: 'red', border: '1px solid red', padding: '10px' }}
-                                        }}];
-                                    }}
-                                }}
-                            }}
+                                        return ["$", "div", uniqueKey, {
+                                            children: `Error: ${error.message}`,
+                                            style: { color: 'red', border: '1px solid red', padding: '10px' }
+                                        }];
+                                    }
+                                }
+                            }
 
-                            return ["$", "div", uniqueKey, {{
+                            return ["$", "div", uniqueKey, {
                                 className: "rsc-unknown",
                                 children: "Unknown element type"
-                            }}];
-                        }}
+                            }];
+                        }
 
                         return element;
-                    }};
-                }}
+                    };
+                }
 
                 const startRSC = performance.now();
-                const rscData = await traverseToRsc({});
+                const rscData = await globalThis.renderToRsc(ELEMENT_PLACEHOLDER, globalThis.__rsc_client_components || {});
                 timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
 
-                globalThis.__rsc_render_result = {{ rsc: rscData, timings }};
-                return globalThis.__rsc_render_result;
-            }})();
-            "#,
-            current_element
-        ));
+                const deferredComponents = globalThis.__deferred_async_components || [];
+                const hasAsync = deferredComponents.length > 0;
+                const deferredCount = deferredComponents.length;
+
+                const result = {
+                    rsc_data: rscData,
+                    boundaries: globalThis.__discovered_boundaries || [],
+                    pending_promises: globalThis.__pending_promises || [],
+                    has_suspense: (globalThis.__discovered_boundaries && globalThis.__discovered_boundaries.length > 0) ||
+                                 (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
+                    metadata: {
+                        hasAsync: hasAsync,
+                        deferredCount: deferredCount,
+                        executionTime: timings.total
+                    },
+                    timings: timings,
+                    success: true
+                };
+
+                try {
+                    const jsonString = JSON.stringify(result);
+                    const cleanResult = JSON.parse(jsonString);
+                    globalThis.__rsc_render_result = cleanResult;
+                    return cleanResult;
+                } catch (jsonError) {
+                    globalThis.__rsc_render_result = result;
+                    return result;
+                }
+            })()
+            "#);
+
+        let script = script.replace("ELEMENT_PLACEHOLDER", &current_element);
 
         Ok(script)
     }
@@ -924,13 +1567,7 @@ impl LayoutRenderer {
         loading_path: &str,
         context: &LayoutRenderContext,
     ) -> Result<ReactElement, RariError> {
-        // Note: Loading component caching has been removed as it's no longer needed
-        // with the simplified async component handling
-
         let component_id = self.create_component_id(loading_path);
-
-        debug!("Rendering loading fallback: {}", component_id);
-
         let renderer = self.renderer.lock().await;
 
         if !renderer.component_exists(&component_id) {
@@ -1049,8 +1686,6 @@ impl LayoutRenderer {
             RariError::from(error)
         })?;
 
-        // Note: Loading component caching has been removed
-
         Ok(element)
     }
 
@@ -1061,8 +1696,6 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
     ) -> Result<ReactElement, RariError> {
         let component_id = self.create_component_id(page_path);
-
-        debug!("Rendering page element: {}", component_id);
 
         let renderer = self.renderer.lock().await;
 
@@ -1159,8 +1792,6 @@ impl LayoutRenderer {
     ) -> Result<ReactElement, RariError> {
         let boundary_id = format!("suspense_{}", uuid::Uuid::new_v4());
 
-        debug!("Creating Suspense boundary with ID: {} for page: {}", boundary_id, page_path);
-
         let page_element = self.render_page_element(page_path, context).await.map_err(|e| {
             let error = LoadingStateError::SuspenseError {
                 message: format!("Failed to render page component for Suspense boundary: {}", e),
@@ -1206,8 +1837,6 @@ impl LayoutRenderer {
         props.insert("children".to_string(), children_value);
         props.insert("__boundary_id".to_string(), serde_json::Value::String(boundary_id.clone()));
 
-        debug!("Successfully created Suspense boundary '{}' for page '{}'", boundary_id, page_path);
-
         Ok(ReactElement { tag: "react.suspense".to_string(), props, key: None })
     }
 
@@ -1227,10 +1856,7 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
     ) -> ReactElement {
         match self.render_loading_fallback(loading_path, context).await {
-            Ok(element) => {
-                debug!("Successfully rendered loading component from: {}", loading_path);
-                element
-            }
+            Ok(element) => element,
             Err(e) => {
                 if let Some(error_type) = e.get_property("error_type") {
                     match error_type {
@@ -1266,7 +1892,6 @@ impl LayoutRenderer {
                     );
                 }
 
-                debug!("Falling back to default loading element");
                 self.create_default_loading_element()
             }
         }
@@ -1283,8 +1908,6 @@ impl LayoutRenderer {
         let composition_script =
             self.build_composition_script_with_element(route_match, context, suspense_element)?;
 
-        debug!("Executing composition script with Suspense boundary");
-
         let renderer = self.renderer.lock().await;
 
         if let Some(ref ctx) = _request_context
@@ -1298,14 +1921,14 @@ impl LayoutRenderer {
             .execute_script("compose_and_render_suspense".to_string(), composition_script)
             .await?;
 
-        let result = if promise_result.is_object() && promise_result.get("rsc").is_some() {
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             promise_result
         } else {
             let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
             renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
         };
 
-        let rsc_data = result.get("rsc").ok_or_else(|| {
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
             RariError::internal("No RSC data in render result")
         })?;
@@ -1320,8 +1943,6 @@ impl LayoutRenderer {
         if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
             tracing::warn!("HTML structure validation warning: {}", e);
         }
-
-        debug!("RSC wire format generation completed with Suspense for {}", route_match.route.path);
 
         Ok(rsc_wire_format)
     }
@@ -1415,91 +2036,114 @@ impl LayoutRenderer {
             current_element = layout_var;
         }
 
-        script.push_str(&format!(
-            r#"
+        script.push_str(r#"
                 globalThis.__rsc_render_result = null;
 
                 const traverseToRsc = globalThis.traverseToRsc;
-                if (!traverseToRsc) {{
+                if (!traverseToRsc) {
                     throw new Error('traverseToRsc not available - RSC runtime not initialized');
-                }}
+                }
 
-                if (!globalThis.renderToRsc) {{
-                    globalThis.renderToRsc = async function(element, clientComponents = {{}}) {{
+                if (!globalThis.renderToRsc) {
+                    globalThis.renderToRsc = async function(element, clientComponents = {}) {
+                        if (element && typeof element === 'object' && element.__preSerializedSuspense) {
+                            return element.rscArray;
+                        }
+
                         if (!element) return null;
 
-                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {{
+                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
                             return element;
-                        }}
+                        }
 
-                        if (Array.isArray(element)) {{
+                        if (Array.isArray(element)) {
                             const results = [];
-                            for (const child of element) {{
+                            for (const child of element) {
                                 results.push(await globalThis.renderToRsc(child, clientComponents));
-                            }}
+                            }
                             return results;
-                        }}
+                        }
 
-                        if (element && typeof element === 'object') {{
+                        if (element && typeof element === 'object') {
                             const uniqueKey = element.key || null;
+                            const props = element.props || {};
 
-                            if (element.type) {{
-                                if (typeof element.type === 'string') {{
-                                    const props = element.props || {{}};
-                                    const {{ children: propsChildren, ...otherProps }} = props;
+                            const typeCheck = element.type === React.Suspense;
+                            const nameCheck = typeof element.type === 'function' && element.type.name === 'Suspense';
+                            const stringCheck = element.type === 'react.suspense' || element.type === 'Suspense';
+                            const propsCheck = props.boundaryId || props.__boundary_id;
+                            const isSuspense = typeCheck || nameCheck || stringCheck || propsCheck;
 
+                            if (isSuspense) {
+                                const rscProps = {
+                                    fallback: props.fallback ? await globalThis.renderToRsc(props.fallback, clientComponents) : null,
+                                    children: props.children ? await globalThis.renderToRsc(props.children, clientComponents) : null,
+                                    boundaryId: props.boundaryId || props.__boundary_id
+                                };
+
+                                if (rscProps.fallback === null) delete rscProps.fallback;
+                                if (rscProps.children === null) delete rscProps.children;
+                                if (!rscProps.boundaryId) delete rscProps.boundaryId;
+
+                                return ["$", "react.suspense", uniqueKey, rscProps];
+                            }
+
+                            if (element.type) {
+                                if (typeof element.type === 'string') {
+                                    const { children: propsChildren, ...otherProps } = props;
                                     const actualChildren = element.children || propsChildren;
 
-                                    const rscProps = {{
+                                    const rscProps = {
                                         ...otherProps,
                                         children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
-                                    }};
-                                    if (rscProps.children === undefined) {{
+                                    };
+
+                                    if (rscProps.children === undefined) {
                                         delete rscProps.children;
-                                    }}
+                                    }
+
                                     return ["$", element.type, uniqueKey, rscProps];
-                                }} else if (typeof element.type === 'function') {{
-                                    try {{
-                                        const props = element.props || {{}};
+                                } else if (typeof element.type === 'function') {
+                                    try {
                                         let result = element.type(props);
 
-                                        if (result && typeof result.then === 'function') {{
+                                        if (result && typeof result.then === 'function') {
                                             result = await result;
-                                        }}
+                                        }
 
                                         return await globalThis.renderToRsc(result, clientComponents);
-                                    }} catch (error) {{
+                                    } catch (error) {
                                         console.error('Error rendering function component:', error);
-                                        return ["$", "div", uniqueKey, {{
-                                            children: `Error: ${{error.message}}`,
-                                            style: {{ color: 'red', border: '1px solid red', padding: '10px' }}
-                                        }}];
-                                    }}
-                                }}
-                            }}
+                                        return ["$", "div", uniqueKey, {
+                                            children: `Error: ${error.message}`,
+                                            style: { color: 'red', border: '1px solid red', padding: '10px' }
+                                        }];
+                                    }
+                                }
+                            }
 
-                            return ["$", "div", uniqueKey, {{
+                            return ["$", "div", uniqueKey, {
                                 className: "rsc-unknown",
                                 children: "Unknown element type"
-                            }}];
-                        }}
+                            }];
+                        }
 
                         return element;
-                    }};
-                }}
+                    };
+                }
 
                 const startRSC = performance.now();
-                const rscData = await traverseToRsc({});
+                const rscData = await globalThis.renderToRsc(ELEMENT_PLACEHOLDER, globalThis.__rsc_client_components || {});
                 timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
 
-                globalThis.__rsc_render_result = {{ rsc: rscData, timings }};
+                globalThis.__rsc_render_result = { rsc_data: rscData, timings };
                 return globalThis.__rsc_render_result;
-            }})();
-            "#,
-            current_element
-        ));
+            })()
+            "#);
+
+        let script = script.replace("ELEMENT_PLACEHOLDER", &current_element);
 
         Ok(script)
     }
@@ -1510,8 +2154,6 @@ impl LayoutRenderer {
         _context: &LayoutRenderContext,
     ) -> Result<String, RariError> {
         let component_id = self.get_component_id(loading_path);
-
-        debug!("Rendering loading component: {}", component_id);
 
         let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
@@ -1535,8 +2177,6 @@ impl LayoutRenderer {
         let props_json = serde_json::to_string(&props)
             .map_err(|e| RariError::internal(format!("Failed to serialize error props: {e}")))?;
 
-        debug!("Rendering error component: {} with error: {}", component_id, error);
-
         let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, Some(&props_json)).await
     }
@@ -1547,8 +2187,6 @@ impl LayoutRenderer {
         _context: &LayoutRenderContext,
     ) -> Result<String, RariError> {
         let component_id = self.get_component_id(not_found_path);
-
-        debug!("Rendering not-found component: {}", component_id);
 
         let mut renderer = self.renderer.lock().await;
         renderer.render_to_string(&component_id, None).await
@@ -1700,5 +2338,1016 @@ mod tests {
         assert!(warning_msg.contains("VALID RSC WIRE FORMAT EXAMPLES"));
         assert!(warning_msg.contains("TROUBLESHOOTING STEPS"));
         assert!(warning_msg.contains("Step 1"));
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_no_suspense() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": "Hello World"
+            }
+        ]);
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(!result.has_suspense);
+        assert_eq!(result.boundary_count, 0);
+        assert_eq!(result.boundaries.len(), 0);
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_with_suspense() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "react.suspense",
+            null,
+            {
+                "boundaryId": "test_boundary_123",
+                "fallback": ["$", "div", null, {"children": "Loading..."}],
+                "children": ["$", "div", null, {"children": "Content"}]
+            }
+        ]);
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(result.has_suspense);
+        assert_eq!(result.boundary_count, 1);
+        assert_eq!(result.boundaries.len(), 1);
+        assert_eq!(result.boundaries[0].id, "test_boundary_123");
+        assert!(result.boundaries[0].has_fallback);
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_nested() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "boundaryId": "nested_boundary",
+                        "fallback": ["$", "span", null, {"children": "Loading..."}]
+                    }
+                ]
+            }
+        ]);
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(result.has_suspense);
+        assert_eq!(result.boundary_count, 1);
+        assert_eq!(result.boundaries[0].id, "nested_boundary");
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_pre_serialized() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!({
+            "__preSerializedSuspense": true,
+            "rscArray": [
+                "$",
+                "react.suspense",
+                null,
+                {
+                    "boundaryId": "pre_serialized_boundary",
+                    "fallback": ["$", "div", null, {"children": "Loading..."}]
+                }
+            ]
+        });
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(result.has_suspense);
+        assert_eq!(result.boundary_count, 1);
+        assert_eq!(result.boundaries[0].id, "pre_serialized_boundary");
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_multiple() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    [
+                        "$",
+                        "react.suspense",
+                        null,
+                        {
+                            "boundaryId": "boundary_1",
+                            "fallback": ["$", "div", null, {"children": "Loading 1..."}]
+                        }
+                    ],
+                    [
+                        "$",
+                        "react.suspense",
+                        null,
+                        {
+                            "__boundary_id": "boundary_2",
+                            "fallback": ["$", "div", null, {"children": "Loading 2..."}]
+                        }
+                    ]
+                ]
+            }
+        ]);
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(result.has_suspense);
+        assert_eq!(result.boundary_count, 2);
+        assert_eq!(result.boundaries.len(), 2);
+        assert_eq!(result.boundaries[0].id, "boundary_1");
+        assert_eq!(result.boundaries[1].id, "boundary_2");
+    }
+
+    #[test]
+    fn test_detect_suspense_boundaries_alternative_tag() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "Suspense",
+            null,
+            {
+                "boundaryId": "alt_boundary",
+                "fallback": ["$", "div", null, {"children": "Loading..."}]
+            }
+        ]);
+
+        let result = renderer.detect_suspense_boundaries(&rsc_json).unwrap();
+        assert!(result.has_suspense);
+        assert_eq!(result.boundary_count, 1);
+        assert_eq!(result.boundaries[0].id, "alt_boundary");
+    }
+
+    #[test]
+    fn test_build_composition_script_with_use_suspense_true() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
+            .unwrap();
+
+        assert!(script.contains("const useSuspense = true"));
+        assert!(script.contains("if (isAsync && useSuspense)"));
+    }
+
+    #[test]
+    fn test_build_composition_script_with_use_suspense_false() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
+            .unwrap();
+
+        assert!(script.contains("const useSuspense = false"));
+        assert!(script.contains("else if (isAsync && !useSuspense)"));
+        assert!(script.contains("RSC Navigation mode - awaiting async component directly"));
+    }
+
+    #[test]
+    fn test_layout_structure_new() {
+        let layout_structure = LayoutStructure::new();
+        assert!(!layout_structure.has_navigation);
+        assert!(layout_structure.navigation_position.is_none());
+        assert!(layout_structure.content_position.is_none());
+        assert_eq!(layout_structure.suspense_boundaries.len(), 0);
+    }
+
+    #[test]
+    fn test_layout_structure_is_valid_empty() {
+        let layout_structure = LayoutStructure::new();
+        assert!(layout_structure.is_valid());
+    }
+
+    #[test]
+    fn test_layout_structure_is_valid_navigation_before_content() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(0),
+            content_position: Some(1),
+            suspense_boundaries: Vec::new(),
+        };
+        assert!(layout_structure.is_valid());
+    }
+
+    #[test]
+    fn test_layout_structure_is_invalid_navigation_after_content() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(1),
+            content_position: Some(0),
+            suspense_boundaries: Vec::new(),
+        };
+        assert!(!layout_structure.is_valid());
+    }
+
+    #[test]
+    fn test_layout_structure_is_invalid_boundary_outside_content() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(0),
+            content_position: Some(1),
+            suspense_boundaries: vec![BoundaryPosition {
+                boundary_id: "test_boundary".to_string(),
+                parent_path: vec![0],
+                is_in_content_area: false,
+                dom_path: vec![0],
+            }],
+        };
+        assert!(!layout_structure.is_valid());
+    }
+
+    #[test]
+    fn test_layout_structure_is_valid_boundary_in_content() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(0),
+            content_position: Some(1),
+            suspense_boundaries: vec![BoundaryPosition {
+                boundary_id: "test_boundary".to_string(),
+                parent_path: vec![1, 0],
+                is_in_content_area: true,
+                dom_path: vec![1, 1, 0],
+            }],
+        };
+        assert!(layout_structure.is_valid());
+    }
+
+    #[test]
+    fn test_validate_layout_structure_no_navigation() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": "Hello World"
+            }
+        ]);
+
+        let result = renderer.validate_layout_structure(&rsc_json, &route_match).unwrap();
+        assert!(!result.has_navigation);
+        assert!(result.navigation_position.is_none());
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_validate_layout_structure_with_navigation() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    ["$", "nav", null, {"children": "Navigation"}],
+                    ["$", "main", null, {"children": "Content"}]
+                ]
+            }
+        ]);
+
+        let result = renderer.validate_layout_structure(&rsc_json, &route_match).unwrap();
+        assert!(result.has_navigation);
+        assert!(result.navigation_position.is_some());
+        assert!(result.content_position.is_some());
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_validate_layout_structure_with_suspense_in_content() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    ["$", "nav", null, {"children": "Navigation"}],
+                    [
+                        "$",
+                        "main",
+                        null,
+                        {
+                            "children": [
+                                "$",
+                                "react.suspense",
+                                null,
+                                {
+                                    "boundaryId": "test_boundary",
+                                    "fallback": ["$", "div", null, {"children": "Loading..."}]
+                                }
+                            ]
+                        }
+                    ]
+                ]
+            }
+        ]);
+
+        let result = renderer.validate_layout_structure(&rsc_json, &route_match).unwrap();
+        assert!(result.has_navigation);
+        assert_eq!(result.suspense_boundaries.len(), 1);
+        assert_eq!(result.suspense_boundaries[0].boundary_id, "test_boundary");
+        assert!(result.suspense_boundaries[0].is_in_content_area);
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_validate_layout_structure_detects_header_with_navigation_role() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    ["$", "header", null, {"role": "navigation", "children": "Header Nav"}],
+                    ["$", "main", null, {"children": "Content"}]
+                ]
+            }
+        ]);
+
+        let result = renderer.validate_layout_structure(&rsc_json, &route_match).unwrap();
+        assert!(result.has_navigation);
+        assert!(result.navigation_position.is_some());
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_validate_layout_structure_detects_section_with_main_role() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let rsc_json = serde_json::json!([
+            "$",
+            "div",
+            null,
+            {
+                "children": [
+                    ["$", "nav", null, {"children": "Navigation"}],
+                    ["$", "section", null, {"role": "main", "children": "Main Content"}]
+                ]
+            }
+        ]);
+
+        let result = renderer.validate_layout_structure(&rsc_json, &route_match).unwrap();
+        assert!(result.has_navigation);
+        assert!(result.content_position.is_some());
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_composition_script_includes_layout_structure_markers() {
+        use crate::server::app_router::LayoutEntry;
+
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![LayoutEntry {
+                path: "/".to_string(),
+                file_path: "app/layout.tsx".to_string(),
+                parent_path: None,
+                is_root: true,
+            }],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+
+        assert!(!script.contains("'data-content-slot': true"));
+        assert!(!script.contains("const contentSlot = React.createElement"));
+        assert!(!script.contains("'data-layout-root': true"));
+        assert!(!script.contains("const layoutRoot = React.createElement"));
+    }
+
+    #[test]
+    fn test_calculate_boundary_positions_with_navigation() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(0),
+            content_position: Some(1),
+            suspense_boundaries: vec![
+                BoundaryPosition {
+                    boundary_id: "boundary1".to_string(),
+                    parent_path: vec![0],
+                    is_in_content_area: true,
+                    dom_path: Vec::new(),
+                },
+                BoundaryPosition {
+                    boundary_id: "boundary2".to_string(),
+                    parent_path: vec![1, 2],
+                    is_in_content_area: true,
+                    dom_path: Vec::new(),
+                },
+            ],
+        };
+
+        let positions = calculate_boundary_positions(&layout_structure);
+
+        assert_eq!(positions.get("boundary1"), Some(&vec![1, 0]));
+        assert_eq!(positions.get("boundary2"), Some(&vec![1, 1, 2]));
+    }
+
+    #[test]
+    fn test_calculate_boundary_positions_without_navigation() {
+        let layout_structure = LayoutStructure {
+            has_navigation: false,
+            navigation_position: None,
+            content_position: Some(0),
+            suspense_boundaries: vec![
+                BoundaryPosition {
+                    boundary_id: "boundary1".to_string(),
+                    parent_path: vec![0],
+                    is_in_content_area: true,
+                    dom_path: Vec::new(),
+                },
+                BoundaryPosition {
+                    boundary_id: "boundary2".to_string(),
+                    parent_path: vec![1, 2],
+                    is_in_content_area: true,
+                    dom_path: Vec::new(),
+                },
+            ],
+        };
+
+        let positions = calculate_boundary_positions(&layout_structure);
+
+        assert_eq!(positions.get("boundary1"), Some(&vec![0, 0]));
+        assert_eq!(positions.get("boundary2"), Some(&vec![0, 1, 2]));
+    }
+
+    #[test]
+    fn test_calculate_boundary_positions_outside_content_area() {
+        let layout_structure = LayoutStructure {
+            has_navigation: true,
+            navigation_position: Some(0),
+            content_position: Some(1),
+            suspense_boundaries: vec![BoundaryPosition {
+                boundary_id: "boundary1".to_string(),
+                parent_path: vec![0, 1],
+                is_in_content_area: false,
+                dom_path: Vec::new(),
+            }],
+        };
+
+        let positions = calculate_boundary_positions(&layout_structure);
+
+        assert_eq!(positions.get("boundary1"), Some(&vec![0, 1]));
+    }
+
+    #[test]
+    fn test_mode_consistency_both_modes_generate_render_to_rsc() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(script_ssr.contains("globalThis.renderToRsc"));
+        assert!(script_rsc.contains("globalThis.renderToRsc"));
+
+        assert!(script_ssr.contains("__preSerializedSuspense"));
+        assert!(script_rsc.contains("__preSerializedSuspense"));
+
+        assert!(script_ssr.contains("Comprehensive Suspense detection"));
+        assert!(script_rsc.contains("Comprehensive Suspense detection"));
+    }
+
+    #[test]
+    fn test_mode_consistency_suspense_serialization_format() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(script_ssr.contains(r#"["$", "react.suspense", uniqueKey, rscProps]"#));
+        assert!(script_rsc.contains(r#"["$", "react.suspense", uniqueKey, rscProps]"#));
+
+        assert!(script_ssr.contains("boundaryId: props.boundaryId || props.__boundary_id"));
+        assert!(script_rsc.contains("boundaryId: props.boundaryId || props.__boundary_id"));
+    }
+
+    #[test]
+    fn test_mode_consistency_metadata_structure() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(script_ssr.contains("rsc_data: rscData"));
+        assert!(script_rsc.contains("rsc_data: rscData"));
+
+        assert!(script_ssr.contains("boundaries: globalThis.__discovered_boundaries"));
+        assert!(script_rsc.contains("boundaries: globalThis.__discovered_boundaries"));
+
+        assert!(script_ssr.contains("pending_promises: globalThis.__pending_promises"));
+        assert!(script_rsc.contains("pending_promises: globalThis.__pending_promises"));
+
+        assert!(script_ssr.contains("metadata: {"));
+        assert!(script_rsc.contains("metadata: {"));
+
+        assert!(script_ssr.contains("hasAsync: hasAsync"));
+        assert!(script_rsc.contains("hasAsync: hasAsync"));
+
+        assert!(script_ssr.contains("deferredCount: deferredCount"));
+        assert!(script_rsc.contains("deferredCount: deferredCount"));
+    }
+
+    #[test]
+    fn test_mode_consistency_async_component_handling_with_loading() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
+            .unwrap();
+        let script_rsc = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
+            .unwrap();
+
+        assert!(script_ssr.contains("const useSuspense = true"));
+        assert!(script_ssr.contains("if (isAsync && useSuspense)"));
+        assert!(script_ssr.contains("__preSerializedSuspense: true"));
+
+        assert!(script_rsc.contains("const useSuspense = false"));
+        assert!(script_rsc.contains("else if (isAsync && !useSuspense)"));
+        assert!(script_rsc.contains("RSC Navigation mode - awaiting async component directly"));
+    }
+
+    #[test]
+    fn test_mode_consistency_boundary_id_format() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), true)
+            .unwrap();
+        let script_rsc = renderer
+            .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
+            .unwrap();
+
+        assert!(script_ssr.contains("const boundaryId = 'page_boundary_'"));
+        assert!(script_rsc.contains("const boundaryId = 'page_boundary_'"));
+
+        assert!(script_ssr.contains("const componentPathHash ="));
+        assert!(script_rsc.contains("const componentPathHash ="));
+    }
+
+    #[test]
+    fn test_mode_consistency_wrapper_elements() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(!script_ssr.contains("const contentSlot = React.createElement"));
+        assert!(!script_ssr.contains("'data-content-slot': true"));
+        assert!(!script_rsc.contains("const contentSlot = React.createElement"));
+        assert!(!script_rsc.contains("'data-content-slot': true"));
+
+        assert_eq!(
+            script_ssr.contains("const contentSlot"),
+            script_rsc.contains("const contentSlot"),
+            "Both modes should have same contentSlot behavior"
+        );
+    }
+
+    #[test]
+    fn test_mode_consistency_error_handling() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(script_ssr.contains("console.error('Error rendering function component:', error)"));
+        assert!(script_rsc.contains("console.error('Error rendering function component:', error)"));
+
+        assert!(script_ssr.contains(r#"children: `Error: ${error.message}`"#));
+        assert!(script_rsc.contains(r#"children: `Error: ${error.message}`"#));
+
+        assert!(
+            script_ssr
+                .contains("style: { color: 'red', border: '1px solid red', padding: '10px' }")
+        );
+        assert!(
+            script_rsc
+                .contains("style: { color: 'red', border: '1px solid red', padding: '10px' }")
+        );
+    }
+
+    #[test]
+    fn test_mode_consistency_rsc_props_cleanup() {
+        let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
+            Arc::new(JsExecutionRuntime::new(None)),
+        ))));
+
+        let route_match = AppRouteMatch {
+            route: crate::server::app_router::AppRouteEntry {
+                path: "/test".to_string(),
+                file_path: "app/test/page.tsx".to_string(),
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            pathname: "/test".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/test".to_string(),
+        };
+
+        let script_ssr =
+            renderer.build_composition_script(&route_match, &context, None, true).unwrap();
+        let script_rsc =
+            renderer.build_composition_script(&route_match, &context, None, false).unwrap();
+
+        assert!(script_ssr.contains("if (rscProps.fallback === null) delete rscProps.fallback"));
+        assert!(script_rsc.contains("if (rscProps.fallback === null) delete rscProps.fallback"));
+
+        assert!(script_ssr.contains("if (rscProps.children === null) delete rscProps.children"));
+        assert!(script_rsc.contains("if (rscProps.children === null) delete rscProps.children"));
+
+        assert!(script_ssr.contains("if (!rscProps.boundaryId) delete rscProps.boundaryId"));
+        assert!(script_rsc.contains("if (!rscProps.boundaryId) delete rscProps.boundaryId"));
+
+        assert!(script_ssr.contains("if (rscProps.children === undefined)"));
+        assert!(script_rsc.contains("if (rscProps.children === undefined)"));
     }
 }

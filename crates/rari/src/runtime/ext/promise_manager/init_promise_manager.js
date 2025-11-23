@@ -28,7 +28,7 @@
   }
 
   if (!globalThis.__pending_promises) {
-    globalThis.__pending_promises = new Set()
+    globalThis.__pending_promises = []
   }
 
   if (!globalThis.__failed_promises) {
@@ -299,7 +299,7 @@
     globalThis.__function_signatures_to_values.clear()
     globalThis.__function_name_to_value.clear()
     globalThis.__resolved_function_values.clear()
-    globalThis.__pending_promises.clear()
+    globalThis.__pending_promises = []
   }
 
   // Enhanced promise rejection handling

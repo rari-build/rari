@@ -6,6 +6,7 @@ pub mod layout_renderer;
 pub mod renderer;
 pub mod rsc_html_renderer;
 pub mod rsc_tree;
+pub mod rsc_wire_parser;
 pub mod serializer;
 pub mod streaming;
 pub mod suspense;
@@ -32,6 +33,10 @@ pub use js_loader::RscJsLoader;
 pub use renderer::RscRenderer;
 pub use rsc_html_renderer::RscHtmlRenderer;
 pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
+pub use rsc_wire_parser::{
+    PromiseRef, RscElement as ParsedRscElement, RscWireFormatParser, StreamingState,
+    SuspenseBoundary,
+};
 pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
 pub use streaming::{RscStream, RscStreamChunk};
 
