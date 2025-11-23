@@ -2019,67 +2019,127 @@ impl StreamingRenderer {
             .map_err(|e| RariError::internal(format!("Partial render failed: {e}")))?;
 
         let result_data = {
-            let poll_script = r#"
-                JSON.stringify((function() {
+            let (completion_tx, completion_rx) = tokio::sync::oneshot::channel::<()>();
+
+            let completion_tx = Arc::new(tokio::sync::Mutex::new(Some(completion_tx)));
+            let completion_tx_clone = Arc::clone(&completion_tx);
+
+            let start_script = r#"
+                (async function() {
                     if (globalThis.__should_start_render) {
                         globalThis.__should_start_render = false;
                         const renderStart = Date.now();
-                        globalThis.__render_component_async().then(() => {
-                            const renderCallTime = Date.now() - renderStart;
-                        });
+                        await globalThis.__render_component_async();
+                        const renderCallTime = Date.now() - renderStart;
+
+                        globalThis.__render_complete_signal = true;
+                    }
+                    return { started: true };
+                })()
+            "#
+            .to_string();
+
+            self.runtime
+                .execute_script(format!("<start_render_{component_id}>"), start_script)
+                .await
+                .map_err(|e| RariError::internal(format!("Failed to start render: {e}")))?;
+
+            let runtime_clone = Arc::clone(&self.runtime);
+            let component_id_clone = component_id.to_string();
+            tokio::spawn(async move {
+                let check_script = r#"
+                    JSON.stringify((function() {
+                        if (globalThis.__initial_render_complete) {
+                            return { complete: true, result: globalThis.__streaming_result };
+                        }
+                        return { complete: false };
+                    })())
+                "#;
+
+                loop {
+                    match runtime_clone
+                        .execute_script(
+                            format!("<check_complete_{}>", component_id_clone),
+                            check_script.to_string(),
+                        )
+                        .await
+                    {
+                        Ok(check_result) => {
+                            let check_str = check_result.to_string();
+                            if let Ok(check_data) =
+                                serde_json::from_str::<serde_json::Value>(&check_str)
+                            {
+                                if let Some(json_str) = check_data.as_str() {
+                                    if let Ok(parsed) =
+                                        serde_json::from_str::<serde_json::Value>(json_str)
+                                        && parsed
+                                            .get("complete")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false)
+                                    {
+                                        let mut tx = completion_tx_clone.lock().await;
+                                        if let Some(sender) = tx.take() {
+                                            let _ = sender.send(());
+                                        }
+                                        break;
+                                    }
+                                } else if check_data
+                                    .get("complete")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false)
+                                {
+                                    let mut tx = completion_tx_clone.lock().await;
+                                    if let Some(sender) = tx.take() {
+                                        let _ = sender.send(());
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        Err(_) => break,
                     }
 
-                    if (globalThis.__initial_render_complete) {
-                        const result = globalThis.__streaming_result;
-                        return result;
-                    } else {
-                        return { __still_pending: true };
-                    }
-                })())
-            "#;
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+                }
+            });
 
-            let mut attempts = 0;
+            match tokio::time::timeout(tokio::time::Duration::from_secs(3), completion_rx).await {
+                Ok(Ok(())) => {
+                    let fetch_script = r#"
+                        JSON.stringify(globalThis.__streaming_result || { success: false, error: "No result available" })
+                    "#;
 
-            loop {
-                let poll_result = self
-                    .runtime
-                    .execute_script(
-                        format!("<poll_result_{component_id}>"),
-                        poll_script.to_string(),
-                    )
-                    .await
-                    .map_err(|e| RariError::internal(format!("Failed to poll for result: {e}")))?;
+                    let result = self
+                        .runtime
+                        .execute_script(
+                            format!("<fetch_result_{component_id}>"),
+                            fetch_script.to_string(),
+                        )
+                        .await
+                        .map_err(|e| RariError::internal(format!("Failed to fetch result: {e}")))?;
 
-                let poll_result_str = poll_result.to_string();
+                    let result_str = result.to_string();
+                    let result_value: serde_json::Value = serde_json::from_str(&result_str)
+                        .map_err(|e| RariError::internal(format!("Failed to parse result: {e}")))?;
 
-                let poll_string_value: serde_json::Value = serde_json::from_str(&poll_result_str)
-                    .map_err(|e| {
-                    RariError::internal(format!("Failed to parse poll result (first parse): {e}"))
-                })?;
-
-                let poll_data: serde_json::Value =
-                    if let Some(json_str) = poll_string_value.as_str() {
+                    if let Some(json_str) = result_value.as_str() {
                         serde_json::from_str(json_str).map_err(|e| {
-                            RariError::internal(format!(
-                                "Failed to parse JSON string (second parse): {e}"
-                            ))
+                            RariError::internal(format!("Failed to parse result JSON: {e}"))
                         })?
                     } else {
-                        poll_string_value
-                    };
-
-                if !poll_data.get("__still_pending").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    break poll_data;
+                        result_value
+                    }
                 }
-
-                attempts += 1;
-                if attempts >= 300 {
+                Ok(Err(_)) => {
+                    return Err(RariError::internal(
+                        "Render completion channel closed unexpectedly".to_string(),
+                    ));
+                }
+                Err(_) => {
                     return Err(RariError::internal(
                         "Initial render timed out after 3 seconds".to_string(),
                     ));
                 }
-
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
             }
         };
 
