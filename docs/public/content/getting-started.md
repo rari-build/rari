@@ -47,7 +47,7 @@ npm install rari
 Update your `vite.config.ts`:
 
 ```typescript
-import { rari, rariRouter } from 'rari/server'
+import { rari, rariRouter } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({

@@ -59,4 +59,4 @@ export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
 
-export { defineRariConfig, defineRariOptions, rari } from './vite'
+export { defineRariConfig, defineRariOptions, rari } from './vite/index'

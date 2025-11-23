@@ -269,7 +269,7 @@ Rari works with zero configuration, but you can customize it:
 
 ```typescript
 // vite.config.ts
-import { rari, rariRouter } from 'rari/server'
+import { rari, rariRouter } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
