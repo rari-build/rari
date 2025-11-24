@@ -8,7 +8,7 @@ import { debounce } from './debounce'
 import { LayoutDataManager } from './LayoutDataManager'
 import { LayoutManager } from './LayoutManager'
 import { NavigationErrorHandler } from './navigation-error-handler'
-import { extractPathname, findLayoutChain, isExternalUrl, normalizePath } from './navigation-utils'
+import { extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { StatePreserver } from './StatePreserver'
 
@@ -127,6 +127,18 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
     const exactMatch = manifest.loading.find(loading => loading.path === targetPath)
     if (exactMatch) {
       return exactMatch
+    }
+
+    const matchedRoute = manifest.routes.find((route) => {
+      const params = matchRouteParams(route.path, route.segments, targetPath)
+      return params !== null
+    })
+
+    if (matchedRoute) {
+      const routeLoading = manifest.loading.find(loading => loading.path === matchedRoute.path)
+      if (routeLoading) {
+        return routeLoading
+      }
     }
 
     const segments = targetPath.split('/').filter(Boolean)

@@ -470,8 +470,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       return
 
     const handleShowLoading = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ route: string, navigationId: number }>
-      const { route, navigationId } = customEvent.detail
+      const customEvent = event as CustomEvent<{ route: string, navigationId: number, loadingComponent: any }>
+      const { route, navigationId, loadingComponent: loadingEntry } = customEvent.detail
 
       currentNavigationIdRef.current = navigationId
 
@@ -483,7 +483,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       setRenderKey(prev => prev + 1)
 
-      const loadingComponent = await loadingRegistryRef.current.loadComponent(route)
+      const loadingComponentPath = loadingEntry?.path || route
+      const loadingComponent = await loadingRegistryRef.current.loadComponent(loadingComponentPath)
 
       if (currentNavigationIdRef.current === navigationId) {
         if (loadingComponent) {
