@@ -21,10 +21,8 @@ With proper app router support, true server-side rendering, and correct RSC sema
 - **Universal NPM package support** - Use any npm package seamlessly
 - **TypeScript-first** - Full type safety across server/client boundary
 - **Cross-platform** - Supports macOS, Linux, and Windows
-
-### In Progress
-- **Streaming RSC** - Framework support added, testing in progress
-- **React Suspense** - Basic functionality implemented, full testing in progress
+- **Streaming SSR** - Progressive rendering with Suspense boundaries
+- **Loading States** - Automatic loading skeletons during navigation
 
 ## Quick Start
 
