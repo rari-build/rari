@@ -112,6 +112,32 @@ impl Default for RscHtmlConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadingConfig {
+    pub enabled: bool,
+    pub min_display_time_ms: u64,
+    pub cache_loading_components: bool,
+}
+
+impl Default for LoadingConfig {
+    fn default() -> Self {
+        Self { enabled: true, min_display_time_ms: 200, cache_loading_components: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingConfig {
+    pub enabled: bool,
+    pub buffer_size: usize,
+    pub resolution_timeout_ms: u64,
+}
+
+impl Default for StreamingConfig {
+    fn default() -> Self {
+        Self { enabled: true, buffer_size: 64, resolution_timeout_ms: 5000 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RscConfig {
     pub enable_ssr: bool,
     pub enable_streaming: bool,
@@ -157,6 +183,9 @@ pub struct Config {
     pub rsc: RscConfig,
     pub rsc_html: RscHtmlConfig,
     pub caching: CacheConfig,
+    pub loading: LoadingConfig,
+    #[serde(default)]
+    pub streaming: StreamingConfig,
 }
 
 impl Config {
@@ -294,6 +323,43 @@ impl Config {
             config.rsc_html.pretty_print = rsc_html_pretty_print_str.to_lowercase() == "true"
                 || rsc_html_pretty_print_str == "1"
                 || rsc_html_pretty_print_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(loading_enabled_str) = std::env::var("RARI_LOADING_ENABLED") {
+            config.loading.enabled = loading_enabled_str.to_lowercase() == "true"
+                || loading_enabled_str == "1"
+                || loading_enabled_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(min_display_time_str) = std::env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
+            config.loading.min_display_time_ms = min_display_time_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string())
+            })?;
+        }
+
+        if let Ok(cache_loading_str) = std::env::var("RARI_LOADING_CACHE_COMPONENTS") {
+            config.loading.cache_loading_components = cache_loading_str.to_lowercase() == "true"
+                || cache_loading_str == "1"
+                || cache_loading_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(streaming_enabled_str) = std::env::var("RARI_STREAMING_ENABLED") {
+            config.streaming.enabled = streaming_enabled_str.to_lowercase() == "true"
+                || streaming_enabled_str == "1"
+                || streaming_enabled_str.to_lowercase() == "yes";
+        }
+
+        if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
+            config.streaming.buffer_size = buffer_size_str.parse().map_err(|_| {
+                ConfigError::InvalidConfig("RARI_STREAMING_BUFFER_SIZE".to_string())
+            })?;
+        }
+
+        if let Ok(resolution_timeout_str) = std::env::var("RARI_STREAMING_RESOLUTION_TIMEOUT_MS") {
+            config.streaming.resolution_timeout_ms =
+                resolution_timeout_str.parse().map_err(|_| {
+                    ConfigError::InvalidConfig("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
+                })?;
         }
 
         Ok(config)
@@ -527,5 +593,34 @@ mod tests {
         assert_eq!(cache_config.static_files, deserialized.static_files);
         assert_eq!(cache_config.server_components, deserialized.server_components);
         assert_eq!(cache_config.routes.len(), deserialized.routes.len());
+    }
+
+    #[test]
+    fn test_streaming_config_default() {
+        let streaming_config = StreamingConfig::default();
+        assert!(streaming_config.enabled);
+        assert_eq!(streaming_config.buffer_size, 64);
+        assert_eq!(streaming_config.resolution_timeout_ms, 5000);
+    }
+
+    #[test]
+    fn test_config_includes_streaming() {
+        let config = Config::default();
+        assert!(config.streaming.enabled);
+        assert_eq!(config.streaming.buffer_size, 64);
+        assert_eq!(config.streaming.resolution_timeout_ms, 5000);
+    }
+
+    #[test]
+    fn test_streaming_config_serialization() {
+        let streaming_config =
+            StreamingConfig { enabled: false, buffer_size: 128, resolution_timeout_ms: 10000 };
+
+        let serialized = serde_json::to_string(&streaming_config).unwrap();
+        let deserialized: StreamingConfig = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(streaming_config.enabled, deserialized.enabled);
+        assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
+        assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
     }
 }

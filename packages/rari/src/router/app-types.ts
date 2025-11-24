@@ -30,6 +30,7 @@ export interface LayoutEntry {
 export interface LoadingEntry {
   path: string
   filePath: string
+  componentId: string
 }
 
 export interface ErrorEntry {

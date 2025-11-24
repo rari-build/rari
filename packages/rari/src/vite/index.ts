@@ -7,6 +7,7 @@ import path from 'node:path'
 import process from 'node:process'
 import * as acorn from 'acorn'
 import { HMRCoordinator } from './hmr-coordinator'
+import { createLoadingComponentPlugin } from './loading-component-bundler'
 import { createServerBuildPlugin } from './server-build'
 
 interface RariOptions {
@@ -1192,8 +1193,20 @@ const ${componentName} = registerClientReference(
         return id
       }
 
-      if (id === 'virtual:app-router-hmr-provider') {
+      if (id === 'virtual:app-router-provider') {
         return `${id}.tsx`
+      }
+
+      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx') {
+        return 'virtual:default-loading-indicator.tsx'
+      }
+
+      if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx') {
+        return 'virtual:loading-error-boundary.tsx'
+      }
+
+      if (id === '../router/LoadingComponentRegistry' || id === '../router/LoadingComponentRegistry.ts') {
+        return 'virtual:loading-component-registry.ts'
       }
 
       if (id === 'react-server-dom-rari/server') {
@@ -1268,13 +1281,13 @@ globalThis.__clientComponents["${componentId}"] = globalThis.__clientComponents[
 globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
-        const isDevelopment = process.env.NODE_ENV !== 'production'
-
         return `
 import React from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import 'virtual:rsc-integration';
-${isDevelopment ? 'import { AppRouterHMRProvider } from \'virtual:app-router-hmr-provider\';' : ''}
+import { ClientRouter } from 'rari/client';
+import { AppRouterProvider } from 'virtual:app-router-provider';
+import 'virtual:loading-component-map';
 
 ${imports}
 
@@ -1287,8 +1300,6 @@ if (typeof globalThis.__clientComponentPaths === 'undefined') {
 
 ${registrations}
 
-let isInitialHydration = true;
-
 export async function renderApp() {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
@@ -1297,8 +1308,6 @@ export async function renderApp() {
   }
 
   try {
-    const hasSSRContent = rootElement.innerHTML.trim().length > 0 && isInitialHydration;
-
     const rariServerUrl = window.location.origin.includes(':5173')
       ? 'http://localhost:3000'
       : window.location.origin;
@@ -1331,23 +1340,44 @@ export async function renderApp() {
       contentToRender = element;
     }
 
-    ${isDevelopment
-      ? `
-    const wrappedContent = React.createElement(
-      AppRouterHMRProvider,
+    let manifest = globalThis.__rari_app_routes_manifest;
+    if (!manifest) {
+      try {
+        const manifestUrl = window.location.origin.includes(':5173')
+          ? 'http://localhost:3000/app-routes.json'
+          : '/app-routes.json';
+
+        const manifestResponse = await fetch(manifestUrl, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (manifestResponse.ok) {
+          const text = await manifestResponse.text();
+          manifest = JSON.parse(text);
+          globalThis.__rari_app_routes_manifest = manifest;
+        }
+      } catch (err) {
+        console.warn('[Rari] Failed to load manifest:', err);
+      }
+    }
+
+    let wrappedContent = contentToRender;
+
+    wrappedContent = React.createElement(
+      AppRouterProvider,
       { initialPayload: { element, rscWireFormat } },
       contentToRender
     );
-    `
-      : 'const wrappedContent = contentToRender;'}
 
-    if (hasSSRContent) {
-      hydrateRoot(rootElement, wrappedContent);
-      isInitialHydration = false;
-    } else {
-      const root = createRoot(rootElement);
-      root.render(wrappedContent);
+    if (manifest) {
+      wrappedContent = React.createElement(
+        ClientRouter,
+        { manifest, initialRoute: window.location.pathname },
+        wrappedContent
+      );
     }
+
+    const root = createRoot(rootElement);
+    root.render(wrappedContent);
   } catch (error) {
     console.error('[Rari] Error rendering app:', error);
     rootElement.innerHTML = \`
@@ -1360,22 +1390,17 @@ export async function renderApp() {
 }
 
 function extractBodyContent(element, skipHeadInjection = false) {
-  console.log('[Rari] extractBodyContent - element:', element);
-  console.log('[Rari] extractBodyContent - element.type:', element?.type);
-  console.log('[Rari] extractBodyContent - element.props:', element?.props);
 
   if (element && element.type === 'html' && element.props && element.props.children) {
     const children = Array.isArray(element.props.children)
       ? element.props.children
       : [element.props.children];
 
-    console.log('[Rari] extractBodyContent - children:', children);
 
     let headElement = null;
     let bodyElement = null;
 
     for (const child of children) {
-      console.log('[Rari] extractBodyContent - checking child:', child, 'type:', child?.type);
       if (child && child.type === 'head') {
         headElement = child;
       } else if (child && child.type === 'body') {
@@ -1384,33 +1409,24 @@ function extractBodyContent(element, skipHeadInjection = false) {
     }
 
     if (bodyElement) {
-      console.log('[Rari] extractBodyContent - found body');
-
       if (!skipHeadInjection && headElement && headElement.props && headElement.props.children) {
-        console.log('[Rari] extractBodyContent - found head, extracting styles');
         injectHeadContent(headElement);
-      } else if (skipHeadInjection) {
-        console.log('[Rari] extractBodyContent - skipping head injection (SSR hydration)');
       }
 
       const bodyChildren = bodyElement.props?.children;
-      console.log('[Rari] extractBodyContent - body children:', bodyChildren);
 
       if (bodyChildren &&
           typeof bodyChildren === 'object' &&
           !Array.isArray(bodyChildren) &&
           bodyChildren.type === 'div' &&
           bodyChildren.props?.id === 'root') {
-        console.log('[Rari] extractBodyContent - found root div in body, returning its children to avoid nesting');
         return bodyChildren.props?.children || null;
       }
 
-      console.log('[Rari] extractBodyContent - returning body children as-is');
       return bodyChildren || null;
     }
   }
 
-  console.log('[Rari] extractBodyContent - no body found, returning null');
   return null;
 }
 
@@ -1452,7 +1468,7 @@ function injectHeadContent(headElement) {
   }
 }
 
-function parseRscWireFormat(wireFormat) {
+function parseRscWireFormat(wireFormat, extractBoundaries = false) {
   const lines = [];
   let currentLine = '';
   let inString = false;
@@ -1497,8 +1513,12 @@ function parseRscWireFormat(wireFormat) {
   let rootElement = null;
   let isFullDocument = false;
   const modules = new Map();
+  const layoutBoundaries = [];
+  let currentLayoutPath = null;
+  let currentLayoutStartLine = null;
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const colonIndex = line.indexOf(':');
     if (colonIndex === -1) continue;
 
@@ -1515,9 +1535,49 @@ function parseRscWireFormat(wireFormat) {
             chunks: Array.isArray(chunks) ? chunks : [chunks],
             name: exportName || 'default',
           });
+
+          if (extractBoundaries && path.includes('layout')) {
+            if (currentLayoutPath !== null && currentLayoutStartLine !== null) {
+              layoutBoundaries.push({
+                layoutPath: currentLayoutPath,
+                startLine: currentLayoutStartLine,
+                endLine: lineIndex - 1,
+                props: {},
+              });
+            }
+
+            currentLayoutPath = path;
+            currentLayoutStartLine = lineIndex;
+          }
         }
       } else if (content.startsWith('[')) {
         const elementData = JSON.parse(content);
+
+        if (
+          extractBoundaries
+          && Array.isArray(elementData)
+          && elementData.length >= 4
+          && typeof elementData[1] === 'string'
+          && elementData[1].startsWith('$L')
+        ) {
+          const moduleRef = elementData[1];
+          const moduleInfo = modules.get(moduleRef);
+
+          if (moduleInfo && moduleInfo.id.includes('layout')) {
+            const props = elementData[3] || {};
+
+            if (currentLayoutPath && currentLayoutStartLine !== null) {
+              const existingBoundary = layoutBoundaries.find(
+                (b) => b.layoutPath === currentLayoutPath && b.startLine === currentLayoutStartLine,
+              );
+
+              if (existingBoundary) {
+                existingBoundary.props = props;
+              }
+            }
+          }
+        }
+
         if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
           rootElement = rscToReact(elementData, modules);
           if (elementData[1] === 'html') {
@@ -1530,11 +1590,29 @@ function parseRscWireFormat(wireFormat) {
     }
   }
 
+  if (
+    extractBoundaries
+    && currentLayoutPath !== null
+    && currentLayoutStartLine !== null
+  ) {
+    layoutBoundaries.push({
+      layoutPath: currentLayoutPath,
+      startLine: currentLayoutStartLine,
+      endLine: lines.length - 1,
+      props: {},
+    });
+  }
+
   if (!rootElement) {
     throw new Error('No root element found in RSC wire format');
   }
 
-  return { element: rootElement, modules, isFullDocument };
+  return {
+    element: rootElement,
+    modules,
+    isFullDocument,
+    layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
+  };
 }
 
 function rscToReact(rsc, modules) {
@@ -1736,11 +1814,11 @@ export function createClientModuleMap() {
 `
       }
 
-      if (id === 'virtual:app-router-hmr-provider.tsx') {
+      if (id === 'virtual:app-router-provider.tsx') {
         const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/src/runtime/AppRouterHMRProvider.tsx'),
-          path.join(process.cwd(), 'src/runtime/AppRouterHMRProvider.tsx'),
-          path.join(process.cwd(), 'node_modules/rari/src/runtime/AppRouterHMRProvider.tsx'),
+          path.join(process.cwd(), 'packages/rari/src/runtime/AppRouterProvider.tsx'),
+          path.join(process.cwd(), 'src/runtime/AppRouterProvider.tsx'),
+          path.join(process.cwd(), 'node_modules/rari/src/runtime/AppRouterProvider.tsx'),
         ]
 
         for (const providerSourcePath of possiblePaths) {
@@ -1749,7 +1827,55 @@ export function createClientModuleMap() {
           }
         }
 
-        return 'export function AppRouterHMRProvider({ children }) { return children; }'
+        return 'export function AppRouterProvider({ children }) { return children; }'
+      }
+
+      if (id === 'virtual:default-loading-indicator.tsx') {
+        const possiblePaths = [
+          path.join(process.cwd(), 'packages/rari/src/runtime/DefaultLoadingIndicator.tsx'),
+          path.join(process.cwd(), 'src/runtime/DefaultLoadingIndicator.tsx'),
+          path.join(process.cwd(), 'node_modules/rari/src/runtime/DefaultLoadingIndicator.tsx'),
+        ]
+
+        for (const sourcePath of possiblePaths) {
+          if (fs.existsSync(sourcePath)) {
+            return fs.readFileSync(sourcePath, 'utf-8')
+          }
+        }
+
+        return 'export function DefaultLoadingIndicator() { return null; }'
+      }
+
+      if (id === 'virtual:loading-error-boundary.tsx') {
+        const possiblePaths = [
+          path.join(process.cwd(), 'packages/rari/src/runtime/LoadingErrorBoundary.tsx'),
+          path.join(process.cwd(), 'src/runtime/LoadingErrorBoundary.tsx'),
+          path.join(process.cwd(), 'node_modules/rari/src/runtime/LoadingErrorBoundary.tsx'),
+        ]
+
+        for (const sourcePath of possiblePaths) {
+          if (fs.existsSync(sourcePath)) {
+            return fs.readFileSync(sourcePath, 'utf-8')
+          }
+        }
+
+        return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
+      }
+
+      if (id === 'virtual:loading-component-registry.ts') {
+        const possiblePaths = [
+          path.join(process.cwd(), 'packages/rari/src/router/LoadingComponentRegistry.ts'),
+          path.join(process.cwd(), 'src/router/LoadingComponentRegistry.ts'),
+          path.join(process.cwd(), 'node_modules/rari/src/router/LoadingComponentRegistry.ts'),
+        ]
+
+        for (const sourcePath of possiblePaths) {
+          if (fs.existsSync(sourcePath)) {
+            return fs.readFileSync(sourcePath, 'utf-8')
+          }
+        }
+
+        return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
       if (id === 'virtual:rsc-integration') {
@@ -3365,8 +3491,9 @@ export {
   }
 
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
+  const loadingComponentPlugin = createLoadingComponentPlugin()
 
-  return [mainPlugin, serverBuildPlugin]
+  return [mainPlugin, serverBuildPlugin, loadingComponentPlugin]
 }
 
 export function defineRariConfig(

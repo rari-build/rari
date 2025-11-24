@@ -91,6 +91,12 @@ impl SuspenseManager {
         fallback: serde_json::Value,
         component_path: String,
     ) -> String {
+        tracing::debug!(
+            "🔍 SUSPENSE: Creating boundary, boundary_id={}, component_path={}",
+            id,
+            component_path
+        );
+
         let boundary = SuspenseBoundary {
             id: id.clone(),
             fallback,
@@ -106,6 +112,7 @@ impl SuspenseManager {
 
         self.boundaries.insert(id.clone(), boundary);
         self.boundary_stack.push(id.clone());
+
         id
     }
 
@@ -117,6 +124,12 @@ impl SuspenseManager {
     ) -> String {
         self.global_promise_counter += 1;
         let promise_id = format!("promise_{}", self.global_promise_counter);
+
+        tracing::debug!(
+            "🔍 SUSPENSE: Registering promise, promise_id={}, boundary_id={}",
+            promise_id,
+            boundary_id
+        );
 
         let promise_info = PromiseInfo {
             id: promise_id.clone(),
@@ -135,6 +148,12 @@ impl SuspenseManager {
 
         if let Some(boundary) = self.boundaries.get_mut(&boundary_id) {
             boundary.pending_promises.push(promise_id.clone());
+        } else {
+            tracing::warn!(
+                "🔍 SUSPENSE: Boundary not found when registering promise, boundary_id={}, promise_id={}",
+                boundary_id,
+                promise_id
+            );
         }
 
         promise_id
@@ -142,6 +161,12 @@ impl SuspenseManager {
 
     pub fn resolve_promise(&mut self, promise_id: &str, value: serde_json::Value) -> bool {
         if let Some(promise) = self.promise_cache.get_mut(promise_id) {
+            tracing::debug!(
+                "🔍 SUSPENSE: Resolving promise, promise_id={}, boundary_id={}",
+                promise_id,
+                promise.boundary_id
+            );
+
             promise.status = PromiseStatus::Resolved;
             promise.resolved_value = Some(value);
             promise.resolved_at =
@@ -150,19 +175,41 @@ impl SuspenseManager {
 
             if let Some(boundary) = self.boundaries.get_mut(&promise.boundary_id) {
                 boundary.pending_promises.retain(|p| p != promise_id);
+
                 if boundary.pending_promises.is_empty() {
                     boundary.resolved = true;
+                    tracing::debug!(
+                        "🔍 SUSPENSE: Boundary resolved, boundary_id={}",
+                        promise.boundary_id
+                    );
                 }
+            } else {
+                tracing::warn!(
+                    "🔍 SUSPENSE: Boundary not found when resolving promise, boundary_id={}, promise_id={}",
+                    promise.boundary_id,
+                    promise_id
+                );
             }
 
             true
         } else {
+            tracing::warn!(
+                "🔍 SUSPENSE: Promise not found when attempting to resolve, promise_id={}",
+                promise_id
+            );
             false
         }
     }
 
     pub fn reject_promise(&mut self, promise_id: &str, error: String) -> bool {
         if let Some(promise) = self.promise_cache.get_mut(promise_id) {
+            tracing::error!(
+                "🔍 SUSPENSE: Rejecting promise, promise_id={}, boundary_id={}, error={}",
+                promise_id,
+                promise.boundary_id,
+                error
+            );
+
             promise.status = PromiseStatus::Rejected;
             promise.error = Some(error.clone());
             promise.resolved_at =
@@ -170,12 +217,28 @@ impl SuspenseManager {
                     as u64);
 
             if let Some(boundary) = self.boundaries.get_mut(&promise.boundary_id) {
-                boundary.error = Some(error);
+                boundary.error = Some(error.clone());
                 boundary.pending_promises.retain(|p| p != promise_id);
+
+                tracing::error!(
+                    "🔍 SUSPENSE: Boundary error, boundary_id={}, error={}",
+                    promise.boundary_id,
+                    error
+                );
+            } else {
+                tracing::warn!(
+                    "🔍 SUSPENSE: Boundary not found when rejecting promise, boundary_id={}, promise_id={}",
+                    promise.boundary_id,
+                    promise_id
+                );
             }
 
             true
         } else {
+            tracing::warn!(
+                "🔍 SUSPENSE: Promise not found when attempting to reject, promise_id={}",
+                promise_id
+            );
             false
         }
     }

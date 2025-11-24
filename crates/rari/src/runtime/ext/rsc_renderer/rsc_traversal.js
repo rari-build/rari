@@ -57,6 +57,10 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
+    if (element.__preSerializedSuspense && element.rscArray) {
+      return element.rscArray
+    }
+
     if (element.type && (typeof element.type === 'string' || typeof element.type === 'function')) {
       const hasPropsChildren = element.props && Object.prototype.hasOwnProperty.call(element.props || {}, 'children')
       const mergedProps = {
