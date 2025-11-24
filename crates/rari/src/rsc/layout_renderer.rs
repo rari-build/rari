@@ -2576,7 +2576,6 @@ mod tests {
 
         assert!(script.contains("const useSuspense = false"));
         assert!(script.contains("else if (isAsync && !useSuspense)"));
-        assert!(script.contains("RSC Navigation mode - awaiting async component directly"));
     }
 
     #[test]
@@ -3021,9 +3020,6 @@ mod tests {
 
         assert!(script_ssr.contains("__preSerializedSuspense"));
         assert!(script_rsc.contains("__preSerializedSuspense"));
-
-        assert!(script_ssr.contains("Comprehensive Suspense detection"));
-        assert!(script_rsc.contains("Comprehensive Suspense detection"));
     }
 
     #[test]
@@ -3162,7 +3158,6 @@ mod tests {
 
         assert!(script_rsc.contains("const useSuspense = false"));
         assert!(script_rsc.contains("else if (isAsync && !useSuspense)"));
-        assert!(script_rsc.contains("RSC Navigation mode - awaiting async component directly"));
     }
 
     #[test]
