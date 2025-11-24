@@ -1,5 +1,9 @@
 ## [0.5.4] - 2025-11-24
 
+### 💼 Other
+
+- Rari@0.5.4
+
 ### 🚜 Refactor
 
 - *(cli)* Fix for issue #45
