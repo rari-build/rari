@@ -5,7 +5,7 @@ services:
     env: node
     plan: free
     buildCommand: '{{INSTALL_COMMAND}}'
-    startCommand: '{{PACKAGE_MANAGER}} start'
+    startCommand: '{{PACKAGE_MANAGER}} run start'
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
