@@ -1,4 +1,13 @@
-## [0.5.1] - 2025-11-24
+## [0.5.2] - 2025-11-24
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update export file extensions
+## [rari@0.5.1] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.1
 
 ### ⚙️ Miscellaneous Tasks
 
