@@ -1,3 +1,13 @@
+## [0.5.1] - 2025-11-24
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update export file extensions
+## [rari@0.5.0] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.0
 ## [create-rari-app@0.2.4] - 2025-11-24
 
 ### 💼 Other
@@ -16,10 +26,6 @@
 
 - *(docs)* Update LayoutProps import source from server to client
 
-### 💼 Other
-
-- Create-rari-app@0.2.2
-
 ### 🚜 Refactor
 
 - *(vite)* Simplify client-side rendering logic
@@ -35,8 +41,17 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- Show compiler output in `prepare-binaries.js`
 - *(release)* Bump version to 0.5.0
+## [create-rari-app@0.2.3] - 2025-11-11
+
+### 💼 Other
+
+- Create-rari-app@0.2.2
+- Create-rari-app@0.2.3
+
+### ⚙️ Miscellaneous Tasks
+
+- Show compiler output in `prepare-binaries.js`
 ## [rari@0.4.0] - 2025-10-30
 
 ### 💼 Other
