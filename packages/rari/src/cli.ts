@@ -150,6 +150,62 @@ async function deployToRender() {
 
 async function main() {
   switch (command) {
+    case undefined:
+    case 'help':
+    case '--help':
+    case '-h':
+      console.warn(`${colors.bold('Rari CLI')}
+
+${colors.bold('Usage:')}
+  ${colors.cyan('rari start')}              Start the Rari server
+  ${colors.cyan('rari deploy railway')}     Setup Railway deployment
+  ${colors.cyan('rari deploy render')}      Setup Render deployment
+  ${colors.cyan('rari help')}               Show this help message
+
+${colors.bold('Environment Variables:')}
+  ${colors.yellow('PORT')}                    Server port (default: 3000)
+  ${colors.yellow('RSC_PORT')}               Alternative server port
+  ${colors.yellow('NODE_ENV')}               Environment (development/production)
+  ${colors.yellow('RUST_LOG')}               Rust logging level (default: info)
+
+${colors.bold('Examples:')}
+  ${colors.gray('# Start development server on port 3000')}
+  ${colors.cyan('rari start')}
+
+  ${colors.gray('# Start production server on port 8080')}
+  ${colors.cyan('PORT=8080 NODE_ENV=production rari start')}
+
+  ${colors.gray('# Setup Railway deployment')}
+  ${colors.cyan('rari deploy railway')}
+
+  ${colors.gray('# Setup Render deployment')}
+  ${colors.cyan('rari deploy render')}
+
+  ${colors.gray('# Start with debug logging')}
+  ${colors.cyan('RUST_LOG=debug rari start')}
+
+${colors.bold('Deployment:')}
+  ${colors.cyan('rari deploy railway')}     Creates Railway deployment files
+  ${colors.cyan('rari deploy render')}      Creates Render deployment files
+
+  Platform deployment automatically detects the environment and configures:
+  - Host binding (0.0.0.0 for platforms, 127.0.0.1 for local)
+  - Port from platform's PORT environment variable
+  - Production mode optimization
+
+${colors.bold('Binary Resolution:')}
+  1. Platform-specific package (rari-{platform}-{arch})
+  2. Global binary in PATH
+  3. Install from source with Cargo
+
+${colors.bold('Notes:')}
+  - Platform binary is automatically detected and used
+  - Platform deployment is automatically detected and configured
+  - Use Ctrl+C to stop the server gracefully
+
+`)
+      break
+
     case 'start':
       await startRustServer()
       break
@@ -167,64 +223,9 @@ async function main() {
       }
       break
 
-    case 'help':
-    case '--help':
-    case '-h':
-      console.warn(`${colors.bold}Rari CLI${colors.reset}
-
-${colors.bold}Usage:${colors.reset}
-  ${colors.cyan}rari start${colors.reset}              Start the Rari server
-  ${colors.cyan}rari deploy railway${colors.reset}     Setup Railway deployment
-  ${colors.cyan}rari deploy render${colors.reset}      Setup Render deployment
-  ${colors.cyan}rari help${colors.reset}               Show this help message
-
-${colors.bold}Environment Variables:${colors.reset}
-  ${colors.yellow}PORT${colors.reset}                    Server port (default: 3000)
-  ${colors.yellow}RSC_PORT${colors.reset}               Alternative server port
-  ${colors.yellow}NODE_ENV${colors.reset}               Environment (development/production)
-  ${colors.yellow}RUST_LOG${colors.reset}               Rust logging level (default: info)
-
-${colors.bold}Examples:${colors.reset}
-  ${colors.gray}# Start development server on port 3000${colors.reset}
-  ${colors.cyan}rari start${colors.reset}
-
-  ${colors.gray}# Start production server on port 8080${colors.reset}
-  ${colors.cyan}PORT=8080 NODE_ENV=production rari start${colors.reset}
-
-  ${colors.gray}# Setup Railway deployment${colors.reset}
-  ${colors.cyan}rari deploy railway${colors.reset}
-
-  ${colors.gray}# Setup Render deployment${colors.reset}
-  ${colors.cyan}rari deploy render${colors.reset}
-
-  ${colors.gray}# Start with debug logging${colors.reset}
-  ${colors.cyan}RUST_LOG=debug rari start${colors.reset}
-
-${colors.bold}Deployment:${colors.reset}
-  ${colors.cyan}rari deploy railway${colors.reset}     Creates Railway deployment files
-  ${colors.cyan}rari deploy render${colors.reset}      Creates Render deployment files
-
-  Platform deployment automatically detects the environment and configures:
-  - Host binding (0.0.0.0 for platforms, 127.0.0.1 for local)
-  - Port from platform's PORT environment variable
-  - Production mode optimization
-
-${colors.bold}Binary Resolution:${colors.reset}
-  1. Platform-specific package (rari-{platform}-{arch})
-  2. Global binary in PATH
-  3. Install from source with Cargo
-
-${colors.bold}Notes:${colors.reset}
-  - Platform binary is automatically detected and used
-  - Platform deployment is automatically detected and configured
-  - Use Ctrl+C to stop the server gracefully
-
-`)
-      break
-
     default:
-      console.error(`${colors.bold}Unknown command:${colors.reset} ${command}`)
-      console.warn(`Run "${colors.cyan}rari help${colors.reset}" for available commands`)
+      console.error(`${colors.bold('Unknown command:')} ${command}`)
+      console.warn(`Run "${colors.cyan('rari help')}" for available commands`)
       process.exit(1)
   }
 }
