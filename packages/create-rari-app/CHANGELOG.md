@@ -1,3 +1,37 @@
+## [0.5.0] - 2025-11-24
+
+### 🚀 Features
+
+- *(error)* Add comprehensive streaming and loading state error handling
+- *(rsc)* Add RSC wire format parser and streaming layout renderer
+- *(rsc)* Refactor streaming render completion to use async/await with channel signaling
+- *(router)* Implement client-side routing with layout management and error handling
+
+### 🐛 Bug Fixes
+
+- *(docs)* Update LayoutProps import source from server to client
+
+### 💼 Other
+
+- Create-rari-app@0.2.2
+
+### 🚜 Refactor
+
+- *(vite)* Simplify client-side rendering logic
+- *(exports)* Rename server export to vite for clarity
+
+### 📚 Documentation
+
+- *(readme)* Update features section with completed streaming capabilities
+
+### 🧪 Testing
+
+- *(layout_renderer)* Remove obsolete assertion messages from tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Show compiler output in `prepare-binaries.js`
+- *(release)* Bump version to 0.5.0
 ## [rari@0.4.0] - 2025-10-30
 
 ### 💼 Other
@@ -386,7 +420,7 @@
 - Bump create-rari-app version to 0.1.9
 - Bump rari package version to 0.2.14
 - Update rari package version to 0.2.14 in pnpm-lock.yaml and package.json
-## [0.2.2] - 2025-10-30
+## [0.2.2] - 2025-08-15
 
 ### 🚜 Refactor
 
