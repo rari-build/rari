@@ -26,12 +26,12 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.6",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20250611.1",
     "@vitejs/plugin-react-oxc": "^0.2.3",
     "eslint": "^9.39.1",
-    "oxlint": "^1.29.0",
+    "oxlint": "^1.30.0",
     "rolldown-vite": "^7.2.7",
     "tailwindcss": "^4.1.17"
   }
