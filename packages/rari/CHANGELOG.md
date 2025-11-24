@@ -1,17 +1,14 @@
 ## [0.5.3] - 2025-11-24
 
-### ⚙️ Miscellaneous Tasks
-
-- *(build)* Adding fixedExtension to tsdown config
-## [rari@0.5.3] - 2025-11-24
-
 ### 💼 Other
 
+- Rari@0.5.3
 - Rari@0.5.3
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(build)* Update export file extensions from .mjs to .js
+- *(build)* Adding fixedExtension to tsdown config
 ## [rari@0.5.2] - 2025-11-24
 
 ### 💼 Other
