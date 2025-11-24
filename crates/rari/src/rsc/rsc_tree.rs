@@ -260,6 +260,19 @@ impl RSCTree {
                 }
             }
             Value::Object(obj) => {
+                if obj.contains_key("__preSerializedSuspense") && obj.contains_key("rscArray") {
+                    tracing::debug!("Unwrapping pre-serialized Suspense boundary");
+
+                    if let Some(rsc_array) = obj.get("rscArray") {
+                        return RSCTree::from_json(rsc_array);
+                    } else {
+                        tracing::error!(
+                            "Pre-serialized Suspense marker found but rscArray is missing or invalid"
+                        );
+                        return Ok(RSCTree::Primitive(value.clone()));
+                    }
+                }
+
                 if obj.contains_key("$$typeof") && obj.contains_key("type") {
                     let tag =
                         obj.get("type").and_then(|t| t.as_str()).ok_or("Invalid element type")?;

@@ -592,7 +592,166 @@ fn get_streaming_ops() -> Vec<deno_core::OpDecl> {
     crate::runtime::ops::get_streaming_ops()
 }
 
-fn v8_to_json<'s>(
+fn extract_promise_metadata<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
+) -> Option<JsonValue> {
+    if !is_promise(scope, value) {
+        return None;
+    }
+
+    tracing::warn!(
+        "Encountered Promise object during serialization, extracting metadata instead of full serialization"
+    );
+
+    let mut metadata = serde_json::Map::new();
+    metadata.insert("__promise_placeholder".to_string(), serde_json::Value::Bool(true));
+    metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
+
+    if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
+        if let Some(boundary_key) = v8::String::new(scope, "boundaryId")
+            && let Some(boundary_val) = obj.get(scope, boundary_key.into())
+            && let Some(boundary_str) = boundary_val.to_string(scope)
+        {
+            let boundary_id = boundary_str.to_rust_string_lossy(scope.as_ref());
+            metadata.insert("boundaryId".to_string(), serde_json::Value::String(boundary_id));
+        }
+
+        if let Some(promise_key) = v8::String::new(scope, "promiseId")
+            && let Some(promise_val) = obj.get(scope, promise_key.into())
+            && let Some(promise_str) = promise_val.to_string(scope)
+        {
+            let promise_id = promise_str.to_rust_string_lossy(scope.as_ref());
+            metadata.insert("promiseId".to_string(), serde_json::Value::String(promise_id));
+        }
+    }
+
+    metadata.insert(
+        "message".to_string(),
+        serde_json::Value::String(
+            "Promise object cannot be fully serialized, use metadata instead".to_string(),
+        ),
+    );
+
+    Some(serde_json::Value::Object(metadata))
+}
+
+fn deserialize_composition_result<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
+) -> Result<JsonValue, RariError> {
+    if is_promise(scope, value) {
+        tracing::warn!(
+            "Composition result is a Promise object, extracting metadata instead of full serialization"
+        );
+
+        if let Some(metadata) = extract_promise_metadata(scope, value) {
+            return Ok(metadata);
+        }
+    }
+
+    let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
+    tracing::debug!("Attempting to serialize V8 value of type: {}", v8_type_str);
+
+    if value.is_object()
+        && let Ok(obj) = v8::Local::<v8::Object>::try_from(value)
+        && let Some(keys) = obj.get_own_property_names(scope, v8::GetPropertyNamesArgs::default())
+    {
+        let key_count = keys.length();
+        tracing::debug!("Object has {} keys", key_count);
+
+        for i in 0..std::cmp::min(key_count, 10) {
+            if let Some(key) = keys.get_index(scope, i)
+                && let Some(key_str) = key.to_string(scope)
+            {
+                let key_name = key_str.to_rust_string_lossy(scope.as_ref());
+                if let Some(val) = obj.get(scope, key) {
+                    let val_type = val.type_of(scope).to_rust_string_lossy(scope.as_ref());
+                    tracing::debug!("  Key '{}': type = {}", key_name, val_type);
+                }
+            }
+        }
+    }
+
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        deno_core::serde_v8::from_v8(scope, value)
+    })) {
+        Ok(Ok(json_value)) => Ok(json_value),
+        Ok(Err(err)) => {
+            let err_str = err.to_string();
+            tracing::error!("Serialization error for V8 type '{}': {}", v8_type_str, err);
+
+            if err_str.contains("Promise") || err_str.contains("promise") {
+                tracing::warn!(
+                    "Serialization failed due to Promise object, using fallback extraction: {}",
+                    err
+                );
+
+                if let Some(metadata) = extract_promise_metadata(scope, value) {
+                    return Ok(metadata);
+                }
+            }
+
+            extract_composition_result_manually(scope, value, err)
+        }
+        Err(_panic) => {
+            tracing::error!(
+                "V8 serialization panicked for type '{}', attempting manual extraction",
+                v8_type_str
+            );
+
+            if let Some(metadata) = extract_promise_metadata(scope, value) {
+                return Ok(metadata);
+            }
+
+            extract_composition_result_manually_from_panic(scope, value)
+        }
+    }
+}
+
+fn extract_composition_result_manually<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
+    original_error: deno_core::serde_v8::Error,
+) -> Result<JsonValue, RariError> {
+    let try_json_stringify =
+        |scope: &mut v8::PinScope, value: v8::Local<v8::Value>| -> Option<JsonValue> {
+            let context = scope.get_current_context();
+            let global = context.global(scope);
+            let json_key = v8::String::new(scope, "JSON")?;
+            let json_obj = global.get(scope, json_key.into())?.to_object(scope)?;
+            let stringify_key = v8::String::new(scope, "stringify")?;
+            let stringify_value = json_obj.get(scope, stringify_key.into())?;
+            let stringify_fn = stringify_value.to_object(scope)?.cast::<v8::Function>();
+
+            let args = [value];
+            let result = stringify_fn.call(scope, json_obj.into(), &args)?;
+            let json_string = result.to_string(scope)?.to_rust_string_lossy(scope.as_ref());
+
+            serde_json::from_str(&json_string).ok()
+        };
+
+    if let Some(json_value) = try_json_stringify(scope, value) {
+        tracing::warn!("Used JSON.stringify fallback for serialization");
+        return Ok(json_value);
+    }
+
+    let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
+    let detailed_err_msg = format!(
+        "Failed to convert V8 value of type '{}' to JSON: {}. V8 value details: {}",
+        v8_type_str,
+        original_error,
+        value
+            .to_detail_string(scope)
+            .map(|s| s.to_rust_string_lossy(scope.as_ref()))
+            .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
+    );
+
+    tracing::error!("Serialization error: {}", detailed_err_msg);
+    Err(RariError::js_execution(detailed_err_msg))
+}
+
+fn extract_composition_result_manually_from_panic<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
 ) -> Result<JsonValue, RariError> {
@@ -613,53 +772,39 @@ fn v8_to_json<'s>(
             serde_json::from_str(&json_string).ok()
         };
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        deno_core::serde_v8::from_v8(scope, value)
-    })) {
-        Ok(Ok(json_value)) => Ok(json_value),
-        Ok(Err(err)) => {
-            if let Some(json_value) = try_json_stringify(scope, value) {
-                return Ok(json_value);
-            }
-
-            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
-            let detailed_err_msg = format!(
-                "Failed to convert V8 value of type '{}' to JSON: {}. V8 value details: {}",
-                v8_type_str,
-                err,
-                value
-                    .to_detail_string(scope)
-                    .map(|s| s.to_rust_string_lossy(scope.as_ref()))
-                    .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
-            );
-            Err(RariError::js_execution(detailed_err_msg))
-        }
-        Err(_panic) => {
-            if let Some(json_value) = try_json_stringify(scope, value) {
-                return Ok(json_value);
-            }
-
-            let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
-            let fallback_msg = format!(
-                "V8 serialization panicked for type '{}', using fallback. V8 value details: {}",
-                v8_type_str,
-                value
-                    .to_detail_string(scope)
-                    .map(|s| s.to_rust_string_lossy(scope.as_ref()))
-                    .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
-            );
-
-            let mut error_obj = serde_json::Map::new();
-            error_obj.insert("__serialization_error".to_string(), serde_json::Value::Bool(true));
-            error_obj.insert(
-                "error".to_string(),
-                serde_json::Value::String("V8 value could not be serialized".to_string()),
-            );
-            error_obj.insert("type".to_string(), serde_json::Value::String(v8_type_str));
-            error_obj.insert("details".to_string(), serde_json::Value::String(fallback_msg));
-            Ok(serde_json::Value::Object(error_obj))
-        }
+    if let Some(json_value) = try_json_stringify(scope, value) {
+        tracing::warn!("Used JSON.stringify fallback after panic");
+        return Ok(json_value);
     }
+
+    let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
+    let fallback_msg = format!(
+        "V8 serialization panicked for type '{}', using fallback. V8 value details: {}",
+        v8_type_str,
+        value
+            .to_detail_string(scope)
+            .map(|s| s.to_rust_string_lossy(scope.as_ref()))
+            .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
+    );
+
+    tracing::warn!("Serialization panic fallback: {}", fallback_msg);
+
+    let mut error_obj = serde_json::Map::new();
+    error_obj.insert("__serialization_error".to_string(), serde_json::Value::Bool(true));
+    error_obj.insert(
+        "error".to_string(),
+        serde_json::Value::String("V8 value could not be serialized".to_string()),
+    );
+    error_obj.insert("type".to_string(), serde_json::Value::String(v8_type_str));
+    error_obj.insert("details".to_string(), serde_json::Value::String(fallback_msg));
+    Ok(serde_json::Value::Object(error_obj))
+}
+
+fn v8_to_json<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
+) -> Result<JsonValue, RariError> {
+    deserialize_composition_result(scope, value)
 }
 
 fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool {
@@ -692,46 +837,6 @@ fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool {
     }
 
     false
-}
-
-fn should_resolve_promises(script_name: &str) -> bool {
-    script_name.starts_with("promise_test_")
-        || script_name.starts_with("streaming_sim_")
-        || script_name.starts_with("api_route_")
-        || script_name == "reload_module"
-        || script_name == "invalidate_cache"
-        || script_name.starts_with("execute_action_")
-        || script_name.starts_with("exec_func_")
-        || script_name == "<streaming_init>"
-        || script_name.starts_with("<partial_render_")
-        || script_name.starts_with("<promise_resolution_")
-        || script_name.contains("streaming")
-        || script_name.contains("async")
-        || (script_name.starts_with("render_") && script_name.contains("Suspense"))
-        || (script_name.starts_with("render_") && script_name.contains("Streaming"))
-        || (script_name.starts_with("extract_rsc_") && script_name.contains("Suspense"))
-        || (script_name.starts_with("extract_rsc_") && script_name.contains("Streaming"))
-        || (script_name.starts_with("render_") && script_name.contains("Fetch"))
-        || (script_name.starts_with("render_") && script_name.contains("Async"))
-        || (script_name.starts_with("render_")
-            && (script_name.contains("Test")
-                || script_name.contains("Component")
-                || script_name.contains("Example")))
-}
-
-fn get_promise_resolution_timeout_ms(script_name: &str) -> u64 {
-    let base_timeout = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(2000); // Default 2 second timeout
-
-    if script_name.contains("Suspense") {
-        base_timeout * 3
-    } else if script_name.contains("Streaming") || script_name.contains("Fetch") {
-        base_timeout * 2
-    } else {
-        base_timeout
-    }
 }
 
 fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> {
@@ -942,18 +1047,12 @@ async fn execute_script(
             )
             .await?;
 
-            let should_resolve = should_resolve_promises(script_name);
+            let is_promise_result = with_scope!(runtime, |scope| {
+                let local_v8_val = v8::Local::new(scope, &_global_v8_val);
+                is_promise(scope, local_v8_val)
+            });
 
-            let is_promise_result = if should_resolve {
-                with_scope!(runtime, |scope| {
-                    let local_v8_val = v8::Local::new(scope, &_global_v8_val);
-                    is_promise(scope, local_v8_val)
-                })
-            } else {
-                false
-            };
-
-            if should_resolve && is_promise_result {
+            if is_promise_result {
                 let _store_script = r#"
                     (function() {
                         globalThis.__current_promise_object = arguments[0];
@@ -983,8 +1082,6 @@ async fn execute_script(
                     (function() {
                         try {
                             const promise = globalThis.__current_promise_object;
-
-                            // Verify it's a Promise
                             if (!promise || typeof promise.then !== 'function') {
                                 globalThis.__promise_resolved_value = {
                                     __error: "Not a valid promise",
@@ -995,7 +1092,6 @@ async fn execute_script(
                                 return;
                             }
 
-                            // Set up Promise resolution with global variable capture
                             globalThis.__promise_resolved_value = null;
                             globalThis.__promise_resolution_complete = false;
 
@@ -1026,7 +1122,12 @@ async fn execute_script(
                     setup_script.to_string(),
                 ) {
                     Ok(_) => {
-                        let promise_timeout_ms = get_promise_resolution_timeout_ms(script_name);
+                        let promise_timeout_ms =
+                            std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
+                                .ok()
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(5000);
+
                         run_event_loop_with_promise_timeout(
                             runtime,
                             script_name,
@@ -1036,11 +1137,8 @@ async fn execute_script(
 
                         let extract_script = r#"
                             (function() {
-                                if (globalThis.__promise_resolved_value !== null && globalThis.__promise_resolved_value !== undefined) {
+                                if (globalThis.__promise_resolution_complete === true) {
                                     return globalThis.__promise_resolved_value;
-                                } else if (globalThis.__promise_resolution_complete === true) {
-                                    // Completed but no value (shouldn't happen)
-                                    return { __completion_error: "Promise completed but no value stored" };
                                 } else {
                                     return {
                                         __timeout_error: "Promise did not resolve in time",
@@ -1058,10 +1156,30 @@ async fn execute_script(
                             extract_script.to_string(),
                         ) {
                             Ok(extracted_value) => {
-                                with_scope!(runtime, |scope| {
+                                let json_result = with_scope!(runtime, |scope| {
                                     let local_v8_val = v8::Local::new(scope, extracted_value);
                                     v8_to_json(scope, local_v8_val)
-                                })
+                                })?;
+
+                                if let JsonValue::Object(ref obj) = json_result
+                                    && let Some(JsonValue::Bool(true)) = obj.get("__error")
+                                {
+                                    let message = obj
+                                        .get("message")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("Unknown error");
+                                    let stack = obj.get("stack").and_then(|v| v.as_str());
+
+                                    return Err(RariError::js_execution(
+                                        if let Some(stack_trace) = stack {
+                                            format!("{}\n{}", message, stack_trace)
+                                        } else {
+                                            message.to_string()
+                                        },
+                                    ));
+                                }
+
+                                Ok(json_result)
                             }
                             Err(_) => {
                                 with_scope!(runtime, |scope| {
@@ -1079,10 +1197,26 @@ async fn execute_script(
                     }
                 }
             } else {
-                with_scope!(runtime, |scope| {
+                let json_result = with_scope!(runtime, |scope| {
                     let local_v8_val = v8::Local::new(scope, _global_v8_val);
                     v8_to_json(scope, local_v8_val)
-                })
+                })?;
+
+                if let JsonValue::Object(ref obj) = json_result
+                    && let Some(JsonValue::Bool(true)) = obj.get("__error")
+                {
+                    let message =
+                        obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    let stack = obj.get("stack").and_then(|v| v.as_str());
+
+                    return Err(RariError::js_execution(if let Some(stack_trace) = stack {
+                        format!("{}\n{}", message, stack_trace)
+                    } else {
+                        message.to_string()
+                    }));
+                }
+
+                Ok(json_result)
             }
         }
         Err(e) => {
@@ -1312,11 +1446,11 @@ impl JsRuntimeInterface for DenoRuntime {
                     const argsJson = atob("{}");
                     const args = JSON.parse(argsJson);
 
-                    if (typeof globalThis.{} !== 'function') {{
+                    if (typeof globalThis["{}"] !== 'function') {{
                         throw new Error("Function not found: {}");
                     }}
 
-                    return globalThis.{}(...args);
+                    return globalThis["{}"](...args);
                 }})();
                 "#,
                 args_base64, function_name, function_name, function_name

@@ -871,6 +871,99 @@ impl RscSerializer {
         self.output_lines.push(content_line.clone());
         content_line
     }
+
+    pub fn serialize_element(
+        &mut self,
+        element: &crate::rsc::elements::ReactElement,
+    ) -> Result<String, RariError> {
+        if element.tag == "react.suspense" {
+            let fallback = element
+                .props
+                .get("fallback")
+                .ok_or_else(|| RariError::internal("Suspense missing fallback prop"))?;
+
+            let children = element
+                .props
+                .get("children")
+                .ok_or_else(|| RariError::internal("Suspense missing children prop"))?;
+
+            let boundary_id =
+                element.props.get("__boundary_id").and_then(|v| v.as_str()).unwrap_or("default");
+
+            let fallback_element: crate::rsc::elements::ReactElement =
+                serde_json::from_value(fallback.clone()).map_err(|e| {
+                    RariError::internal(format!("Failed to parse Suspense fallback: {}", e))
+                })?;
+
+            let children_element: crate::rsc::elements::ReactElement =
+                serde_json::from_value(children.clone()).map_err(|e| {
+                    RariError::internal(format!("Failed to parse Suspense children: {}", e))
+                })?;
+
+            let fallback_ref = self.serialize_element(&fallback_element)?;
+            let children_ref = self.serialize_element(&children_element)?;
+
+            self.emit_suspense_boundary_with_refs(&fallback_ref, &children_ref, boundary_id)
+        } else {
+            self.serialize_regular_element(element)
+        }
+    }
+
+    fn serialize_regular_element(
+        &mut self,
+        element: &crate::rsc::elements::ReactElement,
+    ) -> Result<String, RariError> {
+        let element_id = self.get_next_row_id();
+
+        let key_json = element
+            .key
+            .as_ref()
+            .map(|k| serde_json::to_string(k).unwrap_or_else(|_| "null".to_string()))
+            .unwrap_or_else(|| "null".to_string());
+
+        let props_json = serde_json::to_string(&element.props).unwrap_or_else(|_| "{}".to_string());
+
+        let element_data = format!(r#"["$","{}",{},{}]"#, element.tag, key_json, props_json);
+
+        let element_line = format!("{element_id}:{element_data}");
+        self.output_lines.push(element_line);
+
+        Ok(format!("$L{}", element_id))
+    }
+
+    pub fn emit_suspense_boundary_with_refs(
+        &mut self,
+        fallback_ref: &str,
+        children_ref: &str,
+        boundary_id: &str,
+    ) -> Result<String, RariError> {
+        let boundary_row_id = self.get_next_row_id();
+
+        #[allow(clippy::disallowed_methods)]
+        let boundary_data = serde_json::json!([
+            "$",
+            "react.suspense",
+            null,
+            {
+                "fallback": fallback_ref,
+                "children": children_ref,
+                "__boundary_id": boundary_id
+            }
+        ]);
+
+        let boundary_line = format!(
+            "{}:{}",
+            boundary_row_id,
+            serde_json::to_string(&boundary_data).map_err(|e| RariError::internal(format!(
+                "Failed to serialize Suspense boundary: {}",
+                e
+            )))?
+        );
+
+        self.output_lines.push(boundary_line);
+
+        Ok(format!("$L{}", boundary_row_id))
+    }
 }
 
 impl ReactElement {
@@ -1239,5 +1332,163 @@ mod tests {
 
         assert!(result.contains("GenericComponent"));
         assert!(result.contains("Component: GenericComponent"));
+    }
+
+    #[test]
+    fn test_serialize_element_with_suspense() {
+        use crate::rsc::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        let mut fallback_props = FxHashMap::default();
+        fallback_props.insert("children".to_string(), json!("Loading..."));
+        let fallback = LoadingReactElement::with_props("div", fallback_props);
+
+        let mut children_props = FxHashMap::default();
+        children_props.insert("children".to_string(), json!("Content loaded"));
+        let children = LoadingReactElement::with_props("div", children_props);
+
+        let mut suspense_props = FxHashMap::default();
+        suspense_props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
+        suspense_props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+        suspense_props.insert("__boundary_id".to_string(), json!("test-boundary"));
+
+        let suspense = LoadingReactElement::with_props("react.suspense", suspense_props);
+
+        let result = serializer.serialize_element(&suspense).unwrap();
+
+        assert!(result.starts_with("$L"), "Should return a reference to the Suspense boundary");
+
+        let output = serializer.output_lines.join("\n");
+        assert!(output.contains("react.suspense"), "Should contain Suspense tag");
+        assert!(output.contains("test-boundary"), "Should contain boundary ID");
+        assert!(output.contains("Loading..."), "Should contain fallback content");
+        assert!(output.contains("Content loaded"), "Should contain children content");
+    }
+
+    #[test]
+    fn test_serialize_element_regular() {
+        use crate::rsc::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        let mut props = FxHashMap::default();
+        props.insert("className".to_string(), json!("test-class"));
+        props.insert("children".to_string(), json!("Hello World"));
+
+        let element = LoadingReactElement::with_props("div", props).with_key("test-key");
+
+        let result = serializer.serialize_element(&element).unwrap();
+
+        assert!(result.starts_with("$L"), "Should return a reference");
+
+        let output = serializer.output_lines.join("\n");
+        assert!(output.contains(r#"["$","div""#), "Should contain div element");
+        assert!(output.contains("test-class"), "Should contain className prop");
+        assert!(output.contains("Hello World"), "Should contain children");
+        assert!(output.contains("test-key"), "Should contain key");
+    }
+
+    #[test]
+    fn test_emit_suspense_boundary_with_refs() {
+        let mut serializer = RscSerializer::new();
+
+        let result =
+            serializer.emit_suspense_boundary_with_refs("$L1", "$L2", "boundary-123").unwrap();
+
+        assert!(result.starts_with("$L"), "Should return a reference");
+
+        let output = serializer.output_lines.join("\n");
+        assert!(output.contains("react.suspense"), "Should contain Suspense tag");
+        assert!(output.contains(r#""fallback":"$L1""#), "Should reference fallback");
+        assert!(output.contains(r#""children":"$L2""#), "Should reference children");
+        assert!(output.contains("boundary-123"), "Should contain boundary ID");
+    }
+
+    #[test]
+    fn test_suspense_wire_format_structure() {
+        use crate::rsc::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        let fallback = LoadingReactElement::with_props("div", {
+            let mut props = FxHashMap::default();
+            props.insert("className".to_string(), json!("loading-spinner"));
+            props.insert("children".to_string(), json!("Loading..."));
+            props
+        });
+
+        let children = LoadingReactElement::with_props("article", {
+            let mut props = FxHashMap::default();
+            props.insert("className".to_string(), json!("content"));
+            props.insert("children".to_string(), json!("Article content"));
+            props
+        });
+
+        let suspense = LoadingReactElement::with_props("react.suspense", {
+            let mut props = FxHashMap::default();
+            props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
+            props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+            props.insert("__boundary_id".to_string(), json!("article-boundary"));
+            props
+        });
+
+        let _result = serializer.serialize_element(&suspense).unwrap();
+
+        let output = serializer.output_lines.join("\n");
+
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines.len(), 3, "Should have 3 rows in wire format");
+
+        assert!(lines[0].contains(r#"["$","div""#), "First row should be fallback div");
+        assert!(lines[0].contains("loading-spinner"), "Should contain fallback className");
+
+        assert!(lines[1].contains(r#"["$","article""#), "Second row should be children article");
+        assert!(lines[1].contains("content"), "Should contain children className");
+
+        assert!(lines[2].contains("react.suspense"), "Third row should be Suspense boundary");
+        assert!(lines[2].contains("$L0"), "Should reference fallback with $L0");
+        assert!(lines[2].contains("$L1"), "Should reference children with $L1");
+        assert!(lines[2].contains("article-boundary"), "Should contain boundary ID");
+    }
+
+    #[test]
+    fn test_suspense_missing_fallback_error() {
+        use crate::rsc::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        let mut props = FxHashMap::default();
+        props.insert("children".to_string(), json!({"tag": "div", "props": {}}));
+        props.insert("__boundary_id".to_string(), json!("test"));
+
+        let suspense = LoadingReactElement::with_props("react.suspense", props);
+
+        let result = serializer.serialize_element(&suspense);
+        assert!(result.is_err(), "Should error when fallback is missing");
+        assert!(
+            result.unwrap_err().to_string().contains("fallback"),
+            "Error should mention missing fallback"
+        );
+    }
+
+    #[test]
+    fn test_suspense_missing_children_error() {
+        use crate::rsc::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        let mut props = FxHashMap::default();
+        props.insert("fallback".to_string(), json!({"tag": "div", "props": {}}));
+        props.insert("__boundary_id".to_string(), json!("test"));
+
+        let suspense = LoadingReactElement::with_props("react.suspense", props);
+
+        let result = serializer.serialize_element(&suspense);
+        assert!(result.is_err(), "Should error when children is missing");
+        assert!(
+            result.unwrap_err().to_string().contains("children"),
+            "Error should mention missing children"
+        );
     }
 }

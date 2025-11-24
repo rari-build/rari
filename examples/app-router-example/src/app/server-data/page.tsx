@@ -1,7 +1,7 @@
 import process from 'node:process'
 
 async function fetchData() {
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise(resolve => setTimeout(resolve, 3000))
 
   return {
     timestamp: new Date().toISOString(),

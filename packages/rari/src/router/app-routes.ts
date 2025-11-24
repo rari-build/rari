@@ -172,9 +172,11 @@ export class AppRouteGenerator {
 
     const loadingFile = this.findFile(files, SPECIAL_FILES.LOADING)
     if (loadingFile) {
+      const componentId = this.generateComponentId(routePath, 'loading')
       loading.push({
         path: routePath,
         filePath: path.join(relativePath, loadingFile),
+        componentId,
       })
     }
 
@@ -294,6 +296,10 @@ export class AppRouteGenerator {
       return null
     }
     return parts.slice(0, -1).join('/')
+  }
+
+  private generateComponentId(routePath: string, type: string): string {
+    return `${type}:${routePath}`
   }
 
   async findLayoutChain(routePath: string, manifest: AppRouteManifest): Promise<LayoutEntry[]> {
