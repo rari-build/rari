@@ -1,7 +1,7 @@
 {
   "name": "rari",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Runtime Accelerated Rendering Infrastructure (Rari)",
   "author": "Ryan Skinner",
   "license": "MIT",
@@ -89,11 +89,11 @@
     "picocolors": "^1.1.1"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.4.0",
-    "rari-darwin-x64": "0.4.0",
-    "rari-linux-arm64": "0.4.0",
-    "rari-linux-x64": "0.4.0",
-    "rari-win32-x64": "0.4.0"
+    "rari-darwin-arm64": "0.5.0",
+    "rari-darwin-x64": "0.5.0",
+    "rari-linux-arm64": "0.5.0",
+    "rari-linux-x64": "0.5.0",
+    "rari-win32-x64": "0.5.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
