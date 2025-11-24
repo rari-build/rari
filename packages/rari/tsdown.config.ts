@@ -11,4 +11,6 @@ export default defineConfig({
   },
   external: ['fsevents'],
   dts: true,
+  fixedExtension: true,
+  format: 'esm',
 })

@@ -35,35 +35,35 @@
   "exports": {
     ".": {
       "types": "./dist/vite.d.mts",
-      "browser": "./dist/client.js",
-      "node": "./dist/vite.js",
-      "default": "./dist/vite.js"
+      "browser": "./dist/client.mjs",
+      "node": "./dist/vite.mjs",
+      "default": "./dist/vite.mjs"
     },
     "./client": {
       "types": "./dist/client.d.mts",
-      "default": "./dist/client.js"
+      "default": "./dist/client.mjs"
     },
     "./vite": {
       "types": "./dist/vite.d.mts",
-      "default": "./dist/vite.js"
+      "default": "./dist/vite.mjs"
     },
     "./runtime/actions": {
       "types": "./dist/runtime/actions.d.mts",
-      "default": "./dist/runtime/actions.js"
+      "default": "./dist/runtime/actions.mjs"
     },
     "./runtime/AppRouterProvider": {
       "types": "./dist/runtime/AppRouterProvider.d.mts",
-      "default": "./dist/runtime/AppRouterProvider.js"
+      "default": "./dist/runtime/AppRouterProvider.mjs"
     },
     "./hooks/useActionState": {
       "types": "./dist/hooks/useActionState.d.mts",
-      "default": "./dist/hooks/useActionState.js"
+      "default": "./dist/hooks/useActionState.mjs"
     },
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.mts",
   "bin": {
-    "rari": "./dist/cli.js"
+    "rari": "./dist/cli.mjs"
   },
   "files": [
     "dist",
