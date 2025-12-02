@@ -1,6 +1,6 @@
 use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
-use crate::runtime::api_bridge::RequestBridge;
+use crate::runtime::bridge::RequestBridge;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
