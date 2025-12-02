@@ -1,9 +1,8 @@
 use crate::error::RariError;
 use crate::rsc::component::ComponentRegistry;
 use crate::rsc::dependency_utils::{extract_dependencies, hash_string};
-use crate::rsc::js_loader::{ModuleOperation, RscJsLoader};
-
-use crate::rsc::serializer::{ReactElement, RscSerializer};
+use crate::rsc::js_loader::{RscJsLoader, RscModuleOperation};
+use crate::rsc::serializer::RscSerializer;
 use crate::rsc::streaming::{RscStream, StreamingRenderer};
 use crate::runtime::JsExecutionRuntime;
 use dashmap::DashMap;
@@ -855,7 +854,7 @@ if (typeof globalThis.jsxs === 'undefined') {
                 .unwrap_or_else(|_| "[]".to_string());
         let register_exports_script = RscJsLoader::create_module_operation_script(
             component_id,
-            ModuleOperation::Register { dependencies_json },
+            RscModuleOperation::Register { dependencies_json },
         );
 
         self.runtime
@@ -912,7 +911,7 @@ if (typeof globalThis.jsxs === 'undefined') {
                     .unwrap_or_else(|_| "[]".to_string());
             let register_exports_script = RscJsLoader::create_module_operation_script(
                 component_id,
-                ModuleOperation::Register { dependencies_json },
+                RscModuleOperation::Register { dependencies_json },
             );
 
             self.runtime
@@ -928,7 +927,7 @@ if (typeof globalThis.jsxs === 'undefined') {
 
             let load_script = RscJsLoader::create_module_operation_script(
                 component_id,
-                ModuleOperation::Load { module_specifier: module_specifier_js },
+                RscModuleOperation::Load { module_specifier: module_specifier_js },
             );
 
             match self.runtime.execute_script(format!("load_{component_id}.js"), load_script).await
@@ -1447,7 +1446,11 @@ if (typeof globalThis.jsxs === 'undefined') {
             None
         };
 
-        let client_element = ReactElement::create_client_component(component_id, props_map);
+        let client_element =
+            crate::rsc::serializer::SerializedReactElement::create_client_component(
+                component_id,
+                props_map,
+            );
 
         let mut serializer = self.serializer.lock();
         let rsc_payload = serializer.serialize_to_rsc_format(&client_element);
@@ -1839,7 +1842,7 @@ if (typeof globalThis.jsxs === 'undefined') {
                 .unwrap_or_else(|_| "[]".to_string());
         let register_exports_script = RscJsLoader::create_module_operation_script(
             component_id,
-            ModuleOperation::Register { dependencies_json },
+            RscModuleOperation::Register { dependencies_json },
         );
 
         self.runtime
@@ -2080,7 +2083,7 @@ globalThis.__rsc_functions['{component_id}'] = {component_id};
 
         let post_register_script = RscJsLoader::create_module_operation_script(
             component_id,
-            ModuleOperation::PostRegister,
+            RscModuleOperation::PostRegister,
         );
         let _post_register_result = self
             .runtime

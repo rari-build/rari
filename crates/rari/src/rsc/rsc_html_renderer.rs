@@ -1,4 +1,5 @@
 use crate::error::{RariError, StreamingError};
+use crate::rsc::rsc_types::RscElement;
 use crate::rsc::streaming::{RscChunkType, RscStreamChunk};
 use crate::runtime::JsExecutionRuntime;
 use rustc_hash::FxHashMap;
@@ -33,13 +34,6 @@ impl Default for BoundaryIdGenerator {
 pub struct RscRow {
     pub id: u32,
     pub data: RscElement,
-}
-
-#[derive(Debug, Clone)]
-pub enum RscElement {
-    Component { tag: String, key: Option<String>, props: FxHashMap<String, JsonValue> },
-    Text(String),
-    Reference(String),
 }
 
 pub struct RscHtmlRenderer {
@@ -774,6 +768,23 @@ impl RscHtmlRenderer {
                     RscElement::Reference(ref_str) => {
                         serde_json::json!({
                             "Reference": ref_str
+                        })
+                    }
+                    RscElement::Suspense { fallback_ref, children_ref, boundary_id, props } => {
+                        serde_json::json!({
+                            "Suspense": {
+                                "fallback_ref": fallback_ref,
+                                "children_ref": children_ref,
+                                "boundary_id": boundary_id,
+                                "props": props
+                            }
+                        })
+                    }
+                    RscElement::Promise { promise_id } => {
+                        serde_json::json!({
+                            "Promise": {
+                                "promise_id": promise_id
+                            }
                         })
                     }
                 };

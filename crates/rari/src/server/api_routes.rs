@@ -1,6 +1,7 @@
 use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::api_bridge::RequestBridge;
+use crate::server::routing_types::RouteSegment;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
 use dashmap::DashMap;
@@ -22,24 +23,6 @@ pub struct ApiRouteEntry {
     #[serde(rename = "isDynamic")]
     pub is_dynamic: bool,
     pub methods: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum RouteSegmentType {
-    Static,
-    Dynamic,
-    CatchAll,
-    OptionalCatchAll,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RouteSegment {
-    #[serde(rename = "type")]
-    pub segment_type: RouteSegmentType,
-    pub value: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub param: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

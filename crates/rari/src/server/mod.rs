@@ -46,6 +46,7 @@ pub mod request_context;
 pub mod request_middleware;
 pub mod request_type;
 pub mod response_cache;
+pub mod routing_types;
 pub mod streaming_response;
 pub mod vite_proxy;
 

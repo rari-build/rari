@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SuspenseBoundary {
+pub struct ManagedSuspenseBoundary {
     pub id: String,
     pub fallback: serde_json::Value,
     pub parent_id: Option<String>,
@@ -55,7 +55,7 @@ pub struct SuspenseBoundaryState {
 
 #[derive(Debug)]
 pub struct SuspenseManager {
-    boundaries: FxHashMap<String, SuspenseBoundary>,
+    boundaries: FxHashMap<String, ManagedSuspenseBoundary>,
     promise_cache: FxHashMap<String, PromiseInfo>,
     boundary_stack: Vec<String>,
     global_promise_counter: u64,
@@ -97,7 +97,7 @@ impl SuspenseManager {
             component_path
         );
 
-        let boundary = SuspenseBoundary {
+        let boundary = ManagedSuspenseBoundary {
             id: id.clone(),
             fallback,
             parent_id: self.boundary_stack.last().cloned(),
@@ -356,7 +356,7 @@ impl Default for SuspenseManager {
     }
 }
 
-impl SuspenseBoundary {
+impl ManagedSuspenseBoundary {
     pub fn new(id: String, fallback: serde_json::Value, component_path: String) -> Self {
         Self {
             id,

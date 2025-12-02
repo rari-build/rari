@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use crate::rsc::dependency_utils::DependencyList;
 use dashmap::DashMap;
 use deno_core::{
     FastString, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader, ModuleSource,
@@ -485,8 +486,7 @@ export default moduleExports;
     )
 }
 
-type DependencyList = SmallVec<[String; 4]>;
-type ModuleOperations = SmallVec<[ModuleOperation; 8]>;
+type ModuleOperations = SmallVec<[LoaderModuleOperation; 8]>;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum StorageKey {
@@ -570,7 +570,7 @@ struct BatchedOperation {
 }
 
 #[derive(Debug)]
-enum ModuleOperation {
+enum LoaderModuleOperation {
     AddModule { specifier: Arc<str>, code: Arc<str> },
 }
 
@@ -832,7 +832,7 @@ impl OrderedStorage {
         self.storage.contains_key(&StorageKey::ModuleCode(specifier.to_string()))
     }
 
-    fn add_to_batch(&self, operation: ModuleOperation) -> Result<(), RariError> {
+    fn add_to_batch(&self, operation: LoaderModuleOperation) -> Result<(), RariError> {
         let now = Instant::now();
 
         let mut pending = self.pending_batch.lock();
@@ -876,7 +876,7 @@ impl OrderedStorage {
 
         for operation in &batch.operations {
             match operation {
-                ModuleOperation::AddModule { specifier, code } => {
+                LoaderModuleOperation::AddModule { specifier, code } => {
                     self.set_module_code(specifier.to_string(), code.to_string());
                 }
             }
@@ -894,7 +894,7 @@ impl OrderedStorage {
     fn add_module_interned(&self, specifier: &str, code: &str) -> Result<(), RariError> {
         let interner = get_string_interner();
 
-        let operation = ModuleOperation::AddModule {
+        let operation = LoaderModuleOperation::AddModule {
             specifier: interner.intern(specifier),
             code: interner.intern(code),
         };

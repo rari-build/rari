@@ -120,11 +120,11 @@ fn calculate_boundary_positions(
     positions
 }
 
-struct HtmlCache {
+struct LayoutHtmlCache {
     cache: DashMap<u64, String>,
 }
 
-impl HtmlCache {
+impl LayoutHtmlCache {
     fn new() -> Self {
         Self { cache: DashMap::new() }
     }
@@ -140,12 +140,12 @@ impl HtmlCache {
 
 pub struct LayoutRenderer {
     renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
-    html_cache: Arc<HtmlCache>,
+    html_cache: Arc<LayoutHtmlCache>,
 }
 
 impl LayoutRenderer {
     pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
-        Self { renderer, html_cache: Arc::new(HtmlCache::new()) }
+        Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
     fn generate_cache_key(

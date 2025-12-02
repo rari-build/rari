@@ -42,13 +42,13 @@ impl CacheStatistics {
     }
 }
 
-struct HtmlCache {
+struct SsrHtmlCache {
     cache: FxHashMap<u64, (String, u64)>,
     max_size: usize,
     stats: CacheStatistics,
 }
 
-impl HtmlCache {
+impl SsrHtmlCache {
     fn new(max_size: usize) -> Self {
         Self { cache: FxHashMap::default(), max_size, stats: CacheStatistics::default() }
     }
@@ -109,7 +109,7 @@ impl HtmlCache {
 
 pub struct Renderer {
     runtime: Arc<JsExecutionRuntime>,
-    cache: Arc<Mutex<HtmlCache>>,
+    cache: Arc<Mutex<SsrHtmlCache>>,
 }
 
 impl Renderer {
@@ -118,7 +118,7 @@ impl Renderer {
     }
 
     pub fn with_cache_size(runtime: Arc<JsExecutionRuntime>, cache_size: usize) -> Self {
-        Self { runtime, cache: Arc::new(Mutex::new(HtmlCache::new(cache_size))) }
+        Self { runtime, cache: Arc::new(Mutex::new(SsrHtmlCache::new(cache_size))) }
     }
 
     pub async fn render_to_html(
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_cache_statistics() {
-        let mut cache = HtmlCache::new(10);
+        let mut cache = SsrHtmlCache::new(10);
 
         assert_eq!(cache.get_stats().hits, 0);
         assert_eq!(cache.get_stats().misses, 0);
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let mut cache = HtmlCache::new(5);
+        let mut cache = SsrHtmlCache::new(5);
 
         for i in 0..5 {
             let tree = serde_json::json!({"id": i});
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_cache_clear() {
-        let mut cache = HtmlCache::new(10);
+        let mut cache = SsrHtmlCache::new(10);
 
         for i in 0..3 {
             let tree = serde_json::json!({"id": i});

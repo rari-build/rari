@@ -1,4 +1,6 @@
 use crate::error::RariError;
+#[allow(unused_imports)]
+use crate::rsc::elements::ReactElement;
 use crate::rsc::rsc_tree::RSCTree;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -71,7 +73,7 @@ pub trait ServerComponentExecutor: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct ReactElement {
+pub struct SerializedReactElement {
     pub element_type: ElementType,
     pub props: Option<FxHashMap<String, Value>>,
     pub key: Option<String>,
@@ -143,11 +145,10 @@ impl RscSerializer {
             .unwrap_or(false)
     }
 
-    pub fn serialize_to_rsc_format(&mut self, element: &ReactElement) -> String {
+    pub fn serialize_to_rsc_format(&mut self, element: &SerializedReactElement) -> String {
         self.output_lines.clear();
         self.serialized_modules.clear();
 
-        self.collect_client_components(element);
         self.add_module_import_lines();
 
         let element_id = self.get_next_row_id();
@@ -435,44 +436,6 @@ impl RscSerializer {
         }
     }
 
-    fn collect_client_components(&mut self, element: &ReactElement) {
-        if let Some(props) = &element.props {
-            self.collect_from_props(props);
-        }
-    }
-
-    fn collect_from_props(&mut self, props: &FxHashMap<String, Value>) {
-        for value in props.values() {
-            self.collect_from_value(value);
-        }
-    }
-
-    fn collect_from_value(&mut self, value: &Value) {
-        match value {
-            Value::Object(obj) => {
-                if let (Some(element_type), Some(props)) = (obj.get("$$typeof"), obj.get("props")) {
-                    if element_type.as_str() == Some("Symbol(react.element)")
-                        && let Value::Object(props_obj) = props
-                    {
-                        let props_hashmap: FxHashMap<String, Value> =
-                            props_obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                        self.collect_from_props(&props_hashmap);
-                    }
-                } else {
-                    for (_, v) in obj {
-                        self.collect_from_value(v);
-                    }
-                }
-            }
-            Value::Array(arr) => {
-                for v in arr {
-                    self.collect_from_value(v);
-                }
-            }
-            _ => {}
-        }
-    }
-
     #[allow(clippy::disallowed_methods)]
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
@@ -488,7 +451,7 @@ impl RscSerializer {
         self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
     }
 
-    fn serialize_element_to_standard_format(&self, element: &ReactElement) -> String {
+    fn serialize_element_to_standard_format(&self, element: &SerializedReactElement) -> String {
         match &element.element_type {
             ElementType::HtmlTag(tag) => {
                 self.serialize_html_element_standard(tag, element.props.as_ref())
@@ -846,7 +809,11 @@ impl RscSerializer {
     }
 
     #[allow(clippy::disallowed_methods)]
-    pub fn emit_suspense_boundary(&mut self, fallback: &ReactElement, boundary_id: &str) -> String {
+    pub fn emit_suspense_boundary(
+        &mut self,
+        fallback: &SerializedReactElement,
+        boundary_id: &str,
+    ) -> String {
         let boundary_row_id = self.get_next_row_id();
 
         let boundary_data = serde_json::json!([
@@ -865,7 +832,11 @@ impl RscSerializer {
         boundary_id.to_string()
     }
 
-    pub fn emit_streamed_content(&mut self, boundary_id: &str, content: &ReactElement) -> String {
+    pub fn emit_streamed_content(
+        &mut self,
+        boundary_id: &str,
+        content: &SerializedReactElement,
+    ) -> String {
         let content_data = self.serialize_element_to_standard_format(content);
         let content_line = format!("{boundary_id}:{content_data}");
         self.output_lines.push(content_line.clone());
@@ -966,9 +937,12 @@ impl RscSerializer {
     }
 }
 
-impl ReactElement {
-    pub fn create_html_element(tag: &str, props: Option<FxHashMap<String, Value>>) -> ReactElement {
-        ReactElement {
+impl SerializedReactElement {
+    pub fn create_html_element(
+        tag: &str,
+        props: Option<FxHashMap<String, Value>>,
+    ) -> SerializedReactElement {
+        SerializedReactElement {
             element_type: ElementType::HtmlTag(tag.to_string()),
             props,
             key: None,
@@ -979,8 +953,8 @@ impl ReactElement {
     pub fn create_client_component(
         component_id: &str,
         props: Option<FxHashMap<String, Value>>,
-    ) -> ReactElement {
-        ReactElement {
+    ) -> SerializedReactElement {
+        SerializedReactElement {
             element_type: ElementType::ClientComponent(component_id.to_string()),
             props,
             key: None,
@@ -991,8 +965,8 @@ impl ReactElement {
     pub fn create_server_component(
         component_name: &str,
         props: Option<FxHashMap<String, Value>>,
-    ) -> ReactElement {
-        ReactElement {
+    ) -> SerializedReactElement {
+        SerializedReactElement {
             element_type: ElementType::ServerComponent(component_name.to_string()),
             props,
             key: None,
@@ -1000,8 +974,8 @@ impl ReactElement {
         }
     }
 
-    pub fn create_text_element(text: &str) -> ReactElement {
-        ReactElement {
+    pub fn create_text_element(text: &str) -> SerializedReactElement {
+        SerializedReactElement {
             element_type: ElementType::Text(text.to_string()),
             props: None,
             key: None,
@@ -1009,13 +983,13 @@ impl ReactElement {
         }
     }
 
-    pub fn create_fragment(children: Option<Vec<Value>>) -> ReactElement {
+    pub fn create_fragment(children: Option<Vec<Value>>) -> SerializedReactElement {
         let mut props = FxHashMap::default();
         if let Some(children_vec) = children {
             props.insert("children".to_string(), Value::Array(children_vec));
         }
 
-        ReactElement {
+        SerializedReactElement {
             element_type: ElementType::Fragment,
             props: Some(props),
             key: None,
@@ -1038,7 +1012,7 @@ mod tests {
         props.insert("className".to_string(), json!("test-class"));
         props.insert("children".to_string(), json!("Hello World"));
 
-        let element = ReactElement::create_html_element("div", Some(props));
+        let element = SerializedReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains(r#"["$","div",null,"#));
@@ -1055,7 +1029,7 @@ mod tests {
         props.insert("onClick".to_string(), json!("handleClick"));
         props.insert("children".to_string(), json!("Click me"));
 
-        let element = ReactElement::create_client_component("Button", Some(props));
+        let element = SerializedReactElement::create_client_component("Button", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("./components/Button.client.js"));
@@ -1069,7 +1043,7 @@ mod tests {
     fn test_serialize_text_element() {
         let mut serializer = RscSerializer::new();
 
-        let element = ReactElement::create_text_element("Hello, RSC!");
+        let element = SerializedReactElement::create_text_element("Hello, RSC!");
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("Hello, RSC!"));
@@ -1082,7 +1056,7 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert("userId".to_string(), json!(123));
 
-        let element = ReactElement::create_server_component("UserProfile", Some(props));
+        let element = SerializedReactElement::create_server_component("UserProfile", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("UserProfile"));
@@ -1094,7 +1068,7 @@ mod tests {
 
         let children = vec![json!("First child"), json!("Second child")];
 
-        let element = ReactElement::create_fragment(Some(children));
+        let element = SerializedReactElement::create_fragment(Some(children));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("First child"));
@@ -1107,13 +1081,13 @@ mod tests {
 
         serializer.register_client_component("Button", "./components/Button.client.js", "default");
 
-        let element1 = ReactElement::create_client_component("Button", None);
+        let element1 = SerializedReactElement::create_client_component("Button", None);
         let _result1 = serializer.serialize_to_rsc_format(&element1);
 
         serializer.output_lines.clear();
         serializer.serialized_modules.clear();
 
-        let element2 = ReactElement::create_client_component("Button", None);
+        let element2 = SerializedReactElement::create_client_component("Button", None);
         let result2 = serializer.serialize_to_rsc_format(&element2);
 
         assert!(result2.contains("./components/Button.client.js"));
@@ -1131,8 +1105,9 @@ mod tests {
         let mut div_props = FxHashMap::default();
         div_props.insert("className".to_string(), json!("container"));
 
-        let _button_element = ReactElement::create_client_component("Button", Some(button_props));
-        let div_element = ReactElement::create_html_element("div", Some(div_props));
+        let _button_element =
+            SerializedReactElement::create_client_component("Button", Some(button_props));
+        let div_element = SerializedReactElement::create_html_element("div", Some(div_props));
 
         let result = serializer.serialize_to_rsc_format(&div_element);
 
@@ -1144,7 +1119,7 @@ mod tests {
     fn test_unregistered_client_component() {
         let mut serializer = RscSerializer::new();
 
-        let element = ReactElement::create_client_component("UnknownButton", None);
+        let element = SerializedReactElement::create_client_component("UnknownButton", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("data-rsc-error"));
@@ -1155,7 +1130,7 @@ mod tests {
     fn test_empty_props() {
         let mut serializer = RscSerializer::new();
 
-        let element = ReactElement::create_html_element("br", None);
+        let element = SerializedReactElement::create_html_element("br", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains(r#"["$","br",null,null]"#));
@@ -1179,7 +1154,7 @@ mod tests {
         );
         complex_props.insert("array_prop".to_string(), json!([1, 2, 3]));
 
-        let element = ReactElement::create_html_element("div", Some(complex_props));
+        let element = SerializedReactElement::create_html_element("div", Some(complex_props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("Hello"));
@@ -1198,7 +1173,8 @@ mod tests {
             .insert("onClick".to_string(), json!("function handleClick() { return true; }"));
         props_with_function.insert("valid_prop".to_string(), json!("valid value"));
 
-        let element = ReactElement::create_html_element("button", Some(props_with_function));
+        let element =
+            SerializedReactElement::create_html_element("button", Some(props_with_function));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("null"));
@@ -1224,7 +1200,7 @@ mod tests {
             }),
         );
 
-        let element = ReactElement::create_html_element("div", Some(props));
+        let element = SerializedReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("safe"));
@@ -1240,7 +1216,7 @@ mod tests {
         props.insert("object_prop".to_string(), json!("Object [object Object]"));
         props.insert("valid_prop".to_string(), json!("normal string"));
 
-        let element = ReactElement::create_html_element("div", Some(props));
+        let element = SerializedReactElement::create_html_element("div", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("normal string"));
@@ -1276,7 +1252,7 @@ mod tests {
         let mut serializer = RscSerializer::new();
         serializer.set_server_component_executor(Box::new(MockServerComponentExecutor));
 
-        let element = ReactElement::create_server_component("SuccessfulComponent", None);
+        let element = SerializedReactElement::create_server_component("SuccessfulComponent", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("Server rendered content"));
@@ -1288,7 +1264,7 @@ mod tests {
         let mut serializer = RscSerializer::new();
         serializer.set_server_component_executor(Box::new(MockServerComponentExecutor));
 
-        let element = ReactElement::create_server_component("HTMLComponent", None);
+        let element = SerializedReactElement::create_server_component("HTMLComponent", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("HTMLComponent"));
@@ -1300,7 +1276,7 @@ mod tests {
         let mut serializer = RscSerializer::new();
         serializer.set_server_component_executor(Box::new(MockServerComponentExecutor));
 
-        let element = ReactElement::create_server_component("FailingComponent", None);
+        let element = SerializedReactElement::create_server_component("FailingComponent", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("Error rendering FailingComponent"));
@@ -1311,7 +1287,7 @@ mod tests {
     fn test_server_component_no_executor() {
         let mut serializer = RscSerializer::new();
 
-        let element = ReactElement::create_server_component("TestComponent", None);
+        let element = SerializedReactElement::create_server_component("TestComponent", None);
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("Error rendering TestComponent"));
@@ -1327,7 +1303,8 @@ mod tests {
         props.insert("title".to_string(), json!("Test Title"));
         props.insert("count".to_string(), json!(5));
 
-        let element = ReactElement::create_server_component("GenericComponent", Some(props));
+        let element =
+            SerializedReactElement::create_server_component("GenericComponent", Some(props));
         let result = serializer.serialize_to_rsc_format(&element);
 
         assert!(result.contains("GenericComponent"));

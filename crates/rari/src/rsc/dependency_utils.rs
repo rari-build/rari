@@ -1,7 +1,7 @@
 use crate::error::RariError;
 use smallvec::SmallVec;
 
-type DependencyList = SmallVec<[String; 4]>;
+pub type DependencyList = SmallVec<[String; 4]>;
 
 fn compile_regex(pattern: &str, context: &str) -> Result<regex::Regex, RariError> {
     regex::Regex::new(pattern)

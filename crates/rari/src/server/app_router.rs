@@ -1,26 +1,10 @@
 use crate::error::RariError;
+#[allow(unused_imports)]
+use crate::server::routing_types::{RouteSegment, RouteSegmentType};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::debug;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum RouteSegmentType {
-    Static,
-    Dynamic,
-    CatchAll,
-    OptionalCatchAll,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RouteSegment {
-    #[serde(rename = "type")]
-    pub segment_type: RouteSegmentType,
-    pub value: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub param: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppRouteEntry {

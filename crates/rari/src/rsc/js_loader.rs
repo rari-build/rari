@@ -163,10 +163,10 @@ impl RscJsLoader {
 
     pub fn create_module_operation_script(
         component_id: &str,
-        operation: ModuleOperation,
+        operation: RscModuleOperation,
     ) -> String {
         match operation {
-            ModuleOperation::Load { module_specifier } => {
+            RscModuleOperation::Load { module_specifier } => {
                 format!(
                     r#"
                     (function() {{
@@ -203,7 +203,7 @@ impl RscJsLoader {
                     "#
                 )
             }
-            ModuleOperation::Register { dependencies_json } => {
+            RscModuleOperation::Register { dependencies_json } => {
                 format!(
                     r#"
                     (async function() {{
@@ -317,7 +317,7 @@ impl RscJsLoader {
                     "#
                 )
             }
-            ModuleOperation::PostRegister => {
+            RscModuleOperation::PostRegister => {
                 format!(
                     r#"
                     (function() {{
@@ -556,7 +556,7 @@ pub enum StubType {
 }
 
 #[derive(Debug, Clone)]
-pub enum ModuleOperation {
+pub enum RscModuleOperation {
     Load { module_specifier: String },
     PostRegister,
     Register { dependencies_json: String },

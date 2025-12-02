@@ -81,13 +81,13 @@ impl Default for StaticConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheConfig {
+pub struct CacheControlConfig {
     pub routes: FxHashMap<String, String>,
     pub static_files: String,
     pub server_components: String,
 }
 
-impl Default for CacheConfig {
+impl Default for CacheControlConfig {
     fn default() -> Self {
         Self {
             routes: FxHashMap::default(),
@@ -182,7 +182,7 @@ pub struct Config {
     pub static_files: StaticConfig,
     pub rsc: RscConfig,
     pub rsc_html: RscHtmlConfig,
-    pub caching: CacheConfig,
+    pub caching: CacheControlConfig,
     pub loading: LoadingConfig,
     #[serde(default)]
     pub streaming: StreamingConfig,
@@ -581,14 +581,14 @@ mod tests {
         routes.insert("/api/*".to_string(), "no-cache".to_string());
         routes.insert("/blog/*".to_string(), "public, max-age=3600".to_string());
 
-        let cache_config = CacheConfig {
+        let cache_config = CacheControlConfig {
             routes,
             static_files: "public, max-age=31536000, immutable".to_string(),
             server_components: "no-cache".to_string(),
         };
 
         let serialized = serde_json::to_string(&cache_config).unwrap();
-        let deserialized: CacheConfig = serde_json::from_str(&serialized).unwrap();
+        let deserialized: CacheControlConfig = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(cache_config.static_files, deserialized.static_files);
         assert_eq!(cache_config.server_components, deserialized.server_components);
