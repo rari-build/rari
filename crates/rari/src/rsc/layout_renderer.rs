@@ -2,9 +2,9 @@ use crate::error::{LoadingStateError, RariError};
 use crate::rsc::elements::ReactElement;
 use crate::rsc::renderer::RscRenderer;
 use crate::rsc::streaming::RscStream;
-use crate::server::app_router::AppRouteMatch;
 use crate::server::config::Config;
 use crate::server::request_type::RenderMode;
+use crate::server::routing::app_router::AppRouteMatch;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -1584,7 +1584,7 @@ impl LayoutRenderer {
 
         let page_props = self.create_page_props(
             &AppRouteMatch {
-                route: crate::server::app_router::AppRouteEntry {
+                route: crate::server::routing::app_router::AppRouteEntry {
                     path: String::new(),
                     file_path: loading_path.to_string(),
                     segments: vec![],
@@ -1701,7 +1701,7 @@ impl LayoutRenderer {
 
         let page_props = self.create_page_props(
             &AppRouteMatch {
-                route: crate::server::app_router::AppRouteEntry {
+                route: crate::server::routing::app_router::AppRouteEntry {
                     path: String::new(),
                     file_path: page_path.to_string(),
                     segments: vec![],
@@ -2253,7 +2253,7 @@ mod tests {
         };
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2275,7 +2275,7 @@ mod tests {
 
     #[test]
     fn test_wrapped_html_error_message_contains_key_info() {
-        use crate::server::app_router::{AppRouteEntry, LayoutEntry};
+        use crate::server::routing::app_router::{AppRouteEntry, LayoutEntry};
 
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
@@ -2511,7 +2511,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2548,7 +2548,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2654,7 +2654,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2691,7 +2691,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2732,7 +2732,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2789,7 +2789,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2829,7 +2829,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2864,14 +2864,14 @@ mod tests {
 
     #[test]
     fn test_composition_script_includes_layout_structure_markers() {
-        use crate::server::app_router::LayoutEntry;
+        use crate::server::routing::app_router::LayoutEntry;
 
         let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
             Arc::new(JsExecutionRuntime::new(None)),
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -2988,7 +2988,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3029,7 +3029,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3070,7 +3070,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3123,7 +3123,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3167,7 +3167,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3210,7 +3210,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3256,7 +3256,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],
@@ -3306,7 +3306,7 @@ mod tests {
         ))));
 
         let route_match = AppRouteMatch {
-            route: crate::server::app_router::AppRouteEntry {
+            route: crate::server::routing::app_router::AppRouteEntry {
                 path: "/test".to_string(),
                 file_path: "app/test/page.tsx".to_string(),
                 segments: vec![],

@@ -1,6 +1,6 @@
 use crate::error::RariError;
 #[allow(unused_imports)]
-use crate::server::routing_types::{RouteSegment, RouteSegmentType};
+use crate::server::routing::types::{RouteSegment, RouteSegmentType};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
