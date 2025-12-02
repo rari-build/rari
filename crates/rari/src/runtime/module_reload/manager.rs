@@ -1,5 +1,5 @@
 use crate::error::{ModuleReloadError, RariError};
-use crate::rsc::component::ComponentRegistry;
+use crate::rsc::components::ComponentRegistry;
 use crate::runtime::JsExecutionRuntime;
 use crate::runtime::module_reload::{
     DebounceManager, ModuleReloadRequest, ReloadConfig, ReloadHistoryEntry, ReloadStats,

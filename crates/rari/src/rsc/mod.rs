@@ -1,16 +1,14 @@
-pub mod component;
-pub mod dependency_utils;
-pub mod elements;
-pub mod js_loader;
+pub mod components;
+pub mod js;
 pub mod layout_renderer;
+pub mod parser;
 pub mod renderer;
 pub mod rsc_html_renderer;
-pub mod rsc_tree;
-pub mod rsc_types;
-pub mod rsc_wire_parser;
 pub mod serializer;
 pub mod streaming;
 pub mod suspense;
+pub mod types;
+pub mod utils;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -25,20 +23,20 @@ pub enum ComponentValue {
     Null,
 }
 
-pub use component::{
+pub use components::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
-pub use dependency_utils::extract_dependencies;
-pub use elements::ReactElement as LoadingReactElement;
-pub use elements::ReactElement;
-pub use js_loader::RscJsLoader;
+pub use js::loader::RscJsLoader;
+pub use parser::rsc_wire_parser::{PromiseRef, RscWireFormatParser, StreamingState};
 pub use renderer::RscRenderer;
 pub use rsc_html_renderer::RscHtmlRenderer;
-pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
-pub use rsc_types::{RscElement as ParsedRscElement, SuspenseBoundary};
-pub use rsc_wire_parser::{PromiseRef, RscWireFormatParser, StreamingState};
 pub use serializer::{ElementType, RscSerializer, SerializedReactElement, ServerComponentExecutor};
 pub use streaming::{RscStream, RscStreamChunk};
+pub use types::elements::ReactElement as LoadingReactElement;
+pub use types::elements::ReactElement;
+pub use types::rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
+pub use types::rsc_types::{RscElement as ParsedRscElement, SuspenseBoundary};
+pub use utils::dependency_utils::extract_dependencies;
 
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]

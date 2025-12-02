@@ -16,7 +16,7 @@ fn create_js_wrapper(_component_id: &str, js_code: &str) -> String {
 
 impl RscJsLoader {
     pub fn load_component_isolation_with_id(component_id: &str) -> Result<String, &'static str> {
-        let template = include_str!("js/component_isolation.js");
+        let template = include_str!("component_isolation.js");
         Ok(template.replace("{component_id}", component_id))
     }
 
@@ -25,7 +25,7 @@ impl RscJsLoader {
         component_hash: &str,
         props_json: &str,
     ) -> Result<String, &'static str> {
-        let template = include_str!("js/component_render.js");
+        let template = include_str!("component_render.js");
         let script = template
             .replace("{component_id}", component_id)
             .replace("{component_hash}", component_hash)

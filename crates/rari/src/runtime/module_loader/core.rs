@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::dependency_utils::DependencyList;
+use crate::rsc::utils::dependency_utils::DependencyList;
 use crate::runtime::module_loader::{
     cache::ModuleCaching,
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
