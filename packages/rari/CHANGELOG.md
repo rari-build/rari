@@ -1,7 +1,17 @@
-## [0.5.4] - 2025-11-24
+## [0.5.1] - 2025-12-02
+
+### 🚜 Refactor
+
+- *(rsc)* Replace timestamp-based key generation with counter for stable key gen
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump binary packages to v0.5.1
+## [rari@0.5.4] - 2025-11-24
 
 ### 💼 Other
 
+- Rari@0.5.4
 - Rari@0.5.4
 
 ### 🚜 Refactor
