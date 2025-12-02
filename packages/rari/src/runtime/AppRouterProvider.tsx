@@ -53,7 +53,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   })
 
   const loadingRegistryRef = useRef<LoadingComponentRegistry>(new LoadingComponentRegistry())
-  const layoutInstancesRef = useRef<Map<string, React.ReactElement>>(new Map())
   const pendingFetchesRef = useRef<Map<string, Promise<any>>>(new Map())
   const failureHistoryRef = useRef<HMRFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
@@ -183,35 +182,37 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     if (Array.isArray(rsc)) {
       if (rsc.length >= 4 && rsc[0] === '$') {
-        const [, type, key, props] = rsc
+        const [, type, serverKey, props] = rsc
 
         if (typeof type === 'string' && type.startsWith('$L')) {
           const moduleInfo = modules.get(type)
-          if (moduleInfo) {
-            const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
-            if (Component) {
-              const isLayout = moduleInfo.id.includes('layout')
-              const stableKey = isLayout ? `layout-${moduleInfo.id}` : key
 
-              const childProps = {
-                ...props,
-                children: props.children ? rscToReact(props.children, modules, isLayout ? moduleInfo.id : layoutPath) : undefined,
-              }
-
-              const element = React.createElement(Component, { key: stableKey, ...childProps })
-
-              if (isLayout) {
-                layoutInstancesRef.current.set(stableKey, true as any)
-              }
-
-              return element
-            }
+          if (!moduleInfo) {
+            console.warn('[AppRouterProvider] Module info not found for type:', type, '- skipping component')
+            return null
           }
-          return null
+
+          const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
+
+          if (!Component) {
+            console.warn('[AppRouterProvider] Component not loaded for module:', moduleInfo.id, '- skipping component')
+            return null
+          }
+
+          const effectiveKey = serverKey || `fallback-${Math.random()}`
+
+          const childProps = {
+            ...props,
+            children: props.children ? rscToReact(props.children, modules, layoutPath) : undefined,
+          }
+
+          const element = React.createElement(Component, { key: effectiveKey, ...childProps })
+
+          return element
         }
 
         const processedProps = processProps(props, modules, layoutPath)
-        return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+        return React.createElement(type, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
       return rsc.map(child => rscToReact(child, modules, layoutPath))
     }
@@ -418,20 +419,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             window.location.pathname,
           )
           throw error
-        }
-
-        if (layoutDiff && layoutDiff.unmountLayouts.length > 0) {
-          layoutDiff.unmountLayouts.forEach((layout) => {
-            const keysToRemove: string[] = []
-            layoutInstancesRef.current.forEach((_, key) => {
-              if (key.includes(layout.path)) {
-                keysToRemove.push(key)
-              }
-            })
-            keysToRemove.forEach((key) => {
-              layoutInstancesRef.current.delete(key)
-            })
-          })
         }
 
         setRscPayload(parsedPayload)
