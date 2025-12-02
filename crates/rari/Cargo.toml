@@ -70,6 +70,7 @@ deno_cron = "0.101.0"
 deno_node = "0.159.0"
 deno_resolver = "0.52.0"
 node_resolver = "0.59.0"
+num-bigint-dig = { workspace = true }
 
 # === FFI & NAPI ===
 deno_ffi = "0.208.0"
