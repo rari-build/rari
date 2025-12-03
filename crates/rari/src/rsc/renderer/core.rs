@@ -1252,15 +1252,10 @@ impl RscRenderer {
             if self.component_exists(candidate) {
                 return Ok(candidate.clone());
             }
-            if self.auto_register_component_from_fs(candidate.clone()).await.is_ok() {
-                return Ok(candidate.clone());
-            }
         }
 
         sleep(Duration::from_millis(COMPONENT_AVAILABILITY_CHECK_DELAY_MS)).await;
-        if self.component_exists(original_id)
-            || self.auto_register_component_from_fs(original_id.to_string()).await.is_ok()
-        {
+        if self.component_exists(original_id) {
             return Ok(original_id.to_string());
         }
 
@@ -1484,66 +1479,6 @@ globalThis.__rsc_functions['{component_id}'] = {component_id};
         {
             let mut registry = self.component_registry.lock();
             registry.mark_component_loaded(component_id);
-        }
-        Ok(())
-    }
-
-    async fn auto_register_component_from_fs(&self, component_id: String) -> Result<(), RariError> {
-        if let Some(config) = crate::server::config::Config::get()
-            && !config.is_development()
-        {
-            return Err(RariError::not_found("Auto-register only in development".to_string()));
-        }
-
-        let cwd = std::env::current_dir().map_err(|e| RariError::io(e.to_string()))?;
-        let search_roots = [
-            cwd.join("examples/basic-vite-rsc/src/components"),
-            cwd.join("examples/basic-vite-rsc/src/pages"),
-            cwd.join("docs/src/components"),
-            cwd.join("docs/src/pages"),
-        ];
-
-        let stem = component_id.clone();
-        let exts = [".tsx", ".ts", ".jsx", ".js"];
-        let mut found: Option<std::path::PathBuf> = None;
-        for root in &search_roots {
-            for ext in &exts {
-                let candidate = root.join(format!("{stem}{ext}"));
-                if candidate.exists() {
-                    found = Some(candidate);
-                    break;
-                }
-
-                let candidate_idx = root.join(stem.clone()).join(format!("index{ext}"));
-                if candidate_idx.exists() {
-                    found = Some(candidate_idx);
-                    break;
-                }
-            }
-            if found.is_some() {
-                break;
-            }
-        }
-
-        let path = found.ok_or_else(|| {
-            RariError::not_found(format!("Source file not found for component {component_id}"))
-        })?;
-
-        let code = std::fs::read_to_string(&path)
-            .map_err(|e| RariError::io(format!("Failed to read {}: {}", path.display(), e)))?;
-
-        {
-            let mut renderer = crate::rsc::renderer::RscRenderer {
-                runtime: Arc::clone(&self.runtime),
-                timeout_ms: self.timeout_ms,
-                initialized: self.initialized,
-                component_registry: Arc::clone(&self.component_registry),
-                script_cache: self.script_cache.clone(),
-                resource_limits: self.resource_limits.clone(),
-                resource_tracker: Arc::clone(&self.resource_tracker),
-                serializer: Arc::clone(&self.serializer),
-            };
-            renderer.register_component(&component_id, &code).await?;
         }
         Ok(())
     }

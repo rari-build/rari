@@ -715,7 +715,7 @@ export const __esModule = true;
 
             let package_name = module_path.split('/').next().unwrap_or(module_path);
 
-            if let Some(resolved_path) = self.resolve_from_node_modules(package_name, "docs") {
+            if let Some(resolved_path) = self.resolve_from_node_modules(package_name, ".") {
                 let file_path = resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path);
 
                 if let Ok(content) = fs::read_to_string(file_path) {
