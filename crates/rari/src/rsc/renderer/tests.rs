@@ -1,50 +1,53 @@
 #[cfg(test)]
-use smallvec::SmallVec;
+mod tests {
+    use smallvec::SmallVec;
+    use std::sync::Arc;
 
-#[allow(unused_imports)]
-use super::*;
+    use crate::runtime::JsExecutionRuntime;
 
-#[tokio::test]
-async fn test_renderer_initialization() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    use super::super::core::RscRenderer;
 
-    let mut renderer = RscRenderer::new(runtime);
+    #[tokio::test]
+    async fn test_renderer_initialization() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let result = renderer.initialize().await;
-    assert!(result.is_ok());
-    assert!(renderer.initialized);
-}
+        let mut renderer = RscRenderer::new(runtime);
 
-#[tokio::test]
-async fn test_render_to_string() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-
-    let mut renderer = RscRenderer::new(runtime);
-
-    renderer.initialize().await.expect("Failed to initialize renderer");
-
-    {
-        let mut registry = renderer.component_registry.lock();
-        let _ = registry.register_component(
-            "TestComponent",
-            "function TestComponent(props) { return { name: 'TestComponent', props }; }",
-            "function TestComponent(props) { return { name: 'TestComponent', props }; }"
-                .to_string(),
-            SmallVec::new(),
-        );
+        let result = renderer.initialize().await;
+        assert!(result.is_ok());
+        assert!(renderer.initialized);
     }
 
-    assert!(renderer.initialized);
-}
+    #[tokio::test]
+    async fn test_render_to_string() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-#[tokio::test]
-async fn test_register_and_render_jsx_component() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let mut renderer = RscRenderer::new(runtime);
+        let mut renderer = RscRenderer::new(runtime);
 
-    renderer.initialize().await.expect("Failed to initialize renderer");
+        renderer.initialize().await.expect("Failed to initialize renderer");
 
-    let register_component_js = r#"
+        {
+            let mut registry = renderer.component_registry.lock();
+            let _ = registry.register_component(
+                "TestComponent",
+                "function TestComponent(props) { return { name: 'TestComponent', props }; }",
+                "function TestComponent(props) { return { name: 'TestComponent', props }; }"
+                    .to_string(),
+                SmallVec::new(),
+            );
+        }
+
+        assert!(renderer.initialized);
+    }
+
+    #[tokio::test]
+    async fn test_register_and_render_jsx_component() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let mut renderer = RscRenderer::new(runtime);
+
+        renderer.initialize().await.expect("Failed to initialize renderer");
+
+        let register_component_js = r#"
         globalThis.MyJsxComponent = function(props) {
             return React.createElement('h1', null, 'Hello ' + (props.name || 'JSX World') + '!');
         };
@@ -53,44 +56,45 @@ async fn test_register_and_render_jsx_component() {
         true
         "#;
 
-    {
-        let mut registry = renderer.component_registry.lock();
-        let _ = registry.register_component(
-            "MyJsxComponent",
-            "",
-            register_component_js.to_string(),
-            SmallVec::new(),
-        );
-        registry.mark_component_loaded("MyJsxComponent");
+        {
+            let mut registry = renderer.component_registry.lock();
+            let _ = registry.register_component(
+                "MyJsxComponent",
+                "",
+                register_component_js.to_string(),
+                SmallVec::new(),
+            );
+            registry.mark_component_loaded("MyJsxComponent");
+        }
+
+        let render_result =
+            renderer.render_to_string("MyJsxComponent", Some(r#"{"name":"Test"}"#)).await;
+
+        assert!(renderer.initialized);
+
+        if let Ok(output) = render_result {
+            assert!(output.contains("<"), "Output should contain some HTML content");
+        }
     }
 
-    let render_result =
-        renderer.render_to_string("MyJsxComponent", Some(r#"{"name":"Test"}"#)).await;
+    #[tokio::test]
+    async fn test_render_to_readable_stream() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let mut renderer = RscRenderer::new(runtime);
 
-    assert!(renderer.initialized);
+        let init_result = renderer.initialize().await;
+        assert!(init_result.is_ok(), "Failed to initialize renderer: {:?}", init_result.err());
 
-    if let Ok(output) = render_result {
-        assert!(output.contains("<"), "Output should contain some HTML content");
+        let component_id = "TestStreamComponent";
+        renderer
+            .runtime
+            .execute_script(
+                "register_mock_component.js".to_string(),
+                format!("globalThis.{component_id} = function() {{ return {{}}; }};"),
+            )
+            .await
+            .expect("Failed to execute script");
+
+        assert!(renderer.initialized);
     }
-}
-
-#[tokio::test]
-async fn test_render_to_readable_stream() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let mut renderer = RscRenderer::new(runtime);
-
-    let init_result = renderer.initialize().await;
-    assert!(init_result.is_ok(), "Failed to initialize renderer: {:?}", init_result.err());
-
-    let component_id = "TestStreamComponent";
-    renderer
-        .runtime
-        .execute_script(
-            "register_mock_component.js".to_string(),
-            format!("globalThis.{component_id} = function() {{ return {{}}; }};"),
-        )
-        .await
-        .expect("Failed to execute script");
-
-    assert!(renderer.initialized);
 }
