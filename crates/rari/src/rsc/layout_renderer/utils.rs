@@ -1,0 +1,108 @@
+use crate::error::RariError;
+use crate::server::routing::app_router::AppRouteMatch;
+use rustc_hash::FxHashMap;
+use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+use super::LayoutRenderContext;
+
+pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderContext) -> u64 {
+    let mut hasher = DefaultHasher::new();
+
+    route_match.route.path.hash(&mut hasher);
+
+    let mut params: Vec<_> = context.params.iter().collect();
+    params.sort_by_key(|(k, _)| *k);
+    for (k, v) in params {
+        k.hash(&mut hasher);
+        v.hash(&mut hasher);
+    }
+
+    let mut search_params: Vec<_> = context.search_params.iter().collect();
+    search_params.sort_by_key(|(k, _)| *k);
+    for (k, v) in search_params {
+        k.hash(&mut hasher);
+        v.hash(&mut hasher);
+    }
+
+    hasher.finish()
+}
+
+pub fn create_component_id(file_path: &str) -> String {
+    let normalized =
+        file_path.replace(".tsx", "").replace(".ts", "").replace("[", "_").replace("]", "_");
+    format!("app/{}", normalized)
+}
+
+pub fn get_component_id(file_path: &str) -> String {
+    let path = std::path::Path::new(file_path);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
+
+    let mut chars = stem.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+pub fn create_page_props(
+    route_match: &AppRouteMatch,
+    context: &LayoutRenderContext,
+) -> Result<Value, RariError> {
+    let params_value = if route_match.params.is_empty() {
+        Value::Object(serde_json::Map::new())
+    } else {
+        serde_json::to_value(&route_match.params)?
+    };
+
+    let search_params_value = if context.search_params.is_empty() {
+        Value::Object(serde_json::Map::new())
+    } else {
+        serde_json::to_value(&context.search_params)?
+    };
+
+    #[allow(clippy::disallowed_methods)]
+    let result = serde_json::json!({
+        "params": params_value,
+        "searchParams": search_params_value
+    });
+    Ok(result)
+}
+
+pub fn calculate_boundary_positions(
+    layout_structure: &super::LayoutStructure,
+) -> FxHashMap<String, Vec<usize>> {
+    let mut positions = FxHashMap::default();
+
+    for boundary in &layout_structure.suspense_boundaries {
+        let mut dom_path = Vec::new();
+
+        if layout_structure.has_navigation {
+            if let Some(_nav_pos) = layout_structure.navigation_position
+                && boundary.is_in_content_area
+            {
+                dom_path.push(1);
+            }
+        } else if boundary.is_in_content_area {
+            dom_path.push(0);
+        }
+
+        for &index in &boundary.parent_path {
+            dom_path.push(index);
+        }
+
+        positions.insert(boundary.boundary_id.clone(), dom_path);
+    }
+
+    positions
+}
+
+pub fn create_layout_context(
+    params: FxHashMap<String, String>,
+    search_params: FxHashMap<String, Vec<String>>,
+    headers: FxHashMap<String, String>,
+    pathname: String,
+) -> LayoutRenderContext {
+    LayoutRenderContext { params, search_params, headers, pathname }
+}

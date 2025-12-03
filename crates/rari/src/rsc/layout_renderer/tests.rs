@@ -1,28 +1,21 @@
 #[cfg(test)]
 use super::*;
-#[allow(unused_imports)]
+use crate::rsc::renderer::RscRenderer;
 use crate::runtime::JsExecutionRuntime;
-#[allow(unused_imports)]
+use crate::server::routing::app_router::AppRouteMatch;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 #[test]
 fn test_get_component_id() {
-    let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-        Arc::new(JsExecutionRuntime::new(None)),
-    ))));
-
-    assert_eq!(renderer.get_component_id("app/page.tsx"), "Page");
-    assert_eq!(renderer.get_component_id("app/layout.tsx"), "Layout");
-    assert_eq!(renderer.get_component_id("app/loading.tsx"), "Loading");
-    assert_eq!(renderer.get_component_id("app/error.tsx"), "Error");
+    assert_eq!(utils::get_component_id("app/page.tsx"), "Page");
+    assert_eq!(utils::get_component_id("app/layout.tsx"), "Layout");
+    assert_eq!(utils::get_component_id("app/loading.tsx"), "Loading");
+    assert_eq!(utils::get_component_id("app/error.tsx"), "Error");
 }
 
 #[test]
 fn test_create_page_props() {
-    let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
-        Arc::new(JsExecutionRuntime::new(None)),
-    ))));
-
     let mut params = FxHashMap::default();
     params.insert("id".to_string(), "123".to_string());
 
@@ -52,7 +45,7 @@ fn test_create_page_props() {
         pathname: "/test".to_string(),
     };
 
-    let props = renderer.create_page_props(&route_match, &context).unwrap();
+    let props = utils::create_page_props(&route_match, &context).unwrap();
     assert!(props.get("params").is_some());
     assert!(props.get("searchParams").is_some());
 }
@@ -83,7 +76,7 @@ fn test_wrapped_html_error_message_contains_key_info() {
     };
 
     let error_msg =
-        LayoutRenderer::create_wrapped_html_error_message(&route_match, Some("app/layout.tsx"));
+        error_messages::create_wrapped_html_error_message(&route_match, Some("app/layout.tsx"));
 
     assert!(error_msg.contains("Hydration Mismatch"));
     assert!(error_msg.contains("app/layout.tsx"));
@@ -97,7 +90,7 @@ fn test_wrapped_html_error_message_contains_key_info() {
 
 #[test]
 fn test_empty_rsc_error_message_contains_key_info() {
-    let error_msg = LayoutRenderer::create_empty_rsc_error_message();
+    let error_msg = error_messages::create_empty_rsc_error_message();
 
     assert!(error_msg.contains("Empty Content"));
     assert!(error_msg.contains("COMMON CAUSES"));
@@ -110,7 +103,7 @@ fn test_empty_rsc_error_message_contains_key_info() {
 
 #[test]
 fn test_invalid_rsc_format_warning_contains_key_info() {
-    let warning_msg = LayoutRenderer::create_invalid_rsc_format_warning(
+    let warning_msg = error_messages::create_invalid_rsc_format_warning(
         "missing row ID",
         "Expected numeric row ID at start",
     );
@@ -712,7 +705,7 @@ fn test_calculate_boundary_positions_with_navigation() {
         ],
     };
 
-    let positions = calculate_boundary_positions(&layout_structure);
+    let positions = utils::calculate_boundary_positions(&layout_structure);
 
     assert_eq!(positions.get("boundary1"), Some(&vec![1, 0]));
     assert_eq!(positions.get("boundary2"), Some(&vec![1, 1, 2]));
@@ -740,7 +733,7 @@ fn test_calculate_boundary_positions_without_navigation() {
         ],
     };
 
-    let positions = calculate_boundary_positions(&layout_structure);
+    let positions = utils::calculate_boundary_positions(&layout_structure);
 
     assert_eq!(positions.get("boundary1"), Some(&vec![0, 0]));
     assert_eq!(positions.get("boundary2"), Some(&vec![0, 1, 2]));
@@ -760,7 +753,7 @@ fn test_calculate_boundary_positions_outside_content_area() {
         }],
     };
 
-    let positions = calculate_boundary_positions(&layout_structure);
+    let positions = utils::calculate_boundary_positions(&layout_structure);
 
     assert_eq!(positions.get("boundary1"), Some(&vec![0, 1]));
 }
