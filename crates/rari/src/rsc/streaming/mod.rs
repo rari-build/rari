@@ -8,7 +8,10 @@ use tracing::error;
 use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
 
+pub mod constants;
 pub mod tests;
+
+use constants::*;
 
 #[derive(Debug, Clone)]
 pub struct PartialRenderResult {
@@ -119,131 +122,10 @@ impl BackgroundPromiseResolver {
         let active_promises = Arc::clone(&self.active_promises);
 
         tokio::spawn(async move {
-            let resolution_script = format!(
-                r#"
-                (function() {{
-                    const safeSerializeError = function(error, phase) {{
-                        const errorObj = {{
-                            success: false,
-                            boundary_id: '{boundary_id}',
-                            errorContext: {{
-                                phase: phase,
-                                promiseId: '{promise_id}',
-                                componentPath: '{component_path}',
-                                availablePromises: Object.keys(globalThis.__suspense_promises || {{}})
-                            }}
-                        }};
-
-                        try {{
-                            errorObj.errorName = error.name || 'UnknownError';
-                        }} catch (e) {{
-                            errorObj.errorName = 'UnknownError';
-                        }}
-
-                        try {{
-                            errorObj.error = error.message || String(error) || 'Unknown error';
-                        }} catch (e) {{
-                            errorObj.error = 'Error message unavailable';
-                        }}
-
-                        try {{
-                            errorObj.errorStack = error.stack || 'No stack trace available';
-                        }} catch (e) {{
-                            errorObj.errorStack = 'Stack trace unavailable';
-                        }}
-
-                        try {{
-                            const additionalProps = {{}};
-                            for (const key in error) {{
-                                if (error.hasOwnProperty(key) && key !== 'name' && key !== 'message' && key !== 'stack') {{
-                                    try {{
-                                        const value = error[key];
-                                        if (value !== undefined && value !== null &&
-                                            typeof value !== 'function' && typeof value !== 'symbol') {{
-                                            additionalProps[key] = String(value);
-                                        }}
-                                    }} catch (propError) {{
-                                    }}
-                                }}
-                            }}
-                            if (Object.keys(additionalProps).length > 0) {{
-                                errorObj.additionalErrorProps = additionalProps;
-                            }}
-                        }} catch (e) {{
-                        }}
-
-                        return errorObj;
-                    }};
-
-                    try {{
-                        const promiseId = '{promise_id}';
-                        const boundaryId = '{boundary_id}';
-
-                        const promise = globalThis.__suspense_promises[promiseId];
-
-                        if (!promise) {{
-                            return Promise.resolve({{
-                                success: false,
-                                boundary_id: boundaryId,
-                                error: 'Promise not found: ' + promiseId,
-                                errorName: 'PromiseNotFound',
-                                errorStack: 'No stack trace (promise not registered)',
-                                errorContext: {{
-                                    phase: 'promise_resolution',
-                                    promiseId: promiseId,
-                                    componentPath: '{component_path}',
-                                    availablePromises: Object.keys(globalThis.__suspense_promises || {{}})
-                                }}
-                            }});
-                        }}
-
-                        return promise.then(async function(resolvedElement) {{
-                            if (resolvedElement === undefined || resolvedElement === null) {{
-                                return {{
-                                    success: false,
-                                    boundary_id: boundaryId,
-                                    error: 'Promise resolved to null/undefined',
-                                    errorName: 'InvalidPromiseResolution',
-                                    errorStack: 'No stack trace (invalid resolution)',
-                                    errorContext: {{
-                                        phase: 'promise_resolution',
-                                        promiseId: promiseId,
-                                        componentPath: '{component_path}',
-                                        resolvedType: typeof resolvedElement,
-                                        resolvedValue: String(resolvedElement)
-                                    }}
-                                }};
-                            }}
-
-                            let rscData;
-                            try {{
-                                if (globalThis.renderToRsc) {{
-                                    rscData = await globalThis.renderToRsc(resolvedElement, globalThis.__rsc_client_components || {{}});
-                                }} else {{
-                                    rscData = resolvedElement;
-                                }}
-                            }} catch (rscError) {{
-                                return safeSerializeError(rscError, 'rsc_conversion');
-                            }}
-
-                            return {{
-                                success: true,
-                                boundary_id: boundaryId,
-                                content: rscData
-                            }};
-                        }}).catch(function(awaitError) {{
-                            return safeSerializeError(awaitError, 'promise_resolution');
-                        }});
-
-                    }} catch (error) {{
-                        return Promise.resolve(safeSerializeError(error, 'composition'));
-                    }}
-                }})()
-                "#,
-                promise_id = promise_id,
-                boundary_id = boundary_id,
-                component_path = promise.component_path
-            );
+            let resolution_script = PROMISE_RESOLUTION_SCRIPT
+                .replace("{promise_id}", &promise_id)
+                .replace("{boundary_id}", &boundary_id)
+                .replace("{component_path}", &promise.component_path);
 
             let script_name = format!("<promise_resolution_{promise_id}>");
 
@@ -606,10 +488,13 @@ impl StreamingRenderer {
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                let execute_script = Self::build_deferred_execution_script();
+                let execute_script = DEFERRED_EXECUTION_SCRIPT;
 
                 match runtime
-                    .execute_script("<execute_deferred_components>".to_string(), execute_script)
+                    .execute_script(
+                        "<execute_deferred_components>".to_string(),
+                        execute_script.to_string(),
+                    )
                     .await
                 {
                     Ok(result) => {
@@ -808,10 +693,11 @@ impl StreamingRenderer {
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                let execute_script = Self::build_deferred_execution_script();
-
                 match runtime
-                    .execute_script("<execute_deferred_components>".to_string(), execute_script)
+                    .execute_script(
+                        "<execute_deferred_components>".to_string(),
+                        DEFERRED_EXECUTION_SCRIPT.to_string(),
+                    )
                     .await
                 {
                     Ok(result) => {
@@ -926,26 +812,11 @@ impl StreamingRenderer {
             let has_promises = !pending_promises.is_empty();
 
             tokio::spawn(async move {
-                let init_script = r#"
-                    (function() {
-                        if (!globalThis.__suspense_promises) {
-                            globalThis.__suspense_promises = {};
-                        }
-
-                        if (!globalThis.__deferred_async_components) {
-                            globalThis.__deferred_async_components = [];
-                        }
-
-                        return {
-                            initialized: true,
-                            existingPromises: Object.keys(globalThis.__suspense_promises || {}).length,
-                            deferredComponents: globalThis.__deferred_async_components.length
-                        };
-                    })()
-                "#;
-
                 match runtime
-                    .execute_script("<init_promise_tracking>".to_string(), init_script.to_string())
+                    .execute_script(
+                        "<init_promise_tracking>".to_string(),
+                        PROMISE_TRACKING_INIT_SCRIPT.to_string(),
+                    )
                     .await
                 {
                     Ok(_) => {}
@@ -954,56 +825,10 @@ impl StreamingRenderer {
                     }
                 }
 
-                let execute_script = r#"
-                    (async function() {
-                        if (globalThis.__deferred_async_components && globalThis.__deferred_async_components.length > 0) {
-
-                            const results = [];
-                            for (const deferred of globalThis.__deferred_async_components) {
-                                try {
-
-                                    if (typeof deferred.component !== 'function') {
-                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a function' });
-                                        continue;
-                                    }
-
-                                    const componentPromise = deferred.component(deferred.props);
-
-                                    if (!componentPromise || typeof componentPromise.then !== 'function') {
-                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a promise' });
-                                        continue;
-                                    }
-
-                                    globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                                    globalThis.__suspense_promises[deferred.promiseId] = componentPromise;
-                                    results.push({ promiseId: deferred.promiseId, success: true });
-                                } catch (e) {
-                                    results.push({
-                                        promiseId: deferred.promiseId,
-                                        success: false,
-                                        error: e.message || 'Unknown error',
-                                        stack: e.stack
-                                    });
-                                }
-                            }
-
-                            const successCount = results.filter(r => r.success).length;
-                            globalThis.__deferred_async_components = [];
-                            return {
-                                success: true,
-                                count: successCount,
-                                total: results.length,
-                                results: results
-                            };
-                        }
-                        return { success: true, count: 0, total: 0 };
-                    })()
-                "#;
-
                 match runtime
                     .execute_script(
                         "<execute_deferred_components>".to_string(),
-                        execute_script.to_string(),
+                        DEFERRED_EXECUTION_SCRIPT.to_string(),
                     )
                     .await
                 {
@@ -1158,56 +983,10 @@ impl StreamingRenderer {
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                let execute_script = r#"
-                    (async function() {
-                        if (globalThis.__deferred_async_components && globalThis.__deferred_async_components.length > 0) {
-
-                            const results = [];
-                            for (const deferred of globalThis.__deferred_async_components) {
-                                try {
-
-                                    if (typeof deferred.component !== 'function') {
-                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a function' });
-                                        continue;
-                                    }
-
-                                    const componentPromise = deferred.component(deferred.props);
-
-                                    if (!componentPromise || typeof componentPromise.then !== 'function') {
-                                        results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a promise' });
-                                        continue;
-                                    }
-
-                                    globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                                    globalThis.__suspense_promises[deferred.promiseId] = componentPromise;
-                                    results.push({ promiseId: deferred.promiseId, success: true });
-                                } catch (e) {
-                                    results.push({
-                                        promiseId: deferred.promiseId,
-                                        success: false,
-                                        error: e.message || 'Unknown error',
-                                        stack: e.stack
-                                    });
-                                }
-                            }
-
-                            const successCount = results.filter(r => r.success).length;
-                            globalThis.__deferred_async_components = [];
-                            return {
-                                success: true,
-                                count: successCount,
-                                total: results.length,
-                                results: results
-                            };
-                        }
-                        return { success: true, count: 0, total: 0 };
-                    })()
-                "#;
-
                 match runtime
                     .execute_script(
                         "<execute_deferred_components>".to_string(),
-                        execute_script.to_string(),
+                        DEFERRED_EXECUTION_SCRIPT.to_string(),
                     )
                     .await
                 {
@@ -1294,106 +1073,9 @@ impl StreamingRenderer {
         component_id: &str,
         props: Option<&str>,
     ) -> Result<PartialRenderResult, RariError> {
-        let react_init_script = r#"
-            (function() {
-                if (typeof React === 'undefined') {
-                    try {
-                        if (typeof globalThis.__rsc_modules !== 'undefined') {
-                            const reactModule = globalThis.__rsc_modules['react'] ||
-                                              globalThis.__rsc_modules['React'] ||
-                                              Object.values(globalThis.__rsc_modules).find(m => m && m.createElement);
-                            if (reactModule) {
-                                globalThis.React = reactModule;
-                            }
-                        }
-
-                        if (typeof React === 'undefined' && typeof require !== 'undefined') {
-                            globalThis.React = require('react');
-                        }
-
-                        if (typeof React !== 'undefined' && React.createElement && !globalThis.__react_patched) {
-                            globalThis.__original_create_element = React.createElement;
-
-                                const createElementOverride = function(type, props, ...children) {
-                                    return globalThis.__original_create_element(type, props, ...children);
-                                };
-
-                            Object.defineProperty(React, 'createElement', {
-                                value: createElementOverride,
-                                writable: false,
-                                enumerable: true,
-                                configurable: false
-                            });
-
-                            globalThis.__react_patched = true;
-                        }
-
-                        if (typeof React !== 'undefined' && React.Suspense) {
-                            React.__originalSuspense = React.Suspense;
-
-                            React.Suspense = function SuspenseOverride(props) {
-                                if (!props) return null;
-                                const previousBoundaryId = globalThis.__current_boundary_id;
-                                const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                globalThis.__current_boundary_id = boundaryId;
-                                try {
-                                    const safeFallback = props?.fallback || null;
-                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-                                    globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId });
-                                    if (!props.children) {
-                                        return safeFallback;
-                                    }
-                                    return props.children;
-                                } catch (error) {
-                                    if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
-                                        const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                                        globalThis.__suspense_promises[promiseId] = error.promise;
-                                        globalThis.__pending_promises = globalThis.__pending_promises || [];
-                                        globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
-                                        return props.fallback || null;
-                                    }
-                                    return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + (error && error.message ? error.message : 'Unknown'));
-                                } finally {
-                                    globalThis.__current_boundary_id = previousBoundaryId;
-                                }
-                            };
-                        }
-
-                        if (typeof React === 'undefined') {
-                            globalThis.React = {
-                                createElement: function(type, props, ...children) {
-                                    return {
-                                        type: type,
-                                        props: props ? { ...props, children: children.length > 0 ? children : props.children } : { children: children },
-                                        key: props?.key || null,
-                                        ref: props?.ref || null
-                                    };
-                                },
-                                Fragment: Symbol.for('react.fragment'),
-                                Suspense: function(props) {
-                                    return props.children;
-                                }
-                            };
-                        }
-                    } catch (e) {
-                        console.error('Failed to load React in streaming context:', e);
-                        throw new Error('Cannot initialize streaming without React: ' + e.message);
-                    }
-                }
-
-                return {
-                    available: typeof React !== 'undefined',
-                    reactType: typeof React,
-                    createElementType: typeof React.createElement,
-                    suspenseType: typeof React.Suspense
-                };
-            })()
-        "#;
-
         let react_init_result = self
             .runtime
-            .execute_script("streaming-react-init".to_string(), react_init_script.to_string())
+            .execute_script("streaming-react-init".to_string(), REACT_INIT_SCRIPT.to_string())
             .await?;
 
         if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
@@ -1404,619 +1086,25 @@ impl StreamingRenderer {
             return Err(RariError::internal("Failed to check React initialization"));
         }
 
-        let init_script = r#"
-            if (!globalThis.renderToRsc) {
-                globalThis.renderToRsc = async function(element, clientComponents = {}) {
-                    if (!element) return null;
-
-                    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
-                        return element;
-                    }
-
-                    if (Array.isArray(element)) {
-                        const results = [];
-                        for (const child of element) {
-                            results.push(await globalThis.renderToRsc(child, clientComponents));
-                        }
-                        return results;
-                    }
-
-                    if (element && typeof element === 'object') {
-                        const uniqueKey = element.key || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-                        if (element.type) {
-                            if (typeof element.type === 'string') {
-                                const props = element.props || {};
-                                const { children: propsChildren, ...otherProps } = props;
-
-                                const actualChildren = element.children || propsChildren;
-
-                                const rscProps = {
-                                    ...otherProps,
-                                    children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
-                                };
-                                if (rscProps.children === undefined) {
-                                    delete rscProps.children;
-                                }
-                                return ["$", element.type, uniqueKey, rscProps];
-                            } else if (typeof element.type === 'function') {
-                                try {
-                                    const props = element.props || {};
-                                    let result = element.type(props);
-
-                                    if (result && typeof result.then === 'function') {
-                                        result = await result;
-                                    }
-
-                                    return await globalThis.renderToRsc(result, clientComponents);
-                                } catch (error) {
-                                    console.error('Error rendering function component:', error);
-                                    return ["$", "div", uniqueKey, {
-                                        children: `Error: ${error.message}`,
-                                        style: { color: 'red', border: '1px solid red', padding: '10px' }
-                                    }];
-                                }
-                            }
-                        }
-
-                        return ["$", "div", uniqueKey, {
-                            className: "rsc-unknown",
-                            children: "Unknown element type"
-                        }];
-                    }
-
-                    return element;
-                };
-            }
-
-
-            if (typeof React === 'undefined') {
-                throw new Error('React is not available in streaming context. This suggests the runtime was not properly initialized with React extensions.');
-            }
-
-            if (!globalThis.__suspense_streaming) {
-                globalThis.__suspense_streaming = true;
-                globalThis.__suspense_promises = {};
-                globalThis.__boundary_props = {};
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__current_boundary_id = null;
-
-                globalThis.__safeSerializeElement = function(element) {
-                    if (!element) return null;
-
-                    try {
-                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
-                            return element;
-                        }
-
-                        if (element && typeof element === 'object') {
-                            return {
-                                type: element.type || 'div',
-                                props: element.props ? {
-                                    children: (element.props.children === undefined ? null : element.props.children),
-                                    ...(element.props.className && { className: element.props.className })
-                                } : { children: null },
-                                key: null,
-                                ref: null
-                            };
-                        }
-
-                        return { type: 'div', props: { children: null }, key: null, ref: null };
-                    } catch (e) {
-                        return { type: 'div', props: { children: null }, key: null, ref: null };
-                    }
-                };
-
-                if (!globalThis.__react_patched && typeof React !== 'undefined' && React.createElement) {
-                    globalThis.__original_create_element = React.createElement;
-
-                    const createElementOverride = function(type, props, ...children) {
-                        return globalThis.__original_create_element(type, props, ...children);
-                    };
-
-                    React.createElement = createElementOverride;
-                    globalThis.__react_patched = true;
-                }
-            } else {
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__current_boundary_id = null;
-            }
-        "#;
-
         self.runtime
-            .execute_script("<streaming_init>".to_string(), init_script.to_string())
+            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
 
-        let setup_script = format!(
-            r#"
-            globalThis.__render_component_async = async function() {{
-                try {{
-
-                    let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default) ||
-                                    globalThis['{component_id}'] ||
-                                    (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']);
-
-                    if (Component && typeof Component === 'object' && typeof Component.default === 'function') {{
-                        Component = Component.default;
-                    }}
-
-                    if (!Component || typeof Component !== 'function') {{
-                        throw new Error('Component {component_id} not found or not a function');
-                    }}
-
-                    const props = {props_json};
-                    globalThis.__boundary_props['root'] = props;
-
-                    let element;
-                    let renderError = null;
-                    let isAsyncResult = false;
-
-
-                    try {{
-                        const isOverrideActive = React.createElement.toString().includes('SUSPENSE BOUNDARY FOUND');
-
-                        if (!isOverrideActive) {{
-                            if (!globalThis.__original_create_element) {{
-                                globalThis.__original_create_element = React.createElement;
-                            }}
-
-                            React.createElement = function(type, props, ...children) {{
-                                const isSuspenseComponent = (type) => {{
-                                    if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {{
-                                        return true;
-                                    }}
-                                    if (typeof type === 'function' && type.name === 'Suspense') {{
-                                        return true;
-                                    }}
-                                    return false;
-                                }};
-
-                                if (isSuspenseComponent(type)) {{
-                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                    const previousBoundaryId = globalThis.__current_boundary_id;
-                                    globalThis.__current_boundary_id = boundaryId;
-
-                                    const safeFallback = props?.fallback || null;
-                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-
-                                    globalThis.__discovered_boundaries.push({{
-                                        id: boundaryId,
-                                        fallback: serializableFallback,
-                                        parentId: previousBoundaryId
-                                    }});
-
-                                    globalThis.__current_boundary_id = previousBoundaryId;
-                                    return globalThis.__original_create_element('suspense', {{...props, key: boundaryId}}, ...children);
-                                }}
-                                return globalThis.__original_create_element(type, props, ...children);
-                            }};
-                        }}
-
-                        const isAsyncFunction = Component.constructor.name === 'AsyncFunction' ||
-                                              Component[Symbol.toStringTag] === 'AsyncFunction' ||
-                                              (Component.toString && Component.toString().trim().startsWith('async'));
-
-                        if (isAsyncFunction) {{
-
-                            const boundaryId = 'async_boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                            const promiseId = 'async_promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-                            let loadingComponent = null;
-                            const componentPath = '{component_id}';
-
-                            const loadingPaths = [
-                                componentPath.replace('/page', '/loading'),
-                                componentPath.replace(/\/[^/]+$/, '/loading'),
-                                componentPath + '-loading',
-                                'app/loading'
-                            ];
-
-
-                            for (const loadingPath of loadingPaths) {{
-                                if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {{
-                                    const LoadingModule = globalThis.__rsc_modules[loadingPath];
-                                    const LoadingComp = LoadingModule.default || LoadingModule;
-                                    if (typeof LoadingComp === 'function') {{
-                                        try {{
-                                            loadingComponent = LoadingComp({{}});
-                                            break;
-                                        }} catch (e) {{
-                                        }}
-                                    }}
-                                }}
-                            }}
-
-                            let fallbackContent;
-                            if (loadingComponent) {{
-                                if (loadingComponent && typeof loadingComponent === 'object' &&
-                                    (loadingComponent.type || loadingComponent.$$typeof)) {{
-                                    fallbackContent = loadingComponent;
-                                }} else {{
-                                    fallbackContent = globalThis.__original_create_element('div', {{
-                                        className: 'rari-loading',
-                                        children: 'Loading...'
-                                    }});
-                                }}
-                            }} else {{
-                                fallbackContent = globalThis.__original_create_element('div', {{
-                                    className: 'rari-loading',
-                                    children: 'Loading...'
-                                }});
-                            }}
-
-                            globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
-                            globalThis.__discovered_boundaries.push({{
-                                id: boundaryId,
-                                fallback: globalThis.__safeSerializeElement(fallbackContent),
-                                parentId: null
-                            }});
-
-                            globalThis.__pending_promises = globalThis.__pending_promises || [];
-                            globalThis.__pending_promises.push({{
-                                id: promiseId,
-                                boundaryId: boundaryId,
-                                componentPath: '{component_id}'
-                            }});
-
-                            const serializedFallback = globalThis.__safeSerializeElement(fallbackContent);
-
-                            const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
-                                id: boundary.id,
-                                fallback: globalThis.__safeSerializeElement(boundary.fallback),
-                                parentId: boundary.parentId
-                            }}));
-
-                            const fallbackRsc = ["$", "react.suspense", null, {{
-                                boundaryId: boundaryId,
-                                __boundary_id: boundaryId,
-                                fallback: ["$", serializedFallback.type, serializedFallback.key, serializedFallback.props],
-                                children: null
-                            }}];
-
-                            const initialResult = {{
-                                success: true,
-                                rsc_data: fallbackRsc,
-                                boundaries: safeBoundaries,
-                                pending_promises: globalThis.__pending_promises || [],
-                                has_suspense: true,
-                                error: null,
-                                error_stack: null
-                            }};
-
-                            try {{
-                                const jsonString = JSON.stringify(initialResult);
-                                globalThis.__streaming_result = JSON.parse(jsonString);
-                            }} catch (jsonError) {{
-                                globalThis.__streaming_result = initialResult;
-                            }}
-                            globalThis.__initial_render_complete = true;
-
-                                success: initialResult.success,
-                                has_rsc_data: !!initialResult.rsc_data,
-                                boundaries_count: initialResult.boundaries.length,
-                                pending_count: initialResult.pending_promises.length
-                            }}));
-
-                            globalThis.__deferred_async_components = globalThis.__deferred_async_components || [];
-                            globalThis.__deferred_async_components.push({{
-                                component: Component,
-                                props: props,
-                                promiseId: promiseId,
-                                boundaryId: boundaryId,
-                                componentPath: '{component_id}'
-                            }});
-
-                            return;
-                        }}
-
-                        element = Component(props);
-
-                        if (element && typeof element.then === 'function') {{
-                            isAsyncResult = true;
-
-                            const boundaryId = 'async_boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                            const promiseId = 'async_promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-                            globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
-                            globalThis.__suspense_promises[promiseId] = element;
-
-                            globalThis.__pending_promises = globalThis.__pending_promises || [];
-                            globalThis.__pending_promises.push({{
-                                id: promiseId,
-                                boundaryId: boundaryId,
-                                componentPath: '{component_id}'
-                            }});
-
-                            let loadingComponent = null;
-                            const componentPath = '{component_id}';
-
-                            const loadingPaths = [
-                                componentPath.replace('/page', '/loading'),
-                                componentPath.replace(/\/[^/]+$/, '/loading'),
-                                componentPath + '-loading',
-                                'app/loading'
-                            ];
-
-
-                            for (const loadingPath of loadingPaths) {{
-                                if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {{
-                                    const LoadingModule = globalThis.__rsc_modules[loadingPath];
-                                    const LoadingComp = LoadingModule.default || LoadingModule;
-                                    if (typeof LoadingComp === 'function') {{
-                                        try {{
-                                            loadingComponent = LoadingComp({{}});
-                                            break;
-                                        }} catch (e) {{
-                                        }}
-                                    }}
-                                }}
-                            }}
-
-                            let fallbackContent;
-                            if (loadingComponent && typeof loadingComponent === 'object' &&
-                                (loadingComponent.type || loadingComponent.$$typeof)) {{
-                                fallbackContent = loadingComponent;
-                            }} else {{
-                                if (loadingComponent) {{
-                                }}
-                                fallbackContent = globalThis.__original_create_element('div', {{
-                                    className: 'rari-loading',
-                                    children: 'Loading...'
-                                }});
-                            }}
-
-                            globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
-                            globalThis.__discovered_boundaries.push({{
-                                id: boundaryId,
-                                fallback: globalThis.__safeSerializeElement(fallbackContent),
-                                parentId: null
-                            }});
-
-                            element = fallbackContent;
-
-                            const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
-                                id: boundary.id,
-                                fallback: globalThis.__safeSerializeElement(boundary.fallback),
-                                parentId: boundary.parentId
-                            }}));
-
-                            const serializedFallback = globalThis.__safeSerializeElement(fallbackContent);
-                            const simpleFallbackRsc = {{
-                                type: "react.suspense",
-                                key: null,
-                                props: {{
-                                    boundaryId: boundaryId,
-                                    __boundary_id: boundaryId,
-                                    fallback: {{
-                                        type: serializedFallback.type,
-                                        key: serializedFallback.key,
-                                        props: serializedFallback.props
-                                    }},
-                                    children: null
-                                }}
-                            }};
-
-                            const initialResult = {{
-                                success: true,
-                                rsc_data: simpleFallbackRsc,
-                                boundaries: safeBoundaries,
-                                pending_promises: globalThis.__pending_promises || [],
-                                has_suspense: true,
-                                error: null,
-                                error_stack: null
-                            }};
-
-                            try {{
-                                const jsonString = JSON.stringify(initialResult);
-                                globalThis.__streaming_result = JSON.parse(jsonString);
-                            }} catch (jsonError) {{
-                                globalThis.__streaming_result = initialResult;
-                            }}
-                            globalThis.__initial_render_complete = true;
-
-
-                            return;
-                        }}
-
-                        const processSuspenseInStructure = (el, parentBoundaryId = null) => {{
-                                if (!el || typeof el !== 'object') return el;
-
-                                if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {{
-                                    const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                    const previousBoundaryId = globalThis.__current_boundary_id;
-                                    globalThis.__current_boundary_id = boundaryId;
-
-                                    const safeFallback = el.props.fallback || null;
-                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-
-                                    globalThis.__discovered_boundaries.push({{
-                                        id: boundaryId,
-                                        fallback: serializableFallback,
-                                        parentId: previousBoundaryId
-                                    }});
-
-                                    const processedChildren = el.children.map(child => {{
-                                        try {{
-                                            if (child && typeof child === 'object' && child.type && typeof child.type === 'function') {{
-                                                const result = child.type(child.props || null);
-                                                if (result && typeof result.then === 'function') {{
-                                                    const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                                 globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
-                                                    globalThis.__suspense_promises[promiseId] = result;
-
-                                                    globalThis.__pending_promises = globalThis.__pending_promises || [];
-                                                    globalThis.__pending_promises.push({{
-                                                        id: promiseId,
-                                                        boundaryId: boundaryId,
-                                                        componentPath: (child.type.name || 'AnonymousComponent')
-                                                    }});
-                                                    return safeFallback;
-                                                }} else {{
-                                                    return globalThis.renderToRsc(result, globalThis.__rsc_client_components || {{}});
-                                                }}
-                                            }}
-                                        }} catch (error) {{
-                                            if (error && typeof error.then === 'function') {{
-                                                const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                                globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
-                                                globalThis.__suspense_promises[promiseId] = error;
-
-                                                globalThis.__pending_promises = globalThis.__pending_promises || [];
-                                                globalThis.__pending_promises.push({{
-                                                    id: promiseId,
-                                                    boundaryId: boundaryId,
-                                                    componentPath: 'ThrownPromise'
-                                                }});
-                                                return safeFallback;
-                                            }}
-                                            return safeFallback;
-                                        }}
-
-                                        return processSuspenseInStructure(child, boundaryId);
-                                    }});
-
-                                    globalThis.__current_boundary_id = previousBoundaryId;
-
-                                    return {{
-                                        type: 'suspense',
-                                        props: {{...el.props, key: boundaryId, boundaryId: boundaryId}},
-                                        children: processedChildren
-                                    }};
-                                }}
-
-                                if (el.children && Array.isArray(el.children)) {{
-                                    el.children = el.children.map(child => processSuspenseInStructure(child, parentBoundaryId));
-                                }}
-
-                                return el;
-                            }};
-
-                            element = processSuspenseInStructure(element);
-                        }}
-                    catch (suspenseError) {{
-                        if (suspenseError && suspenseError.$$typeof === Symbol.for('react.suspense.pending')) {{
-                            const componentName = suspenseError.componentName || suspenseError.name || suspenseError.message || '{component_id}';
-                            const asyncDetected = suspenseError.asyncComponentDetected === true;
-                            const hasPromise = suspenseError.promise && typeof suspenseError.promise.then === 'function';
-
-                            const isParentComponent = componentName === '{component_id}' ||
-                                componentName.includes('Test') ||
-                                componentName.includes('Streaming');
-
-                            const isLeafAsyncComponent = asyncDetected ||
-                                (hasPromise && !isParentComponent) ||
-                                (componentName.includes('Async') && !isParentComponent);
-
-                            if (isLeafAsyncComponent) {{
-                                const promiseId = 'promise_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                globalThis.__suspense_promises[promiseId] = suspenseError.promise;
-
-                                const boundaryId = globalThis.__current_boundary_id || 'root_boundary';
-                                globalThis.__pending_promises.push({{
-                                    id: promiseId,
-                                    boundaryId: boundaryId,
-                                    componentPath: componentName
-                                }});
-
-                            }}
-
-                            element = globalThis.__original_create_element ?
-                                globalThis.__original_create_element('div', null, '') :
-                                {{'type': 'div', 'props': {{'children': ''}}}};
-                        }} else {{
-                            console.error('Non-suspense error during rendering:', suspenseError);
-                            renderError = suspenseError;
-                            element = globalThis.__original_create_element ?
-                                globalThis.__original_create_element('div', null, 'Error: ' + suspenseError.message) :
-                                {{'type': 'div', 'props': {{'children': 'Error: ' + suspenseError.message}}}};
-                        }}
-                    }}
-
-                    let rscData;
-                    try {{
-                        rscData = globalThis.renderToRsc ?
-                            await globalThis.renderToRsc(element, globalThis.__rsc_client_components || {{}}) :
-                            element;
-                    }} catch (rscError) {{
-                        console.error('Error in RSC conversion:', rscError);
-                        rscData = {{
-                            type: 'div',
-                            props: {{
-                                children: renderError ? 'Render Error: ' + renderError.message : 'RSC Conversion Error'
-                            }}
-                        }};
-                    }}
-
-                    const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({{
-                        id: boundary.id,
-                        fallback: globalThis.__safeSerializeElement(boundary.fallback),
-                        parentId: boundary.parentId
-                    }}));
-
-                    const finalResult = {{
-                        success: !renderError,
-                        rsc_data: rscData,
-                        boundaries: safeBoundaries,
-                        pending_promises: globalThis.__pending_promises || [],
-                        has_suspense: (safeBoundaries && safeBoundaries.length > 0) ||
-                                     (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
-                        error: renderError ? renderError.message : null,
-                        error_stack: renderError ? renderError.stack : null
-                    }};
-
-                    try {{
-                        const jsonString = JSON.stringify(finalResult);
-                        globalThis.__streaming_result = JSON.parse(jsonString);
-                    }} catch (jsonError) {{
-                        globalThis.__streaming_result = finalResult;
-                    }}
-
-                    if (!globalThis.__initial_render_complete) {{
-                        globalThis.__initial_render_complete = true;
-                    }}
-
-                    globalThis.__streaming_complete = true;
-                }} catch (error) {{
-                    console.error('Fatal error in component rendering:', error);
-                    const errorResult = {{
-                        success: false,
-                        error: error.message,
-                        stack: error.stack,
-                        fatal: true
-                    }};
-                    try {{
-                        const jsonString = JSON.stringify(errorResult);
-                        globalThis.__streaming_result = JSON.parse(jsonString);
-                    }} catch (jsonError) {{
-                        globalThis.__streaming_result = errorResult;
-                    }}
-                    globalThis.__streaming_complete = true;
-                }}
-            }};
-
-            ({{ __setup_complete: true }})
-            "#,
-            component_id = component_id,
-            props_json = props.unwrap_or("{}")
-        );
+        let setup_script = COMPONENT_RENDER_SETUP_SCRIPT
+            .replace("{component_id}", component_id)
+            .replace("{props_json}", props.unwrap_or("{}"));
 
         let _setup_result = self
             .runtime
             .execute_script(format!("<setup_render_{component_id}>"), setup_script)
             .await
             .map_err(|e| RariError::internal(format!("Setup render failed: {e}")))?;
-        let start_script = r#"
-            globalThis.__streaming_complete = false;
-            globalThis.__initial_render_complete = false;
-            globalThis.__should_start_render = true;
-            true
-        "#;
-
         self.runtime
-            .execute_script(format!("<start_render_{component_id}>"), start_script.to_string())
+            .execute_script(
+                format!("<start_render_{component_id}>"),
+                RENDER_INIT_SCRIPT.to_string(),
+            )
             .await
             .map_err(|e| RariError::internal(format!("Partial render failed: {e}")))?;
 
@@ -2026,43 +1114,22 @@ impl StreamingRenderer {
             let completion_tx = Arc::new(tokio::sync::Mutex::new(Some(completion_tx)));
             let completion_tx_clone = Arc::clone(&completion_tx);
 
-            let start_script = r#"
-                (async function() {
-                    if (globalThis.__should_start_render) {
-                        globalThis.__should_start_render = false;
-                        const renderStart = Date.now();
-                        await globalThis.__render_component_async();
-                        const renderCallTime = Date.now() - renderStart;
-
-                        globalThis.__render_complete_signal = true;
-                    }
-                    return { started: true };
-                })()
-            "#
-            .to_string();
-
             self.runtime
-                .execute_script(format!("<start_render_{component_id}>"), start_script)
+                .execute_script(
+                    format!("<start_render_{component_id}>"),
+                    RENDER_START_SCRIPT.to_string(),
+                )
                 .await
                 .map_err(|e| RariError::internal(format!("Failed to start render: {e}")))?;
 
             let runtime_clone = Arc::clone(&self.runtime);
             let component_id_clone = component_id.to_string();
             tokio::spawn(async move {
-                let check_script = r#"
-                    JSON.stringify((function() {
-                        if (globalThis.__initial_render_complete) {
-                            return { complete: true, result: globalThis.__streaming_result };
-                        }
-                        return { complete: false };
-                    })())
-                "#;
-
                 loop {
                     match runtime_clone
                         .execute_script(
                             format!("<check_complete_{}>", component_id_clone),
-                            check_script.to_string(),
+                            RENDER_CHECK_COMPLETE_SCRIPT.to_string(),
                         )
                         .await
                     {
@@ -2107,15 +1174,11 @@ impl StreamingRenderer {
 
             match tokio::time::timeout(tokio::time::Duration::from_secs(3), completion_rx).await {
                 Ok(Ok(())) => {
-                    let fetch_script = r#"
-                        JSON.stringify(globalThis.__streaming_result || { success: false, error: "No result available" })
-                    "#;
-
                     let result = self
                         .runtime
                         .execute_script(
                             format!("<fetch_result_{component_id}>"),
-                            fetch_script.to_string(),
+                            RENDER_FETCH_RESULT_SCRIPT.to_string(),
                         )
                         .await
                         .map_err(|e| RariError::internal(format!("Failed to fetch result: {e}")))?;
@@ -2237,106 +1300,9 @@ impl StreamingRenderer {
         &mut self,
         composition_script: String,
     ) -> Result<PartialRenderResult, RariError> {
-        let react_init_script = r#"
-            (function() {
-                if (typeof React === 'undefined') {
-                    try {
-                        if (typeof globalThis.__rsc_modules !== 'undefined') {
-                            const reactModule = globalThis.__rsc_modules['react'] ||
-                                              globalThis.__rsc_modules['React'] ||
-                                              Object.values(globalThis.__rsc_modules).find(m => m && m.createElement);
-                            if (reactModule) {
-                                globalThis.React = reactModule;
-                            }
-                        }
-
-                        if (typeof React === 'undefined' && typeof require !== 'undefined') {
-                            globalThis.React = require('react');
-                        }
-
-                        if (typeof React !== 'undefined' && React.createElement && !globalThis.__react_patched) {
-                            globalThis.__original_create_element = React.createElement;
-
-                                const createElementOverride = function(type, props, ...children) {
-                                    return globalThis.__original_create_element(type, props, ...children);
-                                };
-
-                            Object.defineProperty(React, 'createElement', {
-                                value: createElementOverride,
-                                writable: false,
-                                enumerable: true,
-                                configurable: false
-                            });
-
-                            globalThis.__react_patched = true;
-                        }
-
-                        if (typeof React !== 'undefined' && React.Suspense) {
-                            React.__originalSuspense = React.Suspense;
-
-                            React.Suspense = function SuspenseOverride(props) {
-                                if (!props) return null;
-                                const previousBoundaryId = globalThis.__current_boundary_id;
-                                const boundaryId = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                globalThis.__current_boundary_id = boundaryId;
-                                try {
-                                    const safeFallback = props?.fallback || null;
-                                    const serializableFallback = globalThis.__safeSerializeElement(safeFallback);
-                                    globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId });
-                                    if (!props.children) {
-                                        return safeFallback;
-                                    }
-                                    return props.children;
-                                } catch (error) {
-                                    if (error && error.$typeof === Symbol.for('react.suspense.pending') && error.promise) {
-                                        const promiseId = 'suspense_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                                        globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                                        globalThis.__suspense_promises[promiseId] = error.promise;
-                                        globalThis.__pending_promises = globalThis.__pending_promises || [];
-                                        globalThis.__pending_promises.push({ id: promiseId, boundaryId: boundaryId, componentPath: (error.componentName || 'unknown') });
-                                        return props.fallback || null;
-                                    }
-                                    return props?.fallback || React.createElement('div', null, 'Suspense Error: ' + (error && error.message ? error.message : 'Unknown'));
-                                } finally {
-                                    globalThis.__current_boundary_id = previousBoundaryId;
-                                }
-                            };
-                        }
-
-                        if (typeof React === 'undefined') {
-                            globalThis.React = {
-                                createElement: function(type, props, ...children) {
-                                    return {
-                                        type: type,
-                                        props: props ? { ...props, children: children.length > 0 ? children : props.children } : { children: children },
-                                        key: props?.key || null,
-                                        ref: props?.ref || null
-                                    };
-                                },
-                                Fragment: Symbol.for('react.fragment'),
-                                Suspense: function(props) {
-                                    return props.children;
-                                }
-                            };
-                        }
-                    } catch (e) {
-                        console.error('Failed to load React in streaming context:', e);
-                        throw new Error('Cannot initialize streaming without React: ' + e.message);
-                    }
-                }
-
-                return {
-                    available: typeof React !== 'undefined',
-                    reactType: typeof React,
-                    createElementType: typeof React.createElement,
-                    suspenseType: typeof React.Suspense
-                };
-            })()
-        "#;
-
         let react_init_result = self
             .runtime
-            .execute_script("streaming-react-init".to_string(), react_init_script.to_string())
+            .execute_script("streaming-react-init".to_string(), REACT_INIT_SCRIPT.to_string())
             .await
             .map_err(|e| {
                 error!("Failed to execute React initialization script: {}", e);
@@ -2362,124 +1328,8 @@ impl StreamingRenderer {
             ));
         }
 
-        let init_script = r#"
-            if (!globalThis.renderToRsc) {
-                globalThis.renderToRsc = async function(element, clientComponents = {}) {
-                    if (!element) return null;
-
-                    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
-                        return element;
-                    }
-
-                    if (Array.isArray(element)) {
-                        const results = [];
-                        for (const child of element) {
-                            results.push(await globalThis.renderToRsc(child, clientComponents));
-                        }
-                        return results;
-                    }
-
-                    if (element && typeof element === 'object') {
-                        const uniqueKey = element.key || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-                        if (element.type) {
-                            if (typeof element.type === 'string') {
-                                const props = element.props || {};
-                                const { children: propsChildren, ...otherProps } = props;
-
-                                const actualChildren = element.children || propsChildren;
-
-                                const rscProps = {
-                                    ...otherProps,
-                                    children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
-                                };
-                                if (rscProps.children === undefined) {
-                                    delete rscProps.children;
-                                }
-                                return ["$", element.type, uniqueKey, rscProps];
-                            } else if (typeof element.type === 'function') {
-                                try {
-                                    const props = element.props || {};
-                                    let result = element.type(props);
-
-                                    if (result && typeof result.then === 'function') {
-                                        result = await result;
-                                    }
-
-                                    return await globalThis.renderToRsc(result, clientComponents);
-                                } catch (error) {
-                                    console.error('Error rendering function component:', error);
-                                    return ["$", "div", uniqueKey, {
-                                        children: `Error: ${error.message}`,
-                                        style: { color: 'red', border: '1px solid red', padding: '10px' }
-                                    }];
-                                }
-                            }
-                        }
-
-                        return ["$", "div", uniqueKey, {
-                            className: "rsc-unknown",
-                            children: "Unknown element type"
-                        }];
-                    }
-
-                    return element;
-                };
-            }
-
-            if (!globalThis.__suspense_streaming) {
-                globalThis.__suspense_streaming = true;
-                globalThis.__suspense_promises = {};
-                globalThis.__boundary_props = {};
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__current_boundary_id = null;
-
-                globalThis.__safeSerializeElement = function(element) {
-                    if (!element) return null;
-
-                    try {
-                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
-                            return element;
-                        }
-
-                        if (element && typeof element === 'object') {
-                            return {
-                                type: element.type || 'div',
-                                props: element.props ? {
-                                    children: (element.props.children === undefined ? null : element.props.children),
-                                    ...(element.props.className && { className: element.props.className })
-                                } : { children: null },
-                                key: null,
-                                ref: null
-                            };
-                        }
-
-                        return { type: 'div', props: { children: null }, key: null, ref: null };
-                    } catch (e) {
-                        return { type: 'div', props: { children: null }, key: null, ref: null };
-                    }
-                };
-
-                if (!globalThis.__react_patched && typeof React !== 'undefined' && React.createElement) {
-                    globalThis.__original_create_element = React.createElement;
-
-                    const createElementOverride = function(type, props, ...children) {
-                        return globalThis.__original_create_element(type, props, ...children);
-                    };
-
-                    React.createElement = createElementOverride;
-                    globalThis.__react_patched = true;
-                }
-            } else {
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__current_boundary_id = null;
-            }
-        "#;
-
         self.runtime
-            .execute_script("<streaming_init>".to_string(), init_script.to_string())
+            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
             .map_err(|e| {
                 error!("Streaming initialization script failed: {}", e);
@@ -2489,85 +1339,8 @@ impl StreamingRenderer {
                 ))
             })?;
 
-        let wrapped_script = format!(
-            r#"
-            (async function() {{
-                try {{
-                    globalThis.__discovered_boundaries = [];
-                    globalThis.__pending_promises = [];
-                    globalThis.__deferred_async_components = [];
-
-                    const compositionResult = await {composition_script};
-
-
-                    if (!compositionResult) {{
-                        throw new Error('Composition script returned null/undefined');
-                    }}
-
-                    if (!compositionResult.rsc_data) {{
-                        throw new Error('Composition script result missing rsc_data property. Keys: ' + Object.keys(compositionResult).join(', '));
-                    }}
-
-
-                    const rscData = compositionResult.rsc_data;
-
-                    const boundaries = compositionResult.boundaries || [];
-                    const pendingPromises = compositionResult.pending_promises || [];
-
-
-                    const safeBoundaries = boundaries.map(boundary => ({{
-                        id: boundary.id,
-                        fallback: globalThis.__safeSerializeElement(boundary.fallback),
-                        parentId: boundary.parentId,
-                        parentPath: boundary.parentPath || [],
-                        isInContentArea: boundary.isInContentArea || false
-                    }}));
-
-
-                    const finalResult = {{
-                        success: true,
-                        rsc_data: rscData,
-                        boundaries: safeBoundaries,
-                        pending_promises: pendingPromises,
-                        has_suspense: (safeBoundaries && safeBoundaries.length > 0) ||
-                                     (pendingPromises && pendingPromises.length > 0),
-                        metadata: compositionResult.metadata,
-                        error: null,
-                        error_stack: null
-                    }};
-
-                    return finalResult;
-                }} catch (error) {{
-                    let errorMessage = 'Unknown error';
-                    if (error) {{
-                        if (error.message) {{
-                            errorMessage = error.message;
-                        }} else if (error.toString && typeof error.toString === 'function') {{
-                            try {{
-                                const str = error.toString();
-                                if (str && str !== '[object Object]') {{
-                                    errorMessage = str;
-                                }}
-                            }} catch (e) {{
-                            }}
-                        }} else if (typeof error === 'string') {{
-                            errorMessage = error;
-                        }}
-                    }}
-
-                    return {{
-                        success: false,
-                        error: errorMessage,
-                        error_stack: error && error.stack ? error.stack : 'No stack available',
-                        error_type: typeof error,
-                        error_string: String(error),
-                        error_name: error && error.name ? error.name : 'UnknownError'
-                    }};
-                }}
-            }})()
-            "#,
-            composition_script = composition_script
-        );
+        let wrapped_script =
+            COMPOSITION_WRAPPER_SCRIPT.replace("{composition_script}", &composition_script);
 
         let result = self
             .runtime
@@ -2943,199 +1716,6 @@ impl StreamingRenderer {
                 error.boundary_id, error.row_id, e
             );
         }
-    }
-
-    fn build_deferred_execution_script() -> String {
-        r#"
-            (async function() {
-                if (typeof React === 'undefined' || !React) {
-                    return {
-                        success: false,
-                        error: 'React is not available',
-                        errorContext: {
-                            phase: 'pre_execution_validation',
-                            hasReact: false
-                        }
-                    };
-                }
-
-                if (!globalThis.__deferred_async_components) {
-                    return { success: true, count: 0, total: 0, results: [] };
-                }
-
-                if (!Array.isArray(globalThis.__deferred_async_components)) {
-                    return {
-                        success: false,
-                        error: '__deferred_async_components is not an array',
-                        errorContext: {
-                            phase: 'pre_execution_validation',
-                            actualType: typeof globalThis.__deferred_async_components
-                        }
-                    };
-                }
-
-                const componentCount = globalThis.__deferred_async_components.length;
-                const componentIds = globalThis.__deferred_async_components.map(d => d.promiseId);
-
-                const captureErrorContext = function(error, deferred) {
-                    const errorInfo = {
-                        promiseId: deferred.promiseId,
-                        success: false,
-                        componentPath: deferred.componentPath,
-                        boundaryId: deferred.boundaryId
-                    };
-
-                    try {
-                        errorInfo.errorName = error.name || 'UnknownError';
-                    } catch (e) {
-                        errorInfo.errorName = 'UnknownError';
-                    }
-
-                    try {
-                        errorInfo.error = error.message || String(error) || 'Unknown error';
-                    } catch (e) {
-                        errorInfo.error = 'Error message unavailable';
-                    }
-
-                    try {
-                        errorInfo.errorStack = error.stack || 'No stack trace available';
-                    } catch (e) {
-                        errorInfo.errorStack = 'Stack trace unavailable';
-                    }
-
-                    errorInfo.errorContext = {
-                        phase: 'deferred_execution',
-                        promiseId: deferred.promiseId,
-                        componentPath: deferred.componentPath,
-                        boundaryId: deferred.boundaryId
-                    };
-
-                    return errorInfo;
-                };
-
-                if (globalThis.__deferred_async_components && globalThis.__deferred_async_components.length > 0) {
-
-                    const results = [];
-                    for (const deferred of globalThis.__deferred_async_components) {
-                        globalThis.__current_executing_component = {
-                            promiseId: deferred.promiseId,
-                            componentPath: deferred.componentPath,
-                            boundaryId: deferred.boundaryId
-                        };
-
-                        try {
-
-                            if (typeof deferred.component !== 'function') {
-                                results.push({
-                                    promiseId: deferred.promiseId,
-                                    success: false,
-                                    error: 'Component is not a function',
-                                    errorName: 'TypeError',
-                                    errorStack: 'No stack trace (type validation)',
-                                    componentPath: deferred.componentPath,
-                                    boundaryId: deferred.boundaryId,
-                                    errorContext: {
-                                        phase: 'deferred_execution',
-                                        promiseId: deferred.promiseId,
-                                        componentPath: deferred.componentPath,
-                                        actualType: typeof deferred.component
-                                    }
-                                });
-                                continue;
-                            }
-
-                            let componentPromise;
-                            try {
-                                componentPromise = deferred.component(deferred.props);
-                            } catch (callError) {
-                                results.push({
-                                    promiseId: deferred.promiseId,
-                                    success: false,
-                                    error: callError.message || String(callError) || 'Component call failed',
-                                    errorName: callError.name || 'Error',
-                                    errorStack: callError.stack || 'No stack trace available',
-                                    componentPath: deferred.componentPath,
-                                    boundaryId: deferred.boundaryId,
-                                    errorContext: {
-                                        phase: 'deferred_execution',
-                                        subPhase: 'component_call',
-                                        promiseId: deferred.promiseId,
-                                        componentPath: deferred.componentPath
-                                    }
-                                });
-                                continue;
-                            }
-
-                            if (!componentPromise || typeof componentPromise.then !== 'function') {
-                                results.push({
-                                    promiseId: deferred.promiseId,
-                                    success: false,
-                                    error: 'Component did not return a promise',
-                                    errorName: 'TypeError',
-                                    errorStack: 'No stack trace (promise validation)',
-                                    componentPath: deferred.componentPath,
-                                    boundaryId: deferred.boundaryId,
-                                    errorContext: {
-                                        phase: 'deferred_execution',
-                                        subPhase: 'promise_validation',
-                                        promiseId: deferred.promiseId,
-                                        componentPath: deferred.componentPath,
-                                        returnedType: typeof componentPromise,
-                                        hasPromise: componentPromise !== null && componentPromise !== undefined,
-                                        hasThen: componentPromise && typeof componentPromise.then === 'function'
-                                    }
-                                });
-                                continue;
-                            }
-
-                            globalThis.__suspense_promises = globalThis.__suspense_promises || {};
-                            globalThis.__suspense_promises[deferred.promiseId] = componentPromise;
-
-                            if (!globalThis.__suspense_promises[deferred.promiseId]) {
-                                const availablePromiseIds = Object.keys(globalThis.__suspense_promises || {});
-                                results.push({
-                                    promiseId: deferred.promiseId,
-                                    success: false,
-                                    error: 'Promise registration verification failed',
-                                    errorName: 'RegistrationError',
-                                    errorStack: 'No stack trace (registration verification)',
-                                    componentPath: deferred.componentPath,
-                                    boundaryId: deferred.boundaryId,
-                                    errorContext: {
-                                        phase: 'deferred_execution',
-                                        subPhase: 'promise_registration_verification',
-                                        promiseId: deferred.promiseId,
-                                        componentPath: deferred.componentPath,
-                                        availablePromises: availablePromiseIds
-                                    }
-                                });
-                            } else {
-                                results.push({
-                                    promiseId: deferred.promiseId,
-                                    success: true,
-                                    componentPath: deferred.componentPath,
-                                    boundaryId: deferred.boundaryId
-                                });
-                            }
-                        } catch (e) {
-                            results.push(captureErrorContext(e, deferred));
-                        }
-                    }
-
-                    globalThis.__current_executing_component = null;
-
-                    const successCount = results.filter(r => r.success).length;
-                    globalThis.__deferred_async_components = [];
-                    return {
-                        success: true,
-                        count: successCount,
-                        total: results.length,
-                        results: results
-                    };
-                }
-                return { success: true, count: 0, total: 0 };
-            })()
-        "#.to_string()
     }
 
     fn create_module_chunk(&self) -> Result<RscStreamChunk, RariError> {
