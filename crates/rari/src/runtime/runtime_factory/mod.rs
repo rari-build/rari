@@ -16,7 +16,6 @@ pub fn create_runtime() -> Box<dyn JsRuntimeInterface> {
     create_runtime_with_config(RuntimeConfig::default())
 }
 
-#[allow(unused_variables)]
-pub fn create_runtime_with_config(config: RuntimeConfig) -> Box<dyn JsRuntimeInterface> {
+pub fn create_runtime_with_config(_config: RuntimeConfig) -> Box<dyn JsRuntimeInterface> {
     Box::new(DenoRuntime::new(None))
 }

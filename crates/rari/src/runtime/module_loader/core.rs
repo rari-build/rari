@@ -915,7 +915,6 @@ export const __esModule = true;
         let json: serde_json::Value = serde_json::from_str(content)?;
 
         Ok(PackageInfo {
-            name: json.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             module: json.get("module").and_then(|v| v.as_str()).map(|s| s.to_string()),
             exports: json.get("exports").cloned(),
         })
@@ -1355,8 +1354,6 @@ impl ModuleLoader for RariModuleLoader {
 
 #[derive(Debug, Clone)]
 struct PackageInfo {
-    #[allow(unused)]
-    name: String,
     module: Option<String>,
     exports: Option<serde_json::Value>,
 }
