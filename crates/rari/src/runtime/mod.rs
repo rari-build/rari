@@ -5,14 +5,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-pub mod api_bridge;
-pub mod dist_path_resolver;
+pub mod bridge;
 pub mod ext;
 pub mod module_loader;
 pub mod module_reload;
 pub mod ops;
 pub mod runtime_factory;
 pub mod transpile;
+pub mod utils;
 
 pub type TokioRuntime = tokio::runtime::Handle;
 

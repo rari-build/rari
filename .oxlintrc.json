@@ -13,9 +13,7 @@
     "builtin": true,
     "es2026": true,
     "browser": true,
-    "commonjs": true,
-    "node": true,
-    "shared-node-browser": true
+    "node": true
   },
   "ignorePatterns": [
     "**/target/",
@@ -339,7 +337,13 @@
           }
         ],
         "@typescript-eslint/no-import-type-side-effects": "error"
-      },
+      }
+    },
+    {
+      "files": [
+        "**/*.?([cm])ts",
+        "**/*.?([cm])tsx"
+      ],
       "plugins": [
         "typescript"
       ]

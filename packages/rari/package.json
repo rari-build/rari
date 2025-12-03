@@ -101,8 +101,8 @@
     "@typescript/native-preview": "7.0.0-dev.20250923.1",
     "chokidar": "^4.0.3",
     "eslint": "^9.39.1",
-    "oxlint": "^1.30.0",
-    "rolldown-vite": "^7.2.7",
+    "oxlint": "^1.31.0",
+    "rolldown-vite": "^7.2.10",
     "tsdown": "^0.15.12"
   }
 }

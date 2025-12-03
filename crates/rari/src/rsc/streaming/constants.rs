@@ -1,0 +1,11 @@
+pub const PROMISE_RESOLUTION_SCRIPT: &str = include_str!("js/promise_resolution.js");
+pub const DEFERRED_EXECUTION_SCRIPT: &str = include_str!("js/deferred_execution.js");
+pub const REACT_INIT_SCRIPT: &str = include_str!("js/react_init.js");
+pub const STREAMING_INIT_SCRIPT: &str = include_str!("js/streaming_init.js");
+pub const PROMISE_TRACKING_INIT_SCRIPT: &str = include_str!("js/promise_tracking_init.js");
+pub const COMPONENT_RENDER_SETUP_SCRIPT: &str = include_str!("js/component_render_setup.js");
+pub const COMPOSITION_WRAPPER_SCRIPT: &str = include_str!("js/composition_wrapper.js");
+pub const RENDER_INIT_SCRIPT: &str = include_str!("js/render_init.js");
+pub const RENDER_START_SCRIPT: &str = include_str!("js/render_start.js");
+pub const RENDER_CHECK_COMPLETE_SCRIPT: &str = include_str!("js/render_check_complete.js");
+pub const RENDER_FETCH_RESULT_SCRIPT: &str = include_str!("js/render_fetch_result.js");

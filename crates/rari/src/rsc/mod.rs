@@ -1,15 +1,14 @@
-pub mod component;
-pub mod dependency_utils;
-pub mod elements;
-pub mod js_loader;
+pub mod components;
+pub mod js;
 pub mod layout_renderer;
+pub mod parser;
 pub mod renderer;
 pub mod rsc_html_renderer;
-pub mod rsc_tree;
-pub mod rsc_wire_parser;
 pub mod serializer;
 pub mod streaming;
 pub mod suspense;
+pub mod types;
+pub mod utils;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -24,21 +23,20 @@ pub enum ComponentValue {
     Null,
 }
 
-pub use component::{
+pub use components::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
-pub use dependency_utils::extract_dependencies;
-pub use elements::ReactElement as LoadingReactElement;
-pub use js_loader::RscJsLoader;
+pub use js::loader::RscJsLoader;
+pub use parser::rsc_wire_parser::{PromiseRef, RscWireFormatParser, StreamingState};
 pub use renderer::RscRenderer;
 pub use rsc_html_renderer::RscHtmlRenderer;
-pub use rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
-pub use rsc_wire_parser::{
-    PromiseRef, RscElement as ParsedRscElement, RscWireFormatParser, StreamingState,
-    SuspenseBoundary,
-};
-pub use serializer::{ElementType, ReactElement, RscSerializer, ServerComponentExecutor};
+pub use serializer::{ElementType, RscSerializer, SerializedReactElement, ServerComponentExecutor};
 pub use streaming::{RscStream, RscStreamChunk};
+pub use types::elements::ReactElement as LoadingReactElement;
+pub use types::elements::ReactElement;
+pub use types::rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
+pub use types::rsc_types::{RscElement as ParsedRscElement, SuspenseBoundary};
+pub use utils::dependency_utils::extract_dependencies;
 
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
@@ -52,7 +50,7 @@ mod compliance_tests {
 
         serializer.register_client_component("MyButton", "/components/MyButton.js", "default");
 
-        let element = ReactElement {
+        let element = SerializedReactElement {
             element_type: ElementType::ClientComponent("MyButton".to_string()),
             props: Some({
                 let mut props = FxHashMap::default();
@@ -82,7 +80,7 @@ mod compliance_tests {
     fn test_suspense_boundary_compliance() {
         let mut serializer = RscSerializer::new();
 
-        let fallback = ReactElement {
+        let fallback = SerializedReactElement {
             element_type: ElementType::HtmlTag("div".to_string()),
             props: Some(FxHashMap::default()),
             key: None,
@@ -104,7 +102,7 @@ mod compliance_tests {
 
         serializer.register_client_component("Counter", "/app/components/Counter.tsx", "default");
 
-        let element = ReactElement {
+        let element = SerializedReactElement {
             element_type: ElementType::ClientComponent("Counter".to_string()),
             props: Some({
                 let mut props = FxHashMap::default();
