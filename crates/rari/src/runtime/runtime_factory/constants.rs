@@ -6,9 +6,7 @@ pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
 pub const COMPONENT_PREFIX: &str = "component_";
 pub const VERIFY_REGISTRATION_PREFIX: &str = "verify_registration_";
-pub const RARI_COMPONENT_PREFIX: &str = "file:///rari_component/";
 pub const RARI_REGISTER_FUNCTION: &str = "__rari_register";
-pub const JS_EXTENSION: &str = ".js";
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
 pub const JS_EXECUTOR_FAILED_ERROR: &str = "JS executor failed to respond";
@@ -124,19 +122,6 @@ pub fn create_already_loaded_response(component_name: &str) -> JsonValue {
         "status": "already_loaded",
         "component": component_name
     })
-}
-
-#[allow(dead_code)]
-pub fn extract_component_id_from_specifier(specifier: &str) -> &str {
-    if specifier.starts_with(RARI_COMPONENT_PREFIX) {
-        specifier
-            .strip_prefix(RARI_COMPONENT_PREFIX)
-            .unwrap_or(specifier)
-            .strip_suffix(JS_EXTENSION)
-            .unwrap_or(specifier)
-    } else {
-        specifier
-    }
 }
 
 pub fn create_registration_script(specifier_str: &str, script_name: &str) -> String {

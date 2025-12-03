@@ -893,53 +893,35 @@ window.__rari && window.__rari.processBoundaryError('{}', '{}', {});
 
 pub struct RscToHtmlConverter {
     row_cache: FxHashMap<u32, String>,
-    #[allow(dead_code)]
-    boundary_map: FxHashMap<String, u32>,
     shell_sent: bool,
     asset_links: Option<String>,
-    #[allow(dead_code)]
-    renderer: Arc<RscHtmlRenderer>,
     boundary_id_generator: BoundaryIdGenerator,
-    #[allow(dead_code)]
-    content_counter: AtomicU32,
     rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
 }
 
 impl RscToHtmlConverter {
-    pub fn new(renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn new(_renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
-            boundary_map: FxHashMap::default(),
             shell_sent: false,
             asset_links: None,
-            renderer,
             boundary_id_generator: BoundaryIdGenerator::new(),
-            content_counter: AtomicU32::new(0),
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
         }
     }
 
-    pub fn with_assets(asset_links: String, renderer: Arc<RscHtmlRenderer>) -> Self {
+    pub fn with_assets(asset_links: String, _renderer: Arc<RscHtmlRenderer>) -> Self {
         Self {
             row_cache: FxHashMap::default(),
-            boundary_map: FxHashMap::default(),
             shell_sent: false,
             asset_links: Some(asset_links),
-            renderer,
             boundary_id_generator: BoundaryIdGenerator::new(),
-            content_counter: AtomicU32::new(0),
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
         }
     }
 
     fn next_boundary_id(&self) -> String {
         self.boundary_id_generator.next()
-    }
-
-    #[allow(dead_code)]
-    fn next_content_id(&self) -> String {
-        let current = self.content_counter.fetch_add(1, Ordering::SeqCst);
-        format!("S:{}", current)
     }
 
     pub async fn convert_chunk(&mut self, chunk: RscStreamChunk) -> Result<Vec<u8>, RariError> {

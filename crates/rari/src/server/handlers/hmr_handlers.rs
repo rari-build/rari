@@ -15,9 +15,6 @@ use tracing::{debug, error, info, warn};
 pub struct HmrInvalidateRequest {
     #[serde(rename = "componentId")]
     component_id: String,
-    #[serde(rename = "filePath")]
-    #[allow(dead_code)]
-    file_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

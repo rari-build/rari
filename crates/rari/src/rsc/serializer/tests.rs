@@ -228,7 +228,6 @@ mod tests {
         assert!(!result.contains("Object [object"));
     }
 
-    #[allow(dead_code)]
     struct MockServerComponentExecutor;
 
     impl ServerComponentExecutor for MockServerComponentExecutor {

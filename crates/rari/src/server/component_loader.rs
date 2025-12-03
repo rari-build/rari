@@ -445,7 +445,6 @@ impl ComponentLoader {
         })
     }
 
-    #[allow(dead_code)]
     pub async fn load_component_from_manifest(
         component_id: &str,
         component_info: &serde_json::Value,

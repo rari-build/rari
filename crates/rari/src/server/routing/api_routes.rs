@@ -11,7 +11,7 @@ use serde_json::Value as JsonValue;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRouteEntry {
@@ -42,8 +42,6 @@ pub struct ApiRouteMatch {
 pub(crate) struct CompiledHandler {
     module_id: String,
     code: String,
-    #[allow(dead_code)]
-    methods: Vec<String>,
     last_modified: SystemTime,
 }
 
@@ -320,16 +318,6 @@ impl ApiRouteHandler {
             .and_then(|m| m.modified())
             .unwrap_or_else(|_| SystemTime::now());
 
-        let methods = Self::detect_http_methods(&code);
-
-        if methods.is_empty() {
-            warn!(
-                file_path = %file_path,
-                route_path = %route.path,
-                "No HTTP method handlers found in file"
-            );
-        }
-
         let module_id = file_path
             .trim_start_matches("api/")
             .trim_end_matches(".ts")
@@ -338,12 +326,8 @@ impl ApiRouteHandler {
             .trim_end_matches(".jsx")
             .replace('/', "_");
 
-        let compiled = CompiledHandler {
-            module_id: module_id.clone(),
-            code: code.clone(),
-            methods: methods.clone(),
-            last_modified,
-        };
+        let compiled =
+            CompiledHandler { module_id: module_id.clone(), code: code.clone(), last_modified };
 
         self.handler_cache.insert(file_path.clone(), compiled.clone());
 
@@ -351,7 +335,6 @@ impl ApiRouteHandler {
             file_path = %file_path,
             route_path = %route.path,
             module_id = %module_id,
-            methods = ?methods,
             code_size = code.len(),
             "Successfully loaded and cached API route handler"
         );
@@ -504,31 +487,6 @@ impl ApiRouteHandler {
             Path::new("dist").join("server").join("app").join(normalized_path).with_extension("js");
 
         Ok(dist_path)
-    }
-
-    fn detect_http_methods(code: &str) -> Vec<String> {
-        let http_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
-        let mut detected = Vec::new();
-
-        for method in http_methods {
-            let patterns = [
-                format!(r"export\s+function\s+{}\s*\(", method),
-                format!(r"export\s+async\s+function\s+{}\s*\(", method),
-                format!(r"export\s+const\s+{}\s*=", method),
-                format!(r"export\s+const\s+{}\s*:", method),
-            ];
-
-            for pattern in &patterns {
-                if let Ok(re) = regex::Regex::new(pattern)
-                    && re.is_match(code)
-                {
-                    detected.push(method.to_string());
-                    break;
-                }
-            }
-        }
-
-        detected
     }
 
     pub async fn execute_handler(
