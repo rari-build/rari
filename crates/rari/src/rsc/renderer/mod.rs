@@ -18,10 +18,10 @@ use tokio::time::sleep;
 use tokio::time::timeout;
 use tracing::{debug, error};
 
+pub mod constants;
 pub mod tests;
 
-const MEMORY_PRESSURE_THRESHOLD: f64 = 0.8;
-const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_millis(10);
+use constants::*;
 
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
@@ -35,11 +35,11 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_concurrent_renders: 50,
-            max_render_time_ms: 8000,
-            max_script_execution_time_ms: 3000,
-            max_memory_per_component_mb: 50,
-            max_cache_size: 1000,
+            max_concurrent_renders: DEFAULT_MAX_CONCURRENT_RENDERS,
+            max_render_time_ms: DEFAULT_MAX_RENDER_TIME_MS,
+            max_script_execution_time_ms: DEFAULT_MAX_SCRIPT_EXECUTION_TIME_MS,
+            max_memory_per_component_mb: DEFAULT_MAX_MEMORY_PER_COMPONENT_MB,
+            max_cache_size: DEFAULT_MAX_CACHE_SIZE,
         }
     }
 }
@@ -397,21 +397,7 @@ impl RscRenderer {
 
         let combined_script = batch_sections.join("\n");
 
-        let final_script = format!(
-            r#"
-            {combined_script}
-
-            (function() {{
-                const errors = globalThis.__batch_errors || [];
-                globalThis.__batch_errors = [];
-                return {{
-                    success: errors.length === 0,
-                    errors: errors,
-                    timestamp: Date.now()
-                }};
-            }})();
-            "#
-        );
+        let final_script = format!("{combined_script}\n\n{BATCH_ERROR_COLLECTION_SCRIPT}");
 
         let batch_name = format!("batch_execution_{}", scripts.len());
         let result = self.execute_script_with_timeout(batch_name, final_script).await?;
@@ -453,111 +439,16 @@ impl RscRenderer {
             return Ok(());
         }
 
-        let extension_checks = r#"
-            (function() {
-                const checks = {};
-
-                if (typeof globalThis.renderElementToHtml === 'undefined') {
-                    throw new Error('RSC Renderer extension not loaded - renderElementToHtml not available');
-                }
-                checks.rsc_renderer = true;
-
-                if (!globalThis.PromiseManager) {
-                    throw new Error('PromiseManager extension not loaded');
-                }
-                checks.promise_manager = true;
-
-                if (!globalThis.registerModule) {
-                    throw new Error('RSC Modules extension not loaded');
-                }
-                checks.rsc_modules = true;
-
-                return {
-                    initialized: true,
-                    extensions: checks,
-                    timestamp: Date.now()
-                };
-            })()
-        "#;
-
         let _extension_check_result = self
             .runtime
-            .execute_script("extension-checks".to_string(), extension_checks.to_string())
+            .execute_script("extension-checks".to_string(), EXTENSION_CHECKS_SCRIPT.to_string())
             .await?;
 
-        let react_globals_script = r#"
-if (typeof globalThis.React === 'undefined') {
-    globalThis.React = {
-        createElement: function(type, props, ...children) {
-            return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children };
-        },
-        Fragment: function(props) { return props?.children || null; },
-        Suspense: function(props) { return props?.children || props?.fallback || null; },
-        Component: class Component {
-            constructor(props) {
-                this.props = props;
-                this.state = {};
-            }
-            setState(updater) {
-                if (typeof updater === 'function') {
-                    this.state = { ...this.state, ...updater(this.state, this.props) };
-                } else {
-                    this.state = { ...this.state, ...updater };
-                }
-            }
-            render() {
-                return null;
-            }
-        }
-    };
-}
-
-if (!globalThis.React.Component) {
-    globalThis.React.Component = class Component {
-        constructor(props) {
-            this.props = props;
-            this.state = {};
-        }
-        setState(updater) {
-            if (typeof updater === 'function') {
-                this.state = { ...this.state, ...updater(this.state, this.props) };
-            } else {
-                this.state = { ...this.state, ...updater };
-            }
-        }
-        render() {
-            return null;
-        }
-    };
-}
-
-if (typeof globalThis.Component === 'undefined') {
-    globalThis.Component = globalThis.React.Component;
-}
-
-if (typeof globalThis.Suspense === 'undefined') {
-    globalThis.Suspense = globalThis.React.Suspense;
-}
-
-if (typeof globalThis.Fragment === 'undefined') {
-    globalThis.Fragment = globalThis.React.Fragment;
-}
-
-if (typeof globalThis.jsx === 'undefined') {
-    globalThis.jsx = function(type, props, key) {
-        return globalThis.React.createElement(type, { ...props, key });
-    };
-}
-
-if (typeof globalThis.jsxs === 'undefined') {
-    globalThis.jsxs = function(type, props, key) {
-        return globalThis.React.createElement(type, { ...props, key });
-    };
-}
-        "#;
-
         self.runtime
-            .execute_script("init_react_globals".to_string(), react_globals_script.to_string())
+            .execute_script(
+                "init_react_globals".to_string(),
+                REACT_GLOBALS_SETUP_SCRIPT.to_string(),
+            )
             .await?;
 
         let html_render_script = include_str!("../../ssr/js/html_render.js");
@@ -648,49 +539,8 @@ if (typeof globalThis.jsxs === 'undefined') {
 
         self.runtime.clear_module_loader_caches(component_id).await?;
 
-        let force_v8_cache_clear_script = format!(
-            r#"
-            (function() {{
-                try {{
-                    const componentId = "{component_id}";
-                    let clearedCount = 0;
-
-                    if (globalThis[componentId]) {{
-                        delete globalThis[componentId];
-                        clearedCount++;
-                    }}
-
-                    const registrationKey = `Component_${{componentId.replace(/[^a-zA-Z0-9]/g, '_')}}`;
-                    if (globalThis[registrationKey]) {{
-                        delete globalThis[registrationKey];
-                        clearedCount++;
-                    }}
-
-                    if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
-                        delete globalThis.__rsc_modules[componentId];
-                        clearedCount++;
-                    }}
-
-                    if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
-                        delete globalThis.__rsc_functions[componentId];
-                        clearedCount++;
-                    }}
-
-                    return {{
-                        success: true,
-                        clearedCount: clearedCount,
-                        componentId: componentId
-                    }};
-                }} catch (error) {{
-                    return {{
-                        success: false,
-                        error: error.message,
-                        componentId: "{component_id}"
-                    }};
-                }}
-            }})()
-            "#
-        );
+        let force_v8_cache_clear_script =
+            V8_CACHE_CLEAR_SCRIPT.replace("{component_id}", component_id);
 
         let _v8_clear_result = self
             .runtime
@@ -1280,15 +1130,7 @@ if (typeof globalThis.jsxs === 'undefined') {
             if let Some(cached) = self.get_cached_script(&cache_key) {
                 cached
             } else {
-                let script = r#"
-                    (function() {
-                        if (!globalThis.PromiseManager) {
-                            throw new Error('PromiseManager extension not loaded');
-                        }
-                        return { available: true, extension: 'promise_manager' };
-                    })()
-                "#
-                .to_string();
+                let script = PROMISE_MANAGER_CHECK_SCRIPT.to_string();
                 self.cache_script(cache_key, script.clone());
                 script
             }
@@ -1299,15 +1141,7 @@ if (typeof globalThis.jsxs === 'undefined') {
             if let Some(cached) = self.get_cached_script(&cache_key) {
                 cached
             } else {
-                let script = r#"
-                    (function() {
-                        if (!globalThis.ServerFunctions) {
-                            throw new Error('ServerFunctions extension not loaded');
-                        }
-                        return globalThis.ServerFunctions.resolve();
-                    })()
-                "#
-                .to_string();
+                let script = SERVER_FUNCTION_RESOLVER_SCRIPT.to_string();
                 self.cache_script(cache_key, script.clone());
                 script
             }
@@ -1334,21 +1168,8 @@ if (typeof globalThis.jsxs === 'undefined') {
 
         let _batch_result = self.execute_batched_scripts(setup_scripts).await?;
 
-        let resolve_server_functions_script = format!(
-            r#"
-            (async function() {{
-                try {{
-                    if (typeof globalThis.resolveServerFunctionsForComponent === 'function') {{
-                        await globalThis.resolveServerFunctionsForComponent("{component_id}");
-                    }}
-
-                    return {{ success: true, resolved: true }};
-                }} catch (error) {{
-                    return {{ success: false, error: error.message }};
-                }}
-            }})()
-            "#
-        );
+        let resolve_server_functions_script =
+            RESOLVE_SERVER_FUNCTIONS_SCRIPT.replace("{component_id}", component_id);
 
         let _resolution_result = self
             .execute_script_with_timeout(
@@ -1557,43 +1378,9 @@ if (typeof globalThis.jsxs === 'undefined') {
         let args_json = serde_json::to_string(args)
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
 
-        let script = format!(
-            r#"
-            (async () => {{
-                try {{
-                    const fn = globalThis["{}"];
-                    if (typeof fn !== "function") {{
-                        throw new Error("Function '{}' not found in globalThis");
-                    }}
-
-                    const rawArgs = {};
-                    const processedArgs = rawArgs.map(arg => {{
-                        if (arg && typeof arg === 'object' && !Array.isArray(arg) && !(arg instanceof FormData)) {{
-                            const formDataLike = {{
-                                data: arg,
-                                get(key) {{ return this.data[key]; }},
-                                has(key) {{ return key in this.data; }},
-                                set(key, value) {{ this.data[key] = value; }},
-                                append(key, value) {{ this.data[key] = value; }},
-                                delete(key) {{ delete this.data[key]; }},
-                                entries() {{ return Object.entries(this.data); }},
-                                keys() {{ return Object.keys(this.data); }},
-                                values() {{ return Object.values(this.data); }}
-                            }};
-                            return formDataLike;
-                        }}
-                        return arg;
-                    }});
-
-                    const result = await fn(...processedArgs);
-                    return JSON.parse(JSON.stringify(result));
-                }} catch (error) {{
-                    throw new Error(`Server action error: ${{error.message || String(error)}}`);
-                }}
-            }})()
-            "#,
-            export_name, export_name, args_json
-        );
+        let script = SERVER_ACTION_INVOCATION_SCRIPT
+            .replace("{function_name}", export_name)
+            .replace("{args_json}", &args_json);
 
         self.runtime
             .execute_script(
@@ -1624,7 +1411,7 @@ if (typeof globalThis.jsxs === 'undefined') {
             return Err(RariError::internal("RSC renderer not initialized"));
         }
 
-        let max_retries = 3;
+        let max_retries = MAX_RETRIES;
         let mut attempt = 0;
         let mut last_error = None;
 
@@ -1637,7 +1424,7 @@ if (typeof globalThis.jsxs === 'undefined') {
                     if attempt >= max_retries {
                         return Err(e);
                     }
-                    sleep(Duration::from_millis(150 * attempt)).await;
+                    sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
                     continue;
                 }
             };
@@ -1646,7 +1433,7 @@ if (typeof globalThis.jsxs === 'undefined') {
                 if attempt >= max_retries {
                     return Err(e);
                 }
-                sleep(Duration::from_millis(150 * attempt)).await;
+                sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
                 continue;
             }
 
@@ -1661,7 +1448,7 @@ if (typeof globalThis.jsxs === 'undefined') {
 
                     if should_retry && attempt < max_retries {
                         last_error = Some(e);
-                        sleep(Duration::from_millis(150 * attempt)).await;
+                        sleep(Duration::from_millis(RETRY_BASE_DELAY_MS * attempt)).await;
                         continue;
                     }
 
@@ -1690,7 +1477,7 @@ if (typeof globalThis.jsxs === 'undefined') {
             }
         }
 
-        sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(COMPONENT_AVAILABILITY_CHECK_DELAY_MS)).await;
         if self.component_exists(original_id)
             || self.auto_register_component_from_fs(original_id.to_string()).await.is_ok()
         {
@@ -1804,28 +1591,11 @@ if (typeof globalThis.jsxs === 'undefined') {
                     ))
                 })?;
 
-            let register_from_namespace_script = format!(
-                r#"
-                (function() {{
-                    try {{
-                        const moduleNamespace = {};
-
-                        if (typeof globalThis.RscModuleManager?.register === 'function') {{
-                            const result = globalThis.RscModuleManager.register(moduleNamespace, "{component_id}");
-                            return {{ success: true, module: "{component_id}", exports: result.exportCount }};
-                        }} else if (typeof globalThis.registerModule === 'function') {{
-                            const result = globalThis.registerModule(moduleNamespace, "{component_id}");
-                            return {{ success: true, module: "{component_id}", exports: result.exportCount }};
-                        }} else {{
-                            return {{ success: false, error: "No module registration function available" }};
-                        }}
-                    }} catch (error) {{
-                        return {{ success: false, error: error.message }};
-                    }}
-                }})()
-                "#,
-                serde_json::to_string(&module_namespace).unwrap_or_else(|_| "null".to_string())
-            );
+            let module_namespace_json =
+                serde_json::to_string(&module_namespace).unwrap_or_else(|_| "null".to_string());
+            let register_from_namespace_script = MODULE_REGISTRATION_SCRIPT
+                .replace("{module_namespace}", &module_namespace_json)
+                .replace("{component_id}", component_id);
 
             self.runtime
                 .execute_script(
@@ -1852,31 +1622,10 @@ if (typeof globalThis.jsxs === 'undefined') {
             .await?;
 
         if force_reload {
-            let setup_jsx_runtime = r#"
-                globalThis.__jsx_runtime = globalThis.__jsx_runtime || {
-                    jsx: function(type, props, key) {
-                        const element = {
-                            $$typeof: Symbol.for('react.element'),
-                            type,
-                            props: props || {},
-                            key: key || null,
-                            ref: null
-                        };
-                        if (props && props.children !== undefined) {
-                            element.props = { ...element.props, children: props.children };
-                        }
-                        return element;
-                    },
-                    jsxs: function(type, props, key) {
-                        return globalThis.__jsx_runtime.jsx(type, props, key);
-                    }
-                };
-            "#;
-
             self.runtime
                 .execute_script(
                     format!("setup_jsx_{component_id}.js"),
-                    setup_jsx_runtime.to_string(),
+                    JSX_RUNTIME_SETUP_SCRIPT.to_string(),
                 )
                 .await?;
 
@@ -1907,154 +1656,12 @@ if (typeof globalThis.jsxs === 'undefined') {
                 .replace("export {", "// export {")
                 .replace("export *", "// export *");
 
-            transformed_source_safe.push_str(r#"
-
-if (typeof __registry_proxy === 'undefined') {
-    var __registry_proxy = new Proxy({}, {
-        get: function(target, prop) {
-            if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions[prop] === 'function') {
-                return globalThis.__rsc_functions[prop];
-            }
-            if (typeof globalThis[prop] === 'function') {
-                return globalThis[prop];
-            }
-            return undefined;
-        }
-    });
-}
-"#);
+            transformed_source_safe.push_str(REGISTRY_PROXY_SETUP_SCRIPT);
 
             transformed_source_safe =
                 transformed_source_safe.replace("\"use module\";", "").replace("'use module';", "");
 
-            let mut eval_safe_source = r#"
-if (typeof _jsx === 'undefined') {
-    var _jsx = globalThis.__jsx_runtime?.jsx || (() => null);
-}
-if (typeof _jsxs === 'undefined') {
-    var _jsxs = globalThis.__jsx_runtime?.jsxs || (() => null);
-}
-
-if (typeof globalThis.React === 'undefined') {
-    globalThis.React = {
-        createElement: function(type, props, ...children) {
-            return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children };
-        },
-        Fragment: function(props) { return props?.children || null; },
-        Suspense: function(props) { return props?.children || props?.fallback || null; },
-        Component: class Component {
-            constructor(props) {
-                this.props = props;
-                this.state = {};
-            }
-            setState(updater) {
-                if (typeof updater === 'function') {
-                    this.state = { ...this.state, ...updater(this.state, this.props) };
-                } else {
-                    this.state = { ...this.state, ...updater };
-                }
-            }
-            render() {
-                return null;
-            }
-        }
-    };
-}
-
-if (!globalThis.React.Suspense) {
-    globalThis.React.Suspense = function(props) { return props?.children || props?.fallback || null; };
-}
-
-if (!globalThis.React.Component) {
-    globalThis.React.Component = class Component {
-        constructor(props) {
-            this.props = props;
-            this.state = {};
-        }
-        setState(updater) {
-            if (typeof updater === 'function') {
-                this.state = { ...this.state, ...updater(this.state, this.props) };
-            } else {
-                this.state = { ...this.state, ...updater };
-            }
-        }
-        render() {
-            return null;
-        }
-    };
-}
-
-if (typeof globalThis.Suspense === 'undefined') {
-    globalThis.Suspense = globalThis.React.Suspense;
-}
-
-if (typeof globalThis.Fragment === 'undefined') {
-    globalThis.Fragment = globalThis.React.Fragment;
-}
-
-if (typeof globalThis.Component === 'undefined') {
-    globalThis.Component = globalThis.React.Component;
-}
-
-if (typeof globalThis.jsx === 'undefined') {
-    globalThis.jsx = function(type, props, key) {
-        return globalThis.React.createElement(type, { ...props, key });
-    };
-}
-
-if (typeof globalThis.jsxs === 'undefined') {
-    globalThis.jsxs = function(type, props, key) {
-        return globalThis.React.createElement(type, { ...props, key });
-    };
-}
-
-if (typeof globalThis.LoadingSpinner === 'undefined') {
-    globalThis.LoadingSpinner = function() {
-        return globalThis.React.createElement('div', {
-            style: {
-                width: '40px',
-                height: '40px',
-                border: '4px solid #f3f4f6',
-                borderTop: '4px solid #3b82f6',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-            }
-        });
-    };
-}
-
-if (typeof globalThis.DefaultLoading === 'undefined') {
-    globalThis.DefaultLoading = function() {
-        return globalThis.React.createElement('div', {
-            style: {
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                padding: '2rem',
-                minHeight: '200px'
-            }
-        }, globalThis.React.createElement(globalThis.LoadingSpinner));
-    };
-}
-
-if (!globalThis.readFileSync && globalThis.__nodeModules && globalThis.__nodeModules.get) {
-    const nodeFs = globalThis.__nodeModules.get('node:fs');
-    if (nodeFs && nodeFs.readFileSync) {
-        globalThis.readFileSync = nodeFs.readFileSync;
-        globalThis.existsSync = nodeFs.existsSync;
-    }
-    const nodePath = globalThis.__nodeModules.get('node:path');
-    if (nodePath && nodePath.join) {
-        globalThis.join = nodePath.join;
-    }
-    const nodeProcess = globalThis.__nodeModules.get('node:process');
-    if (nodeProcess && nodeProcess.cwd) {
-        globalThis.cwd = nodeProcess.cwd;
-    }
-}
-
-// No special npm package restoration needed - import transformation handles everything
-"#.to_string();
+            let mut eval_safe_source = COMPONENT_EVAL_SETUP_SCRIPT.to_string();
 
             let import_transformed_source = transform_imports_for_hmr(&transformed_source_safe);
             eval_safe_source.push_str(&import_transformed_source);
