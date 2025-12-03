@@ -81,7 +81,7 @@ export async function extractServerProps(
   searchParams: Record<string, string>,
 ): Promise<ServerPropsResult> {
   try {
-    const module = await import(componentPath)
+    const module = await import(/* @vite-ignore */ componentPath)
 
     let props: Record<string, any> = {}
     let revalidate: number | undefined
@@ -160,7 +160,7 @@ export async function extractMetadata(
   searchParams: Record<string, string>,
 ): Promise<MetadataResult> {
   try {
-    const module = await import(componentPath)
+    const module = await import(/* @vite-ignore */ componentPath)
 
     if (module.metadata && typeof module.metadata === 'object') {
       return module.metadata
@@ -185,7 +185,7 @@ export async function extractStaticParams(
   componentPath: string,
 ): Promise<StaticParamsResult> {
   try {
-    const module = await import(componentPath)
+    const module = await import(/* @vite-ignore */ componentPath)
 
     if (typeof module.generateStaticParams === 'function') {
       const params = await module.generateStaticParams()
@@ -206,7 +206,7 @@ export async function hasServerSideDataFetching(
   componentPath: string,
 ): Promise<boolean> {
   try {
-    const module = await import(componentPath)
+    const module = await import(/* @vite-ignore */ componentPath)
 
     return !!(
       module.getData
