@@ -84,7 +84,6 @@
     }
   }
 
-  // prettier-ignore
   const props = {props_json}
 
   const isAsyncComponent = Component.constructor.name === 'AsyncFunction'

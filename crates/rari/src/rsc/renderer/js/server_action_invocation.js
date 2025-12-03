@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+/* eslint-disable no-undef, style/object-curly-spacing */
 (async () => {
   try {
     const fn = globalThis['{function_name}']
@@ -6,7 +6,7 @@
       throw new TypeError('Function \'{function_name}\' not found in globalThis')
     }
 
-    const rawArgs = { args_json }
+    const rawArgs = {args_json}
     const processedArgs = rawArgs.map((arg) => {
       if (arg && typeof arg === 'object' && !Array.isArray(arg) && !(arg instanceof FormData)) {
         const formDataLike = {

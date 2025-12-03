@@ -1,5 +1,5 @@
 // oxlint-disable no-unused-expressions
-/* eslint-disable no-undef */
+/* eslint-disable no-undef, style/object-curly-spacing */
 globalThis.__render_component_async = async function () {
   try {
     let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default)
@@ -14,7 +14,7 @@ globalThis.__render_component_async = async function () {
       throw new Error('Component {component_id} not found or not a function')
     }
 
-    const props = { props_json }
+    const props = {props_json}
     globalThis.__boundary_props.root = props
 
     let element

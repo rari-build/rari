@@ -838,8 +838,8 @@ fn test_mode_consistency_suspense_serialization_format() {
     let script_rsc =
         renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
-    assert!(script_ssr.contains(r#"["$", "react.suspense", uniqueKey, rscProps]"#));
-    assert!(script_rsc.contains(r#"["$", "react.suspense", uniqueKey, rscProps]"#));
+    assert!(script_ssr.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
+    assert!(script_rsc.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
 
     assert!(script_ssr.contains("boundaryId: props.boundaryId || props.__boundary_id"));
     assert!(script_rsc.contains("boundaryId: props.boundaryId || props.__boundary_id"));
@@ -977,8 +977,8 @@ fn test_mode_consistency_boundary_id_format() {
         .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
         .unwrap();
 
-    assert!(script_ssr.contains("const boundaryId = 'page_boundary_'"));
-    assert!(script_rsc.contains("const boundaryId = 'page_boundary_'"));
+    assert!(script_ssr.contains("const boundaryId = `page_boundary_"));
+    assert!(script_rsc.contains("const boundaryId = `page_boundary_"));
 
     assert!(script_ssr.contains("const componentPathHash ="));
     assert!(script_rsc.contains("const componentPathHash ="));
@@ -1109,14 +1109,20 @@ fn test_mode_consistency_rsc_props_cleanup() {
     let script_rsc =
         renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
-    assert!(script_ssr.contains("if (rscProps.fallback === null) delete rscProps.fallback"));
-    assert!(script_rsc.contains("if (rscProps.fallback === null) delete rscProps.fallback"));
+    assert!(script_ssr.contains("if (rscProps.fallback === null)"));
+    assert!(script_ssr.contains("delete rscProps.fallback"));
+    assert!(script_rsc.contains("if (rscProps.fallback === null)"));
+    assert!(script_rsc.contains("delete rscProps.fallback"));
 
-    assert!(script_ssr.contains("if (rscProps.children === null) delete rscProps.children"));
-    assert!(script_rsc.contains("if (rscProps.children === null) delete rscProps.children"));
+    assert!(script_ssr.contains("if (rscProps.children === null)"));
+    assert!(script_ssr.contains("delete rscProps.children"));
+    assert!(script_rsc.contains("if (rscProps.children === null)"));
+    assert!(script_rsc.contains("delete rscProps.children"));
 
-    assert!(script_ssr.contains("if (!rscProps.boundaryId) delete rscProps.boundaryId"));
-    assert!(script_rsc.contains("if (!rscProps.boundaryId) delete rscProps.boundaryId"));
+    assert!(script_ssr.contains("if (!rscProps.boundaryId)"));
+    assert!(script_ssr.contains("delete rscProps.boundaryId"));
+    assert!(script_rsc.contains("if (!rscProps.boundaryId)"));
+    assert!(script_rsc.contains("delete rscProps.boundaryId"));
 
     assert!(script_ssr.contains("if (rscProps.children === undefined)"));
     assert!(script_rsc.contains("if (rscProps.children === undefined)"));

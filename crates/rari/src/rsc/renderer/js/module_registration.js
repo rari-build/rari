@@ -1,7 +1,7 @@
-/* eslint-disable no-undef */
+/* eslint-disable no-undef, style/object-curly-spacing */
 (function () {
   try {
-    const moduleNamespace = { module_namespace }
+    const moduleNamespace = {module_namespace}
 
     if (typeof globalThis.RscModuleManager?.register === 'function') {
       const result = globalThis.RscModuleManager.register(moduleNamespace, '{component_id}')

@@ -16,6 +16,13 @@ use tracing::{error, warn};
 
 pub mod tests;
 
+const JS_GET_RESULT: &str = include_str!("js/get_result.js");
+const JS_PAGE_RENDER_SIMPLE: &str = include_str!("js/page_render_simple.js");
+const JS_PAGE_RENDER_WITH_LOADING: &str = include_str!("js/page_render_with_loading.js");
+const JS_RENDER_TO_RSC: &str = include_str!("js/render_to_rsc.js");
+const JS_PAGE_ELEMENT_RENDER: &str = include_str!("js/page_element_render.js");
+const JS_LOADING_FALLBACK_RENDER: &str = include_str!("js/loading_fallback_render.js");
+
 #[derive(Debug, Clone)]
 pub struct LayoutRenderContext {
     pub params: FxHashMap<String, String>,
@@ -217,8 +224,10 @@ impl LayoutRenderer {
         let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             promise_result
         } else {
-            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
-            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
         };
 
         let rsc_data = result.get("rsc_data").ok_or_else(|| {
@@ -598,8 +607,10 @@ impl LayoutRenderer {
         let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             promise_result
         } else {
-            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
-            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
         };
 
         let rsc_data = result.get("rsc_data").ok_or_else(|| {
@@ -1158,155 +1169,16 @@ impl LayoutRenderer {
         let page_component_id = self.create_component_id(&route_match.route.file_path);
 
         let page_render_script = if let Some(loading_id) = loading_component_id {
-            format!(
-                r#"
-                const startPage = performance.now();
-                const PageComponent = globalThis["{}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {} not found');
-                }}
-
-                const LoadingComponent = globalThis["{}"];
-                if (!LoadingComponent || typeof LoadingComponent !== 'function') {{
-                    console.warn('Loading component {} not found, rendering page without Suspense');
-                    const pageProps = {};
-                    const pageResult = PageComponent(pageProps);
-                    var pageElement = pageResult && typeof pageResult.then === 'function'
-                        ? await pageResult
-                        : pageResult;
-                }} else {{
-                    const pageProps = {};
-                    const useSuspense = {};
-
-                    const isAsync = PageComponent.constructor.name === 'AsyncFunction';
-
-                    if (isAsync && useSuspense) {{
-                        try {{
-                            const componentPathHash = '{}';
-                            const boundaryId = 'page_boundary_' + componentPathHash;
-                            const promiseId = 'page_promise_' + componentPathHash;
-
-                        globalThis.__suspense_promises = globalThis.__suspense_promises || {{}};
-
-                        globalThis.__deferred_async_components = globalThis.__deferred_async_components || [];
-                        globalThis.__deferred_async_components.push({{
-                            promiseId: promiseId,
-                            boundaryId: boundaryId,
-                            component: PageComponent,
-                            props: pageProps,
-                            componentPath: '{}'
-                        }});
-
-                        globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || [];
-
-                        globalThis.__pending_promises = globalThis.__pending_promises || [];
-                        globalThis.__pending_promises.push({{
-                            id: promiseId,
-                            boundaryId: boundaryId,
-                            componentPath: '{}'
-                        }});
-
-                        let loadingFallback;
-                        try {{
-                            loadingFallback = LoadingComponent();
-                        }} catch (loadingError) {{
-                            throw new Error('Failed to call LoadingComponent: ' + (loadingError.message || String(loadingError)));
-                        }}
-
-                        const fallbackForBoundary = {{
-                            type: loadingFallback?.type || 'div',
-                            props: loadingFallback?.props ? {{...loadingFallback.props}} : {{ children: 'Loading...' }},
-                            key: null
-                        }};
-
-                        globalThis.__discovered_boundaries.push({{
-                            id: boundaryId,
-                            fallback: fallbackForBoundary,
-                            parentId: 'content-slot',
-                            parentPath: ['content-slot'],
-                            isInContentArea: true,
-                            positionHints: {{
-                                inContentArea: true,
-                                domPath: ['content-slot'],
-                                isStable: true
-                            }}
-                        }});
-
-                        const childrenPlaceholder = React.createElement('div', {{
-                            'data-promise-ref': promiseId,
-                            className: 'suspense-placeholder'
-                        }}, 'Loading...');
-                        let suspenseRscProps;
-                        try {{
-                            const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis.__rsc_client_components || {{}});
-
-                            suspenseRscProps = {{
-                                fallback: fallbackRsc,
-                                boundaryId: boundaryId
-                            }};
-                        }} catch (renderError) {{
-                            throw new Error('Failed to render Suspense boundary: ' + (renderError.message || String(renderError)));
-                        }}
-
-                        var pageElement = {{
-                            __preSerializedSuspense: true,
-                            rscArray: ["$", "react.suspense", null, suspenseRscProps]
-                        }};
-
-                        }} catch (asyncWrapError) {{
-                            throw new Error('Failed to wrap async component in Suspense: ' + (asyncWrapError.message || String(asyncWrapError)));
-                        }}
-                    }} else if (isAsync && !useSuspense) {{
-                        try {{
-                            const pageResult = PageComponent(pageProps);
-
-                            if (pageResult && typeof pageResult.then === 'function') {{
-                                var pageElement = await pageResult;
-                            }} else {{
-                                var pageElement = pageResult;
-                            }}
-                        }} catch (asyncError) {{
-                            throw new Error('Failed to await async component: ' + (asyncError.message || String(asyncError)));
-                        }}
-                    }} else {{
-                        const pageResult = PageComponent(pageProps);
-
-                        var pageElement = pageResult && typeof pageResult.then === 'function'
-                            ? await pageResult
-                            : pageResult;
-                    }}
-                }}
-                timings.pageRender = performance.now() - startPage;
-                "#,
-                page_component_id,
-                page_component_id,
-                loading_id,
-                loading_id,
-                page_props_json,
-                page_props_json,
-                if use_suspense { "true" } else { "false" },
-                route_match.route.file_path,
-                route_match.route.file_path,
-                route_match.route.file_path,
-            )
+            JS_PAGE_RENDER_WITH_LOADING
+                .replace("{page_component_id}", &page_component_id)
+                .replace("{loading_id}", loading_id)
+                .replace("{page_props_json}", &page_props_json)
+                .replace("{use_suspense}", if use_suspense { "true" } else { "false" })
+                .replace("{route_file_path}", &route_match.route.file_path)
         } else {
-            format!(
-                r#"
-                const startPage = performance.now();
-                const PageComponent = globalThis["{}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {} not found');
-                }}
-
-                const pageProps = {};
-                const pageResult = PageComponent(pageProps);
-                var pageElement = pageResult && typeof pageResult.then === 'function'
-                    ? await pageResult
-                    : pageResult;
-                timings.pageRender = performance.now() - startPage;
-                "#,
-                page_component_id, page_component_id, page_props_json
-            )
+            JS_PAGE_RENDER_SIMPLE
+                .replace("{page_component_id}", &page_component_id)
+                .replace("{page_props_json}", &page_props_json)
         };
 
         let mut script = format!(
@@ -1333,34 +1205,8 @@ impl LayoutRenderer {
             let layout_component_id = self.create_component_id(&layout.file_path);
             let layout_var = format!("layout{}", i);
 
-            if layout.is_root {
-                script.push_str(&format!(
-                    r#"
-                const startLayout{} = performance.now();
-                const LayoutComponent{} = globalThis["{}"];
-                if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
-                    throw new Error('Root layout component {} not found');
-                }}
-
-                const {} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
-                timings.layout{} = performance.now() - startLayout{};
-                "#,
-                    i,
-                    i,
-                    layout_component_id,
-                    i,
-                    i,
-                    layout_component_id,
-                    layout_var,
-                    i,
-                    current_element,
-                    serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
-                    i,
-                    i
-                ));
-            } else {
-                script.push_str(&format!(
-                    r#"
+            script.push_str(&format!(
+                r#"
                 const startLayout{} = performance.now();
                 const LayoutComponent{} = globalThis["{}"];
                 if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
@@ -1370,118 +1216,28 @@ impl LayoutRenderer {
                 const {} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
-                    i,
-                    i,
-                    layout_component_id,
-                    i,
-                    i,
-                    layout_component_id,
-                    layout_var,
-                    i,
-                    current_element,
-                    serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
-                    i,
-                    i
-                ));
-            }
+                i,
+                i,
+                layout_component_id,
+                i,
+                i,
+                layout_component_id,
+                layout_var,
+                i,
+                current_element,
+                serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
+                i,
+                i
+            ));
 
             current_element = layout_var;
         }
 
-        script.push_str(r#"
-                globalThis.__rsc_render_result = null;
-
-                if (!globalThis.renderToRsc) {
-                    globalThis.renderToRsc = async function(element, clientComponents = {}) {
-                        if (element && typeof element === 'object' && element.__preSerializedSuspense) {
-                            return element.rscArray;
-                        }
-
-                        if (!element) return null;
-
-                        if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
-                            return element;
-                        }
-
-                        if (Array.isArray(element)) {
-                            const results = [];
-                            for (const child of element) {
-                                results.push(await globalThis.renderToRsc(child, clientComponents));
-                            }
-                            return results;
-                        }
-
-                        if (element && typeof element === 'object') {
-                            const uniqueKey = element.key || null;
-                            const props = element.props || {};
-
-                            const typeCheck = element.type === React.Suspense;
-                            const nameCheck = typeof element.type === 'function' && element.type.name === 'Suspense';
-                            const stringCheck = element.type === 'react.suspense' || element.type === 'Suspense';
-                            const propsCheck = props.boundaryId || props.__boundary_id;
-                            const isSuspense = typeCheck || nameCheck || stringCheck || propsCheck;
-
-                            if (isSuspense) {
-                                const rscProps = {
-                                    fallback: props.fallback ? await globalThis.renderToRsc(props.fallback, clientComponents) : null,
-                                    children: props.children ? await globalThis.renderToRsc(props.children, clientComponents) : null,
-                                    boundaryId: props.boundaryId || props.__boundary_id
-                                };
-
-                                if (rscProps.fallback === null) delete rscProps.fallback;
-                                if (rscProps.children === null) delete rscProps.children;
-                                if (!rscProps.boundaryId) delete rscProps.boundaryId;
-
-                                return ["$", "react.suspense", uniqueKey, rscProps];
-                            }
-
-                            if (element.type) {
-                                if (typeof element.type === 'string') {
-                                    const { children: propsChildren, ...otherProps } = props;
-                                    const actualChildren = element.children || propsChildren;
-
-                                    const rscProps = {
-                                        ...otherProps,
-                                        children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined
-                                    };
-
-                                    if (rscProps.children === undefined) {
-                                        delete rscProps.children;
-                                    }
-
-                                    return ["$", element.type, uniqueKey, rscProps];
-                                } else if (typeof element.type === 'function') {
-                                    try {
-                                        let result = element.type(props);
-
-                                        if (result && typeof result.then === 'function') {
-                                            result = await result;
-                                        }
-
-                                        return await globalThis.renderToRsc(result, clientComponents);
-                                    } catch (error) {
-                                        console.error('Error rendering function component:', error);
-                                        return ["$", "div", uniqueKey, {
-                                            children: `Error: ${error.message}`,
-                                            style: { color: 'red', border: '1px solid red', padding: '10px' }
-                                        }];
-                                    }
-                                }
-                            }
-
-                            return ["$", "div", uniqueKey, {
-                                className: "rsc-unknown",
-                                children: "Unknown element type"
-                            }];
-                        }
-
-                        return element;
-                    };
-                }
-
-                const startRSC = performance.now();
-                const rscData = await globalThis.renderToRsc(ELEMENT_PLACEHOLDER, globalThis.__rsc_client_components || {});
-                timings.rscConversion = performance.now() - startRSC;
+        script.push_str(JS_RENDER_TO_RSC);
+        script.push_str("\n\n");
+        script.push_str("                const startRSC = performance.now();\n");
+        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis.__rsc_client_components || {{}});\n", current_element));
+        script.push_str(r#"                timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
 
@@ -1515,8 +1271,6 @@ impl LayoutRenderer {
                 }
             })()
             "#);
-
-        let script = script.replace("ELEMENT_PLACEHOLDER", &current_element);
 
         Ok(script)
     }
@@ -1606,57 +1360,9 @@ impl LayoutRenderer {
         let page_props_json = serde_json::to_string(&page_props)
             .map_err(|e| RariError::internal(format!("Failed to serialize props: {}", e)))?;
 
-        let script = format!(
-            r#"
-            (function() {{
-                const props = {};
-                const component = globalThis["{}"];
-                if (!component || typeof component !== 'function') {{
-                    throw new Error("Component not found: {}");
-                }}
-
-                const element = component(props);
-
-                function serializeElement(el) {{
-                    if (!el || typeof el !== 'object') {{
-                        return el;
-                    }}
-
-                    if (Array.isArray(el)) {{
-                        return el.map(serializeElement);
-                    }}
-
-                    if (el.type !== undefined && el.props !== undefined) {{
-                        const result = {{
-                            type: el.type,
-                            props: {{}},
-                            key: el.key || null,
-                            ref: el.ref || null
-                        }};
-
-                        for (const [key, value] of Object.entries(el.props)) {{
-                            if (key === 'children') {{
-                                if (Array.isArray(value)) {{
-                                    result.props.children = value.map(serializeElement);
-                                }} else {{
-                                    result.props.children = serializeElement(value);
-                                }}
-                            }} else {{
-                                result.props[key] = value;
-                            }}
-                        }}
-
-                        return result;
-                    }}
-
-                    return el;
-                }}
-
-                return serializeElement(element);
-            }})();
-            "#,
-            page_props_json, component_id, component_id
-        );
+        let script = JS_LOADING_FALLBACK_RENDER
+            .replace("{page_props_json}", &page_props_json)
+            .replace("{component_id}", &component_id);
 
         let result = renderer
             .runtime
@@ -1723,57 +1429,9 @@ impl LayoutRenderer {
         let page_props_json = serde_json::to_string(&page_props)
             .map_err(|e| RariError::internal(format!("Failed to serialize props: {}", e)))?;
 
-        let script = format!(
-            r#"
-            (function() {{
-                const props = {};
-                const component = globalThis["{}"];
-                if (!component || typeof component !== 'function') {{
-                    throw new Error("Component not found: {}");
-                }}
-
-                const element = component(props);
-
-                function serializeElement(el) {{
-                    if (!el || typeof el !== 'object') {{
-                        return el;
-                    }}
-
-                    if (Array.isArray(el)) {{
-                        return el.map(serializeElement);
-                    }}
-
-                    if (el.type !== undefined && el.props !== undefined) {{
-                        const result = {{
-                            type: el.type,
-                            props: {{}},
-                            key: el.key || null,
-                            ref: el.ref || null
-                        }};
-
-                        for (const [key, value] of Object.entries(el.props)) {{
-                            if (key === 'children') {{
-                                if (Array.isArray(value)) {{
-                                    result.props.children = value.map(serializeElement);
-                                }} else {{
-                                    result.props.children = serializeElement(value);
-                                }}
-                            }} else {{
-                                result.props[key] = value;
-                            }}
-                        }}
-
-                        return result;
-                    }}
-
-                    return el;
-                }}
-
-                return serializeElement(element);
-            }})();
-            "#,
-            page_props_json, component_id, component_id
-        );
+        let script = JS_PAGE_ELEMENT_RENDER
+            .replace("{page_props_json}", &page_props_json)
+            .replace("{component_id}", &component_id);
 
         let result =
             renderer.runtime.execute_script(format!("render_{}", component_id), script).await?;
@@ -1926,8 +1584,10 @@ impl LayoutRenderer {
         let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             promise_result
         } else {
-            let get_result_script = r#"globalThis.__rsc_render_result"#.to_string();
-            renderer.runtime.execute_script("get_result".to_string(), get_result_script).await?
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
         };
 
         let rsc_data = result.get("rsc_data").ok_or_else(|| {
