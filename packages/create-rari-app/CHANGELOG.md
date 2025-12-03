@@ -1,3 +1,100 @@
+## [rari@0.5.6] - 2025-12-03
+
+### 💼 Other
+
+- Rari@0.5.6
+## [0.5.2] - 2025-12-03
+
+### 🐛 Bug Fixes
+
+- *(router)* Add Vite ignore comments to dynamic imports
+- *(security)* Prevent prototype pollution in server actions (CVE-2025-55182)
+
+### 🚜 Refactor
+
+- *(rsc)* Extract and reorganize type definitions and fix dupes
+- *(server)* Reorganize server module structure
+- *(runtime)* Extract runtime_factory into submodules
+- *(module_loader)* Extract module loader into submodules
+- *(runtime)* Extract runtime submodules into new org
+- *(rsc)* Reorganize RSC module structure into submodules
+- *(rsc)* Extract streaming module scripts into separate files
+- *(rsc)* Extract streaming submodules into separate files
+- *(rsc)* Extract renderer scripts and constants into separate files
+- *(rsc)* Extract renderer core logic and utilities into submodules
+- *(rsc)* Extract layout renderer scripts into separate files
+- *(layout_renderer)* Extract core logic and utilities into submodules
+- *(rsc)* Remove unused fields and dead code
+- *(runtime)* Remove unused fields and dead code
+- *(rsc,runtime)* Remove auto-register logic and hardcoded paths
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.5.2
+## [rari@0.5.5] - 2025-12-02
+
+### 💼 Other
+
+- Rari@0.5.5
+## [0.5.1] - 2025-12-02
+
+### 🚜 Refactor
+
+- *(rsc)* Replace timestamp-based key generation with counter for stable key gen
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump binary packages to v0.5.1
+## [rari@0.5.4] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.4
+- Rari@0.5.4
+
+### 🚜 Refactor
+
+- *(cli)* Fix for issue #45
+## [rari@0.5.3] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.3
+- Rari@0.5.3
+- Rari@0.5.3
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update export file extensions from .mjs to .js
+- *(build)* Adding fixedExtension to tsdown config
+## [rari@0.5.2] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.2
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update export file extensions
+## [rari@0.5.1] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.1
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update export file extensions
+## [rari@0.5.0] - 2025-11-24
+
+### 💼 Other
+
+- Rari@0.5.0
+## [create-rari-app@0.2.4] - 2025-11-24
+
+### 💼 Other
+
+- Create-rari-app@0.2.4
 ## [0.5.0] - 2025-11-24
 
 ### 🚀 Features
@@ -10,10 +107,6 @@
 ### 🐛 Bug Fixes
 
 - *(docs)* Update LayoutProps import source from server to client
-
-### 💼 Other
-
-- Create-rari-app@0.2.2
 
 ### 🚜 Refactor
 
@@ -30,10 +123,13 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- Show compiler output in `prepare-binaries.js`
 - *(release)* Bump version to 0.5.0
+## [create-rari-app@0.2.3] - 2025-11-11
 
-## [0.2.3] - 2025-11-11
+### 💼 Other
+
+- Create-rari-app@0.2.2
+- Create-rari-app@0.2.3
 
 ### ⚙️ Miscellaneous Tasks
 
