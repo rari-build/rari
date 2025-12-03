@@ -404,8 +404,26 @@ export default {{}};
     fn resolve_from_node_modules(
         &self,
         package_specifier: &str,
-        _referrer_path: &str,
+        referrer_path: &str,
     ) -> Option<String> {
+        let start_dir = if !referrer_path.is_empty() {
+            let clean_referrer = referrer_path.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer_path);
+
+            if clean_referrer.contains("/rari_component/")
+                || clean_referrer.contains("/rari_internal/")
+                || clean_referrer.contains("/node_builtin/")
+            {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            } else if let Some(last_slash) = clean_referrer.rfind('/') {
+                let dir_path = PathBuf::from(&clean_referrer[..last_slash]);
+                dir_path.canonicalize().unwrap_or(dir_path)
+            } else {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            }
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        };
+
         if let Some(slash_pos) = package_specifier.find('/') {
             if package_specifier.starts_with('@') {
                 if let Some(second_slash_pos) = package_specifier[slash_pos + 1..].find('/') {
@@ -413,17 +431,17 @@ export default {{}};
                     let package_name = &package_specifier[..actual_slash_pos];
                     let subpath = &package_specifier[actual_slash_pos..];
 
-                    return self.resolve_subpath_export(package_name, subpath);
+                    return self.resolve_subpath_export_from_dir(package_name, subpath, &start_dir);
                 }
             } else {
                 let package_name = &package_specifier[..slash_pos];
                 let subpath = &package_specifier[slash_pos..];
 
-                return self.resolve_subpath_export(package_name, subpath);
+                return self.resolve_subpath_export_from_dir(package_name, subpath, &start_dir);
             }
         }
 
-        self.resolve_regular_package(package_specifier)
+        self.resolve_regular_package_from_dir(package_specifier, &start_dir)
     }
 
     fn is_npm_package_context(&self, referrer: &str) -> bool {
@@ -715,7 +733,7 @@ export const __esModule = true;
 
             let package_name = module_path.split('/').next().unwrap_or(module_path);
 
-            if let Some(resolved_path) = self.resolve_from_node_modules(package_name, ".") {
+            if let Some(resolved_path) = self.resolve_from_node_modules(package_name, "") {
                 let file_path = resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path);
 
                 if let Ok(content) = fs::read_to_string(file_path) {
@@ -809,14 +827,16 @@ export const __esModule = true;
         None
     }
 
-    fn resolve_regular_package(&self, package_name: &str) -> Option<String> {
+    fn resolve_regular_package_from_dir(
+        &self,
+        package_name: &str,
+        start_dir: &Path,
+    ) -> Option<String> {
         if let Some(cached_path) = self.module_resolver.get_cached_package(package_name) {
             return Some(cached_path);
         }
 
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-        if let Some(package_dir) = self.find_package_directory(&current_dir, package_name) {
+        if let Some(package_dir) = self.find_package_directory(start_dir, package_name) {
             if let Some(entry_point) = self.resolve_package_entry_point(&package_dir) {
                 self.cache_resolved_package(package_name, &entry_point);
                 return Some(entry_point);
@@ -830,10 +850,13 @@ export const __esModule = true;
         None
     }
 
-    fn resolve_subpath_export(&self, package_name: &str, subpath: &str) -> Option<String> {
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-        let package_dir = self.find_package_directory(&current_dir, package_name)?;
+    fn resolve_subpath_export_from_dir(
+        &self,
+        package_name: &str,
+        subpath: &str,
+        start_dir: &Path,
+    ) -> Option<String> {
+        let package_dir = self.find_package_directory(start_dir, package_name)?;
 
         let package_json_path = package_dir.join("package.json");
         if !package_json_path.exists() {
