@@ -1,94 +1,99 @@
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
-use super::*;
+mod tests {
+    use crate::runtime::JsExecutionRuntime;
+    use std::sync::Arc;
 
-#[tokio::test]
-async fn test_partial_render_result() {
-    let partial_result = PartialRenderResult {
-        initial_content: serde_json::json!({"test": "content"}),
-        pending_promises: vec![],
-        boundaries: vec![],
-        has_suspense: false,
-    };
+    use super::super::boundary_manager::SuspenseBoundaryManager;
+    use super::super::renderer::StreamingRenderer;
+    use super::super::types::*;
+    use super::super::validation::validate_suspense_boundaries;
 
-    assert!(!partial_result.has_suspense);
-    assert_eq!(partial_result.pending_promises.len(), 0);
-    assert_eq!(partial_result.boundaries.len(), 0);
-}
+    #[tokio::test]
+    async fn test_partial_render_result() {
+        let partial_result = PartialRenderResult {
+            initial_content: serde_json::json!({"test": "content"}),
+            pending_promises: vec![],
+            boundaries: vec![],
+            has_suspense: false,
+        };
 
-#[tokio::test]
-async fn test_boundary_manager() {
-    let mut manager = SuspenseBoundaryManager::new();
+        assert!(!partial_result.has_suspense);
+        assert_eq!(partial_result.pending_promises.len(), 0);
+        assert_eq!(partial_result.boundaries.len(), 0);
+    }
 
-    let boundary = SuspenseBoundaryInfo {
-        id: "test-boundary".to_string(),
-        fallback_content: serde_json::json!({"loading": true}),
-        parent_boundary_id: None,
-        pending_promise_count: 1,
-        parent_path: vec!["content-slot".to_string()],
-        is_in_content_area: true,
-        skeleton_rendered: false,
-        is_resolved: false,
-        position_hints: Some(PositionHints {
-            in_content_area: true,
-            dom_path: vec!["content-slot".to_string()],
-            is_stable: true,
-        }),
-    };
+    #[tokio::test]
+    async fn test_boundary_manager() {
+        let mut manager = SuspenseBoundaryManager::new();
 
-    manager.register_boundary(boundary).await;
+        let boundary = SuspenseBoundaryInfo {
+            id: "test-boundary".to_string(),
+            fallback_content: serde_json::json!({"loading": true}),
+            parent_boundary_id: None,
+            pending_promise_count: 1,
+            parent_path: vec!["content-slot".to_string()],
+            is_in_content_area: true,
+            skeleton_rendered: false,
+            is_resolved: false,
+            position_hints: Some(PositionHints {
+                in_content_area: true,
+                dom_path: vec!["content-slot".to_string()],
+                is_stable: true,
+            }),
+        };
 
-    let pending = manager.get_pending_boundaries().await;
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].id, "test-boundary");
-}
+        manager.register_boundary(boundary).await;
 
-#[test]
-fn test_rsc_stream_chunk() {
-    let chunk = RscStreamChunk {
-        data: b"test data".to_vec(),
-        chunk_type: RscChunkType::InitialShell,
-        row_id: 1,
-        is_final: false,
-    };
+        let pending = manager.get_pending_boundaries().await;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id, "test-boundary");
+    }
 
-    assert_eq!(chunk.chunk_type, RscChunkType::InitialShell);
-    assert_eq!(chunk.row_id, 1);
-    assert!(!chunk.is_final);
-}
+    #[test]
+    fn test_rsc_stream_chunk() {
+        let chunk = RscStreamChunk {
+            data: b"test data".to_vec(),
+            chunk_type: RscChunkType::InitialShell,
+            row_id: 1,
+            is_final: false,
+        };
 
-#[test]
-fn test_module_row_format() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = StreamingRenderer::new(runtime);
+        assert_eq!(chunk.chunk_type, RscChunkType::InitialShell);
+        assert_eq!(chunk.row_id, 1);
+        assert!(!chunk.is_final);
+    }
 
-    let mut renderer = renderer;
-    renderer.row_counter = 1;
-    renderer.module_path = Some("app/MyComponent.js".to_string());
+    #[test]
+    fn test_module_row_format() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let mut renderer = StreamingRenderer::new(runtime);
 
-    let module_chunk = renderer.create_module_chunk().expect("module chunk");
-    let s = String::from_utf8(module_chunk.data).expect("utf8");
-    assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
-}
+        renderer.set_row_counter(1);
+        renderer.set_module_path("app/MyComponent.js".to_string());
 
-#[test]
-fn test_symbol_row_format() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = StreamingRenderer::new(runtime);
+        let module_chunk = renderer.create_module_chunk().expect("module chunk");
+        let s = String::from_utf8(module_chunk.data).expect("utf8");
+        assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
+    }
 
-    let mut renderer = renderer;
-    renderer.row_counter = 2;
+    #[test]
+    fn test_symbol_row_format() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let mut renderer = StreamingRenderer::new(runtime);
 
-    let sym_chunk = renderer.create_symbol_chunk("react.suspense").expect("symbol chunk");
-    let s = String::from_utf8(sym_chunk.data).expect("utf8");
-    assert!(s.starts_with("2:SSymbol.for(\"react.suspense\")"));
-}
+        renderer.set_row_counter(2);
 
-#[tokio::test]
-async fn test_deferred_execution_validates_react_availability() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let sym_chunk = renderer.create_symbol_chunk("react.suspense").expect("symbol chunk");
+        let s = String::from_utf8(sym_chunk.data).expect("utf8");
+        assert!(s.starts_with("2:SSymbol.for(\"react.suspense\")"));
+    }
 
-    let test_script = r#"
+    #[tokio::test]
+    async fn test_deferred_execution_validates_react_availability() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+
+        let test_script = r#"
             (async function() {
                 const originalReact = globalThis.React;
                 delete globalThis.React;
@@ -107,19 +112,20 @@ async fn test_deferred_execution_validates_react_availability() {
             })()
         "#;
 
-    let result =
-        runtime.execute_script("test_react_validation".to_string(), test_script.to_string()).await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
-    assert_eq!(value["validated"], true);
-    assert_eq!(value["success"], false);
-}
+        let result = runtime
+            .execute_script("test_react_validation".to_string(), test_script.to_string())
+            .await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["validated"], true);
+        assert_eq!(value["success"], false);
+    }
 
-#[tokio::test]
-async fn test_deferred_execution_validates_components_array() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    #[tokio::test]
+    async fn test_deferred_execution_validates_components_array() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let test_script = r#"
+        let test_script = r#"
             (async function() {
                 globalThis.__deferred_async_components = "not an array";
 
@@ -136,19 +142,20 @@ async fn test_deferred_execution_validates_components_array() {
             })()
         "#;
 
-    let result =
-        runtime.execute_script("test_array_validation".to_string(), test_script.to_string()).await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
-    assert_eq!(value["validated"], true);
-    assert_eq!(value["actualType"], "string");
-}
+        let result = runtime
+            .execute_script("test_array_validation".to_string(), test_script.to_string())
+            .await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["validated"], true);
+        assert_eq!(value["actualType"], "string");
+    }
 
-#[tokio::test]
-async fn test_deferred_execution_validates_component_is_function() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    #[tokio::test]
+    async fn test_deferred_execution_validates_component_is_function() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let test_script = r#"
+        let test_script = r#"
             (async function() {
                 const deferred = {
                     component: "not a function",
@@ -171,21 +178,21 @@ async fn test_deferred_execution_validates_component_is_function() {
             })()
         "#;
 
-    let result = runtime
-        .execute_script("test_function_validation".to_string(), test_script.to_string())
-        .await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
-    assert_eq!(value["validated"], true);
-    assert_eq!(value["errorName"], "TypeError");
-    assert_eq!(value["actualType"], "string");
-}
+        let result = runtime
+            .execute_script("test_function_validation".to_string(), test_script.to_string())
+            .await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["validated"], true);
+        assert_eq!(value["errorName"], "TypeError");
+        assert_eq!(value["actualType"], "string");
+    }
 
-#[tokio::test]
-async fn test_deferred_execution_validates_promise_return() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    #[tokio::test]
+    async fn test_deferred_execution_validates_promise_return() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let test_script = r#"
+        let test_script = r#"
             (async function() {
                 const deferred = {
                     component: function() { return "not a promise"; },
@@ -213,22 +220,22 @@ async fn test_deferred_execution_validates_promise_return() {
             })()
         "#;
 
-    let result = runtime
-        .execute_script("test_promise_validation".to_string(), test_script.to_string())
-        .await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
-    assert_eq!(value["validated"], true);
-    assert_eq!(value["errorName"], "TypeError");
-    assert_eq!(value["returnedType"], "string");
-    assert_eq!(value["hasThen"], false);
-}
+        let result = runtime
+            .execute_script("test_promise_validation".to_string(), test_script.to_string())
+            .await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["validated"], true);
+        assert_eq!(value["errorName"], "TypeError");
+        assert_eq!(value["returnedType"], "string");
+        assert_eq!(value["hasThen"], false);
+    }
 
-#[tokio::test]
-async fn test_deferred_execution_verifies_promise_registration() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    #[tokio::test]
+    async fn test_deferred_execution_verifies_promise_registration() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let test_script = r#"
+        let test_script = r#"
             (async function() {
                 globalThis.__suspense_promises = {};
                 const promiseId = "test-promise-123";
@@ -254,149 +261,149 @@ async fn test_deferred_execution_verifies_promise_registration() {
             })()
         "#;
 
-    let result = runtime
-        .execute_script("test_registration_verification".to_string(), test_script.to_string())
-        .await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
-    assert_eq!(value["verified"], true);
-    assert_eq!(value["success"], true);
-    assert_eq!(value["promiseId"], "test-promise-123");
-}
+        let result = runtime
+            .execute_script("test_registration_verification".to_string(), test_script.to_string())
+            .await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["verified"], true);
+        assert_eq!(value["success"], true);
+        assert_eq!(value["promiseId"], "test-promise-123");
+    }
 
-#[test]
-fn test_validate_suspense_boundaries_no_duplicates() {
-    let rsc_data = serde_json::json!([
-        "$",
-        "react.suspense",
-        null,
-        {
-            "__boundary_id": "boundary-1",
-            "fallback": ["$", "div", null, { "children": "Loading 1..." }],
-            "children": "$L1"
-        }
-    ]);
-
-    let result = validate_suspense_boundaries(&rsc_data);
-    assert!(result.is_ok(), "Validation should pass with no duplicates");
-}
-
-#[test]
-fn test_validate_suspense_boundaries_detects_duplicates() {
-    let rsc_data = serde_json::json!({
-        "root": [
+    #[test]
+    fn test_validate_suspense_boundaries_no_duplicates() {
+        let rsc_data = serde_json::json!([
             "$",
-            "div",
+            "react.suspense",
             null,
             {
-                "children": [
-                    [
-                        "$",
-                        "react.suspense",
-                        null,
-                        {
-                            "__boundary_id": "boundary-1",
-                            "fallback": ["$", "div", null, { "children": "Loading..." }],
-                            "children": "$L1"
-                        }
-                    ],
-                    [
-                        "$",
-                        "react.suspense",
-                        null,
-                        {
-                            "__boundary_id": "boundary-2",
-                            "fallback": ["$", "div", null, { "children": "Loading..." }],
-                            "children": "$L2"
-                        }
+                "__boundary_id": "boundary-1",
+                "fallback": ["$", "div", null, { "children": "Loading 1..." }],
+                "children": "$L1"
+            }
+        ]);
+
+        let result = validate_suspense_boundaries(&rsc_data);
+        assert!(result.is_ok(), "Validation should pass with no duplicates");
+    }
+
+    #[test]
+    fn test_validate_suspense_boundaries_detects_duplicates() {
+        let rsc_data = serde_json::json!({
+            "root": [
+                "$",
+                "div",
+                null,
+                {
+                    "children": [
+                        [
+                            "$",
+                            "react.suspense",
+                            null,
+                            {
+                                "__boundary_id": "boundary-1",
+                                "fallback": ["$", "div", null, { "children": "Loading..." }],
+                                "children": "$L1"
+                            }
+                        ],
+                        [
+                            "$",
+                            "react.suspense",
+                            null,
+                            {
+                                "__boundary_id": "boundary-2",
+                                "fallback": ["$", "div", null, { "children": "Loading..." }],
+                                "children": "$L2"
+                            }
+                        ]
                     ]
+                }
+            ]
+        });
+
+        let result = validate_suspense_boundaries(&rsc_data);
+        assert!(result.is_err(), "Validation should fail with duplicate fallbacks");
+
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("boundary-2"), "Error should mention the duplicate boundary");
+    }
+
+    #[test]
+    fn test_validate_suspense_boundaries_nested() {
+        let rsc_data = serde_json::json!([
+            "$",
+            "react.suspense",
+            null,
+            {
+                "__boundary_id": "outer-boundary",
+                "fallback": ["$", "div", null, { "children": "Loading outer..." }],
+                "children": [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "__boundary_id": "inner-boundary",
+                        "fallback": ["$", "div", null, { "children": "Loading inner..." }],
+                        "children": "$L1"
+                    }
                 ]
             }
-        ]
-    });
+        ]);
 
-    let result = validate_suspense_boundaries(&rsc_data);
-    assert!(result.is_err(), "Validation should fail with duplicate fallbacks");
+        let result = validate_suspense_boundaries(&rsc_data);
+        assert!(
+            result.is_ok(),
+            "Validation should pass with nested boundaries having different fallbacks"
+        );
+    }
 
-    let error_msg = result.unwrap_err();
-    assert!(error_msg.contains("boundary-2"), "Error should mention the duplicate boundary");
-}
-
-#[test]
-fn test_validate_suspense_boundaries_nested() {
-    let rsc_data = serde_json::json!([
-        "$",
-        "react.suspense",
-        null,
-        {
-            "__boundary_id": "outer-boundary",
-            "fallback": ["$", "div", null, { "children": "Loading outer..." }],
+    #[test]
+    fn test_validate_suspense_boundaries_multiple_unique() {
+        let rsc_data = serde_json::json!({
             "children": [
-                "$",
-                "react.suspense",
-                null,
-                {
-                    "__boundary_id": "inner-boundary",
-                    "fallback": ["$", "div", null, { "children": "Loading inner..." }],
-                    "children": "$L1"
-                }
+                [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "boundaryId": "boundary-1",
+                        "fallback": ["$", "div", null, { "children": "Loading 1..." }],
+                        "children": "$L1"
+                    }
+                ],
+                [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "boundaryId": "boundary-2",
+                        "fallback": ["$", "div", null, { "children": "Loading 2..." }],
+                        "children": "$L2"
+                    }
+                ],
+                [
+                    "$",
+                    "react.suspense",
+                    null,
+                    {
+                        "boundaryId": "boundary-3",
+                        "fallback": ["$", "div", null, { "children": "Loading 3..." }],
+                        "children": "$L3"
+                    }
+                ]
             ]
-        }
-    ]);
+        });
 
-    let result = validate_suspense_boundaries(&rsc_data);
-    assert!(
-        result.is_ok(),
-        "Validation should pass with nested boundaries having different fallbacks"
-    );
-}
+        let result = validate_suspense_boundaries(&rsc_data);
+        assert!(result.is_ok(), "Validation should pass with multiple unique boundaries");
+    }
 
-#[test]
-fn test_validate_suspense_boundaries_multiple_unique() {
-    let rsc_data = serde_json::json!({
-        "children": [
-            [
-                "$",
-                "react.suspense",
-                null,
-                {
-                    "boundaryId": "boundary-1",
-                    "fallback": ["$", "div", null, { "children": "Loading 1..." }],
-                    "children": "$L1"
-                }
-            ],
-            [
-                "$",
-                "react.suspense",
-                null,
-                {
-                    "boundaryId": "boundary-2",
-                    "fallback": ["$", "div", null, { "children": "Loading 2..." }],
-                    "children": "$L2"
-                }
-            ],
-            [
-                "$",
-                "react.suspense",
-                null,
-                {
-                    "boundaryId": "boundary-3",
-                    "fallback": ["$", "div", null, { "children": "Loading 3..." }],
-                    "children": "$L3"
-                }
-            ]
-        ]
-    });
+    #[tokio::test]
+    async fn test_deferred_execution_complete_flow() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
 
-    let result = validate_suspense_boundaries(&rsc_data);
-    assert!(result.is_ok(), "Validation should pass with multiple unique boundaries");
-}
-
-#[tokio::test]
-async fn test_deferred_execution_complete_flow() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-
-    let test_script = r#"
+        let test_script = r#"
             (async function() {
                 globalThis.React = { createElement: () => {} };
 
@@ -464,22 +471,23 @@ async fn test_deferred_execution_complete_flow() {
             })()
         "#;
 
-    let result =
-        runtime.execute_script("test_complete_flow".to_string(), test_script.to_string()).await;
-    assert!(result.is_ok());
-    let value = result.unwrap();
+        let result =
+            runtime.execute_script("test_complete_flow".to_string(), test_script.to_string()).await;
+        assert!(result.is_ok());
+        let value = result.unwrap();
 
-    assert_eq!(value["totalComponents"], 2);
-    assert_eq!(value["successCount"], 1);
-    assert_eq!(value["failureCount"], 1);
+        assert_eq!(value["totalComponents"], 2);
+        assert_eq!(value["successCount"], 1);
+        assert_eq!(value["failureCount"], 1);
 
-    let results = value["results"].as_array().unwrap();
-    assert_eq!(results.len(), 2);
+        let results = value["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
 
-    assert_eq!(results[0]["promiseId"], "valid-promise");
-    assert_eq!(results[0]["success"], true);
+        assert_eq!(results[0]["promiseId"], "valid-promise");
+        assert_eq!(results[0]["success"], true);
 
-    assert_eq!(results[1]["promiseId"], "invalid-promise");
-    assert_eq!(results[1]["success"], false);
-    assert_eq!(results[1]["error"], "Not a promise");
+        assert_eq!(results[1]["promiseId"], "invalid-promise");
+        assert_eq!(results[1]["success"], false);
+        assert_eq!(results[1]["error"], "Not a promise");
+    }
 }
