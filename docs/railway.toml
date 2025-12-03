@@ -1,9 +1,6 @@
 [build]
 builder = "NIXPACKS"
 
-[build.nixpacksPlan.phases.install]
-cmds = ["pnpm i --no-frozen-lockfile"]
-
 [deploy]
 startCommand = "pnpm start"
 healthcheckPath = "/"
