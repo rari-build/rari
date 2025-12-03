@@ -1,3 +1,36 @@
+## [0.5.2] - 2025-12-03
+
+### 🐛 Bug Fixes
+
+- *(router)* Add Vite ignore comments to dynamic imports
+- *(security)* Prevent prototype pollution in server actions (CVE-2025-55182)
+
+### 🚜 Refactor
+
+- *(rsc)* Extract and reorganize type definitions and fix dupes
+- *(server)* Reorganize server module structure
+- *(runtime)* Extract runtime_factory into submodules
+- *(module_loader)* Extract module loader into submodules
+- *(runtime)* Extract runtime submodules into new org
+- *(rsc)* Reorganize RSC module structure into submodules
+- *(rsc)* Extract streaming module scripts into separate files
+- *(rsc)* Extract streaming submodules into separate files
+- *(rsc)* Extract renderer scripts and constants into separate files
+- *(rsc)* Extract renderer core logic and utilities into submodules
+- *(rsc)* Extract layout renderer scripts into separate files
+- *(layout_renderer)* Extract core logic and utilities into submodules
+- *(rsc)* Remove unused fields and dead code
+- *(runtime)* Remove unused fields and dead code
+- *(rsc,runtime)* Remove auto-register logic and hardcoded paths
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.5.2
+## [rari@0.5.5] - 2025-12-02
+
+### 💼 Other
+
+- Rari@0.5.5
 ## [0.5.1] - 2025-12-02
 
 ### 🚜 Refactor
