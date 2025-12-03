@@ -21,6 +21,7 @@ pub const PROMISE_MANAGER_CHECK_SCRIPT: &str = include_str!("js/promise_manager_
 pub const SERVER_FUNCTION_RESOLVER_SCRIPT: &str = include_str!("js/server_function_resolver.js");
 pub const RESOLVE_SERVER_FUNCTIONS_SCRIPT: &str = include_str!("js/resolve_server_functions.js");
 pub const SERVER_ACTION_INVOCATION_SCRIPT: &str = include_str!("js/server_action_invocation.js");
+pub const SAFE_PROPERTY_ACCESS_SCRIPT: &str = include_str!("js/safe_property_access.js");
 pub const MODULE_REGISTRATION_SCRIPT: &str = include_str!("js/module_registration.js");
 pub const JSX_RUNTIME_SETUP_SCRIPT: &str = include_str!("js/jsx_runtime_setup.js");
 pub const REGISTRY_PROXY_SETUP_SCRIPT: &str = include_str!("js/registry_proxy_setup.js");

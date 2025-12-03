@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use tracing::{debug, error};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Deserialize)]
 pub struct ServerActionRequest {
     pub id: String,
@@ -54,11 +57,13 @@ pub async fn handle_server_action(
         }
     };
 
+    let sanitized_args = sanitize_args(&request.args);
+
     debug!("Executing server action: {} (export: {})", request.id, request.export_name);
 
     let renderer = state.renderer.lock().await;
     let result =
-        renderer.execute_server_function(&request.id, &request.export_name, &request.args).await;
+        renderer.execute_server_function(&request.id, &request.export_name, &sanitized_args).await;
 
     match result {
         Ok(value) => {
@@ -224,4 +229,42 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
     }
 
     Ok(result)
+}
+
+pub(crate) fn sanitize_args(args: &[JsonValue]) -> Vec<JsonValue> {
+    args.iter().map(sanitize_value).collect()
+}
+
+fn sanitize_value(value: &JsonValue) -> JsonValue {
+    match value {
+        JsonValue::Object(obj) => {
+            let mut sanitized = serde_json::Map::new();
+            for (key, val) in obj {
+                if is_dangerous_property(key) {
+                    tracing::warn!(
+                        "Blocked dangerous property '{}' in server action arguments",
+                        key
+                    );
+                    continue;
+                }
+                sanitized.insert(key.clone(), sanitize_value(val));
+            }
+            JsonValue::Object(sanitized)
+        }
+        JsonValue::Array(arr) => JsonValue::Array(arr.iter().map(sanitize_value).collect()),
+        _ => value.clone(),
+    }
+}
+
+pub(crate) fn is_dangerous_property(key: &str) -> bool {
+    matches!(
+        key,
+        "__proto__"
+            | "constructor"
+            | "prototype"
+            | "__defineGetter__"
+            | "__defineSetter__"
+            | "__lookupGetter__"
+            | "__lookupSetter__"
+    )
 }
