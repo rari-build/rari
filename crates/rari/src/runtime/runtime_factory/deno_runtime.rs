@@ -52,7 +52,7 @@ enum JsRequest {
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
     SetRequestContext {
-        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
 }
@@ -673,7 +673,7 @@ impl JsRuntimeInterface for DenoRuntime {
 
     fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
 

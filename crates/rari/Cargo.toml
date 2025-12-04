@@ -21,6 +21,9 @@ readme = "../../README.md"
 homepage = "https://github.com/rari-build/rari"
 documentation = "https://github.com/rari-build/rari/tree/main/docs"
 
+[package.metadata.cargo-machete]
+ignored = [ "num-bigint-dig" ]
+
 [lib]
 crate-type = [ "rlib" ]
 

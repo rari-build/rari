@@ -11,7 +11,6 @@ pub mod module_loader;
 pub mod module_reload;
 pub mod ops;
 pub mod runtime_factory;
-pub mod transpile;
 pub mod utils;
 
 pub type TokioRuntime = tokio::runtime::Handle;
@@ -369,7 +368,7 @@ impl JsExecutionRuntime {
 
     pub async fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Result<(), RariError> {
         let runtime = self.runtime.clone();
 

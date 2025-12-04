@@ -371,7 +371,7 @@ export default {{}};
     pub fn as_extension_transpiler(self: &Rc<Self>) -> Rc<ExtensionTranspilerFn> {
         Rc::new(move |specifier: FastString, code: FastString| {
             match ModuleSpecifier::parse(specifier.as_str()) {
-                Ok(_) => crate::runtime::transpile::maybe_transpile_source(specifier, code),
+                Ok(_) => crate::runtime::utils::transpile::maybe_transpile_source(specifier, code),
                 Err(e) => Err(JsErrorBox::from_err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     format!("Failed to parse module specifier '{specifier}': {e}"),
@@ -487,7 +487,7 @@ export default {{}};
     ) -> Option<ModuleLoadResponse> {
         if let Some(code) = self.storage.get_module_code(specifier_str) {
             let (final_code, module_type) = if needs_typescript_transpilation(specifier_str) {
-                match crate::runtime::transpile::maybe_transpile_source(
+                match crate::runtime::utils::transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
                     code.to_string().into(),
                 ) {
@@ -501,7 +501,7 @@ export default {{}};
                     }
                 }
             } else if needs_jsx_transpilation(specifier_str) {
-                match crate::runtime::transpile::maybe_transpile_source(
+                match crate::runtime::utils::transpile::maybe_transpile_source(
                     specifier_str.to_string().into(),
                     code.to_string().into(),
                 ) {

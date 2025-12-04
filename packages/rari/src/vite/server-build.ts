@@ -566,7 +566,8 @@ const ${importName} = (props) => {
     inputPath: string,
     outputPath: string,
     _component: { dependencies: string[], hasNodeImports: boolean },
-  ): Promise<void> {
+    returnCode = false,
+  ): Promise<string | void> {
     const componentId = this.getComponentId(
       path.relative(this.projectRoot, inputPath),
     )
@@ -737,6 +738,10 @@ const ${importName} = (props) => {
         )
 
         await fs.promises.writeFile(outputPath, finalTransformedCode, 'utf-8')
+
+        if (returnCode) {
+          return finalTransformedCode
+        }
       }
 
       if (result.errors.length > 0) {
@@ -1135,11 +1140,12 @@ function registerClientReference(clientReference, id, exportName) {
     const bundleDir = path.dirname(fullBundlePath)
     await fs.promises.mkdir(bundleDir, { recursive: true })
 
-    const builtCode = await this.buildSingleComponentOptimized(
+    const builtCode = await this.buildSingleComponent(
       filePath,
       fullBundlePath,
       componentData,
-    )
+      true,
+    ) as string
 
     this.buildCache.set(filePath, {
       code: builtCode,
@@ -1153,199 +1159,6 @@ function registerClientReference(clientReference, id, exportName) {
       componentId,
       bundlePath: path.join(this.options.outDir, relativeBundlePath),
       success: true,
-    }
-  }
-
-  private async buildSingleComponentOptimized(
-    inputPath: string,
-    outputPath: string,
-    _component: { dependencies: string[], hasNodeImports: boolean },
-  ): Promise<string> {
-    const componentId = this.getComponentId(
-      path.relative(this.projectRoot, inputPath),
-    )
-
-    const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
-    const clientTransformedCode = this.transformClientImports(
-      originalCode,
-      inputPath,
-    )
-    const isPage = this.isPageComponent(inputPath)
-    const componentGlobalCode = isPage
-      ? this.transformComponentImportsToGlobal(clientTransformedCode)
-      : clientTransformedCode
-    const transformedCode = this.transformNodeImports(componentGlobalCode)
-
-    const ext = path.extname(inputPath)
-    let loader: string
-    if (ext === '.tsx') {
-      loader = 'tsx'
-    }
-    else if (ext === '.ts') {
-      loader = 'ts'
-    }
-    else if (ext === '.jsx') {
-      loader = 'jsx'
-    }
-    else {
-      loader = 'js'
-    }
-
-    try {
-      const result = await build({
-        stdin: {
-          contents: transformedCode,
-          resolveDir: path.dirname(inputPath),
-          sourcefile: inputPath,
-          loader: loader as any,
-        },
-        bundle: true,
-        platform: 'neutral',
-        target: 'es2022',
-        format: 'esm',
-        external: [],
-        mainFields: ['module', 'main'],
-        conditions: ['import', 'module', 'default'],
-        jsx: 'transform',
-        jsxFactory: 'React.createElement',
-        jsxFragment: 'React.Fragment',
-        define: {
-          'global': 'globalThis',
-          'process.env.NODE_ENV': '"production"',
-        },
-        loader: {
-          '.ts': 'ts',
-          '.tsx': 'tsx',
-          '.js': 'js',
-          '.jsx': 'jsx',
-        },
-        resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
-        minify: false,
-        minifyIdentifiers: false,
-        sourcemap: false,
-        metafile: false,
-        write: false,
-        plugins: [
-          {
-            name: 'replace-react-imports',
-            setup(build) {
-              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
-                const fs = await import('node:fs/promises')
-                let contents = await fs.readFile(args.path, 'utf-8')
-                contents = contents.replace(
-                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
-                  '// React is available as globalThis.React',
-                )
-                contents = contents.replace(/React2/g, 'React')
-                return { contents, loader: 'js' }
-              })
-            },
-          },
-          {
-            name: 'auto-external',
-            setup(build) {
-              build.onResolve({ filter: /^[^./]/ }, async (args) => {
-                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
-                  return { path: args.path, external: true }
-                }
-                if (args.path === 'rari/client') {
-                  return null
-                }
-                return { path: args.path, external: true }
-              })
-            },
-          },
-          {
-            name: 'resolve-server-functions',
-            setup(build) {
-              build.onResolve(
-                { filter: /^\.\.?\/.*(functions|actions)/ },
-                async (args) => {
-                  const resolvedPath = path.resolve(
-                    path.dirname(args.importer),
-                    args.path,
-                  )
-
-                  const possibleExtensions = [
-                    '.ts',
-                    '.js',
-                    '.tsx',
-                    '.jsx',
-                    '/index.ts',
-                    '/index.js',
-                  ]
-                  for (const ext of possibleExtensions) {
-                    const fullPath = resolvedPath + ext
-                    if (fs.existsSync(fullPath)) {
-                      return { path: fullPath }
-                    }
-                  }
-
-                  return null
-                },
-              )
-            },
-          },
-        ],
-        banner: {
-          js: `// Rari Server Component Bundle
-// Generated at: ${new Date().toISOString()}
-// Original file: ${path.relative(this.projectRoot, inputPath)}
-`,
-        },
-      })
-
-      if (result.outputFiles && result.outputFiles.length > 0) {
-        const outputFile = result.outputFiles[0]
-        let code = outputFile.text
-
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-runtime['"];?\s*/g,
-          '// jsx/jsxs are available as globals\n',
-        )
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-dev-runtime['"];?\s*/g,
-          '// jsx/jsxs are available as globals\n',
-        )
-        code = code.replace(
-          /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?\s*/g,
-          '// React is available as globalThis.React\n',
-        )
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
-          '// React is available as globalThis.React\n',
-        )
-        code = code.replace(
-          /import\s+\w+\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
-        )
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
-        )
-
-        const finalTransformedCode = this.createSelfRegisteringModule(
-          code,
-          componentId,
-        )
-
-        await fs.promises.writeFile(outputPath, finalTransformedCode, 'utf-8')
-
-        return finalTransformedCode
-      }
-
-      if (result.errors.length > 0) {
-        console.error('ESBuild errors:', result.errors)
-        throw new Error(
-          `ESBuild compilation failed with ${result.errors.length} errors`,
-        )
-      }
-
-      throw new Error('No output generated from ESBuild')
-    }
-    catch (error) {
-      console.error(`ESBuild failed for ${inputPath}:`, error)
-      throw error
     }
   }
 

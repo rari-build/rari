@@ -1,6 +1,6 @@
 use crate::server::ServerState;
-use crate::server::cache_loader::CacheLoader;
 use crate::server::config::Config;
+use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::utils::http_utils::get_content_type;
 use axum::{
     body::Body,

@@ -57,6 +57,6 @@ pub trait JsRuntimeInterface: Send + Sync {
 
     fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 }

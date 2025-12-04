@@ -1,3 +1,4 @@
+pub mod api_error;
 pub mod api_routes;
 pub mod app_router;
 pub mod types;

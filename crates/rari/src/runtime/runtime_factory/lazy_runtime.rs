@@ -268,7 +268,7 @@ impl JsRuntimeInterface for LazyRuntime {
 
     fn set_request_context(
         &self,
-        request_context: std::sync::Arc<crate::server::request_context::RequestContext>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let inner = self.inner.clone();
         let env_vars = self.env_vars.clone();
