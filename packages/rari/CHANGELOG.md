@@ -1,3 +1,38 @@
+## [0.5.8] - 2025-12-04
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump binaries to 0.5.4
+## [0.5.4] - 2025-12-04
+
+### 🚀 Features
+
+- *(rsc)* Extract client-side RSC runtime from inline and update rendering pipeline
+- *(runtime)* Extract client-side entry point and RSC wire format parser
+
+### 🚜 Refactor
+
+- *(rsc)* Reorganize module structure for rendering pipeline
+- *(runtime)* Use StreamOpState from ops module
+- *(server)* Reorganize vite proxy into module structure
+- *(server)* Reorganize types
+- *(server)* Reorganize module structure
+- *(runtime)* Move transpile module into utils
+- *(rsc)* Extract JavaScript initialization and rendering scripts
+
+### 🎨 Styling
+
+- *(runtime)* Clean up linting directives and modernize string formatting
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Configure cargo-machete to ignore num-bigint-dig dependency
+- *(release)* Bump version to 0.5.4
+## [rari@0.5.7] - 2025-12-04
+
+### 💼 Other
+
+- Rari@0.5.7
 ## [0.5.3] - 2025-12-03
 
 ### 📚 Documentation
