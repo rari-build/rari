@@ -11,7 +11,6 @@ pub mod module_loader;
 pub mod module_reload;
 pub mod ops;
 pub mod runtime_factory;
-pub mod transpile;
 pub mod utils;
 
 pub type TokioRuntime = tokio::runtime::Handle;
