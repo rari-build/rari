@@ -1,13 +1,11 @@
 use crate::error::RariError;
 use crate::runtime::module_loader::RariModuleLoader;
+use crate::runtime::ops::StreamOpState;
 use crate::runtime::runtime_factory::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
-
-#[derive(Default)]
-struct StreamOpState;
 
 pub fn create_deno_runtime(
     env_vars: Option<FxHashMap<String, String>>,
@@ -23,7 +21,7 @@ pub fn create_deno_runtime(
         name: "rari:streaming",
         ops: Cow::Owned(streaming_ops),
         op_state_fn: Some(Box::new(|state| {
-            state.put(StreamOpState);
+            state.put(StreamOpState::default());
             let mut feature_checker = deno_features::FeatureChecker::default();
             feature_checker.enable_feature("broadcast-channel");
             feature_checker.enable_feature("webgpu");
