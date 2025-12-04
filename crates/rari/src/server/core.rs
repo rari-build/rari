@@ -24,7 +24,7 @@ use crate::server::request_middleware::{
 };
 use crate::server::response_cache;
 use crate::server::routing::{api_routes, app_router};
-use crate::server::vite_proxy::{
+use crate::server::vite::proxy::{
     check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_src_proxy,
     vite_websocket_proxy,
 };

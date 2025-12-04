@@ -13,7 +13,7 @@ pub mod response_cache;
 pub mod routing;
 pub mod streaming_response;
 pub mod utils;
-pub mod vite_proxy;
+pub mod vite;
 
 pub use core::Server;
 
