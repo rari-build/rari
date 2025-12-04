@@ -432,7 +432,7 @@ pub async fn handle_app_route(
         RenderMode::RscNavigation => {
             debug!("Rendering RSC wire format for client navigation");
             match layout_renderer
-                .render_route_optimized(
+                .render_route_by_mode(
                     &route_match,
                     &context,
                     render_mode,

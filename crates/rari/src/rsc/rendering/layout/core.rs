@@ -108,7 +108,7 @@ impl LayoutRenderer {
         Ok(rsc_wire_format)
     }
 
-    pub async fn render_route_optimized(
+    pub async fn render_route_by_mode(
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
@@ -126,7 +126,7 @@ impl LayoutRenderer {
                     RenderResult::Static(html) => Ok(html),
                     RenderResult::StaticWithPayload { html, .. } => Ok(html),
                     RenderResult::Streaming(_) => Err(RariError::internal(
-                        "Streaming result not supported in render_route_optimized",
+                        "Streaming result not supported in render_route_by_mode",
                     )),
                 }
             }
