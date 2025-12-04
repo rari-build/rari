@@ -1,5 +1,3 @@
-/* eslint-disable unused-imports/no-unused-vars */
-// oxlint-disable prefer-template
 const clientReferenceRegistry = new Map()
 const serverReferenceRegistry = new Map()
 
@@ -10,7 +8,7 @@ if (typeof globalThis.__rari_bridge !== 'undefined') {
 }
 
 export function registerClientReference(clientReference, id, exportName) {
-  const key = id + '#' + exportName
+  const key = `${id}#${exportName}`
   clientReferenceRegistry.set(key, {
     id,
     exportName,
@@ -40,6 +38,7 @@ export function registerClientReference(clientReference, id, exportName) {
     }
   }
   catch (error) {
+    console.error(error)
   }
 
   return clientReference
@@ -48,7 +47,7 @@ export function registerClientReference(clientReference, id, exportName) {
 const clientComponentRegistry = new Map()
 
 export function registerClientComponent(componentFunction, id, exportName) {
-  const key = id + '#' + exportName
+  const key = `${id}#${exportName}`
   clientComponentRegistry.set(key, componentFunction)
   clientReferenceRegistry.set(key, {
     id,
@@ -64,7 +63,7 @@ export function getClientComponent(id) {
 }
 
 export function registerServerReference(serverReference, id, exportName) {
-  const key = id + '#' + exportName
+  const key = `${id}#${exportName}`
   serverReferenceRegistry.set(key, {
     id,
     exportName,
@@ -92,6 +91,7 @@ export function registerServerReference(serverReference, id, exportName) {
     }
   }
   catch (error) {
+    console.error(error)
   }
 
   return serverReference

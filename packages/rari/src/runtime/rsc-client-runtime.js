@@ -1,5 +1,3 @@
-// oxlint-disable prefer-template
-/* eslint-disable no-use-before-define,unused-imports/no-unused-vars, prefer-const, node/prefer-global/process */
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 
@@ -7,6 +5,7 @@ if (typeof globalThis.__rari === 'undefined') {
   globalThis.__rari = {}
 }
 
+// eslint-disable-next-line node/prefer-global/process
 globalThis.__rari.isDevelopment = process.env.NODE_ENV !== 'production'
 
 if (typeof globalThis.__clientComponents === 'undefined') {
@@ -163,7 +162,7 @@ class RscClient {
 
   async fetchServerComponent(componentId, props = {}) {
     const hmrCounter = (typeof window !== 'undefined' && window.__rscRefreshCounters && window.__rscRefreshCounters[componentId]) || 0
-    const cacheKey = componentId + ':' + JSON.stringify(props) + ':hmr:' + hmrCounter
+    const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey)) {
       return this.componentCache.get(cacheKey)
@@ -181,7 +180,7 @@ class RscClient {
       requestPromise = (async () => {
         const encodedProps = encodeURIComponent(JSON.stringify(props))
         const cacheBuster = Date.now()
-        const fetchUrl = '/rsc/render/' + componentId + '?props=' + encodedProps + '&_t=' + cacheBuster
+        const fetchUrl = `/rsc/render/${componentId}?props=${encodedProps}&_t=${cacheBuster}`
         await this.waitForServerReady()
         const response = await this.fetchWithTimeout(fetchUrl, {
           method: 'GET',
@@ -193,12 +192,12 @@ class RscClient {
           },
         })
         if (!response.ok) {
-          throw new Error('Server responded with ' + response.status + ': ' + response.statusText)
+          throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
         }
         try {
           return await this.processRscResponseManually(response)
         }
-        catch (manualError) {
+        catch {
           const fallback = await this.processRscResponse(response)
           return fallback
         }
@@ -246,7 +245,7 @@ class RscClient {
           if (r.ok) {
             return r
           }
-          lastError = new Error('HTTP ' + r.status + ': ' + (await r.text()))
+          lastError = new Error(`HTTP ${r.status}: ${await r.text()}`)
         }
         catch (e) {
           lastError = e
@@ -254,9 +253,6 @@ class RscClient {
       }
       return null
     }
-
-    const abortController = new AbortController()
-    const abortTimeout = setTimeout(() => abortController.abort(), this.config.timeout)
 
     response = await attempt()
     if (!response) {
@@ -269,7 +265,7 @@ class RscClient {
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error('Server responded with ' + response.status + ': ' + errorText)
+      throw new Error(`Server responded with ${response.status}: ${errorText}`)
     }
 
     const stream = response.body
@@ -279,7 +275,6 @@ class RscClient {
 
     const reader = stream.getReader()
     const decoder = new TextDecoder()
-    let content = ''
     const modules = new Map()
     const boundaryRowMap = new Map()
 
@@ -327,7 +322,7 @@ class RscClient {
             if (type.startsWith('$L')) {
               const mod = modules.get(type)
               if (mod) {
-                const clientKey = mod.id + '#' + (mod.name || 'default')
+                const clientKey = `${mod.id}#${mod.name || 'default'}`
                 const clientComponent = getClientComponent(clientKey)
                 if (clientComponent) {
                   const reactElement = createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
@@ -361,7 +356,7 @@ class RscClient {
           }
         }
 
-        return element.map((child, index) => {
+        return element.map((child) => {
           const converted = convertRscToReact(child)
           return converted
         })
@@ -376,9 +371,9 @@ class RscClient {
     }
 
     let initialContent = null
-    let boundaryUpdates = new Map()
-    let isComplete = false
+    const boundaryUpdates = new Map()
     let buffered = ''
+    let streamingComponent = null
 
     const processStream = async () => {
       const newlineChar = String.fromCharCode(10)
@@ -387,7 +382,6 @@ class RscClient {
         while (true) {
           const { value, done } = await reader.read()
           if (done) {
-            isComplete = true
             break
           }
 
@@ -411,14 +405,14 @@ class RscClient {
               const content = line.substring(colonIndex + 1)
 
               if (content.includes('STREAM_COMPLETE')) {
-                isComplete = true
+                // Stream complete
               }
               else if (content.startsWith('I[')) {
                 try {
                   const importData = JSON.parse(content.substring(1))
                   if (Array.isArray(importData) && importData.length >= 3) {
                     const [path, chunks, exportName] = importData
-                    modules.set('$L' + rowId, {
+                    modules.set(`$L${rowId}`, {
                       id: path,
                       chunks: Array.isArray(chunks) ? chunks : [chunks],
                       name: exportName || 'default',
@@ -444,9 +438,9 @@ class RscClient {
               else if (content.startsWith('[')) {
                 const parsed = JSON.parse(content)
                 if (Array.isArray(parsed) && parsed.length >= 4) {
-                  const [marker, selector, key, props] = parsed
+                  const [marker, selector, props] = parsed
                   if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && props.boundaryId) {
-                    boundaryRowMap.set('$L' + rowId, props.boundaryId)
+                    boundaryRowMap.set(`$L${rowId}`, props.boundaryId)
                   }
                   if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
                     if (typeof selector === 'string' && selector.startsWith('$L')) {
@@ -488,14 +482,11 @@ class RscClient {
       }
       catch (error) {
         console.error('Error processing stream:', error)
-        isComplete = true
       }
     }
 
-    let streamingComponent = null
-
     const StreamingWrapper = () => {
-      const [renderTrigger, setRenderTrigger] = useState(0)
+      const [setRenderTrigger] = useState(0)
 
       useEffect(() => {
         streamingComponent = {
@@ -538,7 +529,7 @@ class RscClient {
         }
 
         if (Array.isArray(element)) {
-          return element.map((child, index) => renderWithBoundaryUpdates(child))
+          return element.map(child => renderWithBoundaryUpdates(child))
         }
 
         return element
@@ -604,7 +595,7 @@ class RscClient {
           },
         }
       }
-      catch (error) {
+      catch {
         throw new Error('React Server DOM client not available')
       }
     }
@@ -642,7 +633,7 @@ class RscClient {
           const importData = JSON.parse(data)
           if (Array.isArray(importData) && importData.length >= 3) {
             const [path, chunks, exportName] = importData
-            modules.set('$L' + rowId, {
+            modules.set(`$L${rowId}`, {
               id: path,
               chunks: Array.isArray(chunks) ? chunks : [chunks],
               name: exportName || 'default',
@@ -672,7 +663,7 @@ class RscClient {
     }
 
     if (errors.length > 0) {
-      throw new Error('RSC Server Error: ' + errors.map(e => e.message || e).join(', '))
+      throw new Error(`RSC Server Error: ${errors.map(e => e.message || e).join(', ')}`)
     }
 
     let rootElement = null
@@ -709,7 +700,7 @@ class RscClient {
 
     if (Array.isArray(elementData)) {
       if (elementData.length >= 2 && elementData[0] === '$') {
-        const [marker, type, key, props] = elementData
+        const [type, key, props] = elementData
 
         let actualType = type
 
@@ -731,7 +722,7 @@ class RscClient {
                   backgroundColor: '#fff0f0',
                 },
               },
-              createElement('small', { style: { color: '#c00' } }, 'Missing Client Component: ' + type,
+              createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${type}`,
               ),
               children,
             )
@@ -740,7 +731,7 @@ class RscClient {
         else if (typeof type === 'string' && type.startsWith('$L')) {
           if (modules.has(type)) {
             const moduleData = modules.get(type)
-            const clientComponentKey = moduleData.id + '#' + moduleData.name
+            const clientComponentKey = `${moduleData.id}#${moduleData.name}`
 
             const clientComponent = getClientComponent(clientComponentKey)
 
@@ -760,7 +751,7 @@ class RscClient {
                     backgroundColor: '#fff0f0',
                   },
                 },
-                createElement('small', { style: { color: '#c00' } }, 'Missing Client Component: ' + moduleData.name + ' (' + moduleData.id + ')',
+                createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${moduleData.name} (${moduleData.id})`,
                 ),
                 children,
               )
@@ -773,7 +764,7 @@ class RscClient {
         return createElement(actualType, { key, ...processedProps })
       }
       else {
-        return elementData.map((item, index) => this.reconstructElementFromRscData(item, modules))
+        return elementData.map(item => this.reconstructElementFromRscData(item, modules))
       }
     }
 
@@ -798,7 +789,7 @@ class RscClient {
             processed[key] = result
           }
           else {
-            const processedChildren = value.map((child, index) => {
+            const processedChildren = value.map((child) => {
               const result = this.reconstructElementFromRscData(child, modules)
               return result
             }).filter(child => child !== null && child !== undefined)
@@ -843,14 +834,14 @@ class RscClient {
             serverReady = true
           }
           else {
-            throw new Error('Server status: ' + statusData.status)
+            throw new Error(`Server status: ${statusData.status}`)
           }
         }
         else {
-          throw new Error('Status check failed: ' + statusResponse.status)
+          throw new Error(`Status check failed: ${statusResponse.status}`)
         }
       }
-      catch (err) {
+      catch {
         retries++
         if (retries < this.config.maxRetries) {
           await new Promise(resolve => setTimeout(resolve, this.config.retryDelay))
@@ -940,12 +931,12 @@ function ServerComponentWrapper({
   }
 
   return createElement(RscErrorComponent, {
-    error: 'No data received for component: ' + componentId,
+    error: `No data received for component: ${componentId}`,
     details: { componentId, dataType: typeof data, hasData: !!data },
   })
 }
 
-function createServerComponentWrapper(componentName, importPath) {
+function createServerComponentWrapper(componentName) {
   let globalRefreshCounter = 0
 
   if (typeof window !== 'undefined') {
@@ -981,14 +972,14 @@ function createServerComponentWrapper(componentName, importPath) {
     return createElement(Suspense, {
       fallback: null,
     }, createElement(ServerComponentWrapper, {
-      key: componentName + '-' + mountKey,
+      key: `${componentName}-${mountKey}`,
       componentId: componentName,
       props,
       fallback: null,
     }))
   }
 
-  ServerComponent.displayName = 'ServerComponent(' + componentName + ')'
+  ServerComponent.displayName = `ServerComponent(${componentName})`
 
   return function (props) {
     return createElement(ServerComponent, props)
@@ -1051,7 +1042,7 @@ if (import.meta.hot) {
     const timestamp = data?.t || data?.timestamp
 
     if (componentId) {
-      console.warn('[HMR] Server component updated: ' + componentId)
+      console.warn(`[HMR] Server component updated: ${componentId}`)
 
       if (typeof window !== 'undefined') {
         console.warn('[HMR] Dispatching window event rari:rsc-invalidate')
@@ -1109,7 +1100,7 @@ if (import.meta.hot) {
     const metadata = data.metadata
     const metadataChanged = data.metadataChanged
 
-    console.warn('[HMR] App router ' + fileType + ' updated: ' + filePath)
+    console.warn(`[HMR] App router ${fileType} updated: ${filePath}`)
     console.warn('[HMR] Affected routes:', affectedRoutes)
 
     if (metadataChanged && metadata) {
@@ -1118,7 +1109,7 @@ if (import.meta.hot) {
 
     try {
       const rariServerUrl = window.location.origin
-      const reloadUrl = rariServerUrl + '/api/rsc/hmr-register'
+      const reloadUrl = `${rariServerUrl}/api/rsc/hmr-register`
 
       console.warn('[HMR] Reloading component:', filePath, '(from dist/server)')
 
@@ -1162,7 +1153,7 @@ if (import.meta.hot) {
         routes = affectedRoutes
         break
       default:
-        console.warn('[HMR] Unknown file type: ' + fileType)
+        console.warn(`[HMR] Unknown file type: ${fileType}`)
     }
 
     await invalidateAppRouterCache({ routes, fileType, filePath, componentId: routePath })
@@ -1202,11 +1193,11 @@ if (import.meta.hot) {
     const keysToDelete = []
     for (const key of rscClient.componentCache.keys()) {
       for (const route of routes) {
-        if (key.includes('route:' + route + ':') || key.startsWith(route + ':')) {
+        if (key.includes(`route:${route}:`) || key.startsWith(`${route}:`)) {
           keysToDelete.push(key)
           break
         }
-        if (route !== '/' && key.includes('route:' + route + '/')) {
+        if (route !== '/' && key.includes(`route:${route}/`)) {
           keysToDelete.push(key)
           break
         }
@@ -1217,7 +1208,7 @@ if (import.meta.hot) {
       rscClient.componentCache.delete(key)
     }
 
-    console.warn('[HMR] Cleared cache for ' + keysToDelete.length + ' entries across ' + routes.length + ' route(s)')
+    console.warn(`[HMR] Cleared cache for ${keysToDelete.length} entries across ${routes.length} route(s)`)
   }
 
   async function invalidateAppRouterCache(data) {
@@ -1234,7 +1225,7 @@ if (import.meta.hot) {
           ? 'http://localhost:3000'
           : window.location.origin
 
-        const invalidateUrl = rariServerUrl + '/api/rsc/hmr-invalidate'
+        const invalidateUrl = `${rariServerUrl}/api/rsc/hmr-invalidate`
 
         console.warn('[HMR] Calling server invalidation endpoint for:', componentId || filePath)
 
@@ -1312,7 +1303,7 @@ if (import.meta.hot) {
       const isCurrentRouteAffected = affectedRoutes.some((route) => {
         if (route === currentPath)
           return true
-        if (currentPath.startsWith(route + '/'))
+        if (currentPath.startsWith(`${route}/`))
           return true
         return false
       })
@@ -1355,12 +1346,12 @@ if (import.meta.hot) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to fetch manifest: ' + response.status)
+        throw new Error(`Failed to fetch manifest: ${response.status}`)
       }
 
       const manifest = await response.json()
 
-      console.warn('[HMR] Loaded updated manifest with ' + (manifest.routes?.length || 0) + ' routes')
+      console.warn(`[HMR] Loaded updated manifest with ${manifest.routes?.length || 0} routes`)
 
       if (typeof globalThis !== 'undefined') {
         globalThis.__rari_app_routes_manifest = manifest
@@ -1377,7 +1368,7 @@ if (import.meta.hot) {
           return true
         if (r.path.includes('[')) {
           const pattern = r.path.replace(/\[([^\]]+)\]/g, '([^/]+)')
-          const regex = new RegExp('^' + pattern + '$')
+          const regex = new RegExp(`^${pattern}$`)
           return regex.test(currentPath)
         }
         return false
@@ -1406,44 +1397,6 @@ if (import.meta.hot) {
         detail: { filePath },
       })
       window.dispatchEvent(event)
-    }
-  }
-
-  function invalidateRSCCache(componentId) {
-    rscClient.clearCache()
-    console.warn('[HMR] Cleared RSC cache for component: ' + componentId)
-  }
-
-  async function refetchCurrentRoute() {
-    try {
-      if (typeof window === 'undefined') {
-        return
-      }
-
-      const currentPath = window.location.pathname
-
-      const response = await fetch('/rsc' + currentPath, {
-        headers: {
-          'Accept': 'text/x-component',
-          'X-RSC-Refetch': 'true',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to refetch RSC: ' + response.status)
-      }
-
-      console.warn('[HMR] Re-fetched RSC for route: ' + currentPath)
-
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('rari:rsc-refetch-complete', {
-          detail: { path: currentPath, timestamp: Date.now() },
-        })
-        window.dispatchEvent(event)
-      }
-    }
-    catch (error) {
-      console.error('[HMR] Failed to refetch RSC:', error)
     }
   }
 }
@@ -1488,14 +1441,14 @@ class HMRErrorOverlay {
       return
 
     const fileInfo = error.filePath
-      ? '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem;"><strong>File:</strong> ' + this.escapeHtml(error.filePath) + '</div>'
+      ? `<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem;"><strong>File:</strong> ${this.escapeHtml(error.filePath)}</div>`
       : ''
 
     const stackTrace = error.stack
-      ? '<details style="margin-top: 1rem; cursor: pointer;"><summary style="font-weight: 600; margin-bottom: 0.5rem; user-select: none;">Stack Trace</summary><pre style="margin: 0; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">' + this.escapeHtml(error.stack) + '</pre></details>'
+      ? `<details style="margin-top: 1rem; cursor: pointer;"><summary style="font-weight: 600; margin-bottom: 0.5rem; user-select: none;">Stack Trace</summary><pre style="margin: 0; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${this.escapeHtml(error.stack)}</pre></details>`
       : ''
 
-    this.overlay.innerHTML = '<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);"><div style="background: #1e1e1e; color: #e0e0e0; border-radius: 0.5rem; padding: 2rem; max-width: 50rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); border: 1px solid #ef4444;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"><div style="display: flex; align-items: center; gap: 0.75rem;"><svg style="width: 2rem; height: 2rem; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg><h1 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: #ef4444;">Build Error</h1></div><button onclick="document.getElementById(' + '\'' + 'rari-hmr-error-overlay' + '\'' + ').remove()" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.25rem; transition: all 0.2s; font-size: 1.5rem; line-height: 1; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background=' + '\'' + 'rgba(255,255,255,0.1)' + '\'' + '; this.style.color=' + '\'' + '#e0e0e0' + '\'' + '" onmouseout="this.style.background=' + '\'' + 'transparent' + '\'' + '; this.style.color=' + '\'' + '#9ca3af' + '\'' + '">×</button></div>' + fileInfo + '<div style="margin-bottom: 1.5rem;"><h2 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: #fca5a5;">Error Message:</h2><pre style="margin: 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 0.375rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #fca5a5;">' + this.escapeHtml(error.message) + '</pre></div>' + stackTrace + '<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #374151; display: flex; gap: 0.75rem; align-items: center;"><button onclick="window.location.reload()" style="padding: 0.625rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background=' + '\'' + '#dc2626' + '\'' + '" onmouseout="this.style.background=' + '\'' + '#ef4444' + '\'' + '">Reload Page</button><button onclick="document.getElementById(' + '\'' + 'rari-hmr-error-overlay' + '\'' + ').remove()" style="padding: 0.625rem 1.25rem; background: #374151; color: #e0e0e0; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background=' + '\'' + '#4b5563' + '\'' + '" onmouseout="this.style.background=' + '\'' + '#374151' + '\'' + '">Dismiss</button><span style="margin-left: auto; font-size: 0.75rem; color: #9ca3af;">' + new Date(error.timestamp).toLocaleTimeString() + '</span></div></div></div>'
+    this.overlay.innerHTML = `<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);"><div style="background: #1e1e1e; color: #e0e0e0; border-radius: 0.5rem; padding: 2rem; max-width: 50rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); border: 1px solid #ef4444;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"><div style="display: flex; align-items: center; gap: 0.75rem;"><svg style="width: 2rem; height: 2rem; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg><h1 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: #ef4444;">Build Error</h1></div><button onclick="document.getElementById('rari-hmr-error-overlay').remove()" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.25rem; transition: all 0.2s; font-size: 1.5rem; line-height: 1; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='#e0e0e0'" onmouseout="this.style.background='transparent'; this.style.color='#9ca3af'">×</button></div>${fileInfo}<div style="margin-bottom: 1.5rem;"><h2 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: #fca5a5;">Error Message:</h2><pre style="margin: 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 0.375rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #fca5a5;">${this.escapeHtml(error.message)}</pre></div>${stackTrace}<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #374151; display: flex; gap: 0.75rem; align-items: center;"><button onclick="window.location.reload()" style="padding: 0.625rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Reload Page</button><button onclick="document.getElementById('rari-hmr-error-overlay').remove()" style="padding: 0.625rem 1.25rem; background: #374151; color: #e0e0e0; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#374151'">Dismiss</button><span style="margin-left: auto; font-size: 0.75rem; color: #9ca3af;">${new Date(error.timestamp).toLocaleTimeString()}</span></div></div></div>`
   }
 
   escapeHtml(text) {
@@ -1543,15 +1496,15 @@ if (import.meta.hot) {
 
     if (errorCount && maxErrors) {
       if (errorCount >= maxErrors) {
-        console.error('[HMR] Maximum error count (' + maxErrors + ') reached. Consider restarting the dev server if issues persist.')
+        console.error(`[HMR] Maximum error count (${maxErrors}) reached. Consider restarting the dev server if issues persist.`)
       }
       else if (errorCount >= maxErrors - 2) {
-        console.warn('[HMR] Error count: ' + errorCount + '/' + maxErrors + '. Approaching maximum error threshold.')
+        console.warn(`[HMR] Error count: ${errorCount}/${maxErrors}. Approaching maximum error threshold.`)
       }
     }
   })
 
-  import.meta.hot.on('rari:hmr-error-cleared', (data) => {
+  import.meta.hot.on('rari:hmr-error-cleared', () => {
     console.warn('[HMR] Error cleared, build successful')
     overlay.hide()
   })
