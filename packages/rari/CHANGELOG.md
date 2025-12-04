@@ -1,3 +1,25 @@
+## [0.5.3] - 2025-12-03
+
+### 📚 Documentation
+
+- *(railway)* Restructure configuration for improved readability
+- *(railway)* Add pnpm install command to nixpacks build phase
+- *(railway)* Extract nixpacks configuration to separate file
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update package manager and Node.js version requirements
+- *(release)* Bump version to 0.5.3
+## [create-rari-app@0.2.5] - 2025-12-03
+
+### 💼 Other
+
+- Create-rari-app@0.2.5
+## [rari@0.5.6] - 2025-12-03
+
+### 💼 Other
+
+- Rari@0.5.6
 ## [0.5.2] - 2025-12-03
 
 ### 🐛 Bug Fixes
