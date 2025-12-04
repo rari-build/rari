@@ -351,7 +351,7 @@ pub async fn handle_app_route(
     Query(query_params): Query<FxHashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
-    use crate::server::request_type::{RenderMode, RequestTypeDetector};
+    use crate::server::types::request::{RenderMode, RequestTypeDetector};
 
     let path = uri.path();
 

@@ -1,7 +1,6 @@
 use crate::error::RariError;
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
-use crate::server::ServerState;
 use crate::server::actions::{handle_form_action, handle_server_action};
 use crate::server::cache_loader::CacheLoader;
 use crate::server::component_loader::ComponentLoader;
@@ -24,6 +23,7 @@ use crate::server::request_middleware::{
 };
 use crate::server::response_cache;
 use crate::server::routing::{api_routes, app_router};
+use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
     check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_src_proxy,
     vite_websocket_proxy,
