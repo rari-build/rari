@@ -217,7 +217,8 @@ pub fn op_internal_log(#[string] message: &str) {
 
 #[derive(Default)]
 pub struct FetchOpState {
-    pub request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+    pub request_context:
+        Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
 }
 
 #[allow(clippy::disallowed_methods)]

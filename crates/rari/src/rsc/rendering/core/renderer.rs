@@ -684,7 +684,7 @@ impl RscRenderer {
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+        request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
         let result =
@@ -705,7 +705,7 @@ impl RscRenderer {
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+        request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.resource_tracker.increment_active_renders();
         let result =
@@ -832,7 +832,7 @@ impl RscRenderer {
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.internal_render_to_rsc(component_id, props).await
     }
@@ -841,7 +841,7 @@ impl RscRenderer {
         &mut self,
         component_id: &str,
         props: Option<&str>,
-        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<String, RariError> {
         self.internal_render_to_string(component_id, props).await
     }
@@ -1185,7 +1185,7 @@ impl RscRenderer {
         &self,
         component_id: &str,
         props: Option<&str>,
-        _request_context: Option<Arc<crate::server::request_context::RequestContext>>,
+        _request_context: Option<Arc<crate::server::middleware::request_context::RequestContext>>,
     ) -> Result<RscStream, RariError> {
         if !self.initialized {
             return Err(RariError::internal("RSC renderer not initialized"));

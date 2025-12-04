@@ -2,8 +2,7 @@ use crate::error::RariError;
 use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
 use crate::server::actions::{handle_form_action, handle_server_action};
-use crate::server::cache_loader::CacheLoader;
-use crate::server::component_loader::ComponentLoader;
+use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app_handler::handle_app_route;
@@ -18,10 +17,11 @@ use crate::server::handlers::rsc_handlers::{
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
 };
-use crate::server::request_middleware::{
+use crate::server::loaders::cache_loader::CacheLoader;
+use crate::server::loaders::component_loader::ComponentLoader;
+use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
-use crate::server::response_cache;
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{

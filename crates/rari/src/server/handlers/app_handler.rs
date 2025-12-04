@@ -1,14 +1,14 @@
 use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
 use crate::rsc::rendering::layout::LayoutRenderer;
 use crate::server::ServerState;
-use crate::server::cache_loader::CacheLoader;
+use crate::server::cache::response_cache;
 use crate::server::config::Config;
+use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_rsc_payload,
     inject_vite_client,
 };
-use crate::server::response_cache;
-use crate::server::streaming_response::StreamingHtmlResponse;
+use crate::server::rendering::streaming_response::StreamingHtmlResponse;
 use crate::server::utils::http_utils::{extract_headers, extract_search_params, get_content_type};
 use axum::{
     body::Body,
@@ -57,9 +57,10 @@ pub async fn render_synchronous(
     debug!("Using synchronous rendering for route: {}", route_match.route.path);
 
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
-    let request_context = std::sync::Arc::new(crate::server::request_context::RequestContext::new(
-        route_match.route.path.clone(),
-    ));
+    let request_context =
+        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+            route_match.route.path.clone(),
+        ));
 
     match layout_renderer
         .render_route_to_html_direct(&route_match, &context, Some(request_context))
@@ -111,9 +112,10 @@ pub async fn render_streaming_with_layout(
     let layout_count = route_match.layouts.len();
     debug!("Rendering route with {} layouts for streaming", layout_count);
 
-    let request_context = std::sync::Arc::new(crate::server::request_context::RequestContext::new(
-        route_match.route.path.clone(),
-    ));
+    let request_context =
+        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+            route_match.route.path.clone(),
+        ));
 
     let render_result = match layout_renderer
         .render_route_to_html_direct(&route_match, &context, Some(request_context))
@@ -405,8 +407,9 @@ pub async fn handle_app_route(
 
     debug!("App route matched: {} -> {}", path, route_match.route.path);
 
-    let request_context =
-        std::sync::Arc::new(crate::server::request_context::RequestContext::new(path.to_string()));
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(path.to_string()),
+    );
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
     debug!("Detected render mode: {:?}", render_mode);

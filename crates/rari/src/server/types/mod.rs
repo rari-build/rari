@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 pub mod request;
 
+use crate::server::cache::response_cache;
 use crate::server::config;
-use crate::server::response_cache;
 use crate::server::routing;
 
 #[derive(Clone)]

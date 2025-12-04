@@ -44,7 +44,9 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+        _request_context: Option<
+            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        >,
     ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
@@ -111,7 +113,9 @@ impl LayoutRenderer {
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         mode: RenderMode,
-        request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+        request_context: Option<
+            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        >,
     ) -> Result<String, RariError> {
         match mode {
             RenderMode::Ssr => {
@@ -437,7 +441,9 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<std::sync::Arc<crate::server::request_context::RequestContext>>,
+        _request_context: Option<
+            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        >,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
 

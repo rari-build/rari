@@ -59,7 +59,7 @@ pub async fn handle_api_route(
     State(state): State<ServerState>,
     req: axum::http::Request<Body>,
 ) -> Result<axum::http::Response<Body>, StatusCode> {
-    use crate::server::api_error::{ApiRouteError, create_generic_error_response};
+    use crate::server::routing::api_error::{ApiRouteError, create_generic_error_response};
 
     let path = req.uri().path().to_string();
     let method = req.method().to_string();
