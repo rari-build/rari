@@ -1,6 +1,6 @@
 use crate::error::RariError;
-use crate::rsc::renderer::RscRenderer;
-use crate::rsc::streaming::RscStream;
+use crate::rsc::rendering::core::RscRenderer;
+use crate::rsc::rendering::streaming::RscStream;
 use crate::server::config::Config;
 use crate::server::request_type::RenderMode;
 use crate::server::routing::app_router::AppRouteMatch;
@@ -573,8 +573,9 @@ impl LayoutRenderer {
                 route_match.route.path
             );
 
-            let mut streaming_renderer =
-                crate::rsc::streaming::StreamingRenderer::new(Arc::clone(&renderer.runtime));
+            let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
+                Arc::clone(&renderer.runtime),
+            );
 
             let stream = streaming_renderer
                 .start_streaming_with_precomputed_data(
@@ -723,9 +724,9 @@ impl LayoutRenderer {
 
             let (tx, rx) = mpsc::channel(1);
             let _ = tx
-                .send(crate::rsc::streaming::RscStreamChunk {
+                .send(crate::rsc::rendering::streaming::RscStreamChunk {
                     data: html.into_bytes(),
-                    chunk_type: crate::rsc::streaming::RscChunkType::InitialShell,
+                    chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
                     row_id: 0,
                     is_final: true,
                 })
@@ -749,9 +750,9 @@ impl LayoutRenderer {
 
         let (tx, rx) = mpsc::channel(1);
         let _ = tx
-            .send(crate::rsc::streaming::RscStreamChunk {
+            .send(crate::rsc::rendering::streaming::RscStreamChunk {
                 data: html.into_bytes(),
-                chunk_type: crate::rsc::streaming::RscChunkType::InitialShell,
+                chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
                 row_id: 0,
                 is_final: true,
             })

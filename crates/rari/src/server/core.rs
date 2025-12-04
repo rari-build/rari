@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::renderer::ResourceLimits;
+use crate::rsc::rendering::core::ResourceLimits;
 use crate::runtime::utils::DistPathResolver;
 use crate::server::ServerState;
 use crate::server::actions::{handle_form_action, handle_server_action};

@@ -1,6 +1,6 @@
 use crate::error::{RariError, StreamingError};
-use crate::rsc::streaming::{RscChunkType, RscStreamChunk};
-use crate::rsc::types::rsc_types::RscElement;
+use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
+use crate::rsc::types::RscElement;
 use crate::runtime::JsExecutionRuntime;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;

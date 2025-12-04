@@ -10,10 +10,10 @@ use tracing::{debug, error};
 
 use crate::error::RariError;
 use crate::rsc::components::ComponentRegistry;
-use crate::rsc::js::loader::{RscJsLoader, RscModuleOperation};
-use crate::rsc::serializer::RscSerializer;
-use crate::rsc::streaming::{RscStream, StreamingRenderer};
+use crate::rsc::rendering::core::loader::{RscJsLoader, RscModuleOperation};
+use crate::rsc::rendering::streaming::{RscStream, StreamingRenderer};
 use crate::rsc::utils::dependency_utils::{extract_dependencies, hash_string};
+use crate::rsc::wire_format::serializer::RscSerializer;
 use crate::runtime::JsExecutionRuntime;
 
 use super::constants::*;
@@ -231,12 +231,12 @@ impl RscRenderer {
             )
             .await?;
 
-        let html_render_script = include_str!("../../ssr/js/html_render.js");
+        let html_render_script = include_str!("../layout/js/html_render.js");
         self.runtime
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await?;
 
-        let route_renderer_script = include_str!("../js/route_renderer.js");
+        let route_renderer_script = include_str!("../layout/js/route_renderer.js");
         self.runtime
             .execute_script("route_renderer".to_string(), route_renderer_script.to_string())
             .await?;
@@ -1050,7 +1050,7 @@ impl RscRenderer {
         };
 
         let client_element =
-            crate::rsc::serializer::SerializedReactElement::create_client_component(
+            crate::rsc::wire_format::serializer::SerializedReactElement::create_client_component(
                 component_id,
                 props_map,
             );

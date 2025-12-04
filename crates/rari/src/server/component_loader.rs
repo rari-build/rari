@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::renderer::RscRenderer;
+use crate::rsc::rendering::core::RscRenderer;
 use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,

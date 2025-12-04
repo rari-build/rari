@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::types::rsc_tree::RSCTree;
+use crate::rsc::types::tree::RSCTree;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use serde_json::Value;
@@ -175,7 +175,7 @@ impl RscSerializer {
     }
 
     pub fn serialize_rsc_json(&mut self, rsc_data: &serde_json::Value) -> Result<String, String> {
-        let rsc_tree = crate::rsc::types::rsc_tree::RSCTree::from_json(rsc_data)
+        let rsc_tree = crate::rsc::types::tree::RSCTree::from_json(rsc_data)
             .map_err(|e| format!("Failed to parse RSC tree from JSON: {e}"))?;
 
         Ok(self.serialize_rsc_tree(&rsc_tree))

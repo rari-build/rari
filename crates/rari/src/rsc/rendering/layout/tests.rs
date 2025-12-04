@@ -1,6 +1,6 @@
 #[cfg(test)]
 use super::*;
-use crate::rsc::renderer::RscRenderer;
+use crate::rsc::rendering::core::RscRenderer;
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::app_router::AppRouteMatch;
 use rustc_hash::FxHashMap;

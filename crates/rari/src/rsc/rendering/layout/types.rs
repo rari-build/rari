@@ -1,4 +1,4 @@
-use crate::rsc::streaming::RscStream;
+use crate::rsc::rendering::streaming::RscStream;
 use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]

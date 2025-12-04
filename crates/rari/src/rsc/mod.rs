@@ -1,14 +1,9 @@
 pub mod components;
-pub mod js;
-pub mod layout_renderer;
-pub mod parser;
-pub mod renderer;
-pub mod rsc_html_renderer;
-pub mod serializer;
-pub mod streaming;
+pub mod rendering;
 pub mod suspense;
 pub mod types;
 pub mod utils;
+pub mod wire_format;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -26,23 +21,24 @@ pub enum ComponentValue {
 pub use components::{
     ComponentContext, ComponentProp, ComponentRegistry, ComponentType, TransformedComponent,
 };
-pub use js::loader::RscJsLoader;
-pub use parser::rsc_wire_parser::{PromiseRef, RscWireFormatParser, StreamingState};
-pub use renderer::RscRenderer;
-pub use rsc_html_renderer::RscHtmlRenderer;
-pub use serializer::{ElementType, RscSerializer, SerializedReactElement, ServerComponentExecutor};
-pub use streaming::{RscStream, RscStreamChunk};
+pub use rendering::core::{RscJsLoader, RscRenderer};
+pub use rendering::html::RscHtmlRenderer;
+pub use rendering::streaming::{RscStream, RscStreamChunk};
 pub use types::elements::ReactElement as LoadingReactElement;
 pub use types::elements::ReactElement;
-pub use types::rsc_tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
-pub use types::rsc_types::{RscElement as ParsedRscElement, SuspenseBoundary};
+pub use types::tree::{RSCRenderDebug, RSCRenderResult, RSCTree};
+pub use types::{RscElement as ParsedRscElement, SuspenseBoundary};
 pub use utils::dependency_utils::extract_dependencies;
+pub use wire_format::parser::{PromiseRef, RscWireFormatParser, StreamingState};
+pub use wire_format::serializer::{
+    ElementType, RscSerializer, SerializedReactElement, ServerComponentExecutor,
+};
 
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod compliance_tests {
     use super::*;
-    use crate::rsc::serializer::RscSerializer;
+    use crate::rsc::wire_format::serializer::RscSerializer;
 
     #[test]
     fn test_rsc_wire_format_compliance() {

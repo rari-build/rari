@@ -5,7 +5,7 @@ mod tests {
 
     use crate::runtime::JsExecutionRuntime;
 
-    use super::super::core::RscRenderer;
+    use super::super::renderer::RscRenderer;
 
     #[tokio::test]
     async fn test_renderer_initialization() {

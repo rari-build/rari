@@ -37,7 +37,6 @@ impl StreamingRenderer {
         }
     }
 
-    // Test helpers
     #[cfg(test)]
     pub(crate) fn set_row_counter(&mut self, counter: u32) {
         self.row_counter = counter;
@@ -51,7 +50,7 @@ impl StreamingRenderer {
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
-        layout_structure: crate::rsc::layout_renderer::LayoutStructure,
+        layout_structure: crate::rsc::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
             tracing::error!(
@@ -268,8 +267,8 @@ impl StreamingRenderer {
     pub async fn start_streaming_with_precomputed_data(
         &mut self,
         rsc_data: serde_json::Value,
-        boundaries: Vec<crate::rsc::layout_renderer::BoundaryInfo>,
-        layout_structure: crate::rsc::layout_renderer::LayoutStructure,
+        boundaries: Vec<crate::rsc::rendering::layout::BoundaryInfo>,
+        layout_structure: crate::rsc::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
             tracing::error!(
@@ -1106,8 +1105,7 @@ impl StreamingRenderer {
         &mut self,
         rsc_wire_format: &str,
     ) -> Result<PartialRenderResult, RariError> {
-        let mut parser =
-            crate::rsc::parser::rsc_wire_parser::RscWireFormatParser::new(rsc_wire_format);
+        let mut parser = crate::rsc::wire_format::parser::RscWireFormatParser::new(rsc_wire_format);
 
         parser.parse().map_err(|e| {
             tracing::error!("Failed to parse RSC wire format: {}", e);

@@ -1,5 +1,5 @@
 use crate::error::RariError;
-use crate::rsc::types::rsc_types::{RscElement, SuspenseBoundary};
+use crate::rsc::types::{RscElement, SuspenseBoundary};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
 use tracing::debug;

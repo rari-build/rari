@@ -1,5 +1,5 @@
-use crate::rsc::layout_renderer::LayoutRenderer;
-use crate::rsc::rsc_html_renderer::{RscHtmlRenderer, RscToHtmlConverter};
+use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
+use crate::rsc::rendering::layout::LayoutRenderer;
 use crate::server::ServerState;
 use crate::server::cache_loader::CacheLoader;
 use crate::server::config::Config;
@@ -23,7 +23,7 @@ use tracing::{debug, error, warn};
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::layout_renderer::LayoutRenderContext,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
 ) -> Result<Response, StatusCode> {
     debug!("⏱️ render_with_fallback called for route: {}", route_match.route.path);
 
@@ -52,7 +52,7 @@ pub async fn render_with_fallback(
 pub async fn render_synchronous(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::layout_renderer::LayoutRenderContext,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
 ) -> Result<Response, StatusCode> {
     debug!("Using synchronous rendering for route: {}", route_match.route.path);
 
@@ -66,8 +66,8 @@ pub async fn render_synchronous(
         .await
     {
         Ok(render_result) => match render_result {
-            crate::rsc::layout_renderer::RenderResult::Static(html_content)
-            | crate::rsc::layout_renderer::RenderResult::StaticWithPayload {
+            crate::rsc::rendering::layout::RenderResult::Static(html_content)
+            | crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
                 html: html_content,
                 ..
             } => {
@@ -88,7 +88,7 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
-            crate::rsc::layout_renderer::RenderResult::Streaming(_) => {
+            crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
                 warn!("Unexpected streaming result in render_synchronous, falling back to shell");
                 render_fallback_html(&state, &route_match.route.path).await
             }
@@ -103,7 +103,7 @@ pub async fn render_synchronous(
 pub async fn render_streaming_with_layout(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
-    context: crate::rsc::layout_renderer::LayoutRenderContext,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
 ) -> Result<Response, StatusCode> {
     debug!("Starting streaming render for route: {}", route_match.route.path);
@@ -137,11 +137,11 @@ pub async fn render_streaming_with_layout(
     };
 
     let mut rsc_stream = match render_result {
-        crate::rsc::layout_renderer::RenderResult::Streaming(stream) => {
+        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
             debug!("Suspense detected, using streaming path");
             stream
         }
-        crate::rsc::layout_renderer::RenderResult::Static(html) => {
+        crate::rsc::rendering::layout::RenderResult::Static(html) => {
             debug!("No Suspense detected, returning static HTML");
             let final_html = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
@@ -158,7 +158,7 @@ pub async fn render_streaming_with_layout(
                 .body(Body::from(final_html))
                 .expect("Valid HTML response"));
         }
-        crate::rsc::layout_renderer::RenderResult::StaticWithPayload { html, rsc_payload } => {
+        crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
             debug!("No Suspense detected, returning static HTML with RSC payload");
             let html_with_payload = inject_rsc_payload(&html, &rsc_payload);
             let final_html = match inject_assets_into_html(&html_with_payload, &state.config).await
@@ -416,7 +416,7 @@ pub async fn handle_app_route(
 
     let request_headers = extract_headers(&headers);
 
-    let context = crate::rsc::layout_renderer::create_layout_context(
+    let context = crate::rsc::rendering::layout::create_layout_context(
         route_match.params.clone(),
         search_params,
         request_headers,
@@ -538,7 +538,7 @@ pub async fn handle_app_route(
             debug!("⚡ Direct HTML render took: {:?}", render_duration);
 
             let (html_with_assets, etag) = match render_result {
-                crate::rsc::layout_renderer::RenderResult::Static(html_content) => {
+                crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
                     debug!("Using static rendering path for route: {}", path);
 
                     let total_duration = total_start.elapsed();
@@ -558,7 +558,7 @@ pub async fn handle_app_route(
 
                     (html_with_assets, etag)
                 }
-                crate::rsc::layout_renderer::RenderResult::StaticWithPayload {
+                crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
                     html: html_content,
                     rsc_payload,
                 } => {
@@ -584,7 +584,7 @@ pub async fn handle_app_route(
 
                     (html_with_assets, etag)
                 }
-                crate::rsc::layout_renderer::RenderResult::Streaming(stream) => {
+                crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
                     debug!("Using streaming rendering path for route: {}", path);
 
                     let asset_links = extract_asset_links_from_index_html().await;
