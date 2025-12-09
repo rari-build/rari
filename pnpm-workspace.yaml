@@ -1,4 +1,22 @@
+minimumReleaseAge: 1440
 packages:
   - docs
   - examples/*
   - packages/*
+catalog:
+  '@tailwindcss/vite': ^4.1.17
+  '@types/markdown-it': ^14.1.2
+  '@types/node': ^24.10.2
+  '@types/react': ^19.2.7
+  '@types/react-dom': ^19.2.3
+  '@typescript/native-preview': 7.0.0-dev.20251203.1
+  '@vitejs/plugin-react-oxc': ^0.2.3
+  eslint: ^9.39.1
+  markdown-it: ^14.1.0
+  oxlint: ^1.32.0
+  rari: latest
+  react: ^19.2.1
+  react-dom: ^19.2.1
+  rolldown-vite: ^7.2.10
+  shiki: ^3.19.0
+  tailwindcss: ^4.1.17
