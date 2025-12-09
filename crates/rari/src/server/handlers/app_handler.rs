@@ -4,7 +4,6 @@ use crate::server::ServerState;
 use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::loaders::cache_loader::CacheLoader;
-use crate::server::rendering::csrf_injection::{generate_csrf_helper_script, inject_csrf_token};
 use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_rsc_payload,
     inject_vite_client,
@@ -21,19 +20,6 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{debug, error, warn};
 
-fn inject_csrf_into_html(html: &str, csrf_token: &str) -> String {
-    let html_with_csrf = inject_csrf_token(html, csrf_token);
-
-    if let Some(body_end) = html_with_csrf.rfind("</body>") {
-        let mut result = String::with_capacity(html_with_csrf.len() + 2000);
-        result.push_str(&html_with_csrf[..body_end]);
-        result.push_str(generate_csrf_helper_script());
-        result.push_str(&html_with_csrf[body_end..]);
-        result
-    } else {
-        html_with_csrf
-    }
-}
 
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
@@ -97,24 +83,11 @@ pub async fn render_synchronous(
                     }
                 };
 
-                let csrf_token = state.csrf_manager.generate_token();
-                let html_with_csrf = inject_csrf_token(&final_html, &csrf_token);
-
-                let html_with_script = if let Some(body_end) = html_with_csrf.rfind("</body>") {
-                    let mut result = String::with_capacity(html_with_csrf.len() + 2000);
-                    result.push_str(&html_with_csrf[..body_end]);
-                    result.push_str(generate_csrf_helper_script());
-                    result.push_str(&html_with_csrf[body_end..]);
-                    result
-                } else {
-                    html_with_csrf
-                };
-
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
-                    .body(Body::from(html_with_script))
+                    .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
             crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
@@ -181,14 +154,11 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
-            let csrf_token = state.csrf_manager.generate_token();
-            let html_with_csrf = inject_csrf_into_html(&final_html, &csrf_token);
-
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
-                .body(Body::from(html_with_csrf))
+                .body(Body::from(final_html))
                 .expect("Valid HTML response"));
         }
         crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
@@ -203,14 +173,11 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
-            let csrf_token = state.csrf_manager.generate_token();
-            let html_with_csrf = inject_csrf_into_html(&final_html, &csrf_token);
-
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static-with-payload")
-                .body(Body::from(html_with_csrf))
+                .body(Body::from(final_html))
                 .expect("Valid HTML response"));
         }
     };
@@ -250,11 +217,9 @@ pub async fn render_streaming_with_layout(
         csrf_token, asset_tags
     );
 
-    let csrf_script = generate_csrf_helper_script().to_string();
-
     let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
-        Some(csrf_script),
+        None,
         html_renderer,
     )));
 
@@ -375,6 +340,7 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
         );
 
         debug!("index.html not found, serving generated development HTML shell as fallback");
+
         return Ok(Response::builder()
             .status(StatusCode::OK)
             .header("content-type", "text/html; charset=utf-8")
@@ -672,7 +638,6 @@ pub async fn handle_app_route(
                         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
                     };
 
-                    let csrf_token = state.csrf_manager.generate_token();
                     let asset_tags = asset_links.as_deref().unwrap_or("");
                     let base_shell = format!(
                         r#"<!DOCTYPE html>
@@ -681,7 +646,6 @@ pub async fn handle_app_route(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rari App</title>
-    <meta name="csrf-token" content="{}" />
     {}
     <style>
         .rari-loading {{
@@ -695,17 +659,12 @@ pub async fn handle_app_route(
 </head>
 <body>
 <div id="root">"#,
-                        csrf_token, asset_tags
+                        asset_tags
                     );
 
-                    let csrf_script = generate_csrf_helper_script().to_string();
-
-                    let converter =
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
-                            base_shell,
-                            Some(csrf_script),
-                            html_renderer,
-                        )));
+                    let converter = Arc::new(tokio::sync::Mutex::new(
+                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
+                    ));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();
@@ -798,12 +757,9 @@ pub async fn handle_app_route(
                 policy
             };
 
-            let csrf_token = state.csrf_manager.generate_token();
-            let html_with_csrf = inject_csrf_into_html(&html_with_assets, &csrf_token);
-
             if cache_policy.enabled {
                 let cached_response = response_cache::CachedResponse {
-                    body: bytes::Bytes::from(html_with_csrf.clone()),
+                    body: bytes::Bytes::from(html_with_assets.clone()),
                     headers: response_headers,
                     metadata: response_cache::CacheMetadata {
                         cached_at: std::time::Instant::now(),
@@ -819,7 +775,7 @@ pub async fn handle_app_route(
                 debug!("Caching disabled for route: {}", path);
             }
 
-            Ok(response_builder.body(Body::from(html_with_csrf)).expect("Valid HTML response"))
+            Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
         }
     }
 }

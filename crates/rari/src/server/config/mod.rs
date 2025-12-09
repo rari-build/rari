@@ -617,12 +617,13 @@ impl Config {
             config.script_src.push("'unsafe-inline'".to_string());
         }
 
+        if !config.style_src.contains(&"'unsafe-inline'".to_string()) {
+            config.style_src.push("'unsafe-inline'".to_string());
+        }
+
         if self.is_development() {
             if !config.script_src.contains(&"'unsafe-eval'".to_string()) {
                 config.script_src.push("'unsafe-eval'".to_string());
-            }
-            if !config.style_src.contains(&"'unsafe-inline'".to_string()) {
-                config.style_src.push("'unsafe-inline'".to_string());
             }
         }
 

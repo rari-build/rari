@@ -1,3 +1,5 @@
+import './csrf'
+
 export interface ServerActionResponse {
   success: boolean
   result?: any
