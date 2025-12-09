@@ -1,5 +1,6 @@
 use crate::error::RariError;
 use crate::rsc::types::tree::RSCTree;
+use crate::rsc::wire_format::escape::escape_rsc_value;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use serde_json::Value;
@@ -265,8 +266,12 @@ impl RscSerializer {
                     serde_json::Value::String(format!("Missing client component: {id}")),
                 );
 
+                let props_value = Value::Object(
+                    error_props.into_iter().collect::<serde_json::Map<String, Value>>(),
+                );
+                let escaped_props = escape_rsc_value(&props_value);
                 let props_json =
-                    serde_json::to_string(&error_props).unwrap_or_else(|_| "{}".to_string());
+                    serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
                 format!(r#"["$","div",{key_json},{props_json}]"#)
             };
 
@@ -300,7 +305,14 @@ impl RscSerializer {
             .map(|k| serde_json::to_string(k).unwrap_or_else(|_| "null".to_string()))
             .unwrap_or_else(|| "null".to_string());
 
-        let props_json = serde_json::to_string(props).unwrap_or_else(|_| "{}".to_string());
+        let props_value = Value::Object(
+            props
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<serde_json::Map<String, Value>>(),
+        );
+        let escaped_props = escape_rsc_value(&props_value);
+        let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{module_ref}",{key_json},{props_json}]"#)
     }
@@ -354,14 +366,6 @@ impl RscSerializer {
 
         let is_document_element = matches!(tag, "html" | "head" | "body");
 
-        if tag == "react.suspense" {
-            if let Some(fallback_value) = element_props.get("fallback") {
-                return serde_json::to_string(fallback_value)
-                    .unwrap_or_else(|_| "null".to_string());
-            }
-            return "null".to_string();
-        }
-
         if let Some(children) = children {
             if children.len() == 1 {
                 let child_data = self.serialize_rsc_tree_to_format(&children[0]);
@@ -387,7 +391,10 @@ impl RscSerializer {
             key.map(|k| serde_json::to_string(k).unwrap_or_default()).unwrap_or("null".to_string())
         };
 
-        let props_json = serde_json::to_string(&element_props).unwrap_or("{}".to_string());
+        let props_value =
+            Value::Object(element_props.into_iter().collect::<serde_json::Map<String, Value>>());
+        let escaped_props = escape_rsc_value(&props_value);
+        let props_json = serde_json::to_string(&escaped_props).unwrap_or("{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
     }
