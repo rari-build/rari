@@ -23,7 +23,7 @@ jobs:
             os: ubuntu-22.04
             name: rari-linux-arm64
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
             name: rari-darwin-x64
           - target: aarch64-apple-darwin
             os: macos-15
