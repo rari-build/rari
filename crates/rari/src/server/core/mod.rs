@@ -6,6 +6,7 @@ use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app_handler::handle_app_route;
+use crate::server::handlers::csrf_handler::get_csrf_token;
 use crate::server::handlers::hmr_handlers::{
     hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
     hmr_reload_component, reload_component,
@@ -247,6 +248,7 @@ impl Server {
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
+            .route("/api/rsc/csrf-token", get(get_csrf_token))
             .route("/api/rsc/action", post(handle_server_action))
             .route("/api/rsc/form-action", post(handle_form_action));
 

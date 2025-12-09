@@ -4,6 +4,7 @@ use crate::server::ServerState;
 use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::loaders::cache_loader::CacheLoader;
+use crate::server::rendering::csrf_injection::{generate_csrf_helper_script, inject_csrf_token};
 use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_rsc_payload,
     inject_vite_client,
@@ -19,6 +20,20 @@ use axum::{
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{debug, error, warn};
+
+fn inject_csrf_into_html(html: &str, csrf_token: &str) -> String {
+    let html_with_csrf = inject_csrf_token(html, csrf_token);
+
+    if let Some(body_end) = html_with_csrf.rfind("</body>") {
+        let mut result = String::with_capacity(html_with_csrf.len() + 2000);
+        result.push_str(&html_with_csrf[..body_end]);
+        result.push_str(generate_csrf_helper_script());
+        result.push_str(&html_with_csrf[body_end..]);
+        result
+    } else {
+        html_with_csrf
+    }
+}
 
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
@@ -82,11 +97,24 @@ pub async fn render_synchronous(
                     }
                 };
 
+                let csrf_token = state.csrf_manager.generate_token();
+                let html_with_csrf = inject_csrf_token(&final_html, &csrf_token);
+
+                let html_with_script = if let Some(body_end) = html_with_csrf.rfind("</body>") {
+                    let mut result = String::with_capacity(html_with_csrf.len() + 2000);
+                    result.push_str(&html_with_csrf[..body_end]);
+                    result.push_str(generate_csrf_helper_script());
+                    result.push_str(&html_with_csrf[body_end..]);
+                    result
+                } else {
+                    html_with_csrf
+                };
+
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
-                    .body(Body::from(final_html))
+                    .body(Body::from(html_with_script))
                     .expect("Valid HTML response"))
             }
             crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
@@ -153,11 +181,14 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
+            let csrf_token = state.csrf_manager.generate_token();
+            let html_with_csrf = inject_csrf_into_html(&final_html, &csrf_token);
+
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
-                .body(Body::from(final_html))
+                .body(Body::from(html_with_csrf))
                 .expect("Valid HTML response"));
         }
         crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
