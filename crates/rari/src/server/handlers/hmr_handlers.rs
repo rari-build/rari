@@ -36,7 +36,18 @@ pub async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    use crate::server::utils::path_validation::validate_component_path;
+
     let file_path = request.file_path.clone();
+
+    if let Err(e) = validate_component_path(&file_path) {
+        error!(
+            file_path = %file_path,
+            error = %e,
+            "Component path validation failed"
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let component_id = match extract_component_id(&file_path) {
         Ok(id) => id,

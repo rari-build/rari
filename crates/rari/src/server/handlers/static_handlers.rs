@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
@@ -52,6 +52,8 @@ pub async fn static_or_spa_handler(
     State(state): State<ServerState>,
     Path(path): Path<String>,
 ) -> Result<Response, StatusCode> {
+    use crate::server::utils::path_validation::validate_safe_path;
+
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -60,8 +62,19 @@ pub async fn static_or_spa_handler(
         }
     };
 
-    let file_path = config.public_dir().join(&path);
-    if file_path.exists() && file_path.is_file() {
+    let file_path = match validate_safe_path(config.public_dir(), &path) {
+        Ok(path) => path,
+        Err(e) => {
+            debug!(
+                requested_path = %path,
+                error = %e,
+                "Path validation failed for static file"
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    if file_path.is_file() {
         match std::fs::read(&file_path) {
             Ok(content) => {
                 let content_type = get_content_type(&path);
@@ -117,9 +130,23 @@ pub async fn serve_static_asset(
     State(state): State<ServerState>,
     Path(asset_path): Path<String>,
 ) -> Result<Response, StatusCode> {
-    let file_path = state.config.public_dir().join("assets").join(&asset_path);
+    use crate::server::utils::path_validation::validate_safe_path;
 
-    if !file_path.exists() || !file_path.is_file() {
+    let assets_dir = state.config.public_dir().join("assets");
+
+    let file_path = match validate_safe_path(&assets_dir, &asset_path) {
+        Ok(path) => path,
+        Err(e) => {
+            warn!(
+                requested_path = %asset_path,
+                error = %e,
+                "Path validation failed for static asset"
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    if !file_path.is_file() {
         return Err(StatusCode::NOT_FOUND);
     }
 

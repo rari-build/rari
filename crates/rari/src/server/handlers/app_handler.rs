@@ -368,9 +368,22 @@ pub async fn handle_app_route(
         let path_without_leading_slash = &path[1..];
 
         if path_without_leading_slash.contains('.') {
-            let file_path = state.config.public_dir().join(path_without_leading_slash);
+            use crate::server::utils::path_validation::validate_safe_path;
 
-            if file_path.exists() && file_path.is_file() {
+            let file_path =
+                match validate_safe_path(state.config.public_dir(), path_without_leading_slash) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        warn!(
+                            requested_path = %path,
+                            error = %e,
+                            "Path validation failed for static file request"
+                        );
+                        return Err(StatusCode::NOT_FOUND);
+                    }
+                };
+
+            if file_path.is_file() {
                 match std::fs::read(&file_path) {
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
