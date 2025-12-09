@@ -56,6 +56,19 @@ impl Default for CorsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedirectConfig {
+    pub allowed_hosts: Vec<String>,
+    pub allow_relative: bool,
+    pub allow_subdomains: bool,
+}
+
+impl Default for RedirectConfig {
+    fn default() -> Self {
+        Self { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -201,6 +214,8 @@ pub struct Config {
     pub streaming: StreamingConfig,
     #[serde(default)]
     pub cors: CorsConfig,
+    #[serde(default)]
+    pub redirect: RedirectConfig,
 }
 
 impl Config {
@@ -452,6 +467,38 @@ impl Config {
             };
 
             CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+        }
+    }
+
+    pub fn redirect_config(&self) -> RedirectConfig {
+        if !self.redirect.allowed_hosts.is_empty() {
+            return self.redirect.clone();
+        }
+
+        if self.is_development() {
+            let mut allowed_hosts =
+                vec!["localhost".to_string(), "127.0.0.1".to_string(), self.server.host.clone()];
+
+            if let Some(origin) = &self.server.origin
+                && let Ok(url) = url::Url::parse(origin)
+                && let Some(host) = url.host_str()
+            {
+                allowed_hosts.push(host.to_string());
+            }
+
+            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
+        } else {
+            let allowed_hosts = if let Some(origin) = &self.server.origin {
+                if let Ok(url) = url::Url::parse(origin) {
+                    if let Some(host) = url.host_str() { vec![host.to_string()] } else { vec![] }
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![self.server.host.clone()]
+            };
+
+            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
         }
     }
 

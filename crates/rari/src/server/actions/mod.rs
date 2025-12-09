@@ -161,7 +161,8 @@ pub async fn handle_server_action(
         Ok(value) => {
             debug!("Server action executed successfully, result: {:?}", value);
 
-            let redirect = extract_redirect_from_result(&value);
+            let redirect_config = state.config.redirect_config();
+            let redirect = extract_redirect_from_result(&value, &redirect_config);
 
             let response =
                 ServerActionResponse { success: true, result: Some(value), error: None, redirect };
@@ -234,7 +235,8 @@ pub async fn handle_form_action(
 
     match result {
         Ok(value) => {
-            if let Some(redirect_url) = extract_redirect_from_result(&value) {
+            let redirect_config = state.config.redirect_config();
+            if let Some(redirect_url) = extract_redirect_from_result(&value, &redirect_config) {
                 return Response::builder()
                     .status(StatusCode::SEE_OTHER)
                     .header("Location", redirect_url)
@@ -259,15 +261,53 @@ pub async fn handle_form_action(
     }
 }
 
-fn extract_redirect_from_result(result: &JsonValue) -> Option<String> {
+pub(crate) fn validate_redirect_url(
+    url: &str,
+    config: &crate::server::config::RedirectConfig,
+) -> Result<String, RariError> {
+    if config.allow_relative && url.starts_with('/') && !url.starts_with("//") {
+        return Ok(url.to_string());
+    }
+
+    let parsed =
+        url::Url::parse(url).map_err(|_| RariError::bad_request("Invalid redirect URL format"))?;
+
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(RariError::bad_request("Invalid redirect scheme: only http/https allowed"));
+    }
+
+    if let Some(host) = parsed.host_str() {
+        let is_allowed = config.allowed_hosts.iter().any(|allowed| {
+            if config.allow_subdomains {
+                host == allowed || host.ends_with(&format!(".{}", allowed))
+            } else {
+                host == allowed
+            }
+        });
+
+        if !is_allowed {
+            warn!("Blocked redirect to untrusted host: {}", host);
+            return Err(RariError::bad_request("Redirect to untrusted host not allowed"));
+        }
+    } else {
+        return Err(RariError::bad_request("Invalid redirect URL: missing host"));
+    }
+
+    Ok(url.to_string())
+}
+
+fn extract_redirect_from_result(
+    result: &JsonValue,
+    config: &crate::server::config::RedirectConfig,
+) -> Option<String> {
     if let Some(redirect) = result.get("redirect") {
         if let Some(url) = redirect.as_str() {
-            return Some(url.to_string());
+            return validate_redirect_url(url, config).ok();
         }
         if let Some(obj) = redirect.as_object()
             && let Some(destination) = obj.get("destination").and_then(|d| d.as_str())
         {
-            return Some(destination.to_string());
+            return validate_redirect_url(destination, config).ok();
         }
     }
     None

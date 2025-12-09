@@ -459,4 +459,197 @@ mod tests {
         assert!(obj.contains_key("action"));
         assert!(obj.contains_key("timestamp"));
     }
+
+    use crate::server::actions::validate_redirect_url;
+    use crate::server::config::RedirectConfig;
+
+    #[test]
+    fn test_redirect_relative_url_allowed() {
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
+
+        assert!(validate_redirect_url("/dashboard", &config).is_ok());
+        assert!(validate_redirect_url("/users/123", &config).is_ok());
+        assert!(validate_redirect_url("/", &config).is_ok());
+    }
+
+    #[test]
+    fn test_redirect_relative_url_blocked_when_disabled() {
+        let config = RedirectConfig {
+            allowed_hosts: vec![],
+            allow_relative: false,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("/dashboard", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_protocol_relative_blocked() {
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
+
+        assert!(validate_redirect_url("//evil.com/phishing", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_allowed_host() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("http://example.com/page", &config).is_ok());
+    }
+
+    #[test]
+    fn test_redirect_blocked_host() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://evil.com/phishing", &config).is_err());
+        assert!(validate_redirect_url("https://attacker.com", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_subdomain_when_allowed() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: true,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://www.example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://api.example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://sub.domain.example.com/page", &config).is_ok());
+    }
+
+    #[test]
+    fn test_redirect_subdomain_when_blocked() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://www.example.com/page", &config).is_err());
+        assert!(validate_redirect_url("https://api.example.com/page", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_invalid_scheme() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("javascript:alert(1)", &config).is_err());
+        assert!(
+            validate_redirect_url("data:text/html,<script>alert(1)</script>", &config).is_err()
+        );
+        assert!(validate_redirect_url("ftp://example.com/file", &config).is_err());
+        assert!(validate_redirect_url("file:///etc/passwd", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_multiple_allowed_hosts() {
+        let config = RedirectConfig {
+            allowed_hosts: vec![
+                "example.com".to_string(),
+                "trusted.com".to_string(),
+                "localhost".to_string(),
+            ],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://trusted.com/page", &config).is_ok());
+        assert!(validate_redirect_url("http://localhost:3000/page", &config).is_ok());
+        assert!(validate_redirect_url("https://evil.com/page", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_invalid_url_format() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("not a url", &config).is_err());
+        assert!(validate_redirect_url("ht!tp://example.com", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_with_port() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["localhost".to_string(), "example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("http://localhost:3000/page", &config).is_ok());
+        assert!(validate_redirect_url("https://example.com:8443/page", &config).is_ok());
+    }
+
+    #[test]
+    fn test_redirect_with_query_and_fragment() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page?foo=bar", &config).is_ok());
+        assert!(validate_redirect_url("https://example.com/page#section", &config).is_ok());
+        assert!(validate_redirect_url("https://example.com/page?foo=bar#section", &config).is_ok());
+        assert!(validate_redirect_url("/page?foo=bar#section", &config).is_ok());
+    }
+
+    #[test]
+    fn test_redirect_empty_allowed_hosts() {
+        let config =
+            RedirectConfig { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false };
+
+        assert!(validate_redirect_url("/page", &config).is_ok());
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_case_sensitivity() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://example.com/page", &config).is_ok());
+        assert!(validate_redirect_url("https://EXAMPLE.COM/page", &config).is_ok());
+        assert!(validate_redirect_url("https://Example.Com/page", &config).is_ok());
+
+        assert!(validate_redirect_url("https://evil.com/page", &config).is_err());
+    }
+
+    #[test]
+    fn test_redirect_homograph_attack_prevention() {
+        let config = RedirectConfig {
+            allowed_hosts: vec!["example.com".to_string()],
+            allow_relative: true,
+            allow_subdomains: false,
+        };
+
+        assert!(validate_redirect_url("https://examp1e.com/page", &config).is_err());
+        assert!(validate_redirect_url("https://example.co/page", &config).is_err());
+        assert!(validate_redirect_url("https://examplecom.com/page", &config).is_err());
+    }
 }
