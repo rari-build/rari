@@ -20,6 +20,7 @@ use crate::server::handlers::static_handlers::{
 };
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::loaders::component_loader::ComponentLoader;
+use crate::server::middleware::rate_limit::{create_rate_limit_layer, rate_limit_logger};
 use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
@@ -328,6 +329,16 @@ impl Server {
             router = router.layer(middleware::from_fn(security_headers_middleware));
         }
 
+        if let Some(rate_limit_layer) = create_rate_limit_layer(config) {
+            info!(
+                "Rate limiting enabled: {} req/sec per IP, burst size: {}",
+                config.rate_limit.requests_per_second, config.rate_limit.burst_size
+            );
+            router = router.layer(rate_limit_layer).layer(middleware::from_fn(rate_limit_logger));
+        } else {
+            info!("Rate limiting disabled");
+        }
+
         let middleware_stack =
             ServiceBuilder::new().layer(middleware::from_fn(request_logger)).into_inner();
 
@@ -341,7 +352,7 @@ impl Server {
 
         info!("Starting Rari server on {}", self.address);
 
-        axum::serve(self.listener, self.router)
+        axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
             .await
             .map_err(|e| RariError::network(format!("Server error: {e}")))?;
 

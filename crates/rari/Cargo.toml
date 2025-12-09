@@ -109,6 +109,8 @@ tower-http = { version = "0.6.6", features = [
   "cors",
   "trace"
 ] }
+tower_governor = "0.8.0"
+governor = "0.10.2"
 colored = "3.0.0"
 url = "2.5.7"
 urlencoding = "2.1.3"

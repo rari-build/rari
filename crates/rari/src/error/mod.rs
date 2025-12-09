@@ -913,6 +913,7 @@ impl RariError {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn to_json_response(&self, is_development: bool) -> serde_json::Value {
         serde_json::json!({
             "error": self.safe_message(is_development),

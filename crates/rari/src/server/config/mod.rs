@@ -92,6 +92,19 @@ impl Default for CspConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfig {
+    pub enabled: bool,
+    pub requests_per_second: u32,
+    pub burst_size: u32,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self { enabled: true, requests_per_second: 100, burst_size: 200 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -241,6 +254,8 @@ pub struct Config {
     pub redirect: RedirectConfig,
     #[serde(default)]
     pub csp: CspConfig,
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 impl Config {
@@ -436,6 +451,24 @@ impl Config {
         if let Ok(connect_src) = std::env::var("RARI_CSP_CONNECT_SRC") {
             config.csp.connect_src =
                 connect_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(rate_limit_enabled) = std::env::var("RARI_RATE_LIMIT_ENABLED") {
+            config.rate_limit.enabled = rate_limit_enabled.to_lowercase() == "true"
+                || rate_limit_enabled == "1"
+                || rate_limit_enabled.to_lowercase() == "yes";
+        }
+
+        if let Ok(rate_limit_rps) = std::env::var("RARI_RATE_LIMIT_RPS") {
+            config.rate_limit.requests_per_second = rate_limit_rps
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_RPS".to_string()))?;
+        }
+
+        if let Ok(rate_limit_burst) = std::env::var("RARI_RATE_LIMIT_BURST") {
+            config.rate_limit.burst_size = rate_limit_burst
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_BURST".to_string()))?;
         }
 
         Ok(config)
