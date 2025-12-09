@@ -621,10 +621,9 @@ impl Config {
             config.style_src.push("'unsafe-inline'".to_string());
         }
 
-        if self.is_development()
-            && !config.script_src.contains(&"'unsafe-eval'".to_string()) {
-                config.script_src.push("'unsafe-eval'".to_string());
-            }
+        if self.is_development() && !config.script_src.contains(&"'unsafe-eval'".to_string()) {
+            config.script_src.push("'unsafe-eval'".to_string());
+        }
 
         config
     }
