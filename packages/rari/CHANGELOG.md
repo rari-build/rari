@@ -1,4 +1,42 @@
-## [0.5.9] - 2025-12-09
+## [0.5.10] - 2025-12-09
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.6
+## [0.5.6] - 2025-12-09
+
+### 🚀 Features
+
+- *(server)* Add path validation utilities for security
+- *(server)* Add path validation to HMR component reload handler
+- *(server)* Add CSRF token protection to server actions
+- *(server)* Add CSRF token generation and injection to HTML responses
+- *(server)* Integrate CSRF token generation into RSC rendering pipeline
+- *(server)* Add configurable CORS support with origin validation
+- *(server)* Add input validation with configurable depth and size limits
+- *(server)* Add redirect URL validation with configurable host allowlist
+- *(server)* Add configurable Content Security Policy support
+- *(server)* Enhance security headers and simplify CSP configuration
+- *(server)* Add granular body size limits for API routes
+- *(error)* Add HTTP status codes and safe error messages for API responses
+- *(server)* Add configurable rate limiting with per-IP tracking
+- *(csrf)* Move CSRF token generation to client-side runtime
+- *(actions)* Add reserved export name validation for server actions
+- *(rsc)* Add special value and reference type parsing for wire format
+
+### 🎨 Styling
+
+- *(docs)* Simplify Tailwind class syntax in Sidebar component
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade dependencies and enhance linting rules
+- Bump rari version to 0.5.6
+## [rari@0.5.9] - 2025-12-09
+
+### 💼 Other
+
+- Rari@0.5.9
 
 ### ⚙️ Miscellaneous Tasks
 
