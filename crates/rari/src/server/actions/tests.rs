@@ -1,10 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use crate::server::actions::{is_dangerous_property, sanitize_args};
+    use crate::server::actions::{
+        ValidationConfig, is_dangerous_property, validate_and_sanitize_args,
+    };
     use serde_json::json;
 
     #[test]
     fn test_sanitize_args_removes_proto() {
+        let config = ValidationConfig::default();
         let args = vec![json!({
             "__proto__": {
                 "isAdmin": true
@@ -12,7 +15,7 @@ mod tests {
             "username": "test"
         })];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         assert_eq!(sanitized.len(), 1);
         let obj = sanitized[0].as_object().unwrap();
@@ -22,6 +25,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_args_removes_constructor() {
+        let config = ValidationConfig::default();
         let args = vec![json!({
             "constructor": {
                 "prototype": {
@@ -31,7 +35,7 @@ mod tests {
             "data": "safe"
         })];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         let obj = sanitized[0].as_object().unwrap();
         assert!(!obj.contains_key("constructor"));
@@ -40,6 +44,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_args_removes_prototype() {
+        let config = ValidationConfig::default();
         let args = vec![json!({
             "prototype": {
                 "polluted": true
@@ -47,7 +52,7 @@ mod tests {
             "normal": "value"
         })];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         let obj = sanitized[0].as_object().unwrap();
         assert!(!obj.contains_key("prototype"));
@@ -56,6 +61,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_args_nested_objects() {
+        let config = ValidationConfig::default();
         let args = vec![json!({
             "user": {
                 "__proto__": {
@@ -69,7 +75,7 @@ mod tests {
             }
         })];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         let obj = sanitized[0].as_object().unwrap();
         let user = obj.get("user").unwrap().as_object().unwrap();
@@ -83,6 +89,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_args_arrays() {
+        let config = ValidationConfig::default();
         let args = vec![json!([
             {
                 "__proto__": "bad",
@@ -94,7 +101,7 @@ mod tests {
             }
         ])];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         let arr = sanitized[0].as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -110,6 +117,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_args_preserves_safe_data() {
+        let config = ValidationConfig::default();
         let args = vec![
             json!("string value"),
             json!(42),
@@ -123,7 +131,7 @@ mod tests {
             }),
         ];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         assert_eq!(sanitized.len(), 5);
         assert_eq!(sanitized[0].as_str().unwrap(), "string value");
@@ -156,6 +164,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_deeply_nested() {
+        let config = ValidationConfig::default();
         let args = vec![json!({
             "level1": {
                 "level2": {
@@ -170,7 +179,7 @@ mod tests {
             }
         })];
 
-        let sanitized = sanitize_args(&args);
+        let sanitized = validate_and_sanitize_args(&args, &config).unwrap();
 
         let obj = sanitized[0].as_object().unwrap();
         let level1 = obj.get("level1").unwrap().as_object().unwrap();
@@ -181,5 +190,273 @@ mod tests {
         let level4 = level3.get("level4").unwrap().as_object().unwrap();
         assert!(!level4.contains_key("constructor"));
         assert_eq!(level4.get("safe").unwrap().as_str().unwrap(), "value");
+    }
+
+    #[test]
+    fn test_validation_depth_limit() {
+        let config = ValidationConfig { max_depth: 3, ..Default::default() };
+
+        let valid = vec![json!({
+            "level1": {
+                "level2": {
+                    "level3": "ok"
+                }
+            }
+        })];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let invalid = vec![json!({
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "level4": "too deep"
+                    }
+                }
+            }
+        })];
+        let result = validate_and_sanitize_args(&invalid, &config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("nesting depth"));
+    }
+
+    #[test]
+    fn test_validation_string_length() {
+        let config = ValidationConfig { max_string_length: 100, ..Default::default() };
+
+        let valid = vec![json!({"text": "A".repeat(100)})];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let invalid = vec![json!({"text": "A".repeat(101)})];
+        let result = validate_and_sanitize_args(&invalid, &config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("String too long"));
+    }
+
+    #[test]
+    fn test_validation_array_length() {
+        let config = ValidationConfig { max_array_length: 10, ..Default::default() };
+
+        let valid = vec![json!({"items": vec![1; 10]})];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let invalid = vec![json!({"items": vec![1; 11]})];
+        let result = validate_and_sanitize_args(&invalid, &config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Array too large"));
+    }
+
+    #[test]
+    fn test_validation_object_keys() {
+        let config = ValidationConfig { max_object_keys: 5, ..Default::default() };
+
+        let mut valid_obj = serde_json::Map::new();
+        for i in 0..5 {
+            valid_obj.insert(format!("key{}", i), json!(i));
+        }
+        let valid = vec![json!(valid_obj)];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let mut invalid_obj = serde_json::Map::new();
+        for i in 0..6 {
+            invalid_obj.insert(format!("key{}", i), json!(i));
+        }
+        let invalid = vec![json!(invalid_obj)];
+        let result = validate_and_sanitize_args(&invalid, &config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Too many object keys"));
+    }
+
+    #[test]
+    fn test_validation_special_numbers() {
+        let config = ValidationConfig { allow_special_numbers: false, ..Default::default() };
+
+        let valid = vec![json!({"value": 42.5})];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let valid_negative = vec![json!({"value": -123.456})];
+        assert!(validate_and_sanitize_args(&valid_negative, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validation_combined_limits() {
+        let config = ValidationConfig {
+            max_depth: 3,
+            max_string_length: 50,
+            max_array_length: 3,
+            max_object_keys: 3,
+            allow_special_numbers: false,
+        };
+
+        let valid = vec![json!({
+            "user": {
+                "name": "John",
+                "tags": ["a", "b", "c"]
+            }
+        })];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let too_deep = vec![json!({
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "level4": "fail"
+                    }
+                }
+            }
+        })];
+        assert!(validate_and_sanitize_args(&too_deep, &config).is_err());
+
+        let long_string = vec![json!({
+            "text": "A".repeat(51)
+        })];
+        assert!(validate_and_sanitize_args(&long_string, &config).is_err());
+
+        let large_array = vec![json!({
+            "items": vec![1, 2, 3, 4]
+        })];
+        assert!(validate_and_sanitize_args(&large_array, &config).is_err());
+
+        let many_keys = vec![json!({
+            "key1": 1,
+            "key2": 2,
+            "key3": 3,
+            "key4": 4
+        })];
+        assert!(validate_and_sanitize_args(&many_keys, &config).is_err());
+    }
+
+    #[test]
+    fn test_validation_with_dangerous_properties() {
+        let config = ValidationConfig::default();
+
+        let args = vec![json!({
+            "__proto__": {"isAdmin": true},
+            "username": "test",
+            "data": "A".repeat(100)
+        })];
+
+        let result = validate_and_sanitize_args(&args, &config).unwrap();
+        let obj = result[0].as_object().unwrap();
+
+        assert!(!obj.contains_key("__proto__"));
+        assert_eq!(obj.get("username").unwrap().as_str().unwrap(), "test");
+        assert_eq!(obj.get("data").unwrap().as_str().unwrap().len(), 100);
+    }
+
+    #[test]
+    fn test_validation_nested_arrays() {
+        let config = ValidationConfig { max_depth: 3, max_array_length: 2, ..Default::default() };
+
+        let valid = vec![json!({
+            "matrix": [
+                [1, 2],
+                [3, 4]
+            ]
+        })];
+        assert!(validate_and_sanitize_args(&valid, &config).is_ok());
+
+        let invalid = vec![json!({
+            "matrix": [
+                [1, 2, 3]
+            ]
+        })];
+        assert!(validate_and_sanitize_args(&invalid, &config).is_err());
+    }
+
+    #[test]
+    fn test_validation_preserves_types() {
+        let config = ValidationConfig::default();
+
+        let args = vec![
+            json!(null),
+            json!(true),
+            json!(false),
+            json!(42),
+            json!(-123),
+            json!(3.14),
+            json!("string"),
+            json!([1, 2, 3]),
+            json!({"key": "value"}),
+        ];
+
+        let result = validate_and_sanitize_args(&args, &config).unwrap();
+
+        assert!(result[0].is_null());
+        assert_eq!(result[1].as_bool().unwrap(), true);
+        assert_eq!(result[2].as_bool().unwrap(), false);
+        assert_eq!(result[3].as_i64().unwrap(), 42);
+        assert_eq!(result[4].as_i64().unwrap(), -123);
+        assert_eq!(result[5].as_f64().unwrap(), 3.14);
+        assert_eq!(result[6].as_str().unwrap(), "string");
+        assert_eq!(result[7].as_array().unwrap().len(), 3);
+        assert_eq!(result[8].as_object().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_validation_config_development() {
+        let dev_config = ValidationConfig::development();
+
+        assert_eq!(dev_config.max_depth, 20);
+        assert_eq!(dev_config.max_string_length, 50_000);
+        assert_eq!(dev_config.max_array_length, 5_000);
+        assert_eq!(dev_config.max_object_keys, 500);
+    }
+
+    #[test]
+    fn test_validation_config_production() {
+        let prod_config = ValidationConfig::production();
+
+        assert_eq!(prod_config.max_depth, 10);
+        assert_eq!(prod_config.max_string_length, 10_000);
+        assert_eq!(prod_config.max_array_length, 1_000);
+        assert_eq!(prod_config.max_object_keys, 100);
+    }
+
+    #[test]
+    fn test_validation_empty_structures() {
+        let config = ValidationConfig::default();
+
+        let empty_obj = vec![json!({})];
+        assert!(validate_and_sanitize_args(&empty_obj, &config).is_ok());
+
+        let empty_arr = vec![json!([])];
+        assert!(validate_and_sanitize_args(&empty_arr, &config).is_ok());
+
+        let empty_str = vec![json!({"text": ""})];
+        assert!(validate_and_sanitize_args(&empty_str, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validation_realistic_payload() {
+        let config = ValidationConfig::default();
+
+        let args = vec![json!({
+            "user": {
+                "id": 123,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "roles": ["user", "admin"],
+                "metadata": {
+                    "lastLogin": "2025-12-09T14:00:00Z",
+                    "preferences": {
+                        "theme": "dark",
+                        "notifications": true
+                    }
+                }
+            },
+            "action": "update",
+            "timestamp": 1733756400
+        })];
+
+        let result = validate_and_sanitize_args(&args, &config);
+        assert!(result.is_ok());
+
+        let sanitized = result.unwrap();
+        assert_eq!(sanitized.len(), 1);
+
+        let obj = sanitized[0].as_object().unwrap();
+        assert!(obj.contains_key("user"));
+        assert!(obj.contains_key("action"));
+        assert!(obj.contains_key("timestamp"));
     }
 }

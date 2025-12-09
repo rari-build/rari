@@ -9,10 +9,47 @@ use axum::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone)]
+pub struct ValidationConfig {
+    pub max_depth: usize,
+    pub max_string_length: usize,
+    pub max_array_length: usize,
+    pub max_object_keys: usize,
+    pub allow_special_numbers: bool,
+}
+
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        Self {
+            max_depth: 10,
+            max_string_length: 10_000,
+            max_array_length: 1_000,
+            max_object_keys: 100,
+            allow_special_numbers: false,
+        }
+    }
+}
+
+impl ValidationConfig {
+    pub fn development() -> Self {
+        Self {
+            max_depth: 20,
+            max_string_length: 50_000,
+            max_array_length: 5_000,
+            max_object_keys: 500,
+            allow_special_numbers: false,
+        }
+    }
+
+    pub fn production() -> Self {
+        Self::default()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ServerActionRequest {
@@ -86,7 +123,33 @@ pub async fn handle_server_action(
         }
     };
 
-    let sanitized_args = sanitize_args(&request.args);
+    let validation_config = if state.config.is_development() {
+        ValidationConfig::development()
+    } else {
+        ValidationConfig::production()
+    };
+
+    let sanitized_args = match validate_and_sanitize_args(&request.args, &validation_config) {
+        Ok(args) => args,
+        Err(e) => {
+            error!("Input validation failed: {}", e);
+            let mut response = Json(ServerActionResponse {
+                success: false,
+                result: None,
+                error: Some(format!("Input validation failed: {}", e)),
+                redirect: None,
+            })
+            .into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                "no-store, no-cache, must-revalidate, private"
+                    .parse()
+                    .expect("Valid cache-control header"),
+            );
+            *response.status_mut() = StatusCode::BAD_REQUEST;
+            return Ok(response);
+        }
+    };
 
     debug!("Executing server action: {} (export: {})", request.id, request.export_name);
 
@@ -270,28 +333,84 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
     Ok(result)
 }
 
-pub(crate) fn sanitize_args(args: &[JsonValue]) -> Vec<JsonValue> {
-    args.iter().map(sanitize_value).collect()
+pub(crate) fn validate_and_sanitize_args(
+    args: &[JsonValue],
+    config: &ValidationConfig,
+) -> Result<Vec<JsonValue>, RariError> {
+    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0)).collect()
 }
 
-fn sanitize_value(value: &JsonValue) -> JsonValue {
+fn validate_and_sanitize_value(
+    value: &JsonValue,
+    config: &ValidationConfig,
+    depth: usize,
+) -> Result<JsonValue, RariError> {
+    if depth > config.max_depth {
+        return Err(RariError::bad_request(format!(
+            "Maximum nesting depth exceeded: {} > {}",
+            depth, config.max_depth
+        )));
+    }
+
     match value {
+        JsonValue::String(s) => {
+            if s.len() > config.max_string_length {
+                return Err(RariError::bad_request(format!(
+                    "String too long: {} > {}",
+                    s.len(),
+                    config.max_string_length
+                )));
+            }
+            Ok(value.clone())
+        }
+        JsonValue::Number(n) => {
+            if let Some(f) = n.as_f64()
+                && !config.allow_special_numbers
+                && !f.is_finite()
+            {
+                return Err(RariError::bad_request(
+                    "Invalid number: Infinity or NaN not allowed".to_string(),
+                ));
+            }
+            Ok(value.clone())
+        }
+        JsonValue::Array(arr) => {
+            if arr.len() > config.max_array_length {
+                return Err(RariError::bad_request(format!(
+                    "Array too large: {} > {}",
+                    arr.len(),
+                    config.max_array_length
+                )));
+            }
+
+            let validated: Result<Vec<_>, _> =
+                arr.iter().map(|v| validate_and_sanitize_value(v, config, depth + 1)).collect();
+
+            Ok(JsonValue::Array(validated?))
+        }
         JsonValue::Object(obj) => {
+            if obj.len() > config.max_object_keys {
+                return Err(RariError::bad_request(format!(
+                    "Too many object keys: {} > {}",
+                    obj.len(),
+                    config.max_object_keys
+                )));
+            }
+
             let mut sanitized = serde_json::Map::new();
             for (key, val) in obj {
                 if is_dangerous_property(key) {
-                    tracing::warn!(
-                        "Blocked dangerous property '{}' in server action arguments",
-                        key
-                    );
+                    warn!("Blocked dangerous property '{}' in server action arguments", key);
                     continue;
                 }
-                sanitized.insert(key.clone(), sanitize_value(val));
+
+                let validated_val = validate_and_sanitize_value(val, config, depth + 1)?;
+                sanitized.insert(key.clone(), validated_val);
             }
-            JsonValue::Object(sanitized)
+
+            Ok(JsonValue::Object(sanitized))
         }
-        JsonValue::Array(arr) => JsonValue::Array(arr.iter().map(sanitize_value).collect()),
-        _ => value.clone(),
+        JsonValue::Bool(_) | JsonValue::Null => Ok(value.clone()),
     }
 }
 
