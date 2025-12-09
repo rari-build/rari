@@ -123,6 +123,28 @@ pub async fn handle_server_action(
         }
     };
 
+    if is_reserved_export_name(&request.export_name) {
+        error!("Attempted to call reserved export name: {}", request.export_name);
+        let mut response = Json(ServerActionResponse {
+            success: false,
+            result: None,
+            error: Some(format!(
+                "Invalid export name '{}': reserved for internal use",
+                request.export_name
+            )),
+            redirect: None,
+        })
+        .into_response();
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, private"
+                .parse()
+                .expect("Valid cache-control header"),
+        );
+        *response.status_mut() = StatusCode::BAD_REQUEST;
+        return Ok(response);
+    }
+
     let validation_config = if state.config.is_development() {
         ValidationConfig::development()
     } else {
@@ -225,6 +247,11 @@ pub async fn handle_form_action(
 
     let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
     let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;
+
+    if is_reserved_export_name(export_name) {
+        error!("Attempted to call reserved export name in form action: {}", export_name);
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let args = convert_form_data_to_args(&form_data);
 
@@ -464,5 +491,21 @@ pub(crate) fn is_dangerous_property(key: &str) -> bool {
             | "__defineSetter__"
             | "__lookupGetter__"
             | "__lookupSetter__"
+    )
+}
+
+pub(crate) fn is_reserved_export_name(name: &str) -> bool {
+    matches!(
+        name,
+        "then"
+            | "catch"
+            | "finally"
+            | "toString"
+            | "valueOf"
+            | "toLocaleString"
+            | "constructor"
+            | "Symbol"
+            | "@@iterator"
+            | "@@toStringTag"
     )
 }

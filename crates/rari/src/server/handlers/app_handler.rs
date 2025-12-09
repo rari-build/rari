@@ -20,7 +20,6 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{debug, error, warn};
 
-
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,

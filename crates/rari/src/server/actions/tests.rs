@@ -652,4 +652,67 @@ mod tests {
         assert!(validate_redirect_url("https://example.co/page", &config).is_err());
         assert!(validate_redirect_url("https://examplecom.com/page", &config).is_err());
     }
+
+    #[test]
+    fn test_is_reserved_export_name_then() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(is_reserved_export_name("then"));
+        assert!(is_reserved_export_name("catch"));
+        assert!(is_reserved_export_name("finally"));
+    }
+
+    #[test]
+    fn test_is_reserved_export_name_object_methods() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(is_reserved_export_name("toString"));
+        assert!(is_reserved_export_name("valueOf"));
+        assert!(is_reserved_export_name("toLocaleString"));
+        assert!(is_reserved_export_name("constructor"));
+    }
+
+    #[test]
+    fn test_is_reserved_export_name_symbols() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(is_reserved_export_name("Symbol"));
+        assert!(is_reserved_export_name("@@iterator"));
+        assert!(is_reserved_export_name("@@toStringTag"));
+    }
+
+    #[test]
+    fn test_is_reserved_export_name_allows_valid_names() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(!is_reserved_export_name("getData"));
+        assert!(!is_reserved_export_name("submitForm"));
+        assert!(!is_reserved_export_name("updateUser"));
+        assert!(!is_reserved_export_name("deleteItem"));
+        assert!(!is_reserved_export_name("GET"));
+        assert!(!is_reserved_export_name("POST"));
+        assert!(!is_reserved_export_name("myAction"));
+    }
+
+    #[test]
+    fn test_is_reserved_export_name_case_sensitive() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(is_reserved_export_name("then"));
+        assert!(!is_reserved_export_name("Then"));
+        assert!(!is_reserved_export_name("THEN"));
+
+        assert!(is_reserved_export_name("catch"));
+        assert!(!is_reserved_export_name("Catch"));
+    }
+
+    #[test]
+    fn test_is_reserved_export_name_similar_names() {
+        use crate::server::actions::is_reserved_export_name;
+
+        assert!(!is_reserved_export_name("thenDo"));
+        assert!(!is_reserved_export_name("catchError"));
+        assert!(!is_reserved_export_name("finallyDone"));
+        assert!(!is_reserved_export_name("myThen"));
+    }
 }
