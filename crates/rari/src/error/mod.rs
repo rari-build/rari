@@ -112,6 +112,7 @@ pub enum RariError {
     Validation(String, Option<ErrorMetadata>),
     Internal(String, Option<ErrorMetadata>),
     BadRequest(String, Option<ErrorMetadata>),
+    Forbidden(String, Option<ErrorMetadata>),
     Serialization(String, Option<ErrorMetadata>),
     Deserialization(String, Option<ErrorMetadata>),
     State(String, Option<ErrorMetadata>),
@@ -172,6 +173,7 @@ impl std::fmt::Display for RariError {
             Self::Validation(msg, _) => write!(f, "Validation error: {msg}"),
             Self::Internal(msg, _) => write!(f, "{msg}"),
             Self::BadRequest(msg, _) => write!(f, "Bad request: {msg}"),
+            Self::Forbidden(msg, _) => write!(f, "Forbidden: {msg}"),
             Self::Serialization(msg, _) => write!(f, "Serialization error: {msg}"),
             Self::Deserialization(msg, _) => write!(f, "Deserialization error: {msg}"),
             Self::State(msg, _) => write!(f, "State error: {msg}"),
@@ -346,6 +348,7 @@ impl RariError {
             Self::Validation(msg, _) => msg.clone(),
             Self::Internal(msg, _) => msg.clone(),
             Self::BadRequest(msg, _) => msg.clone(),
+            Self::Forbidden(msg, _) => msg.clone(),
             Self::Serialization(msg, _) => msg.clone(),
             Self::Deserialization(msg, _) => msg.clone(),
             Self::State(msg, _) => msg.clone(),
@@ -365,6 +368,7 @@ impl RariError {
             Self::Validation(_, _) => "VALIDATION",
             Self::Internal(_, _) => "INTERNAL",
             Self::BadRequest(_, _) => "BAD_REQUEST",
+            Self::Forbidden(_, _) => "FORBIDDEN",
             Self::Serialization(_, _) => "SERIALIZATION_ERROR",
             Self::Deserialization(_, _) => "DESERIALIZATION_ERROR",
             Self::State(_, _) => "STATE_ERROR",
@@ -394,6 +398,7 @@ impl RariError {
             Self::JsRuntime(_, meta) => meta.as_ref(),
             Self::IoError(_, meta) => meta.as_ref(),
             Self::ModuleReload(_, meta) => meta.as_ref(),
+            Self::Forbidden(_, meta) => meta.as_ref(),
         }
     }
 
@@ -413,6 +418,7 @@ impl RariError {
             Self::JsRuntime(_, meta) => meta,
             Self::IoError(_, meta) => meta,
             Self::ModuleReload(_, meta) => meta,
+            Self::Forbidden(_, meta) => meta,
         }
     }
 
@@ -430,6 +436,10 @@ impl RariError {
 
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::BadRequest(message.into(), None)
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::Forbidden(message.into(), None)
     }
 
     pub fn serialization(message: impl Into<String>) -> Self {

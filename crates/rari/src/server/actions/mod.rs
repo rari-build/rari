@@ -31,10 +31,39 @@ pub struct ServerActionResponse {
 
 pub async fn handle_server_action(
     State(state): State<ServerState>,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     debug!("Handling server action request");
+
+    if let Some(csrf_token) = headers.get("x-csrf-token") {
+        if let Ok(token_str) = csrf_token.to_str() {
+            if let Err(e) = state.csrf_manager.validate_token(token_str) {
+                error!("CSRF token validation failed: {}", e);
+                let mut response = Json(ServerActionResponse {
+                    success: false,
+                    result: None,
+                    error: Some("CSRF token validation failed".to_string()),
+                    redirect: None,
+                })
+                .into_response();
+                response.headers_mut().insert(
+                    header::CACHE_CONTROL,
+                    "no-store, no-cache, must-revalidate, private"
+                        .parse()
+                        .expect("Valid cache-control header"),
+                );
+                *response.status_mut() = StatusCode::FORBIDDEN;
+                return Ok(response);
+            }
+        } else {
+            error!("Invalid CSRF token header format");
+            return Err(StatusCode::FORBIDDEN);
+        }
+    } else {
+        error!("Missing CSRF token in server action request");
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
         Ok(req) => req,
@@ -119,6 +148,16 @@ pub async fn handle_form_action(
             return Err(StatusCode::BAD_REQUEST);
         }
     };
+
+    let csrf_token = form_data.get("__csrf_token").ok_or_else(|| {
+        error!("Missing CSRF token in form action");
+        StatusCode::FORBIDDEN
+    })?;
+
+    if let Err(e) = state.csrf_manager.validate_token(csrf_token) {
+        error!("CSRF token validation failed: {}", e);
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
     let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;

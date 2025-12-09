@@ -179,6 +179,8 @@ impl Server {
             response_cache.config.default_ttl
         );
 
+        let csrf_manager = Arc::new(Self::initialize_csrf_manager());
+
         let state = ServerState {
             renderer: renderer_arc,
             ssr_renderer,
@@ -192,6 +194,7 @@ impl Server {
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
             response_cache,
+            csrf_manager,
         };
 
         if config.is_production() {
@@ -213,6 +216,22 @@ impl Server {
             .map_err(|e| RariError::network(format!("Failed to get local address: {e}")))?;
 
         Ok(Self { router, config, listener, address: socket_addr })
+    }
+
+    fn initialize_csrf_manager() -> crate::server::security::csrf::CsrfTokenManager {
+        use crate::server::security::csrf::CsrfTokenManager;
+
+        if let Ok(secret) = std::env::var("RARI_CSRF_SECRET") {
+            if secret.len() < 32 {
+                warn!(
+                    "RARI_CSRF_SECRET is less than 32 bytes. Using it anyway, but consider using a stronger secret."
+                );
+            }
+            info!("CSRF protection enabled with secret from RARI_CSRF_SECRET");
+            CsrfTokenManager::new(secret.into_bytes())
+        } else {
+            CsrfTokenManager::new_with_random_secret()
+        }
     }
 
     async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {

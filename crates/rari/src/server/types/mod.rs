@@ -8,6 +8,7 @@ pub mod request;
 use crate::server::cache::response_cache;
 use crate::server::config;
 use crate::server::routing;
+use crate::server::security::csrf::CsrfTokenManager;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -24,6 +25,7 @@ pub struct ServerState {
     pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub response_cache: Arc<response_cache::ResponseCache>,
+    pub csrf_manager: Arc<CsrfTokenManager>,
 }
 
 #[derive(Debug, Deserialize)]
