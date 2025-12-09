@@ -1,4 +1,23 @@
-## [0.5.8] - 2025-12-04
+## [0.5.9] - 2025-12-09
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump binaries to 0.5.5
+## [0.5.5] - 2025-12-09
+
+### 🚀 Features
+
+- *(rsc)* Extract RSC wire format escaping utilities
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.5.5
+- *(release)* Update macOS runner to macos-15-intel
+## [rari@0.5.8] - 2025-12-04
+
+### 💼 Other
+
+- Rari@0.5.8
 
 ### ⚙️ Miscellaneous Tasks
 
