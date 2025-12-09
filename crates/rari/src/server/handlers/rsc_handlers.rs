@@ -275,6 +275,18 @@ pub async fn reload_component_from_dist(
     file_path: &str,
     component_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::server::utils::path_validation::validate_component_path;
+
+    if let Err(e) = validate_component_path(file_path) {
+        error!(
+            component_id = component_id,
+            file_path = file_path,
+            error = %e,
+            "Component path validation failed"
+        );
+        return Err(format!("Path validation error: {}", e).into());
+    }
+
     let dist_path = match get_dist_path_for_component(file_path) {
         Ok(path) => path,
         Err(e) => {
@@ -454,6 +466,17 @@ pub async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::server::utils::path_validation::validate_component_path;
+
+    if let Err(e) = validate_component_path(file_path) {
+        error!(
+            file_path = file_path,
+            error = %e,
+            "Component path validation failed"
+        );
+        return Err(format!("Path validation error: {}", e).into());
+    }
+
     let path = std::path::Path::new(file_path);
     let component_name =
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");

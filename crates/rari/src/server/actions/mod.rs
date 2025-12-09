@@ -9,10 +9,47 @@ use axum::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone)]
+pub struct ValidationConfig {
+    pub max_depth: usize,
+    pub max_string_length: usize,
+    pub max_array_length: usize,
+    pub max_object_keys: usize,
+    pub allow_special_numbers: bool,
+}
+
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        Self {
+            max_depth: 10,
+            max_string_length: 10_000,
+            max_array_length: 1_000,
+            max_object_keys: 100,
+            allow_special_numbers: false,
+        }
+    }
+}
+
+impl ValidationConfig {
+    pub fn development() -> Self {
+        Self {
+            max_depth: 20,
+            max_string_length: 50_000,
+            max_array_length: 5_000,
+            max_object_keys: 500,
+            allow_special_numbers: false,
+        }
+    }
+
+    pub fn production() -> Self {
+        Self::default()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ServerActionRequest {
@@ -31,10 +68,39 @@ pub struct ServerActionResponse {
 
 pub async fn handle_server_action(
     State(state): State<ServerState>,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     debug!("Handling server action request");
+
+    if let Some(csrf_token) = headers.get("x-csrf-token") {
+        if let Ok(token_str) = csrf_token.to_str() {
+            if let Err(e) = state.csrf_manager.validate_token(token_str) {
+                error!("CSRF token validation failed: {}", e);
+                let mut response = Json(ServerActionResponse {
+                    success: false,
+                    result: None,
+                    error: Some("CSRF token validation failed".to_string()),
+                    redirect: None,
+                })
+                .into_response();
+                response.headers_mut().insert(
+                    header::CACHE_CONTROL,
+                    "no-store, no-cache, must-revalidate, private"
+                        .parse()
+                        .expect("Valid cache-control header"),
+                );
+                *response.status_mut() = StatusCode::FORBIDDEN;
+                return Ok(response);
+            }
+        } else {
+            error!("Invalid CSRF token header format");
+            return Err(StatusCode::FORBIDDEN);
+        }
+    } else {
+        error!("Missing CSRF token in server action request");
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
         Ok(req) => req,
@@ -57,7 +123,55 @@ pub async fn handle_server_action(
         }
     };
 
-    let sanitized_args = sanitize_args(&request.args);
+    if is_reserved_export_name(&request.export_name) {
+        error!("Attempted to call reserved export name: {}", request.export_name);
+        let mut response = Json(ServerActionResponse {
+            success: false,
+            result: None,
+            error: Some(format!(
+                "Invalid export name '{}': reserved for internal use",
+                request.export_name
+            )),
+            redirect: None,
+        })
+        .into_response();
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, private"
+                .parse()
+                .expect("Valid cache-control header"),
+        );
+        *response.status_mut() = StatusCode::BAD_REQUEST;
+        return Ok(response);
+    }
+
+    let validation_config = if state.config.is_development() {
+        ValidationConfig::development()
+    } else {
+        ValidationConfig::production()
+    };
+
+    let sanitized_args = match validate_and_sanitize_args(&request.args, &validation_config) {
+        Ok(args) => args,
+        Err(e) => {
+            error!("Input validation failed: {}", e);
+            let mut response = Json(ServerActionResponse {
+                success: false,
+                result: None,
+                error: Some(format!("Input validation failed: {}", e)),
+                redirect: None,
+            })
+            .into_response();
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                "no-store, no-cache, must-revalidate, private"
+                    .parse()
+                    .expect("Valid cache-control header"),
+            );
+            *response.status_mut() = StatusCode::BAD_REQUEST;
+            return Ok(response);
+        }
+    };
 
     debug!("Executing server action: {} (export: {})", request.id, request.export_name);
 
@@ -69,7 +183,8 @@ pub async fn handle_server_action(
         Ok(value) => {
             debug!("Server action executed successfully, result: {:?}", value);
 
-            let redirect = extract_redirect_from_result(&value);
+            let redirect_config = state.config.redirect_config();
+            let redirect = extract_redirect_from_result(&value, &redirect_config);
 
             let response =
                 ServerActionResponse { success: true, result: Some(value), error: None, redirect };
@@ -120,8 +235,23 @@ pub async fn handle_form_action(
         }
     };
 
+    let csrf_token = form_data.get("__csrf_token").ok_or_else(|| {
+        error!("Missing CSRF token in form action");
+        StatusCode::FORBIDDEN
+    })?;
+
+    if let Err(e) = state.csrf_manager.validate_token(csrf_token) {
+        error!("CSRF token validation failed: {}", e);
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
     let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;
+
+    if is_reserved_export_name(export_name) {
+        error!("Attempted to call reserved export name in form action: {}", export_name);
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let args = convert_form_data_to_args(&form_data);
 
@@ -132,7 +262,8 @@ pub async fn handle_form_action(
 
     match result {
         Ok(value) => {
-            if let Some(redirect_url) = extract_redirect_from_result(&value) {
+            let redirect_config = state.config.redirect_config();
+            if let Some(redirect_url) = extract_redirect_from_result(&value, &redirect_config) {
                 return Response::builder()
                     .status(StatusCode::SEE_OTHER)
                     .header("Location", redirect_url)
@@ -157,15 +288,53 @@ pub async fn handle_form_action(
     }
 }
 
-fn extract_redirect_from_result(result: &JsonValue) -> Option<String> {
+pub(crate) fn validate_redirect_url(
+    url: &str,
+    config: &crate::server::config::RedirectConfig,
+) -> Result<String, RariError> {
+    if config.allow_relative && url.starts_with('/') && !url.starts_with("//") {
+        return Ok(url.to_string());
+    }
+
+    let parsed =
+        url::Url::parse(url).map_err(|_| RariError::bad_request("Invalid redirect URL format"))?;
+
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(RariError::bad_request("Invalid redirect scheme: only http/https allowed"));
+    }
+
+    if let Some(host) = parsed.host_str() {
+        let is_allowed = config.allowed_hosts.iter().any(|allowed| {
+            if config.allow_subdomains {
+                host == allowed || host.ends_with(&format!(".{}", allowed))
+            } else {
+                host == allowed
+            }
+        });
+
+        if !is_allowed {
+            warn!("Blocked redirect to untrusted host: {}", host);
+            return Err(RariError::bad_request("Redirect to untrusted host not allowed"));
+        }
+    } else {
+        return Err(RariError::bad_request("Invalid redirect URL: missing host"));
+    }
+
+    Ok(url.to_string())
+}
+
+fn extract_redirect_from_result(
+    result: &JsonValue,
+    config: &crate::server::config::RedirectConfig,
+) -> Option<String> {
     if let Some(redirect) = result.get("redirect") {
         if let Some(url) = redirect.as_str() {
-            return Some(url.to_string());
+            return validate_redirect_url(url, config).ok();
         }
         if let Some(obj) = redirect.as_object()
             && let Some(destination) = obj.get("destination").and_then(|d| d.as_str())
         {
-            return Some(destination.to_string());
+            return validate_redirect_url(destination, config).ok();
         }
     }
     None
@@ -231,28 +400,84 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
     Ok(result)
 }
 
-pub(crate) fn sanitize_args(args: &[JsonValue]) -> Vec<JsonValue> {
-    args.iter().map(sanitize_value).collect()
+pub(crate) fn validate_and_sanitize_args(
+    args: &[JsonValue],
+    config: &ValidationConfig,
+) -> Result<Vec<JsonValue>, RariError> {
+    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0)).collect()
 }
 
-fn sanitize_value(value: &JsonValue) -> JsonValue {
+fn validate_and_sanitize_value(
+    value: &JsonValue,
+    config: &ValidationConfig,
+    depth: usize,
+) -> Result<JsonValue, RariError> {
+    if depth > config.max_depth {
+        return Err(RariError::bad_request(format!(
+            "Maximum nesting depth exceeded: {} > {}",
+            depth, config.max_depth
+        )));
+    }
+
     match value {
+        JsonValue::String(s) => {
+            if s.len() > config.max_string_length {
+                return Err(RariError::bad_request(format!(
+                    "String too long: {} > {}",
+                    s.len(),
+                    config.max_string_length
+                )));
+            }
+            Ok(value.clone())
+        }
+        JsonValue::Number(n) => {
+            if let Some(f) = n.as_f64()
+                && !config.allow_special_numbers
+                && !f.is_finite()
+            {
+                return Err(RariError::bad_request(
+                    "Invalid number: Infinity or NaN not allowed".to_string(),
+                ));
+            }
+            Ok(value.clone())
+        }
+        JsonValue::Array(arr) => {
+            if arr.len() > config.max_array_length {
+                return Err(RariError::bad_request(format!(
+                    "Array too large: {} > {}",
+                    arr.len(),
+                    config.max_array_length
+                )));
+            }
+
+            let validated: Result<Vec<_>, _> =
+                arr.iter().map(|v| validate_and_sanitize_value(v, config, depth + 1)).collect();
+
+            Ok(JsonValue::Array(validated?))
+        }
         JsonValue::Object(obj) => {
+            if obj.len() > config.max_object_keys {
+                return Err(RariError::bad_request(format!(
+                    "Too many object keys: {} > {}",
+                    obj.len(),
+                    config.max_object_keys
+                )));
+            }
+
             let mut sanitized = serde_json::Map::new();
             for (key, val) in obj {
                 if is_dangerous_property(key) {
-                    tracing::warn!(
-                        "Blocked dangerous property '{}' in server action arguments",
-                        key
-                    );
+                    warn!("Blocked dangerous property '{}' in server action arguments", key);
                     continue;
                 }
-                sanitized.insert(key.clone(), sanitize_value(val));
+
+                let validated_val = validate_and_sanitize_value(val, config, depth + 1)?;
+                sanitized.insert(key.clone(), validated_val);
             }
-            JsonValue::Object(sanitized)
+
+            Ok(JsonValue::Object(sanitized))
         }
-        JsonValue::Array(arr) => JsonValue::Array(arr.iter().map(sanitize_value).collect()),
-        _ => value.clone(),
+        JsonValue::Bool(_) | JsonValue::Null => Ok(value.clone()),
     }
 }
 
@@ -266,5 +491,21 @@ pub(crate) fn is_dangerous_property(key: &str) -> bool {
             | "__defineSetter__"
             | "__lookupGetter__"
             | "__lookupSetter__"
+    )
+}
+
+pub(crate) fn is_reserved_export_name(name: &str) -> bool {
+    matches!(
+        name,
+        "then"
+            | "catch"
+            | "finally"
+            | "toString"
+            | "valueOf"
+            | "toLocaleString"
+            | "constructor"
+            | "Symbol"
+            | "@@iterator"
+            | "@@toStringTag"
     )
 }

@@ -885,7 +885,7 @@ function ServerComponentWrapper({
     let mounted = true
 
     if (prevPropsKeyRef.current !== propsKey) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
       setState({ data: null, loading: true, error: null })
       prevPropsKeyRef.current = propsKey
     }

@@ -36,7 +36,18 @@ pub async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    use crate::server::utils::path_validation::validate_component_path;
+
     let file_path = request.file_path.clone();
+
+    if let Err(e) = validate_component_path(&file_path) {
+        error!(
+            file_path = %file_path,
+            error = %e,
+            "Component path validation failed"
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let component_id = match extract_component_id(&file_path) {
         Ok(id) => id,
@@ -440,13 +451,29 @@ pub async fn reload_component(
     State(state): State<ServerState>,
     Json(payload): Json<ReloadComponentRequest>,
 ) -> Result<Json<ReloadComponentResponse>, StatusCode> {
+    use crate::server::utils::path_validation::validate_safe_path;
+
     info!(
         "Reload component request for: {} from bundle: {}",
         payload.component_id, payload.bundle_path
     );
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let bundle_full_path = project_root.join(&payload.bundle_path);
+
+    let bundle_full_path = match validate_safe_path(&project_root, &payload.bundle_path) {
+        Ok(path) => path,
+        Err(e) => {
+            error!(
+                bundle_path = %payload.bundle_path,
+                error = %e,
+                "Bundle path validation failed"
+            );
+            return Ok(Json(ReloadComponentResponse {
+                success: false,
+                message: format!("Invalid bundle path: {}", e),
+            }));
+        }
+    };
 
     let invalidate_result = {
         let renderer = state.renderer.lock().await;

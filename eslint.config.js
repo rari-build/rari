@@ -6,6 +6,11 @@ export default antfu(
   { react: true },
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
   {
+    rules: {
+      'pnpm/json-enforce-catalog': 'off',
+    },
+  },
+  {
     files: ['**/*.md/**'],
     rules: {
       'react-refresh/only-export-components': 'off',

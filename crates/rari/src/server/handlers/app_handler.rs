@@ -190,11 +190,37 @@ pub async fn render_streaming_with_layout(
         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
     };
 
-    let converter = if let Some(links) = asset_links {
-        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_assets(links, html_renderer)))
-    } else {
-        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::new(html_renderer)))
-    };
+    let csrf_token = state.csrf_manager.generate_token();
+    let asset_tags = asset_links.as_deref().unwrap_or("");
+    let base_shell = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rari App</title>
+    <meta name="csrf-token" content="{}" />
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">"#,
+        csrf_token, asset_tags
+    );
+
+    let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+        base_shell,
+        None,
+        html_renderer,
+    )));
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
@@ -313,6 +339,7 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
         );
 
         debug!("index.html not found, serving generated development HTML shell as fallback");
+
         return Ok(Response::builder()
             .status(StatusCode::OK)
             .header("content-type", "text/html; charset=utf-8")
@@ -368,9 +395,22 @@ pub async fn handle_app_route(
         let path_without_leading_slash = &path[1..];
 
         if path_without_leading_slash.contains('.') {
-            let file_path = state.config.public_dir().join(path_without_leading_slash);
+            use crate::server::utils::path_validation::validate_safe_path;
 
-            if file_path.exists() && file_path.is_file() {
+            let file_path =
+                match validate_safe_path(state.config.public_dir(), path_without_leading_slash) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        warn!(
+                            requested_path = %path,
+                            error = %e,
+                            "Path validation failed for static file request"
+                        );
+                        return Err(StatusCode::NOT_FOUND);
+                    }
+                };
+
+            if file_path.is_file() {
                 match std::fs::read(&file_path) {
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
@@ -597,14 +637,33 @@ pub async fn handle_app_route(
                         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
                     };
 
-                    let converter = if let Some(links) = asset_links {
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_assets(
-                            links,
-                            html_renderer,
-                        )))
-                    } else {
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::new(html_renderer)))
-                    };
+                    let asset_tags = asset_links.as_deref().unwrap_or("");
+                    let base_shell = format!(
+                        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rari App</title>
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">"#,
+                        asset_tags
+                    );
+
+                    let converter = Arc::new(tokio::sync::Mutex::new(
+                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
+                    ));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();

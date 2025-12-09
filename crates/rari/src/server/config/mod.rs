@@ -43,6 +43,68 @@ impl Default for ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+    pub allow_credentials: bool,
+    pub max_age: u32,
+}
+
+impl Default for CorsConfig {
+    fn default() -> Self {
+        Self { allowed_origins: vec![], allow_credentials: true, max_age: 86400 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedirectConfig {
+    pub allowed_hosts: Vec<String>,
+    pub allow_relative: bool,
+    pub allow_subdomains: bool,
+}
+
+impl Default for RedirectConfig {
+    fn default() -> Self {
+        Self { allowed_hosts: vec![], allow_relative: true, allow_subdomains: false }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CspConfig {
+    pub script_src: Vec<String>,
+    pub style_src: Vec<String>,
+    pub img_src: Vec<String>,
+    pub font_src: Vec<String>,
+    pub connect_src: Vec<String>,
+    pub default_src: Vec<String>,
+}
+
+impl Default for CspConfig {
+    fn default() -> Self {
+        Self {
+            default_src: vec!["'self'".to_string()],
+            script_src: vec!["'self'".to_string()],
+            style_src: vec!["'self'".to_string()],
+            img_src: vec!["'self'".to_string(), "data:".to_string(), "https:".to_string()],
+            font_src: vec!["'self'".to_string(), "data:".to_string()],
+            connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfig {
+    pub enabled: bool,
+    pub requests_per_second: u32,
+    pub burst_size: u32,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self { enabled: true, requests_per_second: 100, burst_size: 200 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -186,6 +248,14 @@ pub struct Config {
     pub loading: LoadingConfig,
     #[serde(default)]
     pub streaming: StreamingConfig,
+    #[serde(default)]
+    pub cors: CorsConfig,
+    #[serde(default)]
+    pub redirect: RedirectConfig,
+    #[serde(default)]
+    pub csp: CspConfig,
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 impl Config {
@@ -362,6 +432,45 @@ impl Config {
                 })?;
         }
 
+        if let Ok(script_src) = std::env::var("RARI_CSP_SCRIPT_SRC") {
+            config.csp.script_src = script_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(style_src) = std::env::var("RARI_CSP_STYLE_SRC") {
+            config.csp.style_src = style_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(img_src) = std::env::var("RARI_CSP_IMG_SRC") {
+            config.csp.img_src = img_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(font_src) = std::env::var("RARI_CSP_FONT_SRC") {
+            config.csp.font_src = font_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(connect_src) = std::env::var("RARI_CSP_CONNECT_SRC") {
+            config.csp.connect_src =
+                connect_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(rate_limit_enabled) = std::env::var("RARI_RATE_LIMIT_ENABLED") {
+            config.rate_limit.enabled = rate_limit_enabled.to_lowercase() == "true"
+                || rate_limit_enabled == "1"
+                || rate_limit_enabled.to_lowercase() == "yes";
+        }
+
+        if let Ok(rate_limit_rps) = std::env::var("RARI_RATE_LIMIT_RPS") {
+            config.rate_limit.requests_per_second = rate_limit_rps
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_RPS".to_string()))?;
+        }
+
+        if let Ok(rate_limit_burst) = std::env::var("RARI_RATE_LIMIT_BURST") {
+            config.rate_limit.burst_size = rate_limit_burst
+                .parse()
+                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_BURST".to_string()))?;
+        }
+
         Ok(config)
     }
 
@@ -412,6 +521,66 @@ impl Config {
         self.is_development() && self.rsc.hmr_reload_enabled
     }
 
+    pub fn cors_config(&self) -> CorsConfig {
+        if !self.cors.allowed_origins.is_empty() {
+            return self.cors.clone();
+        }
+
+        if self.is_development() {
+            CorsConfig {
+                allowed_origins: vec![
+                    format!("http://{}:{}", self.server.host, self.server.port),
+                    format!("http://localhost:{}", self.server.port),
+                    format!("http://127.0.0.1:{}", self.server.port),
+                    format!("http://{}:{}", self.vite.host, self.vite.port),
+                    format!("http://localhost:{}", self.vite.port),
+                ],
+                allow_credentials: true,
+                max_age: 86400,
+            }
+        } else {
+            let allowed_origins = if let Some(origin) = &self.server.origin {
+                vec![origin.clone()]
+            } else {
+                vec![format!("http://{}:{}", self.server.host, self.server.port)]
+            };
+
+            CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+        }
+    }
+
+    pub fn redirect_config(&self) -> RedirectConfig {
+        if !self.redirect.allowed_hosts.is_empty() {
+            return self.redirect.clone();
+        }
+
+        if self.is_development() {
+            let mut allowed_hosts =
+                vec!["localhost".to_string(), "127.0.0.1".to_string(), self.server.host.clone()];
+
+            if let Some(origin) = &self.server.origin
+                && let Ok(url) = url::Url::parse(origin)
+                && let Some(host) = url.host_str()
+            {
+                allowed_hosts.push(host.to_string());
+            }
+
+            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
+        } else {
+            let allowed_hosts = if let Some(origin) = &self.server.origin {
+                if let Ok(url) = url::Url::parse(origin) {
+                    if let Some(host) = url.host_str() { vec![host.to_string()] } else { vec![] }
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![self.server.host.clone()]
+            };
+
+            RedirectConfig { allowed_hosts, allow_relative: true, allow_subdomains: false }
+        }
+    }
+
     pub fn get_cache_control_for_route(&self, path: &str) -> &str {
         if let Some(cache_control) = self.caching.routes.get(path) {
             return cache_control;
@@ -439,6 +608,55 @@ impl Config {
         }
 
         pattern == path
+    }
+
+    pub fn csp_config(&self) -> CspConfig {
+        let mut config = self.csp.clone();
+
+        if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
+            config.script_src.push("'unsafe-inline'".to_string());
+        }
+
+        if !config.style_src.contains(&"'unsafe-inline'".to_string()) {
+            config.style_src.push("'unsafe-inline'".to_string());
+        }
+
+        if self.is_development() && !config.script_src.contains(&"'unsafe-eval'".to_string()) {
+            config.script_src.push("'unsafe-eval'".to_string());
+        }
+
+        config
+    }
+
+    pub fn build_csp_policy(&self) -> String {
+        let config = self.csp_config();
+        let mut directives = Vec::new();
+
+        if !config.default_src.is_empty() {
+            directives.push(format!("default-src {}", config.default_src.join(" ")));
+        }
+
+        if !config.script_src.is_empty() {
+            directives.push(format!("script-src {}", config.script_src.join(" ")));
+        }
+
+        if !config.style_src.is_empty() {
+            directives.push(format!("style-src {}", config.style_src.join(" ")));
+        }
+
+        if !config.img_src.is_empty() {
+            directives.push(format!("img-src {}", config.img_src.join(" ")));
+        }
+
+        if !config.font_src.is_empty() {
+            directives.push(format!("font-src {}", config.font_src.join(" ")));
+        }
+
+        if !config.connect_src.is_empty() {
+            directives.push(format!("connect-src {}", config.connect_src.join(" ")));
+        }
+
+        directives.join("; ")
     }
 }
 

@@ -11,6 +11,11 @@ pub mod tests;
 use smallvec::SmallVec;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+fn base64_encode(bytes: &[u8]) -> String {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    STANDARD.encode(bytes)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModuleReferenceType {
     ClientComponent,
@@ -457,7 +462,7 @@ impl RscSerializer {
         self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
     }
 
-    fn serialize_element_to_standard_format(&self, element: &SerializedReactElement) -> String {
+    fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
         match &element.element_type {
             ElementType::HtmlTag(tag) => {
                 self.serialize_html_element_standard(tag, element.props.as_ref())
@@ -478,7 +483,7 @@ impl RscSerializer {
     }
 
     fn create_react_element_json(
-        &self,
+        &mut self,
         element_type: &str,
         props: Option<&FxHashMap<String, Value>>,
         key: Option<&str>,
@@ -538,7 +543,7 @@ impl RscSerializer {
     }
 
     fn serialize_html_element_standard(
-        &self,
+        &mut self,
         tag: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
@@ -547,12 +552,12 @@ impl RscSerializer {
     }
 
     fn serialize_client_component_reference_standard(
-        &self,
+        &mut self,
         component_id: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
-        if let Some(module_reference) = self.serialized_modules.get(component_id) {
-            let element = self.create_react_element_json(module_reference, props, None);
+        if let Some(module_reference) = self.serialized_modules.get(component_id).cloned() {
+            let element = self.create_react_element_json(&module_reference, props, None);
             self.serialize_react_element_to_string(
                 &element,
                 &format!("[\"$\",\"{module_reference}\",null,null]"),
@@ -566,7 +571,7 @@ impl RscSerializer {
 
     #[allow(clippy::disallowed_methods)]
     fn serialize_server_component_standard(
-        &self,
+        &mut self,
         component_name: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
@@ -598,7 +603,7 @@ impl RscSerializer {
     }
 
     fn handle_server_component_result(
-        &self,
+        &mut self,
         component_name: &str,
         result: Value,
         props: Option<&FxHashMap<String, Value>>,
@@ -635,7 +640,7 @@ impl RscSerializer {
     }
 
     fn create_execution_placeholder_standard(
-        &self,
+        &mut self,
         component_name: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
@@ -670,15 +675,17 @@ impl RscSerializer {
         serde_json::to_string(&children).unwrap_or_else(|_| "[]".to_string())
     }
 
-    fn serialize_props(&self, props: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
+    fn serialize_props(&mut self, props: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
         let mut result = FxHashMap::default();
         let mut visited = FxHashSet::default();
         let mut validation_errors = Vec::new();
 
         for (key, value) in props {
+            let processed_value = self.process_special_values_with_outlining(value);
+
             match Self::validate_and_serialize_prop(
                 key,
-                value,
+                &processed_value,
                 &mut visited,
                 &mut validation_errors,
             ) {
@@ -701,6 +708,281 @@ impl RscSerializer {
         }
 
         result
+    }
+
+    fn process_special_values_with_outlining(&mut self, value: &Value) -> Value {
+        match value {
+            Value::Number(n) => {
+                if let Some(f) = n.as_f64() {
+                    if f.is_nan() {
+                        return Value::String("$NaN".to_string());
+                    } else if f.is_infinite() {
+                        if f.is_sign_positive() {
+                            return Value::String("$Infinity".to_string());
+                        } else {
+                            return Value::String("$-Infinity".to_string());
+                        }
+                    } else if f == 0.0 && f.is_sign_negative() {
+                        return Value::String("$-0".to_string());
+                    }
+                }
+                value.clone()
+            }
+
+            Value::Object(obj) => {
+                if let Some(date_str) = obj.get("$date").and_then(|v| v.as_str()) {
+                    return Value::String(format!("$D{}", date_str));
+                }
+
+                if let Some(bigint_str) = obj.get("$bigint").and_then(|v| v.as_str()) {
+                    return Value::String(format!("$n{}", bigint_str));
+                }
+
+                if let Some(map_entries) = obj.get("$map") {
+                    return self.outline_map(map_entries);
+                }
+
+                if let Some(set_entries) = obj.get("$set") {
+                    return self.outline_set(set_entries);
+                }
+
+                if let Some(formdata_entries) = obj.get("$formdata") {
+                    return self.outline_formdata(formdata_entries);
+                }
+
+                if let Some(promise_data) = obj.get("$promise") {
+                    return self.outline_promise(promise_data);
+                }
+
+                if let Some(function_data) = obj.get("$function") {
+                    return self.outline_server_function(function_data);
+                }
+
+                if let Some(temp_ref) = obj.get("$temp").and_then(|v| v.as_str()) {
+                    return Value::String(format!("$T{}", temp_ref));
+                }
+
+                if let Some(symbol_name) = obj.get("$symbol").and_then(|v| v.as_str()) {
+                    return Value::String(format!("$S{}", symbol_name));
+                }
+
+                if let Some(deferred_data) = obj.get("$deferred") {
+                    return self.outline_deferred(deferred_data);
+                }
+
+                if let Some(iterator_data) = obj.get("$iterator") {
+                    return self.outline_iterator(iterator_data);
+                }
+
+                if let Some(typedarray_data) = obj.get("$typedarray") {
+                    return self.outline_typedarray(typedarray_data);
+                }
+
+                if let Some(blob_data) = obj.get("$blob") {
+                    return self.outline_blob(blob_data);
+                }
+
+                if let Some(stream_data) = obj.get("$stream") {
+                    return self.outline_stream(stream_data);
+                }
+
+                let mut processed_obj = serde_json::Map::new();
+                for (k, v) in obj {
+                    processed_obj.insert(k.clone(), self.process_special_values_with_outlining(v));
+                }
+                Value::Object(processed_obj)
+            }
+
+            Value::Array(arr) => Value::Array(
+                arr.iter().map(|v| self.process_special_values_with_outlining(v)).collect(),
+            ),
+
+            Value::String(s) if s == "$undefined" => value.clone(),
+
+            _ => value.clone(),
+        }
+    }
+
+    fn outline_map(&mut self, entries: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_entries = self.process_special_values_with_outlining(entries);
+
+        let entries_json =
+            serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$Q{:x}", chunk_id))
+    }
+
+    fn outline_set(&mut self, entries: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_entries = self.process_special_values_with_outlining(entries);
+
+        let entries_json =
+            serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$W{:x}", chunk_id))
+    }
+
+    fn outline_formdata(&mut self, entries: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_entries = self.process_special_values_with_outlining(entries);
+
+        let entries_json =
+            serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$K{:x}", chunk_id))
+    }
+
+    fn outline_promise(&mut self, promise_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_data = self.process_special_values_with_outlining(promise_data);
+
+        let data_json =
+            serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$@{:x}", chunk_id))
+    }
+
+    fn outline_server_function(&mut self, function_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_data = self.process_special_values_with_outlining(function_data);
+
+        let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "{}".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$F{:x}", chunk_id))
+    }
+
+    fn outline_deferred(&mut self, deferred_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_data = self.process_special_values_with_outlining(deferred_data);
+
+        let data_json =
+            serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$Y{:x}", chunk_id))
+    }
+
+    fn outline_iterator(&mut self, iterator_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let processed_data = self.process_special_values_with_outlining(iterator_data);
+
+        let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "[]".to_string());
+        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        self.output_lines.push(chunk_line);
+
+        Value::String(format!("$i{:x}", chunk_id))
+    }
+
+    fn outline_typedarray(&mut self, typedarray_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let type_name =
+            typedarray_data.get("type").and_then(|v| v.as_str()).unwrap_or("Uint8Array");
+
+        let data = typedarray_data.get("data").and_then(|v| v.as_array());
+
+        if let Some(data_array) = data {
+            let tag = match type_name {
+                "ArrayBuffer" => "A",
+                "Int8Array" => "O",
+                "Uint8Array" => "o",
+                "Uint8ClampedArray" => "U",
+                "Int16Array" => "S",
+                "Uint16Array" => "s",
+                "Int32Array" => "L",
+                "Uint32Array" => "l",
+                "Float32Array" => "G",
+                "Float64Array" => "g",
+                "BigInt64Array" => "M",
+                "BigUint64Array" => "m",
+                "DataView" => "V",
+                _ => "o",
+            };
+
+            let bytes: Vec<u8> =
+                data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
+
+            let base64_data = base64_encode(&bytes);
+            let chunk_line = format!("{}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
+            self.output_lines.push(chunk_line);
+
+            Value::String(format!("${:x}", chunk_id))
+        } else {
+            Value::Null
+        }
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    fn outline_blob(&mut self, blob_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let blob_type =
+            blob_data.get("type").and_then(|v| v.as_str()).unwrap_or("application/octet-stream");
+
+        let data = blob_data.get("data").and_then(|v| v.as_array());
+
+        if let Some(data_array) = data {
+            let bytes: Vec<u8> =
+                data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
+
+            let base64_data = base64_encode(&bytes);
+            let blob_model = serde_json::json!([blob_type, base64_data]);
+            let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
+            let chunk_line = format!("{}:{}", chunk_id, blob_json);
+            self.output_lines.push(chunk_line);
+
+            Value::String(format!("$B{:x}", chunk_id))
+        } else {
+            Value::Null
+        }
+    }
+
+    fn outline_stream(&mut self, stream_data: &Value) -> Value {
+        let chunk_id = self.get_next_row_id();
+
+        let is_byte_stream =
+            stream_data.get("byteStream").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let chunks = stream_data.get("chunks").and_then(|v| v.as_array());
+
+        if let Some(chunks_array) = chunks {
+            let start_tag = if is_byte_stream { "r" } else { "R" };
+            let start_line = format!("{:x}:{}", chunk_id, start_tag);
+            self.output_lines.push(start_line);
+
+            for chunk in chunks_array {
+                let processed_chunk = self.process_special_values_with_outlining(chunk);
+                let chunk_json = serde_json::to_string(&processed_chunk).unwrap_or_default();
+                let chunk_line = format!("{:x}:{}", chunk_id, chunk_json);
+                self.output_lines.push(chunk_line);
+            }
+
+            let complete_line = format!("{:x}:C", chunk_id);
+            self.output_lines.push(complete_line);
+
+            Value::String(format!("${:x}", chunk_id))
+        } else {
+            Value::Null
+        }
     }
 
     fn is_likely_function_string(s: &str) -> bool {

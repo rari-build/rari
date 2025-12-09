@@ -76,6 +76,34 @@ impl RscWireFormatParser {
         match value {
             JsonValue::String(s) => {
                 if s.starts_with('$') {
+                    if s == "$undefined" {
+                        return Ok(RscElement::Text(String::new()));
+                    } else if s == "$NaN" {
+                        return Ok(RscElement::Text("NaN".to_string()));
+                    } else if s == "$Infinity" {
+                        return Ok(RscElement::Text("Infinity".to_string()));
+                    } else if s == "$-Infinity" {
+                        return Ok(RscElement::Text("-Infinity".to_string()));
+                    } else if s == "$-0" {
+                        return Ok(RscElement::Text("-0".to_string()));
+                    } else if let Some(date_str) = s.strip_prefix("$D") {
+                        return Ok(RscElement::Text(format!("Date({})", date_str)));
+                    } else if let Some(bigint_str) = s.strip_prefix("$n") {
+                        return Ok(RscElement::Text(format!("{}n", bigint_str)));
+                    } else if s.starts_with("$Q")
+                        || s.starts_with("$W")
+                        || s.starts_with("$K")
+                        || s.starts_with("$@")
+                        || s.starts_with("$F")
+                        || s.starts_with("$T")
+                        || s.starts_with("$S")
+                        || s.starts_with("$Y")
+                        || s.starts_with("$i")
+                        || s.starts_with("$B")
+                        || (s.starts_with("$") && s.len() > 1)
+                    {
+                        return Ok(RscElement::Reference(s.clone()));
+                    }
                     Ok(RscElement::Reference(s.clone()))
                 } else {
                     Ok(RscElement::Text(s.clone()))
@@ -378,5 +406,323 @@ mod tests {
 
         let promises = parser.find_promises();
         assert_eq!(promises.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_special_value_undefined() {
+        let rsc = r#"0:"$undefined""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "");
+        } else {
+            panic!("Expected Text element for undefined");
+        }
+    }
+
+    #[test]
+    fn test_parse_special_value_nan() {
+        let rsc = r#"0:"$NaN""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "NaN");
+        } else {
+            panic!("Expected Text element for NaN");
+        }
+    }
+
+    #[test]
+    fn test_parse_special_value_infinity() {
+        let rsc = r#"0:"$Infinity"
+1:"$-Infinity""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "Infinity");
+        } else {
+            panic!("Expected Text element for Infinity");
+        }
+
+        if let Some(RscElement::Text(text)) = elements.get(&1) {
+            assert_eq!(text, "-Infinity");
+        } else {
+            panic!("Expected Text element for -Infinity");
+        }
+    }
+
+    #[test]
+    fn test_parse_special_value_negative_zero() {
+        let rsc = r#"0:"$-0""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "-0");
+        } else {
+            panic!("Expected Text element for -0");
+        }
+    }
+
+    #[test]
+    fn test_parse_date_marker() {
+        let rsc = r#"0:"$D2025-12-09T18:00:00.000Z""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "Date(2025-12-09T18:00:00.000Z)");
+        } else {
+            panic!("Expected Text element for Date");
+        }
+    }
+
+    #[test]
+    fn test_parse_bigint_marker() {
+        let rsc = r#"0:"$n9007199254740991""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Text(text)) = elements.get(&0) {
+            assert_eq!(text, "9007199254740991n");
+        } else {
+            panic!("Expected Text element for BigInt");
+        }
+    }
+
+    #[test]
+    fn test_parse_map_reference() {
+        let rsc = r#"0:"$Q1""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$Q1");
+        } else {
+            panic!("Expected Reference element for Map");
+        }
+    }
+
+    #[test]
+    fn test_parse_set_reference() {
+        let rsc = r#"0:"$W2""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$W2");
+        } else {
+            panic!("Expected Reference element for Set");
+        }
+    }
+
+    #[test]
+    fn test_parse_formdata_reference() {
+        let rsc = r#"0:"$K3""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$K3");
+        } else {
+            panic!("Expected Reference element for FormData");
+        }
+    }
+
+    #[test]
+    fn test_parse_promise_reference() {
+        let rsc = r#"0:"$@4""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$@4");
+        } else {
+            panic!("Expected Reference element for Promise");
+        }
+    }
+
+    #[test]
+    fn test_parse_server_function_reference() {
+        let rsc = r#"0:"$F5""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$F5");
+        } else {
+            panic!("Expected Reference element for Server Function");
+        }
+    }
+
+    #[test]
+    fn test_parse_temporary_reference() {
+        let rsc = r#"0:"$T6""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$T6");
+        } else {
+            panic!("Expected Reference element for Temporary Reference");
+        }
+    }
+
+    #[test]
+    fn test_parse_symbol_reference() {
+        let rsc = r#"0:"$Sreact.element""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$Sreact.element");
+        } else {
+            panic!("Expected Reference element for Symbol");
+        }
+    }
+
+    #[test]
+    fn test_parse_deferred_object_reference() {
+        let rsc = r#"0:"$Y7""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$Y7");
+        } else {
+            panic!("Expected Reference element for Deferred Object");
+        }
+    }
+
+    #[test]
+    fn test_parse_iterator_reference() {
+        let rsc = r#"0:"$i8""#;
+
+        let mut parser = RscWireFormatParser::new(rsc);
+        assert!(parser.parse().is_ok());
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, "$i8");
+        } else {
+            panic!("Expected Reference element for Iterator");
+        }
+    }
+}
+
+#[test]
+fn test_parse_blob_reference() {
+    let rsc = r#"0:"$B1""#;
+
+    let mut parser = RscWireFormatParser::new(rsc);
+    assert!(parser.parse().is_ok());
+
+    let elements = parser.elements();
+    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+        assert_eq!(ref_str, "$B1");
+    } else {
+        panic!("Expected Reference element for Blob");
+    }
+}
+
+#[test]
+fn test_parse_typedarray_reference() {
+    let rsc = r#"0:"$a""#;
+
+    let mut parser = RscWireFormatParser::new(rsc);
+    assert!(parser.parse().is_ok());
+
+    let elements = parser.elements();
+    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+        assert_eq!(ref_str, "$a");
+    } else {
+        panic!("Expected Reference element for TypedArray");
+    }
+}
+
+#[test]
+fn test_parse_stream_reference() {
+    let rsc = r#"0:"$5""#;
+
+    let mut parser = RscWireFormatParser::new(rsc);
+    assert!(parser.parse().is_ok());
+
+    let elements = parser.elements();
+    if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+        assert_eq!(ref_str, "$5");
+    } else {
+        panic!("Expected Reference element for Stream");
+    }
+}
+
+#[test]
+fn test_parse_binary_in_component() {
+    let rsc = r#"0:["$","div",null,{"buffer":"$B2","data":"$3"}]"#;
+
+    let mut parser = RscWireFormatParser::new(rsc);
+    assert!(parser.parse().is_ok());
+
+    let elements = parser.elements();
+    if let Some(RscElement::Component { tag, props, .. }) = elements.get(&0) {
+        assert_eq!(tag, "div");
+        assert_eq!(props.get("buffer").and_then(|v| v.as_str()), Some("$B2"));
+        assert_eq!(props.get("data").and_then(|v| v.as_str()), Some("$3"));
+    } else {
+        panic!("Expected Component element");
+    }
+}
+
+#[test]
+fn test_parse_all_binary_markers() {
+    let markers = vec![
+        ("$B1", "Blob"),
+        ("$a", "TypedArray by-value"),
+        ("$5", "Stream by-value"),
+        ("$1f", "Hex ID reference"),
+    ];
+
+    for (marker, description) in markers {
+        let rsc = format!(r#"0:"{}""#, marker);
+        let mut parser = RscWireFormatParser::new(&rsc);
+        assert!(parser.parse().is_ok(), "Failed to parse {}", description);
+
+        let elements = parser.elements();
+        if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
+            assert_eq!(ref_str, marker, "Marker mismatch for {}", description);
+        } else {
+            panic!("Expected Reference element for {}", description);
+        }
     }
 }

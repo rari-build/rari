@@ -599,6 +599,8 @@ pub struct RscToHtmlConverter {
     asset_links: Option<String>,
     boundary_id_generator: BoundaryIdGenerator,
     rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
+    custom_shell: Option<String>,
+    csrf_script: Option<String>,
 }
 
 impl RscToHtmlConverter {
@@ -609,6 +611,8 @@ impl RscToHtmlConverter {
             asset_links: None,
             boundary_id_generator: BoundaryIdGenerator::new(),
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
+            custom_shell: None,
+            csrf_script: None,
         }
     }
 
@@ -619,6 +623,24 @@ impl RscToHtmlConverter {
             asset_links: Some(asset_links),
             boundary_id_generator: BoundaryIdGenerator::new(),
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
+            custom_shell: None,
+            csrf_script: None,
+        }
+    }
+
+    pub fn with_custom_shell(
+        custom_shell: String,
+        csrf_script: Option<String>,
+        _renderer: Arc<RscHtmlRenderer>,
+    ) -> Self {
+        Self {
+            row_cache: FxHashMap::default(),
+            shell_sent: false,
+            asset_links: None,
+            boundary_id_generator: BoundaryIdGenerator::new(),
+            rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
+            custom_shell: Some(custom_shell),
+            csrf_script,
         }
     }
 
@@ -715,6 +737,10 @@ impl RscToHtmlConverter {
     }
 
     fn generate_html_shell(&self) -> Vec<u8> {
+        if let Some(custom_shell) = &self.custom_shell {
+            return custom_shell.as_bytes().to_vec();
+        }
+
         let asset_tags = self.asset_links.as_deref().unwrap_or("");
 
         format!(
@@ -744,17 +770,23 @@ impl RscToHtmlConverter {
     }
 
     fn generate_html_closing(&self) -> Vec<u8> {
-        r#"</div>
+        let csrf_script = self.csrf_script.as_deref().unwrap_or("");
+
+        format!(
+            r#"</div>
+{}
 <script>
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined') {{
     window.__rari_stream_complete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
-}
+}}
 </script>
 </body>
-</html>"#
-            .as_bytes()
-            .to_vec()
+</html>"#,
+            csrf_script
+        )
+        .as_bytes()
+        .to_vec()
     }
 
     async fn parse_and_render_rsc(
