@@ -867,3 +867,201 @@ impl From<LoadingStateError> for RariError {
         )
     }
 }
+
+impl RariError {
+    pub fn status_code(&self) -> u16 {
+        match self {
+            Self::NotFound(_, _) => 404,
+            Self::Validation(_, _) => 400,
+            Self::BadRequest(_, _) => 400,
+            Self::Forbidden(_, _) => 403,
+            Self::Timeout(_, _) => 408,
+            Self::Internal(_, _) => 500,
+            Self::Serialization(_, _) => 500,
+            Self::Deserialization(_, _) => 400,
+            Self::State(_, _) => 500,
+            Self::Network(_, _) => 502,
+            Self::ServerError(_, _) => 500,
+            Self::JsExecution(_, _) => 500,
+            Self::JsRuntime(_, _) => 500,
+            Self::IoError(_, _) => 500,
+            Self::ModuleReload(_, _) => 500,
+        }
+    }
+
+    pub fn safe_message(&self, is_development: bool) -> String {
+        if is_development {
+            self.to_string()
+        } else {
+            match self {
+                Self::NotFound(_, _) => "Resource not found".to_string(),
+                Self::Validation(_, _) => "Validation failed".to_string(),
+                Self::BadRequest(_, _) => "Bad request".to_string(),
+                Self::Forbidden(_, _) => "Access forbidden".to_string(),
+                Self::Timeout(_, _) => "Request timeout".to_string(),
+                Self::Internal(_, _) => "Internal server error".to_string(),
+                Self::Serialization(_, _) => "Internal server error".to_string(),
+                Self::Deserialization(_, _) => "Invalid request format".to_string(),
+                Self::State(_, _) => "Internal server error".to_string(),
+                Self::Network(_, _) => "Network error".to_string(),
+                Self::ServerError(_, _) => "Server error".to_string(),
+                Self::JsExecution(_, _) => "Server error".to_string(),
+                Self::JsRuntime(_, _) => "Server error".to_string(),
+                Self::IoError(_, _) => "Internal server error".to_string(),
+                Self::ModuleReload(_, _) => "Internal server error".to_string(),
+            }
+        }
+    }
+
+    pub fn to_json_response(&self, is_development: bool) -> serde_json::Value {
+        serde_json::json!({
+            "error": self.safe_message(is_development),
+            "code": self.code(),
+            "status": self.status_code(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_status_codes() {
+        assert_eq!(RariError::not_found("test").status_code(), 404);
+        assert_eq!(RariError::validation("test").status_code(), 400);
+        assert_eq!(RariError::bad_request("test").status_code(), 400);
+        assert_eq!(RariError::forbidden("test").status_code(), 403);
+        assert_eq!(RariError::timeout("test").status_code(), 408);
+        assert_eq!(RariError::internal("test").status_code(), 500);
+        assert_eq!(RariError::server_error("test").status_code(), 500);
+    }
+
+    #[test]
+    fn test_safe_message_development() {
+        let error = RariError::internal("Detailed internal error with stack trace");
+        let message = error.safe_message(true);
+
+        assert!(message.contains("Detailed internal error"));
+        assert!(message.contains("stack trace"));
+    }
+
+    #[test]
+    fn test_safe_message_production_internal() {
+        let error = RariError::internal("Detailed internal error with /path/to/file.rs:123");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Internal server error");
+        assert!(!message.contains("/path/to/file.rs"));
+        assert!(!message.contains("Detailed"));
+    }
+
+    #[test]
+    fn test_safe_message_production_validation() {
+        let error = RariError::validation("Field 'password' must be at least 8 characters");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Validation failed");
+        assert!(!message.contains("password"));
+        assert!(!message.contains("8 characters"));
+    }
+
+    #[test]
+    fn test_safe_message_production_not_found() {
+        let error = RariError::not_found("File /etc/passwd not found");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Resource not found");
+        assert!(!message.contains("/etc/passwd"));
+    }
+
+    #[test]
+    fn test_safe_message_production_js_error() {
+        let error = RariError::js_execution("ReferenceError: secretKey is not defined at line 42");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Server error");
+        assert!(!message.contains("secretKey"));
+        assert!(!message.contains("line 42"));
+    }
+
+    #[test]
+    fn test_safe_message_production_io_error() {
+        let error = RariError::io("Failed to read /home/user/.env: Permission denied");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Internal server error");
+        assert!(!message.contains("/home/user/.env"));
+        assert!(!message.contains("Permission denied"));
+    }
+
+    #[test]
+    fn test_to_json_response_development() {
+        let error = RariError::bad_request("Invalid JSON: expected '}' at line 5");
+        let json = error.to_json_response(true);
+
+        assert_eq!(json["code"], "BAD_REQUEST");
+        assert_eq!(json["status"], 400);
+        assert!(json["error"].as_str().unwrap().contains("Invalid JSON"));
+        assert!(json["error"].as_str().unwrap().contains("line 5"));
+    }
+
+    #[test]
+    fn test_to_json_response_production() {
+        let error = RariError::bad_request("Invalid JSON: expected '}' at line 5");
+        let json = error.to_json_response(false);
+
+        assert_eq!(json["code"], "BAD_REQUEST");
+        assert_eq!(json["status"], 400);
+        assert_eq!(json["error"], "Bad request");
+        assert!(!json["error"].as_str().unwrap().contains("Invalid JSON"));
+        assert!(!json["error"].as_str().unwrap().contains("line 5"));
+    }
+
+    #[test]
+    fn test_to_json_response_forbidden() {
+        let error = RariError::forbidden("CSRF token validation failed: invalid signature");
+        let json = error.to_json_response(false);
+
+        assert_eq!(json["code"], "FORBIDDEN");
+        assert_eq!(json["status"], 403);
+        assert_eq!(json["error"], "Access forbidden");
+        assert!(!json["error"].as_str().unwrap().contains("CSRF"));
+        assert!(!json["error"].as_str().unwrap().contains("signature"));
+    }
+
+    #[test]
+    fn test_module_reload_error_sanitization() {
+        let error = RariError::module_reload_syntax_error(
+            "Unexpected token at line 42",
+            "/app/src/secret-component.tsx",
+            Some(42),
+            Some(10),
+        );
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Internal server error");
+        assert!(!message.contains("secret-component"));
+        assert!(!message.contains("line 42"));
+    }
+
+    #[test]
+    fn test_network_error_sanitization() {
+        let error = RariError::network("Connection refused to internal-api.company.local:8080");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Network error");
+        assert!(!message.contains("internal-api"));
+        assert!(!message.contains("company.local"));
+        assert!(!message.contains("8080"));
+    }
+
+    #[test]
+    fn test_deserialization_error_shows_bad_request() {
+        let error = RariError::deserialization("Invalid JSON at position 123");
+        let message = error.safe_message(false);
+
+        assert_eq!(message, "Invalid request format");
+        assert!(!message.contains("position 123"));
+    }
+}
