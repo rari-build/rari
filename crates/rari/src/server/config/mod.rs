@@ -76,7 +76,6 @@ pub struct CspConfig {
     pub font_src: Vec<String>,
     pub connect_src: Vec<String>,
     pub default_src: Vec<String>,
-    pub use_nonce: bool,
 }
 
 impl Default for CspConfig {
@@ -88,7 +87,6 @@ impl Default for CspConfig {
             img_src: vec!["'self'".to_string(), "data:".to_string(), "https:".to_string()],
             font_src: vec!["'self'".to_string(), "data:".to_string()],
             connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
-            use_nonce: false,
         }
     }
 }
@@ -440,12 +438,6 @@ impl Config {
                 connect_src.split_whitespace().map(|s| s.to_string()).collect();
         }
 
-        if let Ok(use_nonce) = std::env::var("RARI_CSP_USE_NONCE") {
-            config.csp.use_nonce = use_nonce.to_lowercase() == "true"
-                || use_nonce == "1"
-                || use_nonce.to_lowercase() == "yes";
-        }
-
         Ok(config)
     }
 
@@ -588,10 +580,11 @@ impl Config {
     pub fn csp_config(&self) -> CspConfig {
         let mut config = self.csp.clone();
 
+        if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
+            config.script_src.push("'unsafe-inline'".to_string());
+        }
+
         if self.is_development() {
-            if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
-                config.script_src.push("'unsafe-inline'".to_string());
-            }
             if !config.script_src.contains(&"'unsafe-eval'".to_string()) {
                 config.script_src.push("'unsafe-eval'".to_string());
             }
@@ -603,7 +596,7 @@ impl Config {
         config
     }
 
-    pub fn build_csp_policy(&self, nonce: Option<&str>) -> String {
+    pub fn build_csp_policy(&self) -> String {
         let config = self.csp_config();
         let mut directives = Vec::new();
 
@@ -611,24 +604,12 @@ impl Config {
             directives.push(format!("default-src {}", config.default_src.join(" ")));
         }
 
-        let mut script_src = config.script_src.clone();
-        if let Some(nonce_value) = nonce {
-            if config.use_nonce {
-                script_src.push(format!("'nonce-{}'", nonce_value));
-            }
-        }
-        if !script_src.is_empty() {
-            directives.push(format!("script-src {}", script_src.join(" ")));
+        if !config.script_src.is_empty() {
+            directives.push(format!("script-src {}", config.script_src.join(" ")));
         }
 
-        let mut style_src = config.style_src.clone();
-        if let Some(nonce_value) = nonce {
-            if config.use_nonce {
-                style_src.push(format!("'nonce-{}'", nonce_value));
-            }
-        }
-        if !style_src.is_empty() {
-            directives.push(format!("style-src {}", style_src.join(" ")));
+        if !config.style_src.is_empty() {
+            directives.push(format!("style-src {}", config.style_src.join(" ")));
         }
 
         if !config.img_src.is_empty() {

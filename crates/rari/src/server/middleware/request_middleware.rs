@@ -16,6 +16,12 @@ const X_FRAME_OPTIONS: &str = "X-Frame-Options";
 const X_XSS_PROTECTION: &str = "X-XSS-Protection";
 const STRICT_TRANSPORT_SECURITY: &str = "Strict-Transport-Security";
 const CONTENT_SECURITY_POLICY: &str = "Content-Security-Policy";
+const X_PERMITTED_CROSS_DOMAIN_POLICIES: &str = "X-Permitted-Cross-Domain-Policies";
+const CROSS_ORIGIN_EMBEDDER_POLICY: &str = "Cross-Origin-Embedder-Policy";
+const CROSS_ORIGIN_OPENER_POLICY: &str = "Cross-Origin-Opener-Policy";
+const CROSS_ORIGIN_RESOURCE_POLICY: &str = "Cross-Origin-Resource-Policy";
+const REFERRER_POLICY: &str = "Referrer-Policy";
+const PERMISSIONS_POLICY: &str = "Permissions-Policy";
 const ALLOW_ALL_ORIGINS: &str = "*";
 const ALLOWED_METHODS: &str = "GET, POST, PUT, DELETE, OPTIONS";
 const ALLOWED_HEADERS: &str = "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, Pragma, X-RSC-Streaming";
@@ -24,6 +30,12 @@ const NOSNIFF: &str = "nosniff";
 const FRAME_DENY: &str = "DENY";
 const XSS_PROTECTION: &str = "1; mode=block";
 const HSTS_HEADER: &str = "max-age=31536000; includeSubDomains";
+const CROSS_DOMAIN_POLICIES_NONE: &str = "none";
+const COEP_REQUIRE_CORP: &str = "require-corp";
+const COOP_SAME_ORIGIN: &str = "same-origin";
+const CORP_SAME_ORIGIN: &str = "same-origin";
+const REFERRER_STRICT_ORIGIN: &str = "strict-origin-when-cross-origin";
+const PERMISSIONS_RESTRICTIVE: &str = "geolocation=(), microphone=(), camera=(), payment=()";
 
 pub async fn request_logger(
     request: Request<axum::body::Body>,
@@ -206,7 +218,7 @@ pub async fn security_headers_middleware(
 
 fn add_security_headers(headers: &mut axum::http::HeaderMap) {
     let csp_policy = if let Some(config) = crate::server::config::Config::get() {
-        config.build_csp_policy(None)
+        config.build_csp_policy()
     } else {
         "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:".to_string()
     };
@@ -216,6 +228,12 @@ fn add_security_headers(headers: &mut axum::http::HeaderMap) {
         (X_FRAME_OPTIONS, FRAME_DENY),
         (X_XSS_PROTECTION, XSS_PROTECTION),
         (STRICT_TRANSPORT_SECURITY, HSTS_HEADER),
+        (X_PERMITTED_CROSS_DOMAIN_POLICIES, CROSS_DOMAIN_POLICIES_NONE),
+        (CROSS_ORIGIN_EMBEDDER_POLICY, COEP_REQUIRE_CORP),
+        (CROSS_ORIGIN_OPENER_POLICY, COOP_SAME_ORIGIN),
+        (CROSS_ORIGIN_RESOURCE_POLICY, CORP_SAME_ORIGIN),
+        (REFERRER_POLICY, REFERRER_STRICT_ORIGIN),
+        (PERMISSIONS_POLICY, PERMISSIONS_RESTRICTIVE),
     ];
 
     for (header_name, header_value) in security_headers {
