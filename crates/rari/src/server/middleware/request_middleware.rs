@@ -24,7 +24,6 @@ const NOSNIFF: &str = "nosniff";
 const FRAME_DENY: &str = "DENY";
 const XSS_PROTECTION: &str = "1; mode=block";
 const HSTS_HEADER: &str = "max-age=31536000; includeSubDomains";
-const CSP_POLICY: &str = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss: https://www.google-analytics.com";
 
 pub async fn request_logger(
     request: Request<axum::body::Body>,
@@ -206,17 +205,26 @@ pub async fn security_headers_middleware(
 }
 
 fn add_security_headers(headers: &mut axum::http::HeaderMap) {
+    let csp_policy = if let Some(config) = crate::server::config::Config::get() {
+        config.build_csp_policy(None)
+    } else {
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:".to_string()
+    };
+
     let security_headers = [
         (X_CONTENT_TYPE_OPTIONS, NOSNIFF),
         (X_FRAME_OPTIONS, FRAME_DENY),
         (X_XSS_PROTECTION, XSS_PROTECTION),
         (STRICT_TRANSPORT_SECURITY, HSTS_HEADER),
-        (CONTENT_SECURITY_POLICY, CSP_POLICY),
     ];
 
     for (header_name, header_value) in security_headers {
         if let Ok(value) = HeaderValue::from_str(header_value) {
             headers.insert(header_name, value);
         }
+    }
+
+    if let Ok(value) = HeaderValue::from_str(&csp_policy) {
+        headers.insert(CONTENT_SECURITY_POLICY, value);
     }
 }

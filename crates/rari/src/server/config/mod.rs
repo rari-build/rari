@@ -69,6 +69,31 @@ impl Default for RedirectConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CspConfig {
+    pub script_src: Vec<String>,
+    pub style_src: Vec<String>,
+    pub img_src: Vec<String>,
+    pub font_src: Vec<String>,
+    pub connect_src: Vec<String>,
+    pub default_src: Vec<String>,
+    pub use_nonce: bool,
+}
+
+impl Default for CspConfig {
+    fn default() -> Self {
+        Self {
+            default_src: vec!["'self'".to_string()],
+            script_src: vec!["'self'".to_string()],
+            style_src: vec!["'self'".to_string()],
+            img_src: vec!["'self'".to_string(), "data:".to_string(), "https:".to_string()],
+            font_src: vec!["'self'".to_string(), "data:".to_string()],
+            connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
+            use_nonce: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -216,6 +241,8 @@ pub struct Config {
     pub cors: CorsConfig,
     #[serde(default)]
     pub redirect: RedirectConfig,
+    #[serde(default)]
+    pub csp: CspConfig,
 }
 
 impl Config {
@@ -392,6 +419,33 @@ impl Config {
                 })?;
         }
 
+        if let Ok(script_src) = std::env::var("RARI_CSP_SCRIPT_SRC") {
+            config.csp.script_src = script_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(style_src) = std::env::var("RARI_CSP_STYLE_SRC") {
+            config.csp.style_src = style_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(img_src) = std::env::var("RARI_CSP_IMG_SRC") {
+            config.csp.img_src = img_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(font_src) = std::env::var("RARI_CSP_FONT_SRC") {
+            config.csp.font_src = font_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(connect_src) = std::env::var("RARI_CSP_CONNECT_SRC") {
+            config.csp.connect_src =
+                connect_src.split_whitespace().map(|s| s.to_string()).collect();
+        }
+
+        if let Ok(use_nonce) = std::env::var("RARI_CSP_USE_NONCE") {
+            config.csp.use_nonce = use_nonce.to_lowercase() == "true"
+                || use_nonce == "1"
+                || use_nonce.to_lowercase() == "yes";
+        }
+
         Ok(config)
     }
 
@@ -529,6 +583,67 @@ impl Config {
         }
 
         pattern == path
+    }
+
+    pub fn csp_config(&self) -> CspConfig {
+        let mut config = self.csp.clone();
+
+        if self.is_development() {
+            if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
+                config.script_src.push("'unsafe-inline'".to_string());
+            }
+            if !config.script_src.contains(&"'unsafe-eval'".to_string()) {
+                config.script_src.push("'unsafe-eval'".to_string());
+            }
+            if !config.style_src.contains(&"'unsafe-inline'".to_string()) {
+                config.style_src.push("'unsafe-inline'".to_string());
+            }
+        }
+
+        config
+    }
+
+    pub fn build_csp_policy(&self, nonce: Option<&str>) -> String {
+        let config = self.csp_config();
+        let mut directives = Vec::new();
+
+        if !config.default_src.is_empty() {
+            directives.push(format!("default-src {}", config.default_src.join(" ")));
+        }
+
+        let mut script_src = config.script_src.clone();
+        if let Some(nonce_value) = nonce {
+            if config.use_nonce {
+                script_src.push(format!("'nonce-{}'", nonce_value));
+            }
+        }
+        if !script_src.is_empty() {
+            directives.push(format!("script-src {}", script_src.join(" ")));
+        }
+
+        let mut style_src = config.style_src.clone();
+        if let Some(nonce_value) = nonce {
+            if config.use_nonce {
+                style_src.push(format!("'nonce-{}'", nonce_value));
+            }
+        }
+        if !style_src.is_empty() {
+            directives.push(format!("style-src {}", style_src.join(" ")));
+        }
+
+        if !config.img_src.is_empty() {
+            directives.push(format!("img-src {}", config.img_src.join(" ")));
+        }
+
+        if !config.font_src.is_empty() {
+            directives.push(format!("font-src {}", config.font_src.join(" ")));
+        }
+
+        if !config.connect_src.is_empty() {
+            directives.push(format!("connect-src {}", config.connect_src.join(" ")));
+        }
+
+        directives.join("; ")
     }
 }
 
