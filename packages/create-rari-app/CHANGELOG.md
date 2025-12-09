@@ -1,3 +1,116 @@
+## [rari@0.5.10] - 2025-12-09
+
+### 💼 Other
+
+- Rari@0.5.10
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.6
+## [0.5.6] - 2025-12-09
+
+### 🚀 Features
+
+- *(server)* Add path validation utilities for security
+- *(server)* Add path validation to HMR component reload handler
+- *(server)* Add CSRF token protection to server actions
+- *(server)* Add CSRF token generation and injection to HTML responses
+- *(server)* Integrate CSRF token generation into RSC rendering pipeline
+- *(server)* Add configurable CORS support with origin validation
+- *(server)* Add input validation with configurable depth and size limits
+- *(server)* Add redirect URL validation with configurable host allowlist
+- *(server)* Add configurable Content Security Policy support
+- *(server)* Enhance security headers and simplify CSP configuration
+- *(server)* Add granular body size limits for API routes
+- *(error)* Add HTTP status codes and safe error messages for API responses
+- *(server)* Add configurable rate limiting with per-IP tracking
+- *(csrf)* Move CSRF token generation to client-side runtime
+- *(actions)* Add reserved export name validation for server actions
+- *(rsc)* Add special value and reference type parsing for wire format
+
+### 🎨 Styling
+
+- *(docs)* Simplify Tailwind class syntax in Sidebar component
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade dependencies and enhance linting rules
+- Bump rari version to 0.5.6
+## [rari@0.5.9] - 2025-12-09
+
+### 💼 Other
+
+- Rari@0.5.9
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump binaries to 0.5.5
+## [0.5.5] - 2025-12-09
+
+### 🚀 Features
+
+- *(rsc)* Extract RSC wire format escaping utilities
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.5.5
+- *(release)* Update macOS runner to macos-15-intel
+## [rari@0.5.8] - 2025-12-04
+
+### 💼 Other
+
+- Rari@0.5.8
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump binaries to 0.5.4
+## [0.5.4] - 2025-12-04
+
+### 🚀 Features
+
+- *(rsc)* Extract client-side RSC runtime from inline and update rendering pipeline
+- *(runtime)* Extract client-side entry point and RSC wire format parser
+
+### 🚜 Refactor
+
+- *(rsc)* Reorganize module structure for rendering pipeline
+- *(runtime)* Use StreamOpState from ops module
+- *(server)* Reorganize vite proxy into module structure
+- *(server)* Reorganize types
+- *(server)* Reorganize module structure
+- *(runtime)* Move transpile module into utils
+- *(rsc)* Extract JavaScript initialization and rendering scripts
+
+### 🎨 Styling
+
+- *(runtime)* Clean up linting directives and modernize string formatting
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Configure cargo-machete to ignore num-bigint-dig dependency
+- *(release)* Bump version to 0.5.4
+## [rari@0.5.7] - 2025-12-04
+
+### 💼 Other
+
+- Rari@0.5.7
+## [0.5.3] - 2025-12-03
+
+### 📚 Documentation
+
+- *(railway)* Restructure configuration for improved readability
+- *(railway)* Add pnpm install command to nixpacks build phase
+- *(railway)* Extract nixpacks configuration to separate file
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update package manager and Node.js version requirements
+- *(release)* Bump version to 0.5.3
+## [create-rari-app@0.2.5] - 2025-12-03
+
+### 💼 Other
+
+- Create-rari-app@0.2.5
 ## [rari@0.5.6] - 2025-12-03
 
 ### 💼 Other
