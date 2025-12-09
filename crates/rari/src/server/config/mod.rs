@@ -43,6 +43,19 @@ impl Default for ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+    pub allow_credentials: bool,
+    pub max_age: u32,
+}
+
+impl Default for CorsConfig {
+    fn default() -> Self {
+        Self { allowed_origins: vec![], allow_credentials: true, max_age: 86400 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -186,6 +199,8 @@ pub struct Config {
     pub loading: LoadingConfig,
     #[serde(default)]
     pub streaming: StreamingConfig,
+    #[serde(default)]
+    pub cors: CorsConfig,
 }
 
 impl Config {
@@ -410,6 +425,34 @@ impl Config {
 
     pub fn hmr_reload_enabled(&self) -> bool {
         self.is_development() && self.rsc.hmr_reload_enabled
+    }
+
+    pub fn cors_config(&self) -> CorsConfig {
+        if !self.cors.allowed_origins.is_empty() {
+            return self.cors.clone();
+        }
+
+        if self.is_development() {
+            CorsConfig {
+                allowed_origins: vec![
+                    format!("http://{}:{}", self.server.host, self.server.port),
+                    format!("http://localhost:{}", self.server.port),
+                    format!("http://127.0.0.1:{}", self.server.port),
+                    format!("http://{}:{}", self.vite.host, self.vite.port),
+                    format!("http://localhost:{}", self.vite.port),
+                ],
+                allow_credentials: true,
+                max_age: 86400,
+            }
+        } else {
+            let allowed_origins = if let Some(origin) = &self.server.origin {
+                vec![origin.clone()]
+            } else {
+                vec![format!("http://{}:{}", self.server.host, self.server.port)]
+            };
+
+            CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+        }
     }
 
     pub fn get_cache_control_for_route(&self, path: &str) -> &str {

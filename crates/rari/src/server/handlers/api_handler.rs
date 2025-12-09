@@ -4,10 +4,20 @@ use crate::server::utils::http_utils::{add_api_cors_headers, add_api_security_he
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::Response,
 };
 use tracing::{debug, error, info};
+
+fn add_cors_headers(
+    response_headers: &mut HeaderMap,
+    origin: Option<&str>,
+    allowed_origins: &[String],
+    allow_credentials: bool,
+    max_age: u32,
+) {
+    add_api_cors_headers(response_headers, origin, allowed_origins, allow_credentials, max_age);
+}
 
 #[axum::debug_handler]
 pub async fn api_cors_preflight(
@@ -15,6 +25,7 @@ pub async fn api_cors_preflight(
     req: axum::http::Request<Body>,
 ) -> Response {
     let path = req.uri().path();
+    let request_headers = req.headers();
 
     if let Some(api_handler) = &state.api_route_handler
         && let Some(methods) = api_handler.get_supported_methods(path)
@@ -22,7 +33,16 @@ pub async fn api_cors_preflight(
         let mut builder = Response::builder().status(StatusCode::NO_CONTENT);
         let headers = builder.headers_mut().expect("Response builder should have headers");
 
-        headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+        let origin = request_headers.get("origin").and_then(|v| v.to_str().ok());
+        let cors_config = state.config.cors_config();
+
+        add_api_cors_headers(
+            headers,
+            origin,
+            &cors_config.allowed_origins,
+            cors_config.allow_credentials,
+            cors_config.max_age,
+        );
 
         let mut all_methods = methods.clone();
         if !all_methods.contains(&"OPTIONS".to_string()) {
@@ -34,17 +54,10 @@ pub async fn api_cors_preflight(
             headers.insert("Access-Control-Allow-Methods", methods_value);
         }
 
-        headers.insert(
-                "Access-Control-Allow-Headers",
-                HeaderValue::from_static(
-                    "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
-                ),
-            );
-        headers.insert("Access-Control-Max-Age", HeaderValue::from_static("86400"));
-
         debug!(
             path = %path,
             allowed_methods = %methods_str,
+            origin = ?origin,
             "Returning CORS preflight response for API route"
         );
 
@@ -64,6 +77,9 @@ pub async fn handle_api_route(
     let path = req.uri().path().to_string();
     let method = req.method().to_string();
     let is_development = state.config.is_development();
+
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let cors_config = state.config.cors_config();
 
     debug!(
         path = %path,
@@ -112,7 +128,13 @@ pub async fn handle_api_route(
 
                 let mut response = api_error.to_http_response(is_development);
                 if is_development {
-                    add_api_cors_headers(response.headers_mut());
+                    add_cors_headers(
+                        response.headers_mut(),
+                        origin.as_deref(),
+                        &cors_config.allowed_origins,
+                        cors_config.allow_credentials,
+                        cors_config.max_age,
+                    );
                 }
                 return Ok(response);
             }
@@ -131,7 +153,13 @@ pub async fn handle_api_route(
 
             let mut response = api_error.to_http_response(is_development);
             if is_development {
-                add_api_cors_headers(response.headers_mut());
+                add_cors_headers(
+                    response.headers_mut(),
+                    origin.as_deref(),
+                    &cors_config.allowed_origins,
+                    cors_config.allow_credentials,
+                    cors_config.max_age,
+                );
             }
             return Ok(response);
         }
@@ -155,7 +183,13 @@ pub async fn handle_api_route(
 
             let headers = response.headers_mut();
             if is_development {
-                add_api_cors_headers(headers);
+                add_cors_headers(
+                    headers,
+                    origin.as_deref(),
+                    &cors_config.allowed_origins,
+                    cors_config.allow_credentials,
+                    cors_config.max_age,
+                );
             } else {
                 add_api_security_headers(headers);
             }
@@ -196,7 +230,13 @@ pub async fn handle_api_route(
             let mut response = api_error.to_http_response(is_development);
             let headers = response.headers_mut();
             if is_development {
-                add_api_cors_headers(headers);
+                add_cors_headers(
+                    headers,
+                    origin.as_deref(),
+                    &cors_config.allowed_origins,
+                    cors_config.allow_credentials,
+                    cors_config.max_age,
+                );
             } else {
                 add_api_security_headers(headers);
             }

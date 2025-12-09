@@ -110,6 +110,7 @@ tower-http = { version = "0.6.6", features = [
   "trace"
 ] }
 colored = "3.0.0"
+url = "2.5.7"
 urlencoding = "2.1.3"
 tokio-tungstenite = { version = "0.27", features = [ "rustls-tls-native-roots" ] }
 tungstenite = "0.27"
