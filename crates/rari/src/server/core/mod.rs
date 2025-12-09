@@ -236,37 +236,50 @@ impl Server {
     }
 
     async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
+        let small_body_limit = DefaultBodyLimit::max(100 * 1024);
+        let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
+        let large_body_limit = DefaultBodyLimit::max(10 * 1024 * 1024);
+
         let mut router = Router::new()
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
+            .layer(medium_body_limit)
             .route("/api/rsc/register", post(register_component))
             .route("/api/rsc/register-client", post(register_client_component))
             .route("/api/rsc/hmr-register", post(hmr_register_component))
             .route("/api/rsc/hmr-register", axum::routing::options(cors_preflight_ok))
+            .layer(large_body_limit)
             .route("/api/rsc/components", get(list_components))
             .route("/api/rsc/health", get(health_check))
             .route("/api/rsc/status", get(server_status))
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/csrf-token", get(get_csrf_token))
+            .layer(small_body_limit)
             .route("/api/rsc/action", post(handle_server_action))
-            .route("/api/rsc/form-action", post(handle_form_action));
+            .route("/api/rsc/form-action", post(handle_form_action))
+            .layer(medium_body_limit);
 
         if config.is_development() {
             info!("Adding development routes");
+
+            let small_body_limit = DefaultBodyLimit::max(100 * 1024);
+            let large_body_limit = DefaultBodyLimit::max(10 * 1024 * 1024);
 
             router = router
                 .route("/api/rsc/hmr-invalidate", post(hmr_invalidate_component))
                 .route("/api/rsc/hmr-invalidate", axum::routing::options(cors_preflight_ok))
                 .route("/api/rsc/hmr-reload", post(hmr_reload_component))
                 .route("/api/rsc/hmr-reload", axum::routing::options(cors_preflight_ok))
-                .route("/api/rsc/reload-component", post(reload_component))
-                .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
                 .route("/api/rsc/hmr-invalidate-api-route", post(hmr_invalidate_api_route))
                 .route(
                     "/api/rsc/hmr-invalidate-api-route",
                     axum::routing::options(cors_preflight_ok),
                 )
+                .layer(small_body_limit)
+                .route("/api/rsc/reload-component", post(reload_component))
+                .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
+                .layer(large_body_limit)
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
@@ -281,9 +294,11 @@ impl Server {
 
         if has_app_router {
             info!("Registering API route handler");
+            let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             router = router
                 .route("/api/{*path}", axum::routing::options(api_cors_preflight))
-                .route("/api/{*path}", any(handle_api_route));
+                .route("/api/{*path}", any(handle_api_route))
+                .layer(medium_body_limit);
         }
 
         if has_app_router {
@@ -317,7 +332,6 @@ impl Server {
             ServiceBuilder::new().layer(middleware::from_fn(request_logger)).into_inner();
 
         router = router.layer(middleware_stack);
-        router = router.layer(DefaultBodyLimit::max(1024 * 1024 * 100));
 
         Ok(router.with_state(state))
     }
