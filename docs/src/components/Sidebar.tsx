@@ -19,7 +19,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
       <label
         htmlFor="mobile-menu-toggle"
-        className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-black peer-checked:bg-opacity-50 peer-checked:z-40 hidden peer-checked:block lg:hidden"
+        className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-black/30 peer-checked:z-20 hidden peer-checked:block lg:hidden"
       />
 
       <label
