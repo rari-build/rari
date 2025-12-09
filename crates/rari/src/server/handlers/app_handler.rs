@@ -203,11 +203,14 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
+            let csrf_token = state.csrf_manager.generate_token();
+            let html_with_csrf = inject_csrf_into_html(&final_html, &csrf_token);
+
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static-with-payload")
-                .body(Body::from(final_html))
+                .body(Body::from(html_with_csrf))
                 .expect("Valid HTML response"));
         }
     };
@@ -221,11 +224,39 @@ pub async fn render_streaming_with_layout(
         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
     };
 
-    let converter = if let Some(links) = asset_links {
-        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_assets(links, html_renderer)))
-    } else {
-        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::new(html_renderer)))
-    };
+    let csrf_token = state.csrf_manager.generate_token();
+    let asset_tags = asset_links.as_deref().unwrap_or("");
+    let base_shell = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rari App</title>
+    <meta name="csrf-token" content="{}" />
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">"#,
+        csrf_token, asset_tags
+    );
+
+    let csrf_script = generate_csrf_helper_script().to_string();
+
+    let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+        base_shell,
+        Some(csrf_script),
+        html_renderer,
+    )));
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
@@ -641,14 +672,40 @@ pub async fn handle_app_route(
                         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
                     };
 
-                    let converter = if let Some(links) = asset_links {
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_assets(
-                            links,
+                    let csrf_token = state.csrf_manager.generate_token();
+                    let asset_tags = asset_links.as_deref().unwrap_or("");
+                    let base_shell = format!(
+                        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rari App</title>
+    <meta name="csrf-token" content="{}" />
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">"#,
+                        csrf_token, asset_tags
+                    );
+
+                    let csrf_script = generate_csrf_helper_script().to_string();
+
+                    let converter =
+                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+                            base_shell,
+                            Some(csrf_script),
                             html_renderer,
-                        )))
-                    } else {
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::new(html_renderer)))
-                    };
+                        )));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();
@@ -741,9 +798,12 @@ pub async fn handle_app_route(
                 policy
             };
 
+            let csrf_token = state.csrf_manager.generate_token();
+            let html_with_csrf = inject_csrf_into_html(&html_with_assets, &csrf_token);
+
             if cache_policy.enabled {
                 let cached_response = response_cache::CachedResponse {
-                    body: bytes::Bytes::from(html_with_assets.clone()),
+                    body: bytes::Bytes::from(html_with_csrf.clone()),
                     headers: response_headers,
                     metadata: response_cache::CacheMetadata {
                         cached_at: std::time::Instant::now(),
@@ -759,7 +819,7 @@ pub async fn handle_app_route(
                 debug!("Caching disabled for route: {}", path);
             }
 
-            Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
+            Ok(response_builder.body(Body::from(html_with_csrf)).expect("Valid HTML response"))
         }
     }
 }

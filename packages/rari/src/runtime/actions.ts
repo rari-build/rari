@@ -29,7 +29,11 @@ export function createServerReference(
         return arg
       })
 
-      const response = await fetch('/api/rsc/action', {
+      const fetchFn = typeof window !== 'undefined' && (window as any).fetchWithCsrf
+        ? (window as any).fetchWithCsrf
+        : fetch
+
+      const response = await fetchFn('/api/rsc/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,6 +153,20 @@ export function createFormAction(
       exportNameInput.name = '__export_name'
       exportNameInput.value = exportName
       form.appendChild(exportNameInput)
+
+      if (typeof window !== 'undefined' && (window as any).getCsrfToken) {
+        const csrfToken = (window as any).getCsrfToken()
+        if (csrfToken) {
+          let csrfInput = form.querySelector('input[name="__csrf_token"]') as HTMLInputElement
+          if (!csrfInput) {
+            csrfInput = document.createElement('input')
+            csrfInput.type = 'hidden'
+            csrfInput.name = '__csrf_token'
+            form.appendChild(csrfInput)
+          }
+          csrfInput.value = csrfToken
+        }
+      }
 
       form.action = '/api/rsc/form-action'
       form.method = 'POST'

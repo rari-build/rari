@@ -26,21 +26,40 @@ pub fn generate_csrf_helper_script() -> &'static str {
     return meta ? meta.content : null;
   };
 
-  window.fetchWithCsrf = function(url, options = {}) {
+  window.fetchWithCsrf = async function(url, options = {}) {
     const token = window.getCsrfToken();
+
     if (!token) {
-      console.warn('CSRF token not found. Request may be rejected.');
+      console.warn('CSRF token not found, attempting to refresh...');
+      await window.refreshCsrfToken();
     }
 
     const headers = options.headers || {};
-    if (token) {
-      headers['X-CSRF-Token'] = token;
+    const finalToken = token || window.getCsrfToken();
+    if (finalToken) {
+      headers['X-CSRF-Token'] = finalToken;
     }
 
-    return fetch(url, {
+    const response = await fetch(url, {
       ...options,
       headers
     });
+
+    if (response.status === 403 && url.includes('/api/rsc/')) {
+      const refreshed = await window.refreshCsrfToken();
+      if (refreshed) {
+        const retryToken = window.getCsrfToken();
+        if (retryToken) {
+          headers['X-CSRF-Token'] = retryToken;
+          return fetch(url, {
+            ...options,
+            headers
+          });
+        }
+      }
+    }
+
+    return response;
   };
 
   window.injectCsrfIntoForms = function() {
@@ -59,6 +78,33 @@ pub fn generate_csrf_helper_script() -> &'static str {
 
       csrfInput.value = token;
     });
+  };
+
+  window.refreshCsrfToken = async function() {
+    try {
+      const response = await fetch('/api/rsc/csrf-token');
+      if (!response.ok) {
+        console.warn('Failed to refresh CSRF token:', response.status);
+        return false;
+      }
+      const data = await response.json();
+      if (data.token) {
+        let meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = 'csrf-token';
+          document.head.appendChild(meta);
+        }
+        meta.content = data.token;
+
+        window.injectCsrfIntoForms();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error refreshing CSRF token:', error);
+      return false;
+    }
   };
 
   if (document.readyState === 'loading') {
@@ -81,6 +127,10 @@ pub fn generate_csrf_helper_script() -> &'static str {
       subtree: true
     });
   }
+
+  window.addEventListener('rari:navigate', async function() {
+    await window.refreshCsrfToken();
+  });
 })();
 </script>"#
 }
