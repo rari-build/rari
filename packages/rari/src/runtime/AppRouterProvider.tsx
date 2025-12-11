@@ -199,6 +199,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             return null
           }
 
+          if (typeof Component !== 'function') {
+            console.warn('[AppRouterProvider] Component is not a function for module:', moduleInfo.id, '- skipping component')
+            return null
+          }
+
           const effectiveKey = serverKey || `fallback-${Math.random()}`
 
           const childProps = {
@@ -211,17 +216,31 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return element
         }
 
+        if (!type || (typeof type !== 'string' && typeof type !== 'function')) {
+          console.error('[AppRouterProvider] Invalid component type:', {
+            type,
+            typeOf: typeof type,
+            serverKey,
+            props,
+            rscData: rsc,
+          })
+          return null
+        }
+
         const processedProps = processProps(props, modules, layoutPath)
         return React.createElement(type, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
       return rsc.map((child, index) => {
         const element = rscToReact(child, modules, layoutPath)
-        if (element && typeof element === 'object' && !element.key) {
+        if (!element) {
+          return null
+        }
+        if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
           // eslint-disable-next-line react/no-clone-element
           return React.cloneElement(element, { key: index })
         }
         return element
-      })
+      }).filter(Boolean)
     }
 
     return rsc
@@ -464,31 +483,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       return
 
     const handleShowLoading = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ route: string, navigationId: number, loadingComponent: any }>
-      const { route, navigationId, loadingComponent: loadingEntry } = customEvent.detail
+      const customEvent = event as CustomEvent<{ route: string, navigationId: number, loadingEntry: any }>
+      const { route, navigationId, loadingEntry } = customEvent.detail
 
       currentNavigationIdRef.current = navigationId
-
-      setLoadingState({
-        isShowingLoading: true,
-        loadingRoute: route,
-        loadingComponent: null,
-      })
-
-      setRenderKey(prev => prev + 1)
 
       const loadingComponentPath = loadingEntry?.path || route
       const loadingComponent = await loadingRegistryRef.current.loadComponent(loadingComponentPath)
 
-      if (currentNavigationIdRef.current === navigationId) {
-        if (loadingComponent) {
-          setLoadingState({
-            isShowingLoading: true,
-            loadingRoute: route,
-            loadingComponent,
-          })
-          setRenderKey(prev => prev + 1)
-        }
+      if (currentNavigationIdRef.current === navigationId && loadingComponent) {
+        setLoadingState({
+          isShowingLoading: true,
+          loadingRoute: route,
+          loadingComponent,
+        })
+        setRenderKey(prev => prev + 1)
       }
     }
 
@@ -677,7 +686,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const injectLoadingIntoLayout = (layoutElement: any, loadingComponent: React.ReactNode) => {
     if (!layoutElement || typeof layoutElement !== 'object') {
-      return loadingComponent
+      return loadingComponent || null
     }
 
     const cloneWithLoadingInjected = (element: any): any => {
@@ -705,25 +714,34 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (hasMain) {
             newChildren = children.map((child: any, index: number) => {
               const cloned = cloneWithLoadingInjected(child)
+              if (!cloned) {
+                return null
+              }
 
-              return cloned && typeof cloned === 'object' && !cloned.key
+              return cloned && typeof cloned === 'object' && !cloned.key && React.isValidElement(cloned)
               // eslint-disable-next-line react/no-clone-element
                 ? React.cloneElement(cloned, { key: child?.key || index })
                 : cloned
-            })
+            }).filter(Boolean)
           }
           else {
             newChildren = children.map((child: any, index: number) => {
+              if (!child) {
+                return null
+              }
               if (child && typeof child === 'object') {
                 const cloned = cloneWithLoadingInjected(child)
+                if (!cloned) {
+                  return null
+                }
 
-                return cloned && !cloned.key
+                return cloned && !cloned.key && React.isValidElement(cloned)
                 // eslint-disable-next-line react/no-clone-element
                   ? React.cloneElement(cloned, { key: child.key || index })
                   : cloned
               }
               return child
-            })
+            }).filter(Boolean)
           }
         }
         else if (typeof children === 'object') {
@@ -731,6 +749,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
         else {
           newChildren = children
+        }
+
+        if (!React.isValidElement(element)) {
+          console.warn('[AppRouterProvider] Attempting to clone invalid React element')
+          return element
         }
 
         // eslint-disable-next-line react/no-clone-element
@@ -747,16 +770,27 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   if (loadingState.isShowingLoading) {
     let loadingComponentElement
-    if (loadingState.loadingComponent) {
-      loadingComponentElement = (
-        <LoadingErrorBoundary>
-          {React.createElement(loadingState.loadingComponent)}
-        </LoadingErrorBoundary>
-      )
+    if (loadingState.loadingComponent && typeof loadingState.loadingComponent === 'function') {
+      try {
+        const element = React.createElement(loadingState.loadingComponent)
+        if (element) {
+          loadingComponentElement = (
+            <LoadingErrorBoundary>
+              {element}
+            </LoadingErrorBoundary>
+          )
+        }
+      }
+      catch (error) {
+        console.error('[AppRouterProvider] Failed to create loading component:', error)
+      }
     }
 
     if (rscPayload?.element) {
-      contentToRender = injectLoadingIntoLayout(rscPayload.element, loadingComponentElement)
+      const injected = injectLoadingIntoLayout(rscPayload.element, loadingComponentElement)
+      if (injected) {
+        contentToRender = injected
+      }
     }
     else if (loadingComponentElement) {
       contentToRender = loadingComponentElement
@@ -765,6 +799,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   else if (rscPayload?.element) {
     const extracted = extractBodyContent(rscPayload.element)
     contentToRender = extracted || rscPayload.element
+  }
+
+  if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
+    console.error('[AppRouterProvider] Invalid content to render:', contentToRender)
+    contentToRender = children
   }
 
   return (

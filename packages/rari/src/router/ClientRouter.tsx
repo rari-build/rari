@@ -236,7 +236,7 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
         detail: {
           route: targetPath,
           navigationId,
-          loadingComponent,
+          loadingEntry: loadingComponent,
         },
       }))
     }

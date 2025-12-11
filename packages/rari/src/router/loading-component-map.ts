@@ -12,6 +12,10 @@ export function generateLoadingComponentMap(options: LoadingComponentMapOptions)
   if (loadingComponents.length === 0) {
     return `// No loading components found
 export const loadingComponentModules = {}
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.__rari_loading_components = new Map()
+}
 `
   }
 
