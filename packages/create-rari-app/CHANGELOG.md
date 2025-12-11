@@ -1,3 +1,70 @@
+## [rari@0.5.13] - 2025-12-11
+
+### 💼 Other
+
+- Rari@0.5.13
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari platform dependencies to 0.5.8
+## [0.5.8] - 2025-12-11
+
+### 🐛 Bug Fixes
+
+- Add Win32_System_SystemInformation feature for windows-sys
+- *(deps)* Expand windows-sys features for Windows API support
+- *(deps)* Add Win32_System_SystemInformation feature to windows-sys
+- *(deps)* Add Win32_Networking_WinSock feature to windows-sys
+
+### ⚙️ Miscellaneous Tasks
+
+- Add Windows build test workflow
+- *(release)* Bump version to 0.5.8
+## [0.5.7] - 2025-12-11
+
+### 🐛 Bug Fixes
+
+- *(cli)* Guard main execution to prevent running when imported as module
+
+### 🚜 Refactor
+
+- *(runtime)* Remove unnecessary clone on cache options
+
+### ⚙️ Miscellaneous Tasks
+
+- *(server)* Simplify startup logging and remove verbose debug output
+- *(scripts)* Add postinstall script to build on dependency installation
+- *(rari)* Disable doctests and remove bin tests
+- *(server)* Remove verbose startup completion messages
+- *(release)* Bump version to 0.5.7
+## [rari@0.5.12] - 2025-12-11
+
+### 🚀 Features
+
+- *(router)* Improve loading component handling and validation
+
+### 💼 Other
+
+- Rari@0.5.12
+## [rari@0.5.11] - 2025-12-11
+
+### 🚀 Features
+
+- *(rari)* Improve client-server routing and add manifest middleware
+- *(router)* Convert loading component modules to Map
+
+### 💼 Other
+
+- Rari@0.5.11
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade dependencies and remove unused packages
+## [create-rari-app@0.2.6] - 2025-12-09
+
+### 💼 Other
+
+- Create-rari-app@0.2.6
 ## [rari@0.5.10] - 2025-12-09
 
 ### 💼 Other
@@ -678,7 +745,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update rari package versions to 0.2.7 in pnpm-lock.yaml for all platforms
-## [0.2.7] - 2025-08-16
+## [0.2.7] - 2025-12-11
 
 ### 🚀 Features
 
