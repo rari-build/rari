@@ -369,10 +369,6 @@ impl Server {
             if let Some(origin) = &self.config.server.origin {
                 println!("  {} {}", "Origin:".bold(), origin.cyan());
             }
-
-            println!();
-            println!("{}", "Server is ready!".green().bold());
-            println!();
         }
     }
 
