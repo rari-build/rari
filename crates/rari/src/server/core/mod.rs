@@ -27,8 +27,7 @@ use crate::server::middleware::request_middleware::{
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
-    check_vite_server_health, display_vite_proxy_info, vite_reverse_proxy, vite_src_proxy,
-    vite_websocket_proxy,
+    check_vite_server_health, vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
 };
 use axum::extract::DefaultBodyLimit;
 use axum::{
@@ -363,30 +362,18 @@ impl Server {
     fn display_startup_message(&self) {
         let server_url = format!("http://{}", self.address);
 
-        println!();
-        println!("{}", "🚀 Rari Server".blue().bold());
-        println!();
-
         if self.config.is_production() {
             println!("  {} {}", "Mode:".bold(), "Production".green());
-        } else {
-            println!("  {} {}", "Mode:".bold(), "Development".yellow());
+            println!("  {} {}", "Server:".bold(), server_url.cyan().underline());
+
+            if let Some(origin) = &self.config.server.origin {
+                println!("  {} {}", "Origin:".bold(), origin.cyan());
+            }
+
+            println!();
+            println!("{}", "Server is ready!".green().bold());
+            println!();
         }
-
-        println!("  {} {}", "Server:".bold(), server_url.cyan().underline());
-
-        if let Some(origin) = &self.config.server.origin {
-            println!("  {} {}", "Origin:".bold(), origin.cyan());
-        }
-
-        println!();
-
-        if self.config.is_development() {
-            display_vite_proxy_info();
-        }
-
-        println!("{}", "Server is ready!".green().bold());
-        println!();
     }
 
     pub fn address(&self) -> SocketAddr {

@@ -90,10 +90,6 @@ export function createLoadingComponentPlugin(): Plugin {
       }
 
       loadingComponents = scanForLoadingComponents(appDir)
-
-      if (loadingComponents.length > 0) {
-        console.warn(`[Rari] Found ${loadingComponents.length} loading components`)
-      }
     },
 
     resolveId(id) {

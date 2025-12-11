@@ -74,12 +74,8 @@ async function startRustServer(): Promise<void> {
     logInfo(`${platformName} environment detected`)
     logInfo(`Starting Rari server for ${platformName} deployment...`)
     logInfo(`Mode: ${mode}, Host: ${host}, Port: ${port}`)
+    logInfo(`using binary: ${binaryPath}`)
   }
-  else {
-    logInfo(`starting Rari server in ${mode} mode on port ${port}...`)
-  }
-
-  logInfo(`using binary: ${binaryPath}`)
 
   const args = ['--mode', mode, '--port', port, '--host', host]
 
