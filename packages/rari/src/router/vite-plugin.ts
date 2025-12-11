@@ -274,9 +274,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       routeFiles.clear()
       currentRouteFiles.forEach(file => routeFiles.add(file))
 
-      console.warn(`Generated app router manifest with ${manifest.routes.length} routes`)
-      console.warn(`Generated loading component map with ${manifest.loading.length} components`)
-
       return manifestContent
     }
     catch (error) {

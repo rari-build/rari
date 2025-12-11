@@ -161,6 +161,8 @@ impl Resolver {
         match media_type {
             MediaType::Wasm
             | MediaType::Json
+            | MediaType::Jsonc
+            | MediaType::Json5
             | MediaType::Mts
             | MediaType::Mjs
             | MediaType::Html
@@ -314,6 +316,15 @@ impl NpmPackageFolderResolver for NpmPackageFolderResolverImpl {
             Err(_) => self.byonm.resolve_package_folder_from_package(specifier, referrer),
         }
     }
+
+    fn resolve_types_package_folder(
+        &self,
+        _package_name: &str,
+        _version: Option<&deno_semver::Version>,
+        _referrer: Option<&UrlOrPathRef<'_>>,
+    ) -> Option<PathBuf> {
+        None
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -455,19 +466,10 @@ impl NodeRequireLoader for RequireLoader {
 
     fn ensure_read_permission<'a>(
         &self,
-        permissions: &mut dyn deno_node::NodePermissions,
+        _permissions: &mut deno_permissions::PermissionsContainer,
         path: Cow<'a, std::path::Path>,
     ) -> Result<std::borrow::Cow<'a, Path>, JsErrorBox> {
-        let is_in_node_modules =
-            path.components().all(|c| c.as_os_str().to_ascii_lowercase() != NODE_MODULES_DIR);
-        if is_in_node_modules {
-            let checked_path = permissions
-                .check_open(path, deno_permissions::OpenAccessKind::Read, None)
-                .map_err(JsErrorBox::from_err)?;
-            Ok(Cow::Owned(checked_path.to_path_buf()))
-        } else {
-            Ok(path)
-        }
+        Ok(path)
     }
 
     fn is_maybe_cjs(&self, specifier: &reqwest::Url) -> Result<bool, PackageJsonLoadError> {

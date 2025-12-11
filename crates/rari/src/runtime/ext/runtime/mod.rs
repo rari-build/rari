@@ -31,6 +31,19 @@ fn build_permissions(
 }
 
 extension!(
+    init_console,
+    deps = [rari],
+    esm_entry_point = "ext:init_console/init_console.js",
+    esm = [ dir "src/runtime/ext/runtime", "init_console.js" ],
+);
+impl ExtensionTrait<()> for init_console {
+    fn init((): ()) -> Extension {
+        deno_terminal::colors::set_use_color(true);
+        init_console::init()
+    }
+}
+
+extension!(
     init_runtime,
     ops = [op_main_module, op_ppid],
     esm_entry_point = "ext:init_runtime/init_runtime.js",
@@ -74,7 +87,11 @@ impl ExtensionTrait<()> for deno_runtime::runtime {
     }
 }
 
-use deno_runtime::fmt_errors::format_js_error;
+use deno_runtime::fmt_errors::format_js_error as deno_format_js_error;
+
+fn format_js_error(error: &deno_core::error::JsError) -> String {
+    deno_format_js_error(error, None)
+}
 use deno_runtime::ops::permissions::deno_permissions;
 impl ExtensionTrait<()> for deno_permissions {
     fn init((): ()) -> Extension {
@@ -143,8 +160,8 @@ pub fn extensions(
         deno_web_worker::build((), is_snapshot),
         deno_worker_host::build((options, shared_array_buffer_store), is_snapshot),
         deno_permissions::build((), is_snapshot),
-        //
         deno_runtime::runtime::build((), is_snapshot),
+        init_console::build((), is_snapshot),
         init_runtime::build((), is_snapshot),
     ]
 }
@@ -156,7 +173,7 @@ pub struct WebWorkerCallbackOptions {
     shared_array_buffer_store: Option<CrossIsolateStore<SharedRef<BackingStore>>>,
     node_resolver: Arc<Resolver>,
     root_cert_store_provider: Option<Arc<dyn deno_tls::RootCertStoreProvider>>,
-    broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel,
+    broadcast_channel: deno_web::InMemoryBroadcastChannel,
     unsafely_ignore_certificate_errors: Option<Vec<String>>,
     seed: Option<u64>,
     stdio: deno_io::Stdio,
@@ -208,6 +225,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             npm_process_state_provider: Some(node_resolver.clone()),
             permissions: args.permissions,
             deno_rt_native_addon_loader: None,
+            bundle_provider: None,
         };
 
         let options = WebWorkerOptions {
@@ -232,7 +250,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
                 has_node_modules_dir: node_resolver.has_node_modules_dir(),
                 argv0: None,
                 node_debug: None,
-                node_ipc_fd: None,
+                node_ipc_init: None,
                 mode: WorkerExecutionMode::Worker,
                 serve_port: None,
                 serve_host: None,

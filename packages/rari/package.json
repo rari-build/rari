@@ -85,7 +85,7 @@
   },
   "dependencies": {
     "acorn": "^8.15.0",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.27.1",
     "picocolors": "^1.1.1"
   },
   "optionalDependencies": {
@@ -96,13 +96,13 @@
     "rari-win32-x64": "0.5.6"
   },
   "devDependencies": {
-    "@types/node": "^24.10.2",
+    "@types/node": "^25.0.0",
     "@types/react": "^19.2.7",
-    "@typescript/native-preview": "7.0.0-dev.20251203.1",
-    "chokidar": "^4.0.3",
+    "@typescript/native-preview": "7.0.0-dev.20251210.1",
+    "chokidar": "^5.0.0",
     "eslint": "^9.39.1",
     "oxlint": "^1.32.0",
     "rolldown-vite": "^7.2.10",
-    "tsdown": "^0.15.12"
+    "tsdown": "^0.17.2"
   }
 }

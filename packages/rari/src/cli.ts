@@ -74,12 +74,8 @@ async function startRustServer(): Promise<void> {
     logInfo(`${platformName} environment detected`)
     logInfo(`Starting Rari server for ${platformName} deployment...`)
     logInfo(`Mode: ${mode}, Host: ${host}, Port: ${port}`)
+    logInfo(`using binary: ${binaryPath}`)
   }
-  else {
-    logInfo(`starting Rari server in ${mode} mode on port ${port}...`)
-  }
-
-  logInfo(`using binary: ${binaryPath}`)
 
   const args = ['--mode', mode, '--port', port, '--host', host]
 
@@ -230,8 +226,15 @@ ${colors.bold('Notes:')}
   }
 }
 
-main().catch((error) => {
-  logError(`CLI Error: ${error.message}`)
-  console.error(error)
-  process.exit(1)
-})
+const isMainModule = process.argv[1] && (
+  import.meta.url === `file://${process.argv[1]}`
+    || (import.meta.url.endsWith('/dist/cli.mjs') && process.argv[1].includes('cli.mjs'))
+)
+
+if (isMainModule) {
+  main().catch((error) => {
+    logError(`CLI Error: ${error.message}`)
+    console.error(error)
+    process.exit(1)
+  })
+}

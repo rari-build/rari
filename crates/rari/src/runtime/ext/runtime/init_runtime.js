@@ -1,10 +1,10 @@
 // oxlint-disable no-unused-vars
 /* eslint-disable unused-imports/no-unused-imports */
 import { core } from 'ext:core/mod.js'
-import * as _console from 'ext:deno_console/01_console.js'
 import * as os from 'ext:deno_os/30_os.js'
 import * as signals from 'ext:deno_os/40_signals.js'
 import * as process from 'ext:deno_process/40_process.js'
+import * as _console from 'ext:deno_web/01_console.js'
 import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:rari/rari.js'
 import * as errors from 'ext:runtime/01_errors.js'
 import * as version from 'ext:runtime/01_version.ts'

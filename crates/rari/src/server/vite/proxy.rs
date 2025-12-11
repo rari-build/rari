@@ -9,7 +9,6 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
-use colored::Colorize;
 use futures::StreamExt as FuturesStreamExt;
 use futures_util::SinkExt;
 use reqwest::Client;
@@ -374,31 +373,6 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
             config.vite_address(),
             e
         ))),
-    }
-}
-
-pub fn display_vite_proxy_info() {
-    let config = match Config::get() {
-        Some(config) => config,
-        None => {
-            error!("Configuration not available");
-            return;
-        }
-    };
-
-    if config.is_development() {
-        println!();
-        println!("{}", "Vite Development Proxy Configuration:".blue().bold());
-        println!(
-            "  • Vite server should be running on: {}",
-            format!("http://{}", config.vite_address()).cyan()
-        );
-        println!("  • HTTP requests to /vite-server/* will be proxied");
-        println!("  • WebSocket connections for HMR are automatically proxied");
-        println!();
-        println!("{}", "Make sure your Vite dev server is running with:".yellow());
-        println!("  npm run dev  # or your preferred Vite command");
-        println!();
     }
 }
 

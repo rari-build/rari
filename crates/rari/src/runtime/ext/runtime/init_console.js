@@ -1,4 +1,4 @@
-import * as _console from 'ext:deno_console/01_console.js'
+import * as _console from 'ext:deno_web/01_console.js'
 import { applyToGlobal, nonEnumerable } from 'ext:rari/rari.js'
 
 applyToGlobal({

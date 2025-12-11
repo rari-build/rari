@@ -74,12 +74,6 @@ impl From<&str> for Error {
     }
 }
 
-impl From<deno_broadcast_channel::BroadcastChannelError> for Error {
-    fn from(e: deno_broadcast_channel::BroadcastChannelError) -> Self {
-        Error::Runtime(e.to_string())
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorMetadata {
     pub code: String,
