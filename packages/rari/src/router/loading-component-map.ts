@@ -32,7 +32,7 @@ ${moduleEntries.join(',\n')}
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_loading_components = loadingComponentModules
+  globalThis.__rari_loading_components = new Map(Object.entries(loadingComponentModules))
 }
 `
 
