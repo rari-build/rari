@@ -14,7 +14,8 @@
     "changelog:latest": "pnpm exec git-cliff --latest",
     "release": "node scripts/release.js",
     "release:dry": "node scripts/release.js --skip-prompts",
-    "prepare-binaries": "node scripts/prepare-binaries.js"
+    "prepare-binaries": "node scripts/prepare-binaries.js",
+    "postinstall": "pnpm build"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.6.1",
