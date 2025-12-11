@@ -79,7 +79,10 @@ export class LoadingComponentRegistry {
     if (exactLoader) {
       try {
         const module = await exactLoader()
-        return module.default
+        if (module && module.default && typeof module.default === 'function') {
+          return module.default
+        }
+        console.warn(`[LoadingRegistry] Invalid component for ${routePath}: module.default is not a function`)
       }
       catch (error) {
         console.warn(`[LoadingRegistry] Failed to load exact match for ${routePath}:`, error)
