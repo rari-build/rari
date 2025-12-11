@@ -33,7 +33,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20251203.1",
-    "@vitejs/plugin-react-oxc": "^0.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
     "eslint": "^9.39.1",
     "oxlint": "^1.32.0",
     "rolldown-vite": "^7.2.10",
