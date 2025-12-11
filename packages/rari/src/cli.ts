@@ -226,8 +226,15 @@ ${colors.bold('Notes:')}
   }
 }
 
-main().catch((error) => {
-  logError(`CLI Error: ${error.message}`)
-  console.error(error)
-  process.exit(1)
-})
+const isMainModule = process.argv[1] && (
+  import.meta.url === `file://${process.argv[1]}`
+    || (import.meta.url.endsWith('/dist/cli.mjs') && process.argv[1].includes('cli.mjs'))
+)
+
+if (isMainModule) {
+  main().catch((error) => {
+    logError(`CLI Error: ${error.message}`)
+    console.error(error)
+    process.exit(1)
+  })
+}
