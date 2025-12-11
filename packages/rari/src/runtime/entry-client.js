@@ -62,7 +62,7 @@ export async function renderApp() {
     if (!manifest) {
       try {
         const manifestUrl = window.location.origin.includes(':5173')
-          ? 'http://localhost:3000/app-routes.json'
+          ? '/app-routes.json'
           : '/app-routes.json'
 
         const manifestResponse = await fetch(manifestUrl, {
