@@ -160,23 +160,8 @@ winapi = { version = "0.3.9", features = [
   "minwindef",
 ] }
 windows-sys = { version = "0.59.0", features = [
-  "Win32_Foundation",
-  "Win32_Media",
-  "Win32_Storage_FileSystem",
-  "Win32_System_IO",
+  "Win32_Networking",
   "Win32_System_SystemInformation",
-  "Win32_System_WindowsProgramming",
-  "Wdk",
-  "Wdk_System",
-  "Wdk_System_SystemInformation",
-  "Win32_Security",
-  "Win32_System_Pipes",
-  "Wdk_Storage_FileSystem",
-  "Win32_System_Registry",
-  "Win32_System_Kernel",
-  "Win32_System_Threading",
-  "Win32_UI",
-  "Win32_UI_Shell"
 ] }
 
 # === CLI & Logging ===
