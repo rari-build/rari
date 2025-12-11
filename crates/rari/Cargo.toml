@@ -22,7 +22,10 @@ homepage = "https://github.com/rari-build/rari"
 documentation = "https://github.com/rari-build/rari/tree/main/docs"
 
 [package.metadata.cargo-machete]
-ignored = [ "num-bigint-dig" ]
+ignored = [
+  "num-bigint-dig",
+  "windows-sys"
+]
 
 [lib]
 crate-type = [ "rlib" ]
@@ -156,6 +159,7 @@ winapi = { version = "0.3.9", features = [
   "consoleapi",
   "minwindef",
 ] }
+windows-sys = { version = "0.59", features = [ "Win32_System_SystemInformation" ] }
 
 # === CLI & Logging ===
 clap = { version = "4.5.47", features = [ "derive" ] }
