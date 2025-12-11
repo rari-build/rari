@@ -1,9 +1,18 @@
-## [0.5.11] - 2025-12-11
+## [0.5.12] - 2025-12-11
+
+### 🚀 Features
+
+- *(router)* Improve loading component handling and validation
+## [rari@0.5.11] - 2025-12-11
 
 ### 🚀 Features
 
 - *(rari)* Improve client-server routing and add manifest middleware
 - *(router)* Convert loading component modules to Map
+
+### 💼 Other
+
+- Rari@0.5.11
 
 ### ⚙️ Miscellaneous Tasks
 
