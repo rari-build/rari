@@ -214,7 +214,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const processedProps = processProps(props, modules, layoutPath)
         return React.createElement(type, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
-      return rsc.map(child => rscToReact(child, modules, layoutPath))
+      return rsc.map((child, index) => {
+        const element = rscToReact(child, modules, layoutPath)
+        if (element && typeof element === 'object' && !element.key) {
+          // eslint-disable-next-line react/no-clone-element
+          return React.cloneElement(element, { key: index })
+        }
+        return element
+      })
     }
 
     return rsc
@@ -696,12 +703,24 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           )
 
           if (hasMain) {
-            newChildren = children.map((child: any) => cloneWithLoadingInjected(child))
+            newChildren = children.map((child: any, index: number) => {
+              const cloned = cloneWithLoadingInjected(child)
+
+              return cloned && typeof cloned === 'object' && !cloned.key
+              // eslint-disable-next-line react/no-clone-element
+                ? React.cloneElement(cloned, { key: child?.key || index })
+                : cloned
+            })
           }
           else {
-            newChildren = children.map((child: any) => {
+            newChildren = children.map((child: any, index: number) => {
               if (child && typeof child === 'object') {
-                return cloneWithLoadingInjected(child)
+                const cloned = cloneWithLoadingInjected(child)
+
+                return cloned && !cloned.key
+                // eslint-disable-next-line react/no-clone-element
+                  ? React.cloneElement(cloned, { key: child.key || index })
+                  : cloned
               }
               return child
             })
@@ -739,7 +758,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (rscPayload?.element) {
       contentToRender = injectLoadingIntoLayout(rscPayload.element, loadingComponentElement)
     }
-    else {
+    else if (loadingComponentElement) {
       contentToRender = loadingComponentElement
     }
   }

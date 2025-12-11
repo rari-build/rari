@@ -286,7 +286,10 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
           )
         }
 
-        const fetchUrl = window.location.origin + targetPath
+        const rariServerUrl = window.location.origin.includes(':5173')
+          ? 'http://localhost:3000'
+          : window.location.origin
+        const fetchUrl = rariServerUrl + targetPath
 
         const response = await fetch(fetchUrl, {
           headers: { Accept: 'text/x-component' },
