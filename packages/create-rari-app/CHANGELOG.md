@@ -1,3 +1,18 @@
+## [0.5.9] - 2025-12-11
+
+### 🐛 Bug Fixes
+
+- *(web)* Add URL and URLSearchParams to global scope
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove Windows build test workflow
+- *(release)* Bump rari to 0.5.9
+## [create-rari-app@0.2.7] - 2025-12-11
+
+### 💼 Other
+
+- Create-rari-app@0.2.7
 ## [rari@0.5.13] - 2025-12-11
 
 ### 💼 Other
@@ -745,7 +760,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update rari package versions to 0.2.7 in pnpm-lock.yaml for all platforms
-## [0.2.7] - 2025-12-11
+## [0.2.7] - 2025-08-16
 
 ### 🚀 Features
 
