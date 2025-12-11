@@ -17,10 +17,10 @@
     "prepare-binaries": "node scripts/prepare-binaries.js"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^6.5.1",
+    "@antfu/eslint-config": "^6.6.1",
     "@clack/prompts": "^0.11.0",
     "@eslint-react/eslint-plugin": "^2.3.13",
-    "@types/node": "^24.10.2",
+    "@types/node": "^25.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-oxlint": "^1.32.0",
     "eslint-plugin-react-hooks": "^7.0.1",

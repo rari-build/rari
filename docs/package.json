@@ -29,10 +29,10 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^24.10.2",
+    "@types/node": "^25.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "7.0.0-dev.20251203.1",
+    "@typescript/native-preview": "7.0.0-dev.20251210.1",
     "@vitejs/plugin-react": "^5.1.2",
     "eslint": "^9.39.1",
     "oxlint": "^1.32.0",
