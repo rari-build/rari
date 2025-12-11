@@ -1,4 +1,23 @@
-## [0.5.10] - 2025-12-09
+## [0.5.11] - 2025-12-11
+
+### 🚀 Features
+
+- *(rari)* Improve client-server routing and add manifest middleware
+- *(router)* Convert loading component modules to Map
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade dependencies and remove unused packages
+## [create-rari-app@0.2.6] - 2025-12-09
+
+### 💼 Other
+
+- Create-rari-app@0.2.6
+## [rari@0.5.10] - 2025-12-09
+
+### 💼 Other
+
+- Rari@0.5.10
 
 ### ⚙️ Miscellaneous Tasks
 
