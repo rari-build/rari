@@ -26,6 +26,7 @@ ignored = [ "num-bigint-dig" ]
 
 [lib]
 crate-type = [ "rlib" ]
+doctest = false
 
 [[bin]]
 name = "rari"
