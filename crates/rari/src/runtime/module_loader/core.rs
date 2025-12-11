@@ -11,8 +11,8 @@ use crate::runtime::module_loader::{
 };
 use dashmap::DashMap;
 use deno_core::{
-    FastString, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader, ModuleSource,
-    ModuleSourceCode, ModuleSpecifier, ModuleType, RequestedModuleType, ResolutionKind,
+    FastString, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader,
+    ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, ResolutionKind,
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
@@ -1298,11 +1298,11 @@ impl ModuleLoader for RariModuleLoader {
         &self,
         module_specifier: &ModuleSpecifier,
         maybe_referrer: Option<&ModuleLoadReferrer>,
-        is_dyn_import: bool,
-        _requested_module_type: RequestedModuleType,
+        options: ModuleLoadOptions,
     ) -> ModuleLoadResponse {
         let load_start = std::time::Instant::now();
         let specifier_str = module_specifier.to_string();
+        let is_dyn_import = options.is_dynamic_import;
 
         if let Some(response) = self.handle_cached_module(&specifier_str, module_specifier) {
             let load_duration = load_start.elapsed().as_millis() as u64;

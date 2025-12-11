@@ -1,11 +1,7 @@
-use super::{ExtensionTrait, web::PermissionsContainer};
+use super::ExtensionTrait;
 use deno_core::{Extension, extension};
-use deno_kv::{
-    dynamic::MultiBackendDbHandler,
-    remote::{RemoteDbHandler, RemoteDbHandlerPermissions},
-    sqlite::{SqliteDbHandler, SqliteDbHandlerPermissions},
-};
-use std::{borrow::Cow, path::PathBuf};
+use deno_kv::{dynamic::MultiBackendDbHandler, remote::RemoteDbHandler, sqlite::SqliteDbHandler};
+use std::path::PathBuf;
 
 extension!(
     init_kv,
@@ -101,12 +97,12 @@ impl KvStore {
     pub fn handler(&self) -> MultiBackendDbHandler {
         match &self.0 {
             KvStoreBuilder::Local { path, rng_seed } => {
-                let db = SqliteDbHandler::<PermissionsContainer>::new(path.clone(), *rng_seed);
+                let db = SqliteDbHandler::new(path.clone(), *rng_seed);
                 MultiBackendDbHandler::new(vec![(&[""], Box::new(db))])
             }
 
             KvStoreBuilder::Remote { http_options } => {
-                let db = RemoteDbHandler::<PermissionsContainer>::new(http_options.clone());
+                let db = RemoteDbHandler::new(http_options.clone());
                 MultiBackendDbHandler::new(vec![(&["https://", "http://"], Box::new(db))])
             }
         }
@@ -119,48 +115,5 @@ impl KvStore {
 impl Default for KvStore {
     fn default() -> Self {
         Self::new_local(None, None, KvConfig::default())
-    }
-}
-
-impl SqliteDbHandlerPermissions for PermissionsContainer {
-    fn check_open<'a>(
-        &mut self,
-        path: Cow<'a, std::path::Path>,
-        access_kind: deno_permissions::OpenAccessKind,
-        api_name: &str,
-    ) -> Result<deno_permissions::CheckedPath<'a>, deno_permissions::PermissionCheckError> {
-        match access_kind {
-            deno_permissions::OpenAccessKind::Read
-            | deno_permissions::OpenAccessKind::ReadNoFollow => {
-                let p = self.0.check_read(path, Some(api_name))?;
-                Ok(deno_permissions::CheckedPath::unsafe_new(p))
-            }
-            deno_permissions::OpenAccessKind::Write
-            | deno_permissions::OpenAccessKind::WriteNoFollow => {
-                let p = self.0.check_write(path, Some(api_name))?;
-                Ok(deno_permissions::CheckedPath::unsafe_new(p))
-            }
-            deno_permissions::OpenAccessKind::ReadWrite
-            | deno_permissions::OpenAccessKind::ReadWriteNoFollow => {
-                let p = self.0.check_read(path, Some(api_name))?;
-                Ok(deno_permissions::CheckedPath::unsafe_new(p))
-            }
-        }
-    }
-}
-
-impl RemoteDbHandlerPermissions for PermissionsContainer {
-    fn check_env(&mut self, var: &str) -> Result<(), deno_permissions::PermissionCheckError> {
-        self.0.check_env(var)?;
-        Ok(())
-    }
-
-    fn check_net_url(
-        &mut self,
-        url: &reqwest::Url,
-        api_name: &str,
-    ) -> Result<(), deno_permissions::PermissionCheckError> {
-        self.0.check_url(url, api_name)?;
-        Ok(())
     }
 }

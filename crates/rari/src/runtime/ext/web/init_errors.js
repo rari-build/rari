@@ -8,7 +8,7 @@ import {
   getStderrNoColor,
   inspectArgs,
   quoteString,
-} from 'ext:deno_console/01_console.js'
+} from 'ext:deno_web/01_console.js'
 import { DOMException } from 'ext:deno_web/01_dom_exception.js'
 import * as event from 'ext:deno_web/02_event.js'
 import { DedicatedWorkerGlobalScope } from 'ext:deno_web/04_global_interfaces.js'

@@ -7,7 +7,7 @@ pub use options::WebOptions;
 
 mod permissions;
 pub(crate) use permissions::PermissionsContainer;
-pub use permissions::{DefaultWebPermissions, SystemsPermissionKind, WebPermissions};
+pub use permissions::{DefaultWebPermissions, WebPermissions};
 
 extension!(
     init_fetch,
@@ -35,7 +35,7 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
             resolver: options.resolver.clone(),
         };
 
-        deno_fetch::deno_fetch::init::<PermissionsContainer>(options)
+        deno_fetch::deno_fetch::init(options)
     }
 }
 
@@ -53,7 +53,7 @@ impl ExtensionTrait<WebOptions> for init_net {
 }
 impl ExtensionTrait<WebOptions> for deno_net::deno_net {
     fn init(options: WebOptions) -> Extension {
-        deno_net::deno_net::init::<PermissionsContainer>(
+        deno_net::deno_net::init(
             options.root_cert_store_provider.clone(),
             options.unsafely_ignore_certificate_errors.clone(),
         )
@@ -96,7 +96,7 @@ impl ExtensionTrait<WebOptions> for init_web {
 
 impl ExtensionTrait<WebOptions> for deno_web::deno_web {
     fn init(options: WebOptions) -> Extension {
-        deno_web::deno_web::init::<PermissionsContainer>(options.blob_store, options.base_url)
+        deno_web::deno_web::init(options.blob_store, options.base_url, options.broadcast_channel)
     }
 }
 

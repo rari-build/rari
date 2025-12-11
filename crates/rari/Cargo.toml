@@ -33,51 +33,48 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.363.0"
-deno_error = "=0.7.0"
-deno_features = "0.18.0"
-deno_bundle_runtime = "0.8.0"
-deno_runtime = "0.229.0"
-deno_permissions = "0.80.0"
-deno_process = "0.36.0"
+deno_core = "0.372.0"
+deno_error = "=0.7.1"
+deno_features = "0.19.0"
+deno_bundle_runtime = "0.9.0"
+deno_runtime = "0.230.0"
+deno_permissions = "0.81.0"
+deno_process = "0.37.0"
 
 # === Essential Web APIs ===
-deno_console = "0.221.0"
-deno_crypto = "0.235.0"
-deno_fetch = "0.245.0"
-deno_url = "0.221.0"
-deno_web = "0.252.0"
-deno_webidl = "0.221.0"
-deno_broadcast_channel = "0.215.0"
-deno_cache = "0.153.0"
-deno_webstorage = "0.216.0"
+deno_cache = "0.155.0"
+deno_crypto = "0.236.0"
+deno_fetch = "0.246.0"
+deno_web = "0.253.0"
+deno_webidl = "0.222.0"
+deno_webstorage = "0.217.0"
 
 # === Network & HTTP ===
-deno_http = "0.219.0"
-deno_net = "0.213.0"
-deno_tls = "0.208.0"
-deno_websocket = "0.226.0"
+deno_http = "0.220.0"
+deno_net = "0.214.0"
+deno_tls = "0.209.0"
+deno_websocket = "0.227.0"
 
 # === File System & I/O ===
-deno_fs = "0.131.0"
-deno_io = "0.131.0"
+deno_fs = "0.132.0"
+deno_io = "0.132.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.43.0"
-deno_terminal = "=0.2.2"
-deno_webgpu = "0.188.0"
-deno_kv = "0.129.0"
-deno_cron = "0.101.0"
+deno_telemetry = "0.44.0"
+deno_terminal = "=0.2.3"
+deno_webgpu = "0.189.0"
+deno_kv = "0.130.0"
+deno_cron = "0.102.0"
 
 # === Node.js Integration ===
-deno_node = "0.159.0"
-deno_resolver = "0.52.0"
-node_resolver = "0.59.0"
+deno_node = "0.160.0"
+deno_resolver = "0.53.0"
+node_resolver = "0.60.0"
 num-bigint-dig = { workspace = true }
 
 # === FFI & NAPI ===
-deno_ffi = "0.208.0"
-deno_napi = "0.152.0"
+deno_ffi = "0.209.0"
+deno_napi = "0.153.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -147,9 +144,9 @@ sysinfo = "0.37.0"
 
 # === Development Tools ===
 rustyline = "=13.0.0"
-deno_ast = { version = "=0.50.3", features = [ "transpiling" ] }
-deno_package_json = { version = "0.23.0", default-features = false }
-deno_semver = "=0.9.0"
+deno_ast = { version = "=0.52.0", features = [ "transpiling" ] }
+deno_package_json = { version = "0.24.0", default-features = false }
+deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
 winapi = { version = "0.3.9", features = [

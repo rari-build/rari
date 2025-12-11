@@ -18,9 +18,7 @@ trait ExtensionTrait<A> {
     }
 }
 
-mod broadcast_channel;
 mod cache;
-mod console;
 mod cron;
 mod crypto;
 mod fetch;
@@ -40,7 +38,6 @@ mod rsc_renderer;
 mod runtime;
 mod server_functions;
 mod streaming;
-mod url;
 mod web;
 mod webgpu;
 mod webidl;
@@ -51,11 +48,11 @@ mod webstorage;
 pub struct ExtensionOptions {
     pub web: web::WebOptions,
     pub io_pipes: Option<deno_io::Stdio>,
-    pub cache: Option<deno_cache::CreateCache>,
+    pub cache: Option<()>,
     pub filesystem: FileSystemRc,
     pub crypto_seed: Option<u64>,
     pub node_resolver: std::sync::Arc<node::resolvers::Resolver>,
-    pub broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel,
+    pub broadcast_channel: deno_web::InMemoryBroadcastChannel,
     pub webstorage_origin_storage_dir: Option<std::path::PathBuf>,
     pub kv_store: kv::KvStore,
 }
@@ -66,10 +63,10 @@ impl Default for ExtensionOptions {
             web: web::WebOptions::default(),
             io_pipes: Some(deno_io::Stdio::default()),
             filesystem: MaybeArc::new(deno_fs::RealFs),
-            cache: None,
+            cache: Some(()),
             crypto_seed: None,
             node_resolver: std::sync::Arc::new(node::resolvers::Resolver::default()),
-            broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel::default(),
+            broadcast_channel: deno_web::InMemoryBroadcastChannel::default(),
             webstorage_origin_storage_dir: None,
             kv_store: kv::KvStore::default(),
         }
@@ -87,11 +84,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(react::extensions(is_snapshot));
     extensions.extend(rsc_renderer::extensions(is_snapshot));
     extensions.extend(webidl::extensions(is_snapshot));
-    extensions.extend(console::extensions(is_snapshot));
-    extensions.extend(url::extensions(is_snapshot));
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
-    extensions
-        .extend(broadcast_channel::extensions(options.broadcast_channel.clone(), is_snapshot));
     extensions.extend(cache::extensions(options.cache.clone(), is_snapshot));
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
     extensions.extend(fs::extensions(options.filesystem.clone(), is_snapshot));
