@@ -85,7 +85,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(rsc_renderer::extensions(is_snapshot));
     extensions.extend(webidl::extensions(is_snapshot));
     extensions.extend(web::extensions(options.web.clone(), is_snapshot));
-    extensions.extend(cache::extensions(options.cache.clone(), is_snapshot));
+    extensions.extend(cache::extensions(options.cache, is_snapshot));
     extensions.extend(crypto::extensions(options.crypto_seed, is_snapshot));
     extensions.extend(fs::extensions(options.filesystem.clone(), is_snapshot));
     extensions.extend(io::extensions(options.io_pipes.clone(), is_snapshot));
