@@ -1,7 +1,7 @@
 {
   "name": "create-rari-app",
   "type": "module",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Create Runtime Accelerated Rendering Infrastructure (Rari) applications with no build configuration",
   "author": "Ryan Skinner",
   "license": "MIT",

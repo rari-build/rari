@@ -1,3 +1,36 @@
+## [rari@0.5.15] - 2025-12-12
+
+### 💼 Other
+
+- Rari@0.5.15
+## [0.5.10] - 2025-12-12
+
+### 🚀 Features
+
+- *(rsc)* Enhance prop serialization and client component registration
+- *(runtime)* Enhance Node.js compatibility stubs for fs, path, and process
+
+### 🐛 Bug Fixes
+
+- *(router)* Improve component loading fallback logic
+
+### 🚜 Refactor
+
+- *(docs,rari)* Improve markdown rendering and module resolution
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari to 0.5.10
+## [rari@0.5.14] - 2025-12-11
+
+### 💼 Other
+
+- Rari@0.5.14
+## [create-rari-app@0.2.8] - 2025-12-11
+
+### 💼 Other
+
+- Create-rari-app@0.2.8
 ## [0.5.9] - 2025-12-11
 
 ### 🐛 Bug Fixes
