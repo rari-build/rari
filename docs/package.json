@@ -22,21 +22,21 @@
   "dependencies": {
     "markdown-it": "^14.1.0",
     "rari": "workspace:*",
-    "react": "^19.2.2",
-    "react-dom": "^19.2.2",
-    "shiki": "^3.19.0"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "shiki": "^3.20.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.17",
+    "@tailwindcss/vite": "^4.1.18",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^25.0.0",
+    "@types/node": "^25.0.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20251210.1",
     "@vitejs/plugin-react": "^5.1.2",
     "eslint": "^9.39.1",
     "oxlint": "^1.32.0",
-    "rolldown-vite": "^7.2.10",
-    "tailwindcss": "^4.1.17"
+    "rolldown-vite": "^7.2.11",
+    "tailwindcss": "^4.1.18"
   }
 }
