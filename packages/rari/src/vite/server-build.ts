@@ -391,7 +391,7 @@ const ${importName} = (props) => {
           loader: loader as any,
         },
         bundle: true,
-        platform: 'neutral',
+        platform: 'node',
         target: 'es2022',
         format: 'esm',
         external: [],
@@ -644,7 +644,7 @@ const ${importName} = (props) => {
           loader: loader as any,
         },
         bundle: true,
-        platform: 'neutral',
+        platform: 'node',
         target: 'es2022',
         format: 'esm',
         outfile: outputPath,
@@ -766,13 +766,65 @@ const ${importName} = (props) => {
           /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
           '// React is available as globalThis.React\n',
         )
+
         code = code.replace(
-          /import\s+\w+\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:fs['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'readFileSync') {
+                return 'const readFileSync = (path, encoding) => globalThis.Deno?.readTextFileSync ? globalThis.Deno.readTextFileSync(path) : "";'
+              }
+              if (imp === 'existsSync') {
+                return 'const existsSync = (path) => { try { globalThis.Deno?.statSync(path); return true; } catch { return false; } };'
+              }
+              if (imp === 'statSync') {
+                return 'const statSync = (path) => { const s = globalThis.Deno?.statSync(path); return { isFile: () => s?.isFile, isDirectory: () => s?.isDirectory, size: s?.size || 0 }; };'
+              }
+              if (imp === 'readdirSync') {
+                return 'const readdirSync = (path) => { const entries = []; for (const e of globalThis.Deno?.readDirSync(path) || []) entries.push(e.name); return entries; };'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
         )
+
         code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:path['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'join') {
+                return 'const join = (...parts) => parts.filter(p => p).join("/").replace(/\\/+/g, "/") || ".";'
+              }
+              if (imp === 'resolve') {
+                return 'const resolve = (...paths) => { const cwd = globalThis.Deno?.cwd?.() || "/"; let resolved = ""; let isAbs = false; for (let i = paths.length - 1; i >= -1 && !isAbs; i--) { const p = i >= 0 ? paths[i] : cwd; if (!p) continue; resolved = p + "/" + resolved; isAbs = p[0] === "/"; } const parts = resolved.split("/").filter(Boolean); const result = []; for (const p of parts) { if (p === "..") { if (result.length && result[result.length-1] !== "..") result.pop(); else if (!isAbs) result.push(".."); } else if (p !== ".") result.push(p); } return (isAbs ? "/" : "") + result.join("/") || "."; };'
+              }
+              if (imp === 'dirname') {
+                return 'const dirname = (path) => { const parts = path.split("/").filter(Boolean); parts.pop(); return parts.length ? "/" + parts.join("/") : "/"; };'
+              }
+              if (imp === 'basename') {
+                return 'const basename = (path) => path.split("/").filter(Boolean).pop() || "";'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
+        )
+
+        code = code.replace(
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:process['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'cwd') {
+                return 'const cwd = () => globalThis.Deno?.cwd?.() || "/";'
+              }
+              if (imp === 'env') {
+                return 'const env = new Proxy({}, { get: (_, prop) => globalThis.Deno?.env?.get?.(prop) });'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
         )
 
         const finalTransformedCode = this.createSelfRegisteringModule(

@@ -1,6 +1,6 @@
 import type { Highlighter } from 'shiki'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 import MarkdownIt from 'markdown-it'
 import { createHighlighter } from 'shiki'
@@ -39,9 +39,9 @@ async function getHighlighter(): Promise<Highlighter | null> {
 
 function findContentFile(filePath: string): string | null {
   const searchPaths = [
-    join(cwd(), 'public', 'content', filePath),
-    join(cwd(), 'content', filePath),
-    join(cwd(), 'dist', 'content', filePath),
+    resolve(cwd(), 'public', 'content', filePath),
+    resolve(cwd(), 'content', filePath),
+    resolve(cwd(), 'dist', 'content', filePath),
   ]
 
   for (const path of searchPaths) {

@@ -238,7 +238,7 @@ impl Server {
     async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
-        let large_body_limit = DefaultBodyLimit::max(10 * 1024 * 1024);
+        let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
         let mut router = Router::new()
             .route("/api/rsc/stream", post(stream_component))
@@ -264,7 +264,7 @@ impl Server {
             info!("Adding development routes");
 
             let small_body_limit = DefaultBodyLimit::max(100 * 1024);
-            let large_body_limit = DefaultBodyLimit::max(10 * 1024 * 1024);
+            let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
                 .route("/api/rsc/hmr-invalidate", post(hmr_invalidate_component))
