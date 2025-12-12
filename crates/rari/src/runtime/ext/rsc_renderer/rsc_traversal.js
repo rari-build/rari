@@ -65,7 +65,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       return element.rscArray
     }
 
-    if (element.type && (typeof element.type === 'string' || typeof element.type === 'function')) {
+    if (element.type && (typeof element.type === 'string' || typeof element.type === 'function' || typeof element.type === 'object')) {
       const hasPropsChildren = element.props && Object.prototype.hasOwnProperty.call(element.props || {}, 'children')
       const mergedProps = {
         ...(element.props || {}),
@@ -118,7 +118,31 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     const componentId = getClientComponentId(type, clientComponents)
 
     if (componentId && componentId !== null) {
-      return ['$', componentId, uniqueKey, props || {}]
+      if (componentId.includes('#')) {
+        const [filePath, exportName] = componentId.split('#')
+        if (typeof globalThis.__rari_bridge !== 'undefined'
+          && typeof globalThis.__rari_bridge.registerClientReference === 'function') {
+          try {
+            globalThis.__rari_bridge.registerClientReference(componentId, filePath, exportName)
+          }
+          catch (error) {
+            console.error('Failed to register client reference:', error)
+          }
+        }
+      }
+
+      const processedProps = {}
+      if (props) {
+        for (const [key, value] of Object.entries(props)) {
+          if (key === 'children') {
+            processedProps[key] = await traverseToRsc(value, clientComponents, depth + 1)
+          }
+          else {
+            processedProps[key] = value
+          }
+        }
+      }
+      return ['$', componentId, uniqueKey, processedProps]
     }
     else {
       return [

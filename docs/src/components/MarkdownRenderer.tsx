@@ -1,6 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import type { Highlighter } from 'shiki'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cwd } from 'node:process'
+import MarkdownIt from 'markdown-it'
+import { createHighlighter } from 'shiki'
 import NotFoundPage from '../app/not-found'
 
 interface MarkdownRendererProps {
@@ -8,9 +11,9 @@ interface MarkdownRendererProps {
   className?: string
 }
 
-let shikiHighlighter: any | null = null
+let shikiHighlighter: Highlighter | null = null
 
-async function getHighlighter(createHighlighter: any) {
+async function getHighlighter(): Promise<Highlighter | null> {
   if (!shikiHighlighter) {
     try {
       shikiHighlighter = await createHighlighter({
@@ -26,43 +29,44 @@ async function getHighlighter(createHighlighter: any) {
         ],
       })
     }
-    catch {
+    catch (error) {
+      console.error('Failed to initialize syntax highlighter:', error)
       return null
     }
   }
   return shikiHighlighter
 }
 
+function findContentFile(filePath: string): string | null {
+  const searchPaths = [
+    resolve(cwd(), 'public', 'content', filePath),
+    resolve(cwd(), 'content', filePath),
+    resolve(cwd(), 'dist', 'content', filePath),
+  ]
+
+  for (const path of searchPaths) {
+    try {
+      return readFileSync(path, 'utf-8')
+    }
+    catch {
+      // File doesn't exist at this path, try next
+    }
+  }
+
+  return null
+}
+
 export default async function MarkdownRenderer({
   filePath,
   className = '',
 }: MarkdownRendererProps) {
-  let html: string | null = null
-  let error: Error | null = null
-
   try {
-    const MarkdownIt = (await import('markdown-it')).default
-    const { createHighlighter } = await import('shiki')
-
-    const distPath = join(cwd(), 'dist', 'content', filePath)
-    const contentPath = join(cwd(), 'content', filePath)
-    const publicPath = join(cwd(), 'public', 'content', filePath)
-
-    let content: string
-    if (existsSync(distPath)) {
-      content = readFileSync(distPath, 'utf-8')
-    }
-    else if (existsSync(contentPath)) {
-      content = readFileSync(contentPath, 'utf-8')
-    }
-    else if (existsSync(publicPath)) {
-      content = readFileSync(publicPath, 'utf-8')
-    }
-    else {
+    const content = findContentFile(filePath)
+    if (!content) {
       return <NotFoundPage />
     }
 
-    const highlighter = await getHighlighter(createHighlighter)
+    const highlighter = await getHighlighter()
 
     const md = new MarkdownIt({
       html: true,
@@ -71,43 +75,40 @@ export default async function MarkdownRenderer({
       breaks: false,
       highlight: highlighter
         ? (str, lang) => {
-            if (lang && highlighter) {
-              try {
-                return highlighter.codeToHtml(str, {
-                  lang,
-                  theme: 'github-dark',
-                })
-              }
-              catch (highlightError) {
-                console.warn(`Failed to highlight ${lang}:`, highlightError)
-                return `<pre><code class="language-${lang}">${str}</code></pre>`
-              }
+            if (!lang) {
+              return `<pre><code>${str}</code></pre>`
             }
-            return `<pre><code>${str}</code></pre>`
+
+            try {
+              return highlighter.codeToHtml(str, {
+                lang,
+                theme: 'github-dark',
+              })
+            }
+            catch (error) {
+              console.warn(`Failed to highlight ${lang}:`, error)
+              return `<pre><code class="language-${lang}">${str}</code></pre>`
+            }
           }
         : undefined,
     })
 
-    html = md.render(content)
-  }
-  catch (err) {
-    console.error('Error in MarkdownRenderer:', err)
-    error = err instanceof Error ? err : new Error(String(err))
-  }
+    const html = md.render(content)
 
-  if (error || !html) {
+    return (
+      <div
+        className={`prose prose-invert max-w-none overflow-hidden ${className}`}
+        // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+        dangerouslySetInnerHTML={{ __html: html }}
+        style={{
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
+        }}
+      />
+    )
+  }
+  catch (error) {
+    console.error('Error in MarkdownRenderer:', error)
     return <NotFoundPage />
   }
-
-  return (
-    <div
-      className={`prose prose-invert max-w-none overflow-hidden ${className}`}
-      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
-      dangerouslySetInnerHTML={{ __html: html }}
-      style={{
-        wordWrap: 'break-word',
-        overflowWrap: 'break-word',
-      }}
-    />
-  )
 }

@@ -43,6 +43,49 @@ const existsSync = (path) => {
   }
 };
 
+const statSync = (path) => {
+  try {
+    if (globalThis.Deno?.statSync) {
+      const stat = globalThis.Deno.statSync(path);
+      return {
+        isFile: () => stat.isFile,
+        isDirectory: () => stat.isDirectory,
+        isSymbolicLink: () => stat.isSymlink,
+        size: stat.size,
+        mtime: stat.mtime,
+        atime: stat.atime,
+        birthtime: stat.birthtime,
+        mode: stat.mode || 0,
+        uid: stat.uid || 0,
+        gid: stat.gid || 0,
+      };
+    }
+    throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+  } catch (error) {
+    throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+  }
+};
+
+const lstatSync = statSync;
+
+const realpathSync = (path) => {
+  try {
+    if (globalThis.Deno?.realPathSync) {
+      return globalThis.Deno.realPathSync(path);
+    }
+    return path;
+  } catch (error) {
+    return path;
+  }
+};
+
+const constants = {
+  F_OK: 0,
+  R_OK: 4,
+  W_OK: 2,
+  X_OK: 1,
+};
+
 const readdirSync = (path) => {
   try {
     if (globalThis.Deno?.readDirSync) {
@@ -63,6 +106,10 @@ export default {
   readFile,
   existsSync,
   readdirSync,
+  statSync,
+  lstatSync,
+  realpathSync,
+  constants,
   writeFileSync: () => {},
   writeFile: () => Promise.resolve(),
   exists: () => Promise.resolve(false),
@@ -71,7 +118,7 @@ export default {
   readdir: () => Promise.resolve([]),
 };
 
-export { readFileSync, readFile, existsSync, readdirSync };
+export { readFileSync, readFile, existsSync, readdirSync, statSync, lstatSync, realpathSync, constants };
 export const writeFileSync = () => {};
 export const writeFile = () => Promise.resolve();
 export const exists = () => Promise.resolve(false);
@@ -159,24 +206,157 @@ pub const NODE_PATH_STUB: &str = r#"
 // ESM-compatible stub for node:path
 
 export function join(...parts) {
-  return parts.join('/');
+  if (parts.length === 0) return '.';
+
+  const joined = parts
+    .filter(part => part && part.length > 0)
+    .join('/')
+    .replace(/\/+/g, '/');
+
+  return joined || '.';
 }
+
 export function dirname(path) {
-  return path.split('/').slice(0, -1).join('/');
+  if (!path || path === '/') return '/';
+  const normalized = path.replace(/\/+$/, '');
+  const lastSlash = normalized.lastIndexOf('/');
+  if (lastSlash === -1) return '.';
+  if (lastSlash === 0) return '/';
+  return normalized.slice(0, lastSlash);
 }
-export function basename(path) {
-  return path.split('/').pop();
+
+export function basename(path, ext) {
+  if (!path) return '';
+  const base = path.split('/').filter(Boolean).pop() || '';
+  if (ext && base.endsWith(ext)) {
+    return base.slice(0, -ext.length);
+  }
+  return base;
 }
+
 export function extname(path) {
-  const parts = path.split('.');
-  return parts.length > 1 ? `.${parts.pop()}` : '';
+  if (!path) return '';
+  const base = basename(path);
+  const lastDot = base.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === 0) return '';
+  return base.slice(lastDot);
 }
-export function resolve(...parts) {
-  return '/' + parts.join('/');
+
+export function resolve(...paths) {
+  let resolvedPath = '';
+  let resolvedAbsolute = false;
+
+  const cwd = (() => {
+    try {
+      if (globalThis.Deno?.cwd) {
+        return globalThis.Deno.cwd();
+      }
+      if (globalThis.process?.cwd) {
+        return globalThis.process.cwd();
+      }
+      return '/';
+    } catch {
+      return '/';
+    }
+  })();
+
+  for (let i = paths.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    const path = i >= 0 ? paths[i] : cwd;
+
+    if (!path || path.length === 0) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  resolvedPath = normalizeArray(
+    resolvedPath.split('/').filter(p => p.length > 0),
+    !resolvedAbsolute
+  ).join('/');
+
+  return (resolvedAbsolute ? '/' : '') + resolvedPath || '.';
 }
+
+function normalizeArray(parts, allowAboveRoot) {
+  const res = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || p === '.') continue;
+    if (p === '..') {
+      if (res.length && res[res.length - 1] !== '..') {
+        res.pop();
+      } else if (allowAboveRoot) {
+        res.push('..');
+      }
+    } else {
+      res.push(p);
+    }
+  }
+  return res;
+}
+
 export function isAbsolute(path) {
-  return path.startsWith('/');
+  return path && path.length > 0 && path.charAt(0) === '/';
 }
+
+export function normalize(path) {
+  if (!path || path.length === 0) return '.';
+
+  const isAbs = isAbsolute(path);
+  const trailingSlash = path.charAt(path.length - 1) === '/';
+
+  const normalized = normalizeArray(
+    path.split('/').filter(p => p.length > 0),
+    !isAbs
+  ).join('/');
+
+  if (!normalized && !isAbs) return '.';
+  if (normalized && trailingSlash) return normalized + '/';
+
+  return (isAbs ? '/' : '') + normalized;
+}
+
+export function relative(from, to) {
+  from = resolve(from);
+  to = resolve(to);
+
+  if (from === to) return '';
+
+  const fromParts = from.split('/').filter(Boolean);
+  const toParts = to.split('/').filter(Boolean);
+
+  let i = 0;
+  while (i < fromParts.length && i < toParts.length && fromParts[i] === toParts[i]) {
+    i++;
+  }
+
+  const upCount = fromParts.length - i;
+  const relativeParts = [];
+
+  for (let j = 0; j < upCount; j++) {
+    relativeParts.push('..');
+  }
+
+  return relativeParts.concat(toParts.slice(i)).join('/') || '.';
+}
+
+export const sep = '/';
+export const delimiter = ':';
+export const posix = {
+  join,
+  dirname,
+  basename,
+  extname,
+  resolve,
+  isAbsolute,
+  normalize,
+  relative,
+  sep,
+  delimiter
+};
+
 export default {
   join,
   dirname,
@@ -184,7 +364,13 @@ export default {
   extname,
   resolve,
   isAbsolute,
+  normalize,
+  relative,
+  sep,
+  delimiter,
+  posix
 };
+
 export const __esModule = true;
 "#;
 
@@ -271,11 +457,65 @@ const platform = (() => {
   }
 })();
 
+const arch = (() => {
+  try {
+    if (globalThis.Deno?.build?.arch) {
+      const a = globalThis.Deno.build.arch;
+      if (a === 'x86_64') return 'x64';
+      if (a === 'aarch64') return 'arm64';
+      return a;
+    }
+    return 'x64';
+  } catch (error) {
+    return 'x64';
+  }
+})();
+
+const version = 'v20.0.0';
+const versions = {
+  node: '20.0.0',
+  v8: '11.0.0',
+};
+
+const pid = (() => {
+  try {
+    if (globalThis.Deno?.pid) {
+      return globalThis.Deno.pid;
+    }
+    return 1;
+  } catch (error) {
+    return 1;
+  }
+})();
+
+const ppid = 0;
+const execPath = '/usr/bin/node';
+const execArgv = [];
+
+const memoryUsage = () => ({
+  rss: 0,
+  heapTotal: 0,
+  heapUsed: 0,
+  external: 0,
+  arrayBuffers: 0,
+});
+
+const uptime = () => 0;
+
 export default {
   cwd,
   env,
   argv,
   platform,
+  arch,
+  version,
+  versions,
+  pid,
+  ppid,
+  execPath,
+  execArgv,
+  memoryUsage,
+  uptime,
   nextTick: (fn) => setTimeout(fn, 0),
   exit: (code = 0) => {
     if (globalThis.Deno?.exit) {
@@ -284,7 +524,7 @@ export default {
   },
 };
 
-export { cwd, env, argv, platform };
+export { cwd, env, argv, platform, arch, version, versions, pid, ppid, execPath, execArgv, memoryUsage, uptime };
 export const nextTick = (fn) => setTimeout(fn, 0);
 export const exit = (code = 0) => {
   if (globalThis.Deno?.exit) {

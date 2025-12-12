@@ -4,6 +4,41 @@ import path from 'node:path'
 import process from 'node:process'
 import { build } from 'esbuild'
 
+function isNodeBuiltin(moduleName: string): boolean {
+  const nodeBuiltins = [
+    'fs',
+    'path',
+    'os',
+    'crypto',
+    'util',
+    'stream',
+    'events',
+    'process',
+    'buffer',
+    'url',
+    'querystring',
+    'zlib',
+    'http',
+    'https',
+    'net',
+    'tls',
+    'child_process',
+    'cluster',
+    'worker_threads',
+    'assert',
+    'dns',
+    'readline',
+    'repl',
+    'string_decoder',
+    'timers',
+    'tty',
+    'v8',
+    'vm',
+    'perf_hooks',
+  ]
+  return nodeBuiltins.includes(moduleName)
+}
+
 interface ServerComponentManifest {
   components: Record<
     string,
@@ -356,7 +391,7 @@ const ${importName} = (props) => {
           loader: loader as any,
         },
         bundle: true,
-        platform: 'neutral',
+        platform: 'node',
         target: 'es2022',
         format: 'esm',
         external: [],
@@ -410,11 +445,13 @@ const ${importName} = (props) => {
                 if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
                   return { path: args.path, external: true }
                 }
+
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                  return { path: args.path, external: true }
+                }
+
                 if (args.path === 'rari/client') {
                   return null
-                }
-                if (/^[^./]/.test(args.path)) {
-                  return { path: args.path, external: true }
                 }
 
                 return null
@@ -607,7 +644,7 @@ const ${importName} = (props) => {
           loader: loader as any,
         },
         bundle: true,
-        platform: 'neutral',
+        platform: 'node',
         target: 'es2022',
         format: 'esm',
         outfile: outputPath,
@@ -656,10 +693,16 @@ const ${importName} = (props) => {
                 if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
                   return { path: args.path, external: true }
                 }
+
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                  return { path: args.path, external: true }
+                }
+
                 if (args.path === 'rari/client') {
                   return null
                 }
-                return { path: args.path, external: true }
+
+                return null
               })
             },
           },
@@ -723,13 +766,65 @@ const ${importName} = (props) => {
           /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
           '// React is available as globalThis.React\n',
         )
+
         code = code.replace(
-          /import\s+\w+\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:fs['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'readFileSync') {
+                return 'const readFileSync = (path, encoding) => globalThis.Deno?.readTextFileSync ? globalThis.Deno.readTextFileSync(path) : "";'
+              }
+              if (imp === 'existsSync') {
+                return 'const existsSync = (path) => { try { globalThis.Deno?.statSync(path); return true; } catch { return false; } };'
+              }
+              if (imp === 'statSync') {
+                return 'const statSync = (path) => { const s = globalThis.Deno?.statSync(path); return { isFile: () => s?.isFile, isDirectory: () => s?.isDirectory, size: s?.size || 0 }; };'
+              }
+              if (imp === 'readdirSync') {
+                return 'const readdirSync = (path) => { const entries = []; for (const e of globalThis.Deno?.readDirSync(path) || []) entries.push(e.name); return entries; };'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
         )
+
         code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]node:[^'"]+['"];?\s*/g,
-          '// Node.js built-ins are available in Deno runtime\n',
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:path['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'join') {
+                return 'const join = (...parts) => parts.filter(p => p).join("/").replace(/\\/+/g, "/") || ".";'
+              }
+              if (imp === 'resolve') {
+                return 'const resolve = (...paths) => { const cwd = globalThis.Deno?.cwd?.() || "/"; let resolved = ""; let isAbs = false; for (let i = paths.length - 1; i >= -1 && !isAbs; i--) { const p = i >= 0 ? paths[i] : cwd; if (!p) continue; resolved = p + "/" + resolved; isAbs = p[0] === "/"; } const parts = resolved.split("/").filter(Boolean); const result = []; for (const p of parts) { if (p === "..") { if (result.length && result[result.length-1] !== "..") result.pop(); else if (!isAbs) result.push(".."); } else if (p !== ".") result.push(p); } return (isAbs ? "/" : "") + result.join("/") || "."; };'
+              }
+              if (imp === 'dirname') {
+                return 'const dirname = (path) => { const parts = path.split("/").filter(Boolean); parts.pop(); return parts.length ? "/" + parts.join("/") : "/"; };'
+              }
+              if (imp === 'basename') {
+                return 'const basename = (path) => path.split("/").filter(Boolean).pop() || "";'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
+        )
+
+        code = code.replace(
+          /import\s+\{([^}]+)\}\s+from\s+['"]node:process['"];?\s*/g,
+          (match, imports) => {
+            const importList = imports.split(',').map((i: string) => i.trim())
+            return importList.map((imp: string) => {
+              if (imp === 'cwd') {
+                return 'const cwd = () => globalThis.Deno?.cwd?.() || "/";'
+              }
+              if (imp === 'env') {
+                return 'const env = new Proxy({}, { get: (_, prop) => globalThis.Deno?.env?.get?.(prop) });'
+              }
+              return `const ${imp} = () => {};`
+            }).join('\n')
+          },
         )
 
         const finalTransformedCode = this.createSelfRegisteringModule(
@@ -864,50 +959,59 @@ if (!globalThis["${componentId}"]) {
         try {
             const moduleKey = "${componentId}";
             let mainExport = null;
-            let exportedFunctions = {};
+            const exportedFunctions = {};
 
             globalThis.__server_functions = globalThis.__server_functions || {};
 
-        ${namedExports
-          .map(
-            name => `
-        if (typeof ${name} !== 'undefined') {
-            globalThis.${name} = ${name};
-            globalThis.__server_functions['${name}'] = ${name};
-            exportedFunctions['${name}'] = ${name};
-        }`,
-          )
-          .join('')}
+            ${namedExports
+              .map(
+                name => `if (typeof ${name} !== 'undefined') {
+                globalThis.${name} = ${name};
+                globalThis.__server_functions['${name}'] = ${name};
+                exportedFunctions['${name}'] = ${name};
+            }`,
+              )
+              .join('\n            ')}
 
-        ${defaultExportName
-          ? `if (typeof ${defaultExportName} !== 'undefined') {
-            mainExport = ${defaultExportName};
-        } else `
-          : ''}{
-            const potentialExports = {};
-            ${namedExports.map(name => `if (typeof ${name} !== 'undefined') potentialExports.${name} = ${name};`).join('\n            ')}
+            ${defaultExportName
+              ? `if (typeof ${defaultExportName} !== 'undefined') {
+                mainExport = ${defaultExportName};
+            }`
+              : ''}
 
-            if (Object.keys(potentialExports).length > 0) {
-                if (Object.keys(potentialExports).length === 1) {
-                    mainExport = potentialExports[Object.keys(potentialExports)[0]];
+            if (mainExport === null && Object.keys(exportedFunctions).length > 0) {
+                if (Object.keys(exportedFunctions).length === 1) {
+                    mainExport = exportedFunctions[Object.keys(exportedFunctions)[0]];
                 } else {
-                    mainExport = potentialExports;
+                    let componentFunction = null;
+                    let firstFunction = null;
+
+                    for (const [name, value] of Object.entries(exportedFunctions)) {
+                        if (typeof value === 'function') {
+                            if (!firstFunction) firstFunction = value;
+                            if (/^[A-Z]/.test(name)) {
+                                componentFunction = value;
+                                break;
+                            }
+                        }
+                    }
+
+                    mainExport = componentFunction || firstFunction;
                 }
             }
-        }
 
-        if (mainExport !== null) {
-            if (!globalThis[moduleKey]) {
-                globalThis[moduleKey] = mainExport;
+            if (mainExport !== null) {
+                if (!globalThis[moduleKey]) {
+                    globalThis[moduleKey] = mainExport;
+                }
+
+                globalThis.__rsc_components = globalThis.__rsc_components || {};
+                globalThis.__rsc_components[moduleKey] = mainExport;
+
+                if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
+                    globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
+                }
             }
-
-            globalThis.__rsc_components = globalThis.__rsc_components || {};
-            globalThis.__rsc_components[moduleKey] = mainExport;
-
-            if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
-                globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
-            }
-        }
         } catch (error) {
             console.error('Error in self-registration for ${componentId}:', error);
         }

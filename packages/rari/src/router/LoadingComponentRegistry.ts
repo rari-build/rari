@@ -79,10 +79,17 @@ export class LoadingComponentRegistry {
     if (exactLoader) {
       try {
         const module = await exactLoader()
-        if (module && module.default && typeof module.default === 'function') {
-          return module.default
+        if (module) {
+          if (module.default && typeof module.default === 'function') {
+            return module.default
+          }
+          const exportedValues = Object.values(module).filter(
+            (value): value is React.ComponentType => typeof value === 'function',
+          )
+          if (exportedValues.length > 0) {
+            return exportedValues[0]
+          }
         }
-        console.warn(`[LoadingRegistry] Invalid component for ${routePath}: module.default is not a function`)
       }
       catch (error) {
         console.warn(`[LoadingRegistry] Failed to load exact match for ${routePath}:`, error)
@@ -97,7 +104,17 @@ export class LoadingComponentRegistry {
       if (parentLoader) {
         try {
           const module = await parentLoader()
-          return module.default
+          if (module) {
+            if (module.default && typeof module.default === 'function') {
+              return module.default
+            }
+            const exportedValues = Object.values(module).filter(
+              (value): value is React.ComponentType => typeof value === 'function',
+            )
+            if (exportedValues.length > 0) {
+              return exportedValues[0]
+            }
+          }
         }
         catch (error) {
           console.warn(`[LoadingRegistry] Failed to load parent match for ${parentPath}:`, error)
@@ -110,7 +127,17 @@ export class LoadingComponentRegistry {
     if (rootLoader) {
       try {
         const module = await rootLoader()
-        return module.default
+        if (module) {
+          if (module.default && typeof module.default === 'function') {
+            return module.default
+          }
+          const exportedValues = Object.values(module).filter(
+            (value): value is React.ComponentType => typeof value === 'function',
+          )
+          if (exportedValues.length > 0) {
+            return exportedValues[0]
+          }
+        }
       }
       catch (error) {
         console.warn('[LoadingRegistry] Failed to load root loading component:', error)
