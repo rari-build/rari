@@ -4,6 +4,41 @@ import path from 'node:path'
 import process from 'node:process'
 import { build } from 'esbuild'
 
+function isNodeBuiltin(moduleName: string): boolean {
+  const nodeBuiltins = [
+    'fs',
+    'path',
+    'os',
+    'crypto',
+    'util',
+    'stream',
+    'events',
+    'process',
+    'buffer',
+    'url',
+    'querystring',
+    'zlib',
+    'http',
+    'https',
+    'net',
+    'tls',
+    'child_process',
+    'cluster',
+    'worker_threads',
+    'assert',
+    'dns',
+    'readline',
+    'repl',
+    'string_decoder',
+    'timers',
+    'tty',
+    'v8',
+    'vm',
+    'perf_hooks',
+  ]
+  return nodeBuiltins.includes(moduleName)
+}
+
 interface ServerComponentManifest {
   components: Record<
     string,
@@ -410,11 +445,13 @@ const ${importName} = (props) => {
                 if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
                   return { path: args.path, external: true }
                 }
+
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                  return { path: args.path, external: true }
+                }
+
                 if (args.path === 'rari/client') {
                   return null
-                }
-                if (/^[^./]/.test(args.path)) {
-                  return { path: args.path, external: true }
                 }
 
                 return null
@@ -656,10 +693,16 @@ const ${importName} = (props) => {
                 if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
                   return { path: args.path, external: true }
                 }
+
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                  return { path: args.path, external: true }
+                }
+
                 if (args.path === 'rari/client') {
                   return null
                 }
-                return { path: args.path, external: true }
+
+                return null
               })
             },
           },
