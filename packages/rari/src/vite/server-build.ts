@@ -864,50 +864,59 @@ if (!globalThis["${componentId}"]) {
         try {
             const moduleKey = "${componentId}";
             let mainExport = null;
-            let exportedFunctions = {};
+            const exportedFunctions = {};
 
             globalThis.__server_functions = globalThis.__server_functions || {};
 
-        ${namedExports
-          .map(
-            name => `
-        if (typeof ${name} !== 'undefined') {
-            globalThis.${name} = ${name};
-            globalThis.__server_functions['${name}'] = ${name};
-            exportedFunctions['${name}'] = ${name};
-        }`,
-          )
-          .join('')}
+            ${namedExports
+              .map(
+                name => `if (typeof ${name} !== 'undefined') {
+                globalThis.${name} = ${name};
+                globalThis.__server_functions['${name}'] = ${name};
+                exportedFunctions['${name}'] = ${name};
+            }`,
+              )
+              .join('\n            ')}
 
-        ${defaultExportName
-          ? `if (typeof ${defaultExportName} !== 'undefined') {
-            mainExport = ${defaultExportName};
-        } else `
-          : ''}{
-            const potentialExports = {};
-            ${namedExports.map(name => `if (typeof ${name} !== 'undefined') potentialExports.${name} = ${name};`).join('\n            ')}
+            ${defaultExportName
+              ? `if (typeof ${defaultExportName} !== 'undefined') {
+                mainExport = ${defaultExportName};
+            }`
+              : ''}
 
-            if (Object.keys(potentialExports).length > 0) {
-                if (Object.keys(potentialExports).length === 1) {
-                    mainExport = potentialExports[Object.keys(potentialExports)[0]];
+            if (mainExport === null && Object.keys(exportedFunctions).length > 0) {
+                if (Object.keys(exportedFunctions).length === 1) {
+                    mainExport = exportedFunctions[Object.keys(exportedFunctions)[0]];
                 } else {
-                    mainExport = potentialExports;
+                    let componentFunction = null;
+                    let firstFunction = null;
+
+                    for (const [name, value] of Object.entries(exportedFunctions)) {
+                        if (typeof value === 'function') {
+                            if (!firstFunction) firstFunction = value;
+                            if (/^[A-Z]/.test(name)) {
+                                componentFunction = value;
+                                break;
+                            }
+                        }
+                    }
+
+                    mainExport = componentFunction || firstFunction;
                 }
             }
-        }
 
-        if (mainExport !== null) {
-            if (!globalThis[moduleKey]) {
-                globalThis[moduleKey] = mainExport;
+            if (mainExport !== null) {
+                if (!globalThis[moduleKey]) {
+                    globalThis[moduleKey] = mainExport;
+                }
+
+                globalThis.__rsc_components = globalThis.__rsc_components || {};
+                globalThis.__rsc_components[moduleKey] = mainExport;
+
+                if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
+                    globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
+                }
             }
-
-            globalThis.__rsc_components = globalThis.__rsc_components || {};
-            globalThis.__rsc_components[moduleKey] = mainExport;
-
-            if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
-                globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
-            }
-        }
         } catch (error) {
             console.error('Error in self-registration for ${componentId}:', error);
         }
