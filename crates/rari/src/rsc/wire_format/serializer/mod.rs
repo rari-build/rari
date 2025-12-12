@@ -310,16 +310,45 @@ impl RscSerializer {
             .map(|k| serde_json::to_string(k).unwrap_or_else(|_| "null".to_string()))
             .unwrap_or_else(|| "null".to_string());
 
-        let props_value = Value::Object(
-            props
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<serde_json::Map<String, Value>>(),
-        );
+        let processed_props: FxHashMap<String, Value> = props
+            .iter()
+            .map(|(k, v)| {
+                let processed_value = self.process_prop_value(v);
+                (k.clone(), processed_value)
+            })
+            .collect();
+
+        let props_value =
+            Value::Object(processed_props.into_iter().collect::<serde_json::Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
         let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{module_ref}",{key_json},{props_json}]"#)
+    }
+
+    fn process_prop_value(&mut self, value: &Value) -> Value {
+        if let Some(arr) = value.as_array() {
+            if arr.len() == 4
+                && arr.first().and_then(|v| v.as_str()) == Some("$")
+                && let Ok(rsc_tree) = RSCTree::from_json(value)
+            {
+                let serialized = self.serialize_rsc_tree_to_format(&rsc_tree);
+                if let Ok(parsed) = serde_json::from_str::<Value>(&serialized) {
+                    return parsed;
+                }
+                return Value::String(serialized);
+            }
+            let processed: Vec<Value> = arr.iter().map(|v| self.process_prop_value(v)).collect();
+            return Value::Array(processed);
+        }
+
+        if let Some(obj) = value.as_object() {
+            let processed: serde_json::Map<String, Value> =
+                obj.iter().map(|(k, v)| (k.clone(), self.process_prop_value(v))).collect();
+            return Value::Object(processed);
+        }
+
+        value.clone()
     }
 
     fn parse_and_register_component(&mut self, id: &str) -> Option<String> {
