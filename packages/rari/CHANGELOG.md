@@ -1,3 +1,19 @@
+## [0.5.16] - 2025-12-13
+
+### 🚜 Refactor
+
+- *(docs)* Migrate from shiki to @shikijs modular packages
+- *(docs,examples)* Migrate to path aliases
+## [create-rari-app@0.2.9] - 2025-12-12
+
+### 💼 Other
+
+- Create-rari-app@0.2.9
+## [rari@0.5.15] - 2025-12-12
+
+### 💼 Other
+
+- Rari@0.5.15
 ## [0.5.10] - 2025-12-12
 
 ### 🚀 Features
