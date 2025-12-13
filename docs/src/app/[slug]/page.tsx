@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { PageProps } from 'rari/client'
-import MarkdownRenderer from '../../components/MarkdownRenderer'
+import MarkdownRenderer from '@/components/MarkdownRenderer'
 
 export default function DocPage({ params }: PageProps) {
   const slug = params?.slug

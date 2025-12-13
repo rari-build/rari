@@ -60,6 +60,7 @@ export interface ServerBuildOptions {
   serverDir?: string
   manifestPath?: string
   minify?: boolean
+  alias?: Record<string, string>
 }
 
 export interface ComponentRebuildResult {
@@ -110,6 +111,7 @@ export class ServerComponentBuilder {
       serverDir: options.serverDir || 'server',
       manifestPath: options.manifestPath || 'server-manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
+      alias: options.alias || {},
     }
   }
 
@@ -420,6 +422,34 @@ const ${importName} = (props) => {
         write: false,
         plugins: [
           {
+            name: 'resolve-aliases',
+            setup: (build) => {
+              const aliases = this.options.alias || {}
+              for (const [alias, replacement] of Object.entries(aliases)) {
+                const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const filter = new RegExp(`^${escapedAlias}(/|$)`)
+                build.onResolve({ filter }, (args) => {
+                  const relativePath = args.path.slice(alias.length)
+                  const newPath = path.join(replacement, relativePath)
+                  const resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
+
+                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+                  for (const ext of possibleExtensions) {
+                    const pathWithExt = resolvedPath + ext
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      if (this.isClientComponent(pathWithExt)) {
+                        return { path: args.path, external: true }
+                      }
+                      return { path: pathWithExt }
+                    }
+                  }
+
+                  return { path: resolvedPath }
+                })
+              }
+            },
+          },
+          {
             name: 'replace-react-imports',
             setup(build) {
               build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
@@ -671,6 +701,31 @@ const ${importName} = (props) => {
         metafile: false,
         write: false,
         plugins: [
+          {
+            name: 'resolve-aliases',
+            setup: (build) => {
+              const aliases = this.options.alias || {}
+              for (const [alias, replacement] of Object.entries(aliases)) {
+                const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const filter = new RegExp(`^${escapedAlias}(/|$)`)
+                build.onResolve({ filter }, (args) => {
+                  const relativePath = args.path.slice(alias.length)
+                  const newPath = path.join(replacement, relativePath)
+                  const resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
+
+                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+                  for (const ext of possibleExtensions) {
+                    const pathWithExt = resolvedPath + ext
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      return { path: pathWithExt }
+                    }
+                  }
+
+                  return { path: resolvedPath }
+                })
+              }
+            },
+          },
           {
             name: 'replace-react-imports',
             setup(build) {
@@ -1024,7 +1079,7 @@ if (!globalThis["${componentId}"]) {
     let transformedCode = code
 
     const importRegex
-      = /import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]([./][^'"]+)['"];?\s*$/gm
+      = /import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"];?\s*$/gm
     let match
 
     const replacements: Array<{ original: string, replacement: string }> = []
@@ -1099,7 +1154,20 @@ function registerClientReference(clientReference, id, exportName) {
   }
 
   private resolveImportPath(importPath: string, importerPath: string): string {
-    const resolvedPath = path.resolve(path.dirname(importerPath), importPath)
+    let resolvedPath = importPath
+    const aliases = this.options.alias || {}
+
+    for (const [alias, replacement] of Object.entries(aliases)) {
+      if (importPath.startsWith(`${alias}/`) || importPath === alias) {
+        const relativePath = importPath.slice(alias.length)
+        resolvedPath = path.join(replacement, relativePath)
+        break
+      }
+    }
+
+    if (!path.isAbsolute(resolvedPath)) {
+      resolvedPath = path.resolve(path.dirname(importerPath), resolvedPath)
+    }
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
     for (const ext of extensions) {
@@ -1412,7 +1480,27 @@ export function createServerBuildPlugin(
     configResolved(config) {
       projectRoot = config.root
       isDev = config.command === 'serve'
-      builder = new ServerComponentBuilder(projectRoot, options)
+
+      const alias: Record<string, string> = {}
+      if (config.resolve?.alias) {
+        const aliasConfig = config.resolve.alias
+        if (Array.isArray(aliasConfig)) {
+          aliasConfig.forEach((entry) => {
+            if (typeof entry.find === 'string' && typeof entry.replacement === 'string') {
+              alias[entry.find] = entry.replacement
+            }
+          })
+        }
+        else if (typeof aliasConfig === 'object') {
+          Object.entries(aliasConfig).forEach(([key, value]) => {
+            if (typeof value === 'string') {
+              alias[key] = value
+            }
+          })
+        }
+      }
+
+      builder = new ServerComponentBuilder(projectRoot, { ...options, alias })
     },
 
     buildStart() {

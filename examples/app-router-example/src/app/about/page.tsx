@@ -1,7 +1,6 @@
 export default function AboutPage() {
   return (
     <div className="space-y-8">
-      {/* Header Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           About This Example
@@ -13,7 +12,6 @@ export default function AboutPage() {
         </p>
       </div>
 
-      {/* Key Features */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Key Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -97,7 +95,6 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* Architecture */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
           Architecture Overview
@@ -195,7 +192,6 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* Tech Stack */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
           Technology Stack

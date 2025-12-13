@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useState, useTransition } from 'react'
-import { addTodo } from '../actions/todo-actions'
+import { addTodo } from '@/actions/todo-actions'
 
 interface TodoFormProps {
   onSuccess?: () => void

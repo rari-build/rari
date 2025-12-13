@@ -103,6 +103,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
   const serverImportedClientComponents = new Set<string>()
 
   let hmrCoordinator: HMRCoordinator | null = null
+  const resolvedAlias: Record<string, string> = {}
 
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules')) {
@@ -434,12 +435,21 @@ if (import.meta.hot) {
         new Set([...(existingDedupe || []), ...toAdd]),
       )
 
-      const existingAlias: Array<{
+      let existingAlias: Array<{
         find: string | RegExp
         replacement: string
-      }> = Array.isArray((config.resolve as any).alias)
-        ? (config.resolve as any).alias
-        : []
+      }> = []
+
+      if (Array.isArray((config.resolve as any).alias)) {
+        existingAlias = (config.resolve as any).alias
+      }
+      else if ((config.resolve as any).alias && typeof (config.resolve as any).alias === 'object') {
+        existingAlias = Object.entries((config.resolve as any).alias).map(([key, value]) => ({
+          find: key,
+          replacement: value as string,
+        }))
+      }
+
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
         const reactPath = require.resolve('react')
@@ -516,7 +526,7 @@ if (import.meta.hot) {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
           if (env && env.build) {
-            env.build.rollupOptions = env.build.rollupOptions || {}
+            env.build.rolldownOptions = env.build.rolldownOptions || {}
           }
         }
       }
@@ -552,10 +562,10 @@ if (import.meta.hot) {
 
       if (command === 'build') {
         config.build = config.build || {}
-        config.build.rollupOptions = config.build.rollupOptions || {}
+        config.build.rolldownOptions = config.build.rolldownOptions || {}
 
-        if (!config.build.rollupOptions.input) {
-          config.build.rollupOptions.input = {
+        if (!config.build.rolldownOptions.input) {
+          config.build.rolldownOptions.input = {
             main: './index.html',
           }
         }
@@ -565,15 +575,37 @@ if (import.meta.hot) {
         if (!config.environments.client.build) {
           config.environments.client.build = {}
         }
-        if (!config.environments.client.build.rollupOptions) {
-          config.environments.client.build.rollupOptions = {}
+        if (!config.environments.client.build.rolldownOptions) {
+          config.environments.client.build.rolldownOptions = {}
         }
-        if (!config.environments.client.build.rollupOptions.input) {
-          config.environments.client.build.rollupOptions.input = {}
+        if (!config.environments.client.build.rolldownOptions.input) {
+          config.environments.client.build.rolldownOptions.input = {}
         }
       }
 
       return config
+    },
+
+    configResolved(config) {
+      const excludeAliases = new Set(['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom/client'])
+
+      if (config.resolve?.alias) {
+        const aliasConfig = config.resolve.alias
+        if (Array.isArray(aliasConfig)) {
+          aliasConfig.forEach((entry) => {
+            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find)) {
+              resolvedAlias[entry.find] = entry.replacement
+            }
+          })
+        }
+        else if (typeof aliasConfig === 'object') {
+          Object.entries(aliasConfig).forEach(([key, value]) => {
+            if (typeof value === 'string' && !excludeAliases.has(key)) {
+              resolvedAlias[key] = value
+            }
+          })
+        }
+      }
     },
 
     transform(code, id) {
@@ -819,6 +851,7 @@ const ${componentName} = registerClientReference(
             outDir: 'dist',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
+            alias: resolvedAlias,
           })
 
           serverComponentBuilder = builder
@@ -1093,6 +1126,7 @@ const ${componentName} = registerClientReference(
             outDir: 'dist',
             serverDir: 'server',
             manifestPath: 'server-manifest.json',
+            alias: resolvedAlias,
           })
 
           builder.addServerComponent(filePath)

@@ -13,7 +13,7 @@ import tsx from '@shikijs/langs/tsx'
 import typescript from '@shikijs/langs/typescript'
 import githubDark from '@shikijs/themes/github-dark'
 import MarkdownIt from 'markdown-it'
-import NotFoundPage from '../app/not-found'
+import NotFoundPage from '@/app/not-found'
 
 interface MarkdownRendererProps {
   filePath: string

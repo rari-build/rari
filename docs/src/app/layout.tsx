@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { LayoutProps } from 'rari/client'
-import Sidebar from '../components/Sidebar'
+import Sidebar from '@/components/Sidebar'
 
 interface NpmPackageInfo {
   'dist-tags': {

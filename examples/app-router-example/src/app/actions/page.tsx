@@ -1,13 +1,12 @@
-import { getTodos } from '../../actions/todo-actions'
-import ProgressiveFormExample from '../../components/ProgressiveFormExample'
-import TodoAppWithActions from '../../components/TodoAppWithActions'
+import { getTodos } from '@/actions/todo-actions'
+import ProgressiveFormExample from '@/components/ProgressiveFormExample'
+import TodoAppWithActions from '@/components/TodoAppWithActions'
 
 export default async function ActionsPage() {
   const initialTodos = await getTodos()
 
   return (
     <div className="space-y-8">
-      {/* Header Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
           <h1 className="text-4xl font-bold text-gray-900">
@@ -21,7 +20,6 @@ export default async function ActionsPage() {
         </p>
       </div>
 
-      {/* Interactive Todo App */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
           Interactive Todo Application
@@ -29,7 +27,6 @@ export default async function ActionsPage() {
         <TodoAppWithActions initialTodos={initialTodos} />
       </div>
 
-      {/* Progressive Enhancement */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
           Progressive Enhancement Form
@@ -37,7 +34,6 @@ export default async function ActionsPage() {
         <ProgressiveFormExample />
       </div>
 
-      {/* Server Action Patterns */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
           Server Action Patterns Demonstrated
@@ -111,7 +107,6 @@ export default async function ActionsPage() {
         </div>
       </div>
 
-      {/* Technical Implementation */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
           Technical Implementation
