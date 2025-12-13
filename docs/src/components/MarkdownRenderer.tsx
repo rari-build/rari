@@ -1,42 +1,13 @@
-import type { HighlighterCore } from '@shikijs/core'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
-import { createHighlighterCore } from '@shikijs/core'
-import { createOnigurumaEngine } from '@shikijs/engine-oniguruma'
-import bash from '@shikijs/langs/bash'
-import javascript from '@shikijs/langs/javascript'
-import json from '@shikijs/langs/json'
-import jsx from '@shikijs/langs/jsx'
-import rust from '@shikijs/langs/rust'
-import tsx from '@shikijs/langs/tsx'
-import typescript from '@shikijs/langs/typescript'
-import githubDark from '@shikijs/themes/github-dark'
 import MarkdownIt from 'markdown-it'
 import NotFoundPage from '@/app/not-found'
+import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
 interface MarkdownRendererProps {
   filePath: string
   className?: string
-}
-
-let shikiHighlighter: HighlighterCore | null = null
-
-async function getHighlighter(): Promise<HighlighterCore | null> {
-  if (!shikiHighlighter) {
-    try {
-      shikiHighlighter = await createHighlighterCore({
-        themes: [githubDark],
-        langs: [javascript, typescript, tsx, jsx, json, rust, bash],
-        engine: createOnigurumaEngine(import('@shikijs/engine-oniguruma/wasm-inlined')),
-      })
-    }
-    catch (error) {
-      console.error('Failed to initialize syntax highlighter:', error)
-      return null
-    }
-  }
-  return shikiHighlighter
 }
 
 function findContentFile(filePath: string): string | null {
@@ -84,7 +55,7 @@ export default async function MarkdownRenderer({
             try {
               return highlighter.codeToHtml(str, {
                 lang,
-                theme: 'github-dark',
+                theme: SHIKI_THEME,
               })
             }
             catch (error) {
