@@ -3,7 +3,6 @@ import type { PageProps } from 'rari/client'
 export default function HomePage({ params, searchParams }: PageProps) {
   return (
     <div className="space-y-8">
-      {/* Hero Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
@@ -31,7 +30,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
         </div>
       </div>
 
-      {/* Features Grid */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Core Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -105,7 +103,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
         </div>
       </div>
 
-      {/* Examples Section */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
           Try the Examples
@@ -168,7 +165,6 @@ export default function HomePage({ params, searchParams }: PageProps) {
         </div>
       </div>
 
-      {/* Debug Info */}
       <details className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <summary className="font-semibold text-gray-900 cursor-pointer select-none">
           Debug Information

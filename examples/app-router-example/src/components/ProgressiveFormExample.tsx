@@ -2,7 +2,7 @@
 
 import { createFormAction } from 'rari/runtime/actions'
 import { useEffect, useId, useRef, useState } from 'react'
-import { createTodoAndRedirect } from '../actions/todo-actions'
+import { createTodoAndRedirect } from '@/actions/todo-actions'
 
 export default function ProgressiveFormExample() {
   const formId = useId()
