@@ -203,6 +203,22 @@ impl Server {
             CacheLoader::load_vite_cache_config(&state).await?;
         }
 
+        let mut config = config;
+        match std::fs::read_to_string("dist/image-config.json") {
+            Ok(image_config_str) => match serde_json::from_str(&image_config_str) {
+                Ok(image_config) => {
+                    config.images = image_config;
+                    info!("✓ Loaded image configuration from dist/image-config.json");
+                }
+                Err(e) => {
+                    warn!("Failed to parse image config: {}", e);
+                }
+            },
+            Err(e) => {
+                debug!("No image config found ({}), using defaults", e);
+            }
+        }
+
         let router = Self::build_router(&config, state.clone()).await?;
 
         let address = config.server_address();
@@ -240,6 +256,9 @@ impl Server {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
         let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
+        let image_optimizer =
+            Arc::new(crate::server::image::ImageOptimizer::new(config.images.clone()));
+
         let mut router = Router::new()
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
@@ -259,6 +278,12 @@ impl Server {
             .route("/api/rsc/action", post(handle_server_action))
             .route("/api/rsc/form-action", post(handle_form_action))
             .layer(medium_body_limit);
+
+        let image_router = Router::new()
+            .route("/_rari/image", get(crate::server::image::handle_image_request))
+            .with_state(image_optimizer);
+
+        router = router.merge(image_router);
 
         if config.is_development() {
             info!("Adding development routes");

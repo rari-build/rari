@@ -480,8 +480,12 @@ const ${importName} = (props) => {
                   return { path: args.path, external: true }
                 }
 
-                if (args.path === 'rari/client') {
-                  return null
+                if (args.path === 'rari/image/client') {
+                  return { path: args.path, external: true }
+                }
+
+                if (args.path.startsWith('rari/')) {
+                  return undefined
                 }
 
                 return null
@@ -539,9 +543,31 @@ const ${importName} = (props) => {
 
       if (result.outputFiles && result.outputFiles.length > 0) {
         const outputFile = result.outputFiles[0]
+        let code = outputFile.text
+
+        code = code.replace(
+          /var\s+(\w+)\s+=\s+__toESM\(require_jsx_runtime\(\),\s*\d+\);?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /\(0,\s*import_jsx_runtime\.jsx\)\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /\(0,\s*import_jsx_runtime\.jsxs\)\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /import_jsx_runtime\.jsx\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /import_jsx_runtime\.jsxs\(/g,
+          'React.createElement(',
+        )
 
         const finalTransformedCode = this.createSelfRegisteringModule(
-          outputFile.text,
+          code,
           componentId,
         )
 
@@ -753,8 +779,12 @@ const ${importName} = (props) => {
                   return { path: args.path, external: true }
                 }
 
-                if (args.path === 'rari/client') {
-                  return null
+                if (args.path === 'rari/image/client') {
+                  return { path: args.path, external: true }
+                }
+
+                if (args.path.startsWith('rari/')) {
+                  return undefined
                 }
 
                 return null
@@ -820,6 +850,27 @@ const ${importName} = (props) => {
         code = code.replace(
           /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
           '// React is available as globalThis.React\n',
+        )
+
+        code = code.replace(
+          /var\s+(\w+)\s+=\s+__toESM\(require_jsx_runtime\(\),\s*\d+\);?\s*/g,
+          '// jsx/jsxs are available as globals\n',
+        )
+        code = code.replace(
+          /\(0,\s*import_jsx_runtime\.jsx\)\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /\(0,\s*import_jsx_runtime\.jsxs\)\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /import_jsx_runtime\.jsx\(/g,
+          'React.createElement(',
+        )
+        code = code.replace(
+          /import_jsx_runtime\.jsxs\(/g,
+          'React.createElement(',
         )
 
         code = code.replace(
@@ -1079,30 +1130,63 @@ if (!globalThis["${componentId}"]) {
     let transformedCode = code
 
     const importRegex
-      = /import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+      = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
     let match
 
     const replacements: Array<{ original: string, replacement: string }> = []
     let hasClientComponents = false
+
+    const externalClientComponents = ['rari/image/client']
 
     while (true) {
       match = importRegex.exec(code)
       if (match === null)
         break
 
-      const [fullMatch, defaultImport, importPath] = match
+      const [fullMatch, defaultImport, namedImports, importPath] = match
 
-      const resolvedPath = this.resolveImportPath(importPath, inputPath)
+      let isClientComponent = false
+      let componentId = importPath
 
-      if (this.isClientComponent(resolvedPath)) {
+      if (externalClientComponents.includes(importPath)) {
+        isClientComponent = true
+      }
+      else {
+        const resolvedPath = this.resolveImportPath(importPath, inputPath)
+        if (this.isClientComponent(resolvedPath)) {
+          isClientComponent = true
+          componentId = path.relative(this.projectRoot, resolvedPath)
+        }
+      }
+
+      if (isClientComponent) {
         hasClientComponents = true
-        const componentName = defaultImport || 'default'
 
-        const replacement = `const ${componentName} = registerClientReference(
+        let replacement = ''
+
+        if (defaultImport) {
+          replacement = `const ${defaultImport} = registerClientReference(
   null,
-  ${JSON.stringify(path.relative(this.projectRoot, resolvedPath))},
+  ${JSON.stringify(componentId)},
   "default"
 );`
+        }
+        else if (namedImports) {
+          const imports = namedImports.split(',').map(imp => imp.trim())
+          const registrations = imports.map((imp) => {
+            const [importName, alias] = imp.includes(' as ')
+              ? imp.split(' as ').map(s => s.trim())
+              : [imp, imp]
+
+            return `const ${alias} = registerClientReference(
+  null,
+  ${JSON.stringify(componentId)},
+  ${JSON.stringify(importName)}
+);`
+          }).join('\n')
+
+          replacement = registrations
+        }
 
         replacements.push({ original: fullMatch, replacement })
       }

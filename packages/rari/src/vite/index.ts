@@ -15,6 +15,20 @@ interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  images?: {
+    remotePatterns?: Array<{
+      protocol?: 'http' | 'https'
+      hostname: string
+      port?: string
+      pathname?: string
+    }>
+    deviceSizes?: number[]
+    imageSizes?: number[]
+    formats?: ('avif' | 'webp')[]
+    quality?: number[]
+    minimumCacheTTL?: number
+    maxCacheSize?: number
+  }
 }
 
 async function loadRuntimeFile(filename: string): Promise<string> {
@@ -839,6 +853,15 @@ const ${componentName} = registerClientReference(
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
 
+      if (options.images) {
+        const distDir = path.join(projectRoot, 'dist')
+        if (!fs.existsSync(distDir)) {
+          fs.mkdirSync(distDir, { recursive: true })
+        }
+        const configPath = path.join(distDir, 'image-config.json')
+        fs.writeFileSync(configPath, JSON.stringify(options.images, null, 2))
+      }
+
       let serverComponentBuilder: any = null
 
       const discoverAndRegisterComponents = async () => {
@@ -1340,6 +1363,10 @@ const ${componentName} = registerClientReference(
           ...scannedClientComponents,
         ])
 
+        const externalClientComponents = [
+          { path: 'rari/image/client', exports: ['ImageClient'] },
+        ]
+
         const clientComponentsArray = Array.from(allClientComponents).filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
@@ -1365,6 +1392,21 @@ const ${componentName} = registerClientReference(
         const imports = clientComponentsArray.map((componentPath, index) => {
           const relativePath = path.relative(process.cwd(), componentPath)
           const componentName = `ClientComponent${index}`
+
+          try {
+            const code = fs.readFileSync(componentPath, 'utf-8')
+            const hasDefaultExport = /export\s+default\s+/.test(code)
+            const namedExportMatch = code.match(/export\s+(?:function|const|class)\s+(\w+)/)
+
+            if (!hasDefaultExport && namedExportMatch) {
+              const exportName = namedExportMatch[1]
+              return `import { ${exportName} as ${componentName} } from '/${relativePath}';`
+            }
+          }
+          catch {
+            // Fall back to default import
+          }
+
           return `import ${componentName} from '/${relativePath}';`
         }).join('\n')
 
@@ -1385,7 +1427,33 @@ globalThis.__clientComponents["${componentId}"] = globalThis.__clientComponents[
 globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
-        return await loadEntryClient(imports, registrations)
+        const externalImports = externalClientComponents.map((ext, index) => {
+          const componentNames = ext.exports.map(exp => `${exp} as External${index}_${exp}`).join(', ')
+          return `import { ${componentNames} } from '${ext.path}';`
+        }).join('\n')
+
+        const externalRegistrations = externalClientComponents.flatMap((ext, index) => {
+          return ext.exports.map((exportName) => {
+            const componentName = `External${index}_${exportName}`
+            const fullId = `${ext.path}#${exportName}`
+            return `
+globalThis.__clientComponents["${fullId}"] = {
+  id: "${exportName}",
+  path: "${ext.path}",
+  type: "client",
+  component: ${componentName},
+  registered: true
+};
+globalThis.__clientComponents["${ext.path}"] = globalThis.__clientComponents["${ext.path}"] || {};
+globalThis.__clientComponents["${ext.path}"].component = ${componentName};
+globalThis.__clientComponentPaths["${ext.path}"] = "${exportName}";`
+          })
+        }).join('\n')
+
+        const allImports = [imports, externalImports].filter(Boolean).join('\n')
+        const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
+
+        return await loadEntryClient(allImports, allRegistrations)
       }
 
       if (id === 'react-server-dom-rari/server') {
@@ -1520,6 +1588,18 @@ globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
       }
 
       return undefined
+    },
+
+    writeBundle() {
+      if (options.images) {
+        const projectRoot = options.projectRoot || process.cwd()
+        const distDir = path.join(projectRoot, 'dist')
+        if (!fs.existsSync(distDir)) {
+          fs.mkdirSync(distDir, { recursive: true })
+        }
+        const configPath = path.join(distDir, 'image-config.json')
+        fs.writeFileSync(configPath, JSON.stringify(options.images, null, 2))
+      }
     },
   }
 

@@ -162,6 +162,24 @@ export default function HomePage({ params, searchParams }: PageProps) {
               View demo →
             </span>
           </a>
+
+          <a
+            href="/test-image"
+            className="group block bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-underline hover:shadow-md hover:border-gray-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">🖼️</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                Image Component
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              High-performance image optimization powered by Rust
+            </p>
+            <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+              View demo →
+            </span>
+          </a>
         </div>
       </div>
 

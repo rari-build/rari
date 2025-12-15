@@ -256,6 +256,8 @@ pub struct Config {
     pub csp: CspConfig,
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+    #[serde(default)]
+    pub images: crate::server::image::ImageConfig,
 }
 
 impl Config {
