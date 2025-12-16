@@ -128,8 +128,8 @@ async fn inject_assets_into_complete_document(
     let mut asset_tags = Vec::new();
     for line in template.lines() {
         let trimmed = line.trim();
-        if (trimmed.contains("<link") && trimmed.contains("stylesheet"))
-            || trimmed.contains("<script")
+        if (trimmed.contains("<link") && trimmed.contains("stylesheet") && trimmed.contains("href"))
+            || (trimmed.contains("<script") && trimmed.contains("src"))
         {
             let asset_signature = extract_asset_signature(trimmed);
             if !html.contains(&asset_signature) {
