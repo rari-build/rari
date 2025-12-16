@@ -39,6 +39,8 @@ export default async function MarkdownRenderer({
       return <NotFoundPage />
     }
 
+    const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, '')
+
     const highlighter = await getHighlighter()
 
     const md = new MarkdownIt({
@@ -66,7 +68,7 @@ export default async function MarkdownRenderer({
         : undefined,
     })
 
-    const html = md.render(content)
+    const html = md.render(contentWithoutFrontmatter)
 
     return (
       <div

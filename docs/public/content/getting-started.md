@@ -1,3 +1,8 @@
+---
+title: Getting Started
+description: Learn how to create your first Rari application with React Server Components and Rust-powered performance.
+---
+
 # Getting Started with Rari
 
 This guide will walk you through creating your first Rari application from scratch. You'll learn the basics of React Server Components with Rari's high-performance Rust runtime.
