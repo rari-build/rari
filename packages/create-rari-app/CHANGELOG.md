@@ -1,3 +1,28 @@
+## [0.2.10] - 2025-12-16
+
+### 🚀 Features
+
+- *(metadata)* Add page metadata collection and injection system
+
+### 🚜 Refactor
+
+- *(docs)* Extract shiki highlighter to dedicated module
+- *(server)* Extract html wrapping logic into function
+## [rari@0.5.16] - 2025-12-13
+
+### 💼 Other
+
+- Rari@0.5.16
+
+### 🚜 Refactor
+
+- *(docs)* Migrate from shiki to @shikijs modular packages
+- *(docs,examples)* Migrate to path aliases
+## [create-rari-app@0.2.9] - 2025-12-12
+
+### 💼 Other
+
+- Create-rari-app@0.2.9
 ## [rari@0.5.15] - 2025-12-12
 
 ### 💼 Other
@@ -704,7 +729,7 @@
 ### 💼 Other
 
 - Rari@0.2.15
-## [0.2.10] - 2025-08-20
+## [0.2.10] - 2025-12-16
 
 ### ⚙️ Miscellaneous Tasks
 
