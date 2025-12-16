@@ -1,4 +1,35 @@
-## [0.5.16] - 2025-12-13
+## [0.5.17] - 2025-12-16
+
+### 📚 Documentation
+
+- *(getting-started)* Simplify code examples
+
+### 🎨 Styling
+
+- *(eslint)* Disable dangerously-set-innerhtml rule for docs
+## [0.5.11] - 2025-12-16
+
+### 🚀 Features
+
+- *(metadata)* Add page metadata collection and injection system
+
+### 💼 Other
+
+- Create-rari-app@0.2.10
+
+### 🚜 Refactor
+
+- *(docs)* Extract shiki highlighter to dedicated module
+- *(server)* Extract html wrapping logic into function
+
+### ⚙️ Miscellaneous Tasks
+
+- *(create-rari-app)* Update bin entry point to ESM format
+## [rari@0.5.16] - 2025-12-13
+
+### 💼 Other
+
+- Rari@0.5.16
 
 ### 🚜 Refactor
 
