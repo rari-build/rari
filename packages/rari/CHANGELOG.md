@@ -1,4 +1,13 @@
-## [0.5.17] - 2025-12-16
+## [0.5.12] - 2025-12-16
+
+### 🐛 Bug Fixes
+
+- *(server)* Correct asset injection detection logic
+## [rari@0.5.17] - 2025-12-16
+
+### 💼 Other
+
+- Rari@0.5.17
 
 ### 📚 Documentation
 
