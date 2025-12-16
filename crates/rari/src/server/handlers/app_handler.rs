@@ -1,5 +1,6 @@
 use crate::rsc::rendering::html::{RscHtmlRenderer, RscToHtmlConverter};
-use crate::rsc::rendering::layout::LayoutRenderer;
+use crate::rsc::rendering::layout::types::PageMetadata;
+use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
 use crate::server::cache::response_cache;
 use crate::server::config::Config;
@@ -8,7 +9,9 @@ use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_rsc_payload,
     inject_vite_client,
 };
+use crate::server::rendering::metadata_injection::inject_metadata;
 use crate::server::rendering::streaming_response::StreamingHtmlResponse;
+use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::utils::http_utils::{extract_headers, extract_search_params, get_content_type};
 use axum::{
     body::Body,
@@ -18,15 +21,74 @@ use axum::{
 };
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
+
+async fn collect_page_metadata(
+    state: &ServerState,
+    route_match: &AppRouteMatch,
+    context: &LayoutRenderContext,
+) -> Option<PageMetadata> {
+    let dist_server_path = std::env::current_dir()
+        .ok()
+        .map(|p| p.join("dist/server"))
+        .and_then(|p| p.canonicalize().ok());
+
+    let base_path = match dist_server_path {
+        Some(path) => path,
+        None => {
+            error!("Could not determine dist/server path for metadata collection");
+            return None;
+        }
+    };
+
+    let layout_paths: Vec<String> = route_match
+        .layouts
+        .iter()
+        .filter_map(|layout| {
+            let js_filename = layout.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+            let file_path = base_path.join("app").join(&js_filename);
+            if file_path.exists() { Some(format!("file://{}", file_path.display())) } else { None }
+        })
+        .collect();
+
+    let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+    let page_file_path = base_path.join("app").join(&js_filename);
+    let page_path = if page_file_path.exists() {
+        format!("file://{}", page_file_path.display())
+    } else {
+        return None;
+    };
+
+    let renderer = state.renderer.lock().await;
+    match renderer
+        .runtime
+        .collect_metadata(
+            layout_paths,
+            page_path,
+            context.params.clone(),
+            context.search_params.clone(),
+        )
+        .await
+    {
+        Ok(metadata_value) => match serde_json::from_value::<PageMetadata>(metadata_value) {
+            Ok(metadata) => Some(metadata),
+            Err(e) => {
+                error!("Failed to deserialize metadata: {}", e);
+                None
+            }
+        },
+        Err(e) => {
+            error!("Failed to collect metadata from runtime: {}", e);
+            None
+        }
+    }
+}
 
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
 ) -> Result<Response, StatusCode> {
-    debug!("⏱️ render_with_fallback called for route: {}", route_match.route.path);
-
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
     match render_streaming_with_layout(
@@ -54,8 +116,6 @@ pub async fn render_synchronous(
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
 ) -> Result<Response, StatusCode> {
-    debug!("Using synchronous rendering for route: {}", route_match.route.path);
-
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
     let request_context =
         std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
@@ -72,15 +132,20 @@ pub async fn render_synchronous(
                 html: html_content,
                 ..
             } => {
-                debug!("Successfully rendered HTML synchronously ({} bytes)", html_content.len());
-
-                let final_html = match inject_assets_into_html(&html_content, &state.config).await {
-                    Ok(html) => html,
-                    Err(e) => {
-                        warn!("Failed to inject assets, using original HTML: {}", e);
-                        html_content
-                    }
+                let html_with_metadata = if let Some(ref metadata) = context.metadata {
+                    inject_metadata(&html_content, metadata)
+                } else {
+                    html_content
                 };
+
+                let final_html =
+                    match inject_assets_into_html(&html_with_metadata, &state.config).await {
+                        Ok(html) => html,
+                        Err(e) => {
+                            warn!("Failed to inject assets, using original HTML: {}", e);
+                            html_with_metadata
+                        }
+                    };
 
                 Ok(Response::builder()
                     .status(StatusCode::OK)
@@ -107,10 +172,7 @@ pub async fn render_streaming_with_layout(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
 ) -> Result<Response, StatusCode> {
-    debug!("Starting streaming render for route: {}", route_match.route.path);
-
     let layout_count = route_match.layouts.len();
-    debug!("Rendering route with {} layouts for streaming", layout_count);
 
     let request_context =
         std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
@@ -139,17 +201,50 @@ pub async fn render_streaming_with_layout(
     };
 
     let mut rsc_stream = match render_result {
-        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
-            debug!("Suspense detected, using streaming path");
-            stream
-        }
+        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            debug!("No Suspense detected, returning static HTML");
-            let final_html = match inject_assets_into_html(&html, &state.config).await {
+            let is_complete = html.trim_start().starts_with("<!DOCTYPE")
+                || html.trim_start().starts_with("<html");
+
+            let html_to_process = if !is_complete {
+                let title = context
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.title.as_ref())
+                    .map(|t| t.as_str())
+                    .unwrap_or("Rari App");
+
+                let base_shell = format!(
+                    r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+</head>
+<body>
+<div id="root">{}</div>
+</body>
+</html>"#,
+                    title, html
+                );
+
+                if let Some(ref metadata) = context.metadata {
+                    inject_metadata(&base_shell, metadata)
+                } else {
+                    base_shell
+                }
+            } else if let Some(ref metadata) = context.metadata {
+                inject_metadata(&html, metadata)
+            } else {
+                html
+            };
+
+            let final_html = match inject_assets_into_html(&html_to_process, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
                     warn!("Failed to inject assets, using original HTML: {}", e);
-                    html
+                    html_to_process
                 }
             };
 
@@ -161,8 +256,44 @@ pub async fn render_streaming_with_layout(
                 .expect("Valid HTML response"));
         }
         crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
-            debug!("No Suspense detected, returning static HTML with RSC payload");
-            let html_with_payload = inject_rsc_payload(&html, &rsc_payload);
+            let is_complete = html.trim_start().starts_with("<!DOCTYPE")
+                || html.trim_start().starts_with("<html");
+
+            let html_to_process = if !is_complete {
+                let title = context
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.title.as_ref())
+                    .map(|t| t.as_str())
+                    .unwrap_or("Rari App");
+
+                let base_shell = format!(
+                    r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+</head>
+<body>
+<div id="root">{}</div>
+</body>
+</html>"#,
+                    title, html
+                );
+
+                if let Some(ref metadata) = context.metadata {
+                    inject_metadata(&base_shell, metadata)
+                } else {
+                    base_shell
+                }
+            } else if let Some(ref metadata) = context.metadata {
+                inject_metadata(&html, metadata)
+            } else {
+                html
+            };
+
+            let html_with_payload = inject_rsc_payload(&html_to_process, &rsc_payload);
             let final_html = match inject_assets_into_html(&html_with_payload, &state.config).await
             {
                 Ok(html) => html,
@@ -181,8 +312,6 @@ pub async fn render_streaming_with_layout(
         }
     };
 
-    debug!("Successfully started streaming for route: {}", route_match.route.path);
-
     let asset_links = extract_asset_links_from_index_html().await;
 
     let html_renderer = {
@@ -192,13 +321,21 @@ pub async fn render_streaming_with_layout(
 
     let csrf_token = state.csrf_manager.generate_token();
     let asset_tags = asset_links.as_deref().unwrap_or("");
+
+    let title = context
+        .metadata
+        .as_ref()
+        .and_then(|m| m.title.as_ref())
+        .map(|t| t.as_str())
+        .unwrap_or("Rari App");
+
     let base_shell = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rari App</title>
+    <title>{}</title>
     <meta name="csrf-token" content="{}" />
     {}
     <style>
@@ -213,8 +350,14 @@ pub async fn render_streaming_with_layout(
 </head>
 <body>
 <div id="root">"#,
-        csrf_token, asset_tags
+        title, csrf_token, asset_tags
     );
+
+    let base_shell = if let Some(ref metadata) = context.metadata {
+        inject_metadata(&base_shell, metadata)
+    } else {
+        base_shell
+    };
 
     let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
@@ -226,18 +369,14 @@ pub async fn render_streaming_with_layout(
     let should_continue_clone = should_continue.clone();
 
     let html_stream = async_stream::stream! {
-        let mut chunk_count = 0;
-
         while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
-                    chunk_count += 1;
                     let mut conv = converter.lock().await;
 
                     match conv.convert_chunk(chunk).await {
                         Ok(html_bytes) => {
                             if !html_bytes.is_empty() {
-                                debug!("Yielding HTML chunk {} of {} bytes", chunk_count, html_bytes.len());
                                 yield Ok(html_bytes);
                             }
                         }
@@ -254,14 +393,9 @@ pub async fn render_streaming_with_layout(
                     }
                 }
                 None => {
-                    debug!("Stream completed successfully after {} chunks", chunk_count);
                     break;
                 }
             }
-        }
-
-        if !should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
-            debug!("Stream stopped early due to client disconnection");
         }
     };
 
@@ -269,8 +403,6 @@ pub async fn render_streaming_with_layout(
 }
 
 pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Response, StatusCode> {
-    debug!("Rendering fallback HTML shell for path: {}", path);
-
     let index_path = if state.config.is_development() {
         let root_index = std::path::PathBuf::from("index.html");
         if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
@@ -282,7 +414,6 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
         if state.config.is_production()
             && let Some(cached_html) = state.html_cache.get(path)
         {
-            debug!("✅ Cache HIT for fallback HTML: {}", path);
             let html = cached_html.clone();
             return Ok(Response::builder()
                 .status(StatusCode::OK)
@@ -294,10 +425,8 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
         match std::fs::read_to_string(&index_path) {
             Ok(html_content) => {
                 let final_html = if state.config.is_development() {
-                    debug!("Reading index.html and injecting Vite client for development");
                     inject_vite_client(&html_content, state.config.vite.port)
                 } else {
-                    debug!("Serving built index.html as fallback");
                     html_content
                 };
 
@@ -337,8 +466,6 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
 </html>"#,
             vite_port, vite_port
         );
-
-        debug!("index.html not found, serving generated development HTML shell as fallback");
 
         return Ok(Response::builder()
             .status(StatusCode::OK)
@@ -427,7 +554,6 @@ pub async fn handle_app_route(
                 }
             }
 
-            debug!("Static file not found: {}", path);
             return Err(StatusCode::NOT_FOUND);
         }
     }
@@ -445,32 +571,30 @@ pub async fn handle_app_route(
         },
     };
 
-    debug!("App route matched: {} -> {}", path, route_match.route.path);
-
     let request_context = std::sync::Arc::new(
         crate::server::middleware::request_context::RequestContext::new(path.to_string()),
     );
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
-    debug!("Detected render mode: {:?}", render_mode);
 
     let query_params_for_cache = query_params.clone();
     let search_params = extract_search_params(query_params);
 
     let request_headers = extract_headers(&headers);
 
-    let context = crate::rsc::rendering::layout::create_layout_context(
+    let mut context = crate::rsc::rendering::layout::create_layout_context(
         route_match.params.clone(),
-        search_params,
+        search_params.clone(),
         request_headers,
         route_match.pathname.clone(),
     );
+
+    context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
     match render_mode {
         RenderMode::RscNavigation => {
-            debug!("Rendering RSC wire format for client navigation");
             match layout_renderer
                 .render_route_by_mode(
                     &route_match,
@@ -481,13 +605,19 @@ pub async fn handle_app_route(
                 .await
             {
                 Ok(rsc_wire_format) => {
-                    debug!(
-                        "Successfully rendered RSC wire format ({} bytes)",
-                        rsc_wire_format.len()
-                    );
-                    Ok(Response::builder()
+                    let mut response_builder = Response::builder()
                         .status(StatusCode::OK)
-                        .header("content-type", "text/x-component")
+                        .header("content-type", "text/x-component");
+
+                    if let Some(ref metadata) = context.metadata
+                        && let Ok(metadata_json) = serde_json::to_string(metadata)
+                    {
+                        let encoded_metadata = urlencoding::encode(&metadata_json);
+                        response_builder =
+                            response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+                    }
+
+                    Ok(response_builder
                         .body(Body::from(rsc_wire_format))
                         .expect("Valid RSC response"))
                 }
@@ -498,27 +628,11 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            debug!("⏱️ SSR mode detected, checking streaming...");
-
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
-            debug!(
-                "Streaming decision: enable_streaming={}, has_loading={}, use_streaming={}",
-                state.config.rsc.enable_streaming,
-                route_match.loading.is_some(),
-                use_streaming
-            );
-
             if use_streaming {
-                let streaming_start = std::time::Instant::now();
-                debug!("Using streaming SSR with fallback for route: {}", path);
-                let result = render_with_fallback(Arc::new(state), route_match, context).await;
-                let streaming_duration = streaming_start.elapsed();
-                debug!("⚡ Streaming render took: {:?}", streaming_duration);
-                return result;
+                return render_with_fallback(Arc::new(state), route_match, context).await;
             }
-
-            debug!("Rendering HTML for SSR (initial page load) using direct HTML path");
 
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
@@ -532,12 +646,9 @@ pub async fn handle_app_route(
             let client_etag = headers.get("if-none-match").and_then(|v| v.to_str().ok());
 
             if let Some(cached) = state.response_cache.get(&cache_key).await {
-                debug!("Cache hit for route: {}", path);
-
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
                     && cached_etag == client_etag
                 {
-                    debug!("ETag match, returning 304 Not Modified");
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("etag", cached_etag)
@@ -562,11 +673,6 @@ pub async fn handle_app_route(
                     .body(Body::from(cached.body))
                     .expect("Valid cached response"));
             }
-
-            debug!("Cache miss for route: {}", path);
-            let total_start = std::time::Instant::now();
-
-            let render_start = std::time::Instant::now();
             let render_result = match layout_renderer
                 .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
                 .await
@@ -577,23 +683,50 @@ pub async fn handle_app_route(
                     return render_fallback_html(&state, path).await;
                 }
             };
-            let render_duration = render_start.elapsed();
-            debug!("⚡ Direct HTML render took: {:?}", render_duration);
 
             let (html_with_assets, etag) = match render_result {
                 crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
-                    debug!("Using static rendering path for route: {}", path);
+                    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
+                        || html_content.trim_start().starts_with("<html");
 
-                    let total_duration = total_start.elapsed();
-                    debug!(
-                        "⚡⚡⚡ Total SSR render took: {:?} (direct HTML: {:?})",
-                        total_duration, render_duration
-                    );
+                    let html_to_process = if !is_complete {
+                        let title = context
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.title.as_ref())
+                            .map(|t| t.as_str())
+                            .unwrap_or("Rari App");
+
+                        let base_shell = format!(
+                            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+</head>
+<body>
+<div id="root">{}</div>
+</body>
+</html>"#,
+                            title, html_content
+                        );
+
+                        if let Some(ref metadata) = context.metadata {
+                            inject_metadata(&base_shell, metadata)
+                        } else {
+                            base_shell
+                        }
+                    } else if let Some(ref metadata) = context.metadata {
+                        inject_metadata(&html_content, metadata)
+                    } else {
+                        html_content
+                    };
 
                     let html_with_assets =
-                        match inject_assets_into_html(&html_content, &state.config).await {
+                        match inject_assets_into_html(&html_to_process, &state.config).await {
                             Ok(html) => html,
-                            Err(_) => html_content,
+                            Err(_) => html_to_process,
                         };
 
                     let etag =
@@ -605,16 +738,44 @@ pub async fn handle_app_route(
                     html: html_content,
                     rsc_payload,
                 } => {
-                    debug!("Using static rendering path with RSC payload for route: {}", path);
+                    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
+                        || html_content.trim_start().starts_with("<html");
 
-                    let total_duration = total_start.elapsed();
-                    debug!(
-                        "⚡⚡⚡ Total SSR render took: {:?} (direct HTML: {:?})",
-                        total_duration, render_duration
-                    );
+                    let html_to_process = if !is_complete {
+                        let title = context
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.title.as_ref())
+                            .map(|t| t.as_str())
+                            .unwrap_or("Rari App");
 
-                    debug!("Injecting RSC payload for hydration ({} bytes)", rsc_payload.len());
-                    let html_with_payload = inject_rsc_payload(&html_content, &rsc_payload);
+                        let base_shell = format!(
+                            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+</head>
+<body>
+<div id="root">{}</div>
+</body>
+</html>"#,
+                            title, html_content
+                        );
+
+                        if let Some(ref metadata) = context.metadata {
+                            inject_metadata(&base_shell, metadata)
+                        } else {
+                            base_shell
+                        }
+                    } else if let Some(ref metadata) = context.metadata {
+                        inject_metadata(&html_content, metadata)
+                    } else {
+                        html_content
+                    };
+
+                    let html_with_payload = inject_rsc_payload(&html_to_process, &rsc_payload);
 
                     let html_with_assets =
                         match inject_assets_into_html(&html_with_payload, &state.config).await {
@@ -628,8 +789,6 @@ pub async fn handle_app_route(
                     (html_with_assets, etag)
                 }
                 crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
-                    debug!("Using streaming rendering path for route: {}", path);
-
                     let asset_links = extract_asset_links_from_index_html().await;
 
                     let html_renderer = {
@@ -671,18 +830,14 @@ pub async fn handle_app_route(
                     let mut rsc_stream = stream;
 
                     let html_stream = async_stream::stream! {
-                        let mut chunk_count = 0;
-
                         while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
                             match rsc_stream.next_chunk().await {
                                 Some(chunk) => {
-                                    chunk_count += 1;
                                     let mut conv = converter.lock().await;
 
                                     match conv.convert_chunk(chunk).await {
                                         Ok(html_bytes) => {
                                             if !html_bytes.is_empty() {
-                                                debug!("Yielding HTML chunk {} of {} bytes", chunk_count, html_bytes.len());
                                                 yield Ok(html_bytes);
                                             }
                                         }
@@ -699,14 +854,9 @@ pub async fn handle_app_route(
                                     }
                                 }
                                 None => {
-                                    debug!("Stream completed successfully after {} chunks", chunk_count);
                                     break;
                                 }
                             }
-                        }
-
-                        if !should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                            debug!("Stream stopped early due to client disconnection");
                         }
                     };
 
@@ -769,9 +919,6 @@ pub async fn handle_app_route(
                 };
 
                 state.response_cache.set(cache_key, cached_response).await;
-                debug!("Stored response in cache for route: {} (ttl={}s)", path, cache_policy.ttl);
-            } else {
-                debug!("Caching disabled for route: {}", path);
             }
 
             Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))

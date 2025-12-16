@@ -12,6 +12,193 @@ import { extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, norm
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { StatePreserver } from './StatePreserver'
 
+interface PageMetadata {
+  title?: string
+  description?: string
+  keywords?: string[]
+  viewport?: string
+  canonical?: string
+  openGraph?: {
+    title?: string
+    description?: string
+    url?: string
+    siteName?: string
+    images?: string[]
+    type?: string
+  }
+  twitter?: {
+    card?: string
+    site?: string
+    creator?: string
+    title?: string
+    description?: string
+    images?: string[]
+  }
+  robots?: {
+    index?: boolean
+    follow?: boolean
+    nocache?: boolean
+  }
+}
+
+function updateDocumentMetadata(metadata: PageMetadata): void {
+  if (metadata.title) {
+    document.title = metadata.title
+  }
+
+  const updateOrCreateMetaTag = (selector: string, attributes: Record<string, string>) => {
+    let element = document.querySelector(selector) as HTMLMetaElement | null
+    if (!element) {
+      element = document.createElement('meta')
+      for (const [key, value] of Object.entries(attributes)) {
+        element.setAttribute(key, value)
+      }
+      document.head.appendChild(element)
+    }
+    else {
+      if (attributes.content) {
+        element.setAttribute('content', attributes.content)
+      }
+    }
+  }
+
+  if (metadata.description) {
+    updateOrCreateMetaTag('meta[name="description"]', {
+      name: 'description',
+      content: metadata.description,
+    })
+  }
+
+  if (metadata.keywords && metadata.keywords.length > 0) {
+    updateOrCreateMetaTag('meta[name="keywords"]', {
+      name: 'keywords',
+      content: metadata.keywords.join(', '),
+    })
+  }
+
+  if (metadata.viewport) {
+    updateOrCreateMetaTag('meta[name="viewport"]', {
+      name: 'viewport',
+      content: metadata.viewport,
+    })
+  }
+
+  if (metadata.canonical) {
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+    if (!canonical) {
+      canonical = document.createElement('link')
+      canonical.setAttribute('rel', 'canonical')
+      document.head.appendChild(canonical)
+    }
+    canonical.setAttribute('href', metadata.canonical)
+  }
+
+  if (metadata.robots) {
+    const robotsContent: string[] = []
+    if (metadata.robots.index !== undefined) {
+      robotsContent.push(metadata.robots.index ? 'index' : 'noindex')
+    }
+    if (metadata.robots.follow !== undefined) {
+      robotsContent.push(metadata.robots.follow ? 'follow' : 'nofollow')
+    }
+    if (metadata.robots.nocache) {
+      robotsContent.push('nocache')
+    }
+    if (robotsContent.length > 0) {
+      updateOrCreateMetaTag('meta[name="robots"]', {
+        name: 'robots',
+        content: robotsContent.join(', '),
+      })
+    }
+  }
+
+  if (metadata.openGraph) {
+    const og = metadata.openGraph
+    if (og.title) {
+      updateOrCreateMetaTag('meta[property="og:title"]', {
+        property: 'og:title',
+        content: og.title,
+      })
+    }
+    if (og.description) {
+      updateOrCreateMetaTag('meta[property="og:description"]', {
+        property: 'og:description',
+        content: og.description,
+      })
+    }
+    if (og.url) {
+      updateOrCreateMetaTag('meta[property="og:url"]', {
+        property: 'og:url',
+        content: og.url,
+      })
+    }
+    if (og.siteName) {
+      updateOrCreateMetaTag('meta[property="og:site_name"]', {
+        property: 'og:site_name',
+        content: og.siteName,
+      })
+    }
+    if (og.type) {
+      updateOrCreateMetaTag('meta[property="og:type"]', {
+        property: 'og:type',
+        content: og.type,
+      })
+    }
+    if (og.images && og.images.length > 0) {
+      document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+      for (const image of og.images) {
+        const meta = document.createElement('meta')
+        meta.setAttribute('property', 'og:image')
+        meta.setAttribute('content', image)
+        document.head.appendChild(meta)
+      }
+    }
+  }
+
+  if (metadata.twitter) {
+    const twitter = metadata.twitter
+    if (twitter.card) {
+      updateOrCreateMetaTag('meta[name="twitter:card"]', {
+        name: 'twitter:card',
+        content: twitter.card,
+      })
+    }
+    if (twitter.site) {
+      updateOrCreateMetaTag('meta[name="twitter:site"]', {
+        name: 'twitter:site',
+        content: twitter.site,
+      })
+    }
+    if (twitter.creator) {
+      updateOrCreateMetaTag('meta[name="twitter:creator"]', {
+        name: 'twitter:creator',
+        content: twitter.creator,
+      })
+    }
+    if (twitter.title) {
+      updateOrCreateMetaTag('meta[name="twitter:title"]', {
+        name: 'twitter:title',
+        content: twitter.title,
+      })
+    }
+    if (twitter.description) {
+      updateOrCreateMetaTag('meta[name="twitter:description"]', {
+        name: 'twitter:description',
+        content: twitter.description,
+      })
+    }
+    if (twitter.images && twitter.images.length > 0) {
+      document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+      for (const image of twitter.images) {
+        const meta = document.createElement('meta')
+        meta.setAttribute('name', 'twitter:image')
+        meta.setAttribute('content', image)
+        document.head.appendChild(meta)
+      }
+    }
+  }
+}
+
 export interface ClientRouterProps {
   children: React.ReactNode
   manifest: AppRouteManifest
@@ -303,6 +490,18 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
           return
+        }
+
+        try {
+          const metadataHeader = response.headers.get('x-rari-metadata')
+          if (metadataHeader) {
+            const decodedMetadata = decodeURIComponent(metadataHeader)
+            const metadata = JSON.parse(decodedMetadata) as PageMetadata
+            updateDocumentMetadata(metadata)
+          }
+        }
+        catch (metadataError) {
+          console.warn('[ClientRouter] Failed to extract/apply metadata:', metadataError)
         }
 
         const rscWireFormat = await response.text()
