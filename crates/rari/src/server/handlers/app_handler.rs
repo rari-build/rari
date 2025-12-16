@@ -23,6 +23,43 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{error, warn};
 
+fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>) -> String {
+    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
+        || html_content.trim_start().starts_with("<html");
+
+    if is_complete {
+        if let Some(metadata) = metadata {
+            inject_metadata(&html_content, metadata)
+        } else {
+            html_content
+        }
+    } else {
+        let title =
+            metadata.and_then(|m| m.title.as_ref()).map(|t| t.as_str()).unwrap_or("Rari App");
+
+        let base_shell = format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+</head>
+<body>
+<div id="root">{}</div>
+</body>
+</html>"#,
+            title, html_content
+        );
+
+        if let Some(metadata) = metadata {
+            inject_metadata(&base_shell, metadata)
+        } else {
+            base_shell
+        }
+    }
+}
+
 async fn collect_page_metadata(
     state: &ServerState,
     route_match: &AppRouteMatch,
@@ -132,11 +169,8 @@ pub async fn render_synchronous(
                 html: html_content,
                 ..
             } => {
-                let html_with_metadata = if let Some(ref metadata) = context.metadata {
-                    inject_metadata(&html_content, metadata)
-                } else {
-                    html_content
-                };
+                let html_with_metadata =
+                    wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
@@ -203,48 +237,14 @@ pub async fn render_streaming_with_layout(
     let mut rsc_stream = match render_result {
         crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            let is_complete = html.trim_start().starts_with("<!DOCTYPE")
-                || html.trim_start().starts_with("<html");
+            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
 
-            let html_to_process = if !is_complete {
-                let title = context
-                    .metadata
-                    .as_ref()
-                    .and_then(|m| m.title.as_ref())
-                    .map(|t| t.as_str())
-                    .unwrap_or("Rari App");
-
-                let base_shell = format!(
-                    r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-                    title, html
-                );
-
-                if let Some(ref metadata) = context.metadata {
-                    inject_metadata(&base_shell, metadata)
-                } else {
-                    base_shell
-                }
-            } else if let Some(ref metadata) = context.metadata {
-                inject_metadata(&html, metadata)
-            } else {
-                html
-            };
-
-            let final_html = match inject_assets_into_html(&html_to_process, &state.config).await {
+            let final_html = match inject_assets_into_html(&html_with_metadata, &state.config).await
+            {
                 Ok(html) => html,
                 Err(e) => {
                     warn!("Failed to inject assets, using original HTML: {}", e);
-                    html_to_process
+                    html_with_metadata
                 }
             };
 
@@ -256,44 +256,9 @@ pub async fn render_streaming_with_layout(
                 .expect("Valid HTML response"));
         }
         crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
-            let is_complete = html.trim_start().starts_with("<!DOCTYPE")
-                || html.trim_start().starts_with("<html");
+            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
 
-            let html_to_process = if !is_complete {
-                let title = context
-                    .metadata
-                    .as_ref()
-                    .and_then(|m| m.title.as_ref())
-                    .map(|t| t.as_str())
-                    .unwrap_or("Rari App");
-
-                let base_shell = format!(
-                    r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-                    title, html
-                );
-
-                if let Some(ref metadata) = context.metadata {
-                    inject_metadata(&base_shell, metadata)
-                } else {
-                    base_shell
-                }
-            } else if let Some(ref metadata) = context.metadata {
-                inject_metadata(&html, metadata)
-            } else {
-                html
-            };
-
-            let html_with_payload = inject_rsc_payload(&html_to_process, &rsc_payload);
+            let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
             let final_html = match inject_assets_into_html(&html_with_payload, &state.config).await
             {
                 Ok(html) => html,
@@ -686,47 +651,13 @@ pub async fn handle_app_route(
 
             let (html_with_assets, etag) = match render_result {
                 crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
-                    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
-                        || html_content.trim_start().starts_with("<html");
-
-                    let html_to_process = if !is_complete {
-                        let title = context
-                            .metadata
-                            .as_ref()
-                            .and_then(|m| m.title.as_ref())
-                            .map(|t| t.as_str())
-                            .unwrap_or("Rari App");
-
-                        let base_shell = format!(
-                            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-                            title, html_content
-                        );
-
-                        if let Some(ref metadata) = context.metadata {
-                            inject_metadata(&base_shell, metadata)
-                        } else {
-                            base_shell
-                        }
-                    } else if let Some(ref metadata) = context.metadata {
-                        inject_metadata(&html_content, metadata)
-                    } else {
-                        html_content
-                    };
+                    let html_with_metadata =
+                        wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
                     let html_with_assets =
-                        match inject_assets_into_html(&html_to_process, &state.config).await {
+                        match inject_assets_into_html(&html_with_metadata, &state.config).await {
                             Ok(html) => html,
-                            Err(_) => html_to_process,
+                            Err(_) => html_with_metadata,
                         };
 
                     let etag =
@@ -738,44 +669,10 @@ pub async fn handle_app_route(
                     html: html_content,
                     rsc_payload,
                 } => {
-                    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
-                        || html_content.trim_start().starts_with("<html");
+                    let html_with_metadata =
+                        wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
-                    let html_to_process = if !is_complete {
-                        let title = context
-                            .metadata
-                            .as_ref()
-                            .and_then(|m| m.title.as_ref())
-                            .map(|t| t.as_str())
-                            .unwrap_or("Rari App");
-
-                        let base_shell = format!(
-                            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-                            title, html_content
-                        );
-
-                        if let Some(ref metadata) = context.metadata {
-                            inject_metadata(&base_shell, metadata)
-                        } else {
-                            base_shell
-                        }
-                    } else if let Some(ref metadata) = context.metadata {
-                        inject_metadata(&html_content, metadata)
-                    } else {
-                        html_content
-                    };
-
-                    let html_with_payload = inject_rsc_payload(&html_to_process, &rsc_payload);
+                    let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
 
                     let html_with_assets =
                         match inject_assets_into_html(&html_with_payload, &state.config).await {
