@@ -1,3 +1,17 @@
+## [0.5.13] - 2025-12-16
+
+### 🚀 Features
+
+- *(docs)* Add dynamic metadata generation and route path conversion
+
+### 📚 Documentation
+
+- *(getting-started)* Update prerequisites and simplify project structure
+## [rari@0.5.18] - 2025-12-16
+
+### 💼 Other
+
+- Rari@0.5.18
 ## [0.5.12] - 2025-12-16
 
 ### 🐛 Bug Fixes
