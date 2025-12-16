@@ -1,3 +1,8 @@
+---
+title: Getting Started
+description: Learn how to create your first Rari application with React Server Components and Rust-powered performance.
+---
+
 # Getting Started with Rari
 
 This guide will walk you through creating your first Rari application from scratch. You'll learn the basics of React Server Components with Rari's high-performance Rust runtime.
@@ -7,7 +12,7 @@ This guide will walk you through creating your first Rari application from scrat
 Before you begin, ensure you have the following installed:
 
 - **Node.js 20+**
-- **npm, pnpm, or yarn**
+- **A modern package manager (e.g. npm, pnpm, bun or deno)**
 - **A modern code editor**
 
 ## Installation
@@ -19,7 +24,6 @@ The fastest way to get started is with our project generator:
 ```bash
 npm create rari-app@latest my-rari-app
 cd my-rari-app
-# Dependencies are automatically installed
 npm run dev
 ```
 
@@ -252,32 +256,32 @@ A typical Rari project (created with `create-rari-app`) looks like this:
 ```
 my-rari-app/
 ├── src/
-│   ├── app/                 # App router directory
-│   │   ├── layout.tsx       # Root layout (wraps all pages)
-│   │   ├── page.tsx         # Home page (/)
-│   │   ├── globals.css      # Global styles
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   ├── globals.css
 │   │   ├── about/
-│   │   │   └── page.tsx     # About page (/about)
+│   │   │   └── page.tsx
 │   │   ├── blog/
-│   │   │   ├── page.tsx     # Blog index (/blog)
+│   │   │   ├── page.tsx
 │   │   │   └── [slug]/
-│   │   │       └── page.tsx # Blog post (/blog/[slug])
+│   │   │       └── page.tsx
 │   │   └── users/
 │   │       └── [id]/
-│   │           └── page.tsx # User profile (/users/[id])
-│   ├── components/          # Reusable React components
-│   │   └── Counter.tsx      # Client components ('use client')
-│   ├── actions/             # Server actions
-│   │   └── todo-actions.ts  # Server functions ('use server')
-│   └── vite-env.d.ts       # Vite types
-├── public/                  # Static assets (optional)
-├── index.html              # HTML template
-├── package.json            # Dependencies and scripts
-├── vite.config.ts          # Vite + Rari config
-├── tsconfig.json           # TypeScript project config
-├── tsconfig.app.json       # App-specific TypeScript config
-├── tsconfig.node.json      # Node.js TypeScript config
-└── .gitignore              # Git ignore rules
+│   │           └── page.tsx
+│   ├── components/
+│   │   └── Counter.tsx
+│   ├── actions/
+│   │   └── todo-actions.ts
+│   └── vite-env.d.ts
+├── public/
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+└── .gitignore
 ```
 
 ## App Router

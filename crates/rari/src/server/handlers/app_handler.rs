@@ -78,18 +78,33 @@ async fn collect_page_metadata(
         }
     };
 
+    fn convert_route_path_to_dist_path(path: &str) -> String {
+        use regex::Regex;
+        let re =
+            Regex::new(r"\[+([^\]]+)\]+").expect("Invalid regex pattern for route path conversion");
+        re.replace_all(path, |caps: &regex::Captures| {
+            let param = &caps[1];
+            let bracket_count = caps[0].matches('[').count();
+            let underscores = "_".repeat(bracket_count);
+            format!("{}{}{}", underscores, param, underscores)
+        })
+        .to_string()
+    }
+
     let layout_paths: Vec<String> = route_match
         .layouts
         .iter()
         .filter_map(|layout| {
             let js_filename = layout.file_path.replace(".tsx", ".js").replace(".ts", ".js");
-            let file_path = base_path.join("app").join(&js_filename);
+            let dist_filename = convert_route_path_to_dist_path(&js_filename);
+            let file_path = base_path.join("app").join(&dist_filename);
             if file_path.exists() { Some(format!("file://{}", file_path.display())) } else { None }
         })
         .collect();
 
     let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
-    let page_file_path = base_path.join("app").join(&js_filename);
+    let dist_filename = convert_route_path_to_dist_path(&js_filename);
+    let page_file_path = base_path.join("app").join(&dist_filename);
     let page_path = if page_file_path.exists() {
         format!("file://{}", page_file_path.display())
     } else {
