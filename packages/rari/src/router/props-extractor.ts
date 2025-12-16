@@ -162,15 +162,15 @@ export async function extractMetadata(
   try {
     const module = await import(/* @vite-ignore */ componentPath)
 
-    if (module.metadata && typeof module.metadata === 'object') {
-      return module.metadata
-    }
-
     if (typeof module.generateMetadata === 'function') {
       const metadata = await module.generateMetadata({ params, searchParams })
       if (metadata && typeof metadata === 'object') {
         return metadata
       }
+    }
+
+    if (module.metadata && typeof module.metadata === 'object') {
+      return module.metadata
     }
 
     return {}
@@ -179,6 +179,60 @@ export async function extractMetadata(
     console.error(`Failed to extract metadata from ${componentPath}:`, error)
     return {}
   }
+}
+
+export function mergeMetadata(
+  parentMetadata: MetadataResult,
+  childMetadata: MetadataResult,
+): MetadataResult {
+  const merged: MetadataResult = { ...parentMetadata }
+
+  if (childMetadata.title !== undefined) {
+    if (typeof childMetadata.title === 'string') {
+      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template) {
+        merged.title = parentMetadata.title.template.replace('%s', childMetadata.title)
+      }
+      else {
+        merged.title = childMetadata.title
+      }
+    }
+    else {
+      merged.title = childMetadata.title
+    }
+  }
+
+  if (childMetadata.description !== undefined) {
+    merged.description = childMetadata.description
+  }
+  if (childMetadata.keywords !== undefined) {
+    merged.keywords = childMetadata.keywords
+  }
+  if (childMetadata.openGraph !== undefined) {
+    merged.openGraph = { ...parentMetadata.openGraph, ...childMetadata.openGraph }
+  }
+  if (childMetadata.twitter !== undefined) {
+    merged.twitter = { ...parentMetadata.twitter, ...childMetadata.twitter }
+  }
+  if (childMetadata.robots !== undefined) {
+    merged.robots = { ...parentMetadata.robots, ...childMetadata.robots }
+  }
+  if (childMetadata.icons !== undefined) {
+    merged.icons = { ...parentMetadata.icons, ...childMetadata.icons }
+  }
+  if (childMetadata.manifest !== undefined) {
+    merged.manifest = childMetadata.manifest
+  }
+  if (childMetadata.viewport !== undefined) {
+    merged.viewport = { ...parentMetadata.viewport, ...childMetadata.viewport }
+  }
+  if (childMetadata.verification !== undefined) {
+    merged.verification = { ...parentMetadata.verification, ...childMetadata.verification }
+  }
+  if (childMetadata.alternates !== undefined) {
+    merged.alternates = { ...parentMetadata.alternates, ...childMetadata.alternates }
+  }
+
+  return merged
 }
 
 export async function extractStaticParams(
@@ -259,4 +313,23 @@ export function clearPropsCacheForComponent(componentPath: string): void {
       propsCache.delete(key)
     }
   }
+}
+
+export async function collectMetadataFromChain(
+  layoutPaths: string[],
+  pagePath: string,
+  params: Record<string, string>,
+  searchParams: Record<string, string>,
+): Promise<MetadataResult> {
+  let metadata: MetadataResult = {}
+
+  for (const layoutPath of layoutPaths) {
+    const layoutMetadata = await extractMetadata(layoutPath, params, searchParams)
+    metadata = mergeMetadata(metadata, layoutMetadata)
+  }
+
+  const pageMetadata = await extractMetadata(pagePath, params, searchParams)
+  metadata = mergeMetadata(metadata, pageMetadata)
+
+  return metadata
 }

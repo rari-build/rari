@@ -7,6 +7,69 @@ pub struct LayoutRenderContext {
     pub search_params: FxHashMap<String, Vec<String>>,
     pub headers: FxHashMap<String, String>,
     pub pathname: String,
+    pub metadata: Option<PageMetadata>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PageMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keywords: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "openGraph")]
+    pub open_graph: Option<OpenGraphMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub twitter: Option<TwitterMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub robots: Option<RobotsMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub viewport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canonical: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenGraphMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "siteName")]
+    pub site_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub og_type: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TwitterMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RobotsMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub follow: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nocache: Option<bool>,
 }
 
 #[derive(Debug, Clone)]

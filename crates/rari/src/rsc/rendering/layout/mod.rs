@@ -1,7 +1,7 @@
 mod constants;
 mod core;
 mod error_messages;
-mod types;
+pub mod types;
 mod utils;
 
 #[cfg(test)]

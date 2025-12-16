@@ -90,6 +90,39 @@ impl JsExecutionRuntime {
         }
     }
 
+    pub async fn collect_metadata(
+        &self,
+        layout_paths: Vec<String>,
+        page_path: String,
+        params: rustc_hash::FxHashMap<String, String>,
+        search_params: rustc_hash::FxHashMap<String, Vec<String>>,
+    ) -> Result<Value, RariError> {
+        const METADATA_COLLECTOR_TEMPLATE: &str = include_str!("js/metadata_collector.js");
+
+        let layout_paths_json = serde_json::to_string(&layout_paths)
+            .map_err(|e| RariError::serialization(e.to_string()))?;
+        let params_json =
+            serde_json::to_string(&params).map_err(|e| RariError::serialization(e.to_string()))?;
+
+        let search_params_simple: rustc_hash::FxHashMap<String, String> = search_params
+            .iter()
+            .filter_map(|(k, v)| v.first().map(|val| (k.clone(), val.clone())))
+            .collect();
+        let search_params_json = serde_json::to_string(&search_params_simple)
+            .map_err(|e| RariError::serialization(e.to_string()))?;
+
+        let page_path_json = serde_json::to_string(&page_path)
+            .map_err(|e| RariError::serialization(e.to_string()))?;
+
+        let script = METADATA_COLLECTOR_TEMPLATE
+            .replace("LAYOUT_PATHS_PLACEHOLDER", &layout_paths_json)
+            .replace("'PAGE_PATH_PLACEHOLDER'", &page_path_json)
+            .replace("SEARCH_PARAMS_PLACEHOLDER", &search_params_json)
+            .replace("PARAMS_PLACEHOLDER", &params_json);
+
+        self.execute_script("collect_metadata".to_string(), script).await
+    }
+
     pub async fn execute_function(
         &self,
         function_name: &str,

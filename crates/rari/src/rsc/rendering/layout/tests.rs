@@ -27,6 +27,7 @@ fn test_create_page_props() {
         search_params: search_params.clone(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let route_match = AppRouteMatch {
@@ -308,6 +309,7 @@ fn test_build_composition_script_with_use_suspense_true() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script = renderer
@@ -345,6 +347,7 @@ fn test_build_composition_script_with_use_suspense_false() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script = renderer
@@ -673,6 +676,7 @@ fn test_composition_script_includes_layout_structure_markers() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -785,6 +789,7 @@ fn test_mode_consistency_both_modes_generate_render_to_rsc() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -825,6 +830,7 @@ fn test_mode_consistency_suspense_serialization_format() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -865,6 +871,7 @@ fn test_mode_consistency_metadata_structure() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -917,6 +924,7 @@ fn test_mode_consistency_async_component_handling_with_loading() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer
@@ -961,6 +969,7 @@ fn test_mode_consistency_boundary_id_format() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer
@@ -1004,6 +1013,7 @@ fn test_mode_consistency_wrapper_elements() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -1049,6 +1059,7 @@ fn test_mode_consistency_error_handling() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();
@@ -1096,6 +1107,7 @@ fn test_mode_consistency_rsc_props_cleanup() {
         search_params: FxHashMap::default(),
         headers: FxHashMap::default(),
         pathname: "/test".to_string(),
+        metadata: None,
     };
 
     let script_ssr = renderer.build_composition_script(&route_match, &context, None, true).unwrap();

@@ -104,5 +104,5 @@ pub fn create_layout_context(
     headers: FxHashMap<String, String>,
     pathname: String,
 ) -> LayoutRenderContext {
-    LayoutRenderContext { params, search_params, headers, pathname }
+    LayoutRenderContext { params, search_params, headers, pathname, metadata: None }
 }

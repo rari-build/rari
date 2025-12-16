@@ -80,11 +80,13 @@ export type { NavigationErrorOverlayProps } from './NavigationErrorOverlay'
 export {
   clearPropsCache,
   clearPropsCacheForComponent,
+  collectMetadataFromChain,
   extractMetadata,
   extractServerProps,
   extractServerPropsWithCache,
   extractStaticParams,
   hasServerSideDataFetching,
+  mergeMetadata,
 } from './props-extractor'
 
 export type {
