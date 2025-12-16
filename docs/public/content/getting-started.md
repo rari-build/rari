@@ -176,7 +176,6 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
   return (
     <article>
       <h1>{title}</h1>
-      {/* eslint-disable-next-line react-dom/no-dangerously-set-innerhtml */}
       <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </article>
   )

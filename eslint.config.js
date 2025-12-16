@@ -13,6 +13,7 @@ export default antfu(
   {
     files: ['**/*.md/**'],
     rules: {
+      'react-dom/no-dangerously-set-innerhtml': 'off',
       'react-refresh/only-export-components': 'off',
     },
   },
