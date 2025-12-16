@@ -69,16 +69,12 @@ import type { LayoutProps } from 'rari/client'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm p-4">
-        <div className="max-w-7xl mx-auto flex gap-4">
-          <a href="/" className="text-blue-600 hover:text-blue-800">Home</a>
-          <a href="/about" className="text-blue-600 hover:text-blue-800">About</a>
-        </div>
+    <div>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
       </nav>
-      <main className="max-w-7xl mx-auto py-8 px-4">
-        {children}
-      </main>
+      <main>{children}</main>
     </div>
   )
 }
@@ -103,15 +99,14 @@ export default async function HomePage({ params, searchParams }: PageProps) {
   await new Promise(resolve => setTimeout(resolve, 100))
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Welcome to Rari</h1>
+    <div>
+      <h1>Welcome to Rari</h1>
 
       {/* Server-rendered content */}
-      <div className="p-4 bg-blue-50 rounded-lg">
-        <h2 className="text-lg font-semibold">Server Time</h2>
-        <p className="text-gray-600">
+      <div>
+        <h2>Server Time</h2>
+        <p>
           Generated on server at:
-          {' '}
           {timestamp}
         </p>
       </div>
@@ -139,13 +134,9 @@ export default function Counter() {
   const [count, setCount] = useState(0)
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow">
-      <h2 className="text-lg font-semibold mb-4">Client Interaction</h2>
-      <button
-        onClick={() => setCount(count + 1)}
-        type="button"
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-      >
+    <div>
+      <h2>Client Interaction</h2>
+      <button onClick={() => setCount(count + 1)} type="button">
         Count:
         {' '}
         {count}
@@ -183,7 +174,7 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
   const htmlContent = md.render(content)
 
   return (
-    <article className="prose max-w-none">
+    <article>
       <h1>{title}</h1>
       {/* eslint-disable-next-line react-dom/no-dangerously-set-innerhtml */}
       <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
@@ -210,11 +201,8 @@ This markdown is processed **on the server** using the \`markdown-it\` package.
 
 export default function BlogPage() {
   return (
-    <div className="max-w-4xl mx-auto">
-      <MarkdownPost
-        title="My Blog Post"
-        content={blogPost}
-      />
+    <div>
+      <MarkdownPost title="My Blog Post" content={blogPost} />
     </div>
   )
 }
@@ -367,7 +355,7 @@ import type { LayoutProps } from 'rari/client'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen">
+    <div>
       <nav>
         <a href="/">Home</a>
         <a href="/about">About</a>
@@ -389,15 +377,15 @@ import type { LayoutProps } from 'rari/client'
 
 export default function DashboardLayout({ children }: LayoutProps) {
   return (
-    <div className="flex">
-      <aside className="w-64 bg-gray-100">
+    <div>
+      <aside>
         <nav>
           <a href="/dashboard">Overview</a>
           <a href="/dashboard/analytics">Analytics</a>
           <a href="/dashboard/settings">Settings</a>
         </nav>
       </aside>
-      <div className="flex-1">{children}</div>
+      <div>{children}</div>
     </div>
   )
 }
@@ -451,10 +439,7 @@ export default function ClientComponent() {
   const [count, setCount] = useState(0)
 
   return (
-    <button
-      type="button"
-      onClick={() => setCount(count + 1)}
-    >
+    <button onClick={() => setCount(count + 1)} type="button">
       Clicked
       {' '}
       {count}
@@ -503,7 +488,7 @@ export default function UserForm() {
     <form action={formAction}>
       <input name="name" required />
       <input name="email" type="email" required />
-      <button type="button" disabled={isPending}>
+      <button type="submit" disabled={isPending}>
         {isPending ? 'Creating...' : 'Create User'}
       </button>
       {state?.success && <p>User created successfully!</p>}
@@ -596,7 +581,7 @@ export default async function DataComponent() {
 
   if (error) {
     return (
-      <div className="error">
+      <div>
         <h2>Something went wrong</h2>
         <p>{error instanceof Error ? error.message : 'Unknown error'}</p>
       </div>
