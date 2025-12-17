@@ -419,7 +419,6 @@ fn extract_component_id_from_specifier(specifier: &str) -> String {
         return after_server.trim_end_matches(".js").to_string();
     }
 
-    // Fallback to old behavior for non-file:// URLs
     specifier
         .split('/')
         .next_back()
@@ -427,6 +426,7 @@ fn extract_component_id_from_specifier(specifier: &str) -> String {
         .split('?')
         .next()
         .unwrap_or(specifier)
+        .trim_end_matches(".js")
         .to_string()
 }
 

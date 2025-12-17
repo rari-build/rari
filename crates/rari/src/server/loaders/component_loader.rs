@@ -186,23 +186,7 @@ impl ComponentLoader {
                     }
                 }
             } else {
-                // Fall back to old script execution method
-                match renderer
-                    .runtime
-                    .execute_script(
-                        format!("load_{}.js", component_id.replace('/', "_")),
-                        component_code,
-                    )
-                    .await
-                {
-                    Ok(_) => {
-                        debug!("Loaded production component (legacy): {}", component_id);
-                        loaded_count += 1;
-                    }
-                    Err(e) => {
-                        error!("Failed to load component {}: {}", component_id, e);
-                    }
-                }
+                error!("Component {} missing moduleSpecifier in manifest.", component_id);
             }
         }
 

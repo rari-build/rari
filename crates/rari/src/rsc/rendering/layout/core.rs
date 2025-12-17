@@ -812,8 +812,8 @@ impl LayoutRenderer {
                 const timings = {{}};
                 const startTotal = performance.now();
 
-                const React = globalThis.React || require('react');
-                const ReactDOMServer = globalThis.ReactDOMServer || require('react-dom/server');
+                const React = globalThis.React;
+                const ReactDOMServer = globalThis.ReactDOMServer;
 
                 globalThis.__discovered_boundaries = [];
                 globalThis.__pending_promises = [];
