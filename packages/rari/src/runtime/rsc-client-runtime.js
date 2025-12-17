@@ -38,8 +38,8 @@ export function registerClientComponent(componentFunction, id, exportName) {
   globalThis.__clientComponentNames[componentName] = componentId
 
   if (componentFunction) {
-    componentFunction.__isClientComponent = true
-    componentFunction.__clientComponentId = componentId
+    componentFunction['~isClientComponent'] = true
+    componentFunction['~clientComponentId'] = componentId
   }
 
   if (typeof window !== 'undefined') {

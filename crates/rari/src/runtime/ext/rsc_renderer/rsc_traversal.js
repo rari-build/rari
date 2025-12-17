@@ -401,7 +401,7 @@ function isClientComponent(componentType, clientComponents) {
     return true
   }
 
-  if (componentType && componentType.__isClientComponent) {
+  if (componentType && componentType['~isClientComponent']) {
     return true
   }
 

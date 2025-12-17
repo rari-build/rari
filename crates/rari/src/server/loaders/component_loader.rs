@@ -664,8 +664,8 @@ impl ComponentLoader {
                                             r#"(function() {{
                                                 const comp = globalThis["{}"];
                                                 if (comp && typeof comp === 'function') {{
-                                                    comp.__isClientComponent = true;
-                                                    comp.__clientComponentId = "{}";
+                                                    comp['~isClientComponent'] = true;
+                                                    comp['~clientComponentId'] = "{}";
                                                 }}
                                                 return {{ componentId: "{}", isClient: true }};
                                             }})()"#,
@@ -721,8 +721,8 @@ impl ComponentLoader {
                                         r#"(function() {{
                                             const comp = globalThis["{}"];
                                             if (comp && typeof comp === 'function') {{
-                                                comp.__isClientComponent = true;
-                                                comp.__clientComponentId = "{}";
+                                                comp['~isClientComponent'] = true;
+                                                comp['~clientComponentId'] = "{}";
                                             }}
                                             return {{ componentId: "{}", isClient: true }};
                                         }})()"#,
