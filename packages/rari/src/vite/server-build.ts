@@ -65,6 +65,7 @@ export interface ServerBuildOptions {
   manifestPath?: string
   minify?: boolean
   alias?: Record<string, string>
+  external?: string[]
 }
 
 export interface ComponentRebuildResult {
@@ -116,6 +117,7 @@ export class ServerComponentBuilder {
       manifestPath: options.manifestPath || 'server-manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
+      external: options.external || [],
     }
   }
 
@@ -400,7 +402,7 @@ const ${importName} = (props) => {
         platform: 'node',
         target: 'es2022',
         format: 'esm',
-        external: [],
+        external: this.options.external,
         mainFields: ['module', 'main'],
         conditions: ['import', 'module', 'default'],
         jsx: 'transform',
@@ -725,7 +727,7 @@ const ${importName} = (props) => {
         target: 'es2022',
         format: 'esm',
         outfile: outputPath,
-        external: [],
+        external: this.options.external,
         mainFields: ['module', 'main'],
         conditions: ['import', 'module', 'default'],
         jsx: 'transform',
