@@ -1,4 +1,36 @@
-## [0.5.20] - 2025-12-17
+## [0.5.21] - 2025-12-17
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.15
+## [0.5.15] - 2025-12-17
+
+### 🐛 Bug Fixes
+
+- *(server)* Block access to sensitive internal files
+- *(server)* Block access to sensitive internal files
+
+### 💼 Other
+
+- Rari@0.5.15
+
+### 🚜 Refactor
+
+- *(docs)* Migrate markdown parser from markdown-it to marked
+- *(server)* Separate stylesheet and script injection into head and body
+- *(rsc)* Standardize boundary ID prop naming to ~boundaryId
+- *(rsc)* Standardize pre-serialized suspense prop naming
+- *(rsc)* Standardize client component marker prop naming
+- *(rsc)* Standardize data attribute naming with tilde prefix
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Add marked to external dependencies in vite config
+## [rari@0.5.20] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.20
 
 ### ⚙️ Miscellaneous Tasks
 
