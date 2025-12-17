@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
-import MarkdownIt from 'markdown-it'
+import { marked } from 'marked'
 import NotFoundPage from '@/app/not-found'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
@@ -43,32 +43,35 @@ export default async function MarkdownRenderer({
 
     const highlighter = await getHighlighter()
 
-    const md = new MarkdownIt({
-      html: true,
-      linkify: true,
-      typographer: true,
+    marked.setOptions({
+      gfm: true,
       breaks: false,
-      highlight: highlighter
-        ? (str, lang) => {
+    })
+
+    if (highlighter) {
+      marked.use({
+        renderer: {
+          code({ text, lang }: { text: string, lang?: string }) {
             if (!lang) {
-              return `<pre><code>${str}</code></pre>`
+              return `<pre><code>${text}</code></pre>`
             }
 
             try {
-              return highlighter.codeToHtml(str, {
+              return highlighter.codeToHtml(text, {
                 lang,
                 theme: SHIKI_THEME,
               })
             }
             catch (error) {
               console.warn(`Failed to highlight ${lang}:`, error)
-              return `<pre><code class="language-${lang}">${str}</code></pre>`
+              return `<pre><code class="language-${lang}">${text}</code></pre>`
             }
-          }
-        : undefined,
-    })
+          },
+        },
+      })
+    }
 
-    const html = md.render(contentWithoutFrontmatter)
+    const html = await marked.parse(contentWithoutFrontmatter)
 
     return (
       <div

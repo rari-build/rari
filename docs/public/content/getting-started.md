@@ -163,13 +163,13 @@ export default function Counter() {
 One of Rari's superpowers is seamless NPM package integration. Let's add markdown support:
 
 ```bash
-pnpm add markdown-it
+pnpm add marked
 ```
 
 Create `src/components/MarkdownPost.tsx`:
 
 ```tsx
-import MarkdownIt from 'markdown-it'
+import { marked } from 'marked'
 
 interface MarkdownPostProps {
   content: string
@@ -178,12 +178,11 @@ interface MarkdownPostProps {
 
 export default async function MarkdownPost({ content, title }: MarkdownPostProps) {
   // Process markdown on the server
-  const md = MarkdownIt({
-    html: true,
+  marked.setOptions({
+    gfm: true,
     breaks: false,
-    linkify: true,
   })
-  const htmlContent = md.render(content)
+  const htmlContent = await marked.parse(content)
 
   return (
     <article>
@@ -203,7 +202,7 @@ import MarkdownPost from '@/components/MarkdownPost'
 const blogPost = `
 # Welcome to Rari!
 
-This markdown is processed **on the server** using the \`markdown-it\` package.
+This markdown is processed **on the server** using the \`marked\` package.
 
 - Fast server-side rendering
 - Universal NPM package support

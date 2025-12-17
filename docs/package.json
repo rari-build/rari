@@ -24,14 +24,13 @@
     "@shikijs/engine-oniguruma": "^3.20.0",
     "@shikijs/langs": "^3.20.0",
     "@shikijs/themes": "^3.20.0",
-    "markdown-it": "^14.1.0",
+    "marked": "^17.0.1",
     "rari": "latest",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
-    "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.0.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
