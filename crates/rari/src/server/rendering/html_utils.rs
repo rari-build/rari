@@ -152,15 +152,39 @@ async fn inject_assets_into_complete_document(
         return Ok(format!("<!DOCTYPE html>\n{}", html));
     }
 
-    let assets = asset_tags.join("\n    ");
-    debug!("Injecting {} new asset tags", asset_tags.len());
+    let mut stylesheets = Vec::new();
+    let mut scripts = Vec::new();
+
+    for tag in asset_tags {
+        if tag.contains("<link") && tag.contains("stylesheet") {
+            stylesheets.push(tag);
+        } else {
+            scripts.push(tag);
+        }
+    }
+
+    debug!("Injecting {} stylesheets and {} scripts", stylesheets.len(), scripts.len());
 
     let mut final_html = html.to_string();
-    if let Some(body_end) = final_html.rfind("</body>") {
-        final_html.insert_str(body_end, &format!("\n    {}\n  ", assets));
-        debug!("Injected assets before </body> tag at position {}", body_end);
-    } else {
-        warn!("No </body> tag found in complete HTML document - cannot inject assets");
+
+    if !stylesheets.is_empty() {
+        let stylesheets_html = stylesheets.join("\n    ");
+        if let Some(head_end) = final_html.find("</head>") {
+            final_html.insert_str(head_end, &format!("    {}\n  ", stylesheets_html));
+            debug!("Injected {} stylesheets before </head> tag", stylesheets.len());
+        } else {
+            warn!("No </head> tag found - cannot inject stylesheets in head");
+        }
+    }
+
+    if !scripts.is_empty() {
+        let scripts_html = scripts.join("\n    ");
+        if let Some(body_end) = final_html.rfind("</body>") {
+            final_html.insert_str(body_end, &format!("\n    {}\n  ", scripts_html));
+            debug!("Injected {} scripts before </body> tag", scripts.len());
+        } else {
+            warn!("No </body> tag found - cannot inject scripts");
+        }
     }
 
     if !final_html.trim_start().starts_with("<!DOCTYPE") {

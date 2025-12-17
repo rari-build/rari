@@ -20,8 +20,7 @@ pub fn validate_suspense_boundaries(rsc_data: &serde_json::Value) -> Result<(), 
 
                 if !fallback_refs.insert(fallback_str.clone()) {
                     let boundary_id = props
-                        .get("__boundary_id")
-                        .or_else(|| props.get("boundaryId"))
+                        .get("~boundaryId")
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown")
                         .to_string();

@@ -75,7 +75,7 @@ else {
       })
 
       const childrenPlaceholder = React.createElement('div', {
-        'data-promise-ref': promiseId,
+        'data-~promise-ref': promiseId,
         'className': 'suspense-placeholder',
       }, 'Loading...')
       let suspenseRscProps
@@ -83,8 +83,8 @@ else {
         const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis.__rsc_client_components || {})
 
         suspenseRscProps = {
-          fallback: fallbackRsc,
-          boundaryId,
+          'fallback': fallbackRsc,
+          '~boundaryId': boundaryId,
         }
       }
       catch (renderError) {
@@ -92,8 +92,8 @@ else {
       }
 
       var pageElement = {
-        __preSerializedSuspense: true,
-        rscArray: ['$', 'react.suspense', null, suspenseRscProps],
+        '~preSerializedSuspense': true,
+        'rscArray': ['$', 'react.suspense', null, suspenseRscProps],
       }
     }
     catch (asyncWrapError) {

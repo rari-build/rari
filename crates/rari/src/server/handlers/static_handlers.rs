@@ -54,6 +54,18 @@ pub async fn static_or_spa_handler(
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
+    const BLOCKED_FILES: &[&str] = &["server-manifest.json", "server/"];
+
+    for blocked in BLOCKED_FILES {
+        if path.starts_with(blocked) || path == *blocked {
+            warn!(
+                requested_path = %path,
+                "Blocked access to sensitive internal file"
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -131,6 +143,14 @@ pub async fn serve_static_asset(
     Path(asset_path): Path<String>,
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
+
+    if asset_path.contains("server-manifest.json") || asset_path.starts_with("../") {
+        warn!(
+            requested_path = %asset_path,
+            "Blocked suspicious asset path"
+        );
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     let assets_dir = state.config.public_dir().join("assets");
 

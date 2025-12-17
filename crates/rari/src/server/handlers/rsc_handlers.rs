@@ -101,8 +101,8 @@ pub async fn register_component(
                     r#"(function() {{
                         const comp = globalThis["{}"];
                         if (comp && typeof comp === 'function') {{
-                            comp.__isClientComponent = true;
-                            comp.__clientComponentId = "{}";
+                            comp['~isClientComponent'] = true;
+                            comp['~clientComponentId'] = "{}";
                         }}
                     }})()"#,
                     request.component_id, request.component_id

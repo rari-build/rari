@@ -177,8 +177,7 @@ impl RscWireFormatParser {
         let children_ref = props.get("children").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
         let boundary_id = props
-            .get("__boundary_id")
-            .or_else(|| props.get("boundaryId"))
+            .get("~boundaryId")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| key.clone())
@@ -302,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_parse_suspense_boundary() {
-        let rsc = r#"0:["$","Suspense",null,{"fallback":"$L1","children":"$L2","__boundary_id":"test-boundary"}]"#;
+        let rsc = r#"0:["$","Suspense",null,{"fallback":"$L1","children":"$L2","~boundaryId":"test-boundary"}]"#;
 
         let mut parser = RscWireFormatParser::new(rsc);
         assert!(parser.parse().is_ok());
@@ -362,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_link_promises_to_boundaries() {
-        let rsc = r#"0:["$","Suspense",null,{"fallback":"$L1","children":"$L2","__boundary_id":"boundary-1"}]
+        let rsc = r#"0:["$","Suspense",null,{"fallback":"$L1","children":"$L2","~boundaryId":"boundary-1"}]
 1:["$","div",null,{"children":"Loading..."}]
 2:["$","Promise",null,{"id":"promise-1"}]"#;
 

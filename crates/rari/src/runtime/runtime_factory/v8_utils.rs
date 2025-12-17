@@ -64,12 +64,12 @@ fn extract_promise_metadata<'s>(
     metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
 
     if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
-        if let Some(boundary_key) = v8::String::new(scope, "boundaryId")
+        if let Some(boundary_key) = v8::String::new(scope, "~boundaryId")
             && let Some(boundary_val) = obj.get(scope, boundary_key.into())
             && let Some(boundary_str) = boundary_val.to_string(scope)
         {
             let boundary_id = boundary_str.to_rust_string_lossy(scope.as_ref());
-            metadata.insert("boundaryId".to_string(), serde_json::Value::String(boundary_id));
+            metadata.insert("~boundaryId".to_string(), serde_json::Value::String(boundary_id));
         }
 
         if let Some(promise_key) = v8::String::new(scope, "promiseId")

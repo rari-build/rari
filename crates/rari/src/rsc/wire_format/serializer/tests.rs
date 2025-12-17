@@ -332,7 +332,7 @@ mod tests {
         let mut suspense_props = FxHashMap::default();
         suspense_props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
         suspense_props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
-        suspense_props.insert("__boundary_id".to_string(), json!("test-boundary"));
+        suspense_props.insert("~boundaryId".to_string(), json!("test-boundary"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", suspense_props);
 
@@ -712,7 +712,7 @@ mod tests {
             let mut props = FxHashMap::default();
             props.insert("fallback".to_string(), serde_json::to_value(&fallback).unwrap());
             props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
-            props.insert("__boundary_id".to_string(), json!("article-boundary"));
+            props.insert("~boundaryId".to_string(), json!("article-boundary"));
             props
         });
 
@@ -743,7 +743,7 @@ mod tests {
 
         let mut props = FxHashMap::default();
         props.insert("children".to_string(), json!({"tag": "div", "props": {}}));
-        props.insert("__boundary_id".to_string(), json!("test"));
+        props.insert("~boundaryId".to_string(), json!("test"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", props);
 
@@ -763,7 +763,7 @@ mod tests {
 
         let mut props = FxHashMap::default();
         props.insert("fallback".to_string(), json!({"tag": "div", "props": {}}));
-        props.insert("__boundary_id".to_string(), json!("test"));
+        props.insert("~boundaryId".to_string(), json!("test"));
 
         let suspense = LoadingReactElement::with_props("react.suspense", props);
 

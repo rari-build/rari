@@ -278,7 +278,7 @@ mod tests {
             "react.suspense",
             null,
             {
-                "__boundary_id": "boundary-1",
+                "~boundaryId": "boundary-1",
                 "fallback": ["$", "div", null, { "children": "Loading 1..." }],
                 "children": "$L1"
             }
@@ -302,7 +302,7 @@ mod tests {
                             "react.suspense",
                             null,
                             {
-                                "__boundary_id": "boundary-1",
+                                "~boundaryId": "boundary-1",
                                 "fallback": ["$", "div", null, { "children": "Loading..." }],
                                 "children": "$L1"
                             }
@@ -312,7 +312,7 @@ mod tests {
                             "react.suspense",
                             null,
                             {
-                                "__boundary_id": "boundary-2",
+                                "~boundaryId": "boundary-2",
                                 "fallback": ["$", "div", null, { "children": "Loading..." }],
                                 "children": "$L2"
                             }
@@ -336,14 +336,14 @@ mod tests {
             "react.suspense",
             null,
             {
-                "__boundary_id": "outer-boundary",
+                "~boundaryId": "outer-boundary",
                 "fallback": ["$", "div", null, { "children": "Loading outer..." }],
                 "children": [
                     "$",
                     "react.suspense",
                     null,
                     {
-                        "__boundary_id": "inner-boundary",
+                        "~boundaryId": "inner-boundary",
                         "fallback": ["$", "div", null, { "children": "Loading inner..." }],
                         "children": "$L1"
                     }
@@ -367,7 +367,7 @@ mod tests {
                     "react.suspense",
                     null,
                     {
-                        "boundaryId": "boundary-1",
+                        "~boundaryId": "boundary-1",
                         "fallback": ["$", "div", null, { "children": "Loading 1..." }],
                         "children": "$L1"
                     }
@@ -377,7 +377,7 @@ mod tests {
                     "react.suspense",
                     null,
                     {
-                        "boundaryId": "boundary-2",
+                        "~boundaryId": "boundary-2",
                         "fallback": ["$", "div", null, { "children": "Loading 2..." }],
                         "children": "$L2"
                     }
@@ -387,7 +387,7 @@ mod tests {
                     "react.suspense",
                     null,
                     {
-                        "boundaryId": "boundary-3",
+                        "~boundaryId": "boundary-3",
                         "fallback": ["$", "div", null, { "children": "Loading 3..." }],
                         "children": "$L3"
                     }

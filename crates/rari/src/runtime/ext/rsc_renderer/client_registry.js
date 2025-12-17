@@ -49,7 +49,7 @@ function isClientComponent(componentType, registry) {
       return true
     }
 
-    if (componentType.__isClientComponent) {
+    if (componentType['~isClientComponent']) {
       return true
     }
   }
@@ -162,20 +162,20 @@ function markAsClientComponent(component, componentId) {
     return
   }
 
-  component.__isClientComponent = true
+  component['~isClientComponent'] = true
 
   if (componentId) {
-    component.__clientComponentId = componentId
+    component['~clientComponentId'] = componentId
   }
 }
 
 function createClientReference(componentId, componentPath) {
   const reference = {
-    $$typeof: Symbol.for('react.client.reference'),
-    $$id: componentId,
-    $$async: false,
-    name: componentId,
-    __isClientComponent: true,
+    '$$typeof': Symbol.for('react.client.reference'),
+    '$$id': componentId,
+    '$$async': false,
+    'name': componentId,
+    '~isClientComponent': true,
   }
 
   registerClientComponent(componentId, componentPath, reference)

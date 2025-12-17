@@ -322,11 +322,8 @@ impl RscHtmlRenderer {
         };
 
         if tag == "react.suspense" {
-            let boundary_id = props
-                .get("__boundary_id")
-                .or_else(|| props.get("boundaryId"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let boundary_id =
+                props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             if !props.contains_key("fallback") {
                 warn!(
@@ -536,7 +533,7 @@ impl RscHtmlRenderer {
             content_html.replace('\\', "\\\\").replace('`', "\\`").replace("${", "\\${");
 
         let update_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
+            r#"<script data-~boundary-id="{}" data-row-id="{}">
 window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
@@ -579,7 +576,7 @@ window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
         );
 
         let error_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
+            r#"<script data-~boundary-id="{}" data-row-id="{}">
 window.__rari && window.__rari.processBoundaryError('{}', '{}', {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
@@ -898,11 +895,8 @@ if (typeof window !== 'undefined') {{
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
         if let Some(props) = props {
-            let rari_boundary_id = props
-                .get("boundaryId")
-                .or_else(|| props.get("__boundary_id"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let rari_boundary_id =
+                props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             let (react_boundary_id, is_duplicate) = {
                 let map = self.rari_to_react_boundary_map.lock();

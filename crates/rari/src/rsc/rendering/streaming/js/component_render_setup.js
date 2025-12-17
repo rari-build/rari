@@ -136,10 +136,9 @@ globalThis.__render_component_async = async function () {
         }))
 
         const fallbackRsc = ['$', 'react.suspense', null, {
-          boundaryId,
-          __boundary_id: boundaryId,
-          fallback: ['$', serializedFallback.type, serializedFallback.key, serializedFallback.props],
-          children: null,
+          '~boundaryId': boundaryId,
+          'fallback': ['$', serializedFallback.type, serializedFallback.key, serializedFallback.props],
+          'children': null,
         }]
 
         const initialResult = {
@@ -248,14 +247,13 @@ globalThis.__render_component_async = async function () {
           type: 'react.suspense',
           key: null,
           props: {
-            boundaryId,
-            __boundary_id: boundaryId,
-            fallback: {
+            '~boundaryId': boundaryId,
+            'fallback': {
               type: serializedFallback.type,
               key: serializedFallback.key,
               props: serializedFallback.props,
             },
-            children: null,
+            'children': null,
           },
         }
 

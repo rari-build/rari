@@ -38,8 +38,8 @@ export function registerClientComponent(componentFunction, id, exportName) {
   globalThis.__clientComponentNames[componentName] = componentId
 
   if (componentFunction) {
-    componentFunction.__isClientComponent = true
-    componentFunction.__clientComponentId = componentId
+    componentFunction['~isClientComponent'] = true
+    componentFunction['~clientComponentId'] = componentId
   }
 
   if (typeof window !== 'undefined') {
@@ -297,9 +297,10 @@ class RscClient {
           const [, type, key, props] = element
 
           if (type === 'react.suspense' || type === 'suspense') {
+            const boundaryId = props?.['~boundaryId']
             const suspenseWrapper = createElement('div', {
-              'data-boundary-id': props?.boundaryId,
-              'boundaryId': props?.boundaryId,
+              'data-~boundary-id': boundaryId,
+              '~boundaryId': boundaryId,
               'data-suspense-boundary': true,
             }, convertRscToReact(props?.fallback || props?.children))
 
@@ -343,8 +344,8 @@ class RscClient {
               }
             }
             else {
-              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, 'boundaryId')) {
-                const { boundaryId, ...rest } = processedProps
+              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, '~boundaryId')) {
+                const { '~boundaryId': tildeBoundaryId, ...rest } = processedProps
                 processedProps = rest
               }
               const reactElement = createElement(type, key ? { ...processedProps, key } : processedProps)
@@ -439,8 +440,9 @@ class RscClient {
                 const parsed = JSON.parse(content)
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, props] = parsed
-                  if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && props.boundaryId) {
-                    boundaryRowMap.set(`$L${rowId}`, props.boundaryId)
+                  const boundaryId = props?.['~boundaryId']
+                  if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && boundaryId) {
+                    boundaryRowMap.set(`$L${rowId}`, boundaryId)
                   }
                   if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
                     if (typeof selector === 'string' && selector.startsWith('$L')) {
@@ -461,7 +463,8 @@ class RscClient {
                   if (Array.isArray(parsed) && parsed.length >= 4 && parsed[0] === '$') {
                     const sel = parsed[1]
                     const p = parsed[3]
-                    if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && p.boundaryId) {
+                    const boundaryId = p?.['~boundaryId']
+                    if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && boundaryId) {
                       canUseAsRoot = false
                     }
                   }
@@ -509,8 +512,8 @@ class RscClient {
           return null
 
         if (isValidElement(element)) {
-          if (element.props && element.props.boundaryId) {
-            const boundaryId = element.props.boundaryId
+          const boundaryId = element.props?.['~boundaryId']
+          if (element.props && boundaryId) {
             const resolvedContent = boundaryUpdates.get(boundaryId)
             if (resolvedContent) {
               return resolvedContent
@@ -673,7 +676,8 @@ class RscClient {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
         const [, type, , props] = element
-        if (type === 'react.suspense' && props && props.boundaryId) {
+        const boundaryId = props?.['~boundaryId']
+        if (type === 'react.suspense' && props && boundaryId) {
           continue
         }
         rootElement = element
