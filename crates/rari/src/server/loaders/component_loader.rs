@@ -261,31 +261,115 @@ impl ComponentLoader {
                         if dist_path.exists() {
                             match std::fs::read_to_string(&dist_path) {
                                 Ok(dist_code) => {
-                                    let wrapped_code =
-                                        wrap_server_action_module(&dist_code, &action_id);
-                                    match renderer
+                                    let module_specifier = format!(
+                                        "file://{}",
+                                        dist_path
+                                            .canonicalize()
+                                            .unwrap_or(dist_path.clone())
+                                            .display()
+                                    );
+
+                                    let esm_load_result = renderer
                                         .runtime
-                                        .execute_script(
-                                            format!(
-                                                "load_action_{}.js",
-                                                action_id.replace('/', "_")
-                                            ),
-                                            wrapped_code,
+                                        .add_module_to_loader_only(
+                                            &module_specifier,
+                                            dist_code.clone(),
                                         )
-                                        .await
-                                    {
-                                        Ok(_) => {
-                                            debug!(
-                                                "Successfully loaded server action: {}",
-                                                action_id
-                                            );
-                                            *loaded_count += 1;
+                                        .await;
+
+                                    if esm_load_result.is_ok() {
+                                        match renderer.runtime.load_es_module(&action_id).await {
+                                            Ok(module_id) => {
+                                                if let Err(e) = renderer
+                                                    .runtime
+                                                    .evaluate_module(module_id)
+                                                    .await
+                                                {
+                                                    error!(
+                                                        "Failed to evaluate server action module {}: {}",
+                                                        action_id, e
+                                                    );
+                                                } else {
+                                                    let registration_script = format!(
+                                                        r#"(async function() {{
+                                                            try {{
+                                                                const moduleNamespace = await import("{}");
+                                                                if (!globalThis.__server_functions) {{
+                                                                    globalThis.__server_functions = {{}};
+                                                                }}
+                                                                for (const [key, value] of Object.entries(moduleNamespace)) {{
+                                                                    if (typeof value === 'function') {{
+                                                                        globalThis.__server_functions[key] = value;
+                                                                        globalThis[key] = value;
+                                                                    }}
+                                                                }}
+                                                                return {{ success: true }};
+                                                            }} catch (error) {{
+                                                                console.error("Failed to register server action {}: ", error);
+                                                                return {{ success: false, error: error.message }};
+                                                            }}
+                                                        }})()"#,
+                                                        module_specifier, action_id
+                                                    );
+
+                                                    if let Err(e) = renderer
+                                                        .runtime
+                                                        .execute_script(
+                                                            format!(
+                                                                "register_action_{}.js",
+                                                                action_id.replace('/', "_")
+                                                            ),
+                                                            registration_script,
+                                                        )
+                                                        .await
+                                                    {
+                                                        warn!(
+                                                            "Failed to register server action {} to globalThis: {}",
+                                                            action_id, e
+                                                        );
+                                                    } else {
+                                                        debug!(
+                                                            "Successfully loaded server action: {}",
+                                                            action_id
+                                                        );
+                                                        *loaded_count += 1;
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!(
+                                                    "Failed to load server action {} as ESM module: {}",
+                                                    action_id, e
+                                                );
+                                            }
                                         }
-                                        Err(e) => {
-                                            error!(
-                                                "Failed to load server action {}: {}",
-                                                action_id, e
-                                            );
+                                    } else {
+                                        let wrapped_code =
+                                            wrap_server_action_module(&dist_code, &action_id);
+                                        match renderer
+                                            .runtime
+                                            .execute_script(
+                                                format!(
+                                                    "load_action_{}.js",
+                                                    action_id.replace('/', "_")
+                                                ),
+                                                wrapped_code,
+                                            )
+                                            .await
+                                        {
+                                            Ok(_) => {
+                                                debug!(
+                                                    "Successfully loaded server action: {}",
+                                                    action_id
+                                                );
+                                                *loaded_count += 1;
+                                            }
+                                            Err(e) => {
+                                                error!(
+                                                    "Failed to load server action {}: {}",
+                                                    action_id, e
+                                                );
+                                            }
                                         }
                                     }
                                 }
@@ -366,25 +450,104 @@ impl ComponentLoader {
 
                         debug!("Loading server action file: {} from {:?}", relative_str, path);
 
-                        let wrapped_code =
-                            wrap_server_action_module(&component_code, &relative_str);
-                        match renderer
+                        let module_specifier = format!(
+                            "file://{}",
+                            path.canonicalize().unwrap_or(path.to_path_buf()).display()
+                        );
+
+                        let esm_load_result = renderer
                             .runtime
-                            .execute_script(
-                                format!("load_{}.js", relative_str.replace('/', "_")),
-                                wrapped_code,
-                            )
-                            .await
-                        {
-                            Ok(_) => {
-                                debug!("Successfully loaded server actions from: {}", relative_str);
-                                *loaded_count += 1;
+                            .add_module_to_loader_only(&module_specifier, component_code.clone())
+                            .await;
+
+                        if esm_load_result.is_ok() {
+                            match renderer.runtime.load_es_module(&relative_str).await {
+                                Ok(module_id) => {
+                                    if let Err(e) =
+                                        renderer.runtime.evaluate_module(module_id).await
+                                    {
+                                        error!(
+                                            "Failed to evaluate server action module {}: {}",
+                                            relative_str, e
+                                        );
+                                    } else {
+                                        let registration_script = format!(
+                                            r#"(async function() {{
+                                                try {{
+                                                    const moduleNamespace = await import("{}");
+                                                    if (!globalThis.__server_functions) {{
+                                                        globalThis.__server_functions = {{}};
+                                                    }}
+                                                    for (const [key, value] of Object.entries(moduleNamespace)) {{
+                                                        if (typeof value === 'function') {{
+                                                            globalThis.__server_functions[key] = value;
+                                                            globalThis[key] = value;
+                                                        }}
+                                                    }}
+                                                    return {{ success: true }};
+                                                }} catch (error) {{
+                                                    console.error("Failed to register server action {}: ", error);
+                                                    return {{ success: false, error: error.message }};
+                                                }}
+                                            }})()"#,
+                                            module_specifier, relative_str
+                                        );
+
+                                        if let Err(e) = renderer
+                                            .runtime
+                                            .execute_script(
+                                                format!(
+                                                    "register_{}.js",
+                                                    relative_str.replace('/', "_")
+                                                ),
+                                                registration_script,
+                                            )
+                                            .await
+                                        {
+                                            warn!(
+                                                "Failed to register server action {} to globalThis: {}",
+                                                relative_str, e
+                                            );
+                                        } else {
+                                            debug!(
+                                                "Successfully loaded server actions from: {}",
+                                                relative_str
+                                            );
+                                            *loaded_count += 1;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Failed to load server action {} as ESM module: {}",
+                                        relative_str, e
+                                    );
+                                }
                             }
-                            Err(e) => {
-                                error!(
-                                    "Failed to load server actions from {}: {}",
-                                    relative_str, e
-                                );
+                        } else {
+                            let wrapped_code =
+                                wrap_server_action_module(&component_code, &relative_str);
+                            match renderer
+                                .runtime
+                                .execute_script(
+                                    format!("load_{}.js", relative_str.replace('/', "_")),
+                                    wrapped_code,
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    debug!(
+                                        "Successfully loaded server actions from: {}",
+                                        relative_str
+                                    );
+                                    *loaded_count += 1;
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Failed to load server actions from {}: {}",
+                                        relative_str, e
+                                    );
+                                }
                             }
                         }
                         continue;
@@ -397,15 +560,7 @@ impl ComponentLoader {
                         .replace(".js", "")
                         .replace('\\', "/");
 
-                    let component_id = if relative_str.starts_with("app/") {
-                        relative_str.clone()
-                    } else {
-                        relative_path
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("unknown")
-                            .to_string()
-                    };
+                    let component_id = relative_str.clone();
 
                     debug!("Loading component: {} from {:?}", component_id, path);
 
@@ -425,52 +580,178 @@ impl ComponentLoader {
                         );
                     }
 
-                    match renderer
-                        .runtime
-                        .execute_script(
-                            format!("load_{}.js", component_id.replace('/', "_")),
-                            transformed_module_code,
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            debug!("Successfully loaded component: {}", component_id);
+                    let module_specifier = format!(
+                        "file://{}",
+                        path.canonicalize().unwrap_or(path.to_path_buf()).display()
+                    );
 
-                            if is_client_component {
-                                let mark_client_script = format!(
-                                    r#"(function() {{
-                                        const comp = globalThis["{}"];
-                                        if (comp && typeof comp === 'function') {{
-                                            comp.__isClientComponent = true;
-                                            comp.__clientComponentId = "{}";
-                                        }}
-                                        return {{ componentId: "{}", isClient: true }};
-                                    }})()"#,
-                                    component_id, component_id, component_id
+                    let esm_load_result = renderer
+                        .runtime
+                        .add_module_to_loader_only(&module_specifier, component_code.clone())
+                        .await;
+
+                    if esm_load_result.is_ok() {
+                        match renderer.runtime.load_es_module(&component_id).await {
+                            Ok(module_id) => {
+                                debug!(
+                                    "Loaded component {} as ESM module (id: {})",
+                                    component_id, module_id
                                 );
 
-                                if let Err(e) = renderer
-                                    .runtime
-                                    .execute_script(
-                                        format!(
-                                            "mark_client_{}.js",
-                                            component_id.replace('/', "_")
-                                        ),
-                                        mark_client_script,
-                                    )
-                                    .await
-                                {
-                                    warn!(
-                                        "Failed to mark component {} as client: {}",
-                                        component_id, e
+                                if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
+                                    error!(
+                                        "Failed to evaluate ESM module {} (id: {}): {}",
+                                        component_id, module_id, e
                                     );
+                                } else {
+                                    let registration_script = format!(
+                                        r#"(async function() {{
+                                            try {{
+                                                const moduleNamespace = await import("{}");
+
+                                                if (moduleNamespace.default) {{
+                                                    globalThis["{}"] = moduleNamespace.default;
+                                                }} else {{
+                                                    const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
+                                                    if (exports.length > 0) {{
+                                                        globalThis["{}"] = exports[0];
+                                                    }}
+                                                }}
+
+                                                for (const [key, value] of Object.entries(moduleNamespace)) {{
+                                                    if (key !== 'default' && typeof value === 'function') {{
+                                                        globalThis[key] = value;
+                                                    }}
+                                                }}
+
+                                                if (!globalThis.__rsc_modules) {{
+                                                    globalThis.__rsc_modules = {{}};
+                                                }}
+                                                globalThis.__rsc_modules["{}"] = moduleNamespace;
+
+                                                return {{ success: true }};
+                                            }} catch (error) {{
+                                                console.error("Failed to register component {}: ", error);
+                                                return {{ success: false, error: error.message }};
+                                            }}
+                                        }})()"#,
+                                        module_specifier,
+                                        component_id,
+                                        component_id,
+                                        component_id,
+                                        component_id
+                                    );
+
+                                    if let Err(e) = renderer
+                                        .runtime
+                                        .execute_script(
+                                            format!(
+                                                "register_{}.js",
+                                                component_id.replace('/', "_")
+                                            ),
+                                            registration_script,
+                                        )
+                                        .await
+                                    {
+                                        warn!(
+                                            "Failed to register ESM component {} to globalThis: {}",
+                                            component_id, e
+                                        );
+                                    }
+
+                                    if is_client_component {
+                                        let mark_client_script = format!(
+                                            r#"(function() {{
+                                                const comp = globalThis["{}"];
+                                                if (comp && typeof comp === 'function') {{
+                                                    comp.__isClientComponent = true;
+                                                    comp.__clientComponentId = "{}";
+                                                }}
+                                                return {{ componentId: "{}", isClient: true }};
+                                            }})()"#,
+                                            component_id, component_id, component_id
+                                        );
+
+                                        if let Err(e) = renderer
+                                            .runtime
+                                            .execute_script(
+                                                format!(
+                                                    "mark_client_{}.js",
+                                                    component_id.replace('/', "_")
+                                                ),
+                                                mark_client_script,
+                                            )
+                                            .await
+                                        {
+                                            warn!(
+                                                "Failed to mark component {} as client: {}",
+                                                component_id, e
+                                            );
+                                        }
+                                    }
+
+                                    *loaded_count += 1;
                                 }
                             }
-
-                            *loaded_count += 1;
+                            Err(e) => {
+                                error!(
+                                    "Failed to load component {} as ESM module: {}",
+                                    component_id, e
+                                );
+                            }
                         }
-                        Err(e) => {
-                            error!("Failed to execute component {}: {}", component_id, e);
+                    } else {
+                        debug!(
+                            "Could not add component {} to module loader, falling back to execute_script",
+                            component_id
+                        );
+                        match renderer
+                            .runtime
+                            .execute_script(
+                                format!("load_{}.js", component_id.replace('/', "_")),
+                                transformed_module_code,
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                debug!("Successfully loaded component: {}", component_id);
+
+                                if is_client_component {
+                                    let mark_client_script = format!(
+                                        r#"(function() {{
+                                            const comp = globalThis["{}"];
+                                            if (comp && typeof comp === 'function') {{
+                                                comp.__isClientComponent = true;
+                                                comp.__clientComponentId = "{}";
+                                            }}
+                                            return {{ componentId: "{}", isClient: true }};
+                                        }})()"#,
+                                        component_id, component_id, component_id
+                                    );
+
+                                    if let Err(e) = renderer
+                                        .runtime
+                                        .execute_script(
+                                            format!(
+                                                "mark_client_{}.js",
+                                                component_id.replace('/', "_")
+                                            ),
+                                            mark_client_script,
+                                        )
+                                        .await
+                                    {
+                                        warn!(
+                                            "Failed to mark component {} as client: {}",
+                                            component_id, e
+                                        );
+                                    }
+                                }
+
+                                *loaded_count += 1;
+                            }
+                            Err(e) => {
+                                error!("Failed to execute component {}: {}", component_id, e);
+                            }
                         }
                     }
                 }
