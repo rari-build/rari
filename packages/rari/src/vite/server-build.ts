@@ -359,7 +359,7 @@ const ${importName} = (props) => {
 
   private async buildComponentCodeOnly(
     inputPath: string,
-    componentId: string,
+    _componentId: string,
     _component: { dependencies: string[], hasNodeImports: boolean },
   ): Promise<string> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
@@ -566,23 +566,11 @@ const ${importName} = (props) => {
             },
           },
         ],
-        banner: {
-          js: `// Rari Server Component Bundle
-// Generated at: ${new Date().toISOString()}
-// Original file: ${path.relative(this.projectRoot, inputPath)}
-`,
-        },
       })
 
       if (result.outputFiles && result.outputFiles.length > 0) {
         const outputFile = result.outputFiles[0]
-
-        const finalTransformedCode = `// ESM Module: ${componentId}
-// Generated at: ${new Date().toISOString()}
-// Original file: ${path.relative(this.projectRoot, inputPath)}
-
-${outputFile.text}
-`
+        const finalTransformedCode = outputFile.text
 
         return finalTransformedCode
       }
@@ -698,10 +686,6 @@ ${outputFile.text}
     _component: { dependencies: string[], hasNodeImports: boolean },
     returnCode = false,
   ): Promise<string | void> {
-    const componentId = this.getComponentId(
-      path.relative(this.projectRoot, inputPath),
-    )
-
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
     const clientTransformedCode = this.transformClientImports(
       originalCode,
@@ -758,8 +742,10 @@ ${outputFile.text}
           '.jsx': 'jsx',
         },
         resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
-        minify: false,
-        minifyIdentifiers: false,
+        minify: this.options.minify,
+        minifyWhitespace: this.options.minify,
+        minifyIdentifiers: this.options.minify,
+        minifySyntax: this.options.minify,
         sourcemap: false,
         metafile: false,
         write: false,
@@ -920,12 +906,6 @@ ${outputFile.text}
             },
           },
         ],
-        banner: {
-          js: `// Rari Server Component Bundle
-// Generated at: ${new Date().toISOString()}
-// Original file: ${path.relative(this.projectRoot, inputPath)}
-`,
-        },
       })
 
       if (result.outputFiles && result.outputFiles.length > 0) {
@@ -1041,8 +1021,10 @@ ${outputFile.text}
           },
         )
 
+        // Rewrite external imports (like @/actions/todo-actions) to use file:// URLs
+        // This regex handles both minified and non-minified code
         code = code.replace(
-          /import\s+(\{[^}]+\}|\w+)\s+from\s+["']([^"']+)["'];?/g,
+          /import\s*(\{[^}]+\}|\w+)\s*from\s*["']([^"']+)["'];?/g,
           (match, imports, importPath) => {
             if (importPath.startsWith('file://') || importPath.startsWith('npm:')) {
               return match
@@ -1080,17 +1062,10 @@ ${outputFile.text}
           },
         )
 
-        const finalTransformedCode = `// ESM Module: ${componentId}
-// Generated at: ${new Date().toISOString()}
-// Original file: ${path.relative(this.projectRoot, inputPath)}
-
-${code}
-`
-
-        await fs.promises.writeFile(outputPath, finalTransformedCode, 'utf-8')
+        await fs.promises.writeFile(outputPath, code, 'utf-8')
 
         if (returnCode) {
-          return finalTransformedCode
+          return code
         }
       }
 
