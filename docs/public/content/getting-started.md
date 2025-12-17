@@ -22,19 +22,16 @@ Before you begin, ensure you have the following installed:
 The fastest way to get started is with our project generator:
 
 ```bash
-npm create rari-app@latest my-rari-app
+pnpm create rari-app@latest my-rari-app
 cd my-rari-app
-npm run dev
+pnpm dev
 ```
 
 Or with other package managers:
 
 ```bash
-# Using pnpm (recommended)
-pnpm create rari-app my-rari-app
-
-# Using yarn
-yarn create rari-app my-rari-app
+# Using npm
+npm create rari-app my-rari-app
 
 # Using bun
 bun create rari-app my-rari-app
@@ -45,7 +42,7 @@ bun create rari-app my-rari-app
 If you have an existing Vite + React project:
 
 ```bash
-npm install rari
+pnpm add rari
 ```
 
 Update your `vite.config.ts`:
@@ -93,7 +90,7 @@ Create `src/app/page.tsx` (home page):
 
 ```tsx
 import type { PageProps } from 'rari/client'
-import Counter from '../components/Counter'
+import Counter from '@/components/Counter'
 
 // This is a React Server Component - runs on the server!
 export default async function HomePage({ params, searchParams }: PageProps) {
@@ -155,7 +152,7 @@ export default function Counter() {
 One of Rari's superpowers is seamless NPM package integration. Let's add markdown support:
 
 ```bash
-npm install markdown-it
+pnpm add markdown-it
 ```
 
 Create `src/components/MarkdownPost.tsx`:
@@ -190,7 +187,7 @@ Use it in a page:
 
 ```tsx
 // src/app/blog/page.tsx
-import MarkdownPost from '../../components/MarkdownPost'
+import MarkdownPost from '@/components/MarkdownPost'
 
 const blogPost = `
 # Welcome to Rari!
@@ -221,7 +218,7 @@ export const metadata = {
 ### Start Development Server
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Your app will be available at `http://localhost:5173` (Vite default) with:
@@ -233,7 +230,7 @@ Your app will be available at `http://localhost:5173` (Vite default) with:
 ### Build for Production
 
 ```bash
-npm run build
+pnpm build
 ```
 
 This creates an optimized production build with:
@@ -244,7 +241,7 @@ This creates an optimized production build with:
 ### Start Production Server
 
 ```bash
-npm run start
+pnpm start
 ```
 
 Runs your optimized app in production mode.
@@ -482,7 +479,7 @@ Use server actions in client components with `useActionState`:
 'use client'
 
 import { useActionState } from 'react'
-import { createUser } from '../actions/user-actions'
+import { createUser } from '@/actions/user-actions'
 
 export default function UserForm() {
   const [state, formAction, isPending] = useActionState(createUser, null)
@@ -543,7 +540,7 @@ export async function generateMetadata({ params }: PageProps<{ id: string }>) {
 ```tsx
 // src/app/dashboard/page.tsx - Server component that includes client components
 import type { PageProps } from 'rari/client'
-import ClientCounter from '../../components/ClientCounter'
+import ClientCounter from '@/components/ClientCounter'
 
 export default async function Dashboard({ params, searchParams }: PageProps) {
   const stats = await getServerStats()
@@ -556,8 +553,6 @@ export default async function Dashboard({ params, searchParams }: PageProps) {
         {stats.totalUsers}
       </div>
       <ClientCounter />
-      {' '}
-      {/* Client component */}
     </div>
   )
 }

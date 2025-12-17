@@ -10,8 +10,14 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
 
+    /* Path aliases */
+    "paths": {
+      "*": ["./*"],
+      "@/*": ["./src/*"]
+    },
+
+    "allowImportingTsExtensions": true,
     /* Linting */
     "strict": true,
     "noFallthroughCasesInSwitch": true,
