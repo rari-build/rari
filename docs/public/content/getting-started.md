@@ -53,8 +53,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(), // Core Rari plugin
-    rariRouter(), // App router support
+    rari(),
+    rariRouter(),
   ],
 })
 ```
@@ -94,10 +94,9 @@ import Counter from '@/components/Counter'
 
 // This is a React Server Component - runs on the server!
 export default async function HomePage({ params, searchParams }: PageProps) {
-  const timestamp = new Date().toISOString()
-
-  // Simulate async work
-  await new Promise(resolve => setTimeout(resolve, 100))
+  // Fetch data on the server
+  const response = await fetch('https://api.github.com/repos/facebook/react')
+  const repoData = await response.json()
 
   return (
     <div>
@@ -105,10 +104,22 @@ export default async function HomePage({ params, searchParams }: PageProps) {
 
       {/* Server-rendered content */}
       <div>
-        <h2>Server Time</h2>
+        <h2>React Repository Stats</h2>
         <p>
-          Generated on server at:
-          {timestamp}
+          Stars:
+          {repoData.stargazers_count.toLocaleString()}
+        </p>
+        <p>
+          Forks:
+          {repoData.forks_count.toLocaleString()}
+        </p>
+        <p>
+          Watchers:
+          {repoData.watchers_count.toLocaleString()}
+        </p>
+        <p>
+          Last updated:
+          {new Date(repoData.updated_at).toLocaleDateString()}
         </p>
       </div>
 
