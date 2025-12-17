@@ -370,10 +370,9 @@ const ${importName} = (props) => {
       inputPath,
     )
     const isPage = this.isPageComponent(inputPath)
-    const componentGlobalCode = isPage
+    const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
       : clientTransformedCode
-    const transformedCode = this.transformNodeImports(componentGlobalCode)
 
     const ext = path.extname(inputPath)
     let loader: string
@@ -694,10 +693,9 @@ const ${importName} = (props) => {
       inputPath,
     )
     const isPage = this.isPageComponent(inputPath)
-    const componentGlobalCode = isPage
+    const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
       : clientTransformedCode
-    const transformedCode = this.transformNodeImports(componentGlobalCode)
 
     const ext = path.extname(inputPath)
     let loader: string
@@ -931,100 +929,6 @@ const ${importName} = (props) => {
           '// React is available as globalThis.React\n',
         )
 
-        code = code.replace(
-          /import\s+\{([^}]+)\}\s+from\s+['"]node:fs\/promises['"];?\s*/g,
-          (match, imports) => {
-            const importList = imports.split(',').map((i: string) => i.trim())
-            return importList.map((imp: string) => {
-              if (imp === 'readFile') {
-                return 'const readFile = async (path, encoding = "utf-8") => await globalThis.Deno.readTextFile(path);'
-              }
-              if (imp === 'writeFile') {
-                return 'const writeFile = async (path, data) => await globalThis.Deno.writeTextFile(path, data);'
-              }
-              if (imp === 'mkdir') {
-                return 'const mkdir = async (path, options) => await globalThis.Deno.mkdir(path, options);'
-              }
-              if (imp === 'readdir') {
-                return 'const readdir = async (path) => { const entries = []; for await (const e of globalThis.Deno.readDir(path)) entries.push(e.name); return entries; };'
-              }
-              if (imp === 'stat') {
-                return 'const stat = async (path) => await globalThis.Deno.stat(path);'
-              }
-              return `const ${imp} = async () => { throw new Error('${imp} not available'); };`
-            }).join('\n')
-          },
-        )
-
-        code = code.replace(
-          /import\s+\{([^}]+)\}\s+from\s+['"]node:fs['"];?\s*/g,
-          (match, imports) => {
-            const importList = imports.split(',').map((i: string) => i.trim())
-            return importList.map((imp: string) => {
-              if (imp === 'readFileSync') {
-                return 'const readFileSync = (path, encoding) => globalThis.Deno?.readTextFileSync ? globalThis.Deno.readTextFileSync(path) : "";'
-              }
-              if (imp === 'existsSync') {
-                return 'const existsSync = (path) => { try { globalThis.Deno?.statSync(path); return true; } catch { return false; } };'
-              }
-              if (imp === 'statSync') {
-                return 'const statSync = (path) => { const s = globalThis.Deno?.statSync(path); return { isFile: () => s?.isFile, isDirectory: () => s?.isDirectory, size: s?.size || 0 }; };'
-              }
-              if (imp === 'readdirSync') {
-                return 'const readdirSync = (path) => { const entries = []; for (const e of globalThis.Deno?.readDirSync(path) || []) entries.push(e.name); return entries; };'
-              }
-              return `const ${imp} = () => {};`
-            }).join('\n')
-          },
-        )
-
-        code = code.replace(
-          /import\s+\{([^}]+)\}\s+from\s+['"]node:path['"];?\s*/g,
-          (match, imports) => {
-            const importList = imports.split(',').map((i: string) => i.trim())
-            return importList.map((imp: string) => {
-              if (imp === 'join') {
-                return 'const join = (...paths) => { if (paths.length === 0) return "."; const isAbsolute = paths[0]?.startsWith("/"); const parts = paths.filter(Boolean).join("/").split("/").filter(p => p && p !== "."); const result = []; for (const p of parts) { if (p === "..") { if (result.length && result[result.length-1] !== "..") result.pop(); else if (!isAbsolute) result.push(".."); } else result.push(p); } return (isAbsolute ? "/" : "") + result.join("/") || (isAbsolute ? "/" : "."); };'
-              }
-              if (imp === 'resolve') {
-                return 'const resolve = (...paths) => { const cwd = globalThis.Deno?.cwd?.() || "/"; let resolved = ""; let isAbs = false; for (let i = paths.length - 1; i >= -1 && !isAbs; i--) { const p = i >= 0 ? paths[i] : cwd; if (!p) continue; resolved = p + "/" + resolved; isAbs = p[0] === "/"; } const parts = resolved.split("/").filter(Boolean); const result = []; for (const p of parts) { if (p === "..") { if (result.length && result[result.length-1] !== "..") result.pop(); else if (!isAbs) result.push(".."); } else if (p !== ".") result.push(p); } return (isAbs ? "/" : "") + result.join("/") || "."; };'
-              }
-              if (imp === 'dirname') {
-                return 'const dirname = (path) => { const parts = path.split("/").filter(Boolean); parts.pop(); return parts.length ? "/" + parts.join("/") : "/"; };'
-              }
-              if (imp === 'basename') {
-                return 'const basename = (path) => path.split("/").filter(Boolean).pop() || "";'
-              }
-              return `const ${imp} = () => {};`
-            }).join('\n')
-          },
-        )
-
-        code = code.replace(
-          /import\s+\{([^}]+)\}\s+from\s+['"]node:process['"];?\s*/g,
-          (match, imports) => {
-            const importList = imports.split(',').map((i: string) => i.trim())
-            return importList.map((imp: string) => {
-              if (imp === 'cwd') {
-                return 'const cwd = () => globalThis.Deno?.cwd?.() || "/";'
-              }
-              if (imp === 'env') {
-                return 'const env = new Proxy({}, { get: (_, prop) => globalThis.Deno?.env?.get?.(prop) });'
-              }
-              return `const ${imp} = () => {};`
-            }).join('\n')
-          },
-        )
-
-        code = code.replace(
-          /import\s+(\w+)\s+from\s+['"]node:process['"];?\s*/g,
-          (match, importName) => {
-            return `const ${importName} = { cwd: () => globalThis.Deno?.cwd?.() || ".", env: globalThis.Deno?.env || {} };`
-          },
-        )
-
-        // Rewrite external imports (like @/actions/todo-actions) to use file:// URLs
-        // This regex handles both minified and non-minified code
         code = code.replace(
           /import\s*(\{[^}]+\}|\w+)\s*from\s*["']([^"']+)["'];?/g,
           (match, imports, importPath) => {
@@ -1367,125 +1271,6 @@ function registerClientReference(clientReference, id, exportName) {
     }
 
     return `${resolvedPath}.tsx`
-  }
-
-  private transformNodeImports(code: string): string {
-    let transformedCode = code
-
-    transformedCode = transformedCode.replace(
-      /import\s+(\w+)\s+from\s+['"]node:process['"];?\s*/g,
-      (match, importName) => {
-        return `const ${importName} = { cwd: () => globalThis.Deno?.cwd?.() || '.', env: globalThis.Deno?.env || {} };`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]node:fs\/promises['"];?\s*/g,
-      (match, imports) => {
-        const importList = imports.split(',').map((imp: string) => imp.trim())
-        return importList
-          .map((imp: string) => {
-            const cleanImp = imp.replace(/\s+as\s+\w+/, '')
-            if (cleanImp === 'readFile') {
-              return `const ${cleanImp} = async (path, encoding = 'utf-8') => await globalThis.Deno.readTextFile(path);`
-            }
-            if (cleanImp === 'writeFile') {
-              return `const ${cleanImp} = async (path, data) => await globalThis.Deno.writeTextFile(path, data);`
-            }
-            if (cleanImp === 'mkdir') {
-              return `const ${cleanImp} = async (path, options) => await globalThis.Deno.mkdir(path, options);`
-            }
-            if (cleanImp === 'readdir') {
-              return `const ${cleanImp} = async (path) => { const entries = []; for await (const e of globalThis.Deno.readDir(path)) entries.push(e.name); return entries; };`
-            }
-            if (cleanImp === 'stat') {
-              return `const ${cleanImp} = async (path) => await globalThis.Deno.stat(path);`
-            }
-            return `const ${cleanImp} = async () => { throw new Error('${cleanImp} not available'); };`
-          })
-          .join('\n')
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]node:fs['"];?\s*/g,
-      (match, imports) => {
-        const importList = imports.split(',').map((imp: string) => imp.trim())
-        return importList
-          .map((imp: string) => {
-            const cleanImp = imp.replace(/\s+as\s+\w+/, '')
-            if (cleanImp === 'existsSync') {
-              return `const ${cleanImp} = (path) => { try { if (globalThis.Deno?.statSync) { globalThis.Deno.statSync(path); return true; } return false; } catch (error) { return false; } };`
-            }
-            if (cleanImp === 'readFileSync') {
-              return `const ${cleanImp} = (path, encoding = 'utf8') => globalThis.Deno.readTextFileSync(path);`
-            }
-            if (cleanImp === 'writeFileSync') {
-              return `const ${cleanImp} = (path, data) => globalThis.Deno.writeTextFileSync(path, data);`
-            }
-            if (cleanImp === 'mkdirSync') {
-              return `const ${cleanImp} = (path, options) => globalThis.Deno.mkdirSync(path, options);`
-            }
-            if (cleanImp === 'readdirSync') {
-              return `const ${cleanImp} = (path) => { const entries = []; for (const e of globalThis.Deno.readDirSync(path)) entries.push(e.name); return entries; };`
-            }
-            if (cleanImp === 'statSync') {
-              return `const ${cleanImp} = (path) => globalThis.Deno.statSync(path);`
-            }
-            return `const ${cleanImp} = globalThis.Deno?.${cleanImp} || (() => { throw new Error('${cleanImp} not available'); });`
-          })
-          .join('\n')
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]node:path['"];?\s*/g,
-      (match, imports) => {
-        const importList = imports.split(',').map((imp: string) => imp.trim())
-        return importList
-          .map((imp: string) => {
-            const cleanImp = imp.replace(/\s+as\s+\w+/, '')
-            if (cleanImp === 'join') {
-              return `const ${cleanImp} = (...paths) => { if (paths.length === 0) return '.'; const isAbsolute = paths[0]?.startsWith('/'); const parts = paths.filter(Boolean).join('/').split('/').filter(p => p && p !== '.'); const result = []; for (const p of parts) { if (p === '..') { if (result.length && result[result.length-1] !== '..') result.pop(); else if (!isAbsolute) result.push('..'); } else result.push(p); } return (isAbsolute ? '/' : '') + result.join('/') || (isAbsolute ? '/' : '.'); };`
-            }
-            if (cleanImp === 'resolve') {
-              return `const ${cleanImp} = (...paths) => { const cwd = globalThis.Deno?.cwd?.() || '.'; let resolved = ''; let isAbs = false; for (let i = paths.length - 1; i >= -1 && !isAbs; i--) { const p = i >= 0 ? paths[i] : cwd; if (!p) continue; resolved = p + '/' + resolved; isAbs = p[0] === '/'; } const parts = resolved.split('/').filter(Boolean); const result = []; for (const p of parts) { if (p === '..') { if (result.length && result[result.length-1] !== '..') result.pop(); else if (!isAbs) result.push('..'); } else if (p !== '.') result.push(p); } return (isAbs ? '/' : '') + result.join('/') || '.'; };`
-            }
-            if (cleanImp === 'dirname') {
-              return `const ${cleanImp} = (path) => { const parts = path.split('/').filter(Boolean); parts.pop(); return parts.length ? '/' + parts.join('/') : '.'; };`
-            }
-            if (cleanImp === 'basename') {
-              return `const ${cleanImp} = (path, ext) => { let base = path.split('/').filter(Boolean).pop() || ''; if (ext && base.endsWith(ext)) base = base.slice(0, -ext.length); return base; };`
-            }
-            if (cleanImp === 'extname') {
-              return `const ${cleanImp} = (path) => { const base = path.split('/').pop() || ''; const idx = base.lastIndexOf('.'); return idx > 0 ? base.slice(idx) : ''; };`
-            }
-            return `const ${cleanImp} = globalThis.path?.${cleanImp} || (() => { throw new Error('${cleanImp} not available'); });`
-          })
-          .join('\n')
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]node:process['"];?\s*/g,
-      (match, imports) => {
-        const importList = imports.split(',').map((imp: string) => imp.trim())
-        return importList
-          .map((imp: string) => {
-            const cleanImp = imp.replace(/\s+as\s+\w+/, '')
-            if (cleanImp === 'cwd') {
-              return `const ${cleanImp} = () => globalThis.Deno?.cwd?.() || '.';`
-            }
-            if (cleanImp === 'env') {
-              return `const ${cleanImp} = globalThis.Deno?.env || {};`
-            }
-            return `const ${cleanImp} = globalThis.process?.${cleanImp} || (() => { throw new Error('${cleanImp} not available'); });`
-          })
-          .join('\n')
-      },
-    )
-
-    return transformedCode
   }
 
   private getComponentId(relativePath: string): string {
