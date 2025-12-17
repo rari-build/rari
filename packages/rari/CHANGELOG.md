@@ -1,3 +1,54 @@
+## [0.5.20] - 2025-12-17
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari to 0.5.14
+## [0.5.14] - 2025-12-17
+
+### 🚀 Features
+
+- *(rari)* Add external module configuration for server builds
+- *(server)* Improve server action module loading with ESM support
+
+### 🚜 Refactor
+
+- *(rsc)* Remove legacy module fallback patterns and simplify runtime
+- *(vite)* Simplify node imports transformation in server build
+
+### 📚 Documentation
+
+- *(getting-started)* Standardize pnpm usage and add path aliases
+- *(getting-started)* Improve example with real-world API usage and styling
+
+### 🎨 Styling
+
+- *(docs)* Improve prose list styling and readability
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari to 0.5.14
+## [create-rari-app@0.2.11] - 2025-12-17
+
+### 🚀 Features
+
+- *(runtime)* Add module loading and component initialization improvements
+
+### 💼 Other
+
+- Create-rari-app@0.2.11
+
+### 🚜 Refactor
+
+- *(vite)* Remove unnecessary banners and optimize minification settings
+
+### ⚙️ Miscellaneous Tasks
+
+- *(create-rari-app)* Add predev script to default template
+## [rari@0.5.19] - 2025-12-16
+
+### 💼 Other
+
+- Rari@0.5.19
 ## [0.5.13] - 2025-12-16
 
 ### 🚀 Features
