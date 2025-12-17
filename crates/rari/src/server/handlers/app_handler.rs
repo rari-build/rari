@@ -502,6 +502,20 @@ pub async fn handle_app_route(
         let path_without_leading_slash = &path[1..];
 
         if path_without_leading_slash.contains('.') {
+            const BLOCKED_FILES: &[&str] = &["server-manifest.json", "server/"];
+
+            for blocked in BLOCKED_FILES {
+                if path_without_leading_slash.starts_with(blocked)
+                    || path_without_leading_slash == *blocked
+                {
+                    warn!(
+                        requested_path = %path,
+                        "Blocked access to sensitive internal file"
+                    );
+                    return Err(StatusCode::NOT_FOUND);
+                }
+            }
+
             use crate::server::utils::path_validation::validate_safe_path;
 
             let file_path =
