@@ -89,11 +89,11 @@
     "picocolors": "^1.1.1"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.5.14",
-    "rari-darwin-x64": "0.5.14",
-    "rari-linux-arm64": "0.5.14",
-    "rari-linux-x64": "0.5.14",
-    "rari-win32-x64": "0.5.14"
+    "rari-darwin-arm64": "0.5.15",
+    "rari-darwin-x64": "0.5.15",
+    "rari-linux-arm64": "0.5.15",
+    "rari-linux-x64": "0.5.15",
+    "rari-win32-x64": "0.5.15"
   },
   "devDependencies": {
     "@types/node": "^25.0.1",
