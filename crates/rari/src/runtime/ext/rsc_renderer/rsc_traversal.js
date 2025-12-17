@@ -61,7 +61,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
-    if (element.__preSerializedSuspense && element.rscArray) {
+    if (element['~preSerializedSuspense'] && element.rscArray) {
       return element.rscArray
     }
 

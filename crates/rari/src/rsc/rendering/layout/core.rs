@@ -246,7 +246,7 @@ impl LayoutRenderer {
                     }
                 }
                 serde_json::Value::Object(obj) => {
-                    if obj.contains_key("__preSerializedSuspense") {
+                    if obj.contains_key("~preSerializedSuspense") {
                         if let Some(rsc_array) = obj.get("rscArray") {
                             traverse(rsc_array, structure, path, position, in_content_area);
                         }
@@ -414,7 +414,7 @@ impl LayoutRenderer {
                     }
                 }
                 serde_json::Value::Object(obj) => {
-                    if obj.contains_key("__preSerializedSuspense") {
+                    if obj.contains_key("~preSerializedSuspense") {
                         if let Some(rsc_array) = obj.get("rscArray") {
                             traverse(rsc_array, boundaries, count);
                         }

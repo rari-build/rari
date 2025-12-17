@@ -3,7 +3,7 @@ globalThis.__rsc_render_result = null
 
 if (!globalThis.renderToRsc) {
   globalThis.renderToRsc = async function (element, clientComponents = {}) {
-    if (element && typeof element === 'object' && element.__preSerializedSuspense) {
+    if (element && typeof element === 'object' && element['~preSerializedSuspense']) {
       return element.rscArray
     }
 

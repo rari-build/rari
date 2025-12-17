@@ -92,8 +92,8 @@ else {
       }
 
       var pageElement = {
-        __preSerializedSuspense: true,
-        rscArray: ['$', 'react.suspense', null, suspenseRscProps],
+        '~preSerializedSuspense': true,
+        'rscArray': ['$', 'react.suspense', null, suspenseRscProps],
       }
     }
     catch (asyncWrapError) {

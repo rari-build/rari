@@ -200,7 +200,7 @@ fn test_detect_suspense_boundaries_pre_serialized() {
     ))));
 
     let rsc_json = serde_json::json!({
-        "__preSerializedSuspense": true,
+        "~preSerializedSuspense": true,
         "rscArray": [
             "$",
             "react.suspense",
@@ -799,8 +799,8 @@ fn test_mode_consistency_both_modes_generate_render_to_rsc() {
     assert!(script_ssr.contains("globalThis.renderToRsc"));
     assert!(script_rsc.contains("globalThis.renderToRsc"));
 
-    assert!(script_ssr.contains("__preSerializedSuspense"));
-    assert!(script_rsc.contains("__preSerializedSuspense"));
+    assert!(script_ssr.contains("~preSerializedSuspense"));
+    assert!(script_rsc.contains("~preSerializedSuspense"));
 }
 
 #[test]
@@ -936,7 +936,7 @@ fn test_mode_consistency_async_component_handling_with_loading() {
 
     assert!(script_ssr.contains("const useSuspense = true"));
     assert!(script_ssr.contains("if (isAsync && useSuspense)"));
-    assert!(script_ssr.contains("__preSerializedSuspense: true"));
+    assert!(script_ssr.contains("'~preSerializedSuspense': true"));
 
     assert!(script_rsc.contains("const useSuspense = false"));
     assert!(script_rsc.contains("else if (isAsync && !useSuspense)"));
