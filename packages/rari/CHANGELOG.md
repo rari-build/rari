@@ -1,4 +1,22 @@
-## [0.5.21] - 2025-12-17
+## [0.5.22] - 2025-12-17
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.16
+## [0.5.16] - 2025-12-17
+
+### 🐛 Bug Fixes
+
+- *(server)* Return 404 status code for not found routes
+
+### 💼 Other
+
+- V0.5.16
+## [rari@0.5.21] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.21
 
 ### ⚙️ Miscellaneous Tasks
 
