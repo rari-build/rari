@@ -207,7 +207,7 @@ impl DenoRuntime {
 
                                         module_loader
                                             .component_specifiers
-                                            .insert(component_id.to_string(), specifier.clone());
+                                            .insert(component_id, specifier.clone());
 
                                         let _ = result_tx.send(Ok(()));
                                         Ok::<(), RariError>(())
@@ -413,8 +413,21 @@ async fn handle_get_module_namespace(
     Ok::<(), RariError>(())
 }
 
-fn extract_component_id_from_specifier(specifier: &str) -> &str {
-    specifier.split('/').next_back().unwrap_or(specifier).split('?').next().unwrap_or(specifier)
+fn extract_component_id_from_specifier(specifier: &str) -> String {
+    if let Some(server_idx) = specifier.rfind("/server/") {
+        let after_server = &specifier[server_idx + 8..];
+        return after_server.trim_end_matches(".js").to_string();
+    }
+
+    specifier
+        .split('/')
+        .next_back()
+        .unwrap_or(specifier)
+        .split('?')
+        .next()
+        .unwrap_or(specifier)
+        .trim_end_matches(".js")
+        .to_string()
 }
 
 impl JsRuntimeInterface for DenoRuntime {

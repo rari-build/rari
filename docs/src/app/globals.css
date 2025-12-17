@@ -9,6 +9,14 @@
   --github-text: #f0f6fc;
 }
 
+html {
+  background-color: #0d1117;
+}
+
+body {
+  background-color: #0d1117;
+}
+
 code {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
   font-weight: 500;

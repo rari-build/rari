@@ -241,6 +241,16 @@ impl JsExecutionRuntime {
         }
     }
 
+    pub async fn load_and_evaluate_module(
+        &self,
+        module_specifier: &str,
+    ) -> Result<Value, RariError> {
+        let module_id = self.load_es_module(module_specifier).await?;
+
+        self.evaluate_module(module_id).await?;
+        self.get_module_namespace(module_id).await
+    }
+
     pub async fn get_module_namespace(
         &self,
         module_id: deno_core::ModuleId,

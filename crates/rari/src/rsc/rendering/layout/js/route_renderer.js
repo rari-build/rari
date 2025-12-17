@@ -101,10 +101,3 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
     }
   }
 }
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    renderRoute: globalThis.renderRoute,
-    renderRouteToHtml: globalThis.renderRouteToHtml,
-  }
-}
