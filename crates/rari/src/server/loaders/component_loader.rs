@@ -31,6 +31,8 @@ impl ComponentLoader {
 
         let mut loaded_count = 0;
         for (component_id, component_info) in sorted_components {
+            let module_specifier = component_info.get("moduleSpecifier").and_then(|s| s.as_str());
+
             let bundle_path =
                 component_info.get("bundlePath").and_then(|p| p.as_str()).ok_or_else(|| {
                     RariError::configuration(format!("Component {component_id} missing bundlePath"))
@@ -45,102 +47,167 @@ impl ComponentLoader {
             let component_code = std::fs::read_to_string(&component_file)
                 .map_err(|_e| RariError::io("Failed to read component file".to_string()))?;
 
-            match renderer
-                .runtime
-                .execute_script(
-                    format!("load_{}.js", component_id.replace('/', "_")),
-                    component_code,
-                )
-                .await
-            {
-                Ok(_) => {
-                    debug!("Loaded production component: {}", component_id);
-                    loaded_count += 1;
+            if let Some(specifier) = module_specifier {
+                if let Err(e) = renderer
+                    .runtime
+                    .add_module_to_loader_only(specifier, component_code.clone())
+                    .await
+                {
+                    error!("Failed to add component {} to module loader: {}", component_id, e);
+                    continue;
                 }
-                Err(e) => {
-                    error!("Failed to load component {}: {}", component_id, e);
+
+                match renderer.runtime.load_es_module(component_id).await {
+                    Ok(module_id) => {
+                        debug!(
+                            "Loaded ESM module for component: {} (module_id: {})",
+                            component_id, module_id
+                        );
+
+                        if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
+                            error!(
+                                "Failed to evaluate module {} (id: {}): {}",
+                                component_id, module_id, e
+                            );
+                            continue;
+                        }
+
+                        match renderer.runtime.get_module_namespace(module_id).await {
+                            Ok(namespace) => {
+                                debug!(
+                                    "Got module namespace for component: {} - namespace keys: {:?}",
+                                    component_id,
+                                    namespace.as_object().map(|o| o.keys().collect::<Vec<_>>())
+                                );
+
+                                let export_names: Vec<String> =
+                                    if let Some(obj) = namespace.as_object() {
+                                        obj.keys()
+                                            .filter(|k| *k != "Symbol(Symbol.toStringTag)")
+                                            .map(|k| k.to_string())
+                                            .collect()
+                                    } else {
+                                        vec![]
+                                    };
+
+                                let export_names_json = serde_json::to_string(&export_names)
+                                    .unwrap_or_else(|_| "[]".to_string());
+                                let registration_script = format!(
+                                    r#"(async function() {{
+                                        try {{
+                                            const moduleNamespace = await import("{}");
+                                            const exportNames = {};
+
+                                            if (moduleNamespace.default) {{
+                                                globalThis["{}"] = moduleNamespace.default;
+                                            }} else {{
+                                                const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
+                                                if (exports.length > 0) {{
+                                                    globalThis["{}"] = exports[0];
+                                                }}
+                                            }}
+
+                                            for (const [key, value] of Object.entries(moduleNamespace)) {{
+                                                if (key !== 'default' && typeof value === 'function') {{
+                                                    globalThis[key] = value;
+                                                }}
+                                            }}
+
+                                            if (!globalThis.__rsc_modules) {{
+                                                globalThis.__rsc_modules = {{}};
+                                            }}
+                                            globalThis.__rsc_modules["{}"] = moduleNamespace;
+
+                                            return {{ success: true, hasDefault: !!moduleNamespace.default, exportCount: exportNames.length }};
+                                        }} catch (error) {{
+                                            console.error("Failed to register component {}: ", error);
+                                            return {{ success: false, error: error.message }};
+                                        }}
+                                    }})()"#,
+                                    specifier,
+                                    export_names_json,
+                                    component_id,
+                                    component_id,
+                                    component_id,
+                                    component_id
+                                );
+
+                                match renderer
+                                    .runtime
+                                    .execute_script(
+                                        format!("register_{}.js", component_id.replace('/', "_")),
+                                        registration_script,
+                                    )
+                                    .await
+                                {
+                                    Ok(result) => {
+                                        if let Some(success) =
+                                            result.get("success").and_then(|v| v.as_bool())
+                                        {
+                                            if success {
+                                                debug!(
+                                                    "Registered component {} to globalThis",
+                                                    component_id
+                                                );
+                                                loaded_count += 1;
+                                            } else {
+                                                error!(
+                                                    "Failed to register component {} to globalThis: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
+                                            }
+                                        } else {
+                                            debug!(
+                                                "Registered component {} to globalThis",
+                                                component_id
+                                            );
+                                            loaded_count += 1;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to register component {} to globalThis: {}",
+                                            component_id, e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Failed to get module namespace for {}: {}",
+                                    component_id, e
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to load component {} as ESM module: {}", component_id, e);
+                    }
+                }
+            } else {
+                // Fall back to old script execution method
+                match renderer
+                    .runtime
+                    .execute_script(
+                        format!("load_{}.js", component_id.replace('/', "_")),
+                        component_code,
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        debug!("Loaded production component (legacy): {}", component_id);
+                        loaded_count += 1;
+                    }
+                    Err(e) => {
+                        error!("Failed to load component {}: {}", component_id, e);
+                    }
                 }
             }
         }
 
         info!("Loaded {} production components", loaded_count);
         Ok(())
-    }
-
-    pub async fn load_production_server_actions(
-        renderer: &mut RscRenderer,
-    ) -> Result<(), RariError> {
-        info!("Loading production server actions");
-
-        let actions_dir = std::path::Path::new("dist/server/actions");
-        if !actions_dir.exists() {
-            debug!("No server actions directory found at dist/server/actions");
-            return Ok(());
-        }
-
-        let mut loaded_count = 0;
-        Self::load_server_actions_from_dir(actions_dir, actions_dir, renderer, &mut loaded_count)
-            .await?;
-
-        info!("Loaded {} production server actions", loaded_count);
-        Ok(())
-    }
-
-    fn load_server_actions_from_dir<'a>(
-        dir: &'a std::path::Path,
-        base_dir: &'a std::path::Path,
-        renderer: &'a mut RscRenderer,
-        loaded_count: &'a mut usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
-        Box::pin(async move {
-            let entries = std::fs::read_dir(dir).map_err(|e| {
-                RariError::io(format!("Failed to read directory {}: {}", dir.display(), e))
-            })?;
-
-            for entry in entries {
-                let entry = entry
-                    .map_err(|e| RariError::io(format!("Failed to read directory entry: {e}")))?;
-                let path = entry.path();
-
-                if path.is_dir() {
-                    Self::load_server_actions_from_dir(&path, base_dir, renderer, loaded_count)
-                        .await?;
-                } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
-                    let action_code = std::fs::read_to_string(&path)
-                        .map_err(|e| RariError::io(format!("Failed to read action file: {e}")))?;
-
-                    let relative_path = path.strip_prefix(base_dir).unwrap_or(&path);
-                    let action_id = relative_path
-                        .to_str()
-                        .unwrap_or("unknown")
-                        .replace(".js", "")
-                        .replace('\\', "/");
-
-                    debug!("Loading production server action: {}", action_id);
-
-                    let wrapped_code = wrap_server_action_module(&action_code, &action_id);
-
-                    match renderer
-                        .runtime
-                        .execute_script(
-                            format!("load_action_{}.js", action_id.replace('/', "_")),
-                            wrapped_code,
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            debug!("Successfully loaded production server action: {}", action_id);
-                            *loaded_count += 1;
-                        }
-                        Err(e) => {
-                            error!("Failed to load production server action {}: {}", action_id, e);
-                        }
-                    }
-                }
-            }
-
-            Ok(())
-        })
     }
 
     pub async fn load_server_actions_from_source(

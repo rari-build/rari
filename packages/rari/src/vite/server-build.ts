@@ -47,10 +47,14 @@ interface ServerComponentManifest {
       filePath: string
       relativePath: string
       bundlePath: string
+      moduleSpecifier: string
       dependencies: string[]
       hasNodeImports: boolean
     }
   >
+  importMap: {
+    imports: Record<string, string>
+  }
   version: string
   buildTime: string
 }
@@ -440,6 +444,18 @@ const ${importName} = (props) => {
                       if (this.isClientComponent(pathWithExt)) {
                         return { path: args.path, external: true }
                       }
+
+                      try {
+                        const content = fs.readFileSync(pathWithExt, 'utf-8')
+                        const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
+                        if (hasUseServer) {
+                          return { path: args.path, external: true }
+                        }
+                      }
+                      catch {
+                        // If we can't read the file, continue with normal bundling
+                      }
+
                       return { path: pathWithExt }
                     }
                   }
@@ -482,6 +498,27 @@ const ${importName} = (props) => {
 
                 if (args.path === 'rari/client') {
                   return null
+                }
+
+                if (args.path.startsWith('@/actions/') || args.path.includes('/actions/')) {
+                  const resolvedPath = path.resolve(args.resolveDir, args.path)
+                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+
+                  for (const ext of possibleExtensions) {
+                    const pathWithExt = resolvedPath + ext
+                    if (fs.existsSync(pathWithExt)) {
+                      try {
+                        const content = fs.readFileSync(pathWithExt, 'utf-8')
+                        if (content.includes('\'use server\'') || content.includes('"use server"')) {
+                          return { path: args.path, external: true }
+                        }
+                      }
+                      catch {
+                        // If we can't read the file, continue
+                      }
+                      break
+                    }
+                  }
                 }
 
                 return null
@@ -540,10 +577,12 @@ const ${importName} = (props) => {
       if (result.outputFiles && result.outputFiles.length > 0) {
         const outputFile = result.outputFiles[0]
 
-        const finalTransformedCode = this.createSelfRegisteringModule(
-          outputFile.text,
-          componentId,
-        )
+        const finalTransformedCode = `// ESM Module: ${componentId}
+// Generated at: ${new Date().toISOString()}
+// Original file: ${path.relative(this.projectRoot, inputPath)}
+
+${outputFile.text}
+`
 
         return finalTransformedCode
       }
@@ -568,8 +607,26 @@ const ${importName} = (props) => {
 
     await fs.promises.mkdir(serverOutDir, { recursive: true })
 
+    const importMapImports: Record<string, string> = {
+      'react': 'npm:react@19',
+      'react-dom': 'npm:react-dom@19',
+      'react/jsx-runtime': 'npm:react@19/jsx-runtime',
+      'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
+    }
+
+    const aliases = this.options.alias || {}
+    for (const [alias, replacement] of Object.entries(aliases)) {
+      const absolutePath = path.isAbsolute(replacement)
+        ? replacement
+        : path.resolve(this.projectRoot, replacement)
+      importMapImports[`${alias}/`] = `file://${absolutePath}/`
+    }
+
     const manifest: ServerComponentManifest = {
       components: {},
+      importMap: {
+        imports: importMapImports,
+      },
       version: '1.0.0',
       buildTime: new Date().toISOString(),
     }
@@ -585,11 +642,14 @@ const ${importName} = (props) => {
 
       await this.buildSingleComponent(filePath, fullBundlePath, component)
 
+      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+
       manifest.components[componentId] = {
         id: componentId,
         filePath,
         relativePath,
         bundlePath,
+        moduleSpecifier,
         dependencies: component.dependencies,
         hasNodeImports: component.hasNodeImports,
       }
@@ -606,11 +666,14 @@ const ${importName} = (props) => {
 
       await this.buildSingleComponent(filePath, fullBundlePath, action)
 
+      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+
       manifest.components[actionId] = {
         id: actionId,
         filePath,
         relativePath,
         bundlePath,
+        moduleSpecifier,
         dependencies: action.dependencies,
         hasNodeImports: action.hasNodeImports,
       }
@@ -701,6 +764,70 @@ const ${importName} = (props) => {
         metafile: false,
         write: false,
         plugins: [
+          {
+            name: 'external-server-actions',
+            setup: (build) => {
+              build.onResolve({ filter: /.*/ }, async (args) => {
+                if (args.namespace !== 'file' && args.namespace !== '') {
+                  return null
+                }
+
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)
+                  || args.path === 'react' || args.path === 'react-dom'
+                  || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                  return null
+                }
+
+                let resolvedPath: string | null = null
+
+                const aliases = this.options.alias || {}
+                for (const [alias, replacement] of Object.entries(aliases)) {
+                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
+                    const relativePath = args.path.slice(alias.length)
+                    const newPath = path.join(replacement, relativePath)
+                    resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
+                    break
+                  }
+                }
+
+                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../'))) {
+                  resolvedPath = path.resolve(args.resolveDir, args.path)
+                }
+
+                if (resolvedPath) {
+                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+                  for (const ext of possibleExtensions) {
+                    const pathWithExt = resolvedPath + ext
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      try {
+                        const content = fs.readFileSync(pathWithExt, 'utf-8')
+                        const lines = content.split('\n')
+
+                        for (const line of lines) {
+                          const trimmed = line.trim()
+                          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+                            continue
+                          }
+                          if (trimmed === '\'use server\'' || trimmed === '"use server"'
+                            || trimmed === '\'use server\';' || trimmed === '"use server";') {
+                            return { path: args.path, external: true }
+                          }
+                          if (trimmed) {
+                            break
+                          }
+                        }
+                      }
+                      catch {
+                        // If we can't read the file, let it continue
+                      }
+                      break
+                    }
+                  }
+                }
+                return null
+              })
+            },
+          },
           {
             name: 'resolve-aliases',
             setup: (build) => {
@@ -914,10 +1041,51 @@ const ${importName} = (props) => {
           },
         )
 
-        const finalTransformedCode = this.createSelfRegisteringModule(
-          code,
-          componentId,
+        code = code.replace(
+          /import\s+(\{[^}]+\}|\w+)\s+from\s+["']([^"']+)["'];?/g,
+          (match, imports, importPath) => {
+            if (importPath.startsWith('file://') || importPath.startsWith('npm:')) {
+              return match
+            }
+
+            if (importPath.startsWith('node:') || isNodeBuiltin(importPath)
+              || importPath === 'react' || importPath === 'react-dom'
+              || importPath === 'react/jsx-runtime' || importPath === 'react/jsx-dev-runtime') {
+              return match
+            }
+
+            let resolvedPath: string | null = null
+
+            const aliases = this.options.alias || {}
+            for (const [alias, replacement] of Object.entries(aliases)) {
+              if (importPath.startsWith(`${alias}/`) || importPath === alias) {
+                const relativePath = importPath.slice(alias.length)
+                const newPath = path.join(replacement, relativePath)
+                resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(this.projectRoot, newPath)
+                break
+              }
+            }
+
+            if (resolvedPath) {
+              const relativeToProject = path.relative(this.projectRoot, resolvedPath)
+              const componentId = this.getComponentId(relativeToProject)
+              const bundlePath = path.join(this.options.outDir, this.options.serverDir, `${componentId}.js`)
+              const fileUrl = `file://${path.resolve(this.projectRoot, bundlePath)}`
+
+              return `import ${imports} from "${fileUrl}";`
+            }
+
+            // If we couldn't resolve it, leave it as is
+            return match
+          },
         )
+
+        const finalTransformedCode = `// ESM Module: ${componentId}
+// Generated at: ${new Date().toISOString()}
+// Original file: ${path.relative(this.projectRoot, inputPath)}
+
+${code}
+`
 
         await fs.promises.writeFile(outputPath, finalTransformedCode, 'utf-8')
 
@@ -1450,6 +1618,14 @@ function registerClientReference(clientReference, id, exportName) {
     else {
       manifest = {
         components: {},
+        importMap: {
+          imports: {
+            'react': 'npm:react@19',
+            'react-dom': 'npm:react-dom@19',
+            'react/jsx-runtime': 'npm:react@19/jsx-runtime',
+            'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
+          },
+        },
         version: '1.0.0',
         buildTime: new Date().toISOString(),
       }
@@ -1457,6 +1633,8 @@ function registerClientReference(clientReference, id, exportName) {
     }
 
     const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
+    const fullBundlePath = path.join(this.options.outDir, bundlePath)
+    const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
 
     if (!componentData) {
       const code = await fs.promises.readFile(filePath, 'utf-8')
@@ -1465,6 +1643,7 @@ function registerClientReference(clientReference, id, exportName) {
         filePath,
         relativePath: path.relative(this.projectRoot, filePath),
         bundlePath,
+        moduleSpecifier,
         dependencies: this.extractDependencies(code),
         hasNodeImports: this.hasNodeImports(code),
       }
@@ -1475,8 +1654,20 @@ function registerClientReference(clientReference, id, exportName) {
         filePath,
         relativePath: path.relative(this.projectRoot, filePath),
         bundlePath,
+        moduleSpecifier,
         dependencies: componentData.dependencies,
         hasNodeImports: componentData.hasNodeImports,
+      }
+    }
+
+    if (!manifest.importMap) {
+      manifest.importMap = {
+        imports: {
+          'react': 'npm:react@19',
+          'react-dom': 'npm:react-dom@19',
+          'react/jsx-runtime': 'npm:react@19/jsx-runtime',
+          'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
+        },
       }
     }
 

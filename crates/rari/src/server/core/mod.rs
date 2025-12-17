@@ -76,7 +76,6 @@ impl Server {
 
         if config.is_production() {
             ComponentLoader::load_production_components(&mut renderer).await?;
-            ComponentLoader::load_production_server_actions(&mut renderer).await?;
         } else {
             ComponentLoader::load_app_router_components(&mut renderer).await?;
             ComponentLoader::load_server_actions_from_source(&mut renderer).await?;
