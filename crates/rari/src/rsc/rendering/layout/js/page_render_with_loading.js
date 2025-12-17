@@ -75,7 +75,7 @@ else {
       })
 
       const childrenPlaceholder = React.createElement('div', {
-        'data-promise-ref': promiseId,
+        'data-~promise-ref': promiseId,
         'className': 'suspense-placeholder',
       }, 'Loading...')
       let suspenseRscProps

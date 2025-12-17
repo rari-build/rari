@@ -876,7 +876,7 @@ async fn test_generate_boundary_update_html_simple() {
     assert!(html.contains("</script>"), "Should close script tag");
 
     assert!(
-        html.contains(r#"data-boundary-id="boundary_123""#),
+        html.contains(r#"data-~boundary-id="boundary_123""#),
         "Should have boundary ID data attribute"
     );
     assert!(html.contains(r#"data-row-id="42""#), "Should have row ID data attribute");

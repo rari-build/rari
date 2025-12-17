@@ -533,7 +533,7 @@ impl RscHtmlRenderer {
             content_html.replace('\\', "\\\\").replace('`', "\\`").replace("${", "\\${");
 
         let update_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
+            r#"<script data-~boundary-id="{}" data-row-id="{}">
 window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
@@ -576,7 +576,7 @@ window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
         );
 
         let error_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
+            r#"<script data-~boundary-id="{}" data-row-id="{}">
 window.__rari && window.__rari.processBoundaryError('{}', '{}', {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),

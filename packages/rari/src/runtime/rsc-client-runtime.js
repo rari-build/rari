@@ -299,7 +299,7 @@ class RscClient {
           if (type === 'react.suspense' || type === 'suspense') {
             const boundaryId = props?.['~boundaryId']
             const suspenseWrapper = createElement('div', {
-              'data-boundary-id': boundaryId,
+              'data-~boundary-id': boundaryId,
               '~boundaryId': boundaryId,
               'data-suspense-boundary': true,
             }, convertRscToReact(props?.fallback || props?.children))
