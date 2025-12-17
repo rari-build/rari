@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     rari({
       serverBuild: {
-        external: ['@shikijs/*'],
+        external: ['marked', '@shikijs/*'],
       },
     }),
     rariRouter(),
