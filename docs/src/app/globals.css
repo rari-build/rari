@@ -111,8 +111,17 @@ code {
   padding-left: 1.5rem;
 }
 
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
+}
+
 .prose li {
   margin-bottom: 0.5rem;
+  line-height: 1.6;
 }
 
 .prose a {
