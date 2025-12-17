@@ -174,6 +174,8 @@ pub async fn render_synchronous(
             route_match.route.path.clone(),
         ));
 
+    let is_not_found = route_match.not_found.is_some();
+
     match layout_renderer
         .render_route_to_html_direct(&route_match, &context, Some(request_context))
         .await
@@ -196,8 +198,10 @@ pub async fn render_synchronous(
                         }
                     };
 
+                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
                 Ok(Response::builder()
-                    .status(StatusCode::OK)
+                    .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
                     .body(Body::from(final_html))
@@ -222,6 +226,7 @@ pub async fn render_streaming_with_layout(
     layout_renderer: &LayoutRenderer,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
+    let is_not_found = route_match.not_found.is_some();
 
     let request_context =
         std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
@@ -263,8 +268,10 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
             return Ok(Response::builder()
-                .status(StatusCode::OK)
+                .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
                 .body(Body::from(final_html))
@@ -283,8 +290,10 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
             return Ok(Response::builder()
-                .status(StatusCode::OK)
+                .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static-with-payload")
                 .body(Body::from(final_html))
@@ -599,8 +608,14 @@ pub async fn handle_app_route(
                 .await
             {
                 Ok(rsc_wire_format) => {
+                    let status_code = if route_match.not_found.is_some() {
+                        StatusCode::NOT_FOUND
+                    } else {
+                        StatusCode::OK
+                    };
+
                     let mut response_builder = Response::builder()
-                        .status(StatusCode::OK)
+                        .status(status_code)
                         .header("content-type", "text/x-component");
 
                     if let Some(ref metadata) = context.metadata
@@ -650,8 +665,14 @@ pub async fn handle_app_route(
                         .expect("Valid 304 response"));
                 }
 
+                let status_code = if route_match.not_found.is_some() {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::OK
+                };
+
                 let mut response_builder = Response::builder()
-                    .status(StatusCode::OK)
+                    .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-cache", "HIT");
 
@@ -790,8 +811,14 @@ pub async fn handle_app_route(
                 }
             };
 
+            let status_code = if route_match.not_found.is_some() {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::OK
+            };
+
             let mut response_builder = Response::builder()
-                .status(StatusCode::OK)
+                .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("etag", &etag)
                 .header("x-cache", "MISS");
