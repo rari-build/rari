@@ -1176,7 +1176,7 @@ impl RscSerializer {
                 .ok_or_else(|| RariError::internal("Suspense missing children prop"))?;
 
             let boundary_id =
-                element.props.get("__boundary_id").and_then(|v| v.as_str()).unwrap_or("default");
+                element.props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("default");
 
             let fallback_element: crate::rsc::types::elements::ReactElement =
                 serde_json::from_value(fallback.clone()).map_err(|e| {
@@ -1235,7 +1235,7 @@ impl RscSerializer {
             {
                 "fallback": fallback_ref,
                 "children": children_ref,
-                "__boundary_id": boundary_id
+                "~boundaryId": boundary_id
             }
         ]);
 

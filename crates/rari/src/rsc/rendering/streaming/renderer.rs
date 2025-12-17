@@ -838,7 +838,7 @@ impl StreamingRenderer {
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
-                if let Some(bid) = p["boundaryId"].as_str() {
+                if let Some(bid) = p["~boundaryId"].as_str() {
                     *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
                 }
             }
@@ -902,7 +902,7 @@ impl StreamingRenderer {
             .iter()
             .map(|p| PendingSuspensePromise {
                 id: p["id"].as_str().unwrap_or("unknown").to_string(),
-                boundary_id: p["boundaryId"].as_str().unwrap_or("root").to_string(),
+                boundary_id: p["~boundaryId"].as_str().unwrap_or("root").to_string(),
                 component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
                 promise_handle: p["id"].as_str().unwrap_or("unknown").to_string(),
             })
@@ -1013,7 +1013,7 @@ impl StreamingRenderer {
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
-                if let Some(bid) = p["boundaryId"].as_str() {
+                if let Some(bid) = p["~boundaryId"].as_str() {
                     *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
                 }
             }
@@ -1077,7 +1077,7 @@ impl StreamingRenderer {
             .iter()
             .map(|p| PendingSuspensePromise {
                 id: p["id"].as_str().unwrap_or("unknown").to_string(),
-                boundary_id: p["boundaryId"].as_str().unwrap_or("root").to_string(),
+                boundary_id: p["~boundaryId"].as_str().unwrap_or("root").to_string(),
                 component_path: p["componentPath"].as_str().unwrap_or("unknown").to_string(),
                 promise_handle: p["id"].as_str().unwrap_or("unknown").to_string(),
             })
@@ -1436,7 +1436,7 @@ impl StreamingRenderer {
     ) -> Result<RscStreamChunk, RariError> {
         let mut props = serde_json::Map::new();
         props.insert("fallback".to_string(), fallback_content.clone());
-        props.insert("boundaryId".to_string(), serde_json::Value::String(boundary_id.to_string()));
+        props.insert("~boundaryId".to_string(), serde_json::Value::String(boundary_id.to_string()));
         let element = serde_json::Value::Array(vec![
             serde_json::Value::String("$".to_string()),
             serde_json::Value::String("react.suspense".to_string()),

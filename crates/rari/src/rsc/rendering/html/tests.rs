@@ -674,7 +674,7 @@ fn test_parse_suspense_boundary() {
     let mut props = serde_json::Map::new();
     props.insert("fallback".to_string(), JsonValue::String("$L1".to_string()));
     props.insert("children".to_string(), JsonValue::String("$L2".to_string()));
-    props.insert("__boundary_id".to_string(), JsonValue::String("suspense_123".to_string()));
+    props.insert("~boundaryId".to_string(), JsonValue::String("suspense_123".to_string()));
 
     let value = JsonValue::Array(vec![
         JsonValue::String("$".to_string()),
@@ -691,8 +691,8 @@ fn test_parse_suspense_boundary() {
         assert!(key.is_none());
         assert!(props.contains_key("fallback"));
         assert!(props.contains_key("children"));
-        assert!(props.contains_key("__boundary_id"));
-        assert_eq!(props.get("__boundary_id").unwrap().as_str().unwrap(), "suspense_123");
+        assert!(props.contains_key("~boundaryId"));
+        assert_eq!(props.get("~boundaryId").unwrap().as_str().unwrap(), "suspense_123");
     } else {
         panic!("Expected Component element");
     }
@@ -714,7 +714,7 @@ async fn test_render_suspense_with_fallback() {
         {
             "fallback": "$L1",
             "children": "$L999",
-            "__boundary_id": "suspense_test"
+            "~boundaryId": "suspense_test"
         }
     ]);
 
@@ -746,7 +746,7 @@ async fn test_render_suspense_with_resolved_children() {
         {
             "fallback": "$L1",
             "children": "$L2",
-            "__boundary_id": "suspense_test"
+            "~boundaryId": "suspense_test"
         }
     ]);
 
@@ -777,7 +777,7 @@ async fn test_render_nested_suspense_boundaries() {
         {
             "fallback": "$L2",
             "children": "$L3",
-            "__boundary_id": "inner"
+            "~boundaryId": "inner"
         }
     ]);
     let inner_html = converter.rsc_element_to_html(&inner_suspense).await.unwrap();
@@ -790,7 +790,7 @@ async fn test_render_nested_suspense_boundaries() {
         {
             "fallback": "$L1",
             "children": "$L4",
-            "__boundary_id": "outer"
+            "~boundaryId": "outer"
         }
     ]);
     let html = converter.rsc_element_to_html(&outer_suspense).await.unwrap();
@@ -816,7 +816,7 @@ async fn test_render_suspense_missing_fallback() {
         null,
         {
             "children": "$L999",
-            "__boundary_id": "suspense_test"
+            "~boundaryId": "suspense_test"
         }
     ]);
 
@@ -843,7 +843,7 @@ async fn test_render_suspense_inline_children() {
         {
             "fallback": "$L1",
             "children": ["$", "div", null, {"children": "Inline Content"}],
-            "__boundary_id": "suspense_test"
+            "~boundaryId": "suspense_test"
         }
     ]);
 

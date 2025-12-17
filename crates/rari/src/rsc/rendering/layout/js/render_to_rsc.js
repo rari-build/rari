@@ -29,22 +29,22 @@ if (!globalThis.renderToRsc) {
       const typeCheck = element.type === React.Suspense
       const nameCheck = typeof element.type === 'function' && element.type.name === 'Suspense'
       const stringCheck = element.type === 'react.suspense' || element.type === 'Suspense'
-      const propsCheck = props.boundaryId || props.__boundary_id
+      const propsCheck = props['~boundaryId']
       const isSuspense = typeCheck || nameCheck || stringCheck || propsCheck
 
       if (isSuspense) {
         const rscProps = {
-          fallback: props.fallback ? await globalThis.renderToRsc(props.fallback, clientComponents) : null,
-          children: props.children ? await globalThis.renderToRsc(props.children, clientComponents) : null,
-          boundaryId: props.boundaryId || props.__boundary_id,
+          'fallback': props.fallback ? await globalThis.renderToRsc(props.fallback, clientComponents) : null,
+          'children': props.children ? await globalThis.renderToRsc(props.children, clientComponents) : null,
+          '~boundaryId': props['~boundaryId'],
         }
 
         if (rscProps.fallback === null)
           delete rscProps.fallback
         if (rscProps.children === null)
           delete rscProps.children
-        if (!rscProps.boundaryId)
-          delete rscProps.boundaryId
+        if (!rscProps['~boundaryId'])
+          delete rscProps['~boundaryId']
 
         return ['$', 'react.suspense', uniqueKey, rscProps]
       }

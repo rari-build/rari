@@ -98,13 +98,13 @@ mod tests {
         let mut props = FxHashMap::default();
         props.insert("fallback".to_string(), json!({"tag": "div", "props": {}}));
         props.insert("children".to_string(), json!({"tag": "div", "props": {}}));
-        props.insert("__boundary_id".to_string(), json!("boundary-1"));
+        props.insert("~boundaryId".to_string(), json!("boundary-1"));
 
         let element = ReactElement::with_props("react.suspense", props);
 
         assert_eq!(element.tag, "react.suspense");
         assert!(element.get_prop("fallback").is_some());
         assert!(element.get_prop("children").is_some());
-        assert_eq!(element.get_prop("__boundary_id"), Some(&json!("boundary-1")));
+        assert_eq!(element.get_prop("~boundaryId"), Some(&json!("boundary-1")));
     }
 }

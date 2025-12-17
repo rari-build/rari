@@ -218,10 +218,8 @@ impl LayoutRenderer {
 
                         if (tag == "react.suspense" || tag == "Suspense")
                             && let Some(props) = arr.get(3).and_then(|v| v.as_object())
-                            && let Some(boundary_id) = props
-                                .get("boundaryId")
-                                .or_else(|| props.get("__boundary_id"))
-                                .and_then(|v| v.as_str())
+                            && let Some(boundary_id) =
+                                props.get("~boundaryId").and_then(|v| v.as_str())
                         {
                             structure.suspense_boundaries.push(BoundaryPosition {
                                 boundary_id: boundary_id.to_string(),
@@ -401,10 +399,8 @@ impl LayoutRenderer {
                         *count += 1;
 
                         if let Some(props) = arr.get(3).and_then(|v| v.as_object())
-                            && let Some(boundary_id) = props
-                                .get("boundaryId")
-                                .or_else(|| props.get("__boundary_id"))
-                                .and_then(|v| v.as_str())
+                            && let Some(boundary_id) =
+                                props.get("~boundaryId").and_then(|v| v.as_str())
                         {
                             boundaries.push(BoundaryInfo {
                                 id: boundary_id.to_string(),

@@ -83,8 +83,8 @@ else {
         const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis.__rsc_client_components || {})
 
         suspenseRscProps = {
-          fallback: fallbackRsc,
-          boundaryId,
+          'fallback': fallbackRsc,
+          '~boundaryId': boundaryId,
         }
       }
       catch (renderError) {

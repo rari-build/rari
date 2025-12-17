@@ -150,7 +150,7 @@ fn test_detect_suspense_boundaries_with_suspense() {
         "react.suspense",
         null,
         {
-            "boundaryId": "test_boundary_123",
+            "~boundaryId": "test_boundary_123",
             "fallback": ["$", "div", null, {"children": "Loading..."}],
             "children": ["$", "div", null, {"children": "Content"}]
         }
@@ -180,7 +180,7 @@ fn test_detect_suspense_boundaries_nested() {
                 "react.suspense",
                 null,
                 {
-                    "boundaryId": "nested_boundary",
+                    "~boundaryId": "nested_boundary",
                     "fallback": ["$", "span", null, {"children": "Loading..."}]
                 }
             ]
@@ -206,7 +206,7 @@ fn test_detect_suspense_boundaries_pre_serialized() {
             "react.suspense",
             null,
             {
-                "boundaryId": "pre_serialized_boundary",
+                "~boundaryId": "pre_serialized_boundary",
                 "fallback": ["$", "div", null, {"children": "Loading..."}]
             }
         ]
@@ -235,7 +235,7 @@ fn test_detect_suspense_boundaries_multiple() {
                     "react.suspense",
                     null,
                     {
-                        "boundaryId": "boundary_1",
+                        "~boundaryId": "boundary_1",
                         "fallback": ["$", "div", null, {"children": "Loading 1..."}]
                     }
                 ],
@@ -244,7 +244,7 @@ fn test_detect_suspense_boundaries_multiple() {
                     "react.suspense",
                     null,
                     {
-                        "__boundary_id": "boundary_2",
+                        "~boundaryId": "boundary_2",
                         "fallback": ["$", "div", null, {"children": "Loading 2..."}]
                     }
                 ]
@@ -271,7 +271,7 @@ fn test_detect_suspense_boundaries_alternative_tag() {
         "Suspense",
         null,
         {
-            "boundaryId": "alt_boundary",
+            "~boundaryId": "alt_boundary",
             "fallback": ["$", "div", null, {"children": "Loading..."}]
         }
     ]);
@@ -544,7 +544,7 @@ fn test_validate_layout_structure_with_suspense_in_content() {
                             "react.suspense",
                             null,
                             {
-                                "boundaryId": "test_boundary",
+                                "~boundaryId": "test_boundary",
                                 "fallback": ["$", "div", null, {"children": "Loading..."}]
                             }
                         ]
@@ -840,8 +840,8 @@ fn test_mode_consistency_suspense_serialization_format() {
     assert!(script_ssr.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
     assert!(script_rsc.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
 
-    assert!(script_ssr.contains("boundaryId: props.boundaryId || props.__boundary_id"));
-    assert!(script_rsc.contains("boundaryId: props.boundaryId || props.__boundary_id"));
+    assert!(script_ssr.contains("'~boundaryId': props['~boundaryId']"));
+    assert!(script_rsc.contains("'~boundaryId': props['~boundaryId']"));
 }
 
 #[test]
@@ -1124,10 +1124,10 @@ fn test_mode_consistency_rsc_props_cleanup() {
     assert!(script_rsc.contains("if (rscProps.children === null)"));
     assert!(script_rsc.contains("delete rscProps.children"));
 
-    assert!(script_ssr.contains("if (!rscProps.boundaryId)"));
-    assert!(script_ssr.contains("delete rscProps.boundaryId"));
-    assert!(script_rsc.contains("if (!rscProps.boundaryId)"));
-    assert!(script_rsc.contains("delete rscProps.boundaryId"));
+    assert!(script_ssr.contains("if (!rscProps['~boundaryId'])"));
+    assert!(script_ssr.contains("delete rscProps['~boundaryId']"));
+    assert!(script_rsc.contains("if (!rscProps['~boundaryId'])"));
+    assert!(script_rsc.contains("delete rscProps['~boundaryId']"));
 
     assert!(script_ssr.contains("if (rscProps.children === undefined)"));
     assert!(script_rsc.contains("if (rscProps.children === undefined)"));
