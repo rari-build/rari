@@ -106,15 +106,13 @@ impl AppRouter {
 
                 let error = self.find_error(&route.path);
 
-                let not_found = self.find_not_found(&route.path);
-
                 return Ok(AppRouteMatch {
                     route: route.clone(),
                     params,
                     layouts,
                     loading,
                     error,
-                    not_found,
+                    not_found: None,
                     pathname: normalized_path,
                 });
             }

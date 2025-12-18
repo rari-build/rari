@@ -566,7 +566,7 @@ pub async fn handle_app_route(
         None => return Err(StatusCode::NOT_FOUND),
     };
 
-    let route_match = match app_router.match_route(path) {
+    let mut route_match = match app_router.match_route(path) {
         Ok(m) => m,
         Err(_) => match app_router.create_not_found_match(path) {
             Some(not_found_match) => not_found_match,
@@ -595,6 +595,31 @@ pub async fn handle_app_route(
     context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+
+    if route_match.not_found.is_none() && route_match.route.is_dynamic {
+        tracing::debug!("Checking getData for dynamic route: {}", path);
+        match layout_renderer.check_page_not_found(&route_match, &context).await {
+            Ok(true) => {
+                tracing::info!("Page getData returned notFound=true for route: {}", path);
+                if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
+                    route_match.not_found = Some(not_found_entry);
+                    tracing::debug!("Set not_found entry for route: {}", path);
+                }
+            }
+            Ok(false) => {
+                tracing::debug!("Page getData returned notFound=false for route: {}", path);
+            }
+            Err(e) => {
+                warn!("Failed to check getData for route {}: {}", path, e);
+            }
+        }
+    } else {
+        tracing::debug!(
+            "Skipping getData check - not_found={:?}, is_dynamic={}",
+            route_match.not_found.is_some(),
+            route_match.route.is_dynamic
+        );
+    }
 
     match render_mode {
         RenderMode::RscNavigation => {

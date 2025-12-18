@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { PageProps } from 'rari/client'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
@@ -15,6 +15,22 @@ export default function DocPage({ params }: PageProps) {
       <MarkdownRenderer filePath={`${slug}.md`} />
     </div>
   )
+}
+
+export async function getData({ params }: PageProps) {
+  const slug = params?.slug
+  if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {
+    return { notFound: true }
+  }
+
+  try {
+    const filePath = join(process.cwd(), 'public', 'content', `${slug}.md`)
+    await access(filePath)
+    return { props: {} }
+  }
+  catch {
+    return { notFound: true }
+  }
 }
 
 export async function generateMetadata({ params }: PageProps) {
