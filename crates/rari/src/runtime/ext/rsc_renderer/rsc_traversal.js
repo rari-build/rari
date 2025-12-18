@@ -1,5 +1,4 @@
 /* eslint-disable no-undef */
-
 if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined') {
   globalThis['~rsc'].keyCounter = 0
 }
@@ -407,8 +406,7 @@ function isClientComponent(componentType, clientComponents) {
 
   if (typeof componentType === 'string') {
     if (
-      componentType.includes('Counter')
-      || componentType.includes('tsx#')
+      componentType.includes('tsx#')
       || componentType.includes('use client')
     ) {
       return true
@@ -456,32 +454,6 @@ function getClientComponentId(componentType, clientComponents) {
     && typeof componentType === 'object'
     && Object.keys(componentType).length === 0
   ) {
-    const globalComponents = globalThis['~clientComponents'] || {}
-    const componentNames = globalThis['~clientComponentNames'] || {}
-
-    for (const [componentId, componentInfo] of Object.entries(
-      globalComponents,
-    )) {
-      if (componentInfo.path && componentInfo.path.includes('Counter')) {
-        return componentId
-      }
-    }
-
-    for (const [name, id] of Object.entries(componentNames)) {
-      if (name.toLowerCase().includes('counter')) {
-        return id
-      }
-    }
-
-    for (const [id, info] of Object.entries(globalComponents)) {
-      if (
-        info.component
-        && (info.component.name === 'Counter'
-          || info.component.displayName === 'Counter')
-      ) {
-        return id
-      }
-    }
     return null
   }
 
@@ -489,10 +461,7 @@ function getClientComponentId(componentType, clientComponents) {
     const componentNames = globalThis['~clientComponentNames'] || {}
 
     let componentName = componentType
-    if (componentType.includes('Counter')) {
-      componentName = 'Counter'
-    }
-    else if (componentType.includes('tsx#default')) {
+    if (componentType.includes('tsx#default')) {
       const match = componentType.match(/\/([^/]+)\.tsx#/)
       if (match) {
         componentName = match[1]
