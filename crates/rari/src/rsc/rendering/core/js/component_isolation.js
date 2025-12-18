@@ -58,12 +58,12 @@
     }
 
     globalThis.__isolateComponentData = function (componentId) {
-      if (!globalThis.__rsc_component_data) {
-        globalThis.__rsc_component_data = new Map()
+      if (!globalThis['~rsc'].componentData) {
+        globalThis['~rsc'].componentData = new Map()
       }
 
-      if (!globalThis.__rsc_component_data.has(componentId)) {
-        globalThis.__rsc_component_data.set(componentId, {
+      if (!globalThis['~rsc'].componentData.has(componentId)) {
+        globalThis['~rsc'].componentData.set(componentId, {
           promises: new Map(),
           values: new Map(),
           renderTime: Date.now(),
@@ -71,7 +71,7 @@
         })
       }
 
-      return globalThis.__rsc_component_data.get(componentId)
+      return globalThis['~rsc'].componentData.get(componentId)
     }
 
     globalThis.__cleanupComponentIsolation = function (componentId) {
@@ -83,10 +83,10 @@
       }
 
       if (
-        globalThis.__rsc_component_data
-        && globalThis.__rsc_component_data.has(componentId)
+        globalThis['~rsc'].componentData
+        && globalThis['~rsc'].componentData.has(componentId)
       ) {
-        const data = globalThis.__rsc_component_data.get(componentId)
+        const data = globalThis['~rsc'].componentData.get(componentId)
         data.promises.clear()
         data.values.clear()
       }

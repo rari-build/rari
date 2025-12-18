@@ -2,9 +2,9 @@
 /* eslint-disable no-undef, style/object-curly-spacing */
 globalThis.__render_component_async = async function () {
   try {
-    let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default)
+    let Component = (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}']?.default)
       || globalThis['{component_id}']
-      || (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}'])
+      || (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}'])
 
     if (Component && typeof Component === 'object' && typeof Component.default === 'function') {
       Component = Component.default
@@ -79,8 +79,8 @@ globalThis.__render_component_async = async function () {
         ]
 
         for (const loadingPath of loadingPaths) {
-          if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {
-            const LoadingModule = globalThis.__rsc_modules[loadingPath]
+          if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[loadingPath]) {
+            const LoadingModule = globalThis['~rsc'].modules[loadingPath]
             const LoadingComp = LoadingModule.default || LoadingModule
             if (typeof LoadingComp === 'function') {
               try {
@@ -201,8 +201,8 @@ globalThis.__render_component_async = async function () {
         ]
 
         for (const loadingPath of loadingPaths) {
-          if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {
-            const LoadingModule = globalThis.__rsc_modules[loadingPath]
+          if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[loadingPath]) {
+            const LoadingModule = globalThis['~rsc'].modules[loadingPath]
             const LoadingComp = LoadingModule.default || LoadingModule
             if (typeof LoadingComp === 'function') {
               try {
@@ -315,7 +315,7 @@ globalThis.__render_component_async = async function () {
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis.__rsc_client_components || {})
+                  return globalThis.renderToRsc(result, globalThis['~rsc']?.clientComponents || {})
                 }
               }
             }
@@ -399,7 +399,7 @@ globalThis.__render_component_async = async function () {
     let rscData
     try {
       rscData = globalThis.renderToRsc
-        ? await globalThis.renderToRsc(element, globalThis.__rsc_client_components || {})
+        ? await globalThis.renderToRsc(element, globalThis['~rsc']?.clientComponents || {})
         : element
     }
     catch (rscError) {

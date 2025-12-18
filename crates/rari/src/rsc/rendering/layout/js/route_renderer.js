@@ -23,7 +23,7 @@ globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
       : layoutResult
   }
 
-  const clientComponents = globalThis.__rsc_client_components || {}
+  const clientComponents = globalThis['~rsc'].clientComponents || {}
   let rscResult
 
   if (typeof globalThis.renderToRsc === 'function') {

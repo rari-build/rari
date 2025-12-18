@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 
-if (typeof globalThis !== 'undefined' && typeof globalThis.__rsc_key_counter === 'undefined') {
-  globalThis.__rsc_key_counter = 0
+if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined') {
+  globalThis['~rsc'].keyCounter = 0
 }
 
 async function traverseToRsc(element, clientComponents = {}, depth = 0) {
@@ -112,7 +112,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
 async function traverseReactElement(element, clientComponents, depth = 0) {
   const { type, props, key } = element
 
-  const uniqueKey = key || `element:${globalThis.__rsc_key_counter++}`
+  const uniqueKey = key || `element:${globalThis['~rsc'].keyCounter++}`
 
   if (isClientComponent(type, clientComponents)) {
     const componentId = getClientComponentId(type, clientComponents)
@@ -191,7 +191,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   }
 
   if (isSuspenseComponent(type)) {
-    const boundaryId = `boundary:${globalThis.__rsc_key_counter++}`
+    const boundaryId = `boundary:${globalThis['~rsc'].keyCounter++}`
 
     if (!globalThis.__discovered_boundaries)
       globalThis.__discovered_boundaries = []
@@ -234,7 +234,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
             const result = child.type(child.props || {})
 
             if (result && typeof result.then === 'function') {
-              const promiseId = `promise:${globalThis.__rsc_key_counter++}`
+              const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
               globalThis.__suspense_promises[promiseId] = result
 
               globalThis.__pending_promises.push({
@@ -349,7 +349,7 @@ async function createRSCHTMLElement(
     delete rscProps.children
   }
 
-  const uniqueKey = key || `${tagName}:${globalThis.__rsc_key_counter++}`
+  const uniqueKey = key || `${tagName}:${globalThis['~rsc'].keyCounter++}`
   return ['$', tagName, uniqueKey, rscProps]
 }
 
@@ -526,7 +526,7 @@ function getClientComponentId(componentType, clientComponents) {
 }
 
 function createErrorElement(message, componentName) {
-  const errorId = `error:${globalThis.__rsc_key_counter++}`
+  const errorId = `error:${globalThis['~rsc'].keyCounter++}`
   return [
     '$',
     'div',
@@ -562,7 +562,7 @@ function createErrorElement(message, componentName) {
 
 async function renderToRsc(element, clientComponents = {}) {
   try {
-    globalThis.__rsc_key_counter = 0
+    globalThis['~rsc'].keyCounter = 0
     return await traverseToRsc(element, clientComponents)
   }
   catch (error) {

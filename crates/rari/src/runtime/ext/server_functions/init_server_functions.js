@@ -84,7 +84,7 @@
       )
 
       if (componentId) {
-        promise.__rsc_component_id = componentId
+        promise['~rsc_component_id'] = componentId
       }
 
       return promise

@@ -322,8 +322,8 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
-                    delete globalThis.__rsc_functions[componentId];
+                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
+                    delete globalThis['~rsc'].functions[componentId];
                     deleted = true;
                 }}
 
@@ -332,13 +332,13 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
-                    delete globalThis.__rsc_modules[componentId];
+                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
+                    delete globalThis['~rsc'].modules[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_components && globalThis.__rsc_components[componentId]) {{
-                    delete globalThis.__rsc_components[componentId];
+                if (globalThis['~rsc'].components && globalThis['~rsc'].components[componentId]) {{
+                    delete globalThis['~rsc'].components[componentId];
                     deleted = true;
                 }}
 

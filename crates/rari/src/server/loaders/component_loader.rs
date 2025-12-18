@@ -113,10 +113,10 @@ impl ComponentLoader {
                                                 }}
                                             }}
 
-                                            if (!globalThis.__rsc_modules) {{
-                                                globalThis.__rsc_modules = {{}};
+                                            if (!globalThis['~rsc'].modules) {{
+                                                globalThis['~rsc'].modules = {{}};
                                             }}
-                                            globalThis.__rsc_modules["{}"] = moduleNamespace;
+                                            globalThis['~rsc'].modules["{}"] = moduleNamespace;
 
                                             return {{ success: true, hasDefault: !!moduleNamespace.default, exportCount: exportNames.length }};
                                         }} catch (error) {{
@@ -624,10 +624,10 @@ impl ComponentLoader {
                                                     }}
                                                 }}
 
-                                                if (!globalThis.__rsc_modules) {{
-                                                    globalThis.__rsc_modules = {{}};
+                                                if (!globalThis['~rsc'].modules) {{
+                                                    globalThis['~rsc'].modules = {{}};
                                                 }}
-                                                globalThis.__rsc_modules["{}"] = moduleNamespace;
+                                                globalThis['~rsc'].modules["{}"] = moduleNamespace;
 
                                                 return {{ success: true }};
                                             }} catch (error) {{

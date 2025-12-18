@@ -80,7 +80,7 @@ else {
       }, 'Loading...')
       let suspenseRscProps
       try {
-        const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis.__rsc_client_components || {})
+        const fallbackRsc = await globalThis.renderToRsc(loadingFallback, globalThis['~rsc'].clientComponents || {})
 
         suspenseRscProps = {
           'fallback': fallbackRsc,

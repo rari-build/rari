@@ -14,13 +14,13 @@
       clearedCount++
     }
 
-    if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {
-      delete globalThis.__rsc_modules[componentId]
+    if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {
+      delete globalThis['~rsc'].modules[componentId]
       clearedCount++
     }
 
-    if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {
-      delete globalThis.__rsc_functions[componentId]
+    if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {
+      delete globalThis['~rsc'].functions[componentId]
       clearedCount++
     }
 

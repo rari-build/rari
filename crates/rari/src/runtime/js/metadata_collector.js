@@ -45,9 +45,9 @@
 
   async function extractMetadata(modulePath, params, searchParams) {
     try {
-      if (typeof globalThis.__rsc_modules !== 'undefined') {
+      if (typeof globalThis['~rsc'].modules !== 'undefined') {
         const moduleKey = modulePath.replace(/^file:\/\/.*\/app\//, 'app/').replace(/\.js$/, '')
-        const module = globalThis.__rsc_modules[moduleKey]
+        const module = globalThis['~rsc'].modules[moduleKey]
 
         if (module) {
           if (typeof module.generateMetadata === 'function') {

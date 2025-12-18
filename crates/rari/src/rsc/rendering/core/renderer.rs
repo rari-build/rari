@@ -1445,8 +1445,9 @@ impl RscRenderer {
                 r#"
 
 globalThis.{component_id} = {component_id};
-globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
-globalThis.__rsc_functions['{component_id}'] = {component_id};
+if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
+globalThis['~rsc'].functions = globalThis['~rsc'].functions || {{}};
+globalThis['~rsc'].functions['{component_id}'] = {component_id};
 "#,
                 component_id = component_id
             ));

@@ -574,20 +574,20 @@ pub async fn immediate_component_reregistration(
                         const componentExists = (
                             typeof globalThis[componentName] === 'function' ||
                             typeof globalThis[hashedComponentName] === 'function' ||
-                            (globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] &&
-                             (typeof globalThis.__rsc_modules[componentName].default === 'function' ||
-                              typeof Object.values(globalThis.__rsc_modules[componentName])[0] === 'function'))
+                            (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] &&
+                             (typeof globalThis['~rsc'].modules[componentName].default === 'function' ||
+                              typeof Object.values(globalThis['~rsc'].modules[componentName])[0] === 'function'))
                         );
 
                         const debugInfo = {{
                             globalExists: typeof globalThis[componentName],
-                            moduleRegistryExists: !!globalThis.__rsc_modules,
-                            moduleExists: globalThis.__rsc_modules ? !!globalThis.__rsc_modules[componentName] : false,
-                            moduleDefaultExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof globalThis.__rsc_modules[componentName].default : 'module_not_found',
-                            moduleFirstExportExists: globalThis.__rsc_modules && globalThis.__rsc_modules[componentName] ? typeof Object.values(globalThis.__rsc_modules[componentName])[0] : 'module_not_found',
+                            moduleRegistryExists: !!globalThis['~rsc'].modules,
+                            moduleExists: globalThis['~rsc'].modules ? !!globalThis['~rsc'].modules[componentName] : false,
+                            moduleDefaultExists: globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] ? typeof globalThis['~rsc'].modules[componentName].default : 'module_not_found',
+                            moduleFirstExportExists: globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] ? typeof Object.values(globalThis['~rsc'].modules[componentName])[0] : 'module_not_found',
                             hashedExists: typeof globalThis[hashedComponentName],
                             availableGlobals: Object.keys(globalThis).filter(k => typeof globalThis[k] === 'function' && k.match(/^[A-Z]/)).slice(0, 20),
-                            moduleKeys: globalThis.__rsc_modules ? Object.keys(globalThis.__rsc_modules).slice(0, 20) : []
+                            moduleKeys: globalThis['~rsc'].modules ? Object.keys(globalThis['~rsc'].modules).slice(0, 20) : []
                         }};
 
                         return {{ success: componentExists, componentName: componentName, debugInfo: debugInfo }};

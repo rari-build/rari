@@ -5,18 +5,20 @@
     globalThis['~rari'].initialized = true
     globalThis['~rari'].initTimestamp = Date.now()
 
-    globalThis.__rsc_functions = globalThis.__rsc_functions || {}
-    globalThis.__rsc_modules = globalThis.__rsc_modules || {}
-    globalThis.__rsc_module_dependencies = globalThis.__rsc_module_dependencies || {}
-    globalThis.__rsc_exported_functions = globalThis.__rsc_exported_functions || {}
-    globalThis.__rsc_components = globalThis.__rsc_components || {}
+    if (!globalThis['~rsc'])
+      globalThis['~rsc'] = {}
+    globalThis['~rsc'].functions = globalThis['~rsc'].functions || {}
+    globalThis['~rsc'].modules = globalThis['~rsc'].modules || {}
+    globalThis['~rsc'].moduleDependencies = globalThis['~rsc'].moduleDependencies || {}
+    globalThis['~rsc'].exportedFunctions = globalThis['~rsc'].exportedFunctions || {}
+    globalThis['~rsc'].components = globalThis['~rsc'].components || {}
 
-    globalThis.__rsc_component_functions = globalThis.__rsc_component_functions || new Map()
-    globalThis.__rsc_component_server_functions = globalThis.__rsc_component_server_functions || new Map()
-    globalThis.__rsc_component_data = globalThis.__rsc_component_data || new Map()
-    globalThis.__rsc_component_namespaces = globalThis.__rsc_component_namespaces || new Map()
+    globalThis['~rsc'].componentFunctions = globalThis['~rsc'].componentFunctions || new Map()
+    globalThis['~rsc'].serverFunctions = globalThis['~rsc'].serverFunctions || new Map()
+    globalThis['~rsc'].componentData = globalThis['~rsc'].componentData || new Map()
+    globalThis['~rsc'].componentNamespaces = globalThis['~rsc'].componentNamespaces || new Map()
 
-    globalThis.__RSC_PROMISE_MAP = globalThis.__RSC_PROMISE_MAP || new Map()
+    globalThis['~rsc'].promiseMap = globalThis['~rsc'].promiseMap || new Map()
     globalThis.__component_promise_map = globalThis.__component_promise_map || new Map()
     globalThis.__component_specific_promises = globalThis.__component_specific_promises || new Map()
     globalThis.__component_resolved_promises = globalThis.__component_resolved_promises || new Map()

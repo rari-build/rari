@@ -234,33 +234,33 @@ pub async fn hmr_invalidate_component(
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
-                    delete globalThis.__rsc_modules[componentId];
+                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
+                    delete globalThis['~rsc'].modules[componentId];
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
-                    delete globalThis.__rsc_functions[componentId];
+                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
+                    delete globalThis['~rsc'].functions[componentId];
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_functions && globalThis.__rsc_component_functions.has(componentId)) {{
-                    globalThis.__rsc_component_functions.delete(componentId);
+                if (globalThis['~rsc'].componentFunctions && globalThis['~rsc'].componentFunctions.has(componentId)) {{
+                    globalThis['~rsc'].componentFunctions.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_server_functions && globalThis.__rsc_component_server_functions.has(componentId)) {{
-                    globalThis.__rsc_component_server_functions.delete(componentId);
+                if (globalThis['~rsc'].serverFunctions && globalThis['~rsc'].serverFunctions.has(componentId)) {{
+                    globalThis['~rsc'].serverFunctions.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_data && globalThis.__rsc_component_data.has(componentId)) {{
-                    globalThis.__rsc_component_data.delete(componentId);
+                if (globalThis['~rsc'].componentData && globalThis['~rsc'].componentData.has(componentId)) {{
+                    globalThis['~rsc'].componentData.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_namespaces && globalThis.__rsc_component_namespaces.has(componentId)) {{
-                    globalThis.__rsc_component_namespaces.delete(componentId);
+                if (globalThis['~rsc'].componentNamespaces && globalThis['~rsc'].componentNamespaces.has(componentId)) {{
+                    globalThis['~rsc'].componentNamespaces.delete(componentId);
                     clearedCount++;
                 }}
 

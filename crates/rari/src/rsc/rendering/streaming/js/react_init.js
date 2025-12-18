@@ -2,10 +2,10 @@
 (function () {
   if (typeof React === 'undefined') {
     try {
-      if (typeof globalThis.__rsc_modules !== 'undefined') {
-        const reactModule = globalThis.__rsc_modules.react
-          || globalThis.__rsc_modules.React
-          || Object.values(globalThis.__rsc_modules).find(m => m && m.createElement)
+      if (typeof globalThis['~rsc']?.modules !== 'undefined') {
+        const reactModule = globalThis['~rsc'].modules.react
+          || globalThis['~rsc'].modules.React
+          || Object.values(globalThis['~rsc'].modules).find(m => m && m.createElement)
         if (reactModule) {
           globalThis.React = reactModule
         }

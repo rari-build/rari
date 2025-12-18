@@ -933,7 +933,7 @@ impl LayoutRenderer {
         script.push_str(JS_RENDER_TO_RSC);
         script.push_str("\n\n");
         script.push_str("                const startRSC = performance.now();\n");
-        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis.__rsc_client_components || {{}});\n", current_element));
+        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis['~rsc'].clientComponents || {{}});\n", current_element));
         script.push_str(r#"                timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
@@ -960,10 +960,10 @@ impl LayoutRenderer {
                 try {
                     const jsonString = JSON.stringify(result);
                     const cleanResult = JSON.parse(jsonString);
-                    globalThis.__rsc_render_result = cleanResult;
+                    globalThis['~rsc'].renderResult = cleanResult;
                     return cleanResult;
                 } catch (jsonError) {
-                    globalThis.__rsc_render_result = result;
+                    globalThis['~rsc'].renderResult = result;
                     return result;
                 }
             })()

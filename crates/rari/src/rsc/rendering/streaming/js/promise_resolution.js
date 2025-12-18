@@ -100,7 +100,7 @@
       let rscData
       try {
         if (globalThis.renderToRsc) {
-          rscData = await globalThis.renderToRsc(resolvedElement, globalThis.__rsc_client_components || {})
+          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~rsc']?.clientComponents || {})
         }
         else {
           rscData = resolvedElement

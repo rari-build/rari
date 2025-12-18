@@ -1,6 +1,8 @@
 (function initializeRscModules() {
-  if (!globalThis.__rsc_modules) {
-    globalThis.__rsc_modules = {}
+  if (!globalThis['~rsc'])
+    globalThis['~rsc'] = {}
+  if (!globalThis['~rsc'].modules) {
+    globalThis['~rsc'].modules = {}
   }
 
   if (!globalThis.__exported_server_functions) {
@@ -41,7 +43,7 @@
       moduleKey = moduleNameOrMainExport || 'unknown'
     }
 
-    globalThis.__rsc_modules[moduleKey] = module
+    globalThis['~rsc'].modules[moduleKey] = module
 
     let exportCount = 0
     for (const key in module) {
@@ -101,10 +103,10 @@
       )
       if (cachedValue !== undefined) {
         const cachedPromise = Promise.resolve(cachedValue)
-        cachedPromise.__rsc_function_name = functionName
-        cachedPromise.__rsc_function_args = args
-        cachedPromise.__rsc_cache_key = cacheKey
-        cachedPromise.__rsc_promise_id = promiseId
+        cachedPromise['~rsc_function_name'] = functionName
+        cachedPromise['~rsc_function_args'] = args
+        cachedPromise['~rsc_cache_key'] = cacheKey
+        cachedPromise['~rsc_promise_id'] = promiseId
         cachedPromise.toString = () =>
           `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
         return cachedPromise
@@ -132,10 +134,10 @@
       promise = Promise.reject(error)
     }
 
-    promise.__rsc_function_name = functionName
-    promise.__rsc_function_args = args
-    promise.__rsc_cache_key = cacheKey
-    promise.__rsc_promise_id = promiseId
+    promise['~rsc_function_name'] = functionName
+    promise['~rsc_function_args'] = args
+    promise['~rsc_cache_key'] = cacheKey
+    promise['~rsc_promise_id'] = promiseId
     promise.toString = () =>
       `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
 
@@ -186,12 +188,12 @@ if (typeof globalThis.__server_functions === 'undefined') {
     globalThis.__server_functions = {};
 }
 
-if (typeof globalThis.__rsc_modules === 'undefined') {
-    globalThis.__rsc_modules = {};
+if (typeof globalThis['~rsc'].modules === 'undefined') {
+    globalThis['~rsc'].modules = {};
 }
 
 // Reserve module slot
-globalThis.__rsc_modules['${componentId}'] = {
+globalThis['~rsc'].modules['${componentId}'] = {
     __isLoaderStub: true,
     __awaitingRegistration: true
 };
@@ -246,12 +248,12 @@ export function ~rari_register() {
         globalThis.__server_functions = {};
     }
 
-    if (typeof globalThis.__rsc_modules === 'undefined') {
-        globalThis.__rsc_modules = {};
+    if (typeof globalThis['~rsc'].modules === 'undefined') {
+        globalThis['~rsc'].modules = {};
     }
 
     // Reserve module slot
-    globalThis.__rsc_modules['${componentName}'] = moduleExports;
+    globalThis['~rsc'].modules['${componentName}'] = moduleExports;
 }
 
 // Export the module structure

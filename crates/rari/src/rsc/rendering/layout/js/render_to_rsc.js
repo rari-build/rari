@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-globalThis.__rsc_render_result = null
+globalThis['~rsc'].renderResult = null
 
 if (!globalThis.renderToRsc) {
   globalThis.renderToRsc = async function (element, clientComponents = {}) {

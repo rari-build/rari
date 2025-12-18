@@ -344,8 +344,8 @@ export class ServerComponentBuilder {
     return code.replace(componentImportRegex, (match, importName, componentName) => {
       return `// Component reference: ${componentName}
 const ${importName} = (props) => {
-  const Component = globalThis.__rsc_components?.['components/${componentName}']
-    || globalThis.__rsc_modules?.['components/${componentName}']?.default
+  const Component = globalThis['~rsc']?.components?.['components/${componentName}']
+    || globalThis['~rsc']?.modules?.['components/${componentName}']?.default
     || globalThis['components/${componentName}'];
   if (!Component) {
     throw new Error('Component components/${componentName} not loaded');
@@ -1141,11 +1141,12 @@ if (!globalThis["${componentId}"]) {
                     globalThis[moduleKey] = mainExport;
                 }
 
-                globalThis.__rsc_components = globalThis.__rsc_components || {};
-                globalThis.__rsc_components[moduleKey] = mainExport;
+                if (!globalThis['~rsc']) globalThis['~rsc'] = {};
+                globalThis['~rsc'].components = globalThis['~rsc'].components || {};
+                globalThis['~rsc'].components[moduleKey] = mainExport;
 
-                globalThis.__rsc_modules = globalThis.__rsc_modules || {};
-                globalThis.__rsc_modules[moduleKey] = { default: mainExport, ...exportedFunctions };
+                globalThis['~rsc'].modules = globalThis['~rsc'].modules || {};
+                globalThis['~rsc'].modules[moduleKey] = { default: mainExport, ...exportedFunctions };
 
                 if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
                     globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
