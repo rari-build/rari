@@ -1,4 +1,22 @@
-## [0.5.22] - 2025-12-17
+## [0.5.23] - 2025-12-18
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.17
+## [0.5.17] - 2025-12-18
+
+### 🚀 Features
+
+- *(rsc)* Implement getData-based page not found detection
+
+### 💼 Other
+
+- V0.5.17
+## [rari@0.5.22] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.22
 
 ### ⚙️ Miscellaneous Tasks
 
