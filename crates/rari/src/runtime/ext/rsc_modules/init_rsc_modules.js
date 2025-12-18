@@ -5,16 +5,18 @@
     globalThis['~rsc'].modules = {}
   }
 
-  if (!globalThis.__exported_server_functions) {
-    globalThis.__exported_server_functions = {}
+  if (!globalThis['~serverFunctions'])
+    globalThis['~serverFunctions'] = {}
+  if (!globalThis['~serverFunctions'].exported) {
+    globalThis['~serverFunctions'].exported = {}
   }
 
-  if (!globalThis.__server_functions) {
-    globalThis.__server_functions = {}
+  if (!globalThis['~serverFunctions'].all) {
+    globalThis['~serverFunctions'].all = {}
   }
 
-  if (!globalThis.__registered_server_functions) {
-    globalThis.__registered_server_functions = new Set()
+  if (!globalThis['~serverFunctions'].registered) {
+    globalThis['~serverFunctions'].registered = new Set()
   }
 
   globalThis.registerModule = function (
@@ -48,8 +50,8 @@
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        globalThis.__server_functions[key] = module[key]
-        globalThis.__exported_server_functions[key] = module[key]
+        globalThis['~serverFunctions'].all[key] = module[key]
+        globalThis['~serverFunctions'].exported[key] = module[key]
         exportCount++
       }
     }
@@ -74,17 +76,17 @@
 
   globalThis.getServerFunction = function (name) {
     if (
-      globalThis.__exported_server_functions
-      && typeof globalThis.__exported_server_functions[name] === 'function'
+      globalThis['~serverFunctions'].exported
+      && typeof globalThis['~serverFunctions'].exported[name] === 'function'
     ) {
-      return globalThis.__exported_server_functions[name]
+      return globalThis['~serverFunctions'].exported[name]
     }
 
     if (
-      globalThis.__server_functions
-      && typeof globalThis.__server_functions[name] === 'function'
+      globalThis['~serverFunctions'].all
+      && typeof globalThis['~serverFunctions'].all[name] === 'function'
     ) {
-      return globalThis.__server_functions[name]
+      return globalThis['~serverFunctions'].all[name]
     }
 
     return undefined
@@ -184,8 +186,11 @@ if (typeof globalThis.registerModule === 'function') {
 }
 
 // Initialize registries if they don't exist
-if (typeof globalThis.__server_functions === 'undefined') {
-    globalThis.__server_functions = {};
+if (!globalThis['~serverFunctions']) {
+  globalThis['~serverFunctions'] = {}
+}
+if (typeof globalThis['~serverFunctions'].all === 'undefined') {
+  globalThis['~serverFunctions'].all = {}
 }
 
 if (typeof globalThis['~rsc'].modules === 'undefined') {
@@ -244,8 +249,11 @@ export function ~rari_register() {
     }
 
     // Initialize registries if they don't exist
-    if (typeof globalThis.__server_functions === 'undefined') {
-        globalThis.__server_functions = {};
+    if (!globalThis['~serverFunctions']) {
+      globalThis['~serverFunctions'] = {}
+    }
+    if (typeof globalThis['~serverFunctions'].all === 'undefined') {
+      globalThis['~serverFunctions'].all = {}
     }
 
     if (typeof globalThis['~rsc'].modules === 'undefined') {

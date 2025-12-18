@@ -1,13 +1,21 @@
 (function initializeServerFunctions() {
-  if (!globalThis.__registered_server_functions) {
-    globalThis.__registered_server_functions = new Set()
+  if (!globalThis['~serverFunctions'])
+    globalThis['~serverFunctions'] = {}
+  if (!globalThis['~serverFunctions'].registered) {
+    globalThis['~serverFunctions'].registered = new Set()
+  }
+  if (!globalThis['~serverFunctions'].exported) {
+    globalThis['~serverFunctions'].exported = {}
+  }
+  if (!globalThis['~serverFunctions'].all) {
+    globalThis['~serverFunctions'].all = {}
   }
 
   globalThis.resolveServerFunctionsForComponent = async function (componentId) {
     const currentComponent
-      = componentId || globalThis.__current_rendering_component
+      = componentId || globalThis['~render']?.currentComponent
 
-    const serverFunctions = globalThis.__exported_server_functions || {}
+    const serverFunctions = globalThis['~serverFunctions'].exported || {}
     const functionNames = Object.keys(serverFunctions)
 
     let registeredCount = 0
@@ -19,7 +27,7 @@
           continue
         }
 
-        globalThis.__registered_server_functions.add(functionName)
+        globalThis['~serverFunctions'].registered.add(functionName)
         registeredCount++
       }
     }
@@ -28,7 +36,7 @@
       success: true,
       registered: registeredCount,
       component: currentComponent,
-      functions: Array.from(globalThis.__registered_server_functions),
+      functions: Array.from(globalThis['~serverFunctions'].registered),
     }
   }
 
@@ -94,11 +102,11 @@
   }
 
   globalThis.isServerFunctionRegistered = function (functionName) {
-    return globalThis.__registered_server_functions?.has(functionName) || false
+    return globalThis['~serverFunctions'].registered?.has(functionName) || false
   }
 
   globalThis.clearServerFunctionCache = function (componentId) {
-    globalThis.__registered_server_functions.clear()
+    globalThis['~serverFunctions'].registered.clear()
 
     if (globalThis.PromiseManager) {
       if (componentId && globalThis.PromiseManager.clear) {
@@ -122,6 +130,6 @@
     initialized: true,
     timestamp: Date.now(),
     extension: 'server_functions',
-    registeredCount: globalThis.__registered_server_functions?.size || 0,
+    registeredCount: globalThis['~serverFunctions'].registered?.size || 0,
   }
 })()

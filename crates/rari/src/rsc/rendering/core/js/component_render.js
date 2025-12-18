@@ -105,7 +105,9 @@
           error: asyncError.message,
         },
       }
-      globalThis.__lastRenderResult = errorResult
+      if (!globalThis['~render'])
+        globalThis['~render'] = {}
+      globalThis['~render'].lastResult = errorResult
 
       return errorResult
     }
@@ -140,7 +142,9 @@
           reason: 'empty_rsc',
         },
       }
-      globalThis.__lastRenderResult = emptyResult
+      if (!globalThis['~render'])
+        globalThis['~render'] = {}
+      globalThis['~render'].lastResult = emptyResult
 
       return emptyResult
     }
@@ -157,7 +161,9 @@
       },
     }
 
-    globalThis.__lastRenderResult = finalResult
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].lastResult = finalResult
 
     return finalResult
   }
@@ -197,7 +203,9 @@
             },
           }
 
-          globalThis.__lastRenderResult = suspenseResolvedResult
+          if (!globalThis['~render'])
+            globalThis['~render'] = {}
+          globalThis['~render'].lastResult = suspenseResolvedResult
           return suspenseResolvedResult
         }
         catch (resolveError) {
@@ -214,7 +222,9 @@
             },
           }
 
-          globalThis.__lastRenderResult = errorResult
+          if (!globalThis['~render'])
+            globalThis['~render'] = {}
+          globalThis['~render'].lastResult = errorResult
           return errorResult
         }
       }
@@ -231,7 +241,9 @@
       },
     }
 
-    globalThis.__lastRenderResult = errorResult
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].lastResult = errorResult
 
     return errorResult
   }

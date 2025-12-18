@@ -1,4 +1,6 @@
-globalThis.__jsx_runtime = globalThis.__jsx_runtime || {
+if (!globalThis['~react'])
+  globalThis['~react'] = {}
+globalThis['~react'].jsxRuntime = globalThis['~react'].jsxRuntime || {
   jsx(type, props, key) {
     const element = {
       $typeof: Symbol.for('react.element'),
@@ -13,6 +15,6 @@ globalThis.__jsx_runtime = globalThis.__jsx_runtime || {
     return element
   },
   jsxs(type, props, key) {
-    return globalThis.__jsx_runtime.jsx(type, props, key)
+    return globalThis['~react'].jsxRuntime.jsx(type, props, key)
   },
 }

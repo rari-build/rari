@@ -1,6 +1,6 @@
 JSON.stringify((function () {
-  if (globalThis.__initial_render_complete) {
-    return { complete: true, result: globalThis.__streaming_result }
+  if (globalThis['~render']?.initialComplete) {
+    return { complete: true, result: globalThis['~render'].streamingResult }
   }
   return { complete: false }
 })())

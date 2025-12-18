@@ -1,3 +1,5 @@
-globalThis.__streaming_complete = false
-globalThis.__initial_render_complete = false
-globalThis.__should_start_render = true
+if (!globalThis['~render'])
+  globalThis['~render'] = {}
+globalThis['~render'].streamingComplete = false
+globalThis['~render'].initialComplete = false
+globalThis['~render'].shouldStart = true

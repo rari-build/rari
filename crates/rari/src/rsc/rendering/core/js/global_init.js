@@ -19,31 +19,33 @@
     globalThis['~rsc'].componentNamespaces = globalThis['~rsc'].componentNamespaces || new Map()
 
     globalThis['~rsc'].promiseMap = globalThis['~rsc'].promiseMap || new Map()
-    globalThis.__component_promise_map = globalThis.__component_promise_map || new Map()
-    globalThis.__component_specific_promises = globalThis.__component_specific_promises || new Map()
-    globalThis.__component_resolved_promises = globalThis.__component_resolved_promises || new Map()
-    globalThis.__module_promises = globalThis.__module_promises || new Map()
-    globalThis.__resolved_values = globalThis.__resolved_values || new Map()
 
-    globalThis.__component_permissions = globalThis.__component_permissions || new Map()
+    if (!globalThis['~components'])
+      globalThis['~components'] = {}
+    globalThis['~components'].promiseMap = globalThis['~components'].promiseMap || new Map()
+    globalThis['~components'].specificPromises = globalThis['~components'].specificPromises || new Map()
+    globalThis['~components'].resolvedPromises = globalThis['~components'].resolvedPromises || new Map()
+    globalThis['~components'].modulePromises = globalThis['~components'].modulePromises || new Map()
+    globalThis['~components'].permissions = globalThis['~components'].permissions || new Map()
+    globalThis['~components'].resolvedValues = globalThis['~components'].resolvedValues || new Map()
+    globalThis['~components'].renderLog = globalThis['~components'].renderLog || []
+
     globalThis['~rari'].manualRegister = globalThis['~rari'].manualRegister || {}
 
-    if (!globalThis.__sanitizeDataForComponent) {
-      globalThis.__sanitizeDataForComponent = function (data) {
+    if (!globalThis['~components'].sanitizeData) {
+      globalThis['~components'].sanitizeData = function (data) {
         return data
       }
     }
 
-    if (!globalThis.__checkComponentPermission) {
-      globalThis.__checkComponentPermission = function (componentId, permissionType) {
-        const permissions = globalThis.__component_permissions.get(componentId)
+    if (!globalThis['~components'].checkPermission) {
+      globalThis['~components'].checkPermission = function (componentId, permissionType) {
+        const permissions = globalThis['~components'].permissions.get(componentId)
         if (!permissions)
           return false
         return permissions[permissionType] === true
       }
     }
-
-    globalThis.__component_render_log = globalThis.__component_render_log || []
 
     return {
       initialized: true,

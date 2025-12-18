@@ -9,7 +9,10 @@ globalThis.ReactDOMServer = {
           const promiseId = `suspense_${Date.now()}_${Math.random()
             .toString(36)
             .substring(2, 11)}`
-          globalThis.__suspense_promises = globalThis.__suspense_promises || {}
+          if (!globalThis['~suspense'])
+            globalThis['~suspense'] = {}
+          if (!globalThis['~suspense'].promises)
+            globalThis['~suspense'].promises = {}
           globalThis.__suspense_promises[promiseId] = error.promise
         }
 

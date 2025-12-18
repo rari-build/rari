@@ -1097,13 +1097,14 @@ if (!globalThis["${componentId}"]) {
             let mainExport = null;
             const exportedFunctions = {};
 
-            globalThis.__server_functions = globalThis.__server_functions || {};
+            if (!globalThis['~serverFunctions']) globalThis['~serverFunctions'] = {};
+            if (!globalThis['~serverFunctions'].all) globalThis['~serverFunctions'].all = {};
 
             ${namedExports
               .map(
                 name => `if (typeof ${name} !== 'undefined') {
                 globalThis.${name} = ${name};
-                globalThis.__server_functions['${name}'] = ${name};
+                globalThis['~serverFunctions'].all['${name}'] = ${name};
                 exportedFunctions['${name}'] = ${name};
             }`,
               )

@@ -294,12 +294,15 @@ impl ComponentLoader {
                                                         r#"(async function() {{
                                                             try {{
                                                                 const moduleNamespace = await import("{}");
-                                                                if (!globalThis.__server_functions) {{
-                                                                    globalThis.__server_functions = {{}};
+                                                                if (!globalThis['~serverFunctions']) {{
+                                                                    globalThis['~serverFunctions'] = {{}};
+                                                                }}
+                                                                if (!globalThis['~serverFunctions'].all) {{
+                                                                    globalThis['~serverFunctions'].all = {{}};
                                                                 }}
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
-                                                                        globalThis.__server_functions[key] = value;
+                                                                        globalThis['~serverFunctions'].all[key] = value;
                                                                         globalThis[key] = value;
                                                                     }}
                                                                 }}
@@ -475,12 +478,15 @@ impl ComponentLoader {
                                             r#"(async function() {{
                                                 try {{
                                                     const moduleNamespace = await import("{}");
-                                                    if (!globalThis.__server_functions) {{
-                                                        globalThis.__server_functions = {{}};
+                                                    if (!globalThis['~serverFunctions']) {{
+                                                        globalThis['~serverFunctions'] = {{}};
+                                                    }}
+                                                    if (!globalThis['~serverFunctions'].all) {{
+                                                        globalThis['~serverFunctions'].all = {{}};
                                                     }}
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
-                                                            globalThis.__server_functions[key] = value;
+                                                            globalThis['~serverFunctions'].all[key] = value;
                                                             globalThis[key] = value;
                                                         }}
                                                     }}

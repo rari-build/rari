@@ -192,22 +192,24 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   if (isSuspenseComponent(type)) {
     const boundaryId = `boundary:${globalThis['~rsc'].keyCounter++}`
 
-    if (!globalThis.__discovered_boundaries)
-      globalThis.__discovered_boundaries = []
-    if (!globalThis.__pending_promises)
-      globalThis.__pending_promises = []
-    if (!globalThis.__suspense_promises)
-      globalThis.__suspense_promises = {}
+    if (!globalThis['~suspense'])
+      globalThis['~suspense'] = {}
+    if (!globalThis['~suspense'].discoveredBoundaries)
+      globalThis['~suspense'].discoveredBoundaries = []
+    if (!globalThis['~suspense'].pendingPromises)
+      globalThis['~suspense'].pendingPromises = []
+    if (!globalThis['~suspense'].promises)
+      globalThis['~suspense'].promises = {}
 
-    const previousBoundaryId = globalThis.__current_boundary_id
-    globalThis.__current_boundary_id = boundaryId
+    const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
+    globalThis['~suspense'].currentBoundaryId = boundaryId
 
     const defaultFallback = null
     const safeFallback = props?.fallback
       ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
       : defaultFallback
 
-    globalThis.__discovered_boundaries.push({
+    globalThis['~suspense'].discoveredBoundaries.push({
       id: boundaryId,
       fallback: safeFallback,
       parentId: previousBoundaryId,
@@ -234,9 +236,9 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
             if (result && typeof result.then === 'function') {
               const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
-              globalThis.__suspense_promises[promiseId] = result
+              globalThis['~suspense'].promises[promiseId] = result
 
-              globalThis.__pending_promises.push({
+              globalThis['~suspense'].pendingPromises.push({
                 id: promiseId,
                 boundaryId,
                 componentPath: child.type.name || 'anonymous',
@@ -250,7 +252,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       }
     }
 
-    globalThis.__current_boundary_id = previousBoundaryId
+    globalThis['~suspense'].currentBoundaryId = previousBoundaryId
 
     return [
       '$',

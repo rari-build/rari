@@ -40,7 +40,8 @@ impl RscJsLoader {
     pub fn create_component_environment_setup(component_id: &str) -> String {
         let setup_code = format!(
             r#"
-            globalThis.__current_rendering_component = "{component_id}";
+            if (!globalThis['~render']) globalThis['~render'] = {{}};
+            globalThis['~render'].currentComponent = "{component_id}";
 
             if (globalThis['~rsc'].componentData && !globalThis['~rsc'].componentData.has("{component_id}")) {{
                 globalThis['~rsc'].componentData.set("{component_id}", {{
@@ -51,9 +52,9 @@ impl RscJsLoader {
                 }});
             }}
 
-            if (globalThis.__component_permissions) {{
+            if (globalThis['~components']?.permissions) {{
                 const componentType = "{component_id}".includes("TestComponent") ? "test" : "generic";
-                globalThis.__component_permissions.set("{component_id}", {{
+                globalThis['~components'].permissions.set("{component_id}", {{
                     canAccessCalculations: true,
                     componentType: componentType
                 }});
@@ -325,7 +326,7 @@ impl RscJsLoader {
     pub fn create_html_extraction_script(component_id: &str) -> String {
         let extraction_code = format!(
             r#"
-            if (typeof globalThis.__lastRenderResult === 'undefined') {{
+            if (typeof globalThis['~render']?.lastResult === 'undefined') {{
                 return {{
                     error: true,
                     message: "No rendered HTML available. The component may have suspended.",
@@ -333,8 +334,8 @@ impl RscJsLoader {
                 }};
             }}
 
-            const extractedHtml = globalThis.__lastRenderResult && globalThis.__lastRenderResult.html
-                ? globalThis.__lastRenderResult.html
+            const extractedHtml = globalThis['~render']?.lastResult && globalThis['~render'].lastResult.html
+                ? globalThis['~render'].lastResult.html
                 : "<div><h2>{component_id}</h2><p>Failed to extract HTML content</p></div>";
 
             return {{
@@ -351,7 +352,7 @@ impl RscJsLoader {
     pub fn create_rsc_extraction_script(component_id: &str) -> String {
         let extraction_code = format!(
             r#"
-            if (typeof globalThis.__lastRenderResult === 'undefined') {{
+            if (typeof globalThis['~render']?.lastResult === 'undefined') {{
                 return {{
                     error: true,
                     message: "No rendered result available. The component may have suspended.",
@@ -364,7 +365,7 @@ impl RscJsLoader {
                 }};
             }}
 
-            const renderResult = globalThis.__lastRenderResult;
+            const renderResult = globalThis['~render'].lastResult;
             let extractedRsc = null;
 
             if (renderResult && renderResult.rsc) {{
@@ -480,10 +481,11 @@ impl RscJsLoader {
         format!(
             r#"
             (function() {{
-                globalThis.__current_rendering_component = "{component_id}";
+                if (!globalThis['~render']) globalThis['~render'] = {{}};
+                globalThis['~render'].currentComponent = "{component_id}";
 
-                if (globalThis.__component_promise_map && globalThis.__component_promise_map.has("{component_id}")) {{
-                    globalThis.__component_promise_map.set("{component_id}", new Map());
+                if (globalThis['~components']?.promiseMap && globalThis['~components'].promiseMap.has("{component_id}")) {{
+                    globalThis['~components'].promiseMap.set("{component_id}", new Map());
                 }}
 
                 return true;

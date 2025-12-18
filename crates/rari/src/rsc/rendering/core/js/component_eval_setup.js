@@ -1,10 +1,10 @@
 /* eslint-disable style/max-statements-per-line, no-use-before-define */
 // oxlint-disable block-scoped-var, no-var, vars-on-top
 if (typeof _jsx === 'undefined') {
-  var _jsx = globalThis.__jsx_runtime?.jsx || (() => null)
+  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
 }
 if (typeof _jsxs === 'undefined') {
-  var _jsxs = globalThis.__jsx_runtime?.jsxs || (() => null)
+  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || (() => null)
 }
 
 if (typeof globalThis.React === 'undefined') {
@@ -115,17 +115,17 @@ if (typeof globalThis.DefaultLoading === 'undefined') {
   }
 }
 
-if (!globalThis.readFileSync && globalThis.__nodeModules && globalThis.__nodeModules.get) {
-  const nodeFs = globalThis.__nodeModules.get('node:fs')
+if (!globalThis.readFileSync && globalThis['~node']?.modules && globalThis['~node'].modules.get) {
+  const nodeFs = globalThis['~node'].modules.get('node:fs')
   if (nodeFs && nodeFs.readFileSync) {
     globalThis.readFileSync = nodeFs.readFileSync
     globalThis.existsSync = nodeFs.existsSync
   }
-  const nodePath = globalThis.__nodeModules.get('node:path')
+  const nodePath = globalThis['~node'].modules.get('node:path')
   if (nodePath && nodePath.join) {
     globalThis.join = nodePath.join
   }
-  const nodeProcess = globalThis.__nodeModules.get('node:process')
+  const nodeProcess = globalThis['~node'].modules.get('node:process')
   if (nodeProcess && nodeProcess.cwd) {
     globalThis.cwd = nodeProcess.cwd
   }

@@ -144,8 +144,9 @@ impl RscRenderer {
             try {{
                 {}
             }} catch (batchError_{}) {{
-                globalThis.__batch_errors = globalThis.__batch_errors || [];
-                globalThis.__batch_errors.push({{
+                if (!globalThis['~errors']) globalThis['~errors'] = {{}};
+                if (!globalThis['~errors'].batch) globalThis['~errors'].batch = [];
+globalThis['~errors'].batch.push({{
                     script: "{}",
                     error: batchError_{}.message || String(batchError_{})
                 }});
