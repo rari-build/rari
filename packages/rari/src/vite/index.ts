@@ -641,8 +641,9 @@ if (import.meta.hot) {
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_server_components = globalThis.__rari_server_components || new Set();
-  globalThis.__rari_server_components.add(${JSON.stringify(id)});
+  if (!globalThis['~rari']) globalThis['~rari'] = {};
+  globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set();
+  globalThis['~rari'].serverComponents.add(${JSON.stringify(id)});
 }
 
 ${clientTransformedCode}`

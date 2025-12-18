@@ -881,7 +881,7 @@ async fn test_generate_boundary_update_html_simple() {
     );
     assert!(html.contains(r#"data-row-id="42""#), "Should have row ID data attribute");
 
-    assert!(html.contains("window.__rari"), "Should reference window.__rari namespace");
+    assert!(html.contains("window['~rari']"), "Should reference window['~rari'] namespace");
     assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate function");
 
     assert!(html.contains("'boundary_123'"), "Should pass boundary ID to function");

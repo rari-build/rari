@@ -62,7 +62,7 @@ export class LoadingComponentRegistry {
 
   private async loadComponentFromManifest(routePath: string): Promise<React.ComponentType | null> {
     if (!this.loadingModulesInitialized) {
-      this.loadingModules = (globalThis as any).__rari_loading_components
+      this.loadingModules = (globalThis as any)['~rari']?.loadingComponents
       this.loadingModulesInitialized = true
 
       if (!this.loadingModules) {

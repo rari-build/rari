@@ -1,12 +1,12 @@
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 
-if (typeof globalThis.__rari === 'undefined') {
-  globalThis.__rari = {}
+if (typeof globalThis['~rari'] === 'undefined') {
+  globalThis['~rari'] = {}
 }
 
 // eslint-disable-next-line node/prefer-global/process
-globalThis.__rari.isDevelopment = process.env.NODE_ENV !== 'production'
+globalThis['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
 if (typeof globalThis['~clientComponents'] === 'undefined') {
   globalThis['~clientComponents'] = {}
@@ -1000,8 +1000,8 @@ function isServerComponent(filePath) {
   }
 
   try {
-    if (typeof globalThis !== 'undefined' && globalThis.__rari_server_components) {
-      return globalThis.__rari_server_components.has(filePath)
+    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents) {
+      return globalThis['~rari'].serverComponents.has(filePath)
     }
 
     return false
@@ -1016,8 +1016,8 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set()
-        globalThis.__rari_server_components.add(data.filePath)
+        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
+        globalThis['~rari'].serverComponents.add(data.filePath)
       }
     }
   })
@@ -1025,9 +1025,9 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set()
+        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
         data.serverComponents.forEach((path) => {
-          globalThis.__rari_server_components.add(path)
+          globalThis['~rari'].serverComponents.add(path)
         })
       }
     }
@@ -1358,7 +1358,7 @@ if (import.meta.hot) {
       console.warn(`[HMR] Loaded updated manifest with ${manifest.routes?.length || 0} routes`)
 
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_app_routes_manifest = manifest
+        globalThis['~rari'].appRoutesManifest = manifest
       }
 
       const event = new CustomEvent('rari:app-router-manifest-updated', {

@@ -534,7 +534,7 @@ impl RscHtmlRenderer {
 
         let update_script = format!(
             r#"<script data-~boundary-id="{}" data-row-id="{}">
-window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
+window['~rari'] && window['~rari'].processBoundaryUpdate('{}', `{}`, {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
             row_id,
@@ -577,7 +577,7 @@ window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
 
         let error_script = format!(
             r#"<script data-~boundary-id="{}" data-row-id="{}">
-window.__rari && window.__rari.processBoundaryError('{}', '{}', {});
+window['~rari'] && window['~rari'].processBoundaryError('{}', '{}', {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
             row_id,
@@ -774,7 +774,8 @@ impl RscToHtmlConverter {
 {}
 <script>
 if (typeof window !== 'undefined') {{
-    window.__rari_stream_complete = true;
+    if (!window['~rari']) window['~rari'] = {{}};
+    window['~rari'].streamComplete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
 }}
 </script>

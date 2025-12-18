@@ -58,7 +58,7 @@ export async function renderApp() {
       contentToRender = element
     }
 
-    let manifest = globalThis.__rari_app_routes_manifest
+    let manifest = globalThis['~rari']?.appRoutesManifest
     if (!manifest) {
       try {
         const manifestUrl = window.location.origin.includes(':5173')
@@ -71,7 +71,9 @@ export async function renderApp() {
         if (manifestResponse.ok) {
           const text = await manifestResponse.text()
           manifest = JSON.parse(text)
-          globalThis.__rari_app_routes_manifest = manifest
+          if (!globalThis['~rari'])
+            globalThis['~rari'] = {}
+          globalThis['~rari'].appRoutesManifest = manifest
         }
       }
       catch (err) {
