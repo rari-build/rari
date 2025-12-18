@@ -15,7 +15,7 @@
     for (const functionName of functionNames) {
       const serverFunction = serverFunctions[functionName]
       if (typeof serverFunction === 'function') {
-        if (functionName.startsWith('__rari_') || functionName === 'default') {
+        if (functionName.startsWith('~rari_') || functionName === 'default') {
           continue
         }
 

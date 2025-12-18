@@ -1417,9 +1417,9 @@ impl RscRenderer {
             }
 
             transformed_source_safe = transformed_source_safe
-                .replace(&format!("export const __rari_main_export = {component_id};"), "")
+                .replace(&format!("export const ~rari_main_export = {component_id};"), "")
                 .replace(
-                    "export function __rari_register() { /* Compatibility stub */ return true; }",
+                    "export function ~rari_register() { /* Compatibility stub */ return true; }",
                     "",
                 )
                 .replace("export const __registry_proxy =", "const __registry_proxy =")

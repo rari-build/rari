@@ -54,12 +54,12 @@
   }
 
   globalThis.__wrapPromiseForIdentity = function (promise) {
-    if (promise.__rari_identity) {
+    if (promise['~rari_identity']) {
       return promise
     }
 
     const identityKey = Symbol('promise_identity')
-    promise.__rari_identity = identityKey
+    promise['~rari_identity'] = identityKey
     return promise
   }
 

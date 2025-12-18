@@ -658,7 +658,7 @@ const moduleExports = {{
     __awaitingRegistration: true
 }};
 
-export function __rari_register() {{
+export function ~rari_register() {{
     if (typeof globalThis.registerModule === 'function') {{
         globalThis.registerModule(moduleExports, '{component_name}');
     }}

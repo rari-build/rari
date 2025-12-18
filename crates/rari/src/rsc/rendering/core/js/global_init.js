@@ -1,7 +1,9 @@
 (function () {
-  if (!globalThis.__rari_initialized) {
-    globalThis.__rari_initialized = true
-    globalThis.__rari_init_timestamp = Date.now()
+  if (!globalThis['~rari'])
+    globalThis['~rari'] = {}
+  if (!globalThis['~rari'].initialized) {
+    globalThis['~rari'].initialized = true
+    globalThis['~rari'].initTimestamp = Date.now()
 
     globalThis.__rsc_functions = globalThis.__rsc_functions || {}
     globalThis.__rsc_modules = globalThis.__rsc_modules || {}
@@ -22,7 +24,7 @@
     globalThis.__resolved_values = globalThis.__resolved_values || new Map()
 
     globalThis.__component_permissions = globalThis.__component_permissions || new Map()
-    globalThis.__rari_manual_register = globalThis.__rari_manual_register || {}
+    globalThis['~rari'].manualRegister = globalThis['~rari'].manualRegister || {}
 
     if (!globalThis.__sanitizeDataForComponent) {
       globalThis.__sanitizeDataForComponent = function (data) {
@@ -43,7 +45,7 @@
 
     return {
       initialized: true,
-      timestamp: globalThis.__rari_init_timestamp,
+      timestamp: globalThis['~rari'].initTimestamp,
       source: 'init',
     }
   }
@@ -51,6 +53,6 @@
   return {
     initialized: false,
     reason: 'already_initialized',
-    timestamp: globalThis.__rari_init_timestamp,
+    timestamp: globalThis['~rari'].initTimestamp,
   }
 })()

@@ -236,7 +236,7 @@ const moduleExports = {
 };
 
 // Register the component structure if needed
-export function __rari_register() {
+export function ~rari_register() {
     if (typeof globalThis.registerModule === 'function') {
         globalThis.registerModule(moduleExports, '${componentName}');
     }

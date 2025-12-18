@@ -6,7 +6,7 @@ pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
 pub const COMPONENT_PREFIX: &str = "component_";
 pub const VERIFY_REGISTRATION_PREFIX: &str = "verify_registration_";
-pub const RARI_REGISTER_FUNCTION: &str = "__rari_register";
+pub const RARI_REGISTER_FUNCTION: &str = "~rari_register";
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
 pub const JS_EXECUTOR_FAILED_ERROR: &str = "JS executor failed to respond";

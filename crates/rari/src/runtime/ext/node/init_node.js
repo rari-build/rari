@@ -495,8 +495,8 @@ if (globalThis.import) {
     }
 
     return originalImport.call(this, specifier).catch((error) => {
-      if (globalThis.__rari_runtime_state) {
-        globalThis.__rari_runtime_state.import_errors.push({
+      if (globalThis['~rari']?.runtimeState) {
+        globalThis['~rari'].runtimeState.import_errors.push({
           specifier,
           error: error.message,
           timestamp: Date.now(),

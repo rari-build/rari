@@ -52,7 +52,9 @@ function sanitizeValue(value) {
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_safe_property_access = {
+  if (!globalThis['~rari'])
+    globalThis['~rari'] = {}
+  globalThis['~rari'].safePropertyAccess = {
     safeHasOwnProperty,
     safeGetProperty,
     isDangerousProperty,
