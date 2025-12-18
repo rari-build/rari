@@ -7,11 +7,11 @@ import 'virtual:loading-component-map'
 
 // CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
 
-if (typeof globalThis.__clientComponents === 'undefined') {
-  globalThis.__clientComponents = {}
+if (typeof globalThis['~clientComponents'] === 'undefined') {
+  globalThis['~clientComponents'] = {}
 }
-if (typeof globalThis.__clientComponentPaths === 'undefined') {
-  globalThis.__clientComponentPaths = {}
+if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+  globalThis['~clientComponentPaths'] = {}
 }
 
 // CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
@@ -350,7 +350,7 @@ function rscToReact(rsc, modules) {
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
         if (moduleInfo) {
-          const Component = globalThis.__clientComponents[moduleInfo.id]?.component
+          const Component = globalThis['~clientComponents'][moduleInfo.id]?.component
           if (Component) {
             const childProps = {
               ...props,

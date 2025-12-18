@@ -456,8 +456,8 @@ function getClientComponentId(componentType, clientComponents) {
     && typeof componentType === 'object'
     && Object.keys(componentType).length === 0
   ) {
-    const globalComponents = globalThis.__clientComponents || {}
-    const componentNames = globalThis.__clientComponentNames || {}
+    const globalComponents = globalThis['~clientComponents'] || {}
+    const componentNames = globalThis['~clientComponentNames'] || {}
 
     for (const [componentId, componentInfo] of Object.entries(
       globalComponents,
@@ -486,7 +486,7 @@ function getClientComponentId(componentType, clientComponents) {
   }
 
   if (typeof componentType === 'string') {
-    const componentNames = globalThis.__clientComponentNames || {}
+    const componentNames = globalThis['~clientComponentNames'] || {}
 
     let componentName = componentType
     if (componentType.includes('Counter')) {

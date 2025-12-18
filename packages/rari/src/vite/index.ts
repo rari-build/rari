@@ -1374,15 +1374,15 @@ const ${componentName} = registerClientReference(
           const componentId = path.basename(componentPath, path.extname(componentPath))
 
           return `
-globalThis.__clientComponents["${relativePath}"] = {
+globalThis['~clientComponents']["${relativePath}"] = {
   id: "${componentId}",
   path: "${relativePath}",
   type: "client",
   component: ${componentName},
   registered: true
 };
-globalThis.__clientComponents["${componentId}"] = globalThis.__clientComponents["${relativePath}"];
-globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
+globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${relativePath}"];
+globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
         return await loadEntryClient(imports, registrations)

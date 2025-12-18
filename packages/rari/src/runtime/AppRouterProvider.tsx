@@ -192,7 +192,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             return null
           }
 
-          const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
+          const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
           if (!Component) {
             console.warn('[AppRouterProvider] Component not loaded for module:', moduleInfo.id, '- skipping component')

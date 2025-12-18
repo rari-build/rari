@@ -8,14 +8,14 @@ if (typeof globalThis.__rari === 'undefined') {
 // eslint-disable-next-line node/prefer-global/process
 globalThis.__rari.isDevelopment = process.env.NODE_ENV !== 'production'
 
-if (typeof globalThis.__clientComponents === 'undefined') {
-  globalThis.__clientComponents = {}
+if (typeof globalThis['~clientComponents'] === 'undefined') {
+  globalThis['~clientComponents'] = {}
 }
-if (typeof globalThis.__clientComponentNames === 'undefined') {
-  globalThis.__clientComponentNames = {}
+if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+  globalThis['~clientComponentNames'] = {}
 }
-if (typeof globalThis.__clientComponentPaths === 'undefined') {
-  globalThis.__clientComponentPaths = {}
+if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+  globalThis['~clientComponentPaths'] = {}
 }
 
 export function registerClientComponent(componentFunction, id, exportName) {
@@ -25,7 +25,7 @@ export function registerClientComponent(componentFunction, id, exportName) {
 
   const componentId = componentName
 
-  globalThis.__clientComponents[componentId] = {
+  globalThis['~clientComponents'][componentId] = {
     id: componentId,
     path: id,
     type: 'client',
@@ -33,9 +33,9 @@ export function registerClientComponent(componentFunction, id, exportName) {
     registered: true,
   }
 
-  globalThis.__clientComponentPaths[id] = componentId
+  globalThis['~clientComponentPaths'][id] = componentId
 
-  globalThis.__clientComponentNames[componentName] = componentId
+  globalThis['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -60,31 +60,31 @@ export function registerClientComponent(componentFunction, id, exportName) {
 }
 
 export function getClientComponent(id) {
-  if (globalThis.__clientComponents[id]?.component) {
-    return globalThis.__clientComponents[id].component
+  if (globalThis['~clientComponents'][id]?.component) {
+    return globalThis['~clientComponents'][id].component
   }
 
   if (id.includes('#')) {
     const [path, exportName] = id.split('#')
 
-    const componentId = globalThis.__clientComponentPaths[path]
-    if (componentId && globalThis.__clientComponents[componentId]) {
-      const componentInfo = globalThis.__clientComponents[componentId]
+    const componentId = globalThis['~clientComponentPaths'][path]
+    if (componentId && globalThis['~clientComponents'][componentId]) {
+      const componentInfo = globalThis['~clientComponents'][componentId]
       if (exportName === 'default' || !exportName) {
         return componentInfo.component
       }
     }
 
     const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis.__clientComponentPaths[normalizedPath]
-    if (componentIdByNormalizedPath && globalThis.__clientComponents[componentIdByNormalizedPath]) {
-      return globalThis.__clientComponents[componentIdByNormalizedPath].component
+    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
+    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath]) {
+      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
     }
   }
 
-  const componentId = globalThis.__clientComponentNames[id]
-  if (componentId && globalThis.__clientComponents[componentId]) {
-    return globalThis.__clientComponents[componentId].component
+  const componentId = globalThis['~clientComponentNames'][id]
+  if (componentId && globalThis['~clientComponents'][componentId]) {
+    return globalThis['~clientComponents'][componentId].component
   }
 
   return null
@@ -92,7 +92,7 @@ export function getClientComponent(id) {
 
 export function createClientModuleMap() {
   const moduleMap = {}
-  for (const [componentId, componentInfo] of Object.entries(globalThis.__clientComponents)) {
+  for (const [componentId, componentInfo] of Object.entries(globalThis['~clientComponents'])) {
     moduleMap[componentId] = {
       id: componentId,
       chunks: [componentInfo.path],
@@ -161,7 +161,7 @@ class RscClient {
   }
 
   async fetchServerComponent(componentId, props = {}) {
-    const hmrCounter = (typeof window !== 'undefined' && window.__rscRefreshCounters && window.__rscRefreshCounters[componentId]) || 0
+    const hmrCounter = (typeof window !== 'undefined' && window['~rscRefreshCounters'] && window['~rscRefreshCounters'][componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey)) {
@@ -545,8 +545,8 @@ class RscClient {
     processStream()
 
     return {
-      _isRscResponse: true,
-      _rscPromise: Promise.resolve(createElement(StreamingWrapper)),
+      '~isRscResponse': true,
+      '~rscPromise': Promise.resolve(createElement(StreamingWrapper)),
       readRoot() {
         return Promise.resolve(createElement(StreamingWrapper))
       },
@@ -591,8 +591,8 @@ class RscClient {
       try {
         const rscPromise = createFromFetch(Promise.resolve(response))
         return {
-          _isRscResponse: true,
-          _rscPromise: rscPromise,
+          '~isRscResponse': true,
+          '~rscPromise': rscPromise,
           readRoot() {
             return rscPromise
           },
@@ -925,7 +925,7 @@ function ServerComponentWrapper({
   }
 
   if (data) {
-    if (data._isRscResponse) {
+    if (data['~isRscResponse']) {
       return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
       )
     }
@@ -944,11 +944,11 @@ function createServerComponentWrapper(componentName) {
   let globalRefreshCounter = 0
 
   if (typeof window !== 'undefined') {
-    window.__rscRefreshCounters = window.__rscRefreshCounters || {}
-    if (window.__rscRefreshCounters[componentName] === undefined) {
-      window.__rscRefreshCounters[componentName] = 0
+    window['~rscRefreshCounters'] = window['~rscRefreshCounters'] || {}
+    if (window['~rscRefreshCounters'][componentName] === undefined) {
+      window['~rscRefreshCounters'][componentName] = 0
     }
-    globalRefreshCounter = window.__rscRefreshCounters[componentName]
+    globalRefreshCounter = window['~rscRefreshCounters'][componentName]
   }
 
   const ServerComponent = (props) => {
@@ -961,8 +961,8 @@ function createServerComponentWrapper(componentName) {
           rscClient.clearCache()
 
           if (typeof window !== 'undefined') {
-            window.__rscRefreshCounters[componentName] = (window.__rscRefreshCounters[componentName] || 0) + 1
-            setMountKey(window.__rscRefreshCounters[componentName])
+            window['~rscRefreshCounters'][componentName] = (window['~rscRefreshCounters'][componentName] || 0) + 1
+            setMountKey(window['~rscRefreshCounters'][componentName])
           }
         }
       }

@@ -50,13 +50,13 @@ if (!globalThis.__rsc_renderer_initialized) {
     globalThis.__track_component_render(componentName)
   }
 
-  if (typeof globalThis.__clientComponents === 'undefined') {
-    globalThis.__clientComponents = {}
+  if (typeof globalThis['~clientComponents'] === 'undefined') {
+    globalThis['~clientComponents'] = {}
   }
-  if (typeof globalThis.__clientComponentNames === 'undefined') {
-    globalThis.__clientComponentNames = {}
+  if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+    globalThis['~clientComponentNames'] = {}
   }
-  if (typeof globalThis.__clientComponentPaths === 'undefined') {
-    globalThis.__clientComponentPaths = {}
+  if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+    globalThis['~clientComponentPaths'] = {}
   }
 }
