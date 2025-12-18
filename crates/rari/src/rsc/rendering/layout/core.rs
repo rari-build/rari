@@ -40,6 +40,82 @@ impl LayoutRenderer {
         Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
+    pub async fn check_page_not_found(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+    ) -> Result<bool, RariError> {
+        let page_props = utils::create_page_props(route_match, context)?;
+        let page_props_json = serde_json::to_string(&page_props)?;
+
+        fn convert_route_path_to_dist_path(path: &str) -> String {
+            use regex::Regex;
+            let re = Regex::new(r"\[+([^\]]+)\]+")
+                .expect("Invalid regex pattern for route path conversion");
+            re.replace_all(path, |caps: &regex::Captures| {
+                let param = &caps[1];
+                let bracket_count = caps[0].matches('[').count();
+                let underscores = "_".repeat(bracket_count);
+                format!("{}{}{}", underscores, param, underscores)
+            })
+            .to_string()
+        }
+
+        let dist_server_path = std::env::current_dir()
+            .ok()
+            .map(|p| p.join("dist/server"))
+            .and_then(|p| p.canonicalize().ok());
+
+        let base_path = match dist_server_path {
+            Some(path) => path,
+            None => {
+                tracing::warn!("Could not determine dist/server path for getData check");
+                return Ok(false);
+            }
+        };
+
+        let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+        let dist_filename = convert_route_path_to_dist_path(&js_filename);
+        let page_file_path = base_path.join("app").join(&dist_filename);
+
+        if !page_file_path.exists() {
+            tracing::debug!("Page file not found at {:?}", page_file_path);
+            return Ok(false);
+        }
+
+        let page_path = format!("file://{}", page_file_path.display());
+
+        let check_script = format!(
+            r#"
+            (async () => {{
+                try {{
+                    const module = await import("{}");
+
+                    if (typeof module.getData === 'function') {{
+                        const pageProps = {};
+                        const result = await module.getData(pageProps);
+                        return {{ notFound: result?.notFound === true }};
+                    }}
+
+                    return {{ notFound: false }};
+                }} catch (error) {{
+                    console.error('[check_page_not_found] Error:', error);
+                    return {{ notFound: false }};
+                }}
+            }})()
+            "#,
+            page_path, page_props_json
+        );
+
+        let renderer = self.renderer.lock().await;
+        let result =
+            renderer.runtime.execute_script("check_not_found".to_string(), check_script).await?;
+
+        let not_found = result.get("notFound").and_then(|v| v.as_bool()).unwrap_or(false);
+        tracing::debug!("check_page_not_found result: notFound={}", not_found);
+        Ok(not_found)
+    }
+
     pub async fn render_route(
         &self,
         route_match: &AppRouteMatch,
