@@ -1423,8 +1423,6 @@ globalThis['~errors'].batch.push({{
                     "export function ~rari_register() { /* Compatibility stub */ return true; }",
                     "",
                 )
-                .replace("export const __registry_proxy =", "const __registry_proxy =")
-                .replace("const __registry_proxy =", "")
                 .replace("export const metadata =", "const metadata =")
                 .replace("export const ", "const ")
                 .replace("export function ", "function ")
