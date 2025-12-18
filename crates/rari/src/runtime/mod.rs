@@ -327,8 +327,8 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis.__server_functions && globalThis.__server_functions[componentId]) {{
-                    delete globalThis.__server_functions[componentId];
+                if (globalThis['~serverFunctions']?.all && globalThis['~serverFunctions'].all[componentId]) {{
+                    delete globalThis['~serverFunctions'].all[componentId];
                     deleted = true;
                 }}
 

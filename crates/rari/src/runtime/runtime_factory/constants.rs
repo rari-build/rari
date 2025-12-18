@@ -39,59 +39,60 @@ pub const MODULE_CHECK_SCRIPT: &str = r#"
 pub const PROMISE_SETUP_SCRIPT: &str = r#"
 (function() {
     try {
-        const promise = globalThis.__current_promise_object;
+        if (!globalThis['~promises']) globalThis['~promises'] = {};
+        const promise = globalThis['~promises'].currentObject;
         if (!promise || typeof promise.then !== 'function') {
-            globalThis.__promise_resolved_value = {
+            globalThis['~promises'].resolvedValue = {
                 __error: "Not a valid promise",
                 received: typeof promise,
                 promiseToString: String(promise)
             };
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolutionComplete = true;
             return;
         }
 
-        globalThis.__promise_resolved_value = null;
-        globalThis.__promise_resolution_complete = false;
+        globalThis['~promises'].resolvedValue = null;
+        globalThis['~promises'].resolutionComplete = false;
 
         promise.then(function(resolvedValue) {
-            globalThis.__promise_resolved_value = resolvedValue;
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolvedValue = resolvedValue;
+            globalThis['~promises'].resolutionComplete = true;
         }).catch(function(error) {
-            globalThis.__promise_resolved_value = {
+            globalThis['~promises'].resolvedValue = {
                 __promise_error: true,
                 error: String(error),
                 stack: error.stack || "No stack trace"
             };
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolutionComplete = true;
         });
     } catch (error) {
-        globalThis.__promise_resolved_value = {
+        globalThis['~promises'].resolvedValue = {
             __promise_error: true,
             error: String(error),
             stack: error.stack || "No stack trace"
         };
-        globalThis.__promise_resolution_complete = true;
+        globalThis['~promises'].resolutionComplete = true;
     }
 })()
 "#;
 
 pub const PROMISE_EXTRACT_SCRIPT: &str = r#"
 (function() {
-    if (globalThis.__promise_resolution_complete === true) {
-        return globalThis.__promise_resolved_value;
+    if (!globalThis['~promises']) globalThis['~promises'] = {};
+    if (globalThis['~promises'].resolutionComplete === true) {
+        return globalThis['~promises'].resolvedValue;
     } else {
         return {
             __timeout_error: "Promise did not resolve in time",
             __debug_info: {
-                completion_flag: globalThis.__promise_resolution_complete,
-                resolved_value: globalThis.__promise_resolved_value
+                completion_flag: globalThis['~promises'].resolutionComplete,
+                resolved_value: globalThis['~promises'].resolvedValue
             }
         };
     }
 })()
 "#;
 
-// Helper functions
 pub fn is_critical_error(error: &RariError) -> bool {
     let error_str = error.to_string();
     error_str.contains("assertion") || error_str.contains("panicked")

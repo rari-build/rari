@@ -887,9 +887,11 @@ impl LayoutRenderer {
                 const React = globalThis.React;
                 const ReactDOMServer = globalThis.ReactDOMServer;
 
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__deferred_async_components = [];
+                if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
+                globalThis['~suspense'].discoveredBoundaries = [];
+                globalThis['~suspense'].pendingPromises = [];
+                if (!globalThis['~render']) globalThis['~render'] = {{}};
+                globalThis['~render'].deferredAsyncComponents = [];
 
                 {}
             "#,
@@ -938,16 +940,16 @@ impl LayoutRenderer {
 
                 timings.total = performance.now() - startTotal;
 
-                const deferredComponents = globalThis.__deferred_async_components || [];
+                const deferredComponents = globalThis['~render']?.deferredAsyncComponents || [];
                 const hasAsync = deferredComponents.length > 0;
                 const deferredCount = deferredComponents.length;
 
                 const result = {
                     rsc_data: rscData,
-                    boundaries: globalThis.__discovered_boundaries || [],
-                    pending_promises: globalThis.__pending_promises || [],
-                    has_suspense: (globalThis.__discovered_boundaries && globalThis.__discovered_boundaries.length > 0) ||
-                                 (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
+                    boundaries: globalThis['~suspense']?.discoveredBoundaries || [],
+                    pending_promises: globalThis['~suspense']?.pendingPromises || [],
+                    has_suspense: (globalThis['~suspense']?.discoveredBoundaries && globalThis['~suspense'].discoveredBoundaries.length > 0) ||
+                                 (globalThis['~suspense']?.pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
                     metadata: {
                         hasAsync: hasAsync,
                         deferredCount: deferredCount,

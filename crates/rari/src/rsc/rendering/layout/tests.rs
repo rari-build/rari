@@ -881,11 +881,11 @@ fn test_mode_consistency_metadata_structure() {
     assert!(script_ssr.contains("rsc_data: rscData"));
     assert!(script_rsc.contains("rsc_data: rscData"));
 
-    assert!(script_ssr.contains("boundaries: globalThis.__discovered_boundaries"));
-    assert!(script_rsc.contains("boundaries: globalThis.__discovered_boundaries"));
+    assert!(script_ssr.contains("boundaries: globalThis['~suspense']?.discoveredBoundaries"));
+    assert!(script_rsc.contains("boundaries: globalThis['~suspense']?.discoveredBoundaries"));
 
-    assert!(script_ssr.contains("pending_promises: globalThis.__pending_promises"));
-    assert!(script_rsc.contains("pending_promises: globalThis.__pending_promises"));
+    assert!(script_ssr.contains("pending_promises: globalThis['~suspense']?.pendingPromises"));
+    assert!(script_rsc.contains("pending_promises: globalThis['~suspense']?.pendingPromises"));
 
     assert!(script_ssr.contains("metadata: {"));
     assert!(script_rsc.contains("metadata: {"));

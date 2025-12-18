@@ -297,7 +297,8 @@ pub fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool
 fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> {
     let check_script = r#"
         (function() {
-            return globalThis.__promise_resolution_complete === true;
+            if (!globalThis['~promises']) globalThis['~promises'] = {};
+            return globalThis['~promises'].resolutionComplete === true;
         })()
     "#;
 

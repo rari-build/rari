@@ -94,7 +94,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
+            (function() {
                 const originalReact = globalThis.React;
                 delete globalThis.React;
 
@@ -126,14 +126,15 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
-                globalThis.__deferred_async_components = "not an array";
+            (function() {
+                if (!globalThis['~render']) globalThis['~render'] = {};
+                globalThis['~render'].deferredAsyncComponents = "not an array";
 
-                if (!Array.isArray(globalThis.__deferred_async_components)) {
+                if (!Array.isArray(globalThis['~render'].deferredAsyncComponents)) {
                     return {
                         success: false,
-                        error: '__deferred_async_components is not an array',
-                        actualType: typeof globalThis.__deferred_async_components,
+                        error: 'deferredAsyncComponents is not an array',
+                        actualType: typeof globalThis['~render'].deferredAsyncComponents,
                         validated: true
                     };
                 }
@@ -156,7 +157,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
+            (function() {
                 const deferred = {
                     component: "not a function",
                     promiseId: "test-promise",
@@ -193,7 +194,7 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
+            (function() {
                 const deferred = {
                     component: function() { return "not a promise"; },
                     promiseId: "test-promise",
@@ -236,15 +237,16 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
-                globalThis.__suspense_promises = {};
+            (function() {
+                if (!globalThis['~suspense']) globalThis['~suspense'] = {};
+                globalThis['~suspense'].promises = {};
                 const promiseId = "test-promise-123";
 
                 const testPromise = Promise.resolve("test");
-                globalThis.__suspense_promises[promiseId] = testPromise;
+                globalThis['~suspense'].promises[promiseId] = testPromise;
 
-                if (!globalThis.__suspense_promises[promiseId]) {
-                    const availablePromiseIds = Object.keys(globalThis.__suspense_promises || {});
+                if (!globalThis['~suspense'].promises[promiseId]) {
+                    const availablePromiseIds = Object.keys(globalThis['~suspense'].promises || {});
                     return {
                         success: false,
                         error: 'Promise registration verification failed',
@@ -404,13 +406,14 @@ mod tests {
         let runtime = Arc::new(JsExecutionRuntime::new(None));
 
         let test_script = r#"
-            (async function() {
+            (function() {
                 globalThis.React = { createElement: () => {} };
 
-                globalThis.__deferred_async_components = [
+                if (!globalThis['~render']) globalThis['~render'] = {};
+                globalThis['~render'].deferredAsyncComponents = [
                     {
-                        component: async function(props) {
-                            return { type: 'div', props: { children: 'Valid' } };
+                        component: function(props) {
+                            return Promise.resolve({ type: 'div', props: { children: 'Valid' } });
                         },
                         promiseId: "valid-promise",
                         componentPath: "ValidComponent",
@@ -428,10 +431,11 @@ mod tests {
                     }
                 ];
 
-                globalThis.__suspense_promises = {};
+                if (!globalThis['~suspense']) globalThis['~suspense'] = {};
+                globalThis['~suspense'].promises = {};
                 const results = [];
 
-                for (const deferred of globalThis.__deferred_async_components) {
+                for (const deferred of globalThis['~render'].deferredAsyncComponents) {
                     try {
                         if (typeof deferred.component !== 'function') {
                             results.push({ promiseId: deferred.promiseId, success: false, error: 'Not a function' });
@@ -450,9 +454,9 @@ mod tests {
                             continue;
                         }
 
-                        globalThis.__suspense_promises[deferred.promiseId] = componentPromise;
+                        globalThis['~suspense'].promises[deferred.promiseId] = componentPromise;
 
-                        if (!globalThis.__suspense_promises[deferred.promiseId]) {
+                        if (!globalThis['~suspense'].promises[deferred.promiseId]) {
                             results.push({ promiseId: deferred.promiseId, success: false, error: 'Registration failed' });
                         } else {
                             results.push({ promiseId: deferred.promiseId, success: true });
@@ -463,7 +467,7 @@ mod tests {
                 }
 
                 return {
-                    totalComponents: globalThis.__deferred_async_components.length,
+                    totalComponents: globalThis['~render'].deferredAsyncComponents.length,
                     results: results,
                     successCount: results.filter(r => r.success).length,
                     failureCount: results.filter(r => !r.success).length
