@@ -27,10 +27,16 @@ else {
       const boundaryId = `page_boundary_${componentPathHash}`
       const promiseId = `page_promise_${componentPathHash}`
 
-      globalThis.__suspense_promises = globalThis.__suspense_promises || {}
+      if (!globalThis['~suspense'])
+        globalThis['~suspense'] = {}
+      if (!globalThis['~suspense'].promises)
+        globalThis['~suspense'].promises = {}
 
-      globalThis.__deferred_async_components = globalThis.__deferred_async_components || []
-      globalThis.__deferred_async_components.push({
+      if (!globalThis['~render'])
+        globalThis['~render'] = {}
+      if (!globalThis['~render'].deferredAsyncComponents)
+        globalThis['~render'].deferredAsyncComponents = []
+      globalThis['~render'].deferredAsyncComponents.push({
         promiseId,
         boundaryId,
         component: PageComponent,
@@ -38,10 +44,12 @@ else {
         componentPath: '{route_file_path}',
       })
 
-      globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || []
+      if (!globalThis['~suspense'].discoveredBoundaries)
+        globalThis['~suspense'].discoveredBoundaries = []
 
-      globalThis.__pending_promises = globalThis.__pending_promises || []
-      globalThis.__pending_promises.push({
+      if (!globalThis['~suspense'].pendingPromises)
+        globalThis['~suspense'].pendingPromises = []
+      globalThis['~suspense'].pendingPromises.push({
         id: promiseId,
         boundaryId,
         componentPath: '{route_file_path}',
@@ -61,7 +69,7 @@ else {
         key: null,
       }
 
-      globalThis.__discovered_boundaries.push({
+      globalThis['~suspense'].discoveredBoundaries.push({
         id: boundaryId,
         fallback: fallbackForBoundary,
         parentId: 'content-slot',

@@ -480,8 +480,10 @@ const nodeModules = new Map([
   ],
 ])
 
-if (!globalThis.__nodeModules) {
-  globalThis.__nodeModules = nodeModules
+if (!globalThis['~node'])
+  globalThis['~node'] = {}
+if (!globalThis['~node'].modules) {
+  globalThis['~node'].modules = nodeModules
 }
 
 if (globalThis.import) {
