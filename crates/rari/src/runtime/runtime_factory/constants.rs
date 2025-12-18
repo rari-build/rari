@@ -43,7 +43,7 @@ pub const PROMISE_SETUP_SCRIPT: &str = r#"
         const promise = globalThis['~promises'].currentObject;
         if (!promise || typeof promise.then !== 'function') {
             globalThis['~promises'].resolvedValue = {
-                __error: "Not a valid promise",
+                '~error': "Not a valid promise",
                 received: typeof promise,
                 promiseToString: String(promise)
             };
@@ -59,7 +59,7 @@ pub const PROMISE_SETUP_SCRIPT: &str = r#"
             globalThis['~promises'].resolutionComplete = true;
         }).catch(function(error) {
             globalThis['~promises'].resolvedValue = {
-                __promise_error: true,
+                '~promiseError': true,
                 error: String(error),
                 stack: error.stack || "No stack trace"
             };
@@ -67,7 +67,7 @@ pub const PROMISE_SETUP_SCRIPT: &str = r#"
         });
     } catch (error) {
         globalThis['~promises'].resolvedValue = {
-            __promise_error: true,
+            '~promiseError': true,
             error: String(error),
             stack: error.stack || "No stack trace"
         };
@@ -83,8 +83,8 @@ pub const PROMISE_EXTRACT_SCRIPT: &str = r#"
         return globalThis['~promises'].resolvedValue;
     } else {
         return {
-            __timeout_error: "Promise did not resolve in time",
-            __debug_info: {
+            '~timeoutError': "Promise did not resolve in time",
+            '~debugInfo': {
                 completion_flag: globalThis['~promises'].resolutionComplete,
                 resolved_value: globalThis['~promises'].resolvedValue
             }

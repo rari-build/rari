@@ -60,7 +60,7 @@ fn extract_promise_metadata<'s>(
     );
 
     let mut metadata = serde_json::Map::new();
-    metadata.insert("__promise_placeholder".to_string(), serde_json::Value::Bool(true));
+    metadata.insert("~promisePlaceholder".to_string(), serde_json::Value::Bool(true));
     metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
 
     if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
@@ -245,7 +245,7 @@ fn extract_composition_result_manually_from_panic<'s>(
     tracing::warn!("Serialization panic fallback: {}", fallback_msg);
 
     let mut error_obj = serde_json::Map::new();
-    error_obj.insert("__serialization_error".to_string(), serde_json::Value::Bool(true));
+    error_obj.insert("~serializationError".to_string(), serde_json::Value::Bool(true));
     error_obj.insert(
         "error".to_string(),
         serde_json::Value::String("V8 value could not be serialized".to_string()),
