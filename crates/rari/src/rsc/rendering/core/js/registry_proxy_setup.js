@@ -1,4 +1,3 @@
-/* eslint-disable no-use-before-define */
 // oxlint-disable no-var, vars-on-top, block-scoped-var, no-unused-vars
 if (typeof globalThis['~registryProxy'] === 'undefined') {
   globalThis['~registryProxy'] = new Proxy({}, {

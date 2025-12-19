@@ -78,15 +78,11 @@ pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     format!(
         r#"
 if (!globalThis.{module_key}) {{
-    console.log('[Rari] Loading server action module: {module_id}');
     globalThis.{module_key} = true;
     {code}
-}} else {{
-    console.log('[Rari] Server action module already loaded, skipping: {module_id}');
 }}
 "#,
         module_key = module_key,
-        module_id = module_id,
         code = code
     )
 }

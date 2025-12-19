@@ -1040,16 +1040,11 @@ if (import.meta.hot) {
   })
 
   import.meta.hot.on('rari:server-component-updated', async (data) => {
-    console.warn('[HMR] ⚡ Received rari:server-component-updated event!', data)
-
     const componentId = data?.id || data?.componentId
     const timestamp = data?.t || data?.timestamp
 
     if (componentId) {
-      console.warn(`[HMR] Server component updated: ${componentId}`)
-
       if (typeof window !== 'undefined') {
-        console.warn('[HMR] Dispatching window event rari:rsc-invalidate')
         const event = new CustomEvent('rari:rsc-invalidate', {
           detail: {
             componentId,
@@ -1059,17 +1054,14 @@ if (import.meta.hot) {
           },
         })
         window.dispatchEvent(event)
-        console.warn('[HMR] Window event dispatched')
       }
     }
     else if (data?.path && isServerComponent(data.path)) {
-      console.warn('[HMR] File-based invalidation for:', data.path)
       await invalidateRscCache({ filePath: data.path, forceReload: false })
     }
   })
 
   import.meta.hot.on('rari:app-router-updated', async (data) => {
-    console.warn('[HMR] Received app-router-updated event:', data)
     try {
       if (!data)
         return
@@ -1083,7 +1075,6 @@ if (import.meta.hot) {
 
   import.meta.hot.on('rari:server-action-updated', async (data) => {
     if (data?.filePath) {
-      console.warn('[HMR] Server action updated:', data.filePath)
       rscClient.clearCache()
 
       if (typeof window !== 'undefined') {
@@ -1104,9 +1095,6 @@ if (import.meta.hot) {
     const metadata = data.metadata
     const metadataChanged = data.metadataChanged
 
-    console.warn(`[HMR] App router ${fileType} updated: ${filePath}`)
-    console.warn('[HMR] Affected routes:', affectedRoutes)
-
     if (metadataChanged && metadata) {
       updateDocumentMetadata(metadata)
     }
@@ -1114,8 +1102,6 @@ if (import.meta.hot) {
     try {
       const rariServerUrl = window.location.origin
       const reloadUrl = `${rariServerUrl}/api/rsc/hmr-register`
-
-      console.warn('[HMR] Reloading component:', filePath, '(from dist/server)')
 
       let componentId = filePath
       if (componentId.startsWith('src/')) {
@@ -1133,12 +1119,8 @@ if (import.meta.hot) {
         }),
       })
 
-      if (reloadResponse.ok) {
-        const result = await reloadResponse.json()
-        console.warn('[HMR] Reload response:', result)
-      }
-      else {
-        console.warn('[HMR] Component reload failed:', reloadResponse.status)
+      if (!reloadResponse.ok) {
+        console.error('[HMR] Component reload failed:', reloadResponse.status)
       }
     }
     catch (error) {
@@ -1157,7 +1139,8 @@ if (import.meta.hot) {
         routes = affectedRoutes
         break
       default:
-        console.warn(`[HMR] Unknown file type: ${fileType}`)
+        // Unknown file type, skip
+        break
     }
 
     await invalidateAppRouterCache({ routes, fileType, filePath, componentId: routePath })
@@ -1211,8 +1194,6 @@ if (import.meta.hot) {
     for (const key of keysToDelete) {
       rscClient.componentCache.delete(key)
     }
-
-    console.warn(`[HMR] Cleared cache for ${keysToDelete.length} entries across ${routes.length} route(s)`)
   }
 
   async function invalidateAppRouterCache(data) {
@@ -1221,8 +1202,6 @@ if (import.meta.hot) {
     const filePath = data.filePath
     const componentId = data.componentId
 
-    console.warn('[HMR] Invalidating cache for routes:', routes)
-
     if (componentId || filePath) {
       try {
         const rariServerUrl = window.location.origin.includes(':5173')
@@ -1230,8 +1209,6 @@ if (import.meta.hot) {
           : window.location.origin
 
         const invalidateUrl = `${rariServerUrl}/api/rsc/hmr-invalidate`
-
-        console.warn('[HMR] Calling server invalidation endpoint for:', componentId || filePath)
 
         const invalidateResponse = await fetch(invalidateUrl, {
           method: 'POST',
@@ -1244,12 +1221,8 @@ if (import.meta.hot) {
           }),
         })
 
-        if (invalidateResponse.ok) {
-          const result = await invalidateResponse.json()
-          console.warn('[HMR] Server cache invalidated:', result)
-        }
-        else {
-          console.warn('[HMR] Server cache invalidation failed:', invalidateResponse.status)
+        if (!invalidateResponse.ok) {
+          console.error('[HMR] Server cache invalidation failed:', invalidateResponse.status)
         }
       }
       catch (error) {
@@ -1267,8 +1240,6 @@ if (import.meta.hot) {
 
       const currentPath = window.location.pathname
       if (routes.includes(currentPath) || routes.includes('/')) {
-        console.warn('[HMR] Re-fetching current route:', currentPath)
-
         try {
           const rariServerUrl = window.location.origin.includes(':5173')
             ? 'http://localhost:3000'
@@ -1282,8 +1253,8 @@ if (import.meta.hot) {
             cache: 'no-cache',
           })
 
-          if (response.ok) {
-            console.warn('[HMR] Successfully re-fetched route, triggering re-render')
+          if (!response.ok) {
+            console.error('[HMR] Failed to re-fetch route:', response.status)
           }
         }
         catch (error) {
@@ -1304,17 +1275,6 @@ if (import.meta.hot) {
     try {
       const currentPath = window.location.pathname
 
-      const isCurrentRouteAffected = affectedRoutes.some((route) => {
-        if (route === currentPath)
-          return true
-        if (currentPath.startsWith(`${route}/`))
-          return true
-        return false
-      })
-
-      console.warn('[HMR] App router HMR triggered for routes:', affectedRoutes)
-      console.warn('[HMR] Current route affected:', isCurrentRouteAffected)
-
       const event = new CustomEvent('rari:app-router-rerender', {
         detail: {
           routePath,
@@ -1324,8 +1284,6 @@ if (import.meta.hot) {
         },
       })
       window.dispatchEvent(event)
-
-      console.warn('[HMR] Re-render triggered successfully')
     }
     catch (error) {
       console.error('[HMR] Failed to trigger re-render:', error)
@@ -1337,8 +1295,6 @@ if (import.meta.hot) {
     if (typeof window === 'undefined') {
       return
     }
-
-    console.warn('[HMR] Reloading app router manifest')
 
     try {
       const response = await fetch('/app-routes.json', {
@@ -1354,8 +1310,6 @@ if (import.meta.hot) {
       }
 
       const manifest = await response.json()
-
-      console.warn(`[HMR] Loaded updated manifest with ${manifest.routes?.length || 0} routes`)
 
       if (typeof globalThis !== 'undefined') {
         globalThis['~rari'].appRoutesManifest = manifest
@@ -1378,11 +1332,8 @@ if (import.meta.hot) {
         return false
       })
 
-      if (currentRoute) {
-        console.warn('[HMR] Current route found in updated manifest:', currentRoute.path)
-      }
-      else {
-        console.warn('[HMR] Current route not found in updated manifest, may need navigation update')
+      if (!currentRoute) {
+        console.error('[HMR] Current route not found in updated manifest')
       }
     }
     catch (error) {
@@ -1509,13 +1460,10 @@ if (import.meta.hot) {
   })
 
   import.meta.hot.on('rari:hmr-error-cleared', () => {
-    console.warn('[HMR] Error cleared, build successful')
     overlay.hide()
   })
 
   import.meta.hot.on('vite:error', (data) => {
-    console.error('[HMR] Vite error:', data)
-
     overlay.show({
       message: data.err?.message || 'Unknown Vite error',
       stack: data.err?.stack,
@@ -1523,8 +1471,6 @@ if (import.meta.hot) {
       timestamp: Date.now(),
     })
   })
-
-  console.warn('[HMR] Error handling initialized')
 }
 
 export {

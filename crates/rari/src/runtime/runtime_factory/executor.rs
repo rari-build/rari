@@ -96,9 +96,6 @@ async fn execute_as_module(
         Ok(id) => id,
         Err(load_err) => {
             if load_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
-                println!(
-                    "[RARI_HMR] Module '{script_name}' already loaded, continuing with evaluation"
-                );
                 return Ok(create_already_loaded_response(script_name));
             } else {
                 return Err(RariError::js_execution(format!(

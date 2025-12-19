@@ -105,16 +105,39 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
     Ok(canonical_path)
 }
 
+pub fn normalize_component_path(file_path: &str) -> String {
+    let path = Path::new(file_path);
+
+    if path.is_absolute() {
+        let components: Vec<_> = path.components().collect();
+
+        if let Some(src_idx) = components.iter().position(|c| c.as_os_str() == "src") {
+            let after_src: PathBuf = components[src_idx..].iter().collect();
+            return after_src.to_string_lossy().replace('\\', "/");
+        } else if let Some(app_idx) = components.iter().position(|c| c.as_os_str() == "app") {
+            let after_app: PathBuf = components[app_idx..].iter().collect();
+            return after_app.to_string_lossy().replace('\\', "/");
+        }
+    }
+
+    file_path.replace('\\', "/")
+}
+
 pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
-    if !file_path.starts_with("app/") && !file_path.starts_with("src/") {
+    let normalized = normalize_component_path(file_path);
+
+    if !normalized.starts_with("app/") && !normalized.starts_with("src/") {
         warn!(
             file_path = %file_path,
+            normalized = %normalized,
             "Rejected component path: must start with app/ or src/"
         );
         return Err(RariError::bad_request(
             "Invalid component path: must be within app/ or src/ directory",
         ));
     }
+
+    let file_path = &normalized;
 
     if file_path.contains("..") {
         warn!(

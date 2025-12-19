@@ -275,17 +275,24 @@ pub async fn reload_component_from_dist(
     file_path: &str,
     component_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::server::utils::path_validation::validate_component_path;
+    use crate::server::utils::path_validation::{
+        normalize_component_path, validate_component_path,
+    };
 
-    if let Err(e) = validate_component_path(file_path) {
+    let normalized_path = normalize_component_path(file_path);
+
+    if let Err(e) = validate_component_path(&normalized_path) {
         error!(
             component_id = component_id,
             file_path = file_path,
+            normalized_path = %normalized_path,
             error = %e,
             "Component path validation failed"
         );
         return Err(format!("Path validation error: {}", e).into());
     }
+
+    let file_path = &normalized_path;
 
     let dist_path = match get_dist_path_for_component(file_path) {
         Ok(path) => path,
@@ -318,7 +325,7 @@ pub async fn reload_component_from_dist(
 
     debug!("Found dist file at: {}", dist_path.display());
 
-    let dist_code = match tokio::fs::read_to_string(&dist_path).await {
+    let mut dist_code = match tokio::fs::read_to_string(&dist_path).await {
         Ok(code) => code,
         Err(e) => {
             error!(
@@ -339,31 +346,285 @@ pub async fn reload_component_from_dist(
 
     debug!("Read {} bytes from dist file", dist_code.len());
 
-    let wrapped_code = wrap_server_action_module(&dist_code, component_id);
+    let needs_retry = {
+        let renderer = state.renderer.lock().await;
+        let registry = renderer.component_registry.lock();
+        if let Some(existing_component) = registry.get_component(component_id) {
+            let existing_snippet =
+                existing_component.transformed_source.chars().take(500).collect::<String>();
+            let new_snippet = dist_code.chars().take(500).collect::<String>();
+
+            if existing_snippet == new_snippet {
+                debug!(component_id = component_id, "Dist file unchanged, will retry after delay");
+                true
+            } else {
+                debug!(component_id = component_id, "Dist file has changed, proceeding with HMR");
+                false
+            }
+        } else {
+            false
+        }
+    };
+
+    if needs_retry {
+        debug!("Waiting 100ms for Vite to finish writing dist file...");
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let new_dist_code = match tokio::fs::read_to_string(&dist_path).await {
+            Ok(code) => code,
+            Err(e) => {
+                error!(
+                    component_id = component_id,
+                    dist_path = %dist_path.display(),
+                    error = %e,
+                    "Failed to re-read dist file after retry"
+                );
+                return Err(format!("Failed to re-read dist file: {}", e).into());
+            }
+        };
+
+        let renderer = state.renderer.lock().await;
+        let registry = renderer.component_registry.lock();
+        if let Some(existing_component) = registry.get_component(component_id) {
+            let existing_snippet =
+                existing_component.transformed_source.chars().take(500).collect::<String>();
+            let new_snippet = new_dist_code.chars().take(500).collect::<String>();
+
+            if existing_snippet == new_snippet {
+                debug!(
+                    component_id = component_id,
+                    "Dist file still unchanged after retry, preserving last known good version"
+                );
+                return Err(
+                    "Dist file not yet updated by Vite. Last known good version preserved.".into(),
+                );
+            } else {
+                debug!(
+                    component_id = component_id,
+                    "Dist file updated after retry, proceeding with HMR"
+                );
+            }
+        }
+        drop(registry);
+        drop(renderer);
+
+        dist_code = new_dist_code;
+        debug!("Re-read {} bytes from dist file after retry", dist_code.len());
+    }
+
+    let is_esm = dist_code.contains("export ")
+        || dist_code.contains("export{")
+        || dist_code.contains("export {")
+        || dist_code.contains("export\n")
+        || dist_code.contains("export\r");
+
+    debug!("Component {} is ESM: {}, checking for export statements", component_id, is_esm);
 
     let renderer = state.renderer.lock().await;
 
-    let execution_result = renderer
-        .runtime
-        .execute_script(
-            format!("hmr_reload_{}.js", component_id.replace('/', "_")),
-            wrapped_code.clone(),
-        )
-        .await;
+    if is_esm {
+        debug!("Loading component as ESM module: {}", component_id);
 
-    if let Err(e) = execution_result {
-        error!(
-            component_id = component_id,
-            dist_path = %dist_path.display(),
-            error = %e,
-            code_length = dist_code.len(),
-            "Failed to execute component code during reload. Last known good version will be preserved."
+        debug!("Clearing all caches for component: {}", component_id);
+
+        renderer.clear_component_cache(component_id);
+
+        if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
+            warn!("Failed to clear module loader caches for {}: {}", component_id, e);
+        }
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+
+        let hmr_specifier = format!("file:///rari_hmr/server/{}.js?v={}", component_id, timestamp);
+
+        debug!("Using HMR specifier: {}", hmr_specifier);
+
+        renderer
+            .runtime
+            .add_module_to_loader_only(&hmr_specifier, dist_code.clone())
+            .await
+            .map_err(|e| {
+                error!(
+                    component_id = component_id,
+                    error = %e,
+                    "Failed to add HMR module to loader"
+                );
+                format!("Failed to add HMR module to loader: {}", e)
+            })?;
+
+        let module_id = renderer.runtime.load_es_module(component_id).await.map_err(|e| {
+            error!(
+                component_id = component_id,
+                error = %e,
+                "Failed to load ES module during HMR"
+            );
+            format!("Failed to load ES module: {}", e)
+        })?;
+
+        debug!("Loaded ESM module for component: {} (module_id: {})", component_id, module_id);
+
+        renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
+            error!(
+                component_id = component_id,
+                module_id = module_id,
+                error = %e,
+                "Failed to evaluate module during HMR"
+            );
+            format!("Failed to evaluate module: {}", e)
+        })?;
+
+        debug!("Evaluated ESM module for component: {}", component_id);
+
+        let clear_script = format!(
+            r#"(function() {{
+                const componentId = "{}";
+
+                delete globalThis[componentId];
+
+                if (globalThis['~rsc'] && globalThis['~rsc'].modules) {{
+                    delete globalThis['~rsc'].modules[componentId];
+                }}
+
+                return {{ success: true }};
+            }})()"#,
+            component_id
         );
-        return Err(format!(
-            "Failed to execute component code: {}. Last known good version will be preserved.",
-            e
-        )
-        .into());
+
+        renderer
+            .runtime
+            .execute_script(
+                format!("clear_old_{}.js", component_id.replace('/', "_")),
+                clear_script,
+            )
+            .await
+            .map_err(|e| {
+                error!(
+                    component_id = component_id,
+                    error = %e,
+                    "Failed to clear old component"
+                );
+                format!("Failed to clear old component: {}", e)
+            })?;
+
+        let registration_script = format!(
+            r#"(async function() {{
+                try {{
+                    const moduleNamespace = await import("{}");
+                    const componentId = "{}";
+
+                    if (moduleNamespace.default) {{
+                        globalThis[componentId] = moduleNamespace.default;
+                        if (typeof globalThis[componentId] === 'function') {{
+                            globalThis[componentId].__hmr_timestamp = Date.now();
+                            globalThis[componentId].__hmr_specifier = "{}";
+                        }}
+                    }} else {{
+                        const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
+                        if (exports.length > 0) {{
+                            globalThis[componentId] = exports[0];
+                            if (typeof globalThis[componentId] === 'function') {{
+                                globalThis[componentId].__hmr_timestamp = Date.now();
+                                globalThis[componentId].__hmr_specifier = "{}";
+                            }}
+                        }}
+                    }}
+
+                    for (const [key, value] of Object.entries(moduleNamespace)) {{
+                        if (key !== 'default' && typeof value === 'function') {{
+                            globalThis[key] = value;
+                        }}
+                    }}
+
+                    if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
+                    if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
+                    globalThis['~rsc'].modules[componentId] = moduleNamespace;
+
+                    const component = globalThis[componentId];
+
+                    return {{ success: true, hasDefault: !!moduleNamespace.default, timestamp: component?.__hmr_timestamp }};
+                }} catch (error) {{
+                    return {{ success: false, error: error.message }};
+                }}
+            }})()"#,
+            hmr_specifier, component_id, hmr_specifier, hmr_specifier
+        );
+
+        renderer
+            .runtime
+            .execute_script(
+                format!("register_esm_{}.js", component_id.replace('/', "_")),
+                registration_script,
+            )
+            .await
+            .map_err(|e| {
+                error!(
+                    component_id = component_id,
+                    error = %e,
+                    "Failed to register ESM module exports to globalThis"
+                );
+                format!("Failed to register ESM module: {}", e)
+            })?;
+
+        info!("Successfully reloaded ESM component: {}", component_id);
+
+        debug!("Clearing ALL RSC script caches for HMR reload of: {}", component_id);
+        renderer.clear_script_cache();
+
+        debug!(
+            "Re-registering component {} in renderer's component_registry with NEW code",
+            component_id
+        );
+
+        let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&dist_code);
+
+        {
+            let mut registry = renderer.component_registry.lock();
+
+            registry.remove_component(component_id);
+
+            let _ = registry.register_component(
+                component_id,
+                &dist_code,
+                dist_code.clone(),
+                dependencies.into_iter().collect(),
+            );
+
+            registry.mark_component_loaded(component_id);
+            registry.mark_component_initially_loaded(component_id);
+        }
+
+        debug!(
+            "Component {} re-registered in renderer's component_registry with NEW code",
+            component_id
+        );
+    } else {
+        let wrapped_code = wrap_server_action_module(&dist_code, component_id);
+
+        let execution_result = renderer
+            .runtime
+            .execute_script(
+                format!("hmr_reload_{}.js", component_id.replace('/', "_")),
+                wrapped_code.clone(),
+            )
+            .await;
+
+        if let Err(e) = execution_result {
+            error!(
+                component_id = component_id,
+                dist_path = %dist_path.display(),
+                error = %e,
+                code_length = dist_code.len(),
+                "Failed to execute component code during reload. Last known good version will be preserved."
+            );
+            return Err(format!(
+                "Failed to execute component code: {}. Last known good version will be preserved.",
+                e
+            )
+            .into());
+        }
     }
 
     let verification_script = format!(
@@ -466,16 +727,23 @@ pub async fn immediate_component_reregistration(
     state: &ServerState,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::server::utils::path_validation::validate_component_path;
+    use crate::server::utils::path_validation::{
+        normalize_component_path, validate_component_path,
+    };
 
-    if let Err(e) = validate_component_path(file_path) {
+    let normalized_path = normalize_component_path(file_path);
+
+    if let Err(e) = validate_component_path(&normalized_path) {
         error!(
             file_path = file_path,
+            normalized_path = %normalized_path,
             error = %e,
             "Component path validation failed"
         );
         return Err(format!("Path validation error: {}", e).into());
     }
+
+    let file_path = &normalized_path;
 
     let path = std::path::Path::new(file_path);
     let component_name =

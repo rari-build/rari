@@ -136,9 +136,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   const handleFallbackReload = () => {
-    console.warn('[HMR] Initiating fallback full page reload...')
-    console.warn('[HMR] Preserving console logs for debugging')
-
     setTimeout(() => {
       window.location.reload()
     }, 1000)
@@ -146,7 +143,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const resetFailureTracking = () => {
     if (consecutiveFailuresRef.current > 0) {
-      console.warn(`[HMR] Recovered after ${consecutiveFailuresRef.current} consecutive failures`)
       consecutiveFailuresRef.current = 0
     }
   }
@@ -560,7 +556,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }))
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -594,7 +589,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] HMR update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -619,7 +613,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] RSC invalidation failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -634,7 +627,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] Manifest update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -656,7 +648,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }, [onNavigate])
 
   const handleManualRefresh = () => {
-    console.warn('[HMR] Manual refresh requested')
     window.location.reload()
   }
 

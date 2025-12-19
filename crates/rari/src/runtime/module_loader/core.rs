@@ -343,7 +343,16 @@ export default {{}};
         let component_specifier = format!("file://{RARI_COMPONENT_PATH}{component_id}.js");
 
         self.module_caching.clear_component(component_id);
-        self.component_specifiers.remove(component_id);
+
+        let should_remove_mapping = self
+            .component_specifiers
+            .get(component_id)
+            .map(|entry| !entry.contains("/rari_hmr/"))
+            .unwrap_or(true);
+
+        if should_remove_mapping {
+            self.component_specifiers.remove(component_id);
+        }
 
         self.storage.set_module_meta(format!("hmr_{component_specifier}"), false);
         self.storage.set_module_meta(format!("registered_{component_id}"), false);

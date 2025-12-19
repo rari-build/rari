@@ -57,13 +57,11 @@ export function initializeHMRClient(): void {
   })
 
   import.meta.hot.on('rari:hmr-error-cleared', (_data: HMRErrorClearedEvent) => {
-    console.warn('[HMR] Error cleared, build successful')
     overlay.hide()
   })
 
   import.meta.hot.on('rari:server-component-updated', () => {
     if (overlay.isVisible()) {
-      console.warn('[HMR] Server component updated successfully, clearing error overlay')
       overlay.hide()
     }
   })
@@ -78,8 +76,6 @@ export function initializeHMRClient(): void {
       timestamp: Date.now(),
     })
   })
-
-  console.warn('[HMR] Client initialized')
 }
 
 if (typeof window !== 'undefined') {

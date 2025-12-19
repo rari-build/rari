@@ -1579,8 +1579,6 @@ export function createServerBuildPlugin(
           return
         }
 
-        console.warn(`[server-build] Rebuilding server component: ${relativePath}`)
-
         await builder.buildServerComponents()
       }
       catch (error) {

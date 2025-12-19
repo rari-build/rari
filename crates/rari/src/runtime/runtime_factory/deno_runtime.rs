@@ -205,9 +205,23 @@ impl DenoRuntime {
                                         let component_id =
                                             extract_component_id_from_specifier(&specifier);
 
-                                        module_loader
+                                        let is_hmr_specifier = specifier.contains("/rari_hmr/");
+
+                                        let existing_specifier = module_loader
                                             .component_specifiers
-                                            .insert(component_id, specifier.clone());
+                                            .get(&component_id)
+                                            .map(|entry| entry.clone());
+
+                                        let has_existing_hmr_mapping = existing_specifier
+                                            .as_ref()
+                                            .map(|spec| spec.contains("/rari_hmr/"))
+                                            .unwrap_or(false);
+
+                                        if is_hmr_specifier || !has_existing_hmr_mapping {
+                                            module_loader
+                                                .component_specifiers
+                                                .insert(component_id.clone(), specifier.clone());
+                                        }
 
                                         let _ = result_tx.send(Ok(()));
                                         Ok::<(), RariError>(())
@@ -332,7 +346,6 @@ async fn handle_evaluate_module(
     let module_registered = module_loader.is_already_evaluated(&module_id.to_string());
 
     let result = if module_registered {
-        println!("[RARI_HMR] Module {module_id} already registered, getting namespace");
         match get_module_namespace_as_json(deno_runtime, module_id) {
             Ok(json_result) => Ok(json_result),
             Err(_) => Ok(create_already_evaluated_response("get_module_namespace")),
@@ -345,9 +358,6 @@ async fn handle_evaluate_module(
             }
             Err(e) => {
                 if e.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
-                    println!(
-                        "[RARI_HMR] Module '{module_id}' already evaluated during evaluation attempt"
-                    );
                     module_loader.mark_module_evaluated(&module_id.to_string());
 
                     match get_module_namespace_as_json(deno_runtime, module_id) {
@@ -416,18 +426,29 @@ async fn handle_get_module_namespace(
 fn extract_component_id_from_specifier(specifier: &str) -> String {
     if let Some(server_idx) = specifier.rfind("/server/") {
         let after_server = &specifier[server_idx + 8..];
-        return after_server.trim_end_matches(".js").to_string();
+        after_server.split('?').next().unwrap_or(after_server).trim_end_matches(".js").to_string()
+    } else if let Some(component_idx) = specifier.rfind("/rari_component/") {
+        let after_component = &specifier[component_idx + 16..];
+        after_component
+            .split('?')
+            .next()
+            .unwrap_or(after_component)
+            .trim_end_matches(".js")
+            .to_string()
+    } else if let Some(hmr_idx) = specifier.rfind("/rari_hmr/server/") {
+        let after_hmr = &specifier[hmr_idx + 17..];
+        after_hmr.split('?').next().unwrap_or(after_hmr).trim_end_matches(".js").to_string()
+    } else {
+        specifier
+            .split('/')
+            .next_back()
+            .unwrap_or(specifier)
+            .split('?')
+            .next()
+            .unwrap_or(specifier)
+            .trim_end_matches(".js")
+            .to_string()
     }
-
-    specifier
-        .split('/')
-        .next_back()
-        .unwrap_or(specifier)
-        .split('?')
-        .next()
-        .unwrap_or(specifier)
-        .trim_end_matches(".js")
-        .to_string()
 }
 
 impl JsRuntimeInterface for DenoRuntime {

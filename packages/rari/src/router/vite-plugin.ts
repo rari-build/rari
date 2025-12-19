@@ -171,10 +171,7 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
     }
 
     const result = await response.json()
-    if (result.success) {
-      console.warn(`[HMR] API route handler cache invalidated: ${filePath}`)
-    }
-    else {
+    if (!result.success) {
       console.error(`[HMR] Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
     }
   }
@@ -246,7 +243,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       const currentHash = computeRouteStructureHash(currentRouteFiles)
 
       if (!forceRegenerate && routeStructureHash === currentHash && cachedManifestContent) {
-        console.warn('[Manifest] Route structure unchanged, using cached manifest')
         return cachedManifestContent
       }
 
@@ -299,13 +295,11 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       if (opts.extensions.some(ext => filePath.endsWith(ext))) {
         try {
           const fileType = getAppRouterFileType(filePath)
-
           const isRouteFile = fileType !== null
           const isAddOrUnlink = event === 'add' || event === 'unlink'
           const isNewRouteFile = isRouteFile && !routeFiles.has(filePath)
 
           if (isAddOrUnlink || isNewRouteFile) {
-            console.warn(`[Manifest] Route structure changed (${event}: ${path.relative(root, filePath)}), regenerating manifest`)
             await generateAppRoutes(root, true)
 
             if (server && filePath.includes(opts.appDir)) {
@@ -358,11 +352,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
             pendingHMRUpdates.delete(file)
 
             const isNewRouteFile = !routeFiles.has(file)
-
             const previousManifest = cachedManifestContent
             cachedManifestContent = await generateAppRoutes(server.config.root, isNewRouteFile)
             const manifestUpdated = previousManifest !== cachedManifestContent
-
             const routePath = filePathToRoutePath(file, appDir)
 
             let allRoutes: string[] = [routePath]
@@ -390,7 +382,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
                 if (extractedMetadata) {
                   metadata = extractedMetadata
                   metadataChanged = true
-                  console.warn(`[HMR] Metadata detected in ${fileType}: ${JSON.stringify(metadata)}`)
                 }
               }
               catch (error) {
@@ -402,7 +393,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
               try {
                 const fileContent = await fs.readFile(file, 'utf-8')
                 methods = detectHttpMethods(fileContent)
-                console.warn(`[HMR] API route methods detected: ${methods.join(', ')}`)
 
                 await notifyApiRouteInvalidation(path.relative(appDir, file))
               }
@@ -428,12 +418,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
               event: 'rari:app-router-updated',
               data: hmrData,
             })
-
-            const metadataInfo = metadataChanged ? ' [metadata updated]' : ''
-            const methodsInfo = methods ? ` [methods: ${methods.join(', ')}]` : ''
-            console.warn(
-              `[HMR] App router ${fileType} changed: ${hmrData.filePath} (affects ${affectedRoutes.length} route${affectedRoutes.length === 1 ? '' : 's'})${metadataInfo}${methodsInfo}`,
-            )
           }, DEBOUNCE_DELAY)
 
           pendingHMRUpdates.set(file, timer)
@@ -470,6 +454,5 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         await watcher.close()
       }
     },
-
   }
 }

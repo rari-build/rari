@@ -36,13 +36,16 @@ pub async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    use crate::server::utils::path_validation::validate_component_path;
+    use crate::server::utils::path_validation::{
+        normalize_component_path, validate_component_path,
+    };
 
-    let file_path = request.file_path.clone();
+    let file_path = normalize_component_path(&request.file_path);
 
     if let Err(e) = validate_component_path(&file_path) {
         error!(
             file_path = %file_path,
+            original_path = %request.file_path,
             error = %e,
             "Component path validation failed"
         );
@@ -212,12 +215,6 @@ pub async fn hmr_invalidate_component(
 
         renderer.clear_component_cache(&payload.component_id);
         debug!("Cleared component cache for {}", payload.component_id);
-
-        {
-            let mut registry = renderer.component_registry.lock();
-            registry.remove_component(&payload.component_id);
-            debug!("Removed component {} from registry", payload.component_id);
-        }
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(&payload.component_id).await {
             warn!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
@@ -474,6 +471,35 @@ pub async fn reload_component(
             }));
         }
     };
+
+    let bundle_code = match tokio::fs::read_to_string(&bundle_full_path).await {
+        Ok(code) => code,
+        Err(e) => {
+            error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
+            return Ok(Json(ReloadComponentResponse {
+                success: false,
+                message: format!("Failed to read bundle: {}", e),
+            }));
+        }
+    };
+
+    {
+        let renderer = state.renderer.lock().await;
+        let mut registry = renderer.component_registry.lock();
+
+        registry.remove_component(&payload.component_id);
+
+        let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
+        let _ = registry.register_component(
+            &payload.component_id,
+            &bundle_code,
+            bundle_code.clone(),
+            dependencies.into_iter().collect(),
+        );
+
+        registry.mark_component_loaded(&payload.component_id);
+        registry.mark_component_initially_loaded(&payload.component_id);
+    }
 
     let invalidate_result = {
         let renderer = state.renderer.lock().await;
