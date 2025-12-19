@@ -254,9 +254,7 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
       onError: (error) => {
         console.error('[ClientRouter] Navigation error:', error)
       },
-      onRetry: (attempt, error) => {
-        console.warn(`[ClientRouter] Retry attempt ${attempt} for ${error.url}`)
-      },
+      onRetry: () => {},
     }),
   )
 
@@ -500,9 +498,7 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
             updateDocumentMetadata(metadata)
           }
         }
-        catch (metadataError) {
-          console.warn('[ClientRouter] Failed to extract/apply metadata:', metadataError)
-        }
+        catch {}
 
         const rscWireFormat = await response.text()
 

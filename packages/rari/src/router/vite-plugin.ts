@@ -439,7 +439,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         })
       }
       else {
-        console.warn('App router manifest not generated, skipping emission')
+        console.error('App router manifest not generated, skipping emission')
       }
     },
 

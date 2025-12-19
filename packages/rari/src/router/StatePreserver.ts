@@ -66,9 +66,7 @@ export class StatePreserver {
         }
       })
     }
-    catch (error) {
-      console.warn('Failed to capture scroll positions:', error)
-    }
+    catch {}
 
     return positions
   }
@@ -89,9 +87,7 @@ export class StatePreserver {
         }
       })
     }
-    catch (error) {
-      console.warn('Failed to capture form data:', error)
-    }
+    catch {}
 
     return formDataMap
   }
@@ -112,9 +108,7 @@ export class StatePreserver {
         }
       }
     }
-    catch (error) {
-      console.warn('Failed to capture focused element:', error)
-    }
+    catch {}
 
     return null
   }
@@ -202,13 +196,11 @@ export class StatePreserver {
               element.scrollTop = position.y
             }
             else {
-              console.warn(`Could not find scrollable element: ${key}`)
               allSucceeded = false
             }
           }
         }
-        catch (error) {
-          console.warn(`Failed to restore scroll position for ${key}:`, error)
+        catch {
           allSucceeded = false
         }
       })
@@ -257,19 +249,16 @@ export class StatePreserver {
                   }
                 }
               }
-              catch (error) {
-                console.warn(`Failed to restore form field ${key}:`, error)
+              catch {
                 allSucceeded = false
               }
             })
           }
           else {
-            console.warn(`Could not find form: ${formId}`)
             allSucceeded = false
           }
         }
-        catch (error) {
-          console.warn(`Failed to restore form data for ${formId}:`, error)
+        catch {
           allSucceeded = false
         }
       })
@@ -291,14 +280,10 @@ export class StatePreserver {
           try {
             element.focus()
           }
-          catch (error) {
-            console.warn(`Failed to focus element ${selector}:`, error)
-          }
+          catch {}
         })
       }
     }
-    catch (error) {
-      console.warn(`Failed to restore focus to ${selector}:`, error)
-    }
+    catch {}
   }
 }

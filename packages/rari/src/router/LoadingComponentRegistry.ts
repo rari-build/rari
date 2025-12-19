@@ -51,8 +51,7 @@ export class LoadingComponentRegistry {
       }
       return component
     }
-    catch (error) {
-      console.warn(`[LoadingRegistry] Failed to load component for ${routePath}:`, error)
+    catch {
       return null
     }
     finally {
@@ -64,10 +63,6 @@ export class LoadingComponentRegistry {
     if (!this.loadingModulesInitialized) {
       this.loadingModules = (globalThis as any)['~rari']?.loadingComponents
       this.loadingModulesInitialized = true
-
-      if (!this.loadingModules) {
-        console.warn('[LoadingRegistry] No loading component modules available')
-      }
     }
 
     if (!this.loadingModules) {
@@ -91,9 +86,7 @@ export class LoadingComponentRegistry {
           }
         }
       }
-      catch (error) {
-        console.warn(`[LoadingRegistry] Failed to load exact match for ${routePath}:`, error)
-      }
+      catch {}
     }
 
     const segments = routePath.split('/').filter(Boolean)
@@ -116,9 +109,7 @@ export class LoadingComponentRegistry {
             }
           }
         }
-        catch (error) {
-          console.warn(`[LoadingRegistry] Failed to load parent match for ${parentPath}:`, error)
-        }
+        catch {}
       }
     }
 
@@ -139,9 +130,7 @@ export class LoadingComponentRegistry {
           }
         }
       }
-      catch (error) {
-        console.warn('[LoadingRegistry] Failed to load root loading component:', error)
-      }
+      catch {}
     }
 
     return null

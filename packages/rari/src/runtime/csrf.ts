@@ -12,7 +12,7 @@ export async function refreshCsrfToken(): Promise<boolean> {
   try {
     const response = await fetch('/api/rsc/csrf-token')
     if (!response.ok) {
-      console.warn('Failed to refresh CSRF token:', response.status)
+      console.error('Failed to refresh CSRF token:', response.status)
       return false
     }
     const data = await response.json()

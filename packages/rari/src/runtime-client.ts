@@ -316,7 +316,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     exportName: string,
   ): Promise<void> {
     if (!this.initialized) {
-      console.warn(
+      console.error(
         'Runtime client not initialized. Client component registration will be delayed.',
       )
       return
