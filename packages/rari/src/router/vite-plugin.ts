@@ -426,7 +426,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         }
 
         cachedManifestContent = await generateAppRoutes(server.config.root)
-        console.warn(`App router file changed: ${path.relative(server.config.root, file)}`)
         return []
       }
     },

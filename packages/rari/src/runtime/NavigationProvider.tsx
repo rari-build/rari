@@ -22,11 +22,8 @@ export function NavigationProvider({
   const statePreserverRef = useRef<StatePreserver>(new StatePreserver())
 
   const handleNavigate = useCallback((detail: any) => {
-    console.warn('[NavigationProvider] Navigation completed:', detail)
-
     const hasPreservedState = statePreserverRef.current.hasState(detail.to)
     if (hasPreservedState) {
-      console.warn('[NavigationProvider] Restoring preserved state for:', detail.to)
       requestAnimationFrame(() => {
         statePreserverRef.current.restoreState(detail.to)
       })
@@ -41,8 +38,6 @@ export function NavigationProvider({
     const handleBeforeNavigate = (event: Event) => {
       const customEvent = event as CustomEvent
       const detail = customEvent.detail
-
-      console.warn('[NavigationProvider] Capturing state before navigation from:', detail.from)
 
       statePreserverRef.current.captureState(detail.from)
     }
