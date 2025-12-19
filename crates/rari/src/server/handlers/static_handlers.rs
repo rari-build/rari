@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
@@ -32,7 +32,6 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
                     for (key, value) in page_cache_config {
                         response_builder = response_builder.header(key.to_lowercase(), value);
                     }
-                    debug!("Applied cache headers for root route");
                 }
 
                 return Ok(response_builder
@@ -76,12 +75,7 @@ pub async fn static_or_spa_handler(
 
     let file_path = match validate_safe_path(config.public_dir(), &path) {
         Ok(path) => path,
-        Err(e) => {
-            debug!(
-                requested_path = %path,
-                error = %e,
-                "Path validation failed for static file"
-            );
+        Err(_) => {
             return Err(StatusCode::NOT_FOUND);
         }
     };
@@ -122,7 +116,6 @@ pub async fn static_or_spa_handler(
                     for (key, value) in page_cache_config {
                         response_builder = response_builder.header(key.to_lowercase(), value);
                     }
-                    debug!("Applied cache headers for route: {}", route_path);
                 }
 
                 return Ok(response_builder

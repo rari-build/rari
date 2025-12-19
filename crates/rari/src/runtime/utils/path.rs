@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use tracing::debug;
 
 pub struct DistPathResolver {
     project_root: PathBuf,
@@ -61,7 +60,6 @@ impl DistPathResolver {
         let dist_mtime = match self.get_dist_file_mtime(component_id) {
             Some(time) => time,
             None => {
-                debug!(component_id = component_id, "Dist file does not exist");
                 return false;
             }
         };
@@ -71,10 +69,6 @@ impl DistPathResolver {
             {
                 Some(time) => time,
                 None => {
-                    debug!(
-                        source_path = ?source_path,
-                        "Source file does not exist or cannot read metadata"
-                    );
                     return false;
                 }
             };

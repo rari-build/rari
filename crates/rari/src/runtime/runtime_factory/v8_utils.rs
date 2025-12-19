@@ -106,25 +106,18 @@ fn deserialize_composition_result<'s>(
     }
 
     let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
-    tracing::debug!("Attempting to serialize V8 value of type: {}", v8_type_str);
 
     if value.is_object()
         && let Ok(obj) = v8::Local::<v8::Object>::try_from(value)
         && let Some(keys) = obj.get_own_property_names(scope, v8::GetPropertyNamesArgs::default())
     {
         let key_count = keys.length();
-        tracing::debug!("Object has {} keys", key_count);
 
         for i in 0..std::cmp::min(key_count, 10) {
             if let Some(key) = keys.get_index(scope, i)
-                && let Some(key_str) = key.to_string(scope)
-            {
-                let key_name = key_str.to_rust_string_lossy(scope.as_ref());
-                if let Some(val) = obj.get(scope, key) {
-                    let val_type = val.type_of(scope).to_rust_string_lossy(scope.as_ref());
-                    tracing::debug!("  Key '{}': type = {}", key_name, val_type);
-                }
-            }
+                && let Some(_key_str) = key.to_string(scope)
+                && let Some(_val) = obj.get(scope, key)
+            {}
         }
     }
 

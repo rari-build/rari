@@ -41,7 +41,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub struct Server {
     router: Router,
@@ -56,10 +56,6 @@ impl Server {
 
         Config::set_global(config.clone())
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
-
-        if let Err(e) = dotenvy::dotenv() {
-            debug!("No .env file found or error loading .env: {}", e);
-        }
 
         let resource_limits = ResourceLimits {
             max_script_execution_time_ms: config.rsc.script_execution_timeout_ms,
@@ -93,10 +89,7 @@ impl Server {
                     );
                     Some(Arc::new(router))
                 }
-                Err(e) => {
-                    debug!("No app router manifest found at {}: {}", manifest_path, e);
-                    None
-                }
+                Err(_) => None,
             }
         };
 
@@ -114,10 +107,7 @@ impl Server {
                     );
                     Some(Arc::new(handler))
                 }
-                Err(e) => {
-                    debug!("No API routes found in manifest at {}: {}", manifest_path, e);
-                    None
-                }
+                Err(_) => None,
             }
         };
 

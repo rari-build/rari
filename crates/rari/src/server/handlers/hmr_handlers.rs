@@ -9,7 +9,7 @@ use crate::server::{
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Deserialize)]
 pub struct HmrInvalidateRequest {
@@ -61,7 +61,6 @@ pub async fn hmr_register_component(
     };
 
     info!("HMR register request for component: {} from file: {}", component_id, file_path);
-    debug!("Extracted component ID: {} from path: {}", component_id, file_path);
 
     let path = std::path::Path::new(&file_path);
 
@@ -69,7 +68,6 @@ pub async fn hmr_register_component(
         let renderer = state.renderer.lock().await;
         let mut registry = renderer.component_registry.lock();
         registry.mark_module_stale(&component_id);
-        debug!("Marked component {} as stale", component_id);
     }
 
     let reload_result = reload_component_from_dist(&state, &file_path, &component_id).await;
@@ -106,11 +104,6 @@ pub async fn hmr_register_component(
     }
 
     if reload_result.is_err() {
-        debug!(
-            component_id = component_id,
-            "Attempting fallback re-registration after dist reload failure"
-        );
-
         if let Err(e) = immediate_component_reregistration(&state, &file_path).await {
             error!(
                 component_id = component_id,
@@ -142,11 +135,8 @@ pub async fn hmr_register_component(
     let mut module_reload_error: Option<String> = None;
 
     if state.config.hmr_reload_enabled() {
-        debug!("HMR reload is enabering debounced module reload for {}", component_id);
-
         match state.module_reload_manager.reload_module_debounced(&component_id, path).await {
             Ok(()) => {
-                debug!("Scheduled debounced reload for component: {}", component_id);
                 reloaded = true;
             }
             Err(e) => {
@@ -158,8 +148,6 @@ pub async fn hmr_register_component(
                 module_reload_error = Some(e.to_string());
             }
         }
-    } else {
-        debug!("HMR reload is disabled, skipping module reload");
     }
 
     #[allow(clippy::disallowed_methods)]
@@ -210,11 +198,9 @@ pub async fn hmr_invalidate_component(
         {
             let mut registry = renderer.component_registry.lock();
             registry.mark_module_stale(&payload.component_id);
-            debug!("Marked component {} as stale during invalidation", payload.component_id);
         }
 
         renderer.clear_component_cache(&payload.component_id);
-        debug!("Cleared component cache for {}", payload.component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(&payload.component_id).await {
             warn!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
@@ -338,11 +324,6 @@ pub async fn hmr_reload_component(
     State(state): State<ServerState>,
     Json(payload): Json<HmrReloadRequest>,
 ) -> Json<Value> {
-    debug!(
-        "HMR reload request for component: {} from file: {}",
-        payload.component_id, payload.file_path
-    );
-
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -371,8 +352,6 @@ pub async fn hmr_reload_component(
     };
 
     let vite_url = format!("{}{}?t={}", vite_base_url, file_path, timestamp);
-
-    debug!("Fetching transpiled code from Vite: {}", vite_url);
 
     let transpiled_code = match client.get(&vite_url).send().await {
         Ok(response) => {
@@ -409,8 +388,6 @@ pub async fn hmr_reload_component(
             }));
         }
     };
-
-    debug!("Fetched {} bytes of transpiled code", transpiled_code.len());
 
     let result = {
         state

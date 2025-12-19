@@ -91,12 +91,6 @@ impl SuspenseManager {
         fallback: serde_json::Value,
         component_path: String,
     ) -> String {
-        tracing::debug!(
-            "🔍 SUSPENSE: Creating boundary, boundary_id={}, component_path={}",
-            id,
-            component_path
-        );
-
         let boundary = ManagedSuspenseBoundary {
             id: id.clone(),
             fallback,
@@ -124,12 +118,6 @@ impl SuspenseManager {
     ) -> String {
         self.global_promise_counter += 1;
         let promise_id = format!("promise_{}", self.global_promise_counter);
-
-        tracing::debug!(
-            "🔍 SUSPENSE: Registering promise, promise_id={}, boundary_id={}",
-            promise_id,
-            boundary_id
-        );
 
         let promise_info = PromiseInfo {
             id: promise_id.clone(),
@@ -161,12 +149,6 @@ impl SuspenseManager {
 
     pub fn resolve_promise(&mut self, promise_id: &str, value: serde_json::Value) -> bool {
         if let Some(promise) = self.promise_cache.get_mut(promise_id) {
-            tracing::debug!(
-                "🔍 SUSPENSE: Resolving promise, promise_id={}, boundary_id={}",
-                promise_id,
-                promise.boundary_id
-            );
-
             promise.status = PromiseStatus::Resolved;
             promise.resolved_value = Some(value);
             promise.resolved_at =
@@ -178,10 +160,6 @@ impl SuspenseManager {
 
                 if boundary.pending_promises.is_empty() {
                     boundary.resolved = true;
-                    tracing::debug!(
-                        "🔍 SUSPENSE: Boundary resolved, boundary_id={}",
-                        promise.boundary_id
-                    );
                 }
             } else {
                 tracing::warn!(

@@ -7,7 +7,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     response::Response,
 };
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 fn add_cors_headers(
     response_headers: &mut HeaderMap,
@@ -54,13 +54,6 @@ pub async fn api_cors_preflight(
             headers.insert("Access-Control-Allow-Methods", methods_value);
         }
 
-        debug!(
-            path = %path,
-            allowed_methods = %methods_str,
-            origin = ?origin,
-            "Returning CORS preflight response for API route"
-        );
-
         return builder.body(Body::empty()).expect("Valid preflight response");
     }
 
@@ -81,16 +74,9 @@ pub async fn handle_api_route(
     let origin = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
     let cors_config = state.config.cors_config();
 
-    debug!(
-        path = %path,
-        method = %method,
-        "Received API route request"
-    );
-
     let api_handler = match &state.api_route_handler {
         Some(handler) => handler,
         None => {
-            debug!("No API route handler available");
             return Ok(create_generic_error_response(
                 StatusCode::NOT_FOUND,
                 "API routes not configured",
@@ -139,13 +125,6 @@ pub async fn handle_api_route(
                 return Ok(response);
             }
 
-            debug!(
-                path = %path,
-                method = %method,
-                error = %e,
-                "No matching API route found"
-            );
-
             let api_error = ApiRouteError::NotFound {
                 path: path.to_string(),
                 message: format!("No API route found for path: {}", path),
@@ -165,22 +144,8 @@ pub async fn handle_api_route(
         }
     };
 
-    debug!(
-        request_path = %path,
-        route_path = %route_match.route.path,
-        method = %method,
-        "Matched API route"
-    );
-
     match api_handler.execute_handler(&route_match, req, is_development).await {
         Ok(mut response) => {
-            debug!(
-                route_path = %route_match.route.path,
-                method = %method,
-                status = response.status().as_u16(),
-                "API route handler executed successfully"
-            );
-
             let headers = response.headers_mut();
             if is_development {
                 add_cors_headers(

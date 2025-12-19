@@ -79,7 +79,6 @@ impl LayoutRenderer {
         let page_file_path = base_path.join("app").join(&dist_filename);
 
         if !page_file_path.exists() {
-            tracing::debug!("Page file not found at {:?}", page_file_path);
             return Ok(false);
         }
 
@@ -112,7 +111,7 @@ impl LayoutRenderer {
             renderer.runtime.execute_script("check_not_found".to_string(), check_script).await?;
 
         let not_found = result.get("notFound").and_then(|v| v.as_bool()).unwrap_or(false);
-        tracing::debug!("check_page_not_found result: notFound={}", not_found);
+
         Ok(not_found)
     }
 

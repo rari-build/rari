@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 pub mod tests;
 
@@ -522,11 +522,6 @@ impl RscHtmlRenderer {
         content_rsc: &JsonValue,
         row_id: u32,
     ) -> Result<String, RariError> {
-        debug!(
-            "🔍 BOUNDARY_UPDATE: Generating boundary update HTML, boundary_id={}, row_id={}",
-            boundary_id, row_id
-        );
-
         let content_html = self.render_rsc_value_to_html(content_rsc).await?;
 
         let escaped_content =
@@ -570,11 +565,6 @@ window['~rari'] && window['~rari'].processBoundaryUpdate('{}', `{}`, {});
         error_message: &str,
         row_id: u32,
     ) -> String {
-        debug!(
-            "Generating boundary error HTML for boundary_id: {}, row_id: {}, error: {}",
-            boundary_id, row_id, error_message
-        );
-
         let error_script = format!(
             r#"<script data-~boundary-id="{}" data-row-id="{}">
 window['~rari'] && window['~rari'].processBoundaryError('{}', '{}', {});
@@ -687,7 +677,6 @@ impl RscToHtmlConverter {
             }
 
             RscChunkType::BoundaryUpdate => {
-                debug!("🔍 Processing BoundaryUpdate chunk, row_id: {}", chunk.row_id);
                 match self.generate_boundary_replacement(&chunk).await {
                     Ok(html) => Ok(html),
                     Err(e) => {
@@ -707,10 +696,7 @@ impl RscToHtmlConverter {
                 }
             },
 
-            RscChunkType::StreamComplete => {
-                debug!("🔍 CHUNK_CONVERT: Stream complete");
-                Ok(self.generate_html_closing())
-            }
+            RscChunkType::StreamComplete => Ok(self.generate_html_closing()),
         };
 
         if let Err(ref e) = result {
@@ -796,18 +782,15 @@ if (typeof window !== 'undefined') {{
 
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
         if parts.len() != 2 {
-            debug!("Skipping chunk with invalid format (expected 'row_id:data'): {:?}", rsc_line);
             return Ok(Vec::new());
         }
 
         let json_str = parts[1].trim();
         if json_str.is_empty() {
-            debug!("Skipping chunk with empty JSON data for row_id: {}", parts[0]);
             return Ok(Vec::new());
         }
 
         if json_str.starts_with('I') || json_str.starts_with('S') {
-            debug!("Skipping metadata chunk (module import or symbol) for row_id: {}", parts[0]);
             return Ok(Vec::new());
         }
 
@@ -909,10 +892,6 @@ if (typeof window !== 'undefined') {{
                     self.rari_to_react_boundary_map
                         .lock()
                         .insert(rari_boundary_id.to_string(), new_id.clone());
-                    debug!(
-                        "🔍 RSC_TO_HTML: Created boundary mapping, rari_boundary_id={}, react_boundary_id={}",
-                        rari_boundary_id, new_id
-                    );
                     (new_id, false)
                 }
             };
@@ -992,8 +971,6 @@ if (typeof window !== 'undefined') {{
         &self,
         chunk: &RscStreamChunk,
     ) -> Result<Vec<u8>, RariError> {
-        debug!("🔍 Generating boundary replacement for row_id: {}", chunk.row_id);
-
         let rsc_line = String::from_utf8_lossy(&chunk.data);
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
 
@@ -1014,13 +991,7 @@ if (typeof window !== 'undefined') {{
                         self.rari_to_react_boundary_map.lock().get(rari_boundary_id).cloned();
 
                     if let Some(react_boundary_id) = react_boundary_id {
-                        debug!("🔍 Boundary update: {} -> {}", rari_boundary_id, react_boundary_id);
-
                         let content_html = self.rsc_element_to_html(content).await?;
-                        debug!(
-                            "🔍 Boundary update content HTML length: {} bytes",
-                            content_html.len()
-                        );
 
                         let content_id =
                             format!("S:{}", react_boundary_id.trim_start_matches("B:"));
@@ -1076,17 +1047,10 @@ if (typeof window !== 'undefined') {{
         let error_message =
             error_data["error"].as_str().unwrap_or("Error loading content").to_string();
 
-        debug!(
-            "Generating error replacement for boundary: {}, error: {}",
-            rari_boundary_id, error_message
-        );
-
         let react_boundary_id =
             self.rari_to_react_boundary_map.lock().get(&rari_boundary_id).cloned();
 
         if let Some(react_boundary_id) = react_boundary_id {
-            debug!("🔍 Error boundary update: {} -> {}", rari_boundary_id, react_boundary_id);
-
             let error_html = format!(
                 r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;">
                 <strong>Error loading content:</strong> {}

@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use tower_governor::{
     GovernorLayer, governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::server::config::Config;
 
@@ -18,7 +18,6 @@ pub fn create_rate_limit_layer(
     config: &Config,
 ) -> Option<GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body>> {
     if !config.rate_limit.enabled {
-        debug!("Rate limiting is disabled");
         return None;
     }
 
@@ -28,11 +27,6 @@ pub fn create_rate_limit_layer(
         .use_headers()
         .finish()
         .expect("Failed to create rate limit configuration");
-
-    debug!(
-        "Rate limiting enabled: {} req/sec, burst size: {}",
-        config.rate_limit.requests_per_second, config.rate_limit.burst_size
-    );
 
     Some(GovernorLayer::new(governor_conf))
 }

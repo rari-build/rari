@@ -3,7 +3,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Response, StatusCode};
 use rustc_hash::FxHashMap;
 use serde_json::{Value as JsonValue, json};
-use tracing::{debug, warn};
+use tracing::warn;
 
 pub struct RequestBridge;
 
@@ -15,8 +15,6 @@ impl RequestBridge {
         body: &str,
         params: &FxHashMap<String, String>,
     ) -> Result<JsonValue, RariError> {
-        debug!("Converting request to JSON: {} {}", method, uri);
-
         let mut headers_map = FxHashMap::default();
         for (name, value) in headers.iter() {
             if let Ok(value_str) = value.to_str() {
@@ -39,8 +37,6 @@ impl RequestBridge {
     }
 
     pub fn from_json(result: JsonValue) -> Result<Response<Body>, RariError> {
-        debug!("Converting handler result to Axum response");
-
         if result.is_object() && result.get("status").is_some() {
             Self::from_response_object(result)
         } else {

@@ -2,7 +2,7 @@ use crate::error::RariError;
 use crate::server::ServerState;
 use regex::Regex;
 use rustc_hash::FxHashMap;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub struct CacheLoader;
 
@@ -12,7 +12,6 @@ impl CacheLoader {
 
         let pages_dir = std::path::Path::new("src/pages");
         if !pages_dir.exists() {
-            debug!("No pages directory found, skipping page cache config loading");
             return Ok(());
         }
 
@@ -72,8 +71,6 @@ impl CacheLoader {
 
             let mut page_configs = state.page_cache_configs.write().await;
             page_configs.insert(route_path.clone(), cache_config);
-
-            debug!("Loaded cache config for route: {}", route_path);
         }
 
         Ok(())
@@ -114,7 +111,6 @@ impl CacheLoader {
             }
 
             if !config.is_empty() {
-                debug!("Extracted cache config: {:?}", config);
                 return Some(config);
             }
         }
@@ -163,7 +159,6 @@ impl CacheLoader {
         let cache_config_path = std::path::Path::new("dist/cache-config.json");
 
         if !cache_config_path.exists() {
-            debug!("No vite cache config file found, using defaults");
             return Ok(());
         }
 

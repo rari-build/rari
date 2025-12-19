@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, timeout};
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::error::RariError;
 use crate::rsc::components::ComponentRegistry;
@@ -423,20 +423,13 @@ globalThis['~errors'].batch.push({{
                             registry.is_component_registered(&unique_dep_id)
                         };
 
-                        if !already_registered {
-                            if Self::is_react_component_file(&content) {
-                                let sub_dependencies = extract_dependencies(&content);
-                                for sub_dep in sub_dependencies {
-                                    stack.push(sub_dep);
-                                }
-                                self.register_component_without_loading(&unique_dep_id, &content)
-                                    .await?;
-                            } else {
-                                debug!(
-                                    "Skipping registration of '{}' as it's not a React component",
-                                    unique_dep_id
-                                );
+                        if !already_registered && Self::is_react_component_file(&content) {
+                            let sub_dependencies = extract_dependencies(&content);
+                            for sub_dep in sub_dependencies {
+                                stack.push(sub_dep);
                             }
+                            self.register_component_without_loading(&unique_dep_id, &content)
+                                .await?;
                         }
                     }
                     break;
@@ -1154,8 +1147,6 @@ globalThis['~errors'].batch.push({{
         export_name: &str,
         args: &[JsonValue],
     ) -> Result<JsonValue, RariError> {
-        debug!("Executing server function: {}::{}", function_id, export_name);
-
         let args_json = serde_json::to_string(args)
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
 

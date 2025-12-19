@@ -5,7 +5,6 @@ use crate::server::routing::types::RouteSegmentType;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppRouteEntry {
@@ -94,12 +93,9 @@ impl AppRouter {
 
     pub fn match_route(&self, path: &str) -> Result<AppRouteMatch, RariError> {
         let normalized_path = Self::normalize_path(path);
-        debug!("Matching route for path: {}", normalized_path);
 
         for route in &self.manifest.routes {
             if let Some(params) = self.match_route_pattern(route, &normalized_path) {
-                debug!("Matched route: {} -> {}", normalized_path, route.path);
-
                 let layouts = self.resolve_layouts(&route.path);
 
                 let loading = self.find_loading(&route.path);

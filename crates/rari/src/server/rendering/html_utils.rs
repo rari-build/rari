@@ -1,6 +1,6 @@
 use crate::server::config::Config;
 use axum::http::StatusCode;
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
     use tokio::fs;
@@ -23,39 +23,21 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
             }
 
             if !asset_links.is_empty() {
-                debug!("Extracted asset links from {}: {} bytes", path, asset_links.len());
                 return Some(asset_links);
             }
         }
     }
 
-    debug!("No index.html found or no assets extracted, using shell without assets");
     None
 }
 
 pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<String, StatusCode> {
     let has_root_before = html.contains(r#"id="root""#);
-
-    if has_root_before {
-        debug!("Root element verified before asset injection");
-    } else {
-        warn!("Root element NOT found before asset injection - this may cause hydration issues");
-    }
-
     let is_complete_document = is_complete_html_document(html);
 
-    debug!(
-        "inject_assets_into_html: is_complete_document={}, has_root_before={}, html_length={}",
-        is_complete_document,
-        has_root_before,
-        html.len()
-    );
-
     let result = if is_complete_document {
-        debug!("Routing to inject_assets_into_complete_document");
         inject_assets_into_complete_document(html, config).await
     } else {
-        debug!("Content fragment - routing to template injection");
         inject_content_into_template(html, config).await
     };
 
@@ -78,12 +60,6 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
                 warn!("Recovery completed: original HTML returned to preserve root element");
                 return Ok(recovered_html);
             }
-
-            if has_root_after {
-                debug!("Root element successfully preserved after asset injection");
-            } else if !has_root_before {
-                debug!("No root element before or after injection (content fragment path)");
-            }
         }
         Err(e) => {
             error!("Asset injection failed with error: {:?}", e);
@@ -105,8 +81,6 @@ async fn inject_assets_into_complete_document(
     html: &str,
     config: &Config,
 ) -> Result<String, StatusCode> {
-    debug!("Injecting assets into complete HTML document");
-
     let has_root_before = html.contains(r#"id="root""#);
     if !has_root_before {
         warn!("Root element missing before asset injection - this may cause hydration issues");
@@ -116,8 +90,7 @@ async fn inject_assets_into_complete_document(
 
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,
-        Err(e) => {
-            debug!("Could not read template file {}: {}", template_path, e);
+        Err(_) => {
             if html.trim_start().starts_with("<!DOCTYPE") {
                 return Ok(html.to_string());
             }
@@ -134,18 +107,11 @@ async fn inject_assets_into_complete_document(
             let asset_signature = extract_asset_signature(trimmed);
             if !html.contains(&asset_signature) {
                 asset_tags.push(trimmed.to_string());
-                debug!("Will inject asset: {}", &trimmed[..trimmed.len().min(60)]);
-            } else {
-                debug!(
-                    "Asset already exists in HTML, skipping: {}",
-                    &trimmed[..trimmed.len().min(50)]
-                );
             }
         }
     }
 
     if asset_tags.is_empty() {
-        debug!("No new assets to inject, all assets already present");
         if html.trim_start().starts_with("<!DOCTYPE") {
             return Ok(html.to_string());
         }
@@ -163,15 +129,12 @@ async fn inject_assets_into_complete_document(
         }
     }
 
-    debug!("Injecting {} stylesheets and {} scripts", stylesheets.len(), scripts.len());
-
     let mut final_html = html.to_string();
 
     if !stylesheets.is_empty() {
         let stylesheets_html = stylesheets.join("\n    ");
         if let Some(head_end) = final_html.find("</head>") {
             final_html.insert_str(head_end, &format!("    {}\n  ", stylesheets_html));
-            debug!("Injected {} stylesheets before </head> tag", stylesheets.len());
         } else {
             warn!("No </head> tag found - cannot inject stylesheets in head");
         }
@@ -181,7 +144,6 @@ async fn inject_assets_into_complete_document(
         let scripts_html = scripts.join("\n    ");
         if let Some(body_end) = final_html.rfind("</body>") {
             final_html.insert_str(body_end, &format!("\n    {}\n  ", scripts_html));
-            debug!("Injected {} scripts before </body> tag", scripts.len());
         } else {
             warn!("No </body> tag found - cannot inject scripts");
         }
@@ -202,7 +164,6 @@ async fn inject_assets_into_complete_document(
         return Ok(format!("<!DOCTYPE html>\n{}", html));
     }
 
-    debug!("Asset injection completed successfully, root element preserved");
     Ok(final_html)
 }
 
@@ -229,8 +190,6 @@ fn extract_asset_signature(asset_tag: &str) -> String {
 }
 
 pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
-    debug!("Injecting RSC payload into HTML ({} bytes)", rsc_payload.len());
-
     let escaped_payload =
         rsc_payload.replace('\\', "\\\\").replace('`', "\\`").replace("</script>", "<\\/script>");
 
@@ -242,18 +201,15 @@ pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
     if let Some(body_end) = html.rfind("</body>") {
         let mut result = html.to_string();
         result.insert_str(body_end, &script_tag);
-        debug!("RSC payload injected before </body>");
         return result;
     }
 
     if let Some(html_end) = html.rfind("</html>") {
         let mut result = html.to_string();
         result.insert_str(html_end, &script_tag);
-        debug!("RSC payload injected before </html>");
         return result;
     }
 
-    debug!("No </body> or </html> found, appending RSC payload to end");
     format!("{}{}", html, script_tag)
 }
 
@@ -261,8 +217,6 @@ async fn inject_content_into_template(
     content: &str,
     config: &Config,
 ) -> Result<String, StatusCode> {
-    debug!("Injecting content fragment into template");
-
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
     let template = match tokio::fs::read_to_string(template_path).await {
@@ -297,7 +251,6 @@ async fn inject_content_into_template(
                 result.push_str(content);
                 result.push_str(&template[end_pos..]);
 
-                debug!("Injected content into <div id=\"root\"> in template");
                 result
             } else {
                 warn!("Could not find closing </div> for root element in template");
@@ -359,7 +312,6 @@ async fn inject_content_into_template(
         return Ok(recovered_html);
     }
 
-    debug!("Template injection completed successfully with root element present");
     Ok(final_html)
 }
 

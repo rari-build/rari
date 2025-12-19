@@ -9,7 +9,7 @@ use axum::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 #[cfg(test)]
 mod tests;
@@ -71,8 +71,6 @@ pub async fn handle_server_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    debug!("Handling server action request");
-
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token_str) = csrf_token.to_str() {
             if let Err(e) = state.csrf_manager.validate_token(token_str) {
@@ -173,23 +171,17 @@ pub async fn handle_server_action(
         }
     };
 
-    debug!("Executing server action: {} (export: {})", request.id, request.export_name);
-
     let renderer = state.renderer.lock().await;
     let result =
         renderer.execute_server_function(&request.id, &request.export_name, &sanitized_args).await;
 
     match result {
         Ok(value) => {
-            debug!("Server action executed successfully, result: {:?}", value);
-
             let redirect_config = state.config.redirect_config();
             let redirect = extract_redirect_from_result(&value, &redirect_config);
 
             let response =
                 ServerActionResponse { success: true, result: Some(value), error: None, redirect };
-
-            debug!("Sending response: {:?}", response);
 
             let mut response = Json(response).into_response();
             response.headers_mut().insert(
@@ -225,8 +217,6 @@ pub async fn handle_form_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    debug!("Handling form-based server action");
-
     let form_data = match parse_form_data(&body) {
         Ok(data) => data,
         Err(e) => {
@@ -254,8 +244,6 @@ pub async fn handle_form_action(
     }
 
     let args = convert_form_data_to_args(&form_data);
-
-    debug!("Executing form action: {} (export: {})", action_id, export_name);
 
     let renderer = state.renderer.lock().await;
     let result = renderer.execute_server_function(action_id, export_name, &args).await;

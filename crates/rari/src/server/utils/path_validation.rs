@@ -1,6 +1,6 @@
 use crate::error::RariError;
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use tracing::warn;
 
 pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
     if requested.contains("..") {
@@ -63,13 +63,7 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
 
     let canonical_path = match path.canonicalize() {
         Ok(p) => p,
-        Err(e) => {
-            debug!(
-                requested = %requested,
-                base = %base.display(),
-                error = %e,
-                "Path canonicalization failed (file may not exist)"
-            );
+        Err(_) => {
             return Err(RariError::not_found("File not found"));
         }
     };
@@ -95,12 +89,6 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
         );
         return Err(RariError::bad_request("Path traversal detected"));
     }
-
-    debug!(
-        requested = %requested,
-        resolved = %canonical_path.display(),
-        "Path validation successful"
-    );
 
     Ok(canonical_path)
 }
@@ -173,11 +161,6 @@ pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
         );
         return Err(RariError::bad_request("Invalid path: contains null byte"));
     }
-
-    debug!(
-        file_path = %file_path,
-        "Component path validation successful"
-    );
 
     Ok(())
 }

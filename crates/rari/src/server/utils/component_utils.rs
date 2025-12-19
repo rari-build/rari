@@ -1,5 +1,3 @@
-use tracing::debug;
-
 pub fn has_use_client_directive(code: &str) -> bool {
     for line in code.lines() {
         let trimmed = line.trim();
@@ -66,10 +64,6 @@ pub fn has_use_server_directive(code: &str) -> bool {
 
 pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     if code.contains("Self-registering Production Component") {
-        debug!(
-            "Server action {} already has self-registration wrapper, skipping additional wrap",
-            module_id
-        );
         return code.to_string();
     }
 

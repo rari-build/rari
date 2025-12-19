@@ -13,7 +13,7 @@ use axum::{
 };
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
 const CHUNKED_ENCODING: &str = "chunked";
@@ -23,8 +23,6 @@ pub async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
 ) -> Result<Response, StatusCode> {
-    debug!("Streaming component: {}", request.component_id);
-
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let stream_result = {
@@ -34,8 +32,6 @@ pub async fn stream_component(
 
     match stream_result {
         Ok(mut rsc_stream) => {
-            debug!("Successfully created true streaming for component: {}", request.component_id);
-
             let byte_stream = async_stream::stream! {
                 while let Some(chunk) = rsc_stream.next_chunk().await {
                     yield Ok::<Vec<u8>, std::io::Error>(chunk.data);
@@ -67,16 +63,9 @@ pub async fn register_component(
 ) -> Result<Json<Value>, StatusCode> {
     let is_app_router = request.component_id.starts_with("app/");
 
-    if is_app_router {
-        debug!("Registering app router component: {}", request.component_id);
-    } else {
-        debug!("Registering component: {}", request.component_id);
-    }
-
     if let Some(cache_config) = &request.cache_config {
         let mut cache_configs = state.component_cache_configs.write().await;
         cache_configs.insert(request.component_id.clone(), cache_config.clone());
-        debug!("Stored cache config for component: {}", request.component_id);
     }
 
     let result = {
@@ -117,8 +106,6 @@ pub async fn register_component(
                     .await
                 {
                     error!("Failed to mark {} as client component: {}", request.component_id, e);
-                } else {
-                    debug!("Marked {} as client component", request.component_id);
                 }
             }
 
@@ -207,8 +194,6 @@ pub async fn rsc_render_handler(
 
     state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    debug!("RSC rendering component: {}", component_id);
-
     let props: Option<Value> = params.get("props").and_then(|p| {
         if p.trim().is_empty() || p == "{}" { None } else { serde_json::from_str(p).ok() }
     });
@@ -231,7 +216,6 @@ pub async fn rsc_render_handler(
                 for (key, value) in component_cache_config {
                     response_builder = response_builder.header(key.to_lowercase(), value);
                 }
-                debug!("Applied component-specific cache headers for: {}", component_id);
             } else {
                 let cache_control = state
                     .config
@@ -307,8 +291,6 @@ pub async fn reload_component_from_dist(
         }
     };
 
-    debug!("Reloading component {} from dist path: {}", component_id, dist_path.display());
-
     if !dist_path.exists() {
         warn!(
             component_id = component_id,
@@ -322,8 +304,6 @@ pub async fn reload_component_from_dist(
         )
         .into());
     }
-
-    debug!("Found dist file at: {}", dist_path.display());
 
     let mut dist_code = match tokio::fs::read_to_string(&dist_path).await {
         Ok(code) => code,
@@ -344,8 +324,6 @@ pub async fn reload_component_from_dist(
         }
     };
 
-    debug!("Read {} bytes from dist file", dist_code.len());
-
     let needs_retry = {
         let renderer = state.renderer.lock().await;
         let registry = renderer.component_registry.lock();
@@ -354,20 +332,13 @@ pub async fn reload_component_from_dist(
                 existing_component.transformed_source.chars().take(500).collect::<String>();
             let new_snippet = dist_code.chars().take(500).collect::<String>();
 
-            if existing_snippet == new_snippet {
-                debug!(component_id = component_id, "Dist file unchanged, will retry after delay");
-                true
-            } else {
-                debug!(component_id = component_id, "Dist file has changed, proceeding with HMR");
-                false
-            }
+            existing_snippet == new_snippet
         } else {
             false
         }
     };
 
     if needs_retry {
-        debug!("Waiting 100ms for Vite to finish writing dist file...");
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let new_dist_code = match tokio::fs::read_to_string(&dist_path).await {
@@ -391,17 +362,8 @@ pub async fn reload_component_from_dist(
             let new_snippet = new_dist_code.chars().take(500).collect::<String>();
 
             if existing_snippet == new_snippet {
-                debug!(
-                    component_id = component_id,
-                    "Dist file still unchanged after retry, preserving last known good version"
-                );
                 return Err(
                     "Dist file not yet updated by Vite. Last known good version preserved.".into(),
-                );
-            } else {
-                debug!(
-                    component_id = component_id,
-                    "Dist file updated after retry, proceeding with HMR"
                 );
             }
         }
@@ -409,7 +371,6 @@ pub async fn reload_component_from_dist(
         drop(renderer);
 
         dist_code = new_dist_code;
-        debug!("Re-read {} bytes from dist file after retry", dist_code.len());
     }
 
     let is_esm = dist_code.contains("export ")
@@ -418,15 +379,9 @@ pub async fn reload_component_from_dist(
         || dist_code.contains("export\n")
         || dist_code.contains("export\r");
 
-    debug!("Component {} is ESM: {}, checking for export statements", component_id, is_esm);
-
     let renderer = state.renderer.lock().await;
 
     if is_esm {
-        debug!("Loading component as ESM module: {}", component_id);
-
-        debug!("Clearing all caches for component: {}", component_id);
-
         renderer.clear_component_cache(component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
@@ -439,8 +394,6 @@ pub async fn reload_component_from_dist(
             .as_millis();
 
         let hmr_specifier = format!("file:///rari_hmr/server/{}.js?v={}", component_id, timestamp);
-
-        debug!("Using HMR specifier: {}", hmr_specifier);
 
         renderer
             .runtime
@@ -464,8 +417,6 @@ pub async fn reload_component_from_dist(
             format!("Failed to load ES module: {}", e)
         })?;
 
-        debug!("Loaded ESM module for component: {} (module_id: {})", component_id, module_id);
-
         renderer.runtime.evaluate_module(module_id).await.map_err(|e| {
             error!(
                 component_id = component_id,
@@ -475,8 +426,6 @@ pub async fn reload_component_from_dist(
             );
             format!("Failed to evaluate module: {}", e)
         })?;
-
-        debug!("Evaluated ESM module for component: {}", component_id);
 
         let clear_script = format!(
             r#"(function() {{
@@ -570,13 +519,7 @@ pub async fn reload_component_from_dist(
 
         info!("Successfully reloaded ESM component: {}", component_id);
 
-        debug!("Clearing ALL RSC script caches for HMR reload of: {}", component_id);
         renderer.clear_script_cache();
-
-        debug!(
-            "Re-registering component {} in renderer's component_registry with NEW code",
-            component_id
-        );
 
         let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&dist_code);
 
@@ -595,11 +538,6 @@ pub async fn reload_component_from_dist(
             registry.mark_component_loaded(component_id);
             registry.mark_component_initially_loaded(component_id);
         }
-
-        debug!(
-            "Component {} re-registered in renderer's component_registry with NEW code",
-            component_id
-        );
     } else {
         let wrapped_code = wrap_server_action_module(&dist_code, component_id);
 
@@ -681,10 +619,6 @@ pub async fn reload_component_from_dist(
                 "Component successfully reloaded from dist"
             );
 
-            if let Some(comp_type) = result_json.get("type").and_then(|v| v.as_str()) {
-                debug!("Component type: {}", comp_type);
-            }
-
             Ok(())
         } else {
             let actual_keys = result_json
@@ -748,12 +682,6 @@ pub async fn immediate_component_reregistration(
     let path = std::path::Path::new(file_path);
     let component_name =
         path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("UnknownComponent");
-
-    debug!(
-        component_name = component_name,
-        file_path = file_path,
-        "Starting immediate component re-registration"
-    );
 
     {
         let mut renderer = state.renderer.lock().await;

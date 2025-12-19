@@ -303,8 +303,6 @@ impl JsExecutionRuntime {
     }
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
-        tracing::debug!("Invalidating component: {}", component_id);
-
         let escaped_component_id = component_id
             .replace('\\', "\\\\")
             .replace('"', r#"\""#)
@@ -380,8 +378,6 @@ impl JsExecutionRuntime {
         component_id: &str,
         bundle_path: &std::path::Path,
     ) -> Result<(), RariError> {
-        tracing::debug!("Loading component: {} from {:?}", component_id, bundle_path);
-
         if !bundle_path.exists() {
             let error_msg = format!("Component bundle file not found: {:?}", bundle_path);
             tracing::error!("{}", error_msg);

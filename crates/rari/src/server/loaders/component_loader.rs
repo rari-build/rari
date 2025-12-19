@@ -4,7 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 const DIST_DIR: &str = "dist";
 
@@ -59,11 +59,6 @@ impl ComponentLoader {
 
                 match renderer.runtime.load_es_module(component_id).await {
                     Ok(module_id) => {
-                        debug!(
-                            "Loaded ESM module for component: {} (module_id: {})",
-                            component_id, module_id
-                        );
-
                         if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
                             error!(
                                 "Failed to evaluate module {} (id: {}): {}",
@@ -74,12 +69,6 @@ impl ComponentLoader {
 
                         match renderer.runtime.get_module_namespace(module_id).await {
                             Ok(namespace) => {
-                                debug!(
-                                    "Got module namespace for component: {} - namespace keys: {:?}",
-                                    component_id,
-                                    namespace.as_object().map(|o| o.keys().collect::<Vec<_>>())
-                                );
-
                                 let export_names: Vec<String> =
                                     if let Some(obj) = namespace.as_object() {
                                         obj.keys()
@@ -145,10 +134,6 @@ impl ComponentLoader {
                                             result.get("success").and_then(|v| v.as_bool())
                                         {
                                             if success {
-                                                debug!(
-                                                    "Registered component {} to globalThis",
-                                                    component_id
-                                                );
                                                 loaded_count += 1;
                                             } else {
                                                 error!(
@@ -158,10 +143,6 @@ impl ComponentLoader {
                                                 );
                                             }
                                         } else {
-                                            debug!(
-                                                "Registered component {} to globalThis",
-                                                component_id
-                                            );
                                             loaded_count += 1;
                                         }
                                     }
@@ -201,7 +182,6 @@ impl ComponentLoader {
 
         let src_dir = std::path::Path::new("src");
         if !src_dir.exists() {
-            debug!("No src directory found, skipping server action loading");
             return Ok(());
         }
 
@@ -251,8 +231,6 @@ impl ComponentLoader {
                             .replace(".js", "")
                             .replace(".jsx", "")
                             .replace('\\', "/");
-
-                        debug!("Found server action file: {:?} with ID: {}", path, action_id);
 
                         let dist_path = std::path::Path::new("dist")
                             .join("server")
@@ -331,10 +309,6 @@ impl ComponentLoader {
                                                             action_id, e
                                                         );
                                                     } else {
-                                                        debug!(
-                                                            "Successfully loaded server action: {}",
-                                                            action_id
-                                                        );
                                                         *loaded_count += 1;
                                                     }
                                                 }
@@ -361,10 +335,6 @@ impl ComponentLoader {
                                             .await
                                         {
                                             Ok(_) => {
-                                                debug!(
-                                                    "Successfully loaded server action: {}",
-                                                    action_id
-                                                );
                                                 *loaded_count += 1;
                                             }
                                             Err(e) => {
@@ -383,8 +353,6 @@ impl ComponentLoader {
                                     );
                                 }
                             }
-                        } else {
-                            debug!("Server action not yet built: {:?}", dist_path);
                         }
                     }
                 }
@@ -399,10 +367,6 @@ impl ComponentLoader {
 
         let server_dir = std::path::Path::new(DIST_DIR).join("server");
         if !server_dir.exists() {
-            debug!(
-                "No server directory found at {}, skipping app router component loading",
-                server_dir.display()
-            );
             return Ok(());
         }
 
@@ -450,8 +414,6 @@ impl ComponentLoader {
                             .unwrap_or("unknown")
                             .replace(".js", "")
                             .replace('\\', "/");
-
-                        debug!("Loading server action file: {} from {:?}", relative_str, path);
 
                         let module_specifier = format!(
                             "file://{}",
@@ -515,10 +477,6 @@ impl ComponentLoader {
                                                 relative_str, e
                                             );
                                         } else {
-                                            debug!(
-                                                "Successfully loaded server actions from: {}",
-                                                relative_str
-                                            );
                                             *loaded_count += 1;
                                         }
                                     }
@@ -542,10 +500,6 @@ impl ComponentLoader {
                                 .await
                             {
                                 Ok(_) => {
-                                    debug!(
-                                        "Successfully loaded server actions from: {}",
-                                        relative_str
-                                    );
                                     *loaded_count += 1;
                                 }
                                 Err(e) => {
@@ -567,8 +521,6 @@ impl ComponentLoader {
                         .replace('\\', "/");
 
                     let component_id = relative_str.clone();
-
-                    debug!("Loading component: {} from {:?}", component_id, path);
 
                     let is_client_component = has_use_client_directive(&component_code);
 
@@ -599,11 +551,6 @@ impl ComponentLoader {
                     if esm_load_result.is_ok() {
                         match renderer.runtime.load_es_module(&component_id).await {
                             Ok(module_id) => {
-                                debug!(
-                                    "Loaded component {} as ESM module (id: {})",
-                                    component_id, module_id
-                                );
-
                                 if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
                                     error!(
                                         "Failed to evaluate ESM module {} (id: {}): {}",
@@ -707,10 +654,6 @@ impl ComponentLoader {
                             }
                         }
                     } else {
-                        debug!(
-                            "Could not add component {} to module loader, falling back to execute_script",
-                            component_id
-                        );
                         match renderer
                             .runtime
                             .execute_script(
@@ -720,8 +663,6 @@ impl ComponentLoader {
                             .await
                         {
                             Ok(_) => {
-                                debug!("Successfully loaded component: {}", component_id);
-
                                 if is_client_component {
                                     let mark_client_script = format!(
                                         r#"(function() {{
