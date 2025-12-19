@@ -599,7 +599,6 @@ pub async fn handle_app_route(
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
         match layout_renderer.check_page_not_found(&route_match, &context).await {
             Ok(true) => {
-                tracing::info!("Page getData returned notFound=true for route: {}", path);
                 if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
                     route_match.not_found = Some(not_found_entry);
                 }

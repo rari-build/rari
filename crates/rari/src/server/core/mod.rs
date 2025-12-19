@@ -41,7 +41,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub struct Server {
     router: Router,
@@ -52,8 +52,6 @@ pub struct Server {
 
 impl Server {
     pub async fn new(config: Config) -> Result<Self, RariError> {
-        info!("Initializing Rari server in {} mode", config.mode);
-
         Config::set_global(config.clone())
             .map_err(|_| RariError::configuration("Failed to set global config".to_string()))?;
 
@@ -61,8 +59,6 @@ impl Server {
             max_script_execution_time_ms: config.rsc.script_execution_timeout_ms,
             ..ResourceLimits::default()
         };
-
-        info!("Initializing RSC renderer (mode: {})", config.mode);
 
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
         let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
@@ -81,14 +77,7 @@ impl Server {
             let manifest_path = "dist/app-routes.json";
 
             match app_router::AppRouter::from_file(manifest_path).await {
-                Ok(router) => {
-                    info!(
-                        "Loaded app router from {} with {} routes",
-                        manifest_path,
-                        router.manifest().routes.len()
-                    );
-                    Some(Arc::new(router))
-                }
+                Ok(router) => Some(Arc::new(router)),
                 Err(_) => None,
             }
         };
@@ -99,14 +88,7 @@ impl Server {
             match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
                 .await
             {
-                Ok(handler) => {
-                    info!(
-                        "Loaded API route handler from {} with {} API routes",
-                        manifest_path,
-                        handler.manifest().api_routes.len()
-                    );
-                    Some(Arc::new(handler))
-                }
+                Ok(handler) => Some(Arc::new(handler)),
                 Err(_) => None,
             }
         };
@@ -133,23 +115,6 @@ impl Server {
 
         let module_reload_manager = Arc::new(module_reload_manager);
 
-        if config.hmr_reload_enabled() {
-            info!(
-                enabled = true,
-                max_retry_attempts = config.rsc.hmr_max_retry_attempts,
-                reload_timeout_ms = config.rsc.hmr_reload_timeout_ms,
-                parallel_reloads = config.rsc.hmr_parallel_reloads,
-                debounce_delay_ms = config.rsc.hmr_debounce_delay_ms,
-                "HMR module reloading enabled"
-            );
-        } else {
-            info!(
-                enabled = false,
-                mode = %config.mode,
-                "HMR module reloading disabled"
-            );
-        }
-
         let ssr_renderer = {
             let runtime = renderer.runtime.clone();
             let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
@@ -161,13 +126,6 @@ impl Server {
 
         let cache_config = response_cache::CacheConfig::from_env(config.is_production());
         let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
-
-        info!(
-            "Response cache initialized: enabled={}, max_entries={}, default_ttl={}s",
-            response_cache.config.enabled,
-            response_cache.config.max_entries,
-            response_cache.config.default_ttl
-        );
 
         let csrf_manager = Arc::new(Self::initialize_csrf_manager());
 
@@ -195,7 +153,6 @@ impl Server {
         let router = Self::build_router(&config, state.clone()).await?;
 
         let address = config.server_address();
-        info!("Binding server to {}", address);
 
         let listener = TcpListener::bind(&address)
             .await
@@ -217,7 +174,6 @@ impl Server {
                     "RARI_CSRF_SECRET is less than 32 bytes. Using it anyway, but consider using a stronger secret."
                 );
             }
-            info!("CSRF protection enabled with secret from RARI_CSRF_SECRET");
             CsrfTokenManager::new(secret.into_bytes())
         } else {
             CsrfTokenManager::new_with_random_secret()
@@ -250,8 +206,6 @@ impl Server {
             .layer(medium_body_limit);
 
         if config.is_development() {
-            info!("Adding development routes");
-
             let small_body_limit = DefaultBodyLimit::max(100 * 1024);
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
@@ -282,7 +236,6 @@ impl Server {
         let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
 
         if has_app_router {
-            info!("Registering API route handler");
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             router = router
                 .route("/api/{*path}", axum::routing::options(api_cors_preflight))
@@ -291,8 +244,6 @@ impl Server {
         }
 
         if has_app_router {
-            info!("App router enabled - using app route handler");
-
             if config.is_production() {
                 router = router.route("/assets/{*path}", get(serve_static_asset));
             }
@@ -318,13 +269,7 @@ impl Server {
         }
 
         if let Some(rate_limit_layer) = create_rate_limit_layer(config) {
-            info!(
-                "Rate limiting enabled: {} req/sec per IP, burst size: {}",
-                config.rate_limit.requests_per_second, config.rate_limit.burst_size
-            );
             router = router.layer(rate_limit_layer).layer(middleware::from_fn(rate_limit_logger));
-        } else {
-            info!("Rate limiting disabled");
         }
 
         let middleware_stack =
@@ -338,13 +283,10 @@ impl Server {
     pub async fn start(self) -> Result<(), RariError> {
         self.display_startup_message();
 
-        info!("Starting Rari server on {}", self.address);
-
         axum::serve(self.listener, self.router.into_make_service_with_connect_info::<SocketAddr>())
             .await
             .map_err(|e| RariError::network(format!("Server error: {e}")))?;
 
-        info!("Server shutdown complete");
         Ok(())
     }
 

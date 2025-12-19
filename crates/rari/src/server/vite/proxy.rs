@@ -14,7 +14,7 @@ use futures_util::SinkExt;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
@@ -182,8 +182,6 @@ pub async fn vite_websocket_proxy(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 async fn handle_websocket(mut client_socket: WebSocket) {
-    info!("New WebSocket connection for Vite HMR proxy");
-
     if let Err(e) = client_socket.send(WsMessage::Ping("rari-vite-proxy".into())).await {
         error!("Failed to send initial ping to client: {}", e);
         return;
@@ -216,10 +214,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
     };
 
     let vite_socket = match connect_async(vite_ws_request).await {
-        Ok((stream, _)) => {
-            info!("Successfully connected to Vite WebSocket server");
-            stream
-        }
+        Ok((stream, _)) => stream,
         Err(e) => {
             error!("Failed to connect to Vite WebSocket server: {}", e);
 
@@ -285,8 +280,6 @@ async fn handle_websocket(mut client_socket: WebSocket) {
         _ = client_to_vite => {}
         _ = vite_to_client => {}
     }
-
-    info!("WebSocket proxy connection closed");
 }
 
 fn convert_axum_to_tungstenite_message(msg: WsMessage) -> Option<Message> {
@@ -340,7 +333,6 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
     match client.get(&health_url).send().await {
         Ok(response) => {
             if response.status().is_success() {
-                info!("Vite development server is running at {}", config.vite_address());
                 Ok(())
             } else {
                 Err(RariError::network(format!(

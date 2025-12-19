@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 pub struct ModuleReloadManager {
     reload_queue: Arc<Mutex<VecDeque<ModuleReloadRequest>>>,
@@ -191,12 +191,6 @@ impl ModuleReloadManager {
         }
 
         let start = Instant::now();
-
-        info!(
-            component_id = component_id,
-            file_path = ?file_path,
-            "Reloading module"
-        );
 
         let result = self.reload_with_retry(component_id, file_path).await;
 

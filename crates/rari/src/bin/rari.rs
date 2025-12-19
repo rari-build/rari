@@ -6,7 +6,7 @@ use rari::server::{
 };
 
 use rustls::crypto::CryptoProvider;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -66,41 +66,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     init_logging(&matches)?;
 
-    info!("Starting Rari Server v{}", env!("CARGO_PKG_VERSION"));
-
     CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
         .map_err(|_| "Failed to install rustls crypto provider")?;
 
     let config = load_configuration(&matches).await?;
-
-    info!("Configuration loaded successfully");
-    info!("Server mode: {}", config.mode);
 
     let server = Server::new(config).await.map_err(|e| {
         error!("Failed to create server: {}", e);
         e
     })?;
 
-    info!("Server initialized, starting...");
-
     let shutdown_signal = setup_shutdown_signal();
 
     tokio::select! {
         result = server.start() => {
             match result {
-                Ok(_) => info!("Server stopped normally"),
+                Ok(_) => {}
                 Err(e) => {
                     error!("Server error: {}", e);
                     return Err(e.into());
                 }
             }
         }
-        _ = shutdown_signal => {
-            info!("Shutdown signal received, stopping server...");
-        }
+        _ = shutdown_signal => {}
     }
 
-    info!("Rari Server shutdown complete");
     Ok(())
 }
 
@@ -149,16 +139,12 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
     };
 
     let mut config = if let Some(config_file) = matches.get_one::<String>("config") {
-        info!("Loading configuration from file: {}", config_file);
         Config::from_file(config_file).map_err(|e| {
             RariError::configuration(format!("Failed to load config file '{config_file}': {e}"))
         })?
     } else {
         match Config::from_env() {
-            Ok(config) => {
-                info!("Configuration loaded from environment variables");
-                config
-            }
+            Ok(config) => config,
             Err(e) => {
                 warn!("Failed to load config from environment: {}, using defaults", e);
                 Config::new(mode)
@@ -206,7 +192,6 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
         warn!("Static files will not be served correctly");
     }
 
-    info!("Configuration validation passed");
     Ok(())
 }
 
@@ -221,24 +206,16 @@ async fn setup_shutdown_signal() {
         let mut sigint = signal(SignalKind::interrupt()).expect("Failed to create SIGINT handler");
 
         tokio::select! {
-            _ = sigterm.recv() => {
-                info!("Received SIGTERM");
-            }
-            _ = sigint.recv() => {
-                info!("Received SIGINT");
-            }
-            _ = tokio::signal::ctrl_c() => {
-                info!("Received Ctrl+C");
-            }
+            _ = sigterm.recv() => {}
+            _ = sigint.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
         }
     }
 
     #[cfg(windows)]
     {
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => {
-                info!("Received Ctrl+C");
-            }
+            _ = tokio::signal::ctrl_c() => {}
         }
     }
 }

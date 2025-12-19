@@ -8,8 +8,6 @@ pub struct CacheLoader;
 
 impl CacheLoader {
     pub async fn load_page_cache_configs(state: &ServerState) -> Result<(), RariError> {
-        info!("Loading page cache configurations");
-
         let pages_dir = std::path::Path::new("src/pages");
         if !pages_dir.exists() {
             return Ok(());

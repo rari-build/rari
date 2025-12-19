@@ -169,7 +169,6 @@ windows-sys = { version = "0.59.0", features = [
 clap = { version = "4.5.47", features = [ "derive" ] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = [ "env-filter" ] }
-dotenvy = "0.15.7"
 
 # === TLS & Crypto ===
 rustls = { version = "=0.23.28", default-features = false, features = [

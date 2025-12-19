@@ -7,7 +7,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     response::Response,
 };
-use tracing::{error, info};
+use tracing::error;
 
 fn add_cors_headers(
     response_headers: &mut HeaderMap,
@@ -104,13 +104,6 @@ pub async fn handle_api_route(
                     allowed_methods: allowed_methods.clone(),
                     message: e.message(),
                 };
-
-                info!(
-                    path = %path,
-                    method = %method,
-                    allowed_methods = ?allowed_methods,
-                    "Method not allowed for API route"
-                );
 
                 let mut response = api_error.to_http_response(is_development);
                 if is_development {

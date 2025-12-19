@@ -378,11 +378,6 @@ impl RscSerializer {
             self.register_client_component(component_name, file_path, export_name);
             if let Some(module_ref) = self.module_map.get(component_name).cloned() {
                 self.emit_module_import_line(component_name, &module_ref);
-                tracing::info!(
-                    "Registered and emitted module import for client component: {} from {}",
-                    component_name,
-                    file_path
-                );
             }
         }
 

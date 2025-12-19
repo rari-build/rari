@@ -359,10 +359,7 @@ impl JsExecutionRuntime {
             .execute_script(format!("invalidate_{}", component_id.replace('/', "_")), script)
             .await
         {
-            Ok(_) => {
-                tracing::info!("Component invalidated successfully: {}", component_id);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!("Failed to invalidate component {}: {}", component_id, e);
                 Err(RariError::js_runtime(format!(
@@ -392,10 +389,7 @@ impl JsExecutionRuntime {
 
         let script_name = format!("load_component_{}", component_id.replace('/', "_"));
         match self.execute_script(script_name, component_code).await {
-            Ok(_) => {
-                tracing::info!("Component loaded successfully: {}", component_id);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 let error_msg =
                     format!("Failed to execute component code for {}: {}", component_id, e);

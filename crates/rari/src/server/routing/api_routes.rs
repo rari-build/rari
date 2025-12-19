@@ -11,7 +11,7 @@ use serde_json::Value as JsonValue;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tracing::{error, info};
+use tracing::error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRouteEntry {
@@ -53,19 +53,6 @@ pub struct ApiRouteHandler {
 
 impl ApiRouteHandler {
     pub fn new(runtime: Arc<JsExecutionRuntime>, manifest: ApiRouteManifest) -> Self {
-        info!(route_count = manifest.api_routes.len(), "Initializing API route handler");
-
-        for route in &manifest.api_routes {
-            info!(
-                route_path = %route.path,
-                file_path = %route.file_path,
-                methods = ?route.methods,
-                is_dynamic = route.is_dynamic,
-                params = ?route.params,
-                "Registered API route"
-            );
-        }
-
         Self { runtime, manifest: Arc::new(manifest), handler_cache: Arc::new(DashMap::new()) }
     }
 
@@ -238,12 +225,6 @@ impl ApiRouteHandler {
             }
         }
 
-        info!(
-            file_path = %file_path,
-            route_path = %route.path,
-            "Loading API route handler"
-        );
-
         let dist_path = Self::resolve_dist_path(file_path)?;
 
         if !dist_path.exists() {
@@ -286,14 +267,6 @@ impl ApiRouteHandler {
             CompiledHandler { module_id: module_id.clone(), code: code.clone(), last_modified };
 
         self.handler_cache.insert(file_path.clone(), compiled.clone());
-
-        info!(
-            file_path = %file_path,
-            route_path = %route.path,
-            module_id = %module_id,
-            code_size = code.len(),
-            "Successfully loaded and cached API route handler"
-        );
 
         Ok(compiled)
     }
@@ -451,8 +424,6 @@ impl ApiRouteHandler {
         request: Request<Body>,
         is_development: bool,
     ) -> Result<Response<Body>, RariError> {
-        let start_time = std::time::Instant::now();
-
         let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
@@ -516,15 +487,6 @@ impl ApiRouteHandler {
             );
             e
         })?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            route_path = %route_match.route.path,
-            method = %route_match.method,
-            status = response.status().as_u16(),
-            duration_ms = elapsed.as_millis(),
-            "API route handler executed successfully"
-        );
 
         Ok(response)
     }

@@ -644,12 +644,6 @@ impl LayoutRenderer {
         }
 
         if suspense_detection.has_suspense && layout_structure.is_valid() {
-            tracing::info!(
-                "Found {} Suspense boundaries with valid layout structure, enabling streaming for route {}",
-                suspense_detection.boundary_count,
-                route_match.route.path
-            );
-
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
                 Arc::clone(&renderer.runtime),
             );

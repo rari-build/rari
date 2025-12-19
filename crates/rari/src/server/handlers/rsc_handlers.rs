@@ -13,7 +13,7 @@ use axum::{
 };
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
 const CHUNKED_ENCODING: &str = "chunked";
@@ -61,8 +61,6 @@ pub async fn register_component(
     State(state): State<ServerState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    let is_app_router = request.component_id.starts_with("app/");
-
     if let Some(cache_config) = &request.cache_config {
         let mut cache_configs = state.component_cache_configs.write().await;
         cache_configs.insert(request.component_id.clone(), cache_config.clone());
@@ -75,12 +73,6 @@ pub async fn register_component(
 
     match result {
         Ok(_) => {
-            if is_app_router {
-                info!("Successfully registered app router component: {}", request.component_id);
-            } else {
-                info!("Successfully registered component: {}", request.component_id);
-            }
-
             let renderer = state.renderer.lock().await;
             let is_client =
                 renderer.serializer.lock().is_client_component_registered(&request.component_id);
@@ -127,11 +119,6 @@ pub async fn register_client_component(
     State(state): State<ServerState>,
     Json(request): Json<RegisterClientRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    info!(
-        "Registering client component: {} from path: {} with export: {}",
-        request.component_id, request.file_path, request.export_name
-    );
-
     {
         let renderer = state.renderer.lock().await;
         renderer.register_client_component(
@@ -139,13 +126,8 @@ pub async fn register_client_component(
             &request.file_path,
             &request.export_name,
         );
-
-        let serializer = renderer.serializer.lock();
-        let is_registered = serializer.is_client_component_registered(&request.component_id);
-        info!("Client component {} registration status: {}", request.component_id, is_registered);
     }
 
-    info!("Successfully registered client component: {}", request.component_id);
     #[allow(clippy::disallowed_methods)]
     Ok(Json(serde_json::json!({
         "success": true,
@@ -517,8 +499,6 @@ pub async fn reload_component_from_dist(
                 format!("Failed to register ESM module: {}", e)
             })?;
 
-        info!("Successfully reloaded ESM component: {}", component_id);
-
         renderer.clear_script_cache();
 
         let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&dist_code);
@@ -613,12 +593,6 @@ pub async fn reload_component_from_dist(
 
     if let Some(success) = result_json.get("success").and_then(|v| v.as_bool()) {
         if success {
-            info!(
-                component_id = component_id,
-                dist_path = %dist_path.display(),
-                "Component successfully reloaded from dist"
-            );
-
             Ok(())
         } else {
             let actual_keys = result_json

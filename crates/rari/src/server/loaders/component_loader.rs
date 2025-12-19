@@ -4,7 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 const DIST_DIR: &str = "dist";
 
@@ -12,8 +12,6 @@ pub struct ComponentLoader;
 
 impl ComponentLoader {
     pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        info!("Loading production components");
-
         let manifest_path = std::path::Path::new("dist/server-manifest.json");
         if !manifest_path.exists() {
             warn!(
@@ -29,7 +27,6 @@ impl ComponentLoader {
         let mut sorted_components: Vec<_> = components.iter().collect();
         sorted_components.sort_by_key(|(id, _)| if id.starts_with("components/") { 0 } else { 1 });
 
-        let mut loaded_count = 0;
         for (component_id, component_info) in sorted_components {
             let module_specifier = component_info.get("moduleSpecifier").and_then(|s| s.as_str());
 
@@ -132,18 +129,13 @@ impl ComponentLoader {
                                     Ok(result) => {
                                         if let Some(success) =
                                             result.get("success").and_then(|v| v.as_bool())
+                                            && !success
                                         {
-                                            if success {
-                                                loaded_count += 1;
-                                            } else {
-                                                error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
-                                            }
-                                        } else {
-                                            loaded_count += 1;
+                                            error!(
+                                                "Failed to register component {} to globalThis: {:?}",
+                                                component_id,
+                                                result.get("error")
+                                            );
                                         }
                                     }
                                     Err(e) => {
@@ -171,31 +163,25 @@ impl ComponentLoader {
             }
         }
 
-        info!("Loaded {} production components", loaded_count);
         Ok(())
     }
 
     pub async fn load_server_actions_from_source(
         renderer: &mut RscRenderer,
     ) -> Result<(), RariError> {
-        info!("Loading server actions from source");
-
         let src_dir = std::path::Path::new("src");
         if !src_dir.exists() {
             return Ok(());
         }
 
-        let mut loaded_count = 0;
-        Self::scan_for_server_actions(src_dir, renderer, &mut loaded_count).await?;
+        Self::scan_for_server_actions(src_dir, renderer).await?;
 
-        info!("Loaded {} server action files", loaded_count);
         Ok(())
     }
 
     fn scan_for_server_actions<'a>(
         dir: &'a std::path::Path,
         renderer: &'a mut RscRenderer,
-        loaded_count: &'a mut usize,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
             let entries = std::fs::read_dir(dir).map_err(|e| {
@@ -208,7 +194,7 @@ impl ComponentLoader {
                 let path = entry.path();
 
                 if path.is_dir() {
-                    Self::scan_for_server_actions(&path, renderer, loaded_count).await?;
+                    Self::scan_for_server_actions(&path, renderer).await?;
                 } else if path
                     .extension()
                     .and_then(|s| s.to_str())
@@ -308,8 +294,6 @@ impl ComponentLoader {
                                                             "Failed to register server action {} to globalThis: {}",
                                                             action_id, e
                                                         );
-                                                    } else {
-                                                        *loaded_count += 1;
                                                     }
                                                 }
                                             }
@@ -334,9 +318,7 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            Ok(_) => {
-                                                *loaded_count += 1;
-                                            }
+                                            Ok(_) => {}
                                             Err(e) => {
                                                 error!(
                                                     "Failed to load server action {}: {}",
@@ -363,23 +345,13 @@ impl ComponentLoader {
     }
 
     pub async fn load_app_router_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        info!("Loading app router components");
-
         let server_dir = std::path::Path::new(DIST_DIR).join("server");
         if !server_dir.exists() {
             return Ok(());
         }
 
-        let mut loaded_count = 0;
-        Self::load_server_components_recursive(
-            &server_dir,
-            &server_dir,
-            renderer,
-            &mut loaded_count,
-        )
-        .await?;
+        Self::load_server_components_recursive(&server_dir, &server_dir, renderer).await?;
 
-        info!("Loaded {} app router components", loaded_count);
         Ok(())
     }
 
@@ -387,7 +359,6 @@ impl ComponentLoader {
         dir: &'a std::path::Path,
         base_dir: &'a std::path::Path,
         renderer: &'a mut RscRenderer,
-        loaded_count: &'a mut usize,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
             let entries = std::fs::read_dir(dir).map_err(|e| {
@@ -400,8 +371,7 @@ impl ComponentLoader {
                 let path = entry.path();
 
                 if path.is_dir() {
-                    Self::load_server_components_recursive(&path, base_dir, renderer, loaded_count)
-                        .await?;
+                    Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let component_code = std::fs::read_to_string(&path).map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
@@ -476,8 +446,6 @@ impl ComponentLoader {
                                                 "Failed to register server action {} to globalThis: {}",
                                                 relative_str, e
                                             );
-                                        } else {
-                                            *loaded_count += 1;
                                         }
                                     }
                                 }
@@ -499,9 +467,7 @@ impl ComponentLoader {
                                 )
                                 .await
                             {
-                                Ok(_) => {
-                                    *loaded_count += 1;
-                                }
+                                Ok(_) => {}
                                 Err(e) => {
                                     error!(
                                         "Failed to load server actions from {}: {}",
@@ -642,8 +608,6 @@ impl ComponentLoader {
                                             );
                                         }
                                     }
-
-                                    *loaded_count += 1;
                                 }
                             }
                             Err(e) => {
@@ -693,8 +657,6 @@ impl ComponentLoader {
                                         );
                                     }
                                 }
-
-                                *loaded_count += 1;
                             }
                             Err(e) => {
                                 error!("Failed to execute component {}: {}", component_id, e);
