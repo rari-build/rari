@@ -1,4 +1,33 @@
-## [0.5.23] - 2025-12-18
+## [0.5.18] - 2025-12-20
+
+### 🚜 Refactor
+
+- *(rsc)* Rename client component registry globals to use tilde prefix
+- *(rsc)* Migrate global namespace from __rari to ~rari
+- *(rsc)* Migrate global namespace from __rari to ~rari
+- *(rsc)* Migrate global namespace from __rsc to ~rsc
+- *(rsc)* Remove Counter component special handling from RSC traversal
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(runtime)* Migrate error handling globals from double underscore to tilde prefix
+- *(rsc)* Migrate registry proxy global from double underscore to tilde prefix
+- *(hmr)* Improve component specifier handling and remove debug logging
+- *(rsc)* Remove debug logging statements across codebase
+- *(runtime)* Remove lifecycle logging from LayoutWrapper
+
+### ⚙️ Miscellaneous Tasks
+
+- *(logging)* Remove info-level logging statements across codebase
+- *(logging)* Remove warn-level logging statements
+- *(logging)* Remove warn-level logging and upgrade to error-level where appropriate
+- *(logging)* Remove warn-level logging and unused variables
+- *(release)* Bump version to 0.5.18
+## [rari@0.5.23] - 2025-12-18
+
+### 💼 Other
+
+- Rari@0.5.23
 
 ### ⚙️ Miscellaneous Tasks
 
