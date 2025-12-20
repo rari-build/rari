@@ -7,11 +7,11 @@ import 'virtual:loading-component-map'
 
 // CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
 
-if (typeof globalThis.__clientComponents === 'undefined') {
-  globalThis.__clientComponents = {}
+if (typeof globalThis['~clientComponents'] === 'undefined') {
+  globalThis['~clientComponents'] = {}
 }
-if (typeof globalThis.__clientComponentPaths === 'undefined') {
-  globalThis.__clientComponentPaths = {}
+if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+  globalThis['~clientComponentPaths'] = {}
 }
 
 // CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
@@ -58,7 +58,7 @@ export async function renderApp() {
       contentToRender = element
     }
 
-    let manifest = globalThis.__rari_app_routes_manifest
+    let manifest = globalThis['~rari']?.appRoutesManifest
     if (!manifest) {
       try {
         const manifestUrl = window.location.origin.includes(':5173')
@@ -71,7 +71,9 @@ export async function renderApp() {
         if (manifestResponse.ok) {
           const text = await manifestResponse.text()
           manifest = JSON.parse(text)
-          globalThis.__rari_app_routes_manifest = manifest
+          if (!globalThis['~rari'])
+            globalThis['~rari'] = {}
+          globalThis['~rari'].appRoutesManifest = manifest
         }
       }
       catch (err) {
@@ -350,7 +352,7 @@ function rscToReact(rsc, modules) {
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
         if (moduleInfo) {
-          const Component = globalThis.__clientComponents[moduleInfo.id]?.component
+          const Component = globalThis['~clientComponents'][moduleInfo.id]?.component
           if (Component) {
             const childProps = {
               ...props,

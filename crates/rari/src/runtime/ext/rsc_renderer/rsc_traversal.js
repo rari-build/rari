@@ -1,7 +1,6 @@
 /* eslint-disable no-undef */
-
-if (typeof globalThis !== 'undefined' && typeof globalThis.__rsc_key_counter === 'undefined') {
-  globalThis.__rsc_key_counter = 0
+if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined') {
+  globalThis['~rsc'].keyCounter = 0
 }
 
 async function traverseToRsc(element, clientComponents = {}, depth = 0) {
@@ -112,7 +111,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
 async function traverseReactElement(element, clientComponents, depth = 0) {
   const { type, props, key } = element
 
-  const uniqueKey = key || `element:${globalThis.__rsc_key_counter++}`
+  const uniqueKey = key || `element:${globalThis['~rsc'].keyCounter++}`
 
   if (isClientComponent(type, clientComponents)) {
     const componentId = getClientComponentId(type, clientComponents)
@@ -120,10 +119,10 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     if (componentId && componentId !== null) {
       if (componentId.includes('#')) {
         const [filePath, exportName] = componentId.split('#')
-        if (typeof globalThis.__rari_bridge !== 'undefined'
-          && typeof globalThis.__rari_bridge.registerClientReference === 'function') {
+        if (typeof globalThis['~rari']?.bridge !== 'undefined'
+          && typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
           try {
-            globalThis.__rari_bridge.registerClientReference(componentId, filePath, exportName)
+            globalThis['~rari'].bridge.registerClientReference(componentId, filePath, exportName)
           }
           catch (error) {
             console.error('Failed to register client reference:', error)
@@ -191,24 +190,26 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   }
 
   if (isSuspenseComponent(type)) {
-    const boundaryId = `boundary:${globalThis.__rsc_key_counter++}`
+    const boundaryId = `boundary:${globalThis['~rsc'].keyCounter++}`
 
-    if (!globalThis.__discovered_boundaries)
-      globalThis.__discovered_boundaries = []
-    if (!globalThis.__pending_promises)
-      globalThis.__pending_promises = []
-    if (!globalThis.__suspense_promises)
-      globalThis.__suspense_promises = {}
+    if (!globalThis['~suspense'])
+      globalThis['~suspense'] = {}
+    if (!globalThis['~suspense'].discoveredBoundaries)
+      globalThis['~suspense'].discoveredBoundaries = []
+    if (!globalThis['~suspense'].pendingPromises)
+      globalThis['~suspense'].pendingPromises = []
+    if (!globalThis['~suspense'].promises)
+      globalThis['~suspense'].promises = {}
 
-    const previousBoundaryId = globalThis.__current_boundary_id
-    globalThis.__current_boundary_id = boundaryId
+    const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
+    globalThis['~suspense'].currentBoundaryId = boundaryId
 
     const defaultFallback = null
     const safeFallback = props?.fallback
       ? await traverseToRsc(props.fallback, clientComponents, depth + 1)
       : defaultFallback
 
-    globalThis.__discovered_boundaries.push({
+    globalThis['~suspense'].discoveredBoundaries.push({
       id: boundaryId,
       fallback: safeFallback,
       parentId: previousBoundaryId,
@@ -234,10 +235,10 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
             const result = child.type(child.props || {})
 
             if (result && typeof result.then === 'function') {
-              const promiseId = `promise:${globalThis.__rsc_key_counter++}`
-              globalThis.__suspense_promises[promiseId] = result
+              const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
+              globalThis['~suspense'].promises[promiseId] = result
 
-              globalThis.__pending_promises.push({
+              globalThis['~suspense'].pendingPromises.push({
                 id: promiseId,
                 boundaryId,
                 componentPath: child.type.name || 'anonymous',
@@ -251,7 +252,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       }
     }
 
-    globalThis.__current_boundary_id = previousBoundaryId
+    globalThis['~suspense'].currentBoundaryId = previousBoundaryId
 
     return [
       '$',
@@ -349,7 +350,7 @@ async function createRSCHTMLElement(
     delete rscProps.children
   }
 
-  const uniqueKey = key || `${tagName}:${globalThis.__rsc_key_counter++}`
+  const uniqueKey = key || `${tagName}:${globalThis['~rsc'].keyCounter++}`
   return ['$', tagName, uniqueKey, rscProps]
 }
 
@@ -407,8 +408,7 @@ function isClientComponent(componentType, clientComponents) {
 
   if (typeof componentType === 'string') {
     if (
-      componentType.includes('Counter')
-      || componentType.includes('tsx#')
+      componentType.includes('tsx#')
       || componentType.includes('use client')
     ) {
       return true
@@ -456,43 +456,14 @@ function getClientComponentId(componentType, clientComponents) {
     && typeof componentType === 'object'
     && Object.keys(componentType).length === 0
   ) {
-    const globalComponents = globalThis.__clientComponents || {}
-    const componentNames = globalThis.__clientComponentNames || {}
-
-    for (const [componentId, componentInfo] of Object.entries(
-      globalComponents,
-    )) {
-      if (componentInfo.path && componentInfo.path.includes('Counter')) {
-        return componentId
-      }
-    }
-
-    for (const [name, id] of Object.entries(componentNames)) {
-      if (name.toLowerCase().includes('counter')) {
-        return id
-      }
-    }
-
-    for (const [id, info] of Object.entries(globalComponents)) {
-      if (
-        info.component
-        && (info.component.name === 'Counter'
-          || info.component.displayName === 'Counter')
-      ) {
-        return id
-      }
-    }
     return null
   }
 
   if (typeof componentType === 'string') {
-    const componentNames = globalThis.__clientComponentNames || {}
+    const componentNames = globalThis['~clientComponentNames'] || {}
 
     let componentName = componentType
-    if (componentType.includes('Counter')) {
-      componentName = 'Counter'
-    }
-    else if (componentType.includes('tsx#default')) {
+    if (componentType.includes('tsx#default')) {
       const match = componentType.match(/\/([^/]+)\.tsx#/)
       if (match) {
         componentName = match[1]
@@ -526,7 +497,7 @@ function getClientComponentId(componentType, clientComponents) {
 }
 
 function createErrorElement(message, componentName) {
-  const errorId = `error:${globalThis.__rsc_key_counter++}`
+  const errorId = `error:${globalThis['~rsc'].keyCounter++}`
   return [
     '$',
     'div',
@@ -562,7 +533,7 @@ function createErrorElement(message, componentName) {
 
 async function renderToRsc(element, clientComponents = {}) {
   try {
-    globalThis.__rsc_key_counter = 0
+    globalThis['~rsc'].keyCounter = 0
     return await traverseToRsc(element, clientComponents)
   }
   catch (error) {

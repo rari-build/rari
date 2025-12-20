@@ -5944,7 +5944,6 @@ dependencies = [
  "deno_webidl",
  "deno_websocket",
  "deno_webstorage",
- "dotenvy",
  "futures",
  "futures-util",
  "governor",

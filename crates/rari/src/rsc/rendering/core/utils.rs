@@ -84,13 +84,13 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                                 let original_name = parts[0].trim();
                                 let alias_name = parts[1].trim();
                                 result.push_str(&format!(
-                                        "if (typeof {} === 'undefined') {{ var {} = (globalThis.__rsc_functions && globalThis.__rsc_functions.{} && globalThis.__rsc_functions.{}.__rsc_original) ? globalThis.__rsc_functions.{}.__rsc_original : (globalThis.__rsc_functions && globalThis.__rsc_functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
+                                        "if (typeof {} === 'undefined') {{ var {} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{} && globalThis['~rsc'].functions.{}.['~rsc_original']) ? globalThis['~rsc'].functions.{}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
                                         alias_name, alias_name, original_name, original_name, original_name, original_name, alias_name
                                     ));
                             }
                         } else {
                             result.push_str(&format!(
-                                    "if (typeof {} === 'undefined') {{ var {} = (globalThis.__rsc_functions && globalThis.__rsc_functions.{} && globalThis.__rsc_functions.{}.__rsc_original) ? globalThis.__rsc_functions.{}.__rsc_original : (globalThis.__rsc_functions && globalThis.__rsc_functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
+                                    "if (typeof {} === 'undefined') {{ var {} = (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{} && globalThis['~rsc'].functions.{}.['~rsc_original']) ? globalThis['~rsc'].functions.{}.['~rsc_original'] : (globalThis['~rsc'].functions && globalThis['~rsc'].functions.{}) || globalThis.{} || (function(...args) {{ return Promise.resolve(null); }}); }}\n",
                                     import_name, import_name, import_name, import_name, import_name, import_name, import_name
                                 ));
                         }

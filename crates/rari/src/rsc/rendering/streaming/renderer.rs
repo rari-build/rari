@@ -53,11 +53,11 @@ impl StreamingRenderer {
         layout_structure: crate::rsc::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
-            tracing::error!(
+            error!(
                 "StreamingRenderer: Invalid layout structure detected, streaming should not have been initiated"
             );
 
-            tracing::error!(
+            error!(
                 "Layout structure details: has_navigation={}, navigation_position={:?}, content_position={:?}, suspense_boundaries={}",
                 layout_structure.has_navigation,
                 layout_structure.navigation_position,
@@ -66,11 +66,9 @@ impl StreamingRenderer {
             );
 
             for boundary in &layout_structure.suspense_boundaries {
-                tracing::error!(
+                error!(
                     "  Suspense boundary '{}': parent_path={:?}, is_in_content_area={}",
-                    boundary.boundary_id,
-                    boundary.parent_path,
-                    boundary.is_in_content_area
+                    boundary.boundary_id, boundary.parent_path, boundary.is_in_content_area
                 );
             }
 
@@ -119,40 +117,29 @@ impl StreamingRenderer {
                 {
                     Ok(result) => {
                         let result_str = result.to_string();
-                        match serde_json::from_str::<serde_json::Value>(&result_str) {
-                            Ok(data) => {
-                                if let Some(results) = data["results"].as_array() {
-                                    for result in results {
-                                        if !result["success"].as_bool().unwrap_or(false) {
-                                            let error_msg =
-                                                result["error"].as_str().unwrap_or("unknown");
-                                            let error_name = result["errorName"]
-                                                .as_str()
-                                                .unwrap_or("UnknownError");
-                                            let component_path = result["componentPath"]
-                                                .as_str()
-                                                .unwrap_or("unknown");
-                                            let promise_id =
-                                                result["promiseId"].as_str().unwrap_or("unknown");
+                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
+                            && let Some(results) = data["results"].as_array()
+                        {
+                            for result in results {
+                                if !result["success"].as_bool().unwrap_or(false) {
+                                    let error_msg = result["error"].as_str().unwrap_or("unknown");
+                                    let error_name =
+                                        result["errorName"].as_str().unwrap_or("UnknownError");
+                                    let component_path =
+                                        result["componentPath"].as_str().unwrap_or("unknown");
+                                    let promise_id =
+                                        result["promiseId"].as_str().unwrap_or("unknown");
 
-                                            tracing::warn!(
-                                                "Deferred component failed: promiseId={}, component={}, error={} ({})",
-                                                promise_id,
-                                                component_path,
-                                                error_msg,
-                                                error_name
-                                            );
-                                        }
-                                    }
+                                    error!(
+                                        "Deferred component failed: promiseId={}, component={}, error={} ({})",
+                                        promise_id, component_path, error_msg, error_name
+                                    );
                                 }
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to parse deferred execution result: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to execute deferred components: {}", e);
+                        error!("Failed to execute deferred components: {}", e);
                     }
                 }
 
@@ -179,42 +166,31 @@ impl StreamingRenderer {
             loop {
                 tokio::select! {
                     Some(mut update) = update_receiver.recv() => {
-                        let (was_skeleton_removed, is_duplicate_resolution) = {
+                        let is_duplicate_resolution = {
                             let mut skeleton_ids = rendered_skeleton_ids.lock().await;
                             let mut resolved_ids = resolved_boundary_ids.lock().await;
 
-                            let skeleton_removed = skeleton_ids.remove(&update.boundary_id);
+                            skeleton_ids.remove(&update.boundary_id);
                             let is_first_resolution = resolved_ids.insert(update.boundary_id.clone());
 
-                            (skeleton_removed, !is_first_resolution)
+                            !is_first_resolution
                         };
 
                         if is_duplicate_resolution {
-                            tracing::warn!(
-                                "Boundary '{}' is already resolved. Skipping duplicate resolution to prevent orphaned loading skeletons.",
-                                update.boundary_id
-                            );
                             continue;
-                        }
-
-                        if !was_skeleton_removed {
-                            tracing::warn!(
-                                "Boundary '{}' resolved but no skeleton was tracked. This may indicate the skeleton was never rendered.",
-                                update.boundary_id
-                            );
                         }
 
                         if let Some(dom_path) = boundary_positions_clone.lock().await.get(&update.boundary_id) {
                             update.dom_path = dom_path.clone();
                         } else {
-                            tracing::error!(
+                            error!(
                                 "DOM path not found for boundary '{}' in boundary_positions map. This may cause incorrect skeleton replacement.",
                                 update.boundary_id
                             );
                         }
 
                         if update.dom_path.is_empty() {
-                            tracing::error!(
+                            error!(
                                 "DOM path is empty for boundary '{}'. Skeleton replacement may fail without proper targeting.",
                                 update.boundary_id
                             );
@@ -238,16 +214,7 @@ impl StreamingRenderer {
                 }
             }
 
-            {
-                let skeleton_ids = rendered_skeleton_ids.lock().await;
-                if !skeleton_ids.is_empty() {
-                    tracing::warn!(
-                        "Stream completed with {} unresolved loading skeletons. These may be orphaned: {:?}",
-                        skeleton_ids.len(),
-                        skeleton_ids.iter().collect::<Vec<_>>()
-                    );
-                }
-            }
+            let _ = rendered_skeleton_ids.lock().await;
 
             let final_chunk = RscStreamChunk {
                 data: b"STREAM_COMPLETE\n".to_vec(),
@@ -257,7 +224,7 @@ impl StreamingRenderer {
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                tracing::error!("Failed to send stream completion signal: {}", e);
+                error!("Failed to send stream completion signal: {}", e);
             }
         });
 
@@ -271,7 +238,7 @@ impl StreamingRenderer {
         layout_structure: crate::rsc::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
-            tracing::error!(
+            error!(
                 "StreamingRenderer: Invalid layout structure detected, streaming should not have been initiated"
             );
             return Err(RariError::internal(
@@ -313,25 +280,14 @@ impl StreamingRenderer {
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                match runtime
+                if let Err(e) = runtime
                     .execute_script(
                         "<execute_deferred_components>".to_string(),
                         DEFERRED_EXECUTION_SCRIPT.to_string(),
                     )
                     .await
                 {
-                    Ok(result) => {
-                        let result_str = result.to_string();
-                        match serde_json::from_str::<serde_json::Value>(&result_str) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                tracing::warn!("Failed to parse deferred execution result: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to execute deferred components: {}", e);
-                    }
+                    error!("Failed to execute deferred components: {}", e);
                 }
 
                 for promise in pending_promises {
@@ -353,19 +309,15 @@ impl StreamingRenderer {
             loop {
                 tokio::select! {
                     Some(mut update) = update_receiver.recv() => {
-                        let (_was_skeleton_removed, is_duplicate_resolution) = {
+                        let is_duplicate_resolution = {
                             let mut skeleton_ids = rendered_skeleton_ids.lock().await;
                             let mut resolved_ids = resolved_boundary_ids.lock().await;
-                            let skeleton_removed = skeleton_ids.remove(&update.boundary_id);
+                            skeleton_ids.remove(&update.boundary_id);
                             let is_first_resolution = resolved_ids.insert(update.boundary_id.clone());
-                            (skeleton_removed, !is_first_resolution)
+                            !is_first_resolution
                         };
 
                         if is_duplicate_resolution {
-                            tracing::warn!(
-                                "Boundary '{}' is already resolved. Skipping duplicate resolution.",
-                                update.boundary_id
-                            );
                             continue;
                         }
 
@@ -399,7 +351,7 @@ impl StreamingRenderer {
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                tracing::error!("Failed to send stream completion signal: {}", e);
+                error!("Failed to send stream completion signal: {}", e);
             }
         });
 
@@ -432,17 +384,14 @@ impl StreamingRenderer {
             let has_promises = !pending_promises.is_empty();
 
             tokio::spawn(async move {
-                match runtime
+                if let Err(e) = runtime
                     .execute_script(
                         "<init_promise_tracking>".to_string(),
                         PROMISE_TRACKING_INIT_SCRIPT.to_string(),
                     )
                     .await
                 {
-                    Ok(_) => {}
-                    Err(e) => {
-                        tracing::warn!("Failed to initialize promise tracking: {}", e);
-                    }
+                    error!("Failed to initialize promise tracking: {}", e);
                 }
 
                 match runtime
@@ -454,27 +403,22 @@ impl StreamingRenderer {
                 {
                     Ok(result) => {
                         let result_str = result.to_string();
-                        match serde_json::from_str::<serde_json::Value>(&result_str) {
-                            Ok(data) => {
-                                if let Some(results) = data["results"].as_array() {
-                                    for result in results {
-                                        if !result["success"].as_bool().unwrap_or(false) {
-                                            tracing::warn!(
-                                                "Deferred component failed: promiseId={}, error={}",
-                                                result["promiseId"].as_str().unwrap_or("unknown"),
-                                                result["error"].as_str().unwrap_or("unknown")
-                                            );
-                                        }
-                                    }
+                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
+                            && let Some(results) = data["results"].as_array()
+                        {
+                            for result in results {
+                                if !result["success"].as_bool().unwrap_or(false) {
+                                    error!(
+                                        "Deferred component failed: promiseId={}, error={}",
+                                        result["promiseId"].as_str().unwrap_or("unknown"),
+                                        result["error"].as_str().unwrap_or("unknown")
+                                    );
                                 }
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to parse deferred execution result: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to execute deferred components: {}", e);
+                        error!("Failed to execute deferred components: {}", e);
                     }
                 }
 
@@ -526,7 +470,7 @@ impl StreamingRenderer {
                              }
                              Some(error) = error_receiver.recv() => {
 
-                                 tracing::error!(
+                                 error!(
                                      "Streaming boundary error: boundary_id={}, error={}, row_id={}",
                                      error.boundary_id,
                                      error.error_message,
@@ -612,27 +556,22 @@ impl StreamingRenderer {
                 {
                     Ok(result) => {
                         let result_str = result.to_string();
-                        match serde_json::from_str::<serde_json::Value>(&result_str) {
-                            Ok(data) => {
-                                if let Some(results) = data["results"].as_array() {
-                                    for result in results {
-                                        if !result["success"].as_bool().unwrap_or(false) {
-                                            tracing::warn!(
-                                                "Deferred component failed: promiseId={}, error={}",
-                                                result["promiseId"].as_str().unwrap_or("unknown"),
-                                                result["error"].as_str().unwrap_or("unknown")
-                                            );
-                                        }
-                                    }
+                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
+                            && let Some(results) = data["results"].as_array()
+                        {
+                            for result in results {
+                                if !result["success"].as_bool().unwrap_or(false) {
+                                    error!(
+                                        "Deferred component failed: promiseId={}, error={}",
+                                        result["promiseId"].as_str().unwrap_or("unknown"),
+                                        result["error"].as_str().unwrap_or("unknown")
+                                    );
                                 }
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to parse deferred execution result: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to execute deferred components: {}", e);
+                        error!("Failed to execute deferred components: {}", e);
                     }
                 }
 
@@ -681,7 +620,7 @@ impl StreamingRenderer {
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                tracing::error!("Failed to send stream completion signal: {}", e);
+                error!("Failed to send stream completion signal: {}", e);
             }
         });
 
@@ -715,8 +654,7 @@ impl StreamingRenderer {
             .replace("{component_id}", component_id)
             .replace("{props_json}", props.unwrap_or("{}"));
 
-        let _setup_result = self
-            .runtime
+        self.runtime
             .execute_script(format!("<setup_render_{component_id}>"), setup_script)
             .await
             .map_err(|e| RariError::internal(format!("Setup render failed: {e}")))?;
@@ -996,20 +934,6 @@ impl StreamingRenderer {
             )));
         }
 
-        if let Some(boundaries_array) = result_data["boundaries"].as_array() {
-            for boundary in boundaries_array {
-                let boundary_id = boundary["id"].as_str().unwrap_or("unknown");
-                let is_in_content_area = boundary["isInContentArea"].as_bool().unwrap_or(false);
-
-                if !is_in_content_area {
-                    tracing::warn!(
-                        "Suspense boundary '{}' is not nested within content area - this may cause layout shifts",
-                        boundary_id
-                    );
-                }
-            }
-        }
-
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
@@ -1084,13 +1008,9 @@ impl StreamingRenderer {
             .collect();
 
         if let Err(validation_error) = validate_suspense_boundaries(&result_data["rsc_data"]) {
-            tracing::error!(
+            error!(
                 "RSC structure validation failed after composition script execution: {}",
                 validation_error
-            );
-            tracing::warn!(
-                "Continuing with rendering despite validation failure. \
-                 Duplicate fallbacks may cause duplicate loading skeletons."
             );
         }
 
@@ -1108,7 +1028,7 @@ impl StreamingRenderer {
         let mut parser = crate::rsc::wire_format::parser::RscWireFormatParser::new(rsc_wire_format);
 
         parser.parse().map_err(|e| {
-            tracing::error!("Failed to parse RSC wire format: {}", e);
+            error!("Failed to parse RSC wire format: {}", e);
             RariError::internal(format!("RSC parsing failed: {}", e))
         })?;
 
@@ -1186,7 +1106,6 @@ impl StreamingRenderer {
         }
 
         if initial_content.is_null() {
-            tracing::warn!("Could not extract initial content from RSC wire format");
             #[allow(clippy::disallowed_methods)]
             {
                 initial_content = serde_json::json!(rsc_wire_format);
@@ -1238,12 +1157,7 @@ impl StreamingRenderer {
 
                 {
                     let mut skeleton_ids = self.rendered_skeleton_ids.lock().await;
-                    if !skeleton_ids.insert(boundary.id.clone()) {
-                        tracing::warn!(
-                            "Duplicate loading skeleton detected for boundary '{}'. Only one skeleton should be rendered per boundary.",
-                            boundary.id
-                        );
-                    }
+                    skeleton_ids.insert(boundary.id.clone());
                 }
 
                 {

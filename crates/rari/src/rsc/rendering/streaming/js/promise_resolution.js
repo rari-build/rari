@@ -7,7 +7,7 @@
         phase,
         promiseId: '{promise_id}',
         componentPath: '{component_path}',
-        availablePromises: Object.keys(globalThis.__suspense_promises || {}),
+        availablePromises: Object.keys(globalThis['~suspense']?.promises || {}),
       },
     }
 
@@ -61,7 +61,7 @@
     const promiseId = '{promise_id}'
     const boundaryId = '{boundary_id}'
 
-    const promise = globalThis.__suspense_promises[promiseId]
+    const promise = globalThis['~suspense']?.promises[promiseId]
 
     if (!promise) {
       return Promise.resolve({
@@ -74,7 +74,7 @@
           phase: 'promise_resolution',
           promiseId,
           componentPath: '{component_path}',
-          availablePromises: Object.keys(globalThis.__suspense_promises || {}),
+          availablePromises: Object.keys(globalThis['~suspense']?.promises || {}),
         },
       })
     }
@@ -100,7 +100,7 @@
       let rscData
       try {
         if (globalThis.renderToRsc) {
-          rscData = await globalThis.renderToRsc(resolvedElement, globalThis.__rsc_client_components || {})
+          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~rsc']?.clientComponents || {})
         }
         else {
           rscData = resolvedElement

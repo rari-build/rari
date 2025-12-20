@@ -1,21 +1,21 @@
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 
-if (typeof globalThis.__rari === 'undefined') {
-  globalThis.__rari = {}
+if (typeof globalThis['~rari'] === 'undefined') {
+  globalThis['~rari'] = {}
 }
 
 // eslint-disable-next-line node/prefer-global/process
-globalThis.__rari.isDevelopment = process.env.NODE_ENV !== 'production'
+globalThis['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
-if (typeof globalThis.__clientComponents === 'undefined') {
-  globalThis.__clientComponents = {}
+if (typeof globalThis['~clientComponents'] === 'undefined') {
+  globalThis['~clientComponents'] = {}
 }
-if (typeof globalThis.__clientComponentNames === 'undefined') {
-  globalThis.__clientComponentNames = {}
+if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+  globalThis['~clientComponentNames'] = {}
 }
-if (typeof globalThis.__clientComponentPaths === 'undefined') {
-  globalThis.__clientComponentPaths = {}
+if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+  globalThis['~clientComponentPaths'] = {}
 }
 
 export function registerClientComponent(componentFunction, id, exportName) {
@@ -25,7 +25,7 @@ export function registerClientComponent(componentFunction, id, exportName) {
 
   const componentId = componentName
 
-  globalThis.__clientComponents[componentId] = {
+  globalThis['~clientComponents'][componentId] = {
     id: componentId,
     path: id,
     type: 'client',
@@ -33,9 +33,9 @@ export function registerClientComponent(componentFunction, id, exportName) {
     registered: true,
   }
 
-  globalThis.__clientComponentPaths[id] = componentId
+  globalThis['~clientComponentPaths'][id] = componentId
 
-  globalThis.__clientComponentNames[componentName] = componentId
+  globalThis['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -60,31 +60,31 @@ export function registerClientComponent(componentFunction, id, exportName) {
 }
 
 export function getClientComponent(id) {
-  if (globalThis.__clientComponents[id]?.component) {
-    return globalThis.__clientComponents[id].component
+  if (globalThis['~clientComponents'][id]?.component) {
+    return globalThis['~clientComponents'][id].component
   }
 
   if (id.includes('#')) {
     const [path, exportName] = id.split('#')
 
-    const componentId = globalThis.__clientComponentPaths[path]
-    if (componentId && globalThis.__clientComponents[componentId]) {
-      const componentInfo = globalThis.__clientComponents[componentId]
+    const componentId = globalThis['~clientComponentPaths'][path]
+    if (componentId && globalThis['~clientComponents'][componentId]) {
+      const componentInfo = globalThis['~clientComponents'][componentId]
       if (exportName === 'default' || !exportName) {
         return componentInfo.component
       }
     }
 
     const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis.__clientComponentPaths[normalizedPath]
-    if (componentIdByNormalizedPath && globalThis.__clientComponents[componentIdByNormalizedPath]) {
-      return globalThis.__clientComponents[componentIdByNormalizedPath].component
+    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
+    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath]) {
+      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
     }
   }
 
-  const componentId = globalThis.__clientComponentNames[id]
-  if (componentId && globalThis.__clientComponents[componentId]) {
-    return globalThis.__clientComponents[componentId].component
+  const componentId = globalThis['~clientComponentNames'][id]
+  if (componentId && globalThis['~clientComponents'][componentId]) {
+    return globalThis['~clientComponents'][componentId].component
   }
 
   return null
@@ -92,7 +92,7 @@ export function getClientComponent(id) {
 
 export function createClientModuleMap() {
   const moduleMap = {}
-  for (const [componentId, componentInfo] of Object.entries(globalThis.__clientComponents)) {
+  for (const [componentId, componentInfo] of Object.entries(globalThis['~clientComponents'])) {
     moduleMap[componentId] = {
       id: componentId,
       chunks: [componentInfo.path],
@@ -161,7 +161,7 @@ class RscClient {
   }
 
   async fetchServerComponent(componentId, props = {}) {
-    const hmrCounter = (typeof window !== 'undefined' && window.__rscRefreshCounters && window.__rscRefreshCounters[componentId]) || 0
+    const hmrCounter = (typeof window !== 'undefined' && window['~rscRefreshCounters'] && window['~rscRefreshCounters'][componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey)) {
@@ -545,8 +545,8 @@ class RscClient {
     processStream()
 
     return {
-      _isRscResponse: true,
-      _rscPromise: Promise.resolve(createElement(StreamingWrapper)),
+      '~isRscResponse': true,
+      '~rscPromise': Promise.resolve(createElement(StreamingWrapper)),
       readRoot() {
         return Promise.resolve(createElement(StreamingWrapper))
       },
@@ -591,8 +591,8 @@ class RscClient {
       try {
         const rscPromise = createFromFetch(Promise.resolve(response))
         return {
-          _isRscResponse: true,
-          _rscPromise: rscPromise,
+          '~isRscResponse': true,
+          '~rscPromise': rscPromise,
           readRoot() {
             return rscPromise
           },
@@ -925,7 +925,7 @@ function ServerComponentWrapper({
   }
 
   if (data) {
-    if (data._isRscResponse) {
+    if (data['~isRscResponse']) {
       return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
       )
     }
@@ -944,11 +944,11 @@ function createServerComponentWrapper(componentName) {
   let globalRefreshCounter = 0
 
   if (typeof window !== 'undefined') {
-    window.__rscRefreshCounters = window.__rscRefreshCounters || {}
-    if (window.__rscRefreshCounters[componentName] === undefined) {
-      window.__rscRefreshCounters[componentName] = 0
+    window['~rscRefreshCounters'] = window['~rscRefreshCounters'] || {}
+    if (window['~rscRefreshCounters'][componentName] === undefined) {
+      window['~rscRefreshCounters'][componentName] = 0
     }
-    globalRefreshCounter = window.__rscRefreshCounters[componentName]
+    globalRefreshCounter = window['~rscRefreshCounters'][componentName]
   }
 
   const ServerComponent = (props) => {
@@ -961,8 +961,8 @@ function createServerComponentWrapper(componentName) {
           rscClient.clearCache()
 
           if (typeof window !== 'undefined') {
-            window.__rscRefreshCounters[componentName] = (window.__rscRefreshCounters[componentName] || 0) + 1
-            setMountKey(window.__rscRefreshCounters[componentName])
+            window['~rscRefreshCounters'][componentName] = (window['~rscRefreshCounters'][componentName] || 0) + 1
+            setMountKey(window['~rscRefreshCounters'][componentName])
           }
         }
       }
@@ -1000,8 +1000,8 @@ function isServerComponent(filePath) {
   }
 
   try {
-    if (typeof globalThis !== 'undefined' && globalThis.__rari_server_components) {
-      return globalThis.__rari_server_components.has(filePath)
+    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents) {
+      return globalThis['~rari'].serverComponents.has(filePath)
     }
 
     return false
@@ -1016,8 +1016,8 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set()
-        globalThis.__rari_server_components.add(data.filePath)
+        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
+        globalThis['~rari'].serverComponents.add(data.filePath)
       }
     }
   })
@@ -1025,9 +1025,9 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_server_components = globalThis.__rari_server_components || new Set()
+        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
         data.serverComponents.forEach((path) => {
-          globalThis.__rari_server_components.add(path)
+          globalThis['~rari'].serverComponents.add(path)
         })
       }
     }
@@ -1040,16 +1040,11 @@ if (import.meta.hot) {
   })
 
   import.meta.hot.on('rari:server-component-updated', async (data) => {
-    console.warn('[HMR] ⚡ Received rari:server-component-updated event!', data)
-
     const componentId = data?.id || data?.componentId
     const timestamp = data?.t || data?.timestamp
 
     if (componentId) {
-      console.warn(`[HMR] Server component updated: ${componentId}`)
-
       if (typeof window !== 'undefined') {
-        console.warn('[HMR] Dispatching window event rari:rsc-invalidate')
         const event = new CustomEvent('rari:rsc-invalidate', {
           detail: {
             componentId,
@@ -1059,17 +1054,14 @@ if (import.meta.hot) {
           },
         })
         window.dispatchEvent(event)
-        console.warn('[HMR] Window event dispatched')
       }
     }
     else if (data?.path && isServerComponent(data.path)) {
-      console.warn('[HMR] File-based invalidation for:', data.path)
       await invalidateRscCache({ filePath: data.path, forceReload: false })
     }
   })
 
   import.meta.hot.on('rari:app-router-updated', async (data) => {
-    console.warn('[HMR] Received app-router-updated event:', data)
     try {
       if (!data)
         return
@@ -1083,7 +1075,6 @@ if (import.meta.hot) {
 
   import.meta.hot.on('rari:server-action-updated', async (data) => {
     if (data?.filePath) {
-      console.warn('[HMR] Server action updated:', data.filePath)
       rscClient.clearCache()
 
       if (typeof window !== 'undefined') {
@@ -1104,9 +1095,6 @@ if (import.meta.hot) {
     const metadata = data.metadata
     const metadataChanged = data.metadataChanged
 
-    console.warn(`[HMR] App router ${fileType} updated: ${filePath}`)
-    console.warn('[HMR] Affected routes:', affectedRoutes)
-
     if (metadataChanged && metadata) {
       updateDocumentMetadata(metadata)
     }
@@ -1114,8 +1102,6 @@ if (import.meta.hot) {
     try {
       const rariServerUrl = window.location.origin
       const reloadUrl = `${rariServerUrl}/api/rsc/hmr-register`
-
-      console.warn('[HMR] Reloading component:', filePath, '(from dist/server)')
 
       let componentId = filePath
       if (componentId.startsWith('src/')) {
@@ -1133,12 +1119,8 @@ if (import.meta.hot) {
         }),
       })
 
-      if (reloadResponse.ok) {
-        const result = await reloadResponse.json()
-        console.warn('[HMR] Reload response:', result)
-      }
-      else {
-        console.warn('[HMR] Component reload failed:', reloadResponse.status)
+      if (!reloadResponse.ok) {
+        console.error('[HMR] Component reload failed:', reloadResponse.status)
       }
     }
     catch (error) {
@@ -1157,7 +1139,8 @@ if (import.meta.hot) {
         routes = affectedRoutes
         break
       default:
-        console.warn(`[HMR] Unknown file type: ${fileType}`)
+        // Unknown file type, skip
+        break
     }
 
     await invalidateAppRouterCache({ routes, fileType, filePath, componentId: routePath })
@@ -1211,8 +1194,6 @@ if (import.meta.hot) {
     for (const key of keysToDelete) {
       rscClient.componentCache.delete(key)
     }
-
-    console.warn(`[HMR] Cleared cache for ${keysToDelete.length} entries across ${routes.length} route(s)`)
   }
 
   async function invalidateAppRouterCache(data) {
@@ -1221,8 +1202,6 @@ if (import.meta.hot) {
     const filePath = data.filePath
     const componentId = data.componentId
 
-    console.warn('[HMR] Invalidating cache for routes:', routes)
-
     if (componentId || filePath) {
       try {
         const rariServerUrl = window.location.origin.includes(':5173')
@@ -1230,8 +1209,6 @@ if (import.meta.hot) {
           : window.location.origin
 
         const invalidateUrl = `${rariServerUrl}/api/rsc/hmr-invalidate`
-
-        console.warn('[HMR] Calling server invalidation endpoint for:', componentId || filePath)
 
         const invalidateResponse = await fetch(invalidateUrl, {
           method: 'POST',
@@ -1244,12 +1221,8 @@ if (import.meta.hot) {
           }),
         })
 
-        if (invalidateResponse.ok) {
-          const result = await invalidateResponse.json()
-          console.warn('[HMR] Server cache invalidated:', result)
-        }
-        else {
-          console.warn('[HMR] Server cache invalidation failed:', invalidateResponse.status)
+        if (!invalidateResponse.ok) {
+          console.error('[HMR] Server cache invalidation failed:', invalidateResponse.status)
         }
       }
       catch (error) {
@@ -1267,8 +1240,6 @@ if (import.meta.hot) {
 
       const currentPath = window.location.pathname
       if (routes.includes(currentPath) || routes.includes('/')) {
-        console.warn('[HMR] Re-fetching current route:', currentPath)
-
         try {
           const rariServerUrl = window.location.origin.includes(':5173')
             ? 'http://localhost:3000'
@@ -1282,8 +1253,8 @@ if (import.meta.hot) {
             cache: 'no-cache',
           })
 
-          if (response.ok) {
-            console.warn('[HMR] Successfully re-fetched route, triggering re-render')
+          if (!response.ok) {
+            console.error('[HMR] Failed to re-fetch route:', response.status)
           }
         }
         catch (error) {
@@ -1304,17 +1275,6 @@ if (import.meta.hot) {
     try {
       const currentPath = window.location.pathname
 
-      const isCurrentRouteAffected = affectedRoutes.some((route) => {
-        if (route === currentPath)
-          return true
-        if (currentPath.startsWith(`${route}/`))
-          return true
-        return false
-      })
-
-      console.warn('[HMR] App router HMR triggered for routes:', affectedRoutes)
-      console.warn('[HMR] Current route affected:', isCurrentRouteAffected)
-
       const event = new CustomEvent('rari:app-router-rerender', {
         detail: {
           routePath,
@@ -1324,8 +1284,6 @@ if (import.meta.hot) {
         },
       })
       window.dispatchEvent(event)
-
-      console.warn('[HMR] Re-render triggered successfully')
     }
     catch (error) {
       console.error('[HMR] Failed to trigger re-render:', error)
@@ -1337,8 +1295,6 @@ if (import.meta.hot) {
     if (typeof window === 'undefined') {
       return
     }
-
-    console.warn('[HMR] Reloading app router manifest')
 
     try {
       const response = await fetch('/app-routes.json', {
@@ -1355,10 +1311,8 @@ if (import.meta.hot) {
 
       const manifest = await response.json()
 
-      console.warn(`[HMR] Loaded updated manifest with ${manifest.routes?.length || 0} routes`)
-
       if (typeof globalThis !== 'undefined') {
-        globalThis.__rari_app_routes_manifest = manifest
+        globalThis['~rari'].appRoutesManifest = manifest
       }
 
       const event = new CustomEvent('rari:app-router-manifest-updated', {
@@ -1378,11 +1332,8 @@ if (import.meta.hot) {
         return false
       })
 
-      if (currentRoute) {
-        console.warn('[HMR] Current route found in updated manifest:', currentRoute.path)
-      }
-      else {
-        console.warn('[HMR] Current route not found in updated manifest, may need navigation update')
+      if (!currentRoute) {
+        console.error('[HMR] Current route not found in updated manifest')
       }
     }
     catch (error) {
@@ -1509,13 +1460,10 @@ if (import.meta.hot) {
   })
 
   import.meta.hot.on('rari:hmr-error-cleared', () => {
-    console.warn('[HMR] Error cleared, build successful')
     overlay.hide()
   })
 
   import.meta.hot.on('vite:error', (data) => {
-    console.error('[HMR] Vite error:', data)
-
     overlay.show({
       message: data.err?.message || 'Unknown Vite error',
       stack: data.err?.stack,
@@ -1523,8 +1471,6 @@ if (import.meta.hot) {
       timestamp: Date.now(),
     })
   })
-
-  console.warn('[HMR] Error handling initialized')
 }
 
 export {

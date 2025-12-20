@@ -9,8 +9,11 @@ globalThis.ReactDOMServer = {
           const promiseId = `suspense_${Date.now()}_${Math.random()
             .toString(36)
             .substring(2, 11)}`
-          globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-          globalThis.__suspense_promises[promiseId] = error.promise
+          if (!globalThis['~suspense'])
+            globalThis['~suspense'] = {}
+          if (!globalThis['~suspense'].promises)
+            globalThis['~suspense'].promises = {}
+          globalThis['~suspense'].promises[promiseId] = error.promise
         }
 
         return ''
@@ -124,9 +127,9 @@ function renderElementToString(element, isStatic = false) {
               const promiseId = `suspense_${Date.now()}_${Math.random()
                 .toString(36)
                 .substring(2, 11)}`
-              globalThis.__suspense_promises
-                = globalThis.__suspense_promises || {}
-              globalThis.__suspense_promises[promiseId] = error.promise
+              if (!globalThis['~suspense'].promises)
+                globalThis['~suspense'].promises = {}
+              globalThis['~suspense'].promises[promiseId] = error.promise
             }
 
             const fallback = elementProps?.fallback
@@ -216,10 +219,14 @@ function escapeHtml(text) {
     .replace(/'/g, '&#39;')
 }
 
-if (typeof globalThis.__resolved_promises === 'undefined') {
-  globalThis.__resolved_promises = new Map()
+if (!globalThis['~promises'])
+  globalThis['~promises'] = {}
+if (typeof globalThis['~promises'].resolved === 'undefined') {
+  globalThis['~promises'].resolved = new Map()
 }
-globalThis.__current_suspense_depth = 0
+if (!globalThis['~suspense'])
+  globalThis['~suspense'] = {}
+globalThis['~suspense'].depth = 0
 
 if (!globalThis.ReactDOMServer?.renderToString) {
   throw new Error(

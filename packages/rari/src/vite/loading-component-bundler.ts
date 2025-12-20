@@ -65,7 +65,8 @@ ${imports}
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_loading_components = new Map(Object.entries(loadingComponentModules))
+  if (!globalThis['~rari']) globalThis['~rari'] = {}
+  globalThis['~rari'].loadingComponents = new Map(Object.entries(loadingComponentModules))
 }
 `
 

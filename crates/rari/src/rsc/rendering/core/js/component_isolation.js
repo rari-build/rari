@@ -1,30 +1,32 @@
 (async function initializeComponentIsolation() {
   try {
-    if (!globalThis.__component_resolved_promises) {
-      globalThis.__component_resolved_promises = new Map()
+    if (!globalThis['~components'])
+      globalThis['~components'] = {}
+    if (!globalThis['~components'].resolvedPromises) {
+      globalThis['~components'].resolvedPromises = new Map()
     }
 
-    if (!globalThis.__module_promises) {
-      globalThis.__module_promises = new Map()
+    if (!globalThis['~components'].modulePromises) {
+      globalThis['~components'].modulePromises = new Map()
     }
 
-    if (!globalThis.__resolved_values) {
-      globalThis.__resolved_values = new Map()
+    if (!globalThis['~components'].resolvedValues) {
+      globalThis['~components'].resolvedValues = new Map()
     }
 
-    globalThis.__component_resolved_promises.set('{component_id}', new Map())
+    globalThis['~components'].resolvedPromises.set('{component_id}', new Map())
 
-    globalThis.__register_component_result = function (
+    globalThis['~components'].registerResult = function (
       component,
       promise,
       result,
     ) {
-      if (!globalThis.__component_resolved_promises.has(component)) {
-        globalThis.__component_resolved_promises.set(component, new Map())
+      if (!globalThis['~components'].resolvedPromises.has(component)) {
+        globalThis['~components'].resolvedPromises.set(component, new Map())
       }
 
       const promiseMap
-        = globalThis.__component_resolved_promises.get(component)
+        = globalThis['~components'].resolvedPromises.get(component)
       promiseMap.set(promise, result)
       promiseMap.set(String(promise), result)
 
@@ -43,12 +45,12 @@
         const value = globalThis[key]
 
         if (value && typeof value.then === 'function') {
-          globalThis.__module_promises.set(key, value)
+          globalThis['~components'].modulePromises.set(key, value)
           foundCount++
 
           value
             .then((result) => {
-              globalThis.__resolved_values.set(key, result)
+              globalThis['~components'].resolvedValues.set(key, result)
             })
             .catch(() => {})
         }
@@ -57,13 +59,13 @@
       return foundCount > 0
     }
 
-    globalThis.__isolateComponentData = function (componentId) {
-      if (!globalThis.__rsc_component_data) {
-        globalThis.__rsc_component_data = new Map()
+    globalThis['~components'].isolateData = function (componentId) {
+      if (!globalThis['~rsc'].componentData) {
+        globalThis['~rsc'].componentData = new Map()
       }
 
-      if (!globalThis.__rsc_component_data.has(componentId)) {
-        globalThis.__rsc_component_data.set(componentId, {
+      if (!globalThis['~rsc'].componentData.has(componentId)) {
+        globalThis['~rsc'].componentData.set(componentId, {
           promises: new Map(),
           values: new Map(),
           renderTime: Date.now(),
@@ -71,22 +73,22 @@
         })
       }
 
-      return globalThis.__rsc_component_data.get(componentId)
+      return globalThis['~rsc'].componentData.get(componentId)
     }
 
-    globalThis.__cleanupComponentIsolation = function (componentId) {
+    globalThis['~components'].cleanupIsolation = function (componentId) {
       if (
-        globalThis.__component_resolved_promises
-        && globalThis.__component_resolved_promises.has(componentId)
+        globalThis['~components'].resolvedPromises
+        && globalThis['~components'].resolvedPromises.has(componentId)
       ) {
-        globalThis.__component_resolved_promises.get(componentId).clear()
+        globalThis['~components'].resolvedPromises.get(componentId).clear()
       }
 
       if (
-        globalThis.__rsc_component_data
-        && globalThis.__rsc_component_data.has(componentId)
+        globalThis['~rsc'].componentData
+        && globalThis['~rsc'].componentData.has(componentId)
       ) {
-        const data = globalThis.__rsc_component_data.get(componentId)
+        const data = globalThis['~rsc'].componentData.get(componentId)
         data.promises.clear()
         data.values.clear()
       }

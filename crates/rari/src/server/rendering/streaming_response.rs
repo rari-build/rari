@@ -3,8 +3,7 @@ use axum::response::{IntoResponse, Response};
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
-use crate::error::{RariError, StreamingError};
-use tracing::{debug, warn};
+use crate::error::RariError;
 
 pub struct StreamingHtmlResponse {
     stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RariError>> + Send>>,
@@ -26,7 +25,6 @@ impl IntoResponse for StreamingHtmlResponse {
 
         let stream = self.stream.map(move |chunk| {
             if !client_connected_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                debug!("Client disconnected, stopping stream processing");
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::BrokenPipe,
                     "Client disconnected",
@@ -39,12 +37,7 @@ impl IntoResponse for StreamingHtmlResponse {
                     if e.to_string().contains("disconnected")
                         || e.to_string().contains("broken pipe")
                     {
-                        warn!("Client disconnected during streaming: {}", e);
                         client_connected_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-
-                        let disconnect_error =
-                            StreamingError::ClientDisconnected { message: e.to_string() };
-                        debug!("Streaming stopped: {}", disconnect_error);
                     }
 
                     Err(std::io::Error::other(e.to_string()))

@@ -1,13 +1,13 @@
-if (typeof globalThis.__clientComponents === 'undefined') {
-  globalThis.__clientComponents = {}
+if (typeof globalThis['~clientComponents'] === 'undefined') {
+  globalThis['~clientComponents'] = {}
 }
 
-if (typeof globalThis.__clientComponentNames === 'undefined') {
-  globalThis.__clientComponentNames = {}
+if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+  globalThis['~clientComponentNames'] = {}
 }
 
-if (typeof globalThis.__clientComponentPaths === 'undefined') {
-  globalThis.__clientComponentPaths = {}
+if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+  globalThis['~clientComponentPaths'] = {}
 }
 
 function registerClientComponent(componentId, componentPath, component) {
@@ -24,28 +24,28 @@ function registerClientComponent(componentId, componentPath, component) {
     registered: true,
   }
 
-  globalThis.__clientComponents[componentId] = componentInfo
+  globalThis['~clientComponents'][componentId] = componentInfo
 
-  globalThis.__clientComponentPaths[componentPath] = componentId
+  globalThis['~clientComponentPaths'][componentPath] = componentId
 
   if (component && (component.name || component.displayName)) {
     const componentName = component.name || component.displayName
-    globalThis.__clientComponentNames[componentName] = componentId
+    globalThis['~clientComponentNames'][componentName] = componentId
   }
 
   const pathName = extractComponentNameFromPath(componentPath)
   if (pathName) {
-    globalThis.__clientComponentNames[pathName] = componentId
+    globalThis['~clientComponentNames'][pathName] = componentId
   }
 }
 
 function isClientComponent(componentType, registry) {
-  const clientRegistry = registry || globalThis.__clientComponents || {}
+  const clientRegistry = registry || globalThis['~clientComponents'] || {}
 
   if (typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
 
-    if (componentName && globalThis.__clientComponentNames[componentName]) {
+    if (componentName && globalThis['~clientComponentNames'][componentName]) {
       return true
     }
 
@@ -73,14 +73,14 @@ function getClientComponentInfo(componentType) {
   if (typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
 
-    if (componentName && globalThis.__clientComponentNames[componentName]) {
-      const componentId = globalThis.__clientComponentNames[componentName]
-      return globalThis.__clientComponents[componentId]
+    if (componentName && globalThis['~clientComponentNames'][componentName]) {
+      const componentId = globalThis['~clientComponentNames'][componentName]
+      return globalThis['~clientComponents'][componentId]
     }
   }
 
-  if (typeof componentType === 'string' && globalThis.__clientComponents[componentType]) {
-    return globalThis.__clientComponents[componentType]
+  if (typeof componentType === 'string' && globalThis['~clientComponents'][componentType]) {
+    return globalThis['~clientComponents'][componentType]
   }
 
   if (componentType && componentType.$$typeof === Symbol.for('react.client.reference')) {
@@ -125,17 +125,17 @@ function extractComponentNameFromPath(componentPath) {
 }
 
 function listClientComponents() {
-  return { ...globalThis.__clientComponents }
+  return { ...globalThis['~clientComponents'] }
 }
 
 function listClientComponentNames() {
-  return { ...globalThis.__clientComponentNames }
+  return { ...globalThis['~clientComponentNames'] }
 }
 
 function clearClientComponents() {
-  globalThis.__clientComponents = {}
-  globalThis.__clientComponentNames = {}
-  globalThis.__clientComponentPaths = {}
+  globalThis['~clientComponents'] = {}
+  globalThis['~clientComponentNames'] = {}
+  globalThis['~clientComponentPaths'] = {}
 }
 
 function registerClientComponentFromModule(componentPath, moduleExports) {

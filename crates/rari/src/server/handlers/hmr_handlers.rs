@@ -9,7 +9,7 @@ use crate::server::{
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{debug, error, info, warn};
+use tracing::error;
 
 #[derive(Debug, Deserialize)]
 pub struct HmrInvalidateRequest {
@@ -36,13 +36,16 @@ pub async fn hmr_register_component(
     State(state): State<ServerState>,
     Json(request): Json<HmrRegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    use crate::server::utils::path_validation::validate_component_path;
+    use crate::server::utils::path_validation::{
+        normalize_component_path, validate_component_path,
+    };
 
-    let file_path = request.file_path.clone();
+    let file_path = normalize_component_path(&request.file_path);
 
     if let Err(e) = validate_component_path(&file_path) {
         error!(
             file_path = %file_path,
+            original_path = %request.file_path,
             error = %e,
             "Component path validation failed"
         );
@@ -57,16 +60,12 @@ pub async fn hmr_register_component(
         }
     };
 
-    info!("HMR register request for component: {} from file: {}", component_id, file_path);
-    debug!("Extracted component ID: {} from path: {}", component_id, file_path);
-
     let path = std::path::Path::new(&file_path);
 
     {
         let renderer = state.renderer.lock().await;
         let mut registry = renderer.component_registry.lock();
         registry.mark_module_stale(&component_id);
-        debug!("Marked component {} as stale", component_id);
     }
 
     let reload_result = reload_component_from_dist(&state, &file_path, &component_id).await;
@@ -74,13 +73,7 @@ pub async fn hmr_register_component(
     let mut reload_error_details: Option<serde_json::Value> = None;
 
     match &reload_result {
-        Ok(_) => {
-            info!(
-                component_id = component_id,
-                file_path = file_path,
-                "Successfully reloaded component from dist"
-            );
-        }
+        Ok(_) => {}
         Err(e) => {
             error!(
                 component_id = component_id,
@@ -102,48 +95,38 @@ pub async fn hmr_register_component(
         }
     }
 
-    if reload_result.is_err() {
-        debug!(
+    if reload_result.is_err()
+        && let Err(e) = immediate_component_reregistration(&state, &file_path).await
+    {
+        error!(
             component_id = component_id,
-            "Attempting fallback re-registration after dist reload failure"
+            file_path = file_path,
+            error = %e,
+            "Failed to immediately re-register component, preserving last known good version"
         );
 
-        if let Err(e) = immediate_component_reregistration(&state, &file_path).await {
-            error!(
-                component_id = component_id,
-                file_path = file_path,
-                error = %e,
-                "Failed to immediately re-register component, preserving last known good version"
-            );
-
-            #[allow(clippy::disallowed_methods)]
-            return Ok(Json(serde_json::json!({
-                "success": false,
-                "file_path": request.file_path,
-                "component_id": component_id,
-                "reloaded": false,
-                "preserved_last_good": true,
-                "error": {
-                    "stage": "fallback_registration",
-                    "message": e.to_string(),
-                    "previous_error": reload_error_details,
-                    "suggestion": "Component reload failed. Last known good version is still available. Consider checking for syntax errors or manual page refresh."
-                }
-            })));
-        } else {
-            info!(component_id = component_id, "Fallback re-registration succeeded");
-        }
+        #[allow(clippy::disallowed_methods)]
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "file_path": request.file_path,
+            "component_id": component_id,
+            "reloaded": false,
+            "preserved_last_good": true,
+            "error": {
+                "stage": "fallback_registration",
+                "message": e.to_string(),
+                "previous_error": reload_error_details,
+                "suggestion": "Component reload failed. Last known good version is still available. Consider checking for syntax errors or manual page refresh."
+            }
+        })));
     }
 
     let mut reloaded = reload_result.is_ok();
     let mut module_reload_error: Option<String> = None;
 
     if state.config.hmr_reload_enabled() {
-        debug!("HMR reload is enabering debounced module reload for {}", component_id);
-
         match state.module_reload_manager.reload_module_debounced(&component_id, path).await {
             Ok(()) => {
-                debug!("Scheduled debounced reload for component: {}", component_id);
                 reloaded = true;
             }
             Err(e) => {
@@ -155,8 +138,6 @@ pub async fn hmr_register_component(
                 module_reload_error = Some(e.to_string());
             }
         }
-    } else {
-        debug!("HMR reload is disabled, skipping module reload");
     }
 
     #[allow(clippy::disallowed_methods)]
@@ -199,28 +180,18 @@ pub async fn hmr_invalidate_component(
     State(state): State<ServerState>,
     Json(payload): Json<HmrInvalidateRequest>,
 ) -> Json<Value> {
-    info!("HMR invalidate request for component: {}", payload.component_id);
-
     let result = {
         let renderer = state.renderer.lock().await;
 
         {
             let mut registry = renderer.component_registry.lock();
             registry.mark_module_stale(&payload.component_id);
-            debug!("Marked component {} as stale during invalidation", payload.component_id);
         }
 
         renderer.clear_component_cache(&payload.component_id);
-        debug!("Cleared component cache for {}", payload.component_id);
-
-        {
-            let mut registry = renderer.component_registry.lock();
-            registry.remove_component(&payload.component_id);
-            debug!("Removed component {} from registry", payload.component_id);
-        }
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(&payload.component_id).await {
-            warn!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
+            error!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
         }
 
         let clear_script = format!(
@@ -234,33 +205,33 @@ pub async fn hmr_invalidate_component(
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
-                    delete globalThis.__rsc_modules[componentId];
+                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
+                    delete globalThis['~rsc'].modules[componentId];
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
-                    delete globalThis.__rsc_functions[componentId];
+                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
+                    delete globalThis['~rsc'].functions[componentId];
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_functions && globalThis.__rsc_component_functions.has(componentId)) {{
-                    globalThis.__rsc_component_functions.delete(componentId);
+                if (globalThis['~rsc'].componentFunctions && globalThis['~rsc'].componentFunctions.has(componentId)) {{
+                    globalThis['~rsc'].componentFunctions.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_server_functions && globalThis.__rsc_component_server_functions.has(componentId)) {{
-                    globalThis.__rsc_component_server_functions.delete(componentId);
+                if (globalThis['~rsc'].serverFunctions && globalThis['~rsc'].serverFunctions.has(componentId)) {{
+                    globalThis['~rsc'].serverFunctions.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_data && globalThis.__rsc_component_data.has(componentId)) {{
-                    globalThis.__rsc_component_data.delete(componentId);
+                if (globalThis['~rsc'].componentData && globalThis['~rsc'].componentData.has(componentId)) {{
+                    globalThis['~rsc'].componentData.delete(componentId);
                     clearedCount++;
                 }}
 
-                if (globalThis.__rsc_component_namespaces && globalThis.__rsc_component_namespaces.has(componentId)) {{
-                    globalThis.__rsc_component_namespaces.delete(componentId);
+                if (globalThis['~rsc'].componentNamespaces && globalThis['~rsc'].componentNamespaces.has(componentId)) {{
+                    globalThis['~rsc'].componentNamespaces.delete(componentId);
                     clearedCount++;
                 }}
 
@@ -284,8 +255,8 @@ pub async fn hmr_invalidate_component(
     };
 
     match result {
-        Ok(clear_result) => {
-            info!("Successfully invalidated component cache for: {}", payload.component_id);
+        Ok(clear_result) =>
+        {
             #[allow(clippy::disallowed_methods)]
             Json(serde_json::json!({
                 "success": true,
@@ -310,12 +281,9 @@ pub async fn hmr_invalidate_api_route(
     State(state): State<ServerState>,
     Json(payload): Json<HmrInvalidateApiRouteRequest>,
 ) -> Json<Value> {
-    info!("HMR invalidate request for API route: {}", payload.file_path);
-
     let api_handler = match &state.api_route_handler {
         Some(handler) => handler,
         None => {
-            warn!("No API route handler available for HMR invalidation");
             #[allow(clippy::disallowed_methods)]
             return Json(serde_json::json!({
                 "success": false,
@@ -326,7 +294,6 @@ pub async fn hmr_invalidate_api_route(
     };
 
     api_handler.invalidate_handler(&payload.file_path);
-    info!("Invalidated API route handler cache for: {}", payload.file_path);
 
     #[allow(clippy::disallowed_methods)]
     Json(serde_json::json!({
@@ -341,11 +308,6 @@ pub async fn hmr_reload_component(
     State(state): State<ServerState>,
     Json(payload): Json<HmrReloadRequest>,
 ) -> Json<Value> {
-    debug!(
-        "HMR reload request for component: {} from file: {}",
-        payload.component_id, payload.file_path
-    );
-
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -374,8 +336,6 @@ pub async fn hmr_reload_component(
     };
 
     let vite_url = format!("{}{}?t={}", vite_base_url, file_path, timestamp);
-
-    debug!("Fetching transpiled code from Vite: {}", vite_url);
 
     let transpiled_code = match client.get(&vite_url).send().await {
         Ok(response) => {
@@ -413,8 +373,6 @@ pub async fn hmr_reload_component(
         }
     };
 
-    debug!("Fetched {} bytes of transpiled code", transpiled_code.len());
-
     let result = {
         state
             .renderer
@@ -425,8 +383,8 @@ pub async fn hmr_reload_component(
     };
 
     match result {
-        Ok(()) => {
-            info!("Successfully reloaded component: {}", payload.component_id);
+        Ok(()) =>
+        {
             #[allow(clippy::disallowed_methods)]
             Json(serde_json::json!({
                 "success": true,
@@ -453,11 +411,6 @@ pub async fn reload_component(
 ) -> Result<Json<ReloadComponentResponse>, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
-    info!(
-        "Reload component request for: {} from bundle: {}",
-        payload.component_id, payload.bundle_path
-    );
-
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     let bundle_full_path = match validate_safe_path(&project_root, &payload.bundle_path) {
@@ -475,13 +428,40 @@ pub async fn reload_component(
         }
     };
 
-    let invalidate_result = {
-        let renderer = state.renderer.lock().await;
-        renderer.runtime.invalidate_component(&payload.component_id).await
+    let bundle_code = match tokio::fs::read_to_string(&bundle_full_path).await {
+        Ok(code) => code,
+        Err(e) => {
+            error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
+            return Ok(Json(ReloadComponentResponse {
+                success: false,
+                message: format!("Failed to read bundle: {}", e),
+            }));
+        }
     };
 
-    if let Err(e) = invalidate_result {
-        warn!("Failed to invalidate component (non-fatal): {}", e);
+    {
+        let renderer = state.renderer.lock().await;
+        let mut registry = renderer.component_registry.lock();
+
+        registry.remove_component(&payload.component_id);
+
+        let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
+        let _ = registry.register_component(
+            &payload.component_id,
+            &bundle_code,
+            bundle_code.clone(),
+            dependencies.into_iter().collect(),
+        );
+
+        registry.mark_component_loaded(&payload.component_id);
+        registry.mark_component_initially_loaded(&payload.component_id);
+    }
+
+    if let Err(e) = {
+        let renderer = state.renderer.lock().await;
+        renderer.runtime.invalidate_component(&payload.component_id).await
+    } {
+        error!("Failed to invalidate component {}: {}", payload.component_id, e);
     }
 
     let load_result = {
@@ -490,13 +470,10 @@ pub async fn reload_component(
     };
 
     match load_result {
-        Ok(()) => {
-            info!("Component reloaded successfully: {}", payload.component_id);
-            Ok(Json(ReloadComponentResponse {
-                success: true,
-                message: format!("Component {} reloaded successfully", payload.component_id),
-            }))
-        }
+        Ok(()) => Ok(Json(ReloadComponentResponse {
+            success: true,
+            message: format!("Component {} reloaded successfully", payload.component_id),
+        })),
         Err(e) => {
             error!("Failed to reload component {}: {}", payload.component_id, e);
             Ok(Json(ReloadComponentResponse {

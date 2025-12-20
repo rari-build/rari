@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use tracing::{debug, error, warn};
+use tracing::error;
 
 pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
@@ -32,7 +32,6 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
                     for (key, value) in page_cache_config {
                         response_builder = response_builder.header(key.to_lowercase(), value);
                     }
-                    debug!("Applied cache headers for root route");
                 }
 
                 return Ok(response_builder
@@ -58,10 +57,6 @@ pub async fn static_or_spa_handler(
 
     for blocked in BLOCKED_FILES {
         if path.starts_with(blocked) || path == *blocked {
-            warn!(
-                requested_path = %path,
-                "Blocked access to sensitive internal file"
-            );
             return Err(StatusCode::NOT_FOUND);
         }
     }
@@ -76,12 +71,7 @@ pub async fn static_or_spa_handler(
 
     let file_path = match validate_safe_path(config.public_dir(), &path) {
         Ok(path) => path,
-        Err(e) => {
-            debug!(
-                requested_path = %path,
-                error = %e,
-                "Path validation failed for static file"
-            );
+        Err(_) => {
             return Err(StatusCode::NOT_FOUND);
         }
     };
@@ -122,7 +112,6 @@ pub async fn static_or_spa_handler(
                     for (key, value) in page_cache_config {
                         response_builder = response_builder.header(key.to_lowercase(), value);
                     }
-                    debug!("Applied cache headers for route: {}", route_path);
                 }
 
                 return Ok(response_builder
@@ -145,10 +134,6 @@ pub async fn serve_static_asset(
     use crate::server::utils::path_validation::validate_safe_path;
 
     if asset_path.contains("server-manifest.json") || asset_path.starts_with("../") {
-        warn!(
-            requested_path = %asset_path,
-            "Blocked suspicious asset path"
-        );
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -156,12 +141,7 @@ pub async fn serve_static_asset(
 
     let file_path = match validate_safe_path(&assets_dir, &asset_path) {
         Ok(path) => path,
-        Err(e) => {
-            warn!(
-                requested_path = %asset_path,
-                error = %e,
-                "Path validation failed for static asset"
-            );
+        Err(_) => {
             return Err(StatusCode::NOT_FOUND);
         }
     };

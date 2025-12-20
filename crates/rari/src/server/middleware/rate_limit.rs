@@ -1,16 +1,9 @@
-use axum::{
-    body::Body,
-    extract::ConnectInfo,
-    http::{Request, StatusCode},
-    middleware::Next,
-    response::Response,
-};
+use axum::{body::Body, extract::ConnectInfo, http::Request, middleware::Next, response::Response};
 use governor::middleware::StateInformationMiddleware;
 use std::net::SocketAddr;
 use tower_governor::{
     GovernorLayer, governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor,
 };
-use tracing::{debug, warn};
 
 use crate::server::config::Config;
 
@@ -18,7 +11,6 @@ pub fn create_rate_limit_layer(
     config: &Config,
 ) -> Option<GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body>> {
     if !config.rate_limit.enabled {
-        debug!("Rate limiting is disabled");
         return None;
     }
 
@@ -29,35 +21,15 @@ pub fn create_rate_limit_layer(
         .finish()
         .expect("Failed to create rate limit configuration");
 
-    debug!(
-        "Rate limiting enabled: {} req/sec, burst size: {}",
-        config.rate_limit.requests_per_second, config.rate_limit.burst_size
-    );
-
     Some(GovernorLayer::new(governor_conf))
 }
 
 pub async fn rate_limit_logger(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(_): ConnectInfo<SocketAddr>,
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    let path = request.uri().path().to_string();
-    let method = request.method().clone();
-
-    let response = next.run(request).await;
-
-    if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        warn!(
-            target: "rari::rate_limit",
-            ip = %addr.ip(),
-            method = %method,
-            path = %path,
-            "Rate limit exceeded"
-        );
-    }
-
-    response
+    next.run(request).await
 }
 
 #[cfg(test)]

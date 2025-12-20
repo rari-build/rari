@@ -55,12 +55,8 @@ fn extract_promise_metadata<'s>(
         return None;
     }
 
-    tracing::warn!(
-        "Encountered Promise object during serialization, extracting metadata instead of full serialization"
-    );
-
     let mut metadata = serde_json::Map::new();
-    metadata.insert("__promise_placeholder".to_string(), serde_json::Value::Bool(true));
+    metadata.insert("~promisePlaceholder".to_string(), serde_json::Value::Bool(true));
     metadata.insert("type".to_string(), serde_json::Value::String("Promise".to_string()));
 
     if let Ok(obj) = v8::Local::<v8::Object>::try_from(value) {
@@ -95,36 +91,25 @@ fn deserialize_composition_result<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
 ) -> Result<JsonValue, RariError> {
-    if is_promise(scope, value) {
-        tracing::warn!(
-            "Composition result is a Promise object, extracting metadata instead of full serialization"
-        );
-
-        if let Some(metadata) = extract_promise_metadata(scope, value) {
-            return Ok(metadata);
-        }
+    if is_promise(scope, value)
+        && let Some(metadata) = extract_promise_metadata(scope, value)
+    {
+        return Ok(metadata);
     }
 
     let v8_type_str = value.type_of(scope).to_rust_string_lossy(scope.as_ref());
-    tracing::debug!("Attempting to serialize V8 value of type: {}", v8_type_str);
 
     if value.is_object()
         && let Ok(obj) = v8::Local::<v8::Object>::try_from(value)
         && let Some(keys) = obj.get_own_property_names(scope, v8::GetPropertyNamesArgs::default())
     {
         let key_count = keys.length();
-        tracing::debug!("Object has {} keys", key_count);
 
         for i in 0..std::cmp::min(key_count, 10) {
             if let Some(key) = keys.get_index(scope, i)
-                && let Some(key_str) = key.to_string(scope)
-            {
-                let key_name = key_str.to_rust_string_lossy(scope.as_ref());
-                if let Some(val) = obj.get(scope, key) {
-                    let val_type = val.type_of(scope).to_rust_string_lossy(scope.as_ref());
-                    tracing::debug!("  Key '{}': type = {}", key_name, val_type);
-                }
-            }
+                && let Some(_key_str) = key.to_string(scope)
+                && let Some(_val) = obj.get(scope, key)
+            {}
         }
     }
 
@@ -136,15 +121,10 @@ fn deserialize_composition_result<'s>(
             let err_str = err.to_string();
             tracing::error!("Serialization error for V8 type '{}': {}", v8_type_str, err);
 
-            if err_str.contains("Promise") || err_str.contains("promise") {
-                tracing::warn!(
-                    "Serialization failed due to Promise object, using fallback extraction: {}",
-                    err
-                );
-
-                if let Some(metadata) = extract_promise_metadata(scope, value) {
-                    return Ok(metadata);
-                }
+            if (err_str.contains("Promise") || err_str.contains("promise"))
+                && let Some(metadata) = extract_promise_metadata(scope, value)
+            {
+                return Ok(metadata);
             }
 
             extract_composition_result_manually(scope, value, err)
@@ -187,7 +167,6 @@ fn extract_composition_result_manually<'s>(
         };
 
     if let Some(json_value) = try_json_stringify(scope, value) {
-        tracing::warn!("Used JSON.stringify fallback for serialization");
         return Ok(json_value);
     }
 
@@ -228,7 +207,6 @@ fn extract_composition_result_manually_from_panic<'s>(
         };
 
     if let Some(json_value) = try_json_stringify(scope, value) {
-        tracing::warn!("Used JSON.stringify fallback after panic");
         return Ok(json_value);
     }
 
@@ -242,10 +220,8 @@ fn extract_composition_result_manually_from_panic<'s>(
             .unwrap_or_else(|| "<unable to get detailed string for V8 value>".to_string())
     );
 
-    tracing::warn!("Serialization panic fallback: {}", fallback_msg);
-
     let mut error_obj = serde_json::Map::new();
-    error_obj.insert("__serialization_error".to_string(), serde_json::Value::Bool(true));
+    error_obj.insert("~serializationError".to_string(), serde_json::Value::Bool(true));
     error_obj.insert(
         "error".to_string(),
         serde_json::Value::String("V8 value could not be serialized".to_string()),
@@ -297,7 +273,8 @@ pub fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool
 fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> {
     let check_script = r#"
         (function() {
-            return globalThis.__promise_resolution_complete === true;
+            if (!globalThis['~promises']) globalThis['~promises'] = {};
+            return globalThis['~promises'].resolutionComplete === true;
         })()
     "#;
 

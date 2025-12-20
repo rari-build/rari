@@ -14,7 +14,8 @@ export function generateLoadingComponentMap(options: LoadingComponentMapOptions)
 export const loadingComponentModules = {}
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_loading_components = new Map()
+  if (!globalThis['~rari']) globalThis['~rari'] = {}
+  globalThis['~rari'].loadingComponents = new Map()
 }
 `
   }
@@ -36,7 +37,8 @@ ${moduleEntries.join(',\n')}
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_loading_components = new Map(Object.entries(loadingComponentModules))
+  if (!globalThis['~rari']) globalThis['~rari'] = {}
+  globalThis['~rari'].loadingComponents = new Map(Object.entries(loadingComponentModules))
 }
 `
 

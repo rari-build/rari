@@ -2,7 +2,6 @@ use crate::error::RariError;
 use crate::rsc::types::{RscElement, SuspenseBoundary};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value as JsonValue;
-use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct PromiseRef {
@@ -42,8 +41,6 @@ impl RscWireFormatParser {
             let (row_id, element) = self.parse_line(line)?;
             self.elements.insert(row_id, element);
         }
-
-        debug!("Parsed {} RSC elements from {} lines", self.elements.len(), self.lines.len());
 
         Ok(())
     }
@@ -183,11 +180,6 @@ impl RscWireFormatParser {
             .or_else(|| key.clone())
             .unwrap_or_else(|| format!("boundary_{}", uuid::Uuid::new_v4()));
 
-        debug!(
-            "Parsed Suspense boundary: id={}, fallback={}, children={}",
-            boundary_id, fallback_ref, children_ref
-        );
-
         Ok(RscElement::Suspense { fallback_ref, children_ref, boundary_id, props })
     }
 
@@ -200,8 +192,6 @@ impl RscWireFormatParser {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("promise_{}", uuid::Uuid::new_v4()));
-
-        debug!("Parsed Promise element: id={}", promise_id);
 
         Ok(RscElement::Promise { promise_id })
     }
@@ -224,8 +214,6 @@ impl RscWireFormatParser {
             }
         }
 
-        debug!("Found {} Suspense boundaries", boundaries.len());
-
         boundaries
     }
 
@@ -244,8 +232,6 @@ impl RscWireFormatParser {
             }
         }
 
-        debug!("Found {} Promise elements", promises.len());
-
         promises
     }
 
@@ -260,11 +246,6 @@ impl RscWireFormatParser {
                     promise.boundary_id = boundary.boundary_id.clone();
                     boundary.promise_ids.push(promise.promise_id.clone());
                     boundary.has_promise = true;
-
-                    debug!(
-                        "Linked promise {} to boundary {}",
-                        promise.promise_id, boundary.boundary_id
-                    );
                 }
             }
         }

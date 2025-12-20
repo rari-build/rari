@@ -9,13 +9,13 @@
     componentSource = 'global.{component_id}'
   }
   else if (
-    globalThis.__rsc_modules
-    && globalThis.__rsc_modules['{component_id}']
+    globalThis['~rsc'].modules
+    && globalThis['~rsc'].modules['{component_id}']
   ) {
     Component
-      = globalThis.__rsc_modules['{component_id}'].default
-        || Object.values(globalThis.__rsc_modules['{component_id}'])[0]
-    componentSource = '__rsc_modules.{component_id}'
+      = globalThis['~rsc'].modules['{component_id}'].default
+        || Object.values(globalThis['~rsc'].modules['{component_id}'])[0]
+    componentSource = '~rsc.modules.{component_id}'
   }
   else {
     throw new Error('Component {component_id} not found in global scope')
@@ -50,7 +50,7 @@
 
   const elementToRSC = (element, componentId) => {
     try {
-      const clientComponents = globalThis.__rsc_client_components || {}
+      const clientComponents = globalThis['~rsc'].clientComponents || {}
 
       let rscResult
       if (typeof globalThis.renderToRsc === 'function') {
@@ -105,7 +105,9 @@
           error: asyncError.message,
         },
       }
-      globalThis.__lastRenderResult = errorResult
+      if (!globalThis['~render'])
+        globalThis['~render'] = {}
+      globalThis['~render'].lastResult = errorResult
 
       return errorResult
     }
@@ -140,7 +142,9 @@
           reason: 'empty_rsc',
         },
       }
-      globalThis.__lastRenderResult = emptyResult
+      if (!globalThis['~render'])
+        globalThis['~render'] = {}
+      globalThis['~render'].lastResult = emptyResult
 
       return emptyResult
     }
@@ -157,7 +161,9 @@
       },
     }
 
-    globalThis.__lastRenderResult = finalResult
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].lastResult = finalResult
 
     return finalResult
   }
@@ -197,7 +203,9 @@
             },
           }
 
-          globalThis.__lastRenderResult = suspenseResolvedResult
+          if (!globalThis['~render'])
+            globalThis['~render'] = {}
+          globalThis['~render'].lastResult = suspenseResolvedResult
           return suspenseResolvedResult
         }
         catch (resolveError) {
@@ -214,7 +222,9 @@
             },
           }
 
-          globalThis.__lastRenderResult = errorResult
+          if (!globalThis['~render'])
+            globalThis['~render'] = {}
+          globalThis['~render'].lastResult = errorResult
           return errorResult
         }
       }
@@ -231,7 +241,9 @@
       },
     }
 
-    globalThis.__lastRenderResult = errorResult
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].lastResult = errorResult
 
     return errorResult
   }

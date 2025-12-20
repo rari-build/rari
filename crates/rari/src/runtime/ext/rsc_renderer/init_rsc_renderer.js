@@ -20,13 +20,15 @@ if (typeof globalThis.registerClientComponent === 'undefined') {
   )
 }
 
-if (!globalThis.__rsc_renderer_initialized) {
-  globalThis.__rsc_renderer_initialized = true
-  globalThis.__rsc_renderer_init_timestamp = Date.now()
+if (!globalThis['~rsc'])
+  globalThis['~rsc'] = {}
+if (!globalThis['~rsc'].rendererInitialized) {
+  globalThis['~rsc'].rendererInitialized = true
+  globalThis['~rsc'].rendererInitTimestamp = Date.now()
 
-  globalThis.__rsc_component_renders
-    = globalThis.__rsc_component_renders || new Map()
-  globalThis.__rsc_render_statistics = globalThis.__rsc_render_statistics || {
+  globalThis['~rsc'].componentRenders
+    = globalThis['~rsc'].componentRenders || new Map()
+  globalThis['~rsc'].renderStatistics = globalThis['~rsc'].renderStatistics || {
     totalRenders: 0,
     successfulRenders: 0,
     failedRenders: 0,
@@ -34,29 +36,29 @@ if (!globalThis.__rsc_renderer_initialized) {
     rscRenders: 0,
   }
 
-  globalThis.__track_component_render = function (componentName) {
-    if (!globalThis.__rsc_component_renders.has(componentName)) {
-      globalThis.__rsc_component_renders.set(componentName, 0)
+  globalThis['~track_component_render'] = function (componentName) {
+    if (!globalThis['~rsc'].componentRenders.has(componentName)) {
+      globalThis['~rsc'].componentRenders.set(componentName, 0)
     }
-    globalThis.__rsc_component_renders.set(
+    globalThis['~rsc'].componentRenders.set(
       componentName,
-      globalThis.__rsc_component_renders.get(componentName) + 1,
+      globalThis['~rsc'].componentRenders.get(componentName) + 1,
     )
-    globalThis.__rsc_render_statistics.totalRenders++
+    globalThis['~rsc'].renderStatistics.totalRenders++
   }
 
-  globalThis.__track_rsc_render = function (componentName) {
-    globalThis.__rsc_render_statistics.rscRenders++
-    globalThis.__track_component_render(componentName)
+  globalThis['~track_rsc_render'] = function (componentName) {
+    globalThis['~rsc'].renderStatistics.rscRenders++
+    globalThis['~track_component_render'](componentName)
   }
 
-  if (typeof globalThis.__clientComponents === 'undefined') {
-    globalThis.__clientComponents = {}
+  if (typeof globalThis['~clientComponents'] === 'undefined') {
+    globalThis['~clientComponents'] = {}
   }
-  if (typeof globalThis.__clientComponentNames === 'undefined') {
-    globalThis.__clientComponentNames = {}
+  if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+    globalThis['~clientComponentNames'] = {}
   }
-  if (typeof globalThis.__clientComponentPaths === 'undefined') {
-    globalThis.__clientComponentPaths = {}
+  if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+    globalThis['~clientComponentPaths'] = {}
   }
 }

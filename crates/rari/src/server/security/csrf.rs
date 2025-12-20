@@ -14,9 +14,6 @@ pub struct CsrfTokenManager {
 
 impl CsrfTokenManager {
     pub fn new(secret: Vec<u8>) -> Self {
-        if secret.len() < 32 {
-            tracing::warn!("CSRF secret is less than 32 bytes. Consider using a stronger secret.");
-        }
         Self { secret, expiration_seconds: TOKEN_EXPIRATION_SECONDS }
     }
 
@@ -24,10 +21,6 @@ impl CsrfTokenManager {
         use rand::Rng;
         let mut rng = rand::rng();
         let secret: Vec<u8> = (0..32).map(|_| rng.r#random()).collect();
-        tracing::warn!(
-            "Using randomly generated CSRF secret. This will invalidate tokens on restart. \
-             Set RARI_CSRF_SECRET environment variable for production."
-        );
         Self::new(secret)
     }
 

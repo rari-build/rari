@@ -115,7 +115,9 @@ function verifyComponentAfterReload(componentId) {
   }
 }
 
-globalThis.__rari_module_reload = {
+if (!globalThis['~rari'])
+  globalThis['~rari'] = {}
+globalThis['~rari'].moduleReload = {
   invalidateModuleCache,
   reloadModule,
   getModuleFromCache,

@@ -1,49 +1,55 @@
 (function () {
-  if (!globalThis.__rari_initialized) {
-    globalThis.__rari_initialized = true
-    globalThis.__rari_init_timestamp = Date.now()
+  if (!globalThis['~rari'])
+    globalThis['~rari'] = {}
+  if (!globalThis['~rari'].initialized) {
+    globalThis['~rari'].initialized = true
+    globalThis['~rari'].initTimestamp = Date.now()
 
-    globalThis.__rsc_functions = globalThis.__rsc_functions || {}
-    globalThis.__rsc_modules = globalThis.__rsc_modules || {}
-    globalThis.__rsc_module_dependencies = globalThis.__rsc_module_dependencies || {}
-    globalThis.__rsc_exported_functions = globalThis.__rsc_exported_functions || {}
-    globalThis.__rsc_components = globalThis.__rsc_components || {}
+    if (!globalThis['~rsc'])
+      globalThis['~rsc'] = {}
+    globalThis['~rsc'].functions = globalThis['~rsc'].functions || {}
+    globalThis['~rsc'].modules = globalThis['~rsc'].modules || {}
+    globalThis['~rsc'].moduleDependencies = globalThis['~rsc'].moduleDependencies || {}
+    globalThis['~rsc'].exportedFunctions = globalThis['~rsc'].exportedFunctions || {}
+    globalThis['~rsc'].components = globalThis['~rsc'].components || {}
 
-    globalThis.__rsc_component_functions = globalThis.__rsc_component_functions || new Map()
-    globalThis.__rsc_component_server_functions = globalThis.__rsc_component_server_functions || new Map()
-    globalThis.__rsc_component_data = globalThis.__rsc_component_data || new Map()
-    globalThis.__rsc_component_namespaces = globalThis.__rsc_component_namespaces || new Map()
+    globalThis['~rsc'].componentFunctions = globalThis['~rsc'].componentFunctions || new Map()
+    globalThis['~rsc'].serverFunctions = globalThis['~rsc'].serverFunctions || new Map()
+    globalThis['~rsc'].componentData = globalThis['~rsc'].componentData || new Map()
+    globalThis['~rsc'].componentNamespaces = globalThis['~rsc'].componentNamespaces || new Map()
 
-    globalThis.__RSC_PROMISE_MAP = globalThis.__RSC_PROMISE_MAP || new Map()
-    globalThis.__component_promise_map = globalThis.__component_promise_map || new Map()
-    globalThis.__component_specific_promises = globalThis.__component_specific_promises || new Map()
-    globalThis.__component_resolved_promises = globalThis.__component_resolved_promises || new Map()
-    globalThis.__module_promises = globalThis.__module_promises || new Map()
-    globalThis.__resolved_values = globalThis.__resolved_values || new Map()
+    globalThis['~rsc'].promiseMap = globalThis['~rsc'].promiseMap || new Map()
 
-    globalThis.__component_permissions = globalThis.__component_permissions || new Map()
-    globalThis.__rari_manual_register = globalThis.__rari_manual_register || {}
+    if (!globalThis['~components'])
+      globalThis['~components'] = {}
+    globalThis['~components'].promiseMap = globalThis['~components'].promiseMap || new Map()
+    globalThis['~components'].specificPromises = globalThis['~components'].specificPromises || new Map()
+    globalThis['~components'].resolvedPromises = globalThis['~components'].resolvedPromises || new Map()
+    globalThis['~components'].modulePromises = globalThis['~components'].modulePromises || new Map()
+    globalThis['~components'].permissions = globalThis['~components'].permissions || new Map()
+    globalThis['~components'].resolvedValues = globalThis['~components'].resolvedValues || new Map()
+    globalThis['~components'].renderLog = globalThis['~components'].renderLog || []
 
-    if (!globalThis.__sanitizeDataForComponent) {
-      globalThis.__sanitizeDataForComponent = function (data) {
+    globalThis['~rari'].manualRegister = globalThis['~rari'].manualRegister || {}
+
+    if (!globalThis['~components'].sanitizeData) {
+      globalThis['~components'].sanitizeData = function (data) {
         return data
       }
     }
 
-    if (!globalThis.__checkComponentPermission) {
-      globalThis.__checkComponentPermission = function (componentId, permissionType) {
-        const permissions = globalThis.__component_permissions.get(componentId)
+    if (!globalThis['~components'].checkPermission) {
+      globalThis['~components'].checkPermission = function (componentId, permissionType) {
+        const permissions = globalThis['~components'].permissions.get(componentId)
         if (!permissions)
           return false
         return permissions[permissionType] === true
       }
     }
 
-    globalThis.__component_render_log = globalThis.__component_render_log || []
-
     return {
       initialized: true,
-      timestamp: globalThis.__rari_init_timestamp,
+      timestamp: globalThis['~rari'].initTimestamp,
       source: 'init',
     }
   }
@@ -51,6 +57,6 @@
   return {
     initialized: false,
     reason: 'already_initialized',
-    timestamp: globalThis.__rari_init_timestamp,
+    timestamp: globalThis['~rari'].initTimestamp,
   }
 })()

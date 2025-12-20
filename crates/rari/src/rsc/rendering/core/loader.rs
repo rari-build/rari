@@ -1,6 +1,6 @@
 pub struct RscJsLoader;
 
-fn create_js_wrapper(_component_id: &str, js_code: &str) -> String {
+fn create_js_wrapper(js_code: &str) -> String {
     format!(
         r#"
         (function() {{
@@ -40,10 +40,11 @@ impl RscJsLoader {
     pub fn create_component_environment_setup(component_id: &str) -> String {
         let setup_code = format!(
             r#"
-            globalThis.__current_rendering_component = "{component_id}";
+            if (!globalThis['~render']) globalThis['~render'] = {{}};
+            globalThis['~render'].currentComponent = "{component_id}";
 
-            if (globalThis.__rsc_component_data && !globalThis.__rsc_component_data.has("{component_id}")) {{
-                globalThis.__rsc_component_data.set("{component_id}", {{
+            if (globalThis['~rsc'].componentData && !globalThis['~rsc'].componentData.has("{component_id}")) {{
+                globalThis['~rsc'].componentData.set("{component_id}", {{
                     promises: new Map(),
                     values: new Map(),
                     renderTime: Date.now(),
@@ -51,9 +52,9 @@ impl RscJsLoader {
                 }});
             }}
 
-            if (globalThis.__component_permissions) {{
+            if (globalThis['~components']?.permissions) {{
                 const componentType = "{component_id}".includes("TestComponent") ? "test" : "generic";
-                globalThis.__component_permissions.set("{component_id}", {{
+                globalThis['~components'].permissions.set("{component_id}", {{
                     canAccessCalculations: true,
                     componentType: componentType
                 }});
@@ -68,7 +69,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &setup_code)
+        create_js_wrapper(&setup_code)
     }
 
     pub fn create_stub_via_js_function(component_id: &str, stub_type: StubType) -> String {
@@ -152,25 +153,25 @@ impl RscJsLoader {
                     r#"
                     (async function() {{
                         try {{
-                            globalThis.__rsc_module_dependencies = globalThis.__rsc_module_dependencies || {{}};
-                            globalThis.__rsc_module_dependencies["{component_id}"] = {dependencies_json};
+                            globalThis['~rsc'].moduleDependencies = globalThis['~rsc'].moduleDependencies || {{}};
+                            globalThis['~rsc'].moduleDependencies["{component_id}"] = {dependencies_json};
 
-                            globalThis.__rsc_modules = globalThis.__rsc_modules || {{}};
-                            if (!globalThis.__rsc_modules["{component_id}"]) {{
+                            globalThis['~rsc'].modules = globalThis['~rsc'].modules || {{}};
+                            if (!globalThis['~rsc'].modules["{component_id}"]) {{
                                 let componentFunction = null;
 
                                 if (typeof globalThis["{component_id}"] === 'function') {{
                                     componentFunction = globalThis["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
-                                    componentFunction = globalThis.__rsc_functions["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
-                                    componentFunction = globalThis.__rsc_functions["fn_{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis['~rsc'].functions["{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["fn_{component_id}"] === 'function') {{
+                                    componentFunction = globalThis['~rsc'].functions["fn_{component_id}"];
                                 }}
 
                                 if (componentFunction) {{
-                                    globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+                                    globalThis['~rsc'].modules["{component_id}"] = {{ default: componentFunction }};
                                 }} else {{
-                                    globalThis.__rsc_modules["{component_id}"] = {{}};
+                                    globalThis['~rsc'].modules["{component_id}"] = {{}};
                                 }}
                             }}
 
@@ -179,8 +180,8 @@ impl RscJsLoader {
 
                                 let resolvedModule = null;
 
-                                if (globalThis.__rsc_modules && globalThis.__rsc_modules[depName]) {{
-                                    resolvedModule = globalThis.__rsc_modules[depName];
+                                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[depName]) {{
+                                    resolvedModule = globalThis['~rsc'].modules[depName];
                                 }}
 
                                 if (!resolvedModule) {{
@@ -192,15 +193,15 @@ impl RscJsLoader {
                                     ];
 
                                     for (const variant of pathVariants) {{
-                                        if (globalThis.__rsc_modules && globalThis.__rsc_modules[variant]) {{
-                                            resolvedModule = globalThis.__rsc_modules[variant];
+                                        if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[variant]) {{
+                                            resolvedModule = globalThis['~rsc'].modules[variant];
                                             break;
                                         }}
                                     }}
                                 }}
 
-                                if (!globalThis.__rsc_modules[depName]) {{
-                                    globalThis.__rsc_modules[depName] = resolvedModule || new Proxy({{}}, {{
+                                if (!globalThis['~rsc'].modules[depName]) {{
+                                    globalThis['~rsc'].modules[depName] = resolvedModule || new Proxy({{}}, {{
                                         get: function(target, prop) {{
                                             if (resolvedModule && resolvedModule[prop]) {{
                                                 return resolvedModule[prop];
@@ -220,13 +221,13 @@ impl RscJsLoader {
                                                 }}
                                             }}
 
-                                            if (globalThis.__rsc_functions && globalThis.__rsc_functions[prop]) {{
-                                                return globalThis.__rsc_functions[prop];
+                                            if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[prop]) {{
+                                                return globalThis['~rsc'].functions[prop];
                                             }}
 
                                             const moduleSpecificKey = `${{depName}}_${{prop}}`;
-                                            if (globalThis.__rsc_functions && globalThis.__rsc_functions[moduleSpecificKey]) {{
-                                                return globalThis.__rsc_functions[moduleSpecificKey];
+                                            if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[moduleSpecificKey]) {{
+                                                return globalThis['~rsc'].functions[moduleSpecificKey];
                                             }}
 
                                             return function(...args) {{
@@ -237,19 +238,19 @@ impl RscJsLoader {
                                 }}
                             }}
 
-                            if (!globalThis.__rsc_modules["{component_id}"] || Object.keys(globalThis.__rsc_modules["{component_id}"]).length === 0) {{
+                            if (!globalThis['~rsc'].modules["{component_id}"] || Object.keys(globalThis['~rsc'].modules["{component_id}"]).length === 0) {{
                                 let componentFunction = null;
 
                                 if (typeof globalThis["{component_id}"] === 'function') {{
                                     componentFunction = globalThis["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
-                                    componentFunction = globalThis.__rsc_functions["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
-                                    componentFunction = globalThis.__rsc_functions["fn_{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["{component_id}"] === 'function') {{
+                                    componentFunction = globalThis['~rsc'].functions["{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["fn_{component_id}"] === 'function') {{
+                                    componentFunction = globalThis['~rsc'].functions["fn_{component_id}"];
                                 }}
 
                                 if (componentFunction) {{
-                                    globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+                                    globalThis['~rsc'].modules["{component_id}"] = {{ default: componentFunction }};
                                 }}
                             }}
 
@@ -266,7 +267,7 @@ impl RscJsLoader {
                     r#"
                     (function() {{
                         try {{
-                            globalThis.__rsc_modules = globalThis.__rsc_modules || {{}};
+                            globalThis['~rsc'].modules = globalThis['~rsc'].modules || {{}};
 
                             let componentFunction = null;
                             let attempts = 0;
@@ -275,10 +276,10 @@ impl RscJsLoader {
                             const findComponent = () => {{
                                 if (typeof globalThis["{component_id}"] === 'function') {{
                                     return globalThis["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["{component_id}"] === 'function') {{
-                                    return globalThis.__rsc_functions["{component_id}"];
-                                }} else if (globalThis.__rsc_functions && typeof globalThis.__rsc_functions["fn_{component_id}"] === 'function') {{
-                                    return globalThis.__rsc_functions["fn_{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["{component_id}"] === 'function') {{
+                                    return globalThis['~rsc'].functions["{component_id}"];
+                                }} else if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions["fn_{component_id}"] === 'function') {{
+                                    return globalThis['~rsc'].functions["fn_{component_id}"];
                                 }}
                                 return null;
                             }};
@@ -302,7 +303,7 @@ impl RscJsLoader {
                                 const isAsync = componentFunction.constructor.name === 'AsyncFunction' ||
                                                componentFunction.toString().includes('async function');
 
-                                globalThis.__rsc_modules["{component_id}"] = {{ default: componentFunction }};
+                                globalThis['~rsc'].modules["{component_id}"] = {{ default: componentFunction }};
 
                                 return {{ success: true, component: "{component_id}", function_found: true, async: isAsync }};
                             }} else {{
@@ -325,7 +326,7 @@ impl RscJsLoader {
     pub fn create_html_extraction_script(component_id: &str) -> String {
         let extraction_code = format!(
             r#"
-            if (typeof globalThis.__lastRenderResult === 'undefined') {{
+            if (typeof globalThis['~render']?.lastResult === 'undefined') {{
                 return {{
                     error: true,
                     message: "No rendered HTML available. The component may have suspended.",
@@ -333,8 +334,8 @@ impl RscJsLoader {
                 }};
             }}
 
-            const extractedHtml = globalThis.__lastRenderResult && globalThis.__lastRenderResult.html
-                ? globalThis.__lastRenderResult.html
+            const extractedHtml = globalThis['~render']?.lastResult && globalThis['~render'].lastResult.html
+                ? globalThis['~render'].lastResult.html
                 : "<div><h2>{component_id}</h2><p>Failed to extract HTML content</p></div>";
 
             return {{
@@ -345,13 +346,13 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &extraction_code)
+        create_js_wrapper(&extraction_code)
     }
 
     pub fn create_rsc_extraction_script(component_id: &str) -> String {
         let extraction_code = format!(
             r#"
-            if (typeof globalThis.__lastRenderResult === 'undefined') {{
+            if (typeof globalThis['~render']?.lastResult === 'undefined') {{
                 return {{
                     error: true,
                     message: "No rendered result available. The component may have suspended.",
@@ -364,7 +365,7 @@ impl RscJsLoader {
                 }};
             }}
 
-            const renderResult = globalThis.__lastRenderResult;
+            const renderResult = globalThis['~render'].lastResult;
             let extractedRsc = null;
 
             if (renderResult && renderResult.rsc) {{
@@ -398,7 +399,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &extraction_code)
+        create_js_wrapper(&extraction_code)
     }
 
     pub fn create_component_verification_script(
@@ -418,9 +419,9 @@ impl RscJsLoader {
                 registryContents: []
             }};
 
-            if (globalThis.__rsc_modules) {{
-                details.registryContents = Object.keys(globalThis.__rsc_modules);
-                if (globalThis.__rsc_modules["{component_id}"]) {{
+            if (globalThis['~rsc'].modules) {{
+                details.registryContents = Object.keys(globalThis['~rsc'].modules);
+                if (globalThis['~rsc'].modules["{component_id}"]) {{
                     isRegistered = true;
                     details.foundInRegistry = true;
                 }}
@@ -447,20 +448,20 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &verification_code)
+        create_js_wrapper(&verification_code)
     }
 
     pub fn create_isolation_namespacing_script(component_id: &str) -> String {
         format!(
             r#"
             (function() {{
-                if (!globalThis.__rsc_component_namespaces.has("{component_id}")) {{
-                    globalThis.__rsc_component_namespaces.set("{component_id}", new Map());
+                if (!globalThis['~rsc'].componentNamespaces.has("{component_id}")) {{
+                    globalThis['~rsc'].componentNamespaces.set("{component_id}", new Map());
                 }}
 
                 return {{
                     componentId: "{component_id}",
-                    hasNamespace: globalThis.__rsc_component_namespaces.has("{component_id}")
+                    hasNamespace: globalThis['~rsc'].componentNamespaces.has("{component_id}")
                 }};
             }})();
             "#
@@ -480,10 +481,11 @@ impl RscJsLoader {
         format!(
             r#"
             (function() {{
-                globalThis.__current_rendering_component = "{component_id}";
+                if (!globalThis['~render']) globalThis['~render'] = {{}};
+                globalThis['~render'].currentComponent = "{component_id}";
 
-                if (globalThis.__component_promise_map && globalThis.__component_promise_map.has("{component_id}")) {{
-                    globalThis.__component_promise_map.set("{component_id}", new Map());
+                if (globalThis['~components']?.promiseMap && globalThis['~components'].promiseMap.has("{component_id}")) {{
+                    globalThis['~components'].promiseMap.set("{component_id}", new Map());
                 }}
 
                 return true;

@@ -163,15 +163,15 @@ if (typeof globalThis.registerModule === 'function') {{
     globalThis.registerModule({{}}, '{component_id}');
 }}
 
-if (typeof globalThis.__rsc_functions === 'undefined') {{
-    globalThis.__rsc_functions = {{}};
+if (typeof globalThis['~rsc'].functions === 'undefined') {{
+    globalThis['~rsc'].functions = {{}};
 }}
 
-if (typeof globalThis.__rsc_modul== 'undefined') {{
-    globalThis.__rsc_modules = {{}};
+if (typeof globalThis.'~rsc'].modules == 'undefined') {{
+    globalThis['~rsc'].modules = {{}};
 }}
 
-globalThis.__rsc_modules['{component_id}'] = {{
+globalThis['~rsc'].modules['{component_id}'] = {{
     __isLoaderStub: true,
     __awaitingRegistration: true
 }};
@@ -186,11 +186,11 @@ export default {{
 pub const FALLBACK_MODULE_TEMPLATE: &str = r#"
 // Dynamic fallback module for: {module_name}
 
-if (typeof globalThis.__rsc_modules === 'undefined') {{
-    globalThis.__rsc_modules = {{}};
+if (typeof globalThis['~rsc'].modules === 'undefined') {{
+    globalThis['~rsc'].modules = {{}};
 }}
 
-globalThis.__rsc_modules['{module_name}'] = {{
+globalThis['~rsc'].modules['{module_name}'] = {{
     __isFallback: true,
     __timestamp: Date.now()
 }};
@@ -658,20 +658,20 @@ const moduleExports = {{
     __awaitingRegistration: true
 }};
 
-export function __rari_register() {{
+export function ~rari_register() {{
     if (typeof globalThis.registerModule === 'function') {{
         globalThis.registerModule(moduleExports, '{component_name}');
     }}
 
-    if (typeof globalThis.__rsc_functions === 'undefined') {{
-        globalThis.__rsc_functions = {{}};
+    if (typeof globalThis['~rsc'].functions === 'undefined') {{
+        globalThis['~rsc'].functions = {{}};
     }}
 
-    if (typeof globalThis.__rsc_modules === 'undefined') {{
-        globalThis.__rsc_modules = {{}};
+    if (typeof globalThis['~rsc'].modules === 'undefined') {{
+        globalThis['~rsc'].modules = {{}};
     }}
 
-    globalThis.__rsc_modules['{component_name}'] = moduleExports;
+    globalThis['~rsc'].modules['{component_name}'] = moduleExports;
 }}
 
 export default moduleExports;

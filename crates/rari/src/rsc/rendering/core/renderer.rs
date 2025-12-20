@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, timeout};
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::error::RariError;
 use crate::rsc::components::ComponentRegistry;
@@ -144,8 +144,9 @@ impl RscRenderer {
             try {{
                 {}
             }} catch (batchError_{}) {{
-                globalThis.__batch_errors = globalThis.__batch_errors || [];
-                globalThis.__batch_errors.push({{
+                if (!globalThis['~errors']) globalThis['~errors'] = {{}};
+                if (!globalThis['~errors'].batch) globalThis['~errors'].batch = [];
+globalThis['~errors'].batch.push({{
                     script: "{}",
                     error: batchError_{}.message || String(batchError_{})
                 }});
@@ -219,8 +220,7 @@ impl RscRenderer {
             return Ok(());
         }
 
-        let _extension_check_result = self
-            .runtime
+        self.runtime
             .execute_script("extension-checks".to_string(), EXTENSION_CHECKS_SCRIPT.to_string())
             .await?;
 
@@ -256,16 +256,14 @@ impl RscRenderer {
         }
 
         let init_registry_script = RscJsLoader::create_global_init();
-        let _init_result = self
-            .runtime
+        self.runtime
             .execute_script("ensure_global_registries.js".to_string(), init_registry_script)
             .await?;
 
         let isolation_namespacing_script =
             RscJsLoader::create_isolation_namespacing_script(component_id);
 
-        let _isolation_result = self
-            .runtime
+        self.runtime
             .execute_script(
                 format!("create_namespace_{component_id}.js"),
                 isolation_namespacing_script,
@@ -322,8 +320,7 @@ impl RscRenderer {
         let force_v8_cache_clear_script =
             V8_CACHE_CLEAR_SCRIPT.replace("{component_id}", component_id);
 
-        let _v8_clear_result = self
-            .runtime
+        self.runtime
             .execute_script(
                 format!("force_v8_cache_clear_{component_id}.js"),
                 force_v8_cache_clear_script,
@@ -422,20 +419,13 @@ impl RscRenderer {
                             registry.is_component_registered(&unique_dep_id)
                         };
 
-                        if !already_registered {
-                            if Self::is_react_component_file(&content) {
-                                let sub_dependencies = extract_dependencies(&content);
-                                for sub_dep in sub_dependencies {
-                                    stack.push(sub_dep);
-                                }
-                                self.register_component_without_loading(&unique_dep_id, &content)
-                                    .await?;
-                            } else {
-                                debug!(
-                                    "Skipping registration of '{}' as it's not a React component",
-                                    unique_dep_id
-                                );
+                        if !already_registered && Self::is_react_component_file(&content) {
+                            let sub_dependencies = extract_dependencies(&content);
+                            for sub_dep in sub_dependencies {
+                                stack.push(sub_dep);
                             }
+                            self.register_component_without_loading(&unique_dep_id, &content)
+                                .await?;
                         }
                     }
                     break;
@@ -518,8 +508,7 @@ impl RscRenderer {
         for component_id in &components_to_load {
             let isolation_script = RscJsLoader::create_isolation_init_script(component_id);
 
-            let _isolation_result = self
-                .runtime
+            self.runtime
                 .execute_script(format!("isolation_{component_id}.js"), isolation_script)
                 .await?;
 
@@ -762,8 +751,7 @@ impl RscRenderer {
                     RariError::js_execution(format!("Failed to load component render script: {e}"))
                 })?;
 
-        let _render_result = self
-            .execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
+        self.execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
             .await?;
 
         let rsc_extraction_script = self
@@ -872,12 +860,6 @@ impl RscRenderer {
             }
         }
 
-        let component_hash = hash_string(component_id);
-        let props_json = match props {
-            Some(p) if !p.trim().is_empty() => p,
-            _ => "{}",
-        };
-
         let clear_environment_script = {
             let cache_key = format!("clear_env_{component_id}");
             if let Some(cached) = self.get_cached_script(&cache_key) {
@@ -946,27 +928,16 @@ impl RscRenderer {
             ("isolation_init", isolation_init_script),
         ];
 
-        let _batch_result = self.execute_batched_scripts(setup_scripts).await?;
+        self.execute_batched_scripts(setup_scripts).await?;
 
         let resolve_server_functions_script =
             RESOLVE_SERVER_FUNCTIONS_SCRIPT.replace("{component_id}", component_id);
 
-        let _resolution_result = self
-            .execute_script_with_timeout(
-                format!("resolve_server_functions_{component_id}.js"),
-                resolve_server_functions_script,
-            )
-            .await?;
-
-        let render_script =
-            RscJsLoader::load_component_render_with_data(component_id, &component_hash, props_json)
-                .map_err(|e| {
-                    RariError::js_execution(format!("Failed to load component render script: {e}"))
-                })?;
-
-        let _result = self
-            .execute_script_with_timeout(format!("render_{component_id}.js"), render_script)
-            .await;
+        self.execute_script_with_timeout(
+            format!("resolve_server_functions_{component_id}.js"),
+            resolve_server_functions_script,
+        )
+        .await?;
 
         let html_extraction_script = {
             let cache_key = format!("extract_html_{component_id}");
@@ -1153,8 +1124,6 @@ impl RscRenderer {
         export_name: &str,
         args: &[JsonValue],
     ) -> Result<JsonValue, RariError> {
-        debug!("Executing server function: {}::{}", function_id, export_name);
-
         let args_json = serde_json::to_string(args)
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
 
@@ -1417,13 +1386,11 @@ impl RscRenderer {
             }
 
             transformed_source_safe = transformed_source_safe
-                .replace(&format!("export const __rari_main_export = {component_id};"), "")
+                .replace(&format!("export const ~rari_main_export = {component_id};"), "")
                 .replace(
-                    "export function __rari_register() { /* Compatibility stub */ return true; }",
+                    "export function ~rari_register() { /* Compatibility stub */ return true; }",
                     "",
                 )
-                .replace("export const __registry_proxy =", "const __registry_proxy =")
-                .replace("const __registry_proxy =", "")
                 .replace("export const metadata =", "const metadata =")
                 .replace("export const ", "const ")
                 .replace("export function ", "function ")
@@ -1445,8 +1412,9 @@ impl RscRenderer {
                 r#"
 
 globalThis.{component_id} = {component_id};
-globalThis.__rsc_functions = globalThis.__rsc_functions || {{}};
-globalThis.__rsc_functions['{component_id}'] = {component_id};
+if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
+globalThis['~rsc'].functions = globalThis['~rsc'].functions || {{}};
+globalThis['~rsc'].functions['{component_id}'] = {component_id};
 "#,
                 component_id = component_id
             ));
@@ -1469,8 +1437,7 @@ globalThis.__rsc_functions['{component_id}'] = {component_id};
             component_id,
             RscModuleOperation::PostRegister,
         );
-        let _post_register_result = self
-            .runtime
+        self.runtime
             .execute_script(format!("post_register_{component_id}.js"), post_register_script)
             .await?;
 

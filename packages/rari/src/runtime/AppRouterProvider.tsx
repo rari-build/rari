@@ -136,9 +136,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   const handleFallbackReload = () => {
-    console.warn('[HMR] Initiating fallback full page reload...')
-    console.warn('[HMR] Preserving console logs for debugging')
-
     setTimeout(() => {
       window.location.reload()
     }, 1000)
@@ -146,7 +143,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const resetFailureTracking = () => {
     if (consecutiveFailuresRef.current > 0) {
-      console.warn(`[HMR] Recovered after ${consecutiveFailuresRef.current} consecutive failures`)
       consecutiveFailuresRef.current = 0
     }
   }
@@ -188,19 +184,19 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           const moduleInfo = modules.get(type)
 
           if (!moduleInfo) {
-            console.warn('[AppRouterProvider] Module info not found for type:', type, '- skipping component')
+            console.error('[AppRouterProvider] Module info not found for type:', type, '- skipping component')
             return null
           }
 
-          const Component = (globalThis as any).__clientComponents?.[moduleInfo.id]?.component
+          const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
           if (!Component) {
-            console.warn('[AppRouterProvider] Component not loaded for module:', moduleInfo.id, '- skipping component')
+            console.error('[AppRouterProvider] Component not loaded for module:', moduleInfo.id, '- skipping component')
             return null
           }
 
           if (typeof Component !== 'function') {
-            console.warn('[AppRouterProvider] Component is not a function for module:', moduleInfo.id, '- skipping component')
+            console.error('[AppRouterProvider] Component is not a function for module:', moduleInfo.id, '- skipping component')
             return null
           }
 
@@ -560,7 +556,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }))
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -594,7 +589,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] HMR update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -619,7 +613,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] RSC invalidation failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -634,7 +627,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         console.error('[AppRouterProvider] Manifest update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          console.error('[HMR] Max retries exceeded, falling back to full page reload')
           handleFallbackReload()
         }
       }
@@ -656,7 +648,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }, [onNavigate])
 
   const handleManualRefresh = () => {
-    console.warn('[HMR] Manual refresh requested')
     window.location.reload()
   }
 
@@ -752,7 +743,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         if (!React.isValidElement(element)) {
-          console.warn('[AppRouterProvider] Attempting to clone invalid React element')
+          console.error('[AppRouterProvider] Attempting to clone invalid React element')
           return element
         }
 

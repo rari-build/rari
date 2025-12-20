@@ -1,5 +1,3 @@
-use tracing::debug;
-
 pub fn has_use_client_directive(code: &str) -> bool {
     for line in code.lines() {
         let trimmed = line.trim();
@@ -66,10 +64,6 @@ pub fn has_use_server_directive(code: &str) -> bool {
 
 pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     if code.contains("Self-registering Production Component") {
-        debug!(
-            "Server action {} already has self-registration wrapper, skipping additional wrap",
-            module_id
-        );
         return code.to_string();
     }
 
@@ -78,15 +72,11 @@ pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
     format!(
         r#"
 if (!globalThis.{module_key}) {{
-    console.log('[Rari] Loading server action module: {module_id}');
     globalThis.{module_key} = true;
     {code}
-}} else {{
-    console.log('[Rari] Server action module already loaded, skipping: {module_id}');
 }}
 "#,
         module_key = module_key,
-        module_id = module_id,
         code = code
     )
 }

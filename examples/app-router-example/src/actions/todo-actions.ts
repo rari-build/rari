@@ -141,7 +141,6 @@ export async function deleteTodo(_prevState: any, formData: FormData) {
     todos = todos.filter(t => t.id !== id)
 
     if (todos.length === initialLength) {
-      console.warn('[deleteTodo] Todo not found:', id)
       return {
         success: false,
         error: `Todo with ID ${id} not found. It may have already been deleted.`,

@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{error, warn};
+use tracing::error;
 
 use super::{constants::*, error_messages, types::*, utils};
 
@@ -68,10 +68,7 @@ impl LayoutRenderer {
 
         let base_path = match dist_server_path {
             Some(path) => path,
-            None => {
-                tracing::warn!("Could not determine dist/server path for getData check");
-                return Ok(false);
-            }
+            None => return Ok(false),
         };
 
         let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
@@ -79,7 +76,6 @@ impl LayoutRenderer {
         let page_file_path = base_path.join("app").join(&dist_filename);
 
         if !page_file_path.exists() {
-            tracing::debug!("Page file not found at {:?}", page_file_path);
             return Ok(false);
         }
 
@@ -112,7 +108,7 @@ impl LayoutRenderer {
             renderer.runtime.execute_script("check_not_found".to_string(), check_script).await?;
 
         let not_found = result.get("notFound").and_then(|v| v.as_bool()).unwrap_or(false);
-        tracing::debug!("check_page_not_found result: notFound={}", not_found);
+
         Ok(not_found)
     }
 
@@ -120,7 +116,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<
+        request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<String, RariError> {
@@ -145,10 +141,10 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        if let Some(ref ctx) = _request_context
+        if let Some(ref ctx) = request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
         {
-            tracing::warn!("Failed to set request context in runtime: {}", e);
+            error!("Failed to set request context: {}", e);
         }
 
         let promise_result = renderer
@@ -178,7 +174,7 @@ impl LayoutRenderer {
         };
 
         if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
-            tracing::warn!("HTML structure validation warning: {}", e);
+            error!("HTML structure validation failed: {}", e);
         }
 
         Ok(rsc_wire_format)
@@ -218,10 +214,6 @@ impl LayoutRenderer {
     ) -> Result<(), RariError> {
         for boundary in &layout_structure.suspense_boundaries {
             if !boundary.is_in_content_area {
-                warn!(
-                    "Skeleton position validation failed: boundary '{}' is not in content area. This may cause layout shifts.",
-                    boundary.boundary_id
-                );
                 return Err(RariError::internal(format!(
                     "Skeleton position validation failed: boundary '{}' is not in content area",
                     boundary.boundary_id
@@ -229,10 +221,6 @@ impl LayoutRenderer {
             }
 
             if boundary.dom_path.is_empty() {
-                warn!(
-                    "Skeleton position validation failed: boundary '{}' has empty DOM path. Cannot ensure position stability.",
-                    boundary.boundary_id
-                );
                 return Err(RariError::internal(format!(
                     "Skeleton position validation failed: boundary '{}' has empty DOM path",
                     boundary.boundary_id
@@ -513,7 +501,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<
+        request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<RenderResult, RariError> {
@@ -545,10 +533,10 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        if let Some(ref ctx) = _request_context
+        if let Some(ref ctx) = request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
         {
-            tracing::warn!("Failed to set request context in runtime: {}", e);
+            error!("Failed to set request context: {}", e);
         }
 
         let promise_result = renderer
@@ -573,34 +561,11 @@ impl LayoutRenderer {
         let layout_structure = match self.validate_layout_structure_impl(rsc_data, route_match) {
             Ok(structure) => {
                 if !structure.is_valid() {
-                    warn!(
-                        "Layout structure validation failed for route '{}'. Falling back to non-streaming rendering.",
-                        route_match.route.path
-                    );
-
-                    warn!(
-                        "Component tree for route '{}': {} layouts, page: {}",
-                        route_match.route.path,
-                        route_match.layouts.len(),
-                        route_match.route.file_path
-                    );
-
-                    for (idx, layout) in route_match.layouts.iter().enumerate() {
-                        warn!(
-                            "  Layout {}: {} (is_root: {})",
-                            idx, layout.file_path, layout.is_root
-                        );
-                    }
-
                     structure
                 } else {
                     if let Err(e) = self.validate_skeleton_positions(&structure) {
-                        warn!(
-                            "Skeleton position validation failed for route '{}': {}. Falling back to non-streaming rendering.",
-                            route_match.route.path, e
-                        );
+                        error!("Skeleton position validation failed: {}", e);
                     }
-
                     structure
                 }
             }
@@ -621,36 +586,13 @@ impl LayoutRenderer {
                     error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
                 }
 
-                warn!(
-                    "Falling back to static rendering for route {} due to validation error",
-                    route_match.route.path
-                );
-
                 LayoutStructure::new()
             }
         };
 
         let suspense_detection = self.detect_suspense_boundaries_impl(rsc_data)?;
 
-        if suspense_detection.boundary_count > 0 {
-            let rsc_str = serde_json::to_string(rsc_data).unwrap_or_default();
-            let boundary_occurrences = rsc_str.matches("react.suspense").count();
-            if boundary_occurrences != suspense_detection.boundary_count {
-                tracing::warn!(
-                    "⚠️ RSC data contains {} occurrences of 'react.suspense' but detected {} unique boundaries. Possible duplicates in RSC data!",
-                    boundary_occurrences,
-                    suspense_detection.boundary_count
-                );
-            }
-        }
-
         if suspense_detection.has_suspense && layout_structure.is_valid() {
-            tracing::info!(
-                "Found {} Suspense boundaries with valid layout structure, enabling streaming for route {}",
-                suspense_detection.boundary_count,
-                route_match.route.path
-            );
-
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
                 Arc::clone(&renderer.runtime),
             );
@@ -664,11 +606,6 @@ impl LayoutRenderer {
                 .await?;
 
             return Ok(RenderResult::Streaming(stream));
-        } else if suspense_detection.has_suspense && !layout_structure.is_valid() {
-            warn!(
-                "Found {} Suspense boundaries but layout structure is invalid, falling back to static rendering for route {}",
-                suspense_detection.boundary_count, route_match.route.path
-            );
         }
 
         let page_props = utils::create_page_props(route_match, context)?;
@@ -745,44 +682,6 @@ impl LayoutRenderer {
         if rsc_data.trim().is_empty() {
             let error_msg = error_messages::create_empty_rsc_error_message();
             return Err(RariError::internal(error_msg));
-        }
-
-        let trimmed = rsc_data.trim_start();
-        if !trimmed.starts_with(char::is_numeric) {
-            let warning_msg = error_messages::create_invalid_rsc_format_warning(
-                "missing row ID at start",
-                &trimmed.chars().take(50).collect::<String>(),
-            );
-            tracing::warn!("{}", warning_msg);
-        }
-
-        if !rsc_data.contains("[\"$\"") {
-            let warning_msg = error_messages::create_invalid_rsc_format_warning(
-                "missing React element markers",
-                "Expected to find [\"$\"] markers in the output",
-            );
-            tracing::warn!("{}", warning_msg);
-        }
-
-        let lines: Vec<&str> = rsc_data.lines().collect();
-        for (idx, line) in lines.iter().enumerate() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            if !line.starts_with(char::is_numeric) {
-                let warning_msg = format!(
-                    "⚠️  RSC Wire Format Warning: Invalid Line Format\n\n\
-                    Line {} does not start with a row ID.\n\n\
-                    📍 Line Content (first 50 chars):\n   {}\n\n\
-                    💡 Expected Format:\n   \
-                    Each line should start with a numeric row ID followed by a colon.\n   \
-                    Example: 0:[\"$\",\"html\",null,{{...}}]\n",
-                    idx,
-                    &line.chars().take(50).collect::<String>()
-                );
-                tracing::warn!("{}", warning_msg);
-            }
         }
 
         Ok(())
@@ -887,9 +786,11 @@ impl LayoutRenderer {
                 const React = globalThis.React;
                 const ReactDOMServer = globalThis.ReactDOMServer;
 
-                globalThis.__discovered_boundaries = [];
-                globalThis.__pending_promises = [];
-                globalThis.__deferred_async_components = [];
+                if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
+                globalThis['~suspense'].discoveredBoundaries = [];
+                globalThis['~suspense'].pendingPromises = [];
+                if (!globalThis['~render']) globalThis['~render'] = {{}};
+                globalThis['~render'].deferredAsyncComponents = [];
 
                 {}
             "#,
@@ -933,21 +834,21 @@ impl LayoutRenderer {
         script.push_str(JS_RENDER_TO_RSC);
         script.push_str("\n\n");
         script.push_str("                const startRSC = performance.now();\n");
-        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis.__rsc_client_components || {{}});\n", current_element));
+        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis['~rsc'].clientComponents || {{}});\n", current_element));
         script.push_str(r#"                timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
 
-                const deferredComponents = globalThis.__deferred_async_components || [];
+                const deferredComponents = globalThis['~render']?.deferredAsyncComponents || [];
                 const hasAsync = deferredComponents.length > 0;
                 const deferredCount = deferredComponents.length;
 
                 const result = {
                     rsc_data: rscData,
-                    boundaries: globalThis.__discovered_boundaries || [],
-                    pending_promises: globalThis.__pending_promises || [],
-                    has_suspense: (globalThis.__discovered_boundaries && globalThis.__discovered_boundaries.length > 0) ||
-                                 (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
+                    boundaries: globalThis['~suspense']?.discoveredBoundaries || [],
+                    pending_promises: globalThis['~suspense']?.pendingPromises || [],
+                    has_suspense: (globalThis['~suspense']?.discoveredBoundaries && globalThis['~suspense'].discoveredBoundaries.length > 0) ||
+                                 (globalThis['~suspense']?.pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
                     metadata: {
                         hasAsync: hasAsync,
                         deferredCount: deferredCount,
@@ -960,10 +861,10 @@ impl LayoutRenderer {
                 try {
                     const jsonString = JSON.stringify(result);
                     const cleanResult = JSON.parse(jsonString);
-                    globalThis.__rsc_render_result = cleanResult;
+                    globalThis['~rsc'].renderResult = cleanResult;
                     return cleanResult;
                 } catch (jsonError) {
-                    globalThis.__rsc_render_result = result;
+                    globalThis['~rsc'].renderResult = result;
                     return result;
                 }
             })()

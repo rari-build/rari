@@ -289,18 +289,10 @@ impl RscSerializer {
                     if let Some(module_reference) = self.serialized_modules.get(&component_name) {
                         module_reference.clone()
                     } else {
-                        tracing::warn!(
-                            "Client component '{}' has no registered module - treating as div placeholder",
-                            id
-                        );
                         return create_error_placeholder(id, key, props);
                     }
                 }
                 None => {
-                    tracing::warn!(
-                        "Client component '{}' has invalid format - treating as div placeholder",
-                        id
-                    );
                     return create_error_placeholder(id, key, props);
                 }
             }
@@ -378,11 +370,6 @@ impl RscSerializer {
             self.register_client_component(component_name, file_path, export_name);
             if let Some(module_ref) = self.module_map.get(component_name).cloned() {
                 self.emit_module_import_line(component_name, &module_ref);
-                tracing::info!(
-                    "Registered and emitted module import for client component: {} from {}",
-                    component_name,
-                    file_path
-                );
             }
         }
 

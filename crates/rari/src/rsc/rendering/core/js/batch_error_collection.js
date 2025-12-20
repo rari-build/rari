@@ -1,6 +1,8 @@
 (function () {
-  const errors = globalThis.__batch_errors || []
-  globalThis.__batch_errors = []
+  if (!globalThis['~errors'])
+    globalThis['~errors'] = {}
+  const errors = globalThis['~errors'].batch || []
+  globalThis['~errors'].batch = []
   return {
     success: errors.length === 0,
     errors,

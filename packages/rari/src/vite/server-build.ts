@@ -344,8 +344,8 @@ export class ServerComponentBuilder {
     return code.replace(componentImportRegex, (match, importName, componentName) => {
       return `// Component reference: ${componentName}
 const ${importName} = (props) => {
-  const Component = globalThis.__rsc_components?.['components/${componentName}']
-    || globalThis.__rsc_modules?.['components/${componentName}']?.default
+  const Component = globalThis['~rsc']?.components?.['components/${componentName}']
+    || globalThis['~rsc']?.modules?.['components/${componentName}']?.default
     || globalThis['components/${componentName}'];
   if (!Component) {
     throw new Error('Component components/${componentName} not loaded');
@@ -1097,13 +1097,14 @@ if (!globalThis["${componentId}"]) {
             let mainExport = null;
             const exportedFunctions = {};
 
-            globalThis.__server_functions = globalThis.__server_functions || {};
+            if (!globalThis['~serverFunctions']) globalThis['~serverFunctions'] = {};
+            if (!globalThis['~serverFunctions'].all) globalThis['~serverFunctions'].all = {};
 
             ${namedExports
               .map(
                 name => `if (typeof ${name} !== 'undefined') {
                 globalThis.${name} = ${name};
-                globalThis.__server_functions['${name}'] = ${name};
+                globalThis['~serverFunctions'].all['${name}'] = ${name};
                 exportedFunctions['${name}'] = ${name};
             }`,
               )
@@ -1141,11 +1142,12 @@ if (!globalThis["${componentId}"]) {
                     globalThis[moduleKey] = mainExport;
                 }
 
-                globalThis.__rsc_components = globalThis.__rsc_components || {};
-                globalThis.__rsc_components[moduleKey] = mainExport;
+                if (!globalThis['~rsc']) globalThis['~rsc'] = {};
+                globalThis['~rsc'].components = globalThis['~rsc'].components || {};
+                globalThis['~rsc'].components[moduleKey] = mainExport;
 
-                globalThis.__rsc_modules = globalThis.__rsc_modules || {};
-                globalThis.__rsc_modules[moduleKey] = { default: mainExport, ...exportedFunctions };
+                globalThis['~rsc'].modules = globalThis['~rsc'].modules || {};
+                globalThis['~rsc'].modules[moduleKey] = { default: mainExport, ...exportedFunctions };
 
                 if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
                     globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
@@ -1215,9 +1217,9 @@ function registerClientReference(clientReference, id, exportName) {
   });
 
   try {
-    if (typeof globalThis.__rari_bridge !== 'undefined' &&
-        typeof globalThis.__rari_bridge.registerClientReference === 'function') {
-      globalThis.__rari_bridge.registerClientReference(key, id, exportName);
+    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
+        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
+      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
     }
   } catch (error) {
     console.error('Failed to register client reference with Rust bridge:', error);
@@ -1576,8 +1578,6 @@ export function createServerBuildPlugin(
         if (content.includes('use client')) {
           return
         }
-
-        console.warn(`[server-build] Rebuilding server component: ${relativePath}`)
 
         await builder.buildServerComponents()
       }

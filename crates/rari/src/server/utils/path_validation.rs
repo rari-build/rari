@@ -1,29 +1,16 @@
 use crate::error::RariError;
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
 
 pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
     if requested.contains("..") {
-        warn!(
-            requested = %requested,
-            "Rejected path containing '..' traversal pattern"
-        );
         return Err(RariError::bad_request("Invalid path: contains '..' pattern"));
     }
 
     if requested.contains("//") {
-        warn!(
-            requested = %requested,
-            "Rejected path containing '//' pattern"
-        );
         return Err(RariError::bad_request("Invalid path: contains '//' pattern"));
     }
 
     if requested.contains('\0') {
-        warn!(
-            requested = %requested,
-            "Rejected path containing null byte"
-        );
         return Err(RariError::bad_request("Invalid path: contains null byte"));
     }
 
@@ -32,27 +19,15 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
         && requested.len() > 1
         && requested.chars().nth(1) == Some('/')
     {
-        warn!(
-            requested = %requested,
-            "Rejected absolute path"
-        );
         return Err(RariError::bad_request("Invalid path: absolute paths not allowed"));
     }
 
     if cfg!(windows) && requested.len() >= 2 {
         let chars: Vec<char> = requested.chars().collect();
         if chars.len() >= 2 && chars[1] == ':' && chars[0].is_ascii_alphabetic() {
-            warn!(
-                requested = %requested,
-                "Rejected Windows drive path"
-            );
             return Err(RariError::bad_request("Invalid path: drive paths not allowed"));
         }
         if requested.starts_with("\\\\") || requested.starts_with("//") {
-            warn!(
-                requested = %requested,
-                "Rejected UNC path"
-            );
             return Err(RariError::bad_request("Invalid path: UNC paths not allowed"));
         }
     }
@@ -63,98 +38,72 @@ pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariE
 
     let canonical_path = match path.canonicalize() {
         Ok(p) => p,
-        Err(e) => {
-            debug!(
-                requested = %requested,
-                base = %base.display(),
-                error = %e,
-                "Path canonicalization failed (file may not exist)"
-            );
+        Err(_) => {
             return Err(RariError::not_found("File not found"));
         }
     };
 
     let canonical_base = match base.canonicalize() {
         Ok(b) => b,
-        Err(e) => {
-            warn!(
-                base = %base.display(),
-                error = %e,
-                "Base directory canonicalization failed"
-            );
+        Err(_) => {
             return Err(RariError::internal("Invalid base directory configuration"));
         }
     };
 
     if !canonical_path.starts_with(&canonical_base) {
-        warn!(
-            requested = %requested,
-            canonical_path = %canonical_path.display(),
-            canonical_base = %canonical_base.display(),
-            "Path traversal attempt detected: resolved path outside base directory"
-        );
         return Err(RariError::bad_request("Path traversal detected"));
     }
-
-    debug!(
-        requested = %requested,
-        resolved = %canonical_path.display(),
-        "Path validation successful"
-    );
 
     Ok(canonical_path)
 }
 
+pub fn normalize_component_path(file_path: &str) -> String {
+    let path = Path::new(file_path);
+
+    if path.is_absolute() {
+        let components: Vec<_> = path.components().collect();
+
+        if let Some(src_idx) = components.iter().position(|c| c.as_os_str() == "src") {
+            let after_src: PathBuf = components[src_idx..].iter().collect();
+            return after_src.to_string_lossy().replace('\\', "/");
+        } else if let Some(app_idx) = components.iter().position(|c| c.as_os_str() == "app") {
+            let after_app: PathBuf = components[app_idx..].iter().collect();
+            return after_app.to_string_lossy().replace('\\', "/");
+        }
+    }
+
+    file_path.replace('\\', "/")
+}
+
 pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {
-    if !file_path.starts_with("app/") && !file_path.starts_with("src/") {
-        warn!(
-            file_path = %file_path,
-            "Rejected component path: must start with app/ or src/"
-        );
+    let normalized = normalize_component_path(file_path);
+
+    if !normalized.starts_with("app/") && !normalized.starts_with("src/") {
         return Err(RariError::bad_request(
             "Invalid component path: must be within app/ or src/ directory",
         ));
     }
 
+    let file_path = &normalized;
+
     if file_path.contains("..") {
-        warn!(
-            file_path = %file_path,
-            "Rejected component path containing '..'"
-        );
         return Err(RariError::bad_request("Path traversal detected in component path"));
     }
 
     if file_path.contains("//") {
-        warn!(
-            file_path = %file_path,
-            "Rejected component path containing '//'"
-        );
         return Err(RariError::bad_request("Invalid component path: contains '//'"));
     }
 
     let allowed_extensions = [".ts", ".tsx", ".js", ".jsx"];
     if !allowed_extensions.iter().any(|ext| file_path.ends_with(ext)) {
-        warn!(
-            file_path = %file_path,
-            "Rejected component path with invalid extension"
-        );
         return Err(RariError::bad_request(
             "Invalid file extension: must be .ts, .tsx, .js, or .jsx",
         ));
     }
 
     if file_path.contains('\0') {
-        warn!(
-            file_path = %file_path,
-            "Rejected component path containing null byte"
-        );
         return Err(RariError::bad_request("Invalid path: contains null byte"));
     }
-
-    debug!(
-        file_path = %file_path,
-        "Component path validation successful"
-    );
 
     Ok(())
 }

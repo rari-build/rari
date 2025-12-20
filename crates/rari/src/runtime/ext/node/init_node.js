@@ -480,8 +480,10 @@ const nodeModules = new Map([
   ],
 ])
 
-if (!globalThis.__nodeModules) {
-  globalThis.__nodeModules = nodeModules
+if (!globalThis['~node'])
+  globalThis['~node'] = {}
+if (!globalThis['~node'].modules) {
+  globalThis['~node'].modules = nodeModules
 }
 
 if (globalThis.import) {
@@ -495,8 +497,8 @@ if (globalThis.import) {
     }
 
     return originalImport.call(this, specifier).catch((error) => {
-      if (globalThis.__rari_runtime_state) {
-        globalThis.__rari_runtime_state.import_errors.push({
+      if (globalThis['~rari']?.runtimeState) {
+        globalThis['~rari'].runtimeState.import_errors.push({
           specifier,
           error: error.message,
           timestamp: Date.now(),

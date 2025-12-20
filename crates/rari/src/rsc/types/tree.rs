@@ -261,8 +261,6 @@ impl RSCTree {
             }
             Value::Object(obj) => {
                 if obj.contains_key("~preSerializedSuspense") && obj.contains_key("rscArray") {
-                    tracing::debug!("Unwrapping pre-serialized Suspense boundary");
-
                     if let Some(rsc_array) = obj.get("rscArray") {
                         return RSCTree::from_json(rsc_array);
                     } else {

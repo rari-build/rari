@@ -21,7 +21,7 @@ use axum::{
 };
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use tracing::{error, warn};
+use tracing::error;
 
 fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>) -> String {
     let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
@@ -153,11 +153,7 @@ pub async fn render_with_fallback(
     {
         Ok(response) => Ok(response),
         Err(e) => {
-            warn!(
-                "Streaming failed for route {}, falling back to synchronous rendering: {:?}",
-                route_match.route.path, e
-            );
-
+            error!("Streaming render failed, falling back to synchronous: {}", e);
             render_synchronous(state, route_match, context).await
         }
     }
@@ -193,7 +189,7 @@ pub async fn render_synchronous(
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
                         Ok(html) => html,
                         Err(e) => {
-                            warn!("Failed to inject assets, using original HTML: {}", e);
+                            error!("Failed to inject assets into HTML: {}", e);
                             html_with_metadata
                         }
                     };
@@ -208,7 +204,6 @@ pub async fn render_synchronous(
                     .expect("Valid HTML response"))
             }
             crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
-                warn!("Unexpected streaming result in render_synchronous, falling back to shell");
                 render_fallback_html(&state, &route_match.route.path).await
             }
         },
@@ -249,7 +244,6 @@ pub async fn render_streaming_with_layout(
                 error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
             }
 
-            warn!("Falling back to synchronous rendering due to render_route failure");
             return render_synchronous(state, route_match, context).await;
         }
     };
@@ -263,7 +257,7 @@ pub async fn render_streaming_with_layout(
             {
                 Ok(html) => html,
                 Err(e) => {
-                    warn!("Failed to inject assets, using original HTML: {}", e);
+                    error!("Failed to inject assets into HTML: {}", e);
                     html_with_metadata
                 }
             };
@@ -285,7 +279,7 @@ pub async fn render_streaming_with_layout(
             {
                 Ok(html) => html,
                 Err(e) => {
-                    warn!("Failed to inject assets, using original HTML: {}", e);
+                    error!("Failed to inject assets into HTML: {}", e);
                     html_with_payload
                 }
             };
@@ -371,7 +365,6 @@ pub async fn render_streaming_with_layout(
                         }
                         Err(e) => {
                             if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                warn!("Client disconnected, stopping stream processing");
                                 should_continue_clone.store(false, std::sync::atomic::Ordering::Relaxed);
                                 break;
                             }
@@ -411,27 +404,22 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
                 .expect("Valid HTML response"));
         }
 
-        match std::fs::read_to_string(&index_path) {
-            Ok(html_content) => {
-                let final_html = if state.config.is_development() {
-                    inject_vite_client(&html_content, state.config.vite.port)
-                } else {
-                    html_content
-                };
+        if let Ok(html_content) = std::fs::read_to_string(&index_path) {
+            let final_html = if state.config.is_development() {
+                inject_vite_client(&html_content, state.config.vite.port)
+            } else {
+                html_content
+            };
 
-                if state.config.is_production() {
-                    state.html_cache.insert(path.to_string(), final_html.clone());
-                }
+            if state.config.is_production() {
+                state.html_cache.insert(path.to_string(), final_html.clone());
+            }
 
-                return Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(final_html))
-                    .expect("Valid HTML response"));
-            }
-            Err(e) => {
-                warn!("Failed to read index.html from {:?}: {}", index_path, e);
-            }
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(final_html))
+                .expect("Valid HTML response"));
         }
     }
 
@@ -481,7 +469,6 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
 </body>
 </html>"#;
 
-    warn!("No built files found, serving error page");
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "text/html; charset=utf-8")
@@ -517,10 +504,6 @@ pub async fn handle_app_route(
                 if path_without_leading_slash.starts_with(blocked)
                     || path_without_leading_slash == *blocked
                 {
-                    warn!(
-                        requested_path = %path,
-                        "Blocked access to sensitive internal file"
-                    );
                     return Err(StatusCode::NOT_FOUND);
                 }
             }
@@ -530,14 +513,7 @@ pub async fn handle_app_route(
             let file_path =
                 match validate_safe_path(state.config.public_dir(), path_without_leading_slash) {
                     Ok(path) => path,
-                    Err(e) => {
-                        warn!(
-                            requested_path = %path,
-                            error = %e,
-                            "Path validation failed for static file request"
-                        );
-                        return Err(StatusCode::NOT_FOUND);
-                    }
+                    Err(_) => return Err(StatusCode::NOT_FOUND),
                 };
 
             if file_path.is_file() {
@@ -597,28 +573,17 @@ pub async fn handle_app_route(
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
-        tracing::debug!("Checking getData for dynamic route: {}", path);
         match layout_renderer.check_page_not_found(&route_match, &context).await {
             Ok(true) => {
-                tracing::info!("Page getData returned notFound=true for route: {}", path);
                 if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
                     route_match.not_found = Some(not_found_entry);
-                    tracing::debug!("Set not_found entry for route: {}", path);
                 }
             }
-            Ok(false) => {
-                tracing::debug!("Page getData returned notFound=false for route: {}", path);
-            }
+            Ok(false) => {}
             Err(e) => {
-                warn!("Failed to check getData for route {}: {}", path, e);
+                error!("Failed to check if page is not found: {}", e);
             }
         }
-    } else {
-        tracing::debug!(
-            "Skipping getData check - not_found={:?}, is_dynamic={}",
-            route_match.not_found.is_some(),
-            route_match.route.is_dynamic
-        );
     }
 
     match render_mode {
@@ -732,7 +697,10 @@ pub async fn handle_app_route(
                     let html_with_assets =
                         match inject_assets_into_html(&html_with_metadata, &state.config).await {
                             Ok(html) => html,
-                            Err(_) => html_with_metadata,
+                            Err(e) => {
+                                error!("Failed to inject assets into HTML: {}", e);
+                                html_with_metadata
+                            }
                         };
 
                     let etag =
@@ -752,7 +720,10 @@ pub async fn handle_app_route(
                     let html_with_assets =
                         match inject_assets_into_html(&html_with_payload, &state.config).await {
                             Ok(html) => html,
-                            Err(_) => html_with_payload,
+                            Err(e) => {
+                                error!("Failed to inject assets into HTML: {}", e);
+                                html_with_payload
+                            }
                         };
 
                     let etag =
@@ -815,7 +786,6 @@ pub async fn handle_app_route(
                                         }
                                         Err(e) => {
                                             if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                                warn!("Client disconnected, stopping stream processing");
                                                 should_continue_clone.store(false, std::sync::atomic::Ordering::Relaxed);
                                                 break;
                                             }

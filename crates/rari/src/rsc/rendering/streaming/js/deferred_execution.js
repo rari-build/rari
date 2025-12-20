@@ -11,17 +11,17 @@
     }
   }
 
-  if (!globalThis.__deferred_async_components) {
+  if (!globalThis['~render']?.deferredAsyncComponents) {
     return { success: true, count: 0, total: 0, results: [] }
   }
 
-  if (!Array.isArray(globalThis.__deferred_async_components)) {
+  if (!Array.isArray(globalThis['~render'].deferredAsyncComponents)) {
     return {
       success: false,
-      error: '__deferred_async_components is not an array',
+      error: 'deferredAsyncComponents is not an array',
       errorContext: {
         phase: 'pre_execution_validation',
-        actualType: typeof globalThis.__deferred_async_components,
+        actualType: typeof globalThis['~render'].deferredAsyncComponents,
       },
     }
   }
@@ -65,10 +65,12 @@
     return errorInfo
   }
 
-  if (globalThis.__deferred_async_components && globalThis.__deferred_async_components.length > 0) {
+  if (globalThis['~render']?.deferredAsyncComponents && globalThis['~render'].deferredAsyncComponents.length > 0) {
     const results = []
-    for (const deferred of globalThis.__deferred_async_components) {
-      globalThis.__current_executing_component = {
+    for (const deferred of globalThis['~render'].deferredAsyncComponents) {
+      if (!globalThis['~render'].currentExecuting)
+        globalThis['~render'].currentExecuting = {}
+      globalThis['~render'].currentExecuting = {
         promiseId: deferred.promiseId,
         componentPath: deferred.componentPath,
         boundaryId: deferred.boundaryId,
@@ -139,11 +141,14 @@
           continue
         }
 
-        globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-        globalThis.__suspense_promises[deferred.promiseId] = componentPromise
+        if (!globalThis['~suspense'])
+          globalThis['~suspense'] = {}
+        if (!globalThis['~suspense'].promises)
+          globalThis['~suspense'].promises = {}
+        globalThis['~suspense'].promises[deferred.promiseId] = componentPromise
 
-        if (!globalThis.__suspense_promises[deferred.promiseId]) {
-          const availablePromiseIds = Object.keys(globalThis.__suspense_promises || {})
+        if (!globalThis['~suspense'].promises[deferred.promiseId]) {
+          const availablePromiseIds = Object.keys(globalThis['~suspense'].promises || {})
           results.push({
             promiseId: deferred.promiseId,
             success: false,
@@ -175,10 +180,11 @@
       }
     }
 
-    globalThis.__current_executing_component = null
+    if (globalThis['~render'])
+      globalThis['~render'].currentExecuting = null
 
     const successCount = results.filter(r => r.success).length
-    globalThis.__deferred_async_components = []
+    globalThis['~render'].deferredAsyncComponents = []
     return {
       success: true,
       count: successCount,

@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tracing::{debug, error, warn};
+use tracing::error;
 
 pub mod tests;
 
@@ -113,7 +113,6 @@ impl RscHtmlRenderer {
             }
             Err(e) => {
                 if is_dev_mode {
-                    warn!("index.html not found, using generated template: {}", e);
                     self.generate_dev_template_fallback()
                 } else {
                     return Err(e);
@@ -321,24 +320,6 @@ impl RscHtmlRenderer {
             FxHashMap::default()
         };
 
-        if tag == "react.suspense" {
-            let boundary_id =
-                props.get("~boundaryId").and_then(|v| v.as_str()).unwrap_or("unknown");
-
-            if !props.contains_key("fallback") {
-                warn!(
-                    "🔍 RSC_RENDERER: Suspense boundary missing fallback prop, boundary_id={}",
-                    boundary_id
-                );
-            }
-            if !props.contains_key("children") {
-                warn!(
-                    "🔍 RSC_RENDERER: Suspense boundary missing children prop, boundary_id={}",
-                    boundary_id
-                );
-            }
-        }
-
         Ok(RscElement::Component { tag, key, props })
     }
 
@@ -522,11 +503,6 @@ impl RscHtmlRenderer {
         content_rsc: &JsonValue,
         row_id: u32,
     ) -> Result<String, RariError> {
-        debug!(
-            "🔍 BOUNDARY_UPDATE: Generating boundary update HTML, boundary_id={}, row_id={}",
-            boundary_id, row_id
-        );
-
         let content_html = self.render_rsc_value_to_html(content_rsc).await?;
 
         let escaped_content =
@@ -534,7 +510,7 @@ impl RscHtmlRenderer {
 
         let update_script = format!(
             r#"<script data-~boundary-id="{}" data-row-id="{}">
-window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
+window['~rari'] && window['~rari'].processBoundaryUpdate('{}', `{}`, {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
             row_id,
@@ -570,14 +546,9 @@ window.__rari && window.__rari.processBoundaryUpdate('{}', `{}`, {});
         error_message: &str,
         row_id: u32,
     ) -> String {
-        debug!(
-            "Generating boundary error HTML for boundary_id: {}, row_id: {}, error: {}",
-            boundary_id, row_id, error_message
-        );
-
         let error_script = format!(
             r#"<script data-~boundary-id="{}" data-row-id="{}">
-window.__rari && window.__rari.processBoundaryError('{}', '{}', {});
+window['~rari'] && window['~rari'].processBoundaryError('{}', '{}', {});
 </script>"#,
             Self::escape_html_attribute(boundary_id),
             row_id,
@@ -669,7 +640,6 @@ impl RscToHtmlConverter {
                         }
                         Err(e) => {
                             error!("Error parsing RSC in shell: {}", e);
-                            warn!("Continuing stream with shell only due to RSC parse error");
                             output
                         }
                     }
@@ -678,7 +648,6 @@ impl RscToHtmlConverter {
                         Ok(html) => html,
                         Err(e) => {
                             error!("Error parsing RSC chunk: {}", e);
-                            warn!("Skipping chunk due to parse error, continuing stream");
                             Vec::new()
                         }
                     }
@@ -687,12 +656,10 @@ impl RscToHtmlConverter {
             }
 
             RscChunkType::BoundaryUpdate => {
-                debug!("🔍 Processing BoundaryUpdate chunk, row_id: {}", chunk.row_id);
                 match self.generate_boundary_replacement(&chunk).await {
                     Ok(html) => Ok(html),
                     Err(e) => {
                         error!("Error generating boundary replacement: {}", e);
-                        warn!("Skipping boundary update due to error, continuing stream");
                         Ok(Vec::new())
                     }
                 }
@@ -702,15 +669,11 @@ impl RscToHtmlConverter {
                 Ok(html) => Ok(html),
                 Err(e) => {
                     error!("Error generating error replacement: {}", e);
-                    warn!("Using fallback error message");
                     Ok(self.generate_fallback_error_html())
                 }
             },
 
-            RscChunkType::StreamComplete => {
-                debug!("🔍 CHUNK_CONVERT: Stream complete");
-                Ok(self.generate_html_closing())
-            }
+            RscChunkType::StreamComplete => Ok(self.generate_html_closing()),
         };
 
         if let Err(ref e) = result {
@@ -774,7 +737,8 @@ impl RscToHtmlConverter {
 {}
 <script>
 if (typeof window !== 'undefined') {{
-    window.__rari_stream_complete = true;
+    if (!window['~rari']) window['~rari'] = {{}};
+    window['~rari'].streamComplete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
 }}
 </script>
@@ -795,18 +759,15 @@ if (typeof window !== 'undefined') {{
 
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
         if parts.len() != 2 {
-            debug!("Skipping chunk with invalid format (expected 'row_id:data'): {:?}", rsc_line);
             return Ok(Vec::new());
         }
 
         let json_str = parts[1].trim();
         if json_str.is_empty() {
-            debug!("Skipping chunk with empty JSON data for row_id: {}", parts[0]);
             return Ok(Vec::new());
         }
 
         if json_str.starts_with('I') || json_str.starts_with('S') {
-            debug!("Skipping metadata chunk (module import or symbol) for row_id: {}", parts[0]);
             return Ok(Vec::new());
         }
 
@@ -908,10 +869,6 @@ if (typeof window !== 'undefined') {{
                     self.rari_to_react_boundary_map
                         .lock()
                         .insert(rari_boundary_id.to_string(), new_id.clone());
-                    debug!(
-                        "🔍 RSC_TO_HTML: Created boundary mapping, rari_boundary_id={}, react_boundary_id={}",
-                        rari_boundary_id, new_id
-                    );
                     (new_id, false)
                 }
             };
@@ -991,59 +948,36 @@ if (typeof window !== 'undefined') {{
         &self,
         chunk: &RscStreamChunk,
     ) -> Result<Vec<u8>, RariError> {
-        debug!("🔍 Generating boundary replacement for row_id: {}", chunk.row_id);
-
         let rsc_line = String::from_utf8_lossy(&chunk.data);
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
 
         if parts.len() != 2 {
-            warn!("Invalid boundary update format: missing colon separator");
             return Ok(Vec::new());
         }
 
         let rsc_data: serde_json::Value = serde_json::from_str(parts[1])
             .map_err(|e| RariError::internal(format!("Invalid boundary update JSON: {}", e)))?;
 
-        if let Some(obj) = rsc_data.as_object() {
-            if let (Some(boundary_id_value), Some(content)) =
+        if let Some(obj) = rsc_data.as_object()
+            && let (Some(boundary_id_value), Some(content)) =
                 (obj.get("boundary_id"), obj.get("content"))
-            {
-                if let Some(rari_boundary_id) = boundary_id_value.as_str() {
-                    let react_boundary_id =
-                        self.rari_to_react_boundary_map.lock().get(rari_boundary_id).cloned();
+            && let Some(rari_boundary_id) = boundary_id_value.as_str()
+        {
+            let react_boundary_id =
+                self.rari_to_react_boundary_map.lock().get(rari_boundary_id).cloned();
 
-                    if let Some(react_boundary_id) = react_boundary_id {
-                        debug!("🔍 Boundary update: {} -> {}", rari_boundary_id, react_boundary_id);
+            if let Some(react_boundary_id) = react_boundary_id {
+                let content_html = self.rsc_element_to_html(content).await?;
 
-                        let content_html = self.rsc_element_to_html(content).await?;
-                        debug!(
-                            "🔍 Boundary update content HTML length: {} bytes",
-                            content_html.len()
-                        );
+                let content_id = format!("S:{}", react_boundary_id.trim_start_matches("B:"));
 
-                        let content_id =
-                            format!("S:{}", react_boundary_id.trim_start_matches("B:"));
+                let update_html = format!(
+                    r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{}","{}");</script>"#,
+                    content_id, content_html, react_boundary_id, content_id
+                );
 
-                        let update_html = format!(
-                            r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{}","{}");</script>"#,
-                            content_id, content_html, react_boundary_id, content_id
-                        );
-
-                        return Ok(update_html.into_bytes());
-                    } else {
-                        warn!(
-                            "No React boundary ID mapping found for Rari boundary: {}",
-                            rari_boundary_id
-                        );
-                    }
-                } else {
-                    warn!("Boundary update boundary_id is not a string");
-                }
-            } else {
-                warn!("Boundary update missing boundary_id or content property");
+                return Ok(update_html.into_bytes());
             }
-        } else {
-            warn!("Boundary update is not an object: {:?}", rsc_data);
         }
 
         Ok(Vec::new())
@@ -1057,7 +991,6 @@ if (typeof window !== 'undefined') {{
         let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
 
         if parts.len() != 2 {
-            warn!("Invalid error chunk format, missing colon separator");
             return Ok(self.generate_fallback_error_html());
         }
 
@@ -1066,7 +999,7 @@ if (typeof window !== 'undefined') {{
         let error_data = match serde_json::from_str::<serde_json::Value>(json_part) {
             Ok(data) => data,
             Err(e) => {
-                warn!("Failed to parse error chunk JSON: {}", e);
+                error!("Failed to parse error data from stream, using fallback: {}", e);
                 return Ok(self.generate_fallback_error_html());
             }
         };
@@ -1075,17 +1008,10 @@ if (typeof window !== 'undefined') {{
         let error_message =
             error_data["error"].as_str().unwrap_or("Error loading content").to_string();
 
-        debug!(
-            "Generating error replacement for boundary: {}, error: {}",
-            rari_boundary_id, error_message
-        );
-
         let react_boundary_id =
             self.rari_to_react_boundary_map.lock().get(&rari_boundary_id).cloned();
 
         if let Some(react_boundary_id) = react_boundary_id {
-            debug!("🔍 Error boundary update: {} -> {}", rari_boundary_id, react_boundary_id);
-
             let error_html = format!(
                 r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;">
                 <strong>Error loading content:</strong> {}
@@ -1102,7 +1028,6 @@ if (typeof window !== 'undefined') {{
 
             Ok(error_update.into_bytes())
         } else {
-            warn!("No React boundary ID mapping found for Rari boundary: {}", rari_boundary_id);
             Ok(self.generate_fallback_error_html())
         }
     }

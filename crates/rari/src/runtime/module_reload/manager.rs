@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::error;
 
 pub struct ModuleReloadManager {
     reload_queue: Arc<Mutex<VecDeque<ModuleReloadRequest>>>,
@@ -163,13 +163,6 @@ impl ModuleReloadManager {
         let file_path = file_path.to_path_buf();
         let debounce_delay = Duration::from_millis(self.config.debounce_delay_ms);
 
-        if self.debounce_manager.cancel_pending(&component_id).await {
-            debug!(
-                component_id = %component_id,
-                "Cancelled pending reload due to new file change"
-            );
-        }
-
         let manager = self.clone_for_task();
         let component_id_clone = component_id.clone();
         let file_path_clone = file_path.clone();
@@ -179,17 +172,13 @@ impl ModuleReloadManager {
 
             manager.debounce_manager.remove_pending(&component_id_clone).await;
 
-            let _ = manager.reload_module(&component_id_clone, &file_path_clone).await;
+            if let Err(e) = manager.reload_module(&component_id_clone, &file_path_clone).await {
+                error!("Failed to reload module {}: {}", component_id_clone, e);
+            }
         });
 
         let request = ModuleReloadRequest::new(component_id.clone(), file_path.clone());
         self.debounce_manager.add_pending(component_id.clone(), request, handle).await;
-
-        debug!(
-            component_id = %component_id,
-            debounce_delay_ms = self.config.debounce_delay_ms,
-            "Scheduled debounced module reload"
-        );
 
         Ok(())
     }
@@ -205,12 +194,6 @@ impl ModuleReloadManager {
 
         let start = Instant::now();
 
-        info!(
-            component_id = component_id,
-            file_path = ?file_path,
-            "Reloading module"
-        );
-
         let result = self.reload_with_retry(component_id, file_path).await;
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -219,21 +202,7 @@ impl ModuleReloadManager {
         self.add_to_history(component_id.to_string(), result.is_ok(), duration_ms).await;
 
         match &result {
-            Ok(_) => {
-                debug!(
-                    component_id = component_id,
-                    duration_ms = duration_ms,
-                    "Module reload completed successfully"
-                );
-
-                if duration_ms > 1000 {
-                    warn!(
-                        component_id = component_id,
-                        duration_ms = duration_ms,
-                        "Module reload was slow (> 1 second)"
-                    );
-                }
-            }
+            Ok(_) => {}
             Err(e) => {
                 error!(
                     component_id = component_id,
@@ -268,14 +237,7 @@ impl ModuleReloadManager {
                         last_error: Some(e.to_string()),
                     }));
                 }
-                Err(e) => {
-                    warn!(
-                        component_id = component_id,
-                        attempt = attempts,
-                        max_attempts = max_attempts,
-                        error = %e,
-                        "Reload attempt failed, retrying..."
-                    );
+                Err(_) => {
                     tokio::time::sleep(Duration::from_millis(100 * attempts as u64)).await;
                 }
             }
@@ -285,9 +247,9 @@ impl ModuleReloadManager {
     async fn reload_module_internal(
         &self,
         component_id: &str,
-        file_path: &Path,
+        _file_path: &Path,
     ) -> Result<(), RariError> {
-        let _runtime = self.runtime.as_ref().ok_or_else(|| {
+        self.runtime.as_ref().ok_or_else(|| {
             RariError::module_reload(ModuleReloadError::RuntimeNotAvailable {
                 message: "Runtime not available".to_string(),
             })
@@ -297,12 +259,6 @@ impl ModuleReloadManager {
             let mut reg = registry.lock();
             reg.remove_component(component_id);
         }
-
-        debug!(
-            component_id = component_id,
-            file_path = ?file_path,
-            "Module reload internal implementation"
-        );
 
         Ok(())
     }

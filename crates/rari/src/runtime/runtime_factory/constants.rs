@@ -6,7 +6,7 @@ pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
 pub const COMPONENT_PREFIX: &str = "component_";
 pub const VERIFY_REGISTRATION_PREFIX: &str = "verify_registration_";
-pub const RARI_REGISTER_FUNCTION: &str = "__rari_register";
+pub const RARI_REGISTER_FUNCTION: &str = "~rari_register";
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
 pub const JS_EXECUTOR_FAILED_ERROR: &str = "JS executor failed to respond";
@@ -39,59 +39,60 @@ pub const MODULE_CHECK_SCRIPT: &str = r#"
 pub const PROMISE_SETUP_SCRIPT: &str = r#"
 (function() {
     try {
-        const promise = globalThis.__current_promise_object;
+        if (!globalThis['~promises']) globalThis['~promises'] = {};
+        const promise = globalThis['~promises'].currentObject;
         if (!promise || typeof promise.then !== 'function') {
-            globalThis.__promise_resolved_value = {
-                __error: "Not a valid promise",
+            globalThis['~promises'].resolvedValue = {
+                '~error': "Not a valid promise",
                 received: typeof promise,
                 promiseToString: String(promise)
             };
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolutionComplete = true;
             return;
         }
 
-        globalThis.__promise_resolved_value = null;
-        globalThis.__promise_resolution_complete = false;
+        globalThis['~promises'].resolvedValue = null;
+        globalThis['~promises'].resolutionComplete = false;
 
         promise.then(function(resolvedValue) {
-            globalThis.__promise_resolved_value = resolvedValue;
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolvedValue = resolvedValue;
+            globalThis['~promises'].resolutionComplete = true;
         }).catch(function(error) {
-            globalThis.__promise_resolved_value = {
-                __promise_error: true,
+            globalThis['~promises'].resolvedValue = {
+                '~promiseError': true,
                 error: String(error),
                 stack: error.stack || "No stack trace"
             };
-            globalThis.__promise_resolution_complete = true;
+            globalThis['~promises'].resolutionComplete = true;
         });
     } catch (error) {
-        globalThis.__promise_resolved_value = {
-            __promise_error: true,
+        globalThis['~promises'].resolvedValue = {
+            '~promiseError': true,
             error: String(error),
             stack: error.stack || "No stack trace"
         };
-        globalThis.__promise_resolution_complete = true;
+        globalThis['~promises'].resolutionComplete = true;
     }
 })()
 "#;
 
 pub const PROMISE_EXTRACT_SCRIPT: &str = r#"
 (function() {
-    if (globalThis.__promise_resolution_complete === true) {
-        return globalThis.__promise_resolved_value;
+    if (!globalThis['~promises']) globalThis['~promises'] = {};
+    if (globalThis['~promises'].resolutionComplete === true) {
+        return globalThis['~promises'].resolvedValue;
     } else {
         return {
-            __timeout_error: "Promise did not resolve in time",
-            __debug_info: {
-                completion_flag: globalThis.__promise_resolution_complete,
-                resolved_value: globalThis.__promise_resolved_value
+            '~timeoutError': "Promise did not resolve in time",
+            '~debugInfo': {
+                completion_flag: globalThis['~promises'].resolutionComplete,
+                resolved_value: globalThis['~promises'].resolvedValue
             }
         };
     }
 })()
 "#;
 
-// Helper functions
 pub fn is_critical_error(error: &RariError) -> bool {
     let error_str = error.to_string();
     error_str.contains("assertion") || error_str.contains("panicked")

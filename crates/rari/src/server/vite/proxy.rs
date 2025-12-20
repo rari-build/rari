@@ -14,7 +14,7 @@ use futures_util::SinkExt;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{debug, error, info, warn};
+use tracing::error;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
@@ -51,8 +51,6 @@ pub async fn vite_src_proxy(
 
     let target_url = format!("{vite_base_url}/src/{path}{query_string}");
 
-    debug!("Proxying src request to Vite server: {}", target_url);
-
     match client.get(&target_url).send().await {
         Ok(response) => {
             let status = response.status();
@@ -81,8 +79,6 @@ pub async fn vite_src_proxy(
             }
         }
         Err(e) => {
-            warn!("Failed to proxy src request to Vite server: {}", e);
-
             if e.is_connect() {
                 create_error_response(
                     StatusCode::BAD_GATEWAY,
@@ -132,8 +128,6 @@ pub async fn vite_reverse_proxy(
 
     let target_url = format!("{vite_base_url}/vite-server/{path}{query_string}");
 
-    debug!("Proxying request to Vite server: {}", target_url);
-
     match client.get(&target_url).send().await {
         Ok(response) => {
             let status = response.status();
@@ -162,8 +156,6 @@ pub async fn vite_reverse_proxy(
             }
         }
         Err(e) => {
-            warn!("Failed to proxy request to Vite server: {}", e);
-
             if e.is_connect() {
                 create_error_response(
                     StatusCode::BAD_GATEWAY,
@@ -186,8 +178,6 @@ pub async fn vite_websocket_proxy(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 async fn handle_websocket(mut client_socket: WebSocket) {
-    info!("New WebSocket connection for Vite HMR proxy");
-
     if let Err(e) = client_socket.send(WsMessage::Ping("rari-vite-proxy".into())).await {
         error!("Failed to send initial ping to client: {}", e);
         return;
@@ -220,10 +210,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
     };
 
     let vite_socket = match connect_async(vite_ws_request).await {
-        Ok((stream, _)) => {
-            info!("Successfully connected to Vite WebSocket server");
-            stream
-        }
+        Ok((stream, _)) => stream,
         Err(e) => {
             error!("Failed to connect to Vite WebSocket server: {}", e);
 
@@ -249,8 +236,7 @@ async fn handle_websocket(mut client_socket: WebSocket) {
         while let Some(msg) = client_receiver.next().await {
             let msg = match msg {
                 Ok(msg) => msg,
-                Err(e) => {
-                    debug!("Client WebSocket error: {}", e);
+                Err(_) => {
                     break;
                 }
             };
@@ -260,21 +246,17 @@ async fn handle_websocket(mut client_socket: WebSocket) {
                 None => continue,
             };
 
-            if let Err(e) = vite_sender.send(vite_msg).await {
-                debug!("Failed to forward message to Vite server: {}", e);
+            if vite_sender.send(vite_msg).await.is_err() {
                 break;
             }
         }
-
-        debug!("Client to Vite message forwarding ended");
     });
 
     let vite_to_client = tokio::spawn(async move {
         while let Some(msg) = vite_receiver.next().await {
             let msg = match msg {
                 Ok(msg) => msg,
-                Err(e) => {
-                    debug!("Vite WebSocket error: {}", e);
+                Err(_) => {
                     break;
                 }
             };
@@ -284,25 +266,16 @@ async fn handle_websocket(mut client_socket: WebSocket) {
                 None => continue,
             };
 
-            if let Err(e) = client_sender.send(client_msg).await {
-                debug!("Failed to forward message to client: {}", e);
+            if client_sender.send(client_msg).await.is_err() {
                 break;
             }
         }
-
-        debug!("Vite to client message forwarding ended");
     });
 
     tokio::select! {
-        _ = client_to_vite => {
-            debug!("Client to Vite forwarding completed");
-        }
-        _ = vite_to_client => {
-            debug!("Vite to client forwarding completed");
-        }
+        _ = client_to_vite => {}
+        _ = vite_to_client => {}
     }
-
-    info!("WebSocket proxy connection closed");
 }
 
 fn convert_axum_to_tungstenite_message(msg: WsMessage) -> Option<Message> {
@@ -322,10 +295,7 @@ fn convert_tungstenite_to_axum_message(msg: Message) -> Option<WsMessage> {
         Message::Ping(data) => Some(WsMessage::Ping(data)),
         Message::Pong(data) => Some(WsMessage::Pong(data)),
         Message::Close(_) => Some(WsMessage::Close(None)),
-        Message::Frame(_) => {
-            debug!("Received raw WebSocket frame, skipping");
-            None
-        }
+        Message::Frame(_) => None,
     }
 }
 
@@ -359,7 +329,6 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
     match client.get(&health_url).send().await {
         Ok(response) => {
             if response.status().is_success() {
-                info!("Vite development server is running at {}", config.vite_address());
                 Ok(())
             } else {
                 Err(RariError::network(format!(

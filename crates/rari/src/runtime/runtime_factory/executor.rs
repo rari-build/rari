@@ -96,9 +96,6 @@ async fn execute_as_module(
         Ok(id) => id,
         Err(load_err) => {
             if load_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
-                println!(
-                    "[RARI_HMR] Module '{script_name}' already loaded, continuing with evaluation"
-                );
                 return Ok(create_already_loaded_response(script_name));
             } else {
                 return Err(RariError::js_execution(format!(
@@ -225,20 +222,31 @@ async fn handle_promise_result(
     script_name: &str,
     _global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
 ) -> Result<JsonValue, RariError> {
+    let setup_promise_storage = r#"
+        (function() {
+            if (!globalThis['~promises']) globalThis['~promises'] = {};
+            globalThis['~promises'].currentObject = __temp_promise_ref__;
+        })()
+        "#;
+
     with_scope!(runtime, |scope| {
         let local_v8_val = deno_core::v8::Local::new(scope, &_global_v8_val);
         let context = scope.get_current_context();
         let global = context.global(scope);
-        let key = match deno_core::v8::String::new(scope, "__current_promise_object") {
+        let key = match deno_core::v8::String::new(scope, "__temp_promise_ref__") {
             Some(key) => key,
             None => {
-                error!("Failed to create V8 string for __current_promise_object");
+                error!("Failed to create V8 string for __temp_promise_ref__");
                 return Err(RariError::internal("Failed to create V8 string".to_string()));
             }
         };
         global.set(scope, key.into(), local_v8_val);
         Ok::<(), RariError>(())
     })?;
+
+    runtime
+        .execute_script("store_promise", setup_promise_storage.to_string())
+        .map_err(|e| RariError::js_execution(format!("Failed to store promise: {}", e)))?;
 
     let setup_script = PROMISE_SETUP_SCRIPT;
 
@@ -263,7 +271,7 @@ async fn handle_promise_result(
                     })?;
 
                     if let JsonValue::Object(ref obj) = json_result
-                        && let Some(JsonValue::Bool(true)) = obj.get("__error")
+                        && let Some(JsonValue::Bool(true)) = obj.get("~error")
                     {
                         let message =
                             obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
@@ -301,7 +309,7 @@ fn handle_non_promise_result(
     })?;
 
     if let JsonValue::Object(ref obj) = json_result
-        && let Some(JsonValue::Bool(true)) = obj.get("__error")
+        && let Some(JsonValue::Bool(true)) = obj.get("~error")
     {
         let message = obj.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown error");
         let stack = obj.get("stack").and_then(|v| v.as_str());

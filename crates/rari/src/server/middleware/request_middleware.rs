@@ -3,8 +3,7 @@ use axum::{
     http::{HeaderValue, Request, Response},
     middleware::Next,
 };
-use std::time::Instant;
-use tracing::{Instrument, info, warn};
+use tracing::Instrument;
 use uuid::Uuid;
 
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
@@ -41,7 +40,6 @@ pub async fn request_logger(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response<axum::body::Body> {
-    let start_time = Instant::now();
     let request_id = Uuid::new_v4();
 
     let method = request.method().clone();
@@ -60,119 +58,14 @@ pub async fn request_logger(
         request_id = %request_id,
     );
 
-    async move {
-        info!(
-            target: "rari::http",
-            method = %method,
-            path = %path,
-            request_id = %request_id,
-            "Request started"
-        );
-
-        let response = next.run(request).await;
-        let duration = start_time.elapsed();
-
-        let status = response.status();
-        let status_code = status.as_u16();
-
-        log_request_completion(method, path, status_code, duration, request_id);
-
-        response
-    }
-    .instrument(span)
-    .await
-}
-
-fn log_request_completion(
-    method: axum::http::Method,
-    path: String,
-    status_code: u16,
-    duration: std::time::Duration,
-    request_id: Uuid,
-) {
-    let duration_ms = duration.as_millis();
-
-    match status_code {
-        200..=299 => {
-            info!(
-                target: "rari::http",
-                method = %method,
-                path = %path,
-                status = status_code,
-                duration_ms = duration_ms,
-                request_id = %request_id,
-                "Request completed successfully"
-            );
-        }
-        300..=399 => {
-            info!(
-                target: "rari::http",
-                method = %method,
-                path = %path,
-                status = status_code,
-                duration_ms = duration_ms,
-                request_id = %request_id,
-                "Request completed with redirection"
-            );
-        }
-        400..=499 => {
-            warn!(
-                target: "rari::http",
-                method = %method,
-                path = %path,
-                status = status_code,
-                duration_ms = duration_ms,
-                request_id = %request_id,
-                "Request completed with client error"
-            );
-        }
-        500..=599 => {
-            warn!(
-                target: "rari::http",
-                method = %method,
-                path = %path,
-                status = status_code,
-                duration_ms = duration_ms,
-                request_id = %request_id,
-                "Request completed with server error"
-            );
-        }
-        _ => {
-            info!(
-                target: "rari::http",
-                method = %method,
-                path = %path,
-                status = status_code,
-                duration_ms = duration_ms,
-                request_id = %request_id,
-                "Request completed"
-            );
-        }
-    }
+    async move { next.run(request).await }.instrument(span).await
 }
 
 pub async fn minimal_request_logger(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response<axum::body::Body> {
-    let start_time = Instant::now();
-    let method = request.method().clone();
-    let path = request.uri().path().to_owned();
-
-    let response = next.run(request).await;
-    let duration = start_time.elapsed();
-    let status = response.status().as_u16();
-
-    info!(
-        target: "rari::http",
-        "{} {} {} - {}ms",
-        method,
-        path,
-        status,
-        duration.as_millis()
-    );
-
-    response
+    next.run(request).await
 }
 
 pub async fn cors_middleware(

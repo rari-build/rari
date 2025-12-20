@@ -1,18 +1,22 @@
 (function initializeRscModules() {
-  if (!globalThis.__rsc_modules) {
-    globalThis.__rsc_modules = {}
+  if (!globalThis['~rsc'])
+    globalThis['~rsc'] = {}
+  if (!globalThis['~rsc'].modules) {
+    globalThis['~rsc'].modules = {}
   }
 
-  if (!globalThis.__exported_server_functions) {
-    globalThis.__exported_server_functions = {}
+  if (!globalThis['~serverFunctions'])
+    globalThis['~serverFunctions'] = {}
+  if (!globalThis['~serverFunctions'].exported) {
+    globalThis['~serverFunctions'].exported = {}
   }
 
-  if (!globalThis.__server_functions) {
-    globalThis.__server_functions = {}
+  if (!globalThis['~serverFunctions'].all) {
+    globalThis['~serverFunctions'].all = {}
   }
 
-  if (!globalThis.__registered_server_functions) {
-    globalThis.__registered_server_functions = new Set()
+  if (!globalThis['~serverFunctions'].registered) {
+    globalThis['~serverFunctions'].registered = new Set()
   }
 
   globalThis.registerModule = function (
@@ -41,13 +45,13 @@
       moduleKey = moduleNameOrMainExport || 'unknown'
     }
 
-    globalThis.__rsc_modules[moduleKey] = module
+    globalThis['~rsc'].modules[moduleKey] = module
 
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        globalThis.__server_functions[key] = module[key]
-        globalThis.__exported_server_functions[key] = module[key]
+        globalThis['~serverFunctions'].all[key] = module[key]
+        globalThis['~serverFunctions'].exported[key] = module[key]
         exportCount++
       }
     }
@@ -72,17 +76,17 @@
 
   globalThis.getServerFunction = function (name) {
     if (
-      globalThis.__exported_server_functions
-      && typeof globalThis.__exported_server_functions[name] === 'function'
+      globalThis['~serverFunctions'].exported
+      && typeof globalThis['~serverFunctions'].exported[name] === 'function'
     ) {
-      return globalThis.__exported_server_functions[name]
+      return globalThis['~serverFunctions'].exported[name]
     }
 
     if (
-      globalThis.__server_functions
-      && typeof globalThis.__server_functions[name] === 'function'
+      globalThis['~serverFunctions'].all
+      && typeof globalThis['~serverFunctions'].all[name] === 'function'
     ) {
-      return globalThis.__server_functions[name]
+      return globalThis['~serverFunctions'].all[name]
     }
 
     return undefined
@@ -101,10 +105,10 @@
       )
       if (cachedValue !== undefined) {
         const cachedPromise = Promise.resolve(cachedValue)
-        cachedPromise.__rsc_function_name = functionName
-        cachedPromise.__rsc_function_args = args
-        cachedPromise.__rsc_cache_key = cacheKey
-        cachedPromise.__rsc_promise_id = promiseId
+        cachedPromise['~rsc_function_name'] = functionName
+        cachedPromise['~rsc_function_args'] = args
+        cachedPromise['~rsc_cache_key'] = cacheKey
+        cachedPromise['~rsc_promise_id'] = promiseId
         cachedPromise.toString = () =>
           `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
         return cachedPromise
@@ -132,10 +136,10 @@
       promise = Promise.reject(error)
     }
 
-    promise.__rsc_function_name = functionName
-    promise.__rsc_function_args = args
-    promise.__rsc_cache_key = cacheKey
-    promise.__rsc_promise_id = promiseId
+    promise['~rsc_function_name'] = functionName
+    promise['~rsc_function_args'] = args
+    promise['~rsc_cache_key'] = cacheKey
+    promise['~rsc_promise_id'] = promiseId
     promise.toString = () =>
       `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
 
@@ -182,16 +186,19 @@ if (typeof globalThis.registerModule === 'function') {
 }
 
 // Initialize registries if they don't exist
-if (typeof globalThis.__server_functions === 'undefined') {
-    globalThis.__server_functions = {};
+if (!globalThis['~serverFunctions']) {
+  globalThis['~serverFunctions'] = {}
+}
+if (typeof globalThis['~serverFunctions'].all === 'undefined') {
+  globalThis['~serverFunctions'].all = {}
 }
 
-if (typeof globalThis.__rsc_modules === 'undefined') {
-    globalThis.__rsc_modules = {};
+if (typeof globalThis['~rsc'].modules === 'undefined') {
+    globalThis['~rsc'].modules = {};
 }
 
 // Reserve module slot
-globalThis.__rsc_modules['${componentId}'] = {
+globalThis['~rsc'].modules['${componentId}'] = {
     __isLoaderStub: true,
     __awaitingRegistration: true
 };
@@ -236,22 +243,25 @@ const moduleExports = {
 };
 
 // Register the component structure if needed
-export function __rari_register() {
+export function ~rari_register() {
     if (typeof globalThis.registerModule === 'function') {
         globalThis.registerModule(moduleExports, '${componentName}');
     }
 
     // Initialize registries if they don't exist
-    if (typeof globalThis.__server_functions === 'undefined') {
-        globalThis.__server_functions = {};
+    if (!globalThis['~serverFunctions']) {
+      globalThis['~serverFunctions'] = {}
+    }
+    if (typeof globalThis['~serverFunctions'].all === 'undefined') {
+      globalThis['~serverFunctions'].all = {}
     }
 
-    if (typeof globalThis.__rsc_modules === 'undefined') {
-        globalThis.__rsc_modules = {};
+    if (typeof globalThis['~rsc'].modules === 'undefined') {
+        globalThis['~rsc'].modules = {};
     }
 
     // Reserve module slot
-    globalThis.__rsc_modules['${componentName}'] = moduleExports;
+    globalThis['~rsc'].modules['${componentName}'] = moduleExports;
 }
 
 // Export the module structure

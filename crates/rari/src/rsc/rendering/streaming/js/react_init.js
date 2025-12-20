@@ -2,10 +2,10 @@
 (function () {
   if (typeof React === 'undefined') {
     try {
-      if (typeof globalThis.__rsc_modules !== 'undefined') {
-        const reactModule = globalThis.__rsc_modules.react
-          || globalThis.__rsc_modules.React
-          || Object.values(globalThis.__rsc_modules).find(m => m && m.createElement)
+      if (typeof globalThis['~rsc']?.modules !== 'undefined') {
+        const reactModule = globalThis['~rsc'].modules.react
+          || globalThis['~rsc'].modules.React
+          || Object.values(globalThis['~rsc'].modules).find(m => m && m.createElement)
         if (reactModule) {
           globalThis.React = reactModule
         }
@@ -15,11 +15,13 @@
         globalThis.React = require('react')
       }
 
-      if (typeof React !== 'undefined' && React.createElement && !globalThis.__react_patched) {
-        globalThis.__original_create_element = React.createElement
+      if (typeof React !== 'undefined' && React.createElement && !globalThis['~react']?.patched) {
+        if (!globalThis['~react'])
+          globalThis['~react'] = {}
+        globalThis['~react'].originalCreateElement = React.createElement
 
         const createElementOverride = function (type, props, ...children) {
-          return globalThis.__original_create_element(type, props, ...children)
+          return globalThis['~react'].originalCreateElement(type, props, ...children)
         }
 
         Object.defineProperty(React, 'createElement', {
@@ -29,7 +31,7 @@
           configurable: false,
         })
 
-        globalThis.__react_patched = true
+        globalThis['~react'].patched = true
       }
 
       if (typeof React !== 'undefined' && React.Suspense) {
@@ -38,13 +40,17 @@
         React.Suspense = function SuspenseOverride(props) {
           if (!props)
             return null
-          const previousBoundaryId = globalThis.__current_boundary_id
+          if (!globalThis['~suspense'])
+            globalThis['~suspense'] = {}
+          const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
           const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-          globalThis.__current_boundary_id = boundaryId
+          globalThis['~suspense'].currentBoundaryId = boundaryId
           try {
             const safeFallback = props?.fallback || null
-            const serializableFallback = globalThis.__safeSerializeElement(safeFallback)
-            globalThis.__discovered_boundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId })
+            const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
+            if (!globalThis['~suspense'].discoveredBoundaries)
+              globalThis['~suspense'].discoveredBoundaries = []
+            globalThis['~suspense'].discoveredBoundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId })
             if (!props.children) {
               return safeFallback
             }
@@ -53,16 +59,18 @@
           catch (error) {
             if (error && error.$typeof === Symbol.for('react.suspense.pending') && error.promise) {
               const promiseId = `suspense_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-              globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-              globalThis.__suspense_promises[promiseId] = error.promise
-              globalThis.__pending_promises = globalThis.__pending_promises || []
-              globalThis.__pending_promises.push({ id: promiseId, boundaryId, componentPath: (error.componentName || 'unknown') })
+              if (!globalThis['~suspense'].promises)
+                globalThis['~suspense'].promises = {}
+              globalThis['~suspense'].promises[promiseId] = error.promise
+              if (!globalThis['~suspense'].pendingPromises)
+                globalThis['~suspense'].pendingPromises = []
+              globalThis['~suspense'].pendingPromises.push({ id: promiseId, boundaryId, componentPath: (error.componentName || 'unknown') })
               return props.fallback || null
             }
             return props?.fallback || React.createElement('div', null, `Suspense Error: ${error && error.message ? error.message : 'Unknown'}`)
           }
           finally {
-            globalThis.__current_boundary_id = previousBoundaryId
+            globalThis['~suspense'].currentBoundaryId = previousBoundaryId
           }
         }
       }

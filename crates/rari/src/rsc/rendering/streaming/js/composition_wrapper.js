@@ -1,8 +1,12 @@
 (async function () {
   try {
-    globalThis.__discovered_boundaries = []
-    globalThis.__pending_promises = []
-    globalThis.__deferred_async_components = []
+    if (!globalThis['~suspense'])
+      globalThis['~suspense'] = {}
+    globalThis['~suspense'].discoveredBoundaries = []
+    globalThis['~suspense'].pendingPromises = []
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].deferredAsyncComponents = []
 
     // eslint-disable-next-line no-undef
     const compositionResult = await { composition_script }
@@ -22,7 +26,7 @@
 
     const safeBoundaries = boundaries.map(boundary => ({
       id: boundary.id,
-      fallback: globalThis.__safeSerializeElement(boundary.fallback),
+      fallback: globalThis['~suspense'].safeSerializeElement(boundary.fallback),
       parentId: boundary.parentId,
       parentPath: boundary.parentPath || [],
       isInContentArea: boundary.isInContentArea || false,

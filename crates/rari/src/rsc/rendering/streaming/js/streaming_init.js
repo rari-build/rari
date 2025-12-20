@@ -70,15 +70,17 @@ if (typeof React === 'undefined') {
   throw new TypeError('React is not available in streaming context. This suggests the runtime was not properly initialized with React extensions.')
 }
 
-if (!globalThis.__suspense_streaming) {
-  globalThis.__suspense_streaming = true
-  globalThis.__suspense_promises = {}
-  globalThis.__boundary_props = {}
-  globalThis.__discovered_boundaries = []
-  globalThis.__pending_promises = []
-  globalThis.__current_boundary_id = null
+if (!globalThis['~suspense']) {
+  globalThis['~suspense'] = {
+    streaming: true,
+    promises: {},
+    boundaryProps: {},
+    discoveredBoundaries: [],
+    pendingPromises: [],
+    currentBoundaryId: null,
+  }
 
-  globalThis.__safeSerializeElement = function (element) {
+  globalThis['~suspense'].safeSerializeElement = function (element) {
     if (!element)
       return null
 
@@ -108,19 +110,21 @@ if (!globalThis.__suspense_streaming) {
     }
   }
 
-  if (!globalThis.__react_patched && typeof React !== 'undefined' && React.createElement) {
-    globalThis.__original_create_element = React.createElement
+  if (!globalThis['~react'])
+    globalThis['~react'] = {}
+  if (!globalThis['~react'].patched && typeof React !== 'undefined' && React.createElement) {
+    globalThis['~react'].originalCreateElement = React.createElement
 
     const createElementOverride = function (type, props, ...children) {
-      return globalThis.__original_create_element(type, props, ...children)
+      return globalThis['~react'].originalCreateElement(type, props, ...children)
     }
 
     React.createElement = createElementOverride
-    globalThis.__react_patched = true
+    globalThis['~react'].patched = true
   }
 }
 else {
-  globalThis.__discovered_boundaries = []
-  globalThis.__pending_promises = []
-  globalThis.__current_boundary_id = null
+  globalThis['~suspense'].discoveredBoundaries = []
+  globalThis['~suspense'].pendingPromises = []
+  globalThis['~suspense'].currentBoundaryId = null
 }

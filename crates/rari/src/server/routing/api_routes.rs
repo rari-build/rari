@@ -11,7 +11,7 @@ use serde_json::Value as JsonValue;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tracing::{debug, error, info};
+use tracing::error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRouteEntry {
@@ -53,19 +53,6 @@ pub struct ApiRouteHandler {
 
 impl ApiRouteHandler {
     pub fn new(runtime: Arc<JsExecutionRuntime>, manifest: ApiRouteManifest) -> Self {
-        info!(route_count = manifest.api_routes.len(), "Initializing API route handler");
-
-        for route in &manifest.api_routes {
-            info!(
-                route_path = %route.path,
-                file_path = %route.file_path,
-                methods = ?route.methods,
-                is_dynamic = route.is_dynamic,
-                params = ?route.params,
-                "Registered API route"
-            );
-        }
-
         Self { runtime, manifest: Arc::new(manifest), handler_cache: Arc::new(DashMap::new()) }
     }
 
@@ -93,12 +80,10 @@ impl ApiRouteHandler {
     }
 
     pub fn clear_cache(&self) {
-        debug!("Clearing API route handler cache");
         self.handler_cache.clear();
     }
 
     pub fn invalidate_handler(&self, file_path: &str) {
-        debug!("Invalidating handler cache for: {}", file_path);
         self.handler_cache.remove(file_path);
     }
 
@@ -116,21 +101,10 @@ impl ApiRouteHandler {
 
     pub fn match_route(&self, path: &str, method: &str) -> Result<ApiRouteMatch, RariError> {
         let normalized_path = Self::normalize_path(path);
-        debug!(
-            path = %normalized_path,
-            method = %method,
-            "Matching API route"
-        );
 
         for route in &self.manifest.api_routes {
             if let Some(params) = self.match_route_pattern(route, &normalized_path) {
                 if !route.methods.iter().any(|m| m.eq_ignore_ascii_case(method)) {
-                    debug!(
-                        route_path = %route.path,
-                        requested_method = %method,
-                        supported_methods = ?route.methods,
-                        "Route matched path but method not supported"
-                    );
                     return Err(RariError::bad_request(format!(
                         "Method {} not allowed for route {}. Supported methods: {}",
                         method,
@@ -141,14 +115,6 @@ impl ApiRouteHandler {
                     .with_property("allowed_methods", &route.methods.join(",")));
                 }
 
-                debug!(
-                    request_path = %normalized_path,
-                    route_path = %route.path,
-                    method = %method,
-                    params = ?params,
-                    "Successfully matched API route"
-                );
-
                 return Ok(ApiRouteMatch {
                     route: route.clone(),
                     params,
@@ -156,13 +122,6 @@ impl ApiRouteHandler {
                 });
             }
         }
-
-        debug!(
-            path = %path,
-            method = %method,
-            available_routes = ?self.manifest.api_routes.iter().map(|r| &r.path).collect::<Vec<_>>(),
-            "No matching API route found"
-        );
 
         Err(RariError::not_found(format!("No API route found for path: {}", path)))
     }
@@ -257,36 +216,14 @@ impl ApiRouteHandler {
                 let dist_path = Self::resolve_dist_path(file_path)?;
                 if let Ok(metadata) = tokio::fs::metadata(&dist_path).await
                     && let Ok(modified) = metadata.modified()
+                    && modified <= cached.last_modified
                 {
-                    if modified <= cached.last_modified {
-                        debug!(
-                            file_path = %file_path,
-                            module_id = %cached.module_id,
-                            "Using cached handler"
-                        );
-                        return Ok(cached.clone());
-                    } else {
-                        debug!(
-                            file_path = %file_path,
-                            "Handler file modified, reloading"
-                        );
-                    }
+                    return Ok(cached.clone());
                 }
             } else {
-                debug!(
-                    file_path = %file_path,
-                    module_id = %cached.module_id,
-                    "Using cached handler (production mode)"
-                );
                 return Ok(cached.clone());
             }
         }
-
-        info!(
-            file_path = %file_path,
-            route_path = %route.path,
-            "Loading API route handler"
-        );
 
         let dist_path = Self::resolve_dist_path(file_path)?;
 
@@ -330,14 +267,6 @@ impl ApiRouteHandler {
             CompiledHandler { module_id: module_id.clone(), code: code.clone(), last_modified };
 
         self.handler_cache.insert(file_path.clone(), compiled.clone());
-
-        info!(
-            file_path = %file_path,
-            route_path = %route.path,
-            module_id = %module_id,
-            code_size = code.len(),
-            "Successfully loaded and cached API route handler"
-        );
 
         Ok(compiled)
     }
@@ -495,15 +424,6 @@ impl ApiRouteHandler {
         request: Request<Body>,
         is_development: bool,
     ) -> Result<Response<Body>, RariError> {
-        let start_time = std::time::Instant::now();
-
-        debug!(
-            route_path = %route_match.route.path,
-            method = %route_match.method,
-            params = ?route_match.params,
-            "Executing API route handler"
-        );
-
         let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
@@ -528,13 +448,6 @@ impl ApiRouteHandler {
 
         let body_string = String::from_utf8_lossy(&body_bytes).to_string();
 
-        debug!(
-            route_path = %route_match.route.path,
-            method = %route_match.method,
-            body_size = body_bytes.len(),
-            "Request body read successfully"
-        );
-
         let request_obj = self.create_request_object(
             parts.method.as_ref(),
             &parts.uri.to_string(),
@@ -549,13 +462,6 @@ impl ApiRouteHandler {
             &request_obj,
             &route_match.route.file_path,
         )?;
-
-        debug!(
-            route_path = %route_match.route.path,
-            method = %route_match.method,
-            module_id = %handler.module_id,
-            "Executing handler in JavaScript runtime"
-        );
 
         let result = self
             .runtime
@@ -581,15 +487,6 @@ impl ApiRouteHandler {
             );
             e
         })?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            route_path = %route_match.route.path,
-            method = %route_match.method,
-            status = response.status().as_u16(),
-            duration_ms = elapsed.as_millis(),
-            "API route handler executed successfully"
-        );
 
         Ok(response)
     }

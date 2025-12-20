@@ -4,7 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
-use tracing::{debug, error, info, warn};
+use tracing::error;
 
 const DIST_DIR: &str = "dist";
 
@@ -12,14 +12,8 @@ pub struct ComponentLoader;
 
 impl ComponentLoader {
     pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        info!("Loading production components");
-
         let manifest_path = std::path::Path::new("dist/server-manifest.json");
         if !manifest_path.exists() {
-            warn!(
-                "No server manifest found at {}, production components will not be available",
-                manifest_path.display()
-            );
             return Ok(());
         }
 
@@ -29,7 +23,6 @@ impl ComponentLoader {
         let mut sorted_components: Vec<_> = components.iter().collect();
         sorted_components.sort_by_key(|(id, _)| if id.starts_with("components/") { 0 } else { 1 });
 
-        let mut loaded_count = 0;
         for (component_id, component_info) in sorted_components {
             let module_specifier = component_info.get("moduleSpecifier").and_then(|s| s.as_str());
 
@@ -59,11 +52,6 @@ impl ComponentLoader {
 
                 match renderer.runtime.load_es_module(component_id).await {
                     Ok(module_id) => {
-                        debug!(
-                            "Loaded ESM module for component: {} (module_id: {})",
-                            component_id, module_id
-                        );
-
                         if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
                             error!(
                                 "Failed to evaluate module {} (id: {}): {}",
@@ -74,12 +62,6 @@ impl ComponentLoader {
 
                         match renderer.runtime.get_module_namespace(module_id).await {
                             Ok(namespace) => {
-                                debug!(
-                                    "Got module namespace for component: {} - namespace keys: {:?}",
-                                    component_id,
-                                    namespace.as_object().map(|o| o.keys().collect::<Vec<_>>())
-                                );
-
                                 let export_names: Vec<String> =
                                     if let Some(obj) = namespace.as_object() {
                                         obj.keys()
@@ -113,10 +95,10 @@ impl ComponentLoader {
                                                 }}
                                             }}
 
-                                            if (!globalThis.__rsc_modules) {{
-                                                globalThis.__rsc_modules = {{}};
+                                            if (!globalThis['~rsc'].modules) {{
+                                                globalThis['~rsc'].modules = {{}};
                                             }}
-                                            globalThis.__rsc_modules["{}"] = moduleNamespace;
+                                            globalThis['~rsc'].modules["{}"] = moduleNamespace;
 
                                             return {{ success: true, hasDefault: !!moduleNamespace.default, exportCount: exportNames.length }};
                                         }} catch (error) {{
@@ -143,26 +125,13 @@ impl ComponentLoader {
                                     Ok(result) => {
                                         if let Some(success) =
                                             result.get("success").and_then(|v| v.as_bool())
+                                            && !success
                                         {
-                                            if success {
-                                                debug!(
-                                                    "Registered component {} to globalThis",
-                                                    component_id
-                                                );
-                                                loaded_count += 1;
-                                            } else {
-                                                error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
-                                            }
-                                        } else {
-                                            debug!(
-                                                "Registered component {} to globalThis",
-                                                component_id
+                                            error!(
+                                                "Failed to register component {} to globalThis: {:?}",
+                                                component_id,
+                                                result.get("error")
                                             );
-                                            loaded_count += 1;
                                         }
                                     }
                                     Err(e) => {
@@ -190,32 +159,25 @@ impl ComponentLoader {
             }
         }
 
-        info!("Loaded {} production components", loaded_count);
         Ok(())
     }
 
     pub async fn load_server_actions_from_source(
         renderer: &mut RscRenderer,
     ) -> Result<(), RariError> {
-        info!("Loading server actions from source");
-
         let src_dir = std::path::Path::new("src");
         if !src_dir.exists() {
-            debug!("No src directory found, skipping server action loading");
             return Ok(());
         }
 
-        let mut loaded_count = 0;
-        Self::scan_for_server_actions(src_dir, renderer, &mut loaded_count).await?;
+        Self::scan_for_server_actions(src_dir, renderer).await?;
 
-        info!("Loaded {} server action files", loaded_count);
         Ok(())
     }
 
     fn scan_for_server_actions<'a>(
         dir: &'a std::path::Path,
         renderer: &'a mut RscRenderer,
-        loaded_count: &'a mut usize,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
             let entries = std::fs::read_dir(dir).map_err(|e| {
@@ -228,7 +190,7 @@ impl ComponentLoader {
                 let path = entry.path();
 
                 if path.is_dir() {
-                    Self::scan_for_server_actions(&path, renderer, loaded_count).await?;
+                    Self::scan_for_server_actions(&path, renderer).await?;
                 } else if path
                     .extension()
                     .and_then(|s| s.to_str())
@@ -251,8 +213,6 @@ impl ComponentLoader {
                             .replace(".js", "")
                             .replace(".jsx", "")
                             .replace('\\', "/");
-
-                        debug!("Found server action file: {:?} with ID: {}", path, action_id);
 
                         let dist_path = std::path::Path::new("dist")
                             .join("server")
@@ -294,12 +254,15 @@ impl ComponentLoader {
                                                         r#"(async function() {{
                                                             try {{
                                                                 const moduleNamespace = await import("{}");
-                                                                if (!globalThis.__server_functions) {{
-                                                                    globalThis.__server_functions = {{}};
+                                                                if (!globalThis['~serverFunctions']) {{
+                                                                    globalThis['~serverFunctions'] = {{}};
+                                                                }}
+                                                                if (!globalThis['~serverFunctions'].all) {{
+                                                                    globalThis['~serverFunctions'].all = {{}};
                                                                 }}
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
-                                                                        globalThis.__server_functions[key] = value;
+                                                                        globalThis['~serverFunctions'].all[key] = value;
                                                                         globalThis[key] = value;
                                                                     }}
                                                                 }}
@@ -323,16 +286,10 @@ impl ComponentLoader {
                                                         )
                                                         .await
                                                     {
-                                                        warn!(
-                                                            "Failed to register server action {} to globalThis: {}",
+                                                        error!(
+                                                            "Failed to register server action {}: {}",
                                                             action_id, e
                                                         );
-                                                    } else {
-                                                        debug!(
-                                                            "Successfully loaded server action: {}",
-                                                            action_id
-                                                        );
-                                                        *loaded_count += 1;
                                                     }
                                                 }
                                             }
@@ -357,13 +314,7 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            Ok(_) => {
-                                                debug!(
-                                                    "Successfully loaded server action: {}",
-                                                    action_id
-                                                );
-                                                *loaded_count += 1;
-                                            }
+                                            Ok(_) => {}
                                             Err(e) => {
                                                 error!(
                                                     "Failed to load server action {}: {}",
@@ -380,8 +331,6 @@ impl ComponentLoader {
                                     );
                                 }
                             }
-                        } else {
-                            debug!("Server action not yet built: {:?}", dist_path);
                         }
                     }
                 }
@@ -392,27 +341,13 @@ impl ComponentLoader {
     }
 
     pub async fn load_app_router_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        info!("Loading app router components");
-
         let server_dir = std::path::Path::new(DIST_DIR).join("server");
         if !server_dir.exists() {
-            debug!(
-                "No server directory found at {}, skipping app router component loading",
-                server_dir.display()
-            );
             return Ok(());
         }
 
-        let mut loaded_count = 0;
-        Self::load_server_components_recursive(
-            &server_dir,
-            &server_dir,
-            renderer,
-            &mut loaded_count,
-        )
-        .await?;
+        Self::load_server_components_recursive(&server_dir, &server_dir, renderer).await?;
 
-        info!("Loaded {} app router components", loaded_count);
         Ok(())
     }
 
@@ -420,7 +355,6 @@ impl ComponentLoader {
         dir: &'a std::path::Path,
         base_dir: &'a std::path::Path,
         renderer: &'a mut RscRenderer,
-        loaded_count: &'a mut usize,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), RariError>> + 'a>> {
         Box::pin(async move {
             let entries = std::fs::read_dir(dir).map_err(|e| {
@@ -433,8 +367,7 @@ impl ComponentLoader {
                 let path = entry.path();
 
                 if path.is_dir() {
-                    Self::load_server_components_recursive(&path, base_dir, renderer, loaded_count)
-                        .await?;
+                    Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
                     let component_code = std::fs::read_to_string(&path).map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
@@ -447,8 +380,6 @@ impl ComponentLoader {
                             .unwrap_or("unknown")
                             .replace(".js", "")
                             .replace('\\', "/");
-
-                        debug!("Loading server action file: {} from {:?}", relative_str, path);
 
                         let module_specifier = format!(
                             "file://{}",
@@ -475,12 +406,15 @@ impl ComponentLoader {
                                             r#"(async function() {{
                                                 try {{
                                                     const moduleNamespace = await import("{}");
-                                                    if (!globalThis.__server_functions) {{
-                                                        globalThis.__server_functions = {{}};
+                                                    if (!globalThis['~serverFunctions']) {{
+                                                        globalThis['~serverFunctions'] = {{}};
+                                                    }}
+                                                    if (!globalThis['~serverFunctions'].all) {{
+                                                        globalThis['~serverFunctions'].all = {{}};
                                                     }}
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
-                                                            globalThis.__server_functions[key] = value;
+                                                            globalThis['~serverFunctions'].all[key] = value;
                                                             globalThis[key] = value;
                                                         }}
                                                     }}
@@ -504,16 +438,10 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            warn!(
-                                                "Failed to register server action {} to globalThis: {}",
+                                            error!(
+                                                "Failed to register server functions from {}: {}",
                                                 relative_str, e
                                             );
-                                        } else {
-                                            debug!(
-                                                "Successfully loaded server actions from: {}",
-                                                relative_str
-                                            );
-                                            *loaded_count += 1;
                                         }
                                     }
                                 }
@@ -535,13 +463,7 @@ impl ComponentLoader {
                                 )
                                 .await
                             {
-                                Ok(_) => {
-                                    debug!(
-                                        "Successfully loaded server actions from: {}",
-                                        relative_str
-                                    );
-                                    *loaded_count += 1;
-                                }
+                                Ok(_) => {}
                                 Err(e) => {
                                     error!(
                                         "Failed to load server actions from {}: {}",
@@ -561,8 +483,6 @@ impl ComponentLoader {
                         .replace('\\', "/");
 
                     let component_id = relative_str.clone();
-
-                    debug!("Loading component: {} from {:?}", component_id, path);
 
                     let is_client_component = has_use_client_directive(&component_code);
 
@@ -593,11 +513,6 @@ impl ComponentLoader {
                     if esm_load_result.is_ok() {
                         match renderer.runtime.load_es_module(&component_id).await {
                             Ok(module_id) => {
-                                debug!(
-                                    "Loaded component {} as ESM module (id: {})",
-                                    component_id, module_id
-                                );
-
                                 if let Err(e) = renderer.runtime.evaluate_module(module_id).await {
                                     error!(
                                         "Failed to evaluate ESM module {} (id: {}): {}",
@@ -624,10 +539,10 @@ impl ComponentLoader {
                                                     }}
                                                 }}
 
-                                                if (!globalThis.__rsc_modules) {{
-                                                    globalThis.__rsc_modules = {{}};
+                                                if (!globalThis['~rsc'].modules) {{
+                                                    globalThis['~rsc'].modules = {{}};
                                                 }}
-                                                globalThis.__rsc_modules["{}"] = moduleNamespace;
+                                                globalThis['~rsc'].modules["{}"] = moduleNamespace;
 
                                                 return {{ success: true }};
                                             }} catch (error) {{
@@ -653,8 +568,8 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        warn!(
-                                            "Failed to register ESM component {} to globalThis: {}",
+                                        error!(
+                                            "Failed to register component {}: {}",
                                             component_id, e
                                         );
                                     }
@@ -683,14 +598,12 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            warn!(
+                                            error!(
                                                 "Failed to mark component {} as client: {}",
                                                 component_id, e
                                             );
                                         }
                                     }
-
-                                    *loaded_count += 1;
                                 }
                             }
                             Err(e) => {
@@ -701,10 +614,6 @@ impl ComponentLoader {
                             }
                         }
                     } else {
-                        debug!(
-                            "Could not add component {} to module loader, falling back to execute_script",
-                            component_id
-                        );
                         match renderer
                             .runtime
                             .execute_script(
@@ -714,8 +623,6 @@ impl ComponentLoader {
                             .await
                         {
                             Ok(_) => {
-                                debug!("Successfully loaded component: {}", component_id);
-
                                 if is_client_component {
                                     let mark_client_script = format!(
                                         r#"(function() {{
@@ -740,14 +647,12 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        warn!(
+                                        error!(
                                             "Failed to mark component {} as client: {}",
                                             component_id, e
                                         );
                                     }
                                 }
-
-                                *loaded_count += 1;
                             }
                             Err(e) => {
                                 error!("Failed to execute component {}: {}", component_id, e);

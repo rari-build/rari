@@ -3,8 +3,8 @@ const serverReferenceRegistry = new Map()
 
 let rustBridge = null
 
-if (typeof globalThis.__rari_bridge !== 'undefined') {
-  rustBridge = globalThis.__rari_bridge
+if (typeof globalThis['~rari']?.bridge !== 'undefined') {
+  rustBridge = globalThis['~rari'].bridge
 }
 
 export function registerClientReference(clientReference, id, exportName) {

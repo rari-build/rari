@@ -54,8 +54,16 @@
     "**/components.d.ts"
   ],
   "rules": {
+    "accessor-pairs": [
+      "error",
+      {
+        "enforceForClassMembers": true,
+        "setWithoutGet": true
+      }
+    ],
     "array-callback-return": "error",
     "block-scoped-var": "error",
+    "constructor-super": "error",
     "default-case-last": "error",
     "eqeqeq": [
       "error",
@@ -156,6 +164,7 @@
       }
     ],
     "no-self-compare": "error",
+    "no-sequences": "error",
     "no-shadow-restricted-names": "error",
     "no-sparse-arrays": "error",
     "no-template-curly-in-string": "error",
@@ -266,6 +275,7 @@
         "**/*.?([cm])tsx"
       ],
       "rules": {
+        "constructor-super": "off",
         "no-class-assign": "off",
         "no-const-assign": "off",
         "no-dupe-keys": "off",
@@ -386,6 +396,7 @@
         "react/jsx-no-duplicate-props": "warn",
         "react/no-array-index-key": "warn",
         "react/no-direct-mutation-state": "error",
+        "react/no-redundant-should-component-update": "error",
         "react/no-string-refs": "error",
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn"

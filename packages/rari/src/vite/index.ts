@@ -411,6 +411,8 @@ if (import.meta.hot) {
     return lastSegment.replace(/\.[^.]*$/, '')
   }
 
+  let serverComponentBuilder: any = null
+
   const mainPlugin: Plugin = {
     name: 'rari',
 
@@ -641,8 +643,9 @@ if (import.meta.hot) {
 }
 
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rari_server_components = globalThis.__rari_server_components || new Set();
-  globalThis.__rari_server_components.add(${JSON.stringify(id)});
+  if (!globalThis['~rari']) globalThis['~rari'] = {};
+  globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set();
+  globalThis['~rari'].serverComponents.add(${JSON.stringify(id)});
 }
 
 ${clientTransformedCode}`
@@ -838,8 +841,6 @@ const ${componentName} = registerClientReference(
     configureServer(server) {
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
-
-      let serverComponentBuilder: any = null
 
       const discoverAndRegisterComponents = async () => {
         try {
@@ -1374,15 +1375,15 @@ const ${componentName} = registerClientReference(
           const componentId = path.basename(componentPath, path.extname(componentPath))
 
           return `
-globalThis.__clientComponents["${relativePath}"] = {
+globalThis['~clientComponents']["${relativePath}"] = {
   id: "${componentId}",
   path: "${relativePath}",
   type: "client",
   component: ${componentName},
   registered: true
 };
-globalThis.__clientComponents["${componentId}"] = globalThis.__clientComponents["${relativePath}"];
-globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
+globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${relativePath}"];
+globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
         return await loadEntryClient(imports, registrations)
@@ -1497,12 +1498,22 @@ globalThis.__clientComponentPaths["${relativePath}"] = "${componentId}";`
           fileType = 'not-found'
         }
 
+        if (serverComponentBuilder && componentType === 'server') {
+          try {
+            await (serverComponentBuilder as any).rebuildComponent(file)
+          }
+          catch (error) {
+            console.error(`[HMR] Failed to rebuild ${file}:`, error)
+          }
+        }
+
         server.hot.send('rari:app-router-updated', {
           type: 'rari-hmr',
           filePath: file,
           fileType,
         })
-        return []
+
+        return undefined
       }
 
       if (componentType === 'client') {

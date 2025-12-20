@@ -1,69 +1,74 @@
 (function initializePromiseManager() {
-  if (!globalThis.__promise_cache) {
-    globalThis.__promise_cache = new WeakMap()
+  if (!globalThis['~promises'])
+    globalThis['~promises'] = {}
+
+  if (!globalThis['~promises'].cache) {
+    globalThis['~promises'].cache = new WeakMap()
   }
 
-  if (!globalThis.__component_promise_cache) {
-    globalThis.__component_promise_cache = new Map()
+  if (!globalThis['~promises'].componentCache) {
+    globalThis['~promises'].componentCache = new Map()
   }
 
-  if (!globalThis.__resolved_promises) {
-    globalThis.__resolved_promises = new Map()
+  if (!globalThis['~promises'].resolved) {
+    globalThis['~promises'].resolved = new Map()
   }
 
-  if (!globalThis.__component_specific_promises) {
-    globalThis.__component_specific_promises = new Map()
+  if (!globalThis['~promises'].componentSpecific) {
+    globalThis['~promises'].componentSpecific = new Map()
   }
 
-  if (!globalThis.__function_signatures_to_values) {
-    globalThis.__function_signatures_to_values = new Map()
+  if (!globalThis['~promises'].functionSignatures) {
+    globalThis['~promises'].functionSignatures = new Map()
   }
 
-  if (!globalThis.__function_name_to_value) {
-    globalThis.__function_name_to_value = new Map()
+  if (!globalThis['~promises'].functionNameToValue) {
+    globalThis['~promises'].functionNameToValue = new Map()
   }
 
-  if (!globalThis.__resolved_function_values) {
-    globalThis.__resolved_function_values = new Map()
+  if (!globalThis['~promises'].resolvedFunctions) {
+    globalThis['~promises'].resolvedFunctions = new Map()
   }
 
-  if (!globalThis.__pending_promises) {
-    globalThis.__pending_promises = []
+  if (!globalThis['~promises'].pending) {
+    globalThis['~promises'].pending = []
   }
 
-  if (!globalThis.__failed_promises) {
-    globalThis.__failed_promises = new Map()
+  if (!globalThis['~promises'].failed) {
+    globalThis['~promises'].failed = new Map()
   }
 
-  if (!globalThis.__promise_rejection_handlers) {
-    globalThis.__promise_rejection_handlers = new Map()
+  if (!globalThis['~promises'].rejectionHandlers) {
+    globalThis['~promises'].rejectionHandlers = new Map()
   }
 
-  globalThis.__track_component_render = function (componentId) {
-    globalThis.__current_rendering_component = componentId
+  globalThis['~promises'].trackComponentRender = function (componentId) {
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].currentComponent = componentId
 
-    if (!globalThis.__component_specific_promises.has(componentId)) {
-      globalThis.__component_specific_promises.set(componentId, new Map())
+    if (!globalThis['~promises'].componentSpecific.has(componentId)) {
+      globalThis['~promises'].componentSpecific.set(componentId, new Map())
     }
 
-    if (!globalThis.__component_promise_cache.has(componentId)) {
-      globalThis.__component_promise_cache.set(componentId, new WeakMap())
+    if (!globalThis['~promises'].componentCache.has(componentId)) {
+      globalThis['~promises'].componentCache.set(componentId, new WeakMap())
     }
 
     return componentId
   }
 
-  globalThis.__wrapPromiseForIdentity = function (promise) {
-    if (promise.__rari_identity) {
+  globalThis['~promises'].wrapForIdentity = function (promise) {
+    if (promise['~rari_identity']) {
       return promise
     }
 
     const identityKey = Symbol('promise_identity')
-    promise.__rari_identity = identityKey
+    promise['~rari_identity'] = identityKey
     return promise
   }
 
-  globalThis.__createFunctionSignatureKey = function (fnName, args) {
+  globalThis['~promises'].createSignatureKey = function (fnName, args) {
     if (!fnName)
       return null
 
@@ -96,7 +101,7 @@
     return `${fnName}(${argsStr})`
   }
 
-  globalThis.__parseFunctionFromPromise = function (promiseStr) {
+  globalThis['~promises'].parseFunction = function (promiseStr) {
     const patterns = [
       /Promise\s*\{\s*<?(\w+)\(([^)]*)\)/i,
       /\[object Promise\]/i,
@@ -162,30 +167,30 @@
     return null
   }
 
-  globalThis.__store_promise_with_component = function (
+  globalThis['~promises'].storeWithComponent = function (
     promise,
     result,
     contextId,
   ) {
-    const wrappedPromise = globalThis.__wrapPromiseForIdentity(promise)
+    const wrappedPromise = globalThis['~promises'].wrapForIdentity(promise)
 
-    globalThis.__resolved_promises.set(promise, result)
-    globalThis.__promise_cache.set(wrappedPromise, result)
+    globalThis['~promises'].resolved.set(promise, result)
+    globalThis['~promises'].cache.set(wrappedPromise, result)
 
     const cId
-      = contextId || globalThis.__current_rendering_component || 'unknown'
-    if (globalThis.__component_specific_promises.has(cId)) {
-      globalThis.__component_specific_promises.get(cId).set(promise, result)
+      = contextId || globalThis['~render']?.currentComponent || 'unknown'
+    if (globalThis['~promises'].componentSpecific.has(cId)) {
+      globalThis['~promises'].componentSpecific.get(cId).set(promise, result)
     }
 
-    if (globalThis.__component_promise_cache.has(cId)) {
-      globalThis.__component_promise_cache.get(cId).set(wrappedPromise, result)
+    if (globalThis['~promises'].componentCache.has(cId)) {
+      globalThis['~promises'].componentCache.get(cId).set(wrappedPromise, result)
     }
 
     return true
   }
 
-  globalThis.__registerResolvedPromise = function (
+  globalThis['~promises'].registerResolved = function (
     promise,
     result,
     componentId,
@@ -194,33 +199,33 @@
       return false
     }
 
-    return globalThis.__store_promise_with_component(
+    return globalThis['~promises'].storeWithComponent(
       promise,
       result,
       componentId,
     )
   }
 
-  globalThis.__registerFunctionResult = function (functionName, args, result) {
+  globalThis['~promises'].registerFunction = function (functionName, args, result) {
     if (!functionName)
       return false
 
-    globalThis.__function_name_to_value.set(functionName, result)
+    globalThis['~promises'].functionNameToValue.set(functionName, result)
 
     if (args) {
-      const signature = globalThis.__createFunctionSignatureKey(
+      const signature = globalThis['~promises'].createSignatureKey(
         functionName,
         args,
       )
       if (signature) {
-        globalThis.__function_signatures_to_values.set(signature, result)
+        globalThis['~promises'].functionSignatures.set(signature, result)
       }
     }
 
     return true
   }
 
-  globalThis.__registerModuleFunctionResult = function (
+  globalThis['~promises'].registerModuleFunction = function (
     moduleName,
     functionName,
     result,
@@ -229,86 +234,86 @@
       return false
 
     const key = `${moduleName}.${functionName}`
-    globalThis.__resolved_function_values.set(key, result)
+    globalThis['~promises'].resolvedFunctions.set(key, result)
     return true
   }
 
-  globalThis.__getResolvedPromise = function (promise, componentId) {
+  globalThis['~promises'].getResolved = function (promise, componentId) {
     if (
       componentId
-      && globalThis.__component_specific_promises.has(componentId)
+      && globalThis['~promises'].componentSpecific.has(componentId)
     ) {
       const componentCache
-        = globalThis.__component_specific_promises.get(componentId)
+        = globalThis['~promises'].componentSpecific.get(componentId)
       if (componentCache.has(promise)) {
         return componentCache.get(promise)
       }
     }
 
-    if (globalThis.__resolved_promises.has(promise)) {
-      return globalThis.__resolved_promises.get(promise)
+    if (globalThis['~promises'].resolved.has(promise)) {
+      return globalThis['~promises'].resolved.get(promise)
     }
 
-    if (globalThis.__promise_cache.has(promise)) {
-      return globalThis.__promise_cache.get(promise)
+    if (globalThis['~promises'].cache.has(promise)) {
+      return globalThis['~promises'].cache.get(promise)
     }
 
     return undefined
   }
 
-  globalThis.__getFunctionResult = function (functionName, args) {
+  globalThis['~promises'].getFunctionResult = function (functionName, args) {
     if (args) {
-      const signature = globalThis.__createFunctionSignatureKey(
+      const signature = globalThis['~promises'].createSignatureKey(
         functionName,
         args,
       )
       if (
         signature
-        && globalThis.__function_signatures_to_values.has(signature)
+        && globalThis['~promises'].functionSignatures.has(signature)
       ) {
-        return globalThis.__function_signatures_to_values.get(signature)
+        return globalThis['~promises'].functionSignatures.get(signature)
       }
     }
 
-    if (globalThis.__function_name_to_value.has(functionName)) {
-      return globalThis.__function_name_to_value.get(functionName)
+    if (globalThis['~promises'].functionNameToValue.has(functionName)) {
+      return globalThis['~promises'].functionNameToValue.get(functionName)
     }
 
     return undefined
   }
 
-  globalThis.__getModuleFunctionResult = function (moduleName, functionName) {
+  globalThis['~promises'].getModuleFunctionResult = function (moduleName, functionName) {
     const key = `${moduleName}.${functionName}`
-    return globalThis.__resolved_function_values.get(key)
+    return globalThis['~promises'].resolvedFunctions.get(key)
   }
 
-  globalThis.__clearComponentPromises = function (componentId) {
-    if (globalThis.__component_specific_promises.has(componentId)) {
-      globalThis.__component_specific_promises.get(componentId).clear()
+  globalThis['~promises'].clearComponent = function (componentId) {
+    if (globalThis['~promises'].componentSpecific.has(componentId)) {
+      globalThis['~promises'].componentSpecific.get(componentId).clear()
     }
 
-    if (globalThis.__component_promise_cache.has(componentId)) {
-      globalThis.__component_promise_cache.delete(componentId)
+    if (globalThis['~promises'].componentCache.has(componentId)) {
+      globalThis['~promises'].componentCache.delete(componentId)
     }
   }
 
-  globalThis.__clearAllPromises = function () {
-    globalThis.__resolved_promises.clear()
-    globalThis.__component_specific_promises.clear()
-    globalThis.__component_promise_cache.clear()
-    globalThis.__function_signatures_to_values.clear()
-    globalThis.__function_name_to_value.clear()
-    globalThis.__resolved_function_values.clear()
-    globalThis.__pending_promises = []
+  globalThis['~promises'].clearAll = function () {
+    globalThis['~promises'].resolved.clear()
+    globalThis['~promises'].componentSpecific.clear()
+    globalThis['~promises'].componentCache.clear()
+    globalThis['~promises'].functionSignatures.clear()
+    globalThis['~promises'].functionNameToValue.clear()
+    globalThis['~promises'].resolvedFunctions.clear()
+    globalThis['~promises'].pending = []
   }
 
   // Enhanced promise rejection handling
-  globalThis.__handlePromiseRejection = function (promise, error, componentId) {
+  globalThis['~promises'].handleRejection = function (promise, error, componentId) {
     const cId
-      = componentId || globalThis.__current_rendering_component || 'unknown'
+      = componentId || globalThis['~render']?.currentComponent || 'unknown'
 
     // Store the failed promise
-    globalThis.__failed_promises.set(promise, {
+    globalThis['~promises'].failed.set(promise, {
       error,
       componentId: cId,
       timestamp: Date.now(),
@@ -325,26 +330,26 @@
     return true
   }
 
-  globalThis.__wrapPromiseWithErrorHandling = function (promise, componentId) {
+  globalThis['~promises'].wrapWithErrorHandling = function (promise, componentId) {
     if (!promise || typeof promise.then !== 'function') {
       return promise
     }
 
     const cId
-      = componentId || globalThis.__current_rendering_component || 'unknown'
+      = componentId || globalThis['~render']?.currentComponent || 'unknown'
 
     return promise.catch((error) => {
-      globalThis.__handlePromiseRejection(promise, error, cId)
+      globalThis['~promises'].handleRejection(promise, error, cId)
       // Re-throw to maintain promise chain behavior
       throw error
     })
   }
 
-  globalThis.__safePromiseWrapper = function (promiseFactory, componentId) {
+  globalThis['~promises'].safeWrapper = function (promiseFactory, componentId) {
     try {
       const promise = promiseFactory()
       if (promise && typeof promise.then === 'function') {
-        return globalThis.__wrapPromiseWithErrorHandling(promise, componentId)
+        return globalThis['~promises'].wrapWithErrorHandling(promise, componentId)
       }
       return promise
     }
@@ -353,42 +358,42 @@
     }
   }
 
-  globalThis.__getFailedPromise = function (promise) {
-    return globalThis.__failed_promises.get(promise)
+  globalThis['~promises'].getFailed = function (promise) {
+    return globalThis['~promises'].failed.get(promise)
   }
 
-  globalThis.__clearFailedPromises = function (componentId) {
+  globalThis['~promises'].clearFailed = function (componentId) {
     if (componentId) {
       // Clear only promises for specific component
-      for (const [promise, data] of globalThis.__failed_promises.entries()) {
+      for (const [promise, data] of globalThis['~promises'].failed.entries()) {
         if (data.componentId === componentId) {
-          globalThis.__failed_promises.delete(promise)
+          globalThis['~promises'].failed.delete(promise)
         }
       }
     }
     else {
       // Clear all failed promises
-      globalThis.__failed_promises.clear()
+      globalThis['~promises'].failed.clear()
     }
   }
 
   globalThis.PromiseManager = {
-    track: globalThis.__track_component_render,
-    register: globalThis.__registerResolvedPromise,
-    registerFunction: globalThis.__registerFunctionResult,
-    registerModuleFunction: globalThis.__registerModuleFunctionResult,
-    get: globalThis.__getResolvedPromise,
-    getFunction: globalThis.__getFunctionResult,
-    getModuleFunction: globalThis.__getModuleFunctionResult,
-    clear: globalThis.__clearComponentPromises,
-    clearAll: globalThis.__clearAllPromises,
-    createSignature: globalThis.__createFunctionSignatureKey,
-    parsePromise: globalThis.__parseFunctionFromPromise,
-    handleRejection: globalThis.__handlePromiseRejection,
-    wrapWithErrorHandling: globalThis.__wrapPromiseWithErrorHandling,
-    safeWrapper: globalThis.__safePromiseWrapper,
-    getFailedPromise: globalThis.__getFailedPromise,
-    clearFailedPromises: globalThis.__clearFailedPromises,
+    track: globalThis['~promises'].trackComponentRender,
+    register: globalThis['~promises'].registerResolved,
+    registerFunction: globalThis['~promises'].registerFunction,
+    registerModuleFunction: globalThis['~promises'].registerModuleFunction,
+    get: globalThis['~promises'].getResolved,
+    getFunction: globalThis['~promises'].getFunctionResult,
+    getModuleFunction: globalThis['~promises'].getModuleFunctionResult,
+    clear: globalThis['~promises'].clearComponent,
+    clearAll: globalThis['~promises'].clearAll,
+    createSignature: globalThis['~promises'].createSignatureKey,
+    parsePromise: globalThis['~promises'].parseFunction,
+    handleRejection: globalThis['~promises'].handleRejection,
+    wrapWithErrorHandling: globalThis['~promises'].wrapWithErrorHandling,
+    safeWrapper: globalThis['~promises'].safeWrapper,
+    getFailedPromise: globalThis['~promises'].getFailed,
+    clearFailedPromises: globalThis['~promises'].clearFailed,
   }
 
   return {

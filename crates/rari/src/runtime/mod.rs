@@ -303,8 +303,6 @@ impl JsExecutionRuntime {
     }
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
-        tracing::debug!("Invalidating component: {}", component_id);
-
         let escaped_component_id = component_id
             .replace('\\', "\\\\")
             .replace('"', r#"\""#)
@@ -322,23 +320,23 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_functions && globalThis.__rsc_functions[componentId]) {{
-                    delete globalThis.__rsc_functions[componentId];
+                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
+                    delete globalThis['~rsc'].functions[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis.__server_functions && globalThis.__server_functions[componentId]) {{
-                    delete globalThis.__server_functions[componentId];
+                if (globalThis['~serverFunctions']?.all && globalThis['~serverFunctions'].all[componentId]) {{
+                    delete globalThis['~serverFunctions'].all[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_modules && globalThis.__rsc_modules[componentId]) {{
-                    delete globalThis.__rsc_modules[componentId];
+                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
+                    delete globalThis['~rsc'].modules[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis.__rsc_components && globalThis.__rsc_components[componentId]) {{
-                    delete globalThis.__rsc_components[componentId];
+                if (globalThis['~rsc'].components && globalThis['~rsc'].components[componentId]) {{
+                    delete globalThis['~rsc'].components[componentId];
                     deleted = true;
                 }}
 
@@ -361,10 +359,7 @@ impl JsExecutionRuntime {
             .execute_script(format!("invalidate_{}", component_id.replace('/', "_")), script)
             .await
         {
-            Ok(_) => {
-                tracing::info!("Component invalidated successfully: {}", component_id);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!("Failed to invalidate component {}: {}", component_id, e);
                 Err(RariError::js_runtime(format!(
@@ -380,8 +375,6 @@ impl JsExecutionRuntime {
         component_id: &str,
         bundle_path: &std::path::Path,
     ) -> Result<(), RariError> {
-        tracing::debug!("Loading component: {} from {:?}", component_id, bundle_path);
-
         if !bundle_path.exists() {
             let error_msg = format!("Component bundle file not found: {:?}", bundle_path);
             tracing::error!("{}", error_msg);
@@ -396,10 +389,7 @@ impl JsExecutionRuntime {
 
         let script_name = format!("load_component_{}", component_id.replace('/', "_"));
         match self.execute_script(script_name, component_code).await {
-            Ok(_) => {
-                tracing::info!("Component loaded successfully: {}", component_id);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 let error_msg =
                     format!("Failed to execute component code for {}: {}", component_id, e);

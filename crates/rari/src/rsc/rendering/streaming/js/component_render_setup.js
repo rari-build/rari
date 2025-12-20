@@ -1,10 +1,12 @@
 // oxlint-disable no-unused-expressions
 /* eslint-disable no-undef, style/object-curly-spacing */
-globalThis.__render_component_async = async function () {
+if (!globalThis['~render'])
+  globalThis['~render'] = {}
+globalThis['~render'].componentAsync = async function () {
   try {
-    let Component = (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}']?.default)
+    let Component = (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}']?.default)
       || globalThis['{component_id}']
-      || (globalThis.__rsc_modules && globalThis.__rsc_modules['{component_id}'])
+      || (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}'])
 
     if (Component && typeof Component === 'object' && typeof Component.default === 'function') {
       Component = Component.default
@@ -15,7 +17,11 @@ globalThis.__render_component_async = async function () {
     }
 
     const props = {props_json}
-    globalThis.__boundary_props.root = props
+    if (!globalThis['~suspense'])
+      globalThis['~suspense'] = {}
+    if (!globalThis['~suspense'].boundaryProps)
+      globalThis['~suspense'].boundaryProps = {}
+    globalThis['~suspense'].boundaryProps.root = props
 
     let element
     let renderError = null
@@ -24,8 +30,10 @@ globalThis.__render_component_async = async function () {
       const isOverrideActive = React.createElement.toString().includes('SUSPENSE BOUNDARY FOUND')
 
       if (!isOverrideActive) {
-        if (!globalThis.__original_create_element) {
-          globalThis.__original_create_element = React.createElement
+        if (!globalThis['~react'])
+          globalThis['~react'] = {}
+        if (!globalThis['~react'].originalCreateElement) {
+          globalThis['~react'].originalCreateElement = React.createElement
         }
 
         React.createElement = function (type, props, ...children) {
@@ -41,22 +49,26 @@ globalThis.__render_component_async = async function () {
 
           if (isSuspenseComponent(type)) {
             const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-            const previousBoundaryId = globalThis.__current_boundary_id
-            globalThis.__current_boundary_id = boundaryId
+            if (!globalThis['~suspense'])
+              globalThis['~suspense'] = {}
+            const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
+            globalThis['~suspense'].currentBoundaryId = boundaryId
 
             const safeFallback = props?.fallback || null
-            const serializableFallback = globalThis.__safeSerializeElement(safeFallback)
+            const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-            globalThis.__discovered_boundaries.push({
+            if (!globalThis['~suspense'].discoveredBoundaries)
+              globalThis['~suspense'].discoveredBoundaries = []
+            globalThis['~suspense'].discoveredBoundaries.push({
               id: boundaryId,
               fallback: serializableFallback,
               parentId: previousBoundaryId,
             })
 
-            globalThis.__current_boundary_id = previousBoundaryId
-            return globalThis.__original_create_element('suspense', { ...props, key: boundaryId }, ...children)
+            globalThis['~suspense'].currentBoundaryId = previousBoundaryId
+            return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId }, ...children)
           }
-          return globalThis.__original_create_element(type, props, ...children)
+          return globalThis['~react'].originalCreateElement(type, props, ...children)
         }
       }
 
@@ -79,8 +91,8 @@ globalThis.__render_component_async = async function () {
         ]
 
         for (const loadingPath of loadingPaths) {
-          if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {
-            const LoadingModule = globalThis.__rsc_modules[loadingPath]
+          if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[loadingPath]) {
+            const LoadingModule = globalThis['~rsc'].modules[loadingPath]
             const LoadingComp = LoadingModule.default || LoadingModule
             if (typeof LoadingComp === 'function') {
               try {
@@ -100,38 +112,40 @@ globalThis.__render_component_async = async function () {
             fallbackContent = loadingComponent
           }
           else {
-            fallbackContent = globalThis.__original_create_element('div', {
+            fallbackContent = globalThis['~react'].originalCreateElement('div', {
               className: 'rari-loading',
               children: 'Loading...',
             })
           }
         }
         else {
-          fallbackContent = globalThis.__original_create_element('div', {
+          fallbackContent = globalThis['~react'].originalCreateElement('div', {
             className: 'rari-loading',
             children: 'Loading...',
           })
         }
 
-        globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || []
-        globalThis.__discovered_boundaries.push({
+        if (!globalThis['~suspense'].discoveredBoundaries)
+          globalThis['~suspense'].discoveredBoundaries = []
+        globalThis['~suspense'].discoveredBoundaries.push({
           id: boundaryId,
-          fallback: globalThis.__safeSerializeElement(fallbackContent),
+          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
           parentId: null,
         })
 
-        globalThis.__pending_promises = globalThis.__pending_promises || []
-        globalThis.__pending_promises.push({
+        if (!globalThis['~suspense'].pendingPromises)
+          globalThis['~suspense'].pendingPromises = []
+        globalThis['~suspense'].pendingPromises.push({
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
         })
 
-        const serializedFallback = globalThis.__safeSerializeElement(fallbackContent)
+        const serializedFallback = globalThis['~suspense'].safeSerializeElement(fallbackContent)
 
-        const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({
+        const safeBoundaries = (globalThis['~suspense'].discoveredBoundaries || []).map(boundary => ({
           id: boundary.id,
-          fallback: globalThis.__safeSerializeElement(boundary.fallback),
+          fallback: globalThis['~suspense'].safeSerializeElement(boundary.fallback),
           parentId: boundary.parentId,
         }))
 
@@ -145,7 +159,7 @@ globalThis.__render_component_async = async function () {
           success: true,
           rsc_data: fallbackRsc,
           boundaries: safeBoundaries,
-          pending_promises: globalThis.__pending_promises || [],
+          pending_promises: globalThis['~suspense'].pendingPromises || [],
           has_suspense: true,
           error: null,
           error_stack: null,
@@ -153,15 +167,15 @@ globalThis.__render_component_async = async function () {
 
         try {
           const jsonString = JSON.stringify(initialResult)
-          globalThis.__streaming_result = JSON.parse(jsonString)
+          globalThis['~render'].streamingResult = JSON.parse(jsonString)
         }
         catch {
-          globalThis.__streaming_result = initialResult
+          globalThis['~render'].streamingResult = initialResult
         }
-        globalThis.__initial_render_complete = true
+        globalThis['~render'].initialComplete = true
 
-        globalThis.__deferred_async_components = globalThis.__deferred_async_components || []
-        globalThis.__deferred_async_components.push({
+        globalThis['~render'].deferredAsyncComponents = globalThis['~render'].deferredAsyncComponents || []
+        globalThis['~render'].deferredAsyncComponents.push({
           component: Component,
           props,
           promiseId,
@@ -180,11 +194,11 @@ globalThis.__render_component_async = async function () {
         const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
         const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
-        globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-        globalThis.__suspense_promises[promiseId] = element
+        globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
+        globalThis['~suspense'].promises[promiseId] = element
 
-        globalThis.__pending_promises = globalThis.__pending_promises || []
-        globalThis.__pending_promises.push({
+        globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
+        globalThis['~suspense'].pendingPromises.push({
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
@@ -201,8 +215,8 @@ globalThis.__render_component_async = async function () {
         ]
 
         for (const loadingPath of loadingPaths) {
-          if (globalThis.__rsc_modules && globalThis.__rsc_modules[loadingPath]) {
-            const LoadingModule = globalThis.__rsc_modules[loadingPath]
+          if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[loadingPath]) {
+            const LoadingModule = globalThis['~rsc'].modules[loadingPath]
             const LoadingComp = LoadingModule.default || LoadingModule
             if (typeof LoadingComp === 'function') {
               try {
@@ -221,28 +235,28 @@ globalThis.__render_component_async = async function () {
           fallbackContent = loadingComponent
         }
         else {
-          fallbackContent = globalThis.__original_create_element('div', {
+          fallbackContent = globalThis['~react'].originalCreateElement('div', {
             className: 'rari-loading',
             children: 'Loading...',
           })
         }
 
-        globalThis.__discovered_boundaries = globalThis.__discovered_boundaries || []
-        globalThis.__discovered_boundaries.push({
+        globalThis['~suspense'].discoveredBoundaries = globalThis['~suspense'].discoveredBoundaries || []
+        globalThis['~suspense'].discoveredBoundaries.push({
           id: boundaryId,
-          fallback: globalThis.__safeSerializeElement(fallbackContent),
+          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
           parentId: null,
         })
 
         element = fallbackContent
 
-        const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({
+        const safeBoundaries = (globalThis['~suspense'].discoveredBoundaries || []).map(boundary => ({
           id: boundary.id,
-          fallback: globalThis.__safeSerializeElement(boundary.fallback),
+          fallback: globalThis['~suspense'].safeSerializeElement(boundary.fallback),
           parentId: boundary.parentId,
         }))
 
-        const serializedFallback = globalThis.__safeSerializeElement(fallbackContent)
+        const serializedFallback = globalThis['~suspense'].safeSerializeElement(fallbackContent)
         const simpleFallbackRsc = {
           type: 'react.suspense',
           key: null,
@@ -261,7 +275,7 @@ globalThis.__render_component_async = async function () {
           success: true,
           rsc_data: simpleFallbackRsc,
           boundaries: safeBoundaries,
-          pending_promises: globalThis.__pending_promises || [],
+          pending_promises: globalThis['~suspense'].pendingPromises || [],
           has_suspense: true,
           error: null,
           error_stack: null,
@@ -269,12 +283,12 @@ globalThis.__render_component_async = async function () {
 
         try {
           const jsonString = JSON.stringify(initialResult)
-          globalThis.__streaming_result = JSON.parse(jsonString)
+          globalThis['~render'].streamingResult = JSON.parse(jsonString)
         }
         catch {
-          globalThis.__streaming_result = initialResult
+          globalThis['~render'].streamingResult = initialResult
         }
-        globalThis.__initial_render_complete = true
+        globalThis['~render'].initialComplete = true
 
         return
       }
@@ -285,13 +299,15 @@ globalThis.__render_component_async = async function () {
 
         if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {
           const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-          const previousBoundaryId = globalThis.__current_boundary_id
-          globalThis.__current_boundary_id = boundaryId
+          if (!globalThis['~suspense'])
+            globalThis['~suspense'] = {}
+          const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
+          globalThis['~suspense'].currentBoundaryId = boundaryId
 
           const safeFallback = el.props.fallback || null
-          const serializableFallback = globalThis.__safeSerializeElement(safeFallback)
+          const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-          globalThis.__discovered_boundaries.push({
+          globalThis['~suspense'].discoveredBoundaries.push({
             id: boundaryId,
             fallback: serializableFallback,
             parentId: previousBoundaryId,
@@ -303,11 +319,11 @@ globalThis.__render_component_async = async function () {
                 const result = child.type(child.props || null)
                 if (result && typeof result.then === 'function') {
                   const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-                  globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-                  globalThis.__suspense_promises[promiseId] = result
+                  globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
+                  globalThis['~suspense'].promises[promiseId] = result
 
-                  globalThis.__pending_promises = globalThis.__pending_promises || []
-                  globalThis.__pending_promises.push({
+                  globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
+                  globalThis['~suspense'].pendingPromises.push({
                     id: promiseId,
                     boundaryId,
                     componentPath: (child.type.name || 'AnonymousComponent'),
@@ -315,18 +331,18 @@ globalThis.__render_component_async = async function () {
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis.__rsc_client_components || {})
+                  return globalThis.renderToRsc(result, globalThis['~rsc']?.clientComponents || {})
                 }
               }
             }
             catch (error) {
               if (error && typeof error.then === 'function') {
                 const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-                globalThis.__suspense_promises = globalThis.__suspense_promises || {}
-                globalThis.__suspense_promises[promiseId] = error
+                globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
+                globalThis['~suspense'].promises[promiseId] = error
 
-                globalThis.__pending_promises = globalThis.__pending_promises || []
-                globalThis.__pending_promises.push({
+                globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
+                globalThis['~suspense'].pendingPromises.push({
                   id: promiseId,
                   boundaryId,
                   componentPath: 'ThrownPromise',
@@ -339,7 +355,7 @@ globalThis.__render_component_async = async function () {
             return processSuspenseInStructure(child, boundaryId)
           })
 
-          globalThis.__current_boundary_id = previousBoundaryId
+          globalThis['~suspense'].currentBoundaryId = previousBoundaryId
 
           return {
             type: 'suspense',
@@ -373,25 +389,25 @@ globalThis.__render_component_async = async function () {
 
         if (isLeafAsyncComponent) {
           const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-          globalThis.__suspense_promises[promiseId] = suspenseError.promise
+          globalThis['~suspense'].promises[promiseId] = suspenseError.promise
 
-          const boundaryId = globalThis.__current_boundary_id || 'root_boundary'
-          globalThis.__pending_promises.push({
+          const boundaryId = globalThis['~suspense'].currentBoundaryId || 'root_boundary'
+          globalThis['~suspense'].pendingPromises.push({
             id: promiseId,
             boundaryId,
             componentPath: componentName,
           })
         }
 
-        element = globalThis.__original_create_element
-          ? globalThis.__original_create_element('div', null, '')
+        element = globalThis['~react'].originalCreateElement
+          ? globalThis['~react'].originalCreateElement('div', null, '')
           : { type: 'div', props: { children: '' } }
       }
       else {
         console.error('Non-suspense error during rendering:', suspenseError)
         renderError = suspenseError
-        element = globalThis.__original_create_element
-          ? globalThis.__original_create_element('div', null, `Error: ${suspenseError.message}`)
+        element = globalThis['~react'].originalCreateElement
+          ? globalThis['~react'].originalCreateElement('div', null, `Error: ${suspenseError.message}`)
           : { type: 'div', props: { children: `Error: ${suspenseError.message}` } }
       }
     }
@@ -399,7 +415,7 @@ globalThis.__render_component_async = async function () {
     let rscData
     try {
       rscData = globalThis.renderToRsc
-        ? await globalThis.renderToRsc(element, globalThis.__rsc_client_components || {})
+        ? await globalThis.renderToRsc(element, globalThis['~rsc']?.clientComponents || {})
         : element
     }
     catch (rscError) {
@@ -412,9 +428,9 @@ globalThis.__render_component_async = async function () {
       }
     }
 
-    const safeBoundaries = (globalThis.__discovered_boundaries || []).map(boundary => ({
+    const safeBoundaries = (globalThis['~suspense'].discoveredBoundaries || []).map(boundary => ({
       id: boundary.id,
-      fallback: globalThis.__safeSerializeElement(boundary.fallback),
+      fallback: globalThis['~suspense'].safeSerializeElement(boundary.fallback),
       parentId: boundary.parentId,
     }))
 
@@ -422,26 +438,28 @@ globalThis.__render_component_async = async function () {
       success: !renderError,
       rsc_data: rscData,
       boundaries: safeBoundaries,
-      pending_promises: globalThis.__pending_promises || [],
+      pending_promises: globalThis['~suspense'].pendingPromises || [],
       has_suspense: (safeBoundaries && safeBoundaries.length > 0)
-        || (globalThis.__pending_promises && globalThis.__pending_promises.length > 0),
+        || (globalThis['~suspense'].pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
       error: renderError ? renderError.message : null,
       error_stack: renderError ? renderError.stack : null,
     }
 
     try {
       const jsonString = JSON.stringify(finalResult)
-      globalThis.__streaming_result = JSON.parse(jsonString)
+      globalThis['~render'].streamingResult = JSON.parse(jsonString)
     }
     catch {
-      globalThis.__streaming_result = finalResult
+      globalThis['~render'].streamingResult = finalResult
     }
 
-    if (!globalThis.__initial_render_complete) {
-      globalThis.__initial_render_complete = true
+    if (!globalThis['~render'].initialComplete) {
+      globalThis['~render'].initialComplete = true
     }
 
-    globalThis.__streaming_complete = true
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].streamingComplete = true
   }
   catch (error) {
     console.error('Fatal error in component rendering:', error)
@@ -453,12 +471,14 @@ globalThis.__render_component_async = async function () {
     }
     try {
       const jsonString = JSON.stringify(errorResult)
-      globalThis.__streaming_result = JSON.parse(jsonString)
+      globalThis['~render'].streamingResult = JSON.parse(jsonString)
     }
     catch {
-      globalThis.__streaming_result = errorResult
+      globalThis['~render'].streamingResult = errorResult
     }
-    globalThis.__streaming_complete = true
+    if (!globalThis['~render'])
+      globalThis['~render'] = {}
+    globalThis['~render'].streamingComplete = true
   }
 };
 

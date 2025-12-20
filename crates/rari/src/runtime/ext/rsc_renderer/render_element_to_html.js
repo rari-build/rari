@@ -186,8 +186,8 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
         }
         else if (typeof type === 'function') {
           try {
-            if (globalThis.__track_component_render && type.name) {
-              globalThis.__track_component_render(type.name)
+            if (globalThis['~promises']?.trackComponentRender && type.name) {
+              globalThis['~promises'].trackComponentRender(type.name)
             }
 
             const result = type(props)

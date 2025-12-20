@@ -86,7 +86,7 @@ mod tests {
         serializer.register_client_component("Button", "./components/Button.client.js", "default");
 
         let element1 = SerializedReactElement::create_client_component("Button", None);
-        let _result1 = serializer.serialize_to_rsc_format(&element1);
+        serializer.serialize_to_rsc_format(&element1);
 
         serializer.output_lines.clear();
         serializer.serialized_modules.clear();
@@ -103,14 +103,9 @@ mod tests {
 
         serializer.register_client_component("Button", "./components/Button.client.js", "default");
 
-        let mut button_props = FxHashMap::default();
-        button_props.insert("children".to_string(), json!("Click me"));
-
         let mut div_props = FxHashMap::default();
         div_props.insert("className".to_string(), json!("container"));
 
-        let _button_element =
-            SerializedReactElement::create_client_component("Button", Some(button_props));
         let div_element = SerializedReactElement::create_html_element("div", Some(div_props));
 
         let result = serializer.serialize_to_rsc_format(&div_element);
@@ -716,7 +711,7 @@ mod tests {
             props
         });
 
-        let _result = serializer.serialize_element(&suspense).unwrap();
+        serializer.serialize_element(&suspense).unwrap();
 
         let output = serializer.output_lines.join("\n");
 
