@@ -1,4 +1,147 @@
-## [0.2.11] - 2025-12-17
+## [rari@0.5.24] - 2025-12-20
+
+### 💼 Other
+
+- Rari@0.5.24
+## [0.5.18] - 2025-12-20
+
+### 🚜 Refactor
+
+- *(rsc)* Rename client component registry globals to use tilde prefix
+- *(rsc)* Migrate global namespace from __rari to ~rari
+- *(rsc)* Migrate global namespace from __rari to ~rari
+- *(rsc)* Migrate global namespace from __rsc to ~rsc
+- *(rsc)* Remove Counter component special handling from RSC traversal
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(rsc)* Migrate global namespace from double underscore to tilde prefix
+- *(runtime)* Migrate error handling globals from double underscore to tilde prefix
+- *(rsc)* Migrate registry proxy global from double underscore to tilde prefix
+- *(hmr)* Improve component specifier handling and remove debug logging
+- *(rsc)* Remove debug logging statements across codebase
+- *(runtime)* Remove lifecycle logging from LayoutWrapper
+
+### ⚙️ Miscellaneous Tasks
+
+- *(logging)* Remove info-level logging statements across codebase
+- *(logging)* Remove warn-level logging statements
+- *(logging)* Remove warn-level logging and upgrade to error-level where appropriate
+- *(logging)* Remove warn-level logging and unused variables
+- *(release)* Bump version to 0.5.18
+## [rari@0.5.23] - 2025-12-18
+
+### 💼 Other
+
+- Rari@0.5.23
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.17
+## [0.5.17] - 2025-12-18
+
+### 🚀 Features
+
+- *(rsc)* Implement getData-based page not found detection
+
+### 💼 Other
+
+- V0.5.17
+## [rari@0.5.22] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.22
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.16
+## [0.5.16] - 2025-12-17
+
+### 🐛 Bug Fixes
+
+- *(server)* Return 404 status code for not found routes
+
+### 💼 Other
+
+- V0.5.16
+## [rari@0.5.21] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.21
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.5.15
+## [0.5.15] - 2025-12-17
+
+### 🐛 Bug Fixes
+
+- *(server)* Block access to sensitive internal files
+- *(server)* Block access to sensitive internal files
+
+### 💼 Other
+
+- Rari@0.5.15
+
+### 🚜 Refactor
+
+- *(docs)* Migrate markdown parser from markdown-it to marked
+- *(server)* Separate stylesheet and script injection into head and body
+- *(rsc)* Standardize boundary ID prop naming to ~boundaryId
+- *(rsc)* Standardize pre-serialized suspense prop naming
+- *(rsc)* Standardize client component marker prop naming
+- *(rsc)* Standardize data attribute naming with tilde prefix
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Add marked to external dependencies in vite config
+## [rari@0.5.20] - 2025-12-17
+
+### 💼 Other
+
+- Rari@0.5.20
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari to 0.5.14
+## [0.5.14] - 2025-12-17
+
+### 🚀 Features
+
+- *(rari)* Add external module configuration for server builds
+- *(server)* Improve server action module loading with ESM support
+
+### 🚜 Refactor
+
+- *(rsc)* Remove legacy module fallback patterns and simplify runtime
+- *(vite)* Simplify node imports transformation in server build
+
+### 📚 Documentation
+
+- *(getting-started)* Standardize pnpm usage and add path aliases
+- *(getting-started)* Improve example with real-world API usage and styling
+
+### 🎨 Styling
+
+- *(docs)* Improve prose list styling and readability
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari to 0.5.14
+## [create-rari-app@0.2.11] - 2025-12-17
+
+### 🚀 Features
+
+- *(runtime)* Add module loading and component initialization improvements
+
+### 💼 Other
+
+- Create-rari-app@0.2.11
+
+### 🚜 Refactor
+
+- *(vite)* Remove unnecessary banners and optimize minification settings
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -743,7 +886,7 @@
 ### 💼 Other
 
 - Rari@0.2.17
-## [0.2.12] - 2025-08-21
+## [0.2.12] - 2025-12-20
 
 ### 🐛 Bug Fixes
 
@@ -766,7 +909,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Remove CHANGELOG.md and update release script to handle changelog copying
-## [0.2.11] - 2025-12-17
+## [0.2.11] - 2025-08-21
 
 ### ⚙️ Miscellaneous Tasks
 
