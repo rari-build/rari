@@ -50,10 +50,10 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^25.0.1",
-    "@typescript/native-preview": "7.0.0-dev.20251210.1",
-    "eslint": "^9.39.1",
-    "oxlint": "^1.32.0",
+    "@types/node": "^25.0.3",
+    "@typescript/native-preview": "7.0.0-dev.20251219.1",
+    "eslint": "^9.39.2",
+    "oxlint": "^1.34.0",
     "tsdown": "^0.17.3"
   }
 }
