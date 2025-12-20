@@ -6,7 +6,7 @@ use rari::server::{
 };
 
 use rustls::crypto::CryptoProvider;
-use tracing::{error, warn};
+use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -146,7 +146,7 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
         match Config::from_env() {
             Ok(config) => config,
             Err(e) => {
-                warn!("Failed to load config from environment: {}, using defaults", e);
+                error!("No environment config found, using defaults: {}", e);
                 Config::new(mode)
             }
         }
@@ -185,11 +185,6 @@ fn validate_configuration(config: &Config) -> Result<(), RariError> {
 
     if config.server.host.is_empty() {
         return Err(RariError::configuration("Server host cannot be empty".to_string()));
-    }
-
-    if !config.public_dir().exists() {
-        warn!("Public directory does not exist: {}", config.public_dir().display());
-        warn!("Static files will not be served correctly");
     }
 
     Ok(())

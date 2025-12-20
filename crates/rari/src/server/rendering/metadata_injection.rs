@@ -3,18 +3,15 @@ use crate::rsc::rendering::layout::types::PageMetadata;
 pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
     let mut result = html.to_string();
 
-    if let Some(title) = &metadata.title {
-        if let Some(title_start) = result.find("<title>") {
-            if let Some(title_end_rel) = result[title_start..].find("</title>") {
-                let title_end_abs = title_start + title_end_rel + "</title>".len();
-                result.replace_range(
-                    title_start..title_end_abs,
-                    &format!("<title>{}</title>", escape_html(title)),
-                );
-            }
-        } else {
-            tracing::warn!("No <title> tag found in HTML to replace");
-        }
+    if let Some(title) = &metadata.title
+        && let Some(title_start) = result.find("<title>")
+        && let Some(title_end_rel) = result[title_start..].find("</title>")
+    {
+        let title_end_abs = title_start + title_end_rel + "</title>".len();
+        result.replace_range(
+            title_start..title_end_abs,
+            &format!("<title>{}</title>", escape_html(title)),
+        );
     }
 
     if let Some(head_end) = result.find("</head>") {

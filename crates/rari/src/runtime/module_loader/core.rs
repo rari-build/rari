@@ -1066,13 +1066,6 @@ export const __esModule = true;
 
         None
     }
-
-    fn try_infer_component_source_path(&self, virtual_specifier: &str) -> Option<String> {
-        let _component_id =
-            virtual_specifier.strip_prefix("file:///rari_component/")?.strip_suffix(".js")?;
-
-        None
-    }
 }
 
 impl Default for RariModuleLoader {
@@ -1095,23 +1088,21 @@ impl ModuleLoader for RariModuleLoader {
             && let Some(package_start) = referrer.rfind("node_modules/")
         {
             let after_node_modules = &referrer[package_start + 13..];
-            if let Some(package_end) = after_node_modules.find('/') {
-                let _package_name = &after_node_modules[..package_end];
-
-                if specifier.starts_with("./") || specifier.starts_with("../") {
-                    let referrer_dir = match std::path::Path::new(referrer).parent() {
-                        Some(dir) => dir,
-                        None => {
-                            return Err(JsErrorBox::generic("Module not found"));
-                        }
-                    };
-                    let resolved_path = referrer_dir.join(specifier);
-
-                    if let Ok(canonical) = resolved_path.canonicalize()
-                        && let Ok(url) = ModuleSpecifier::from_file_path(canonical)
-                    {
-                        return Ok(url);
+            if after_node_modules.find('/').is_some()
+                && (specifier.starts_with("./") || specifier.starts_with("../"))
+            {
+                let referrer_dir = match std::path::Path::new(referrer).parent() {
+                    Some(dir) => dir,
+                    None => {
+                        return Err(JsErrorBox::generic("Module not found"));
                     }
+                };
+                let resolved_path = referrer_dir.join(specifier);
+
+                if let Ok(canonical) = resolved_path.canonicalize()
+                    && let Ok(url) = ModuleSpecifier::from_file_path(canonical)
+                {
+                    return Ok(url);
                 }
             }
         }
@@ -1158,10 +1149,7 @@ impl ModuleLoader for RariModuleLoader {
             }
 
             if referrer.contains(RARI_COMPONENT_PATH) {
-                let source_path = self
-                    .module_caching
-                    .get_component_source_path(referrer)
-                    .or_else(|| self.try_infer_component_source_path(referrer));
+                let source_path = self.module_caching.get_component_source_path(referrer);
 
                 if let Some(source_path) = source_path {
                     let source_dir = if source_path.contains('/') {

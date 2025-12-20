@@ -13,7 +13,7 @@ use axum::{
 };
 use rustc_hash::FxHashMap;
 use serde_json::Value;
-use tracing::{error, warn};
+use tracing::error;
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
 const CHUNKED_ENCODING: &str = "chunked";
@@ -172,8 +172,6 @@ pub async fn rsc_render_handler(
     Path(component_id): Path<String>,
     Query(params): Query<FxHashMap<String, String>>,
 ) -> Result<Response, StatusCode> {
-    let start_time = std::time::Instant::now();
-
     state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     let props: Option<Value> = params.get("props").and_then(|p| {
@@ -189,8 +187,6 @@ pub async fn rsc_render_handler(
 
     match result {
         Ok(rsc_data) => {
-            let _render_time = start_time.elapsed().as_millis() as u64;
-
             let cache_configs = state.component_cache_configs.read().await;
             let mut response_builder = Response::builder().header("content-type", RSC_CONTENT_TYPE);
 
@@ -208,8 +204,6 @@ pub async fn rsc_render_handler(
             Ok(response_builder.body(Body::from(rsc_data)).expect("Valid RSC response"))
         }
         Err(e) => {
-            let _render_time = start_time.elapsed().as_millis() as u64;
-
             error!("Failed to render RSC component {}: {}", component_id, e);
 
             Err(StatusCode::INTERNAL_SERVER_ERROR)
@@ -274,12 +268,6 @@ pub async fn reload_component_from_dist(
     };
 
     if !dist_path.exists() {
-        warn!(
-            component_id = component_id,
-            dist_path = %dist_path.display(),
-            source_path = file_path,
-            "Dist file does not exist, Vite may not have finished building"
-        );
         return Err(format!(
             "Dist file not found: {}. Vite may not have finished building yet. Last known good version will be preserved.",
             dist_path.display()
@@ -367,7 +355,7 @@ pub async fn reload_component_from_dist(
         renderer.clear_component_cache(component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(component_id).await {
-            warn!("Failed to clear module loader caches for {}: {}", component_id, e);
+            error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let timestamp = std::time::SystemTime::now()
@@ -662,11 +650,7 @@ pub async fn immediate_component_reregistration(
         renderer.clear_script_cache();
 
         if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-            warn!(
-                component_name = component_name,
-                error = %e,
-                "Failed to clear component module cache, continuing anyway"
-            );
+            error!("Failed to clear component module cache for {}: {}", component_name, e);
         }
     }
 
@@ -699,11 +683,7 @@ pub async fn immediate_component_reregistration(
 
             let mut renderer = state.renderer.lock().await;
             if let Err(e) = renderer.clear_component_module_cache(component_name).await {
-                warn!(
-                    component_name = component_name,
-                    error = %e,
-                    "Failed to clear component module cache after initial registration"
-                );
+                error!("Failed to clear component module cache for {}: {}", component_name, e);
             }
             drop(renderer);
 
@@ -724,88 +704,6 @@ pub async fn immediate_component_reregistration(
 
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-            let renderer = state.renderer.lock().await;
-
-            let verification_attempts = 3;
-            for attempt in 1..=verification_attempts {
-                let _unique_id = format!(
-                    "{}_{}",
-                    component_name,
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                );
-                let verification_script = format!(
-                    r#"
-                    (function() {{
-                        const componentName = "{}";
-                        const hashedComponentName = "Component_" + componentName;
-                        const componentExists = (
-                            typeof globalThis[componentName] === 'function' ||
-                            typeof globalThis[hashedComponentName] === 'function' ||
-                            (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] &&
-                             (typeof globalThis['~rsc'].modules[componentName].default === 'function' ||
-                              typeof Object.values(globalThis['~rsc'].modules[componentName])[0] === 'function'))
-                        );
-
-                        const debugInfo = {{
-                            globalExists: typeof globalThis[componentName],
-                            moduleRegistryExists: !!globalThis['~rsc'].modules,
-                            moduleExists: globalThis['~rsc'].modules ? !!globalThis['~rsc'].modules[componentName] : false,
-                            moduleDefaultExists: globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] ? typeof globalThis['~rsc'].modules[componentName].default : 'module_not_found',
-                            moduleFirstExportExists: globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentName] ? typeof Object.values(globalThis['~rsc'].modules[componentName])[0] : 'module_not_found',
-                            hashedExists: typeof globalThis[hashedComponentName],
-                            availableGlobals: Object.keys(globalThis).filter(k => typeof globalThis[k] === 'function' && k.match(/^[A-Z]/)).slice(0, 20),
-                            moduleKeys: globalThis['~rsc'].modules ? Object.keys(globalThis['~rsc'].modules).slice(0, 20) : []
-                        }};
-
-                        return {{ success: componentExists, componentName: componentName, debugInfo: debugInfo }};
-                    }})()
-                    "#,
-                    component_name
-                );
-
-                match renderer
-                    .runtime
-                    .execute_script(
-                        format!("hmr_verify_{}.js", component_name),
-                        verification_script,
-                    )
-                    .await
-                {
-                    Ok(result) => {
-                        if let Some(success) = result.get("success").and_then(|v| v.as_bool())
-                            && success
-                        {
-                            return Ok(());
-                        }
-
-                        if attempt == verification_attempts {
-                            warn!(
-                                component_name = component_name,
-                                attempts = verification_attempts,
-                                "Component verification failed after all attempts, but component may still be available"
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        warn!(
-                            component_name = component_name,
-                            attempt = attempt,
-                            error = %e,
-                            "Component verification script execution failed"
-                        );
-                    }
-                }
-                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-            }
-
-            warn!(
-                component_name = component_name,
-                attempts = verification_attempts,
-                "Component verification failed after all attempts, but component may still be available"
-            );
             Ok(())
         }
     }

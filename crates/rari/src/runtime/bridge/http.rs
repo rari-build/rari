@@ -3,7 +3,6 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Response, StatusCode};
 use rustc_hash::FxHashMap;
 use serde_json::{Value as JsonValue, json};
-use tracing::warn;
 
 pub struct RequestBridge;
 
@@ -19,8 +18,6 @@ impl RequestBridge {
         for (name, value) in headers.iter() {
             if let Ok(value_str) = value.to_str() {
                 headers_map.insert(name.to_string(), value_str.to_string());
-            } else {
-                warn!("Skipping non-UTF8 header: {}", name);
             }
         }
 

@@ -9,7 +9,7 @@ use crate::server::{
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{error, warn};
+use tracing::error;
 
 #[derive(Debug, Deserialize)]
 pub struct HmrInvalidateRequest {
@@ -191,7 +191,7 @@ pub async fn hmr_invalidate_component(
         renderer.clear_component_cache(&payload.component_id);
 
         if let Err(e) = renderer.runtime.clear_module_loader_caches(&payload.component_id).await {
-            warn!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
+            error!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
         }
 
         let clear_script = format!(
@@ -284,7 +284,6 @@ pub async fn hmr_invalidate_api_route(
     let api_handler = match &state.api_route_handler {
         Some(handler) => handler,
         None => {
-            warn!("No API route handler available for HMR invalidation");
             #[allow(clippy::disallowed_methods)]
             return Json(serde_json::json!({
                 "success": false,
@@ -458,13 +457,11 @@ pub async fn reload_component(
         registry.mark_component_initially_loaded(&payload.component_id);
     }
 
-    let invalidate_result = {
+    if let Err(e) = {
         let renderer = state.renderer.lock().await;
         renderer.runtime.invalidate_component(&payload.component_id).await
-    };
-
-    if let Err(e) = invalidate_result {
-        warn!("Failed to invalidate component (non-fatal): {}", e);
+    } {
+        error!("Failed to invalidate component {}: {}", payload.component_id, e);
     }
 
     let load_result = {

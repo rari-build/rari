@@ -30,16 +30,6 @@ impl SuspenseBoundaryManager {
     pub async fn register_boundary(&mut self, mut boundary: SuspenseBoundaryInfo) {
         let boundary_id = boundary.id.clone();
 
-        {
-            let boundaries = self.boundaries.lock().await;
-            if boundaries.contains_key(&boundary_id) {
-                tracing::warn!(
-                    "Duplicate boundary registration detected: boundary_id='{}'. This may cause duplicate loading skeletons.",
-                    boundary_id
-                );
-            }
-        }
-
         boundary.skeleton_rendered = false;
         boundary.is_resolved = false;
 
@@ -54,22 +44,9 @@ impl SuspenseBoundaryManager {
         let mut skeleton_ids = self.rendered_skeleton_ids.lock().await;
         let is_first = skeleton_ids.insert(boundary_id.to_string());
 
-        if !is_first {
-            tracing::warn!(
-                "Duplicate loading skeleton detected for boundary '{}'. Only one skeleton should be rendered per boundary.",
-                boundary_id
-            );
-        }
-
         {
             let mut boundaries = self.boundaries.lock().await;
             if let Some(boundary) = boundaries.get_mut(boundary_id) {
-                if boundary.skeleton_rendered {
-                    tracing::warn!(
-                        "Boundary '{}' already has skeleton_rendered=true, but skeleton is being rendered again",
-                        boundary_id
-                    );
-                }
                 boundary.skeleton_rendered = true;
             }
         }
@@ -78,18 +55,6 @@ impl SuspenseBoundaryManager {
     }
 
     pub async fn resolve_boundary(&self, boundary_id: &str, content: serde_json::Value) {
-        {
-            let boundaries = self.boundaries.lock().await;
-            if let Some(boundary) = boundaries.get(boundary_id)
-                && boundary.is_resolved
-            {
-                tracing::warn!(
-                    "Boundary '{}' is already resolved. Duplicate resolution may cause orphaned loading skeletons.",
-                    boundary_id
-                );
-            }
-        }
-
         {
             let mut resolved = self.resolved_boundaries.lock().await;
             resolved.insert(boundary_id.to_string(), content);
@@ -128,10 +93,6 @@ impl SuspenseBoundaryManager {
 
         for (id, boundary) in boundaries.iter() {
             if boundary.skeleton_rendered && !skeleton_ids.contains(id) && !boundary.is_resolved {
-                tracing::warn!(
-                    "Inconsistency detected: boundary '{}' has skeleton_rendered=true but is not in rendered_skeleton_ids",
-                    id
-                );
                 duplicates.push(id.clone());
             }
         }

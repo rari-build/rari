@@ -14,7 +14,7 @@ use futures_util::SinkExt;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{error, warn};
+use tracing::error;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
@@ -79,8 +79,6 @@ pub async fn vite_src_proxy(
             }
         }
         Err(e) => {
-            warn!("Failed to proxy src request to Vite server: {}", e);
-
             if e.is_connect() {
                 create_error_response(
                     StatusCode::BAD_GATEWAY,
@@ -158,8 +156,6 @@ pub async fn vite_reverse_proxy(
             }
         }
         Err(e) => {
-            warn!("Failed to proxy request to Vite server: {}", e);
-
             if e.is_connect() {
                 create_error_response(
                     StatusCode::BAD_GATEWAY,

@@ -9,7 +9,7 @@ use axum::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tracing::{error, warn};
+use tracing::error;
 
 #[cfg(test)]
 mod tests;
@@ -301,7 +301,6 @@ pub(crate) fn validate_redirect_url(
         });
 
         if !is_allowed {
-            warn!("Blocked redirect to untrusted host: {}", host);
             return Err(RariError::bad_request("Redirect to untrusted host not allowed"));
         }
     } else {
@@ -455,7 +454,6 @@ fn validate_and_sanitize_value(
             let mut sanitized = serde_json::Map::new();
             for (key, val) in obj {
                 if is_dangerous_property(key) {
-                    warn!("Blocked dangerous property '{}' in server action arguments", key);
                     continue;
                 }
 

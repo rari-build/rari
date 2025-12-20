@@ -4,7 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
-use tracing::{error, warn};
+use tracing::error;
 
 const DIST_DIR: &str = "dist";
 
@@ -14,10 +14,6 @@ impl ComponentLoader {
     pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
         let manifest_path = std::path::Path::new("dist/server-manifest.json");
         if !manifest_path.exists() {
-            warn!(
-                "No server manifest found at {}, production components will not be available",
-                manifest_path.display()
-            );
             return Ok(());
         }
 
@@ -290,8 +286,8 @@ impl ComponentLoader {
                                                         )
                                                         .await
                                                     {
-                                                        warn!(
-                                                            "Failed to register server action {} to globalThis: {}",
+                                                        error!(
+                                                            "Failed to register server action {}: {}",
                                                             action_id, e
                                                         );
                                                     }
@@ -442,8 +438,8 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            warn!(
-                                                "Failed to register server action {} to globalThis: {}",
+                                            error!(
+                                                "Failed to register server functions from {}: {}",
                                                 relative_str, e
                                             );
                                         }
@@ -572,8 +568,8 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        warn!(
-                                            "Failed to register ESM component {} to globalThis: {}",
+                                        error!(
+                                            "Failed to register component {}: {}",
                                             component_id, e
                                         );
                                     }
@@ -602,7 +598,7 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            warn!(
+                                            error!(
                                                 "Failed to mark component {} as client: {}",
                                                 component_id, e
                                             );
@@ -651,7 +647,7 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        warn!(
+                                        error!(
                                             "Failed to mark component {} as client: {}",
                                             component_id, e
                                         );

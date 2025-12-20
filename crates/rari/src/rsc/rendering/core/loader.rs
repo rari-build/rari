@@ -1,6 +1,6 @@
 pub struct RscJsLoader;
 
-fn create_js_wrapper(_component_id: &str, js_code: &str) -> String {
+fn create_js_wrapper(js_code: &str) -> String {
     format!(
         r#"
         (function() {{
@@ -69,7 +69,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &setup_code)
+        create_js_wrapper(&setup_code)
     }
 
     pub fn create_stub_via_js_function(component_id: &str, stub_type: StubType) -> String {
@@ -346,7 +346,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &extraction_code)
+        create_js_wrapper(&extraction_code)
     }
 
     pub fn create_rsc_extraction_script(component_id: &str) -> String {
@@ -399,7 +399,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &extraction_code)
+        create_js_wrapper(&extraction_code)
     }
 
     pub fn create_component_verification_script(
@@ -448,7 +448,7 @@ impl RscJsLoader {
             "#
         );
 
-        create_js_wrapper(component_id, &verification_code)
+        create_js_wrapper(&verification_code)
     }
 
     pub fn create_isolation_namespacing_script(component_id: &str) -> String {

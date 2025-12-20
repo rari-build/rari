@@ -4,7 +4,6 @@ use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
 use crate::error::RariError;
-use tracing::warn;
 
 pub struct StreamingHtmlResponse {
     stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RariError>> + Send>>,
@@ -38,7 +37,6 @@ impl IntoResponse for StreamingHtmlResponse {
                     if e.to_string().contains("disconnected")
                         || e.to_string().contains("broken pipe")
                     {
-                        warn!("Client disconnected during streaming: {}", e);
                         client_connected_clone.store(false, std::sync::atomic::Ordering::Relaxed);
                     }
 

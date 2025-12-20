@@ -25,11 +25,6 @@ pub fn validate_suspense_boundaries(rsc_data: &serde_json::Value) -> Result<(), 
                         .unwrap_or("unknown")
                         .to_string();
 
-                    tracing::warn!(
-                        "Duplicate fallback content detected for boundary '{}'",
-                        boundary_id
-                    );
-
                     duplicates.push(boundary_id);
                 }
             }

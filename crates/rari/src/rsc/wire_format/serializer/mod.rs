@@ -289,18 +289,10 @@ impl RscSerializer {
                     if let Some(module_reference) = self.serialized_modules.get(&component_name) {
                         module_reference.clone()
                     } else {
-                        tracing::warn!(
-                            "Client component '{}' has no registered module - treating as div placeholder",
-                            id
-                        );
                         return create_error_placeholder(id, key, props);
                     }
                 }
                 None => {
-                    tracing::warn!(
-                        "Client component '{}' has invalid format - treating as div placeholder",
-                        id
-                    );
                     return create_error_placeholder(id, key, props);
                 }
             }

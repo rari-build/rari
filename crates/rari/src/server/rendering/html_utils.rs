@@ -1,6 +1,6 @@
 use crate::server::config::Config;
 use axum::http::StatusCode;
-use tracing::{error, warn};
+use tracing::error;
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
     use tokio::fs;
@@ -49,15 +49,12 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
                 error!("CRITICAL: Root element was LOST during asset injection!");
                 error!("This will cause hydration to fail in the browser.");
 
-                warn!("Attempting recovery: returning original HTML without asset injection");
-
                 let recovered_html = if html.trim_start().starts_with("<!DOCTYPE") {
                     html.to_string()
                 } else {
                     format!("<!DOCTYPE html>\n{}", html)
                 };
 
-                warn!("Recovery completed: original HTML returned to preserve root element");
                 return Ok(recovered_html);
             }
         }
@@ -82,9 +79,6 @@ async fn inject_assets_into_complete_document(
     config: &Config,
 ) -> Result<String, StatusCode> {
     let has_root_before = html.contains(r#"id="root""#);
-    if !has_root_before {
-        warn!("Root element missing before asset injection - this may cause hydration issues");
-    }
 
     let template_path = if config.is_development() { "index.html" } else { "dist/index.html" };
 
@@ -135,8 +129,6 @@ async fn inject_assets_into_complete_document(
         let stylesheets_html = stylesheets.join("\n    ");
         if let Some(head_end) = final_html.find("</head>") {
             final_html.insert_str(head_end, &format!("    {}\n  ", stylesheets_html));
-        } else {
-            warn!("No </head> tag found - cannot inject stylesheets in head");
         }
     }
 
@@ -144,8 +136,6 @@ async fn inject_assets_into_complete_document(
         let scripts_html = scripts.join("\n    ");
         if let Some(body_end) = final_html.rfind("</body>") {
             final_html.insert_str(body_end, &format!("\n    {}\n  ", scripts_html));
-        } else {
-            warn!("No </body> tag found - cannot inject scripts");
         }
     }
 
@@ -157,7 +147,6 @@ async fn inject_assets_into_complete_document(
     if has_root_before && !has_root_after {
         error!("Root element was lost during asset injection!");
 
-        warn!("Returning original HTML to preserve root element");
         if html.trim_start().starts_with("<!DOCTYPE") {
             return Ok(html.to_string());
         }
@@ -221,8 +210,7 @@ async fn inject_content_into_template(
 
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,
-        Err(e) => {
-            warn!("Could not read template file {}: {}", template_path, e);
+        Err(_) => {
             return Ok(format!(
                 r#"<!DOCTYPE html>
 <html>
@@ -253,47 +241,41 @@ async fn inject_content_into_template(
 
                 result
             } else {
-                warn!("Could not find closing </div> for root element in template");
                 template.replace(
                     r#"<div id="root"></div>"#,
                     &format!(r#"<div id="root">{}</div>"#, content),
                 )
             }
         } else {
-            warn!("Malformed root div in template");
             template.replace(
                 r#"<div id="root"></div>"#,
                 &format!(r#"<div id="root">{}</div>"#, content),
             )
         }
+    } else if let Some(body_end) = template.rfind("</body>") {
+        let mut result = template.clone();
+        result.insert_str(body_end, &format!(r#"<div id="root">{}</div>"#, content));
+        result
     } else {
-        warn!("No <div id=\"root\"> found in template, using fallback");
-        if let Some(body_end) = template.rfind("</body>") {
-            let mut result = template.clone();
-            result.insert_str(body_end, &format!(r#"<div id="root">{}</div>"#, content));
-            result
-        } else {
-            format!(
-                r#"<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-<body>
-  <div id="root">{}</div>
-</body>
-</html>"#,
-                content
-            )
-        }
+        format!(
+            r#"<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    </head>
+    <body>
+      <div id="root">{}</div>
+    </body>
+    </html>"#,
+            content
+        )
     };
 
     if !final_html.contains(r#"id="root""#) {
         error!("CRITICAL: Root element missing in final HTML after template injection!");
         error!("This should never happen as template injection should always create root element");
 
-        warn!("Attempting recovery with fallback HTML structure");
         let recovered_html = format!(
             r#"<!DOCTYPE html>
 <html>
@@ -308,7 +290,6 @@ async fn inject_content_into_template(
             content
         );
 
-        warn!("Recovery completed: fallback HTML with root element returned");
         return Ok(recovered_html);
     }
 

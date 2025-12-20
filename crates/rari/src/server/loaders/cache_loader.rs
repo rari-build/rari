@@ -2,7 +2,7 @@ use crate::error::RariError;
 use crate::server::ServerState;
 use regex::Regex;
 use rustc_hash::FxHashMap;
-use tracing::{info, warn};
+use tracing::error;
 
 pub struct CacheLoader;
 
@@ -16,7 +16,6 @@ impl CacheLoader {
         let mut loaded_count = 0;
         Self::scan_pages_directory(pages_dir, state, &mut loaded_count).await?;
 
-        info!("Loaded {} page cache configurations", loaded_count);
         Ok(())
     }
 
@@ -46,10 +45,9 @@ impl CacheLoader {
                         || extension == "js")
                 {
                     if let Err(e) = Self::load_page_cache_config(&path, state).await {
-                        warn!("Failed to load cache config for {}: {}", path.display(), e);
-                    } else {
-                        *loaded_count += 1;
+                        error!("Failed to load page cache config for {:?}: {}", path, e);
                     }
+                    *loaded_count += 1;
                 }
             }
         }
@@ -160,32 +158,20 @@ impl CacheLoader {
             return Ok(());
         }
 
-        match std::fs::read_to_string(cache_config_path) {
-            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
-                Ok(config_json) => {
-                    if let Some(routes) = config_json.get("routes").and_then(|r| r.as_object()) {
-                        let mut page_configs = state.page_cache_configs.write().await;
+        if let Ok(content) = std::fs::read_to_string(cache_config_path)
+            && let Ok(config_json) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(routes) = config_json.get("routes").and_then(|r| r.as_object())
+        {
+            let mut page_configs = state.page_cache_configs.write().await;
 
-                        for (route, cache_control) in routes {
-                            if let Some(cache_str) = cache_control.as_str()
-                                && !page_configs.contains_key(route)
-                            {
-                                let mut cache_config = FxHashMap::default();
-                                cache_config
-                                    .insert("cache-control".to_string(), cache_str.to_string());
-                                page_configs.insert(route.clone(), cache_config);
-                            }
-                        }
-
-                        info!("Loaded vite cache configuration with {} routes", routes.len());
-                    }
+            for (route, cache_control) in routes {
+                if let Some(cache_str) = cache_control.as_str()
+                    && !page_configs.contains_key(route)
+                {
+                    let mut cache_config = FxHashMap::default();
+                    cache_config.insert("cache-control".to_string(), cache_str.to_string());
+                    page_configs.insert(route.clone(), cache_config);
                 }
-                Err(e) => {
-                    warn!("Failed to parse vite cache config: {}", e);
-                }
-            },
-            Err(e) => {
-                warn!("Failed to read vite cache config file: {}", e);
             }
         }
 

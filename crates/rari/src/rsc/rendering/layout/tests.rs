@@ -103,22 +103,6 @@ fn test_empty_rsc_error_message_contains_key_info() {
 }
 
 #[test]
-fn test_invalid_rsc_format_warning_contains_key_info() {
-    let warning_msg = error_messages::create_invalid_rsc_format_warning(
-        "missing row ID",
-        "Expected numeric row ID at start",
-    );
-
-    assert!(warning_msg.contains("Invalid Structure"));
-    assert!(warning_msg.contains("missing row ID"));
-    assert!(warning_msg.contains("Expected numeric row ID at start"));
-    assert!(warning_msg.contains("RSC WIRE FORMAT SPECIFICATION"));
-    assert!(warning_msg.contains("VALID RSC WIRE FORMAT EXAMPLES"));
-    assert!(warning_msg.contains("TROUBLESHOOTING STEPS"));
-    assert!(warning_msg.contains("Step 1"));
-}
-
-#[test]
 fn test_detect_suspense_boundaries_no_suspense() {
     let renderer = LayoutRenderer::new(Arc::new(tokio::sync::Mutex::new(RscRenderer::new(
         Arc::new(JsExecutionRuntime::new(None)),

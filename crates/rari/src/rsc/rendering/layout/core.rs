@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{error, warn};
+use tracing::error;
 
 use super::{constants::*, error_messages, types::*, utils};
 
@@ -68,10 +68,7 @@ impl LayoutRenderer {
 
         let base_path = match dist_server_path {
             Some(path) => path,
-            None => {
-                tracing::warn!("Could not determine dist/server path for getData check");
-                return Ok(false);
-            }
+            None => return Ok(false),
         };
 
         let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
@@ -119,7 +116,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<
+        request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<String, RariError> {
@@ -144,10 +141,10 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        if let Some(ref ctx) = _request_context
+        if let Some(ref ctx) = request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
         {
-            tracing::warn!("Failed to set request context in runtime: {}", e);
+            error!("Failed to set request context: {}", e);
         }
 
         let promise_result = renderer
@@ -177,7 +174,7 @@ impl LayoutRenderer {
         };
 
         if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
-            tracing::warn!("HTML structure validation warning: {}", e);
+            error!("HTML structure validation failed: {}", e);
         }
 
         Ok(rsc_wire_format)
@@ -217,10 +214,6 @@ impl LayoutRenderer {
     ) -> Result<(), RariError> {
         for boundary in &layout_structure.suspense_boundaries {
             if !boundary.is_in_content_area {
-                warn!(
-                    "Skeleton position validation failed: boundary '{}' is not in content area. This may cause layout shifts.",
-                    boundary.boundary_id
-                );
                 return Err(RariError::internal(format!(
                     "Skeleton position validation failed: boundary '{}' is not in content area",
                     boundary.boundary_id
@@ -228,10 +221,6 @@ impl LayoutRenderer {
             }
 
             if boundary.dom_path.is_empty() {
-                warn!(
-                    "Skeleton position validation failed: boundary '{}' has empty DOM path. Cannot ensure position stability.",
-                    boundary.boundary_id
-                );
                 return Err(RariError::internal(format!(
                     "Skeleton position validation failed: boundary '{}' has empty DOM path",
                     boundary.boundary_id
@@ -512,7 +501,7 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        _request_context: Option<
+        request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<RenderResult, RariError> {
@@ -544,10 +533,10 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        if let Some(ref ctx) = _request_context
+        if let Some(ref ctx) = request_context
             && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
         {
-            tracing::warn!("Failed to set request context in runtime: {}", e);
+            error!("Failed to set request context: {}", e);
         }
 
         let promise_result = renderer
@@ -572,34 +561,11 @@ impl LayoutRenderer {
         let layout_structure = match self.validate_layout_structure_impl(rsc_data, route_match) {
             Ok(structure) => {
                 if !structure.is_valid() {
-                    warn!(
-                        "Layout structure validation failed for route '{}'. Falling back to non-streaming rendering.",
-                        route_match.route.path
-                    );
-
-                    warn!(
-                        "Component tree for route '{}': {} layouts, page: {}",
-                        route_match.route.path,
-                        route_match.layouts.len(),
-                        route_match.route.file_path
-                    );
-
-                    for (idx, layout) in route_match.layouts.iter().enumerate() {
-                        warn!(
-                            "  Layout {}: {} (is_root: {})",
-                            idx, layout.file_path, layout.is_root
-                        );
-                    }
-
                     structure
                 } else {
                     if let Err(e) = self.validate_skeleton_positions(&structure) {
-                        warn!(
-                            "Skeleton position validation failed for route '{}': {}. Falling back to non-streaming rendering.",
-                            route_match.route.path, e
-                        );
+                        error!("Skeleton position validation failed: {}", e);
                     }
-
                     structure
                 }
             }
@@ -620,28 +586,11 @@ impl LayoutRenderer {
                     error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
                 }
 
-                warn!(
-                    "Falling back to static rendering for route {} due to validation error",
-                    route_match.route.path
-                );
-
                 LayoutStructure::new()
             }
         };
 
         let suspense_detection = self.detect_suspense_boundaries_impl(rsc_data)?;
-
-        if suspense_detection.boundary_count > 0 {
-            let rsc_str = serde_json::to_string(rsc_data).unwrap_or_default();
-            let boundary_occurrences = rsc_str.matches("react.suspense").count();
-            if boundary_occurrences != suspense_detection.boundary_count {
-                tracing::warn!(
-                    "⚠️ RSC data contains {} occurrences of 'react.suspense' but detected {} unique boundaries. Possible duplicates in RSC data!",
-                    boundary_occurrences,
-                    suspense_detection.boundary_count
-                );
-            }
-        }
 
         if suspense_detection.has_suspense && layout_structure.is_valid() {
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
@@ -657,11 +606,6 @@ impl LayoutRenderer {
                 .await?;
 
             return Ok(RenderResult::Streaming(stream));
-        } else if suspense_detection.has_suspense && !layout_structure.is_valid() {
-            warn!(
-                "Found {} Suspense boundaries but layout structure is invalid, falling back to static rendering for route {}",
-                suspense_detection.boundary_count, route_match.route.path
-            );
         }
 
         let page_props = utils::create_page_props(route_match, context)?;
@@ -738,44 +682,6 @@ impl LayoutRenderer {
         if rsc_data.trim().is_empty() {
             let error_msg = error_messages::create_empty_rsc_error_message();
             return Err(RariError::internal(error_msg));
-        }
-
-        let trimmed = rsc_data.trim_start();
-        if !trimmed.starts_with(char::is_numeric) {
-            let warning_msg = error_messages::create_invalid_rsc_format_warning(
-                "missing row ID at start",
-                &trimmed.chars().take(50).collect::<String>(),
-            );
-            tracing::warn!("{}", warning_msg);
-        }
-
-        if !rsc_data.contains("[\"$\"") {
-            let warning_msg = error_messages::create_invalid_rsc_format_warning(
-                "missing React element markers",
-                "Expected to find [\"$\"] markers in the output",
-            );
-            tracing::warn!("{}", warning_msg);
-        }
-
-        let lines: Vec<&str> = rsc_data.lines().collect();
-        for (idx, line) in lines.iter().enumerate() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            if !line.starts_with(char::is_numeric) {
-                let warning_msg = format!(
-                    "⚠️  RSC Wire Format Warning: Invalid Line Format\n\n\
-                    Line {} does not start with a row ID.\n\n\
-                    📍 Line Content (first 50 chars):\n   {}\n\n\
-                    💡 Expected Format:\n   \
-                    Each line should start with a numeric row ID followed by a colon.\n   \
-                    Example: 0:[\"$\",\"html\",null,{{...}}]\n",
-                    idx,
-                    &line.chars().take(50).collect::<String>()
-                );
-                tracing::warn!("{}", warning_msg);
-            }
         }
 
         Ok(())

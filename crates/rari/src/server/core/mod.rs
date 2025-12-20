@@ -41,7 +41,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
-use tracing::warn;
+use tracing::error;
 
 pub struct Server {
     router: Router,
@@ -169,11 +169,6 @@ impl Server {
         use crate::server::security::csrf::CsrfTokenManager;
 
         if let Ok(secret) = std::env::var("RARI_CSRF_SECRET") {
-            if secret.len() < 32 {
-                warn!(
-                    "RARI_CSRF_SECRET is less than 32 bytes. Using it anyway, but consider using a stronger secret."
-                );
-            }
             CsrfTokenManager::new(secret.into_bytes())
         } else {
             CsrfTokenManager::new_with_random_secret()
@@ -228,8 +223,7 @@ impl Server {
                 .route("/src/{*path}", any(vite_src_proxy));
 
             if let Err(e) = check_vite_server_health().await {
-                warn!("Vite development server check failed: {}", e);
-                warn!("Make sure to start your Vite dev server for HMR to work");
+                error!("Vite server health check failed: {}", e);
             }
         }
 
