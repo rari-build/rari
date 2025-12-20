@@ -149,9 +149,7 @@ export default function Counter() {
     <div>
       <h2>Client Interaction</h2>
       <button onClick={() => setCount(count + 1)} type="button">
-        Count:
-        {' '}
-        {count}
+        Count: {count}
       </button>
     </div>
   )
@@ -426,7 +424,6 @@ export default function Navigation() {
 - Automatically serialized for the client
 
 ```tsx
-// Server Component (default)
 export default async function ServerComponent() {
   const data = await fetch('https://api.example.com/data')
   const result = await data.json()
@@ -450,11 +447,7 @@ export default function ClientComponent() {
 
   return (
     <button onClick={() => setCount(count + 1)} type="button">
-      Clicked
-      {' '}
-      {count}
-      {' '}
-      times
+      Clicked {count} times
     </button>
   )
 }
