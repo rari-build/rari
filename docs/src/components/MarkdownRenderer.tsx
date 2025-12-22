@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 import { marked } from 'marked'
 import NotFoundPage from '@/app/not-found'
+import { parseFrontmatter } from '@/lib/frontmatter'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
 interface MarkdownRendererProps {
@@ -39,7 +40,7 @@ export default async function MarkdownRenderer({
       return <NotFoundPage />
     }
 
-    const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, '')
+    const { content: contentWithoutFrontmatter } = parseFrontmatter(content)
 
     const highlighter = await getHighlighter()
 

@@ -4,6 +4,7 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
+import { parseFrontmatter } from '@/lib/frontmatter'
 
 export default function DocPage({ params }: PageProps) {
   const slug = params?.slug
@@ -46,24 +47,16 @@ export async function generateMetadata({ params }: PageProps) {
     const filePath = join(process.cwd(), 'public', 'content', `${slug}.md`)
     const content = await readFile(filePath, 'utf-8')
 
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
-    if (frontmatterMatch) {
-      const frontmatter: Record<string, string> = {}
-      frontmatterMatch[1].split('\n').forEach((line) => {
-        const colonIndex = line.indexOf(':')
-        if (colonIndex > 0) {
-          const key = line.substring(0, colonIndex).trim()
-          const value = line.substring(colonIndex + 1).trim().replace(/^["']|["']$/g, '')
-          frontmatter[key] = value
-        }
-      })
+    const { data: frontmatter, content: markdownContent } = parseFrontmatter(content)
+
+    if (frontmatter.title || frontmatter.description) {
       return {
         title: frontmatter.title ? `${frontmatter.title} | Rari` : 'Documentation | Rari',
         description: frontmatter.description || 'Complete documentation for Rari framework.',
       }
     }
 
-    const headingMatch = content.match(/^#\s+(\S.*)$/m)
+    const headingMatch = markdownContent.match(/^#\s+(\S.*)$/m)
     if (headingMatch) {
       return {
         title: `${headingMatch[1]} | Rari`,
