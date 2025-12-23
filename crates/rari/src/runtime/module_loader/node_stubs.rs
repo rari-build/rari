@@ -679,7 +679,6 @@ const createContext = (defaultValue) => ({
   _currentValue: defaultValue
 });
 const memo = (component) => component;
-const forwardRef = (component) => component;
 const useRef = (initial) => ({ current: initial });
 const useCallback = (fn) => fn;
 const useMemo = (fn) => fn();
@@ -703,7 +702,6 @@ export {
   use,
   createContext,
   memo,
-  forwardRef,
   useRef,
   useCallback,
   useMemo,
@@ -728,7 +726,6 @@ export default {
   use,
   createContext,
   memo,
-  forwardRef,
   useRef,
   useCallback,
   useMemo,
