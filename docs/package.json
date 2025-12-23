@@ -27,7 +27,7 @@
     "@shikijs/langs": "^3.20.0",
     "@shikijs/rehype": "^3.20.0",
     "@shikijs/themes": "^3.20.0",
-    "rari": "workspace:*",
+    "rari": "latest",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
