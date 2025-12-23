@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   const PageComponent = globalThis[pageComponentId]
   if (!PageComponent || typeof PageComponent !== 'function') {
@@ -47,6 +48,7 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
   if (!PageComponent || typeof PageComponent !== 'function') {
     return {
       html: '',
+      rsc: '',
       error: `Page component ${pageComponentId} not found`,
       success: false,
     }
@@ -65,6 +67,7 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
       if (!LayoutComponent || typeof LayoutComponent !== 'function') {
         return {
           html: '',
+          rsc: '',
           error: `Layout component ${layout.componentId} not found`,
           success: false,
         }
@@ -79,15 +82,71 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
     if (typeof globalThis.renderToHtml !== 'function') {
       return {
         html: '',
+        rsc: '',
         error: 'renderToHtml function not available',
         success: false,
       }
     }
 
-    const html = await globalThis.renderToHtml(currentElement)
+    const AppRouterProviderShell = ({ children }) => React.createElement(React.Fragment, {}, children)
+    const ClientRouterShell = ({ children }) => React.createElement(React.Fragment, {}, children)
+
+    let htmlElement = React.createElement(
+      AppRouterProviderShell,
+      {},
+      currentElement,
+    )
+
+    const manifest = globalThis['~rari']?.appRoutesManifest
+    htmlElement = React.createElement(
+      ClientRouterShell,
+      { manifest, initialRoute: pageProps.pathname || '/' },
+      htmlElement,
+    )
+
+    const html = await globalThis.renderToHtml(htmlElement)
+
+    let rscData = null
+    try {
+      const clientComponents = globalThis['~rsc']?.clientComponents || {}
+
+      if (typeof globalThis.renderToRsc === 'function') {
+        rscData = await globalThis.renderToRsc(currentElement, clientComponents)
+
+        rscData = ['$', '$LAppRouterProvider', null, {
+          children: rscData,
+        }]
+
+        const manifest = globalThis['~rari']?.appRoutesManifest
+        if (manifest && typeof manifest === 'object') {
+          const cleanManifest = {
+            routes: manifest.routes || [],
+            layouts: manifest.layouts || [],
+            loading: manifest.loading || [],
+            errors: manifest.errors || [],
+            notFound: manifest.notFound || [],
+            apiRoutes: manifest.apiRoutes || [],
+            generated: manifest.generated || '',
+          }
+
+          rscData = ['$', '$LClientRouter', null, {
+            manifest: cleanManifest,
+            initialRoute: pageProps.pathname || '/',
+            children: rscData,
+          }]
+        }
+      }
+      else if (typeof globalThis.traverseToRsc === 'function') {
+        rscData = await globalThis.traverseToRsc(currentElement, clientComponents)
+      }
+    }
+    catch (rscError) {
+      console.error('[renderRouteToHtml] Failed to generate RSC payload:', rscError)
+    }
 
     return {
       html,
+      rscData,
       error: null,
       success: true,
     }
@@ -96,6 +155,7 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
     console.error('Error in renderRouteToHtml:', error)
     return {
       html: '',
+      rsc: '',
       error: error.message || String(error),
       success: false,
     }

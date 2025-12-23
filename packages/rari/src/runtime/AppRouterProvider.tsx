@@ -876,9 +876,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         </div>
       )}
 
-      <div>
-        {contentToRender}
-      </div>
+      {contentToRender}
     </>
   )
 }

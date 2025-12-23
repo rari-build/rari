@@ -1298,6 +1298,10 @@ const ${componentName} = registerClientReference(
         return id
       }
 
+      if (id === 'virtual:react-server-dom-rari-client') {
+        return id
+      }
+
       if (id === 'virtual:app-router-provider') {
         return `${id}.tsx`
       }
@@ -1459,6 +1463,10 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
 
       if (id === 'virtual:rsc-integration') {
         return await loadRscClientRuntime()
+      }
+
+      if (id === 'virtual:react-server-dom-rari-client') {
+        return await loadRuntimeFile('react-server-dom-rari-client.js')
       }
     },
 

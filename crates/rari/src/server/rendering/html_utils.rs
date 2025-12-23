@@ -179,8 +179,7 @@ fn extract_asset_signature(asset_tag: &str) -> String {
 }
 
 pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
-    let escaped_payload =
-        rsc_payload.replace('\\', "\\\\").replace('`', "\\`").replace("</script>", "<\\/script>");
+    let escaped_payload = rsc_payload.replace("</script>", "<\\/script>");
 
     let script_tag = format!(
         r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>"#,

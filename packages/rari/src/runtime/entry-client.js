@@ -2,8 +2,15 @@ import { ClientRouter } from 'rari/client'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
+import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import 'virtual:rsc-integration'
 import 'virtual:loading-component-map'
+
+if (typeof globalThis['~rari'] === 'undefined') {
+  globalThis['~rari'] = {}
+}
+globalThis['~rari'].AppRouterProvider = AppRouterProvider
+globalThis['~rari'].ClientRouter = ClientRouter
 
 // CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
 
@@ -24,27 +31,62 @@ export async function renderApp() {
   }
 
   try {
-    const rariServerUrl = window.location.origin.includes(':5173')
-      ? 'http://localhost:3000'
-      : window.location.origin
-    const url = rariServerUrl + window.location.pathname + window.location.search
+    let element
+    let isFullDocument = false
 
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'text/x-component',
-      },
-    })
+    const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch RSC data: ${response.status}`)
+    if (payloadScript && payloadScript.textContent) {
+      try {
+        const payloadJson = payloadScript.textContent
+
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(payloadJson))
+            controller.close()
+          },
+        })
+
+        element = await createFromReadableStream(stream, {
+          moduleMap: globalThis['~clientComponents'] || {},
+        })
+      }
+      catch (e) {
+        console.error('[Rari] Failed to parse embedded RSC payload:', e)
+        element = null
+      }
     }
 
-    const rscWireFormat = await response.text()
+    if (!element) {
+      const rariServerUrl = window.location.origin.includes(':5173')
+        ? 'http://localhost:3000'
+        : window.location.origin
+      const url = rariServerUrl + window.location.pathname + window.location.search
 
-    const { element, isFullDocument } = parseRscWireFormat(rscWireFormat)
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'text/x-component',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch RSC data: ${response.status}`)
+      }
+
+      const rscWireFormat = await response.text()
+      const parsed = parseRscWireFormat(rscWireFormat)
+      element = parsed.element
+      isFullDocument = parsed.isFullDocument
+    }
 
     let contentToRender
-    if (isFullDocument) {
+    let hasProviders = false
+
+    if (payloadScript && element) {
+      contentToRender = element
+      hasProviders = true
+    }
+    else if (isFullDocument) {
       const bodyContent = extractBodyContent(element, false)
       if (bodyContent) {
         contentToRender = bodyContent
@@ -60,41 +102,67 @@ export async function renderApp() {
 
     let manifest = globalThis['~rari']?.appRoutesManifest
     if (!manifest) {
-      try {
-        const manifestUrl = window.location.origin.includes(':5173')
-          ? '/app-routes.json'
-          : '/app-routes.json'
+      const manifestScript = document.getElementById('__RARI_MANIFEST__')
 
-        const manifestResponse = await fetch(manifestUrl, {
-          headers: { 'Cache-Control': 'no-cache' },
-        })
-        if (manifestResponse.ok) {
-          const text = await manifestResponse.text()
-          manifest = JSON.parse(text)
+      if (manifestScript && manifestScript.textContent) {
+        try {
+          manifest = JSON.parse(manifestScript.textContent)
           if (!globalThis['~rari'])
             globalThis['~rari'] = {}
           globalThis['~rari'].appRoutesManifest = manifest
         }
+        catch (e) {
+          console.error('[Rari] Failed to parse embedded manifest:', e)
+        }
       }
-      catch (err) {
-        console.warn('[Rari] Failed to load manifest:', err)
+
+      if (!manifest) {
+        try {
+          const manifestUrl = window.location.origin.includes(':5173')
+            ? '/app-routes.json'
+            : '/app-routes.json'
+
+          const manifestResponse = await fetch(manifestUrl, {
+            headers: { 'Cache-Control': 'no-cache' },
+          })
+          if (manifestResponse.ok) {
+            const text = await manifestResponse.text()
+            manifest = JSON.parse(text)
+            if (!globalThis['~rari'])
+              globalThis['~rari'] = {}
+            globalThis['~rari'].appRoutesManifest = manifest
+          }
+        }
+        catch (err) {
+          console.warn('[Rari] Failed to load manifest:', err)
+        }
       }
     }
 
-    let wrappedContent = contentToRender
+    let wrappedContent
 
-    wrappedContent = React.createElement(
-      AppRouterProvider,
-      { initialPayload: { element, rscWireFormat } },
-      contentToRender,
-    )
-
-    if (manifest) {
+    if (hasProviders) {
+      if (!manifest) {
+        wrappedContent = contentToRender
+      }
+      else {
+        wrappedContent = contentToRender
+      }
+    }
+    else {
       wrappedContent = React.createElement(
-        ClientRouter,
-        { manifest, initialRoute: window.location.pathname },
-        wrappedContent,
+        AppRouterProvider,
+        { initialPayload: { element } },
+        contentToRender,
       )
+
+      if (manifest) {
+        wrappedContent = React.createElement(
+          ClientRouter,
+          { manifest, initialRoute: window.location.pathname },
+          wrappedContent,
+        )
+      }
     }
 
     const root = createRoot(rootElement)
