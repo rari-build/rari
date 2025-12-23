@@ -63,9 +63,7 @@ export async function generateMetadata({ params }: PageProps) {
       }
     }
   }
-  catch (error) {
-    console.error(`Failed to read metadata for ${slug}:`, error)
-  }
+  catch {}
 
   return {
     title: 'Documentation | Rari',
