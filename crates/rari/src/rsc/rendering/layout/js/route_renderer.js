@@ -97,10 +97,9 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
       currentElement,
     )
 
-    const manifest = globalThis['~rari']?.appRoutesManifest
     htmlElement = React.createElement(
       ClientRouterShell,
-      { manifest, initialRoute: pageProps.pathname || '/' },
+      { initialRoute: pageProps.pathname || '/' },
       htmlElement,
     )
 
@@ -117,24 +116,10 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
           children: rscData,
         }]
 
-        const manifest = globalThis['~rari']?.appRoutesManifest
-        if (manifest && typeof manifest === 'object') {
-          const cleanManifest = {
-            routes: manifest.routes || [],
-            layouts: manifest.layouts || [],
-            loading: manifest.loading || [],
-            errors: manifest.errors || [],
-            notFound: manifest.notFound || [],
-            apiRoutes: manifest.apiRoutes || [],
-            generated: manifest.generated || '',
-          }
-
-          rscData = ['$', '$LClientRouter', null, {
-            manifest: cleanManifest,
-            initialRoute: pageProps.pathname || '/',
-            children: rscData,
-          }]
-        }
+        rscData = ['$', '$LClientRouter', null, {
+          initialRoute: pageProps.pathname || '/',
+          children: rscData,
+        }]
       }
       else if (typeof globalThis.traverseToRsc === 'function') {
         rscData = await globalThis.traverseToRsc(currentElement, clientComponents)

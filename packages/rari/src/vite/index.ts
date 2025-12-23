@@ -1208,27 +1208,6 @@ const ${componentName} = registerClientReference(
         }
       })
 
-      server.middlewares.use('/app-routes.json', async (req, res) => {
-        try {
-          const manifestPath = path.join(server.config.root, 'dist', 'app-routes.json')
-          if (fs.existsSync(manifestPath)) {
-            const manifestContent = await fs.promises.readFile(manifestPath, 'utf-8')
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json')
-            res.setHeader('Cache-Control', 'no-cache')
-            res.end(manifestContent)
-          }
-          else {
-            res.statusCode = 404
-            res.end('Manifest not found')
-          }
-        }
-        catch (error) {
-          res.statusCode = 500
-          res.end(`Error reading manifest: ${error instanceof Error ? error.message : String(error)}`)
-        }
-      })
-
       server.middlewares.use('/api/vite/hmr-transform', async (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405

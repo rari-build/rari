@@ -37,7 +37,7 @@ const SEGMENT_PATTERNS = {
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const
 
-export class AppRouteGenerator {
+class AppRouteGenerator {
   private appDir: string
   private extensions: string[]
   private verbose: boolean
@@ -302,21 +302,6 @@ export class AppRouteGenerator {
     return `${type}:${routePath}`
   }
 
-  async findLayoutChain(routePath: string, manifest: AppRouteManifest): Promise<LayoutEntry[]> {
-    const chain: LayoutEntry[] = []
-    const segments = routePath.split('/').filter(Boolean)
-
-    for (let i = segments.length; i >= 0; i--) {
-      const currentPath = i === 0 ? '/' : `/${segments.slice(0, i).join('/')}`
-      const layout = manifest.layouts.find(l => l.path === currentPath)
-      if (layout) {
-        chain.unshift(layout)
-      }
-    }
-
-    return chain
-  }
-
   private shouldScanDirectory(name: string): boolean {
     const skipDirs = [
       'node_modules',
@@ -430,17 +415,4 @@ export async function generateAppRouteManifest(
   })
 
   return generator.generateManifest()
-}
-
-export async function writeManifest(
-  manifest: AppRouteManifest,
-  outputPath: string,
-): Promise<void> {
-  const json = JSON.stringify(manifest, null, 2)
-  await fs.writeFile(outputPath, json, 'utf-8')
-}
-
-export async function loadManifest(manifestPath: string): Promise<AppRouteManifest> {
-  const content = await fs.readFile(manifestPath, 'utf-8')
-  return JSON.parse(content)
 }

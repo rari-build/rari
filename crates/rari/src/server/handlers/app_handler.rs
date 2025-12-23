@@ -370,12 +370,6 @@ pub async fn render_streaming_with_layout(
         html_renderer,
     )));
 
-    if let Some(ref app_router) = state.app_router {
-        let manifest_json =
-            serde_json::to_string(app_router.manifest()).unwrap_or_else(|_| String::from("{}"));
-        converter.lock().await.set_manifest(manifest_json);
-    }
-
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
 

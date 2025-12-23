@@ -1292,53 +1292,8 @@ if (import.meta.hot) {
   }
 
   async function reloadAppRouterManifest() {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const response = await fetch('/app-routes.json', {
-        cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch manifest: ${response.status}`)
-      }
-
-      const manifest = await response.json()
-
-      if (typeof globalThis !== 'undefined') {
-        globalThis['~rari'].appRoutesManifest = manifest
-      }
-
-      const event = new CustomEvent('rari:app-router-manifest-updated', {
-        detail: { manifest },
-      })
-      window.dispatchEvent(event)
-
-      const currentPath = window.location.pathname
-      const currentRoute = manifest.routes?.find((r) => {
-        if (r.path === currentPath)
-          return true
-        if (r.path.includes('[')) {
-          const pattern = r.path.replace(/\[([^\]]+)\]/g, '([^/]+)')
-          const regex = new RegExp(`^${pattern}$`)
-          return regex.test(currentPath)
-        }
-        return false
-      })
-
-      if (!currentRoute) {
-        console.error('[HMR] Current route not found in updated manifest')
-      }
-    }
-    catch (error) {
-      console.error('[HMR] Failed to reload app router manifest:', error)
-      throw error
+    if (typeof window !== 'undefined' && window['~rari']?.routeInfoCache) {
+      window['~rari'].routeInfoCache.clear()
     }
   }
 
