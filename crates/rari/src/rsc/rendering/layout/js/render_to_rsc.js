@@ -7,9 +7,8 @@ if (!globalThis.renderToRsc) {
       return element.rscArray
     }
 
-    if (!element) {
+    if (!element)
       return null
-    }
 
     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
       return element
