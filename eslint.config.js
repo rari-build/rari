@@ -6,7 +6,7 @@ export default antfu(
   { react: true },
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
   {
-    files: ['**/*.md/**'],
+    files: ['README.md', '**/*.md/**'],
     rules: {
       'react-dom/no-dangerously-set-innerhtml': 'off',
       'react-refresh/only-export-components': 'off',

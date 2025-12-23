@@ -214,9 +214,7 @@ export default function Counter({ initialValue }: { initialValue: number }) {
 
   return (
     <button onClick={() => setCount(count + 1)}>
-      Count:
-      {' '}
-      {count}
+      Count: {count}
     </button>
   )
 }
