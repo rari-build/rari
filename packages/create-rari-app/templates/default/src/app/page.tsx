@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { PageProps } from 'rari/client'
 import ServerTime from '../components/ServerTime'
 import Welcome from '../components/Welcome'

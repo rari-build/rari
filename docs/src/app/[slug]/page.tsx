@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { PageProps } from 'rari/client'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'

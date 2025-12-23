@@ -13,4 +13,10 @@ export default antfu(
       'style/jsx-one-expression-per-line': 'off',
     },
   },
+  {
+    files: ['docs/src/app/**', 'examples/**/src/app/**', 'packages/create-rari-app/templates/**/src/app/**'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )

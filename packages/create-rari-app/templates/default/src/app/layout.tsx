@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 /* eslint-disable style/object-curly-spacing */
 import type { LayoutProps } from 'rari/client'
 

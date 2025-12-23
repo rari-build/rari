@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { LayoutProps } from 'rari/client'
 import Sidebar from '@/components/Sidebar'
 

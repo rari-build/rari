@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 export default function HomePage() {
   return (
     <div className="space-y-8 lg:space-y-12">
