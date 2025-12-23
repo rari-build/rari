@@ -82,7 +82,6 @@
               type,
               props: props ? { ...props, children: children.length > 0 ? children : props.children } : { children },
               key: props?.key || null,
-              ref: props?.ref || null,
             }
           },
           Fragment: Symbol.for('react.fragment'),
