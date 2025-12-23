@@ -57,7 +57,7 @@
             return props.children
           }
           catch (error) {
-            if (error && error.$typeof === Symbol.for('react.suspense.pending') && error.promise) {
+            if (error && error.$$typeof === Symbol.for('react.suspense.pending') && error.promise) {
               const promiseId = `suspense_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
               if (!globalThis['~suspense'].promises)
                 globalThis['~suspense'].promises = {}

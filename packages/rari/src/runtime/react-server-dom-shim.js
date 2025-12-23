@@ -17,17 +17,17 @@ export function registerClientReference(clientReference, id, exportName) {
     async: false,
   })
 
-  Object.defineProperty(clientReference, '$typeof', {
+  Object.defineProperty(clientReference, '$$typeof', {
     value: Symbol.for('react.client.reference'),
     enumerable: false,
   })
 
-  Object.defineProperty(clientReference, '$id', {
+  Object.defineProperty(clientReference, '$$id', {
     value: key,
     enumerable: false,
   })
 
-  Object.defineProperty(clientReference, '$async', {
+  Object.defineProperty(clientReference, '$$async', {
     value: false,
     enumerable: false,
   })
@@ -70,17 +70,17 @@ export function registerServerReference(serverReference, id, exportName) {
     bound: false,
   })
 
-  Object.defineProperty(serverReference, '$typeof', {
+  Object.defineProperty(serverReference, '$$typeof', {
     value: Symbol.for('react.server.reference'),
     enumerable: false,
   })
 
-  Object.defineProperty(serverReference, '$id', {
+  Object.defineProperty(serverReference, '$$id', {
     value: key,
     enumerable: false,
   })
 
-  Object.defineProperty(serverReference, '$bound', {
+  Object.defineProperty(serverReference, '$$bound', {
     value: false,
     enumerable: false,
   })

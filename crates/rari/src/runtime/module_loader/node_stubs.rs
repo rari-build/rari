@@ -131,7 +131,7 @@ export const __esModule = true;
 pub const JSX_RUNTIME_STUB: &str = r#"
 export function jsx(type, props, key) {
   const element = {
-    $typeof: Symbol.for('react.element'),
+    $$typeof: Symbol.for('react.element'),
     type,
     props: props || {},
     key: key || null,
