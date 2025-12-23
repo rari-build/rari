@@ -1,3 +1,52 @@
+## [rari@0.5.25] - 2025-12-23
+
+### 💼 Other
+
+- Rari@0.5.25
+
+### 🎨 Styling
+
+- Simplify JSX formatting and expand markdown linting scope
+## [0.5.19] - 2025-12-23
+
+### 🚀 Features
+
+- *(rsc)* Add RSC wire format payload and manifest embedding
+- *(mdx)* Replace mdx-remote with native @mdx-js/mdx compilation
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Correct React element symbol and add transitional element support
+- *(rsc)* Correct React symbol property names from single to double dollar signs
+- *(rsc)* Update React element symbol to use transitional variant
+- *(rsc)* Remove ref property from React element objects
+- *(rsc)* Remove ref property from React element objects
+- *(rsc)* Update React element symbol to use transitional variant
+- *(rsc)* Remove ref property and forwardRef from React elements
+
+### 🚜 Refactor
+
+- *(docs)* Extract frontmatter parsing into dedicated utility
+
+### 📚 Documentation
+
+- *(getting-started)* Simplify JSX formatting in code examples
+- *(homepage)* Remove unused PageProps import and parameter
+
+### 🎨 Styling
+
+- *(rsc)* Remove unnecessary braces from single-line conditional
+
+### ⚙️ Miscellaneous Tasks
+
+- *(eslint)* Remove pnpm catalog enforcement rule override
+- *(eslint)* Move react-refresh rule disable to config
+- *(release)* Bump rari version to 0.5.19
+## [create-rari-app@0.2.12] - 2025-12-20
+
+### 💼 Other
+
+- Create-rari-app@0.2.12
 ## [rari@0.5.24] - 2025-12-20
 
 ### 💼 Other
@@ -874,7 +923,7 @@
 ### 💼 Other
 
 - Rari@0.2.18
-## [0.2.13] - 2025-08-22
+## [0.2.13] - 2025-12-23
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -886,7 +935,7 @@
 ### 💼 Other
 
 - Rari@0.2.17
-## [0.2.12] - 2025-12-20
+## [0.2.12] - 2025-08-21
 
 ### 🐛 Bug Fixes
 
