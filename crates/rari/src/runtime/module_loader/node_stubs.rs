@@ -534,6 +534,123 @@ export const exit = (code = 0) => {
 export const __esModule = true;
 "#;
 
+pub const NODE_URL_STUB: &str = r#"
+// ESM-compatible stub for node:url
+
+export function fileURLToPath(url) {
+  if (typeof url === 'string') {
+    if (url.startsWith('file://')) {
+      let path = url.slice(7);
+
+      if (path.match(/^\/[a-zA-Z]:\//)) {
+        path = path.slice(1);
+      }
+
+      try {
+        path = decodeURIComponent(path);
+      } catch (e) {
+        // If decoding fails, use the path as-is
+      }
+
+      return path;
+    }
+    return url;
+  }
+
+  if (url && typeof url === 'object' && url.protocol === 'file:') {
+    return fileURLToPath(url.href || url.toString());
+  }
+
+  return String(url);
+}
+
+export function pathToFileURL(path) {
+  if (typeof path !== 'string') {
+    path = String(path);
+  }
+
+  if (path.startsWith('/')) {
+    return new URL('file://' + path);
+  }
+
+  if (path.match(/^[a-zA-Z]:\\/)) {
+    return new URL('file:///' + path.replace(/\\/g, '/'));
+  }
+
+  const cwd = (() => {
+    try {
+      if (globalThis.Deno?.cwd) {
+        return globalThis.Deno.cwd();
+      }
+      if (globalThis.process?.cwd) {
+        return globalThis.process.cwd();
+      }
+      return '/';
+    } catch {
+      return '/';
+    }
+  })();
+
+  const fullPath = cwd + '/' + path;
+  return new URL('file://' + fullPath);
+}
+
+export function format(urlObject) {
+  if (typeof urlObject === 'string') {
+    return urlObject;
+  }
+
+  if (!urlObject || typeof urlObject !== 'object') {
+    return '';
+  }
+
+  const protocol = urlObject.protocol || '';
+  const hostname = urlObject.hostname || urlObject.host || '';
+  const port = urlObject.port ? ':' + urlObject.port : '';
+  const pathname = urlObject.pathname || '';
+  const search = urlObject.search || '';
+  const hash = urlObject.hash || '';
+
+  return protocol + '//' + hostname + port + pathname + search + hash;
+}
+
+export function parse(urlString, parseQueryString = false) {
+  try {
+    const url = new URL(urlString);
+    return {
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port,
+      pathname: url.pathname,
+      search: url.search,
+      hash: url.hash,
+      host: url.host,
+      href: url.href,
+    };
+  } catch (e) {
+    return {
+      protocol: null,
+      hostname: null,
+      port: null,
+      pathname: urlString,
+      search: null,
+      hash: null,
+      host: null,
+      href: urlString,
+    };
+  }
+}
+
+export default {
+  fileURLToPath,
+  pathToFileURL,
+  format,
+  parse,
+};
+
+export const __esModule = true;
+"#;
+
 pub const REACT_STUB: &str = r#"
 // React stub for Deno environment
 

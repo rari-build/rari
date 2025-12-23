@@ -3,8 +3,7 @@ import type { PageProps } from 'rari/client'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import MarkdownRenderer from '@/components/MarkdownRenderer'
-import { parseFrontmatter } from '@/lib/frontmatter'
+import MdxRenderer from '@/components/MdxRenderer'
 
 export default function DocPage({ params }: PageProps) {
   const slug = params?.slug
@@ -13,7 +12,7 @@ export default function DocPage({ params }: PageProps) {
   }
   return (
     <div className="prose prose-invert max-w-none overflow-hidden">
-      <MarkdownRenderer filePath={`${slug}.md`} />
+      <MdxRenderer filePath={`${slug}.mdx`} />
     </div>
   )
 }
@@ -25,7 +24,7 @@ export async function getData({ params }: PageProps) {
   }
 
   try {
-    const filePath = join(process.cwd(), 'public', 'content', `${slug}.md`)
+    const filePath = join(process.cwd(), 'public', 'content', `${slug}.mdx`)
     await access(filePath)
     return { props: {} }
   }
@@ -44,19 +43,20 @@ export async function generateMetadata({ params }: PageProps) {
   }
 
   try {
-    const filePath = join(process.cwd(), 'public', 'content', `${slug}.md`)
+    const filePath = join(process.cwd(), 'public', 'content', `${slug}.mdx`)
     const content = await readFile(filePath, 'utf-8')
 
-    const { data: frontmatter, content: markdownContent } = parseFrontmatter(content)
+    const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
+    const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
 
-    if (frontmatter.title || frontmatter.description) {
+    if (titleMatch || descriptionMatch) {
       return {
-        title: frontmatter.title ? `${frontmatter.title} | Rari` : 'Documentation | Rari',
-        description: frontmatter.description || 'Complete documentation for Rari framework.',
+        title: titleMatch ? `${titleMatch[1]} | Rari` : 'Documentation | Rari',
+        description: descriptionMatch ? descriptionMatch[1] : 'Complete documentation for Rari framework.',
       }
     }
 
-    const headingMatch = markdownContent.match(/^#\s+(\S.*)$/m)
+    const headingMatch = content.match(/^#\s+(\S.*)$/m)
     if (headingMatch) {
       return {
         title: `${headingMatch[1]} | Rari`,

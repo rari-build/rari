@@ -1,4 +1,5 @@
 import path from 'node:path'
+import mdx from '@mdx-js/rollup'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { rari, rariRouter } from 'rari/vite'
@@ -8,10 +9,11 @@ export default defineConfig({
   plugins: [
     rari({
       serverBuild: {
-        external: ['marked', '@shikijs/*'],
+        external: ['@shikijs/*'],
       },
     }),
     rariRouter(),
+    mdx(),
     react(),
     tailwindcss(),
   ],

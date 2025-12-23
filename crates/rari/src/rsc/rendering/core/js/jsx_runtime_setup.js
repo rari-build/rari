@@ -3,7 +3,7 @@ if (!globalThis['~react'])
 globalThis['~react'].jsxRuntime = globalThis['~react'].jsxRuntime || {
   jsx(type, props, key) {
     const element = {
-      $typeof: Symbol.for('react.element'),
+      $$typeof: Symbol.for('react.element'),
       type,
       props: props || {},
       key: key || null,

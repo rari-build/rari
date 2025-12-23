@@ -20,14 +20,17 @@
     "typecheck": "tsgo"
   },
   "dependencies": {
+    "@mdx-js/mdx": "3.1.1",
+    "@mdx-js/rollup": "^3.1.1",
     "@shikijs/core": "^3.20.0",
     "@shikijs/engine-oniguruma": "^3.20.0",
     "@shikijs/langs": "^3.20.0",
     "@shikijs/themes": "^3.20.0",
-    "marked": "^17.0.1",
-    "rari": "latest",
+    "rari": "workspace:*",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "rehype-raw": "^7.0.0",
+    "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
