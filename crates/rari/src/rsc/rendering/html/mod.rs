@@ -955,7 +955,11 @@ if (typeof window !== 'undefined') {{
 
         if let Some(props) = props {
             for (key, value) in props {
-                if key == "children" {
+                if key == "children" || key == "key" || key == "ref" {
+                    continue;
+                }
+
+                if value.is_null() {
                     continue;
                 }
 
@@ -965,8 +969,58 @@ if (typeof window !== 'undefined') {{
                     _ => key.as_str(),
                 };
 
+                if key == "style" && value.is_object() {
+                    if let Some(style_obj) = value.as_object() {
+                        let style_parts: Vec<String> = style_obj
+                            .iter()
+                            .map(|(k, v)| {
+                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                                    if c.is_uppercase() {
+                                        acc.push('-');
+                                        acc.push(c.to_lowercase().next().expect(
+                                            "to_lowercase() always returns at least one character",
+                                        ));
+                                    } else {
+                                        acc.push(c);
+                                    }
+                                    acc
+                                });
+                                let value_str = v.as_str().unwrap_or_else(|| {
+                                    if let Some(n) = v.as_f64() {
+                                        return Box::leak(n.to_string().into_boxed_str());
+                                    }
+                                    ""
+                                });
+                                format!("{}:{}", kebab_key, value_str)
+                            })
+                            .collect();
+                        let style_str = style_parts.join(";");
+                        html.push_str(&format!(
+                            " style=\"{}\"",
+                            Self::escape_attribute(&style_str)
+                        ));
+                    }
+                    continue;
+                }
+
+                if let Some(b) = value.as_bool() {
+                    if b {
+                        html.push_str(&format!(" {}", attr_name));
+                    }
+                    continue;
+                }
+
                 if let Some(s) = value.as_str() {
                     html.push_str(&format!(" {}=\"{}\"", attr_name, Self::escape_attribute(s)));
+                    continue;
+                }
+
+                if value.is_number() || value.is_boolean() {
+                    html.push_str(&format!(
+                        " {}=\"{}\"",
+                        attr_name,
+                        Self::escape_attribute(&value.to_string())
+                    ));
                 }
             }
         }
