@@ -177,11 +177,7 @@ pub async fn render_synchronous(
         .await
     {
         Ok(render_result) => match render_result {
-            crate::rsc::rendering::layout::RenderResult::Static(html_content)
-            | crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
-                html: html_content,
-                ..
-            } => {
+            crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
                 let html_with_metadata =
                     wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
@@ -200,6 +196,32 @@ pub async fn render_synchronous(
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
+                    .body(Body::from(final_html))
+                    .expect("Valid HTML response"))
+            }
+            crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
+                html: html_content,
+                rsc_payload,
+            } => {
+                let html_with_metadata =
+                    wrap_html_with_metadata(html_content, context.metadata.as_ref());
+
+                let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
+                let final_html =
+                    match inject_assets_into_html(&html_with_payload, &state.config).await {
+                        Ok(html) => html,
+                        Err(e) => {
+                            error!("Failed to inject assets into HTML: {}", e);
+                            html_with_payload
+                        }
+                    };
+
+                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+                Ok(Response::builder()
+                    .status(status_code)
+                    .header("content-type", "text/html; charset=utf-8")
+                    .header("x-render-mode", "synchronous-with-payload")
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
@@ -347,6 +369,12 @@ pub async fn render_streaming_with_layout(
         None,
         html_renderer,
     )));
+
+    if let Some(ref app_router) = state.app_router {
+        let manifest_json =
+            serde_json::to_string(app_router.manifest()).unwrap_or_else(|_| String::from("{}"));
+        converter.lock().await.set_manifest(manifest_json);
+    }
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();

@@ -221,6 +221,8 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             shared_array_buffer_store: options.shared_array_buffer_store.clone(),
             compiled_wasm_module_store: None,
             maybe_inspector_server: None,
+            main_inspector_session_tx:
+                deno_runtime::inspector_server::MainInspectorSessionChannel::default(),
             feature_checker: feature_checker.into(),
             npm_process_state_provider: Some(node_resolver.clone()),
             permissions: args.permissions,

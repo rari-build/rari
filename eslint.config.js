@@ -6,16 +6,17 @@ export default antfu(
   { react: true },
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
   {
-    rules: {
-      'pnpm/json-enforce-catalog': 'off',
-    },
-  },
-  {
     files: ['**/*.md/**'],
     rules: {
       'react-dom/no-dangerously-set-innerhtml': 'off',
       'react-refresh/only-export-components': 'off',
       'style/jsx-one-expression-per-line': 'off',
+    },
+  },
+  {
+    files: ['docs/src/app/**', 'examples/**/src/app/**', 'packages/create-rari-app/templates/**/src/app/**'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 )

@@ -108,7 +108,7 @@ globalThis['~render'].componentAsync = async function () {
         let fallbackContent
         if (loadingComponent) {
           if (loadingComponent && typeof loadingComponent === 'object'
-            && (loadingComponent.type || loadingComponent.$typeof)) {
+            && (loadingComponent.type || loadingComponent.$$typeof)) {
             fallbackContent = loadingComponent
           }
           else {
@@ -231,7 +231,7 @@ globalThis['~render'].componentAsync = async function () {
 
         let fallbackContent
         if (loadingComponent && typeof loadingComponent === 'object'
-          && (loadingComponent.type || loadingComponent.$typeof)) {
+          && (loadingComponent.type || loadingComponent.$$typeof)) {
           fallbackContent = loadingComponent
         }
         else {
@@ -374,7 +374,7 @@ globalThis['~render'].componentAsync = async function () {
       element = processSuspenseInStructure(element)
     }
     catch (suspenseError) {
-      if (suspenseError && suspenseError.$typeof === Symbol.for('react.suspense.pending')) {
+      if (suspenseError && suspenseError.$$typeof === Symbol.for('react.suspense.pending')) {
         const componentName = suspenseError.componentName || suspenseError.name || suspenseError.message || '{component_id}'
         const asyncDetected = suspenseError.asyncComponentDetected === true
         const hasPromise = suspenseError.promise && typeof suspenseError.promise.then === 'function'

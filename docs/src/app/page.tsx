@@ -1,7 +1,4 @@
-/* eslint-disable react-refresh/only-export-components */
-import type { PageProps } from 'rari/client'
-
-export default function HomePage(_params: PageProps) {
+export default function HomePage() {
   return (
     <div className="space-y-8 lg:space-y-12">
       <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">

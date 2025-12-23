@@ -578,14 +578,14 @@ mod tests {
 
     #[test]
     fn test_parse_symbol_reference() {
-        let rsc = r#"0:"$Sreact.element""#;
+        let rsc = r#"0:"$Sreact.transitional.element""#;
 
         let mut parser = RscWireFormatParser::new(rsc);
         assert!(parser.parse().is_ok());
 
         let elements = parser.elements();
         if let Some(RscElement::Reference(ref_str)) = elements.get(&0) {
-            assert_eq!(ref_str, "$Sreact.element");
+            assert_eq!(ref_str, "$Sreact.transitional.element");
         } else {
             panic!("Expected Reference element for Symbol");
         }

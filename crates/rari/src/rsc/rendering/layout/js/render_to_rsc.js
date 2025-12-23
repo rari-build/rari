@@ -63,9 +63,29 @@ if (!globalThis.renderToRsc) {
             delete rscProps.children
           }
 
-          return ['$', element.type, uniqueKey, rscProps]
+          const result = ['$', element.type, uniqueKey, rscProps]
+          return result
         }
         else if (typeof element.type === 'function') {
+          const componentId = element.type.$$id || element.type.$$typeof
+          const isClientComponent = componentId || element.type.$$typeof === Symbol.for('react.client.reference')
+
+          if (isClientComponent) {
+            const clientId = element.type.$$id || element.type.name || 'ClientComponent'
+
+            const rscProps = {}
+            for (const [key, value] of Object.entries(props)) {
+              if (key === 'children') {
+                rscProps.children = await globalThis.renderToRsc(value, clientComponents)
+              }
+              else {
+                rscProps[key] = value
+              }
+            }
+
+            return ['$', `$L${clientId}`, uniqueKey, rscProps]
+          }
+
           try {
             let result = element.type(props)
 

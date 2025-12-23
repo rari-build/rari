@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { PageProps } from 'rari/client'
 
 export default function AboutPage(_params: PageProps) {

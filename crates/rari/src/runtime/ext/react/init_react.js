@@ -47,7 +47,7 @@ if (typeof globalThis.React === 'undefined') {
             ? props.children
             : undefined
       return {
-        $$typeof: Symbol.for('react.element'),
+        $$typeof: Symbol.for('react.transitional.element'),
         type,
         props: props
           ? { ...props, children: normalizedChildren }
@@ -55,10 +55,6 @@ if (typeof globalThis.React === 'undefined') {
         key:
           props && Object.prototype.hasOwnProperty.call(props, 'key')
             ? props.key
-            : null,
-        ref:
-          props && Object.prototype.hasOwnProperty.call(props, 'ref')
-            ? props.ref
             : null,
       }
     },
@@ -91,7 +87,7 @@ function renderElementToString(element, isStatic = false) {
   if (
     typeof element === 'object'
     && element.type
-    && (element.$$typeof === Symbol.for('react.element')
+    && (element.$$typeof === Symbol.for('react.transitional.element')
       || element.props
       || element.children)
   ) {

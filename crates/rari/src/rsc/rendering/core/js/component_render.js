@@ -61,7 +61,7 @@
       }
       else {
         rscResult = {
-          $$typeof: Symbol.for('react.element'),
+          $$typeof: Symbol.for('react.transitional.element'),
           type: 'div',
           props: {
             'data-rsc-component': componentId,
@@ -74,7 +74,7 @@
     }
     catch (error) {
       return {
-        $$typeof: Symbol.for('react.element'),
+        $$typeof: Symbol.for('react.transitional.element'),
         type: 'div',
         props: {
           'data-rsc-component': componentId,

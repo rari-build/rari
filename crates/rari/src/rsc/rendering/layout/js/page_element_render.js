@@ -22,7 +22,6 @@
         type: el.type,
         props: {},
         key: el.key || null,
-        ref: el.ref || null,
       }
 
       for (const [key, value] of Object.entries(el.props)) {

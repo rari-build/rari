@@ -569,6 +569,8 @@ pub struct RscToHtmlConverter {
     rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
     custom_shell: Option<String>,
     csrf_script: Option<String>,
+    rsc_wire_format: Vec<String>,
+    manifest_json: Option<String>,
 }
 
 impl RscToHtmlConverter {
@@ -581,6 +583,8 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             csrf_script: None,
+            rsc_wire_format: Vec::new(),
+            manifest_json: None,
         }
     }
 
@@ -593,6 +597,8 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             csrf_script: None,
+            rsc_wire_format: Vec::new(),
+            manifest_json: None,
         }
     }
 
@@ -609,7 +615,17 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: Some(custom_shell),
             csrf_script,
+            rsc_wire_format: Vec::new(),
+            manifest_json: None,
         }
+    }
+
+    pub fn disable_payload_embedding(&mut self) {
+        self.rsc_wire_format.clear();
+    }
+
+    pub fn set_manifest(&mut self, manifest_json: String) {
+        self.manifest_json = Some(manifest_json);
     }
 
     fn next_boundary_id(&self) -> String {
@@ -732,9 +748,34 @@ impl RscToHtmlConverter {
     fn generate_html_closing(&self) -> Vec<u8> {
         let csrf_script = self.csrf_script.as_deref().unwrap_or("");
 
+        let rsc_payload = self.rsc_wire_format.join("\n");
+
+        let escaped_payload = rsc_payload.replace("</script>", "<\\/script>");
+
+        let rsc_script = if !rsc_payload.is_empty() {
+            format!(
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>
+"#,
+                escaped_payload
+            )
+        } else {
+            String::new()
+        };
+
+        let manifest_script = if let Some(ref manifest) = self.manifest_json {
+            let escaped_manifest = manifest.replace("</script>", "<\\/script>");
+            format!(
+                r#"<script id="__RARI_MANIFEST__" type="application/json">{}</script>
+"#,
+                escaped_manifest
+            )
+        } else {
+            String::new()
+        };
+
         format!(
             r#"</div>
-{}
+{}{}{}
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
@@ -744,7 +785,7 @@ if (typeof window !== 'undefined') {{
 </script>
 </body>
 </html>"#,
-            csrf_script
+            csrf_script, rsc_script, manifest_script
         )
         .as_bytes()
         .to_vec()
@@ -914,7 +955,11 @@ if (typeof window !== 'undefined') {{
 
         if let Some(props) = props {
             for (key, value) in props {
-                if key == "children" {
+                if key == "children" || key == "key" || key == "ref" {
+                    continue;
+                }
+
+                if value.is_null() {
                     continue;
                 }
 
@@ -924,8 +969,58 @@ if (typeof window !== 'undefined') {{
                     _ => key.as_str(),
                 };
 
+                if key == "style" && value.is_object() {
+                    if let Some(style_obj) = value.as_object() {
+                        let style_parts: Vec<String> = style_obj
+                            .iter()
+                            .map(|(k, v)| {
+                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                                    if c.is_uppercase() {
+                                        acc.push('-');
+                                        acc.push(c.to_lowercase().next().expect(
+                                            "to_lowercase() always returns at least one character",
+                                        ));
+                                    } else {
+                                        acc.push(c);
+                                    }
+                                    acc
+                                });
+                                let value_str = v.as_str().unwrap_or_else(|| {
+                                    if let Some(n) = v.as_f64() {
+                                        return Box::leak(n.to_string().into_boxed_str());
+                                    }
+                                    ""
+                                });
+                                format!("{}:{}", kebab_key, value_str)
+                            })
+                            .collect();
+                        let style_str = style_parts.join(";");
+                        html.push_str(&format!(
+                            " style=\"{}\"",
+                            Self::escape_attribute(&style_str)
+                        ));
+                    }
+                    continue;
+                }
+
+                if let Some(b) = value.as_bool() {
+                    if b {
+                        html.push_str(&format!(" {}", attr_name));
+                    }
+                    continue;
+                }
+
                 if let Some(s) = value.as_str() {
                     html.push_str(&format!(" {}=\"{}\"", attr_name, Self::escape_attribute(s)));
+                    continue;
+                }
+
+                if value.is_number() || value.is_boolean() {
+                    html.push_str(&format!(
+                        " {}=\"{}\"",
+                        attr_name,
+                        Self::escape_attribute(&value.to_string())
+                    ));
                 }
             }
         }

@@ -99,14 +99,13 @@ if (!globalThis['~suspense']) {
               }
             : { children: null },
           key: null,
-          ref: null,
         }
       }
 
-      return { type: 'div', props: { children: null }, key: null, ref: null }
+      return { type: 'div', props: { children: null }, key: null }
     }
     catch {
-      return { type: 'div', props: { children: null }, key: null, ref: null }
+      return { type: 'div', props: { children: null }, key: null }
     }
   }
 

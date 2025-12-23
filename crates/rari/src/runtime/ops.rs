@@ -342,7 +342,7 @@ mod tests {
         assert!(element_op.contains("\"type\":\"element\""));
         assert!(element_op.contains("\"row_id\":\"1\""));
 
-        let symbol_op = create_symbol_operation("2", "Symbol.for('react.element')");
+        let symbol_op = create_symbol_operation("2", "Symbol.for('react.transitional.element')");
         assert!(symbol_op.contains("\"type\":\"symbol\""));
         assert!(symbol_op.contains("\"row_id\":\"2\""));
 

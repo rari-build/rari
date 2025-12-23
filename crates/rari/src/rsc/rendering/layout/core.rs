@@ -592,7 +592,12 @@ impl LayoutRenderer {
 
         let suspense_detection = self.detect_suspense_boundaries_impl(rsc_data)?;
 
-        if suspense_detection.has_suspense && layout_structure.is_valid() {
+        let config_enable_streaming = Config::get().map(|c| c.rsc.enable_streaming).unwrap_or(true);
+
+        let should_stream = layout_structure.is_valid()
+            && (suspense_detection.has_suspense || config_enable_streaming);
+
+        if should_stream {
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
                 Arc::clone(&renderer.runtime),
             );
@@ -652,7 +657,19 @@ impl LayoutRenderer {
             })?
             .to_string();
 
-        let rsc_payload = result.get("rsc").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let rsc_payload = if let Some(rsc_data) = result.get("rscData") {
+            if !rsc_data.is_null() {
+                let mut serializer = renderer.serializer.lock();
+                serializer.serialize_rsc_json(rsc_data).map_err(|e| {
+                    tracing::error!("Failed to serialize RSC data to wire format: {}", e);
+                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
+                })?
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
         self.html_cache.insert(cache_key, html.clone());
 
