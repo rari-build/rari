@@ -7,7 +7,6 @@ globalThis['~react'].jsxRuntime = globalThis['~react'].jsxRuntime || {
       type,
       props: props || {},
       key: key || null,
-      ref: null,
     }
     if (props && props.children !== undefined) {
       element.props = { ...element.props, children: props.children }

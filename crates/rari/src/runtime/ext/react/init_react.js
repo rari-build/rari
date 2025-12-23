@@ -56,10 +56,6 @@ if (typeof globalThis.React === 'undefined') {
           props && Object.prototype.hasOwnProperty.call(props, 'key')
             ? props.key
             : null,
-        ref:
-          props && Object.prototype.hasOwnProperty.call(props, 'ref')
-            ? props.ref
-            : null,
       }
     },
     Fragment: Symbol.for('react.fragment'),

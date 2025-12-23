@@ -134,8 +134,7 @@ export function jsx(type, props, key) {
     $$typeof: Symbol.for('react.transitional.element'),
     type,
     props: props || {},
-    key: key || null,
-    ref: null
+    key: key || null
   };
 
   if (props && props.children !== undefined) {
