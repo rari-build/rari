@@ -1,4 +1,30 @@
-## [0.5.25] - 2025-12-23
+## [0.5.20] - 2025-12-23
+
+### 🚀 Features
+
+- *(routing)* Implement dynamic route info endpoint and remove manifest injection
+
+### 🐛 Bug Fixes
+
+- *(server)* Block access to app-routes.json in request handlers
+
+### 🎨 Styling
+
+- *(docs)* Simplify error handling in metadata generation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.20
+## [create-rari-app@0.2.13] - 2025-12-23
+
+### 💼 Other
+
+- Create-rari-app@0.2.13
+## [rari@0.5.25] - 2025-12-23
+
+### 💼 Other
+
+- Rari@0.5.25
 
 ### 🎨 Styling
 
