@@ -37,48 +37,48 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.372.0"
+deno_core = "0.376.0"
 deno_error = "=0.7.1"
-deno_features = "0.19.0"
-deno_bundle_runtime = "0.9.0"
-deno_runtime = "0.230.0"
-deno_permissions = "0.81.0"
-deno_process = "0.37.0"
+deno_features = "0.22.0"
+deno_bundle_runtime = "0.12.0"
+deno_runtime = "0.233.0"
+deno_permissions = "0.84.0"
+deno_process = "0.40.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.155.0"
-deno_crypto = "0.236.0"
-deno_fetch = "0.246.0"
-deno_web = "0.253.0"
-deno_webidl = "0.222.0"
-deno_webstorage = "0.217.0"
+deno_cache = "0.158.0"
+deno_crypto = "0.239.0"
+deno_fetch = "0.249.0"
+deno_web = "0.256.0"
+deno_webidl = "0.225.0"
+deno_webstorage = "0.220.0"
 
 # === Network & HTTP ===
-deno_http = "0.220.0"
-deno_net = "0.214.0"
-deno_tls = "0.209.0"
-deno_websocket = "0.227.0"
+deno_http = "0.223.0"
+deno_net = "0.217.0"
+deno_tls = "0.212.0"
+deno_websocket = "0.230.0"
 
 # === File System & I/O ===
-deno_fs = "0.132.0"
-deno_io = "0.132.0"
+deno_fs = "0.135.0"
+deno_io = "0.135.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.44.0"
+deno_telemetry = "0.47.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.189.0"
-deno_kv = "0.130.0"
-deno_cron = "0.102.0"
+deno_webgpu = "0.192.0"
+deno_kv = "0.133.0"
+deno_cron = "0.105.0"
 
 # === Node.js Integration ===
-deno_node = "0.160.0"
-deno_resolver = "0.53.0"
-node_resolver = "0.60.0"
+deno_node = "0.163.0"
+deno_resolver = "0.56.0"
+node_resolver = "0.63.0"
 num-bigint-dig = { workspace = true }
 
 # === FFI & NAPI ===
-deno_ffi = "0.209.0"
-deno_napi = "0.153.0"
+deno_ffi = "0.212.0"
+deno_napi = "0.156.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -149,7 +149,7 @@ sysinfo = "0.37.0"
 # === Development Tools ===
 rustyline = "=13.0.0"
 deno_ast = { version = "=0.52.0", features = [ "transpiling" ] }
-deno_package_json = { version = "0.24.0", default-features = false }
+deno_package_json = { version = "0.27.0", default-features = false }
 deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
