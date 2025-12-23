@@ -100,54 +100,14 @@ export async function renderApp() {
       contentToRender = element
     }
 
-    let manifest = globalThis['~rari']?.appRoutesManifest
-    if (!manifest) {
-      const manifestScript = document.getElementById('__RARI_MANIFEST__')
-
-      if (manifestScript && manifestScript.textContent) {
-        try {
-          manifest = JSON.parse(manifestScript.textContent)
-          if (!globalThis['~rari'])
-            globalThis['~rari'] = {}
-          globalThis['~rari'].appRoutesManifest = manifest
-        }
-        catch (e) {
-          console.error('[Rari] Failed to parse embedded manifest:', e)
-        }
-      }
-
-      if (!manifest) {
-        try {
-          const manifestUrl = window.location.origin.includes(':5173')
-            ? '/app-routes.json'
-            : '/app-routes.json'
-
-          const manifestResponse = await fetch(manifestUrl, {
-            headers: { 'Cache-Control': 'no-cache' },
-          })
-          if (manifestResponse.ok) {
-            const text = await manifestResponse.text()
-            manifest = JSON.parse(text)
-            if (!globalThis['~rari'])
-              globalThis['~rari'] = {}
-            globalThis['~rari'].appRoutesManifest = manifest
-          }
-        }
-        catch (err) {
-          console.warn('[Rari] Failed to load manifest:', err)
-        }
-      }
-    }
-
     let wrappedContent
 
     if (hasProviders) {
-      if (!manifest) {
-        wrappedContent = contentToRender
-      }
-      else {
-        wrappedContent = contentToRender
-      }
+      wrappedContent = React.createElement(
+        ClientRouter,
+        { initialRoute: window.location.pathname },
+        contentToRender,
+      )
     }
     else {
       wrappedContent = React.createElement(
@@ -156,13 +116,11 @@ export async function renderApp() {
         contentToRender,
       )
 
-      if (manifest) {
-        wrappedContent = React.createElement(
-          ClientRouter,
-          { manifest, initialRoute: window.location.pathname },
-          wrappedContent,
-        )
-      }
+      wrappedContent = React.createElement(
+        ClientRouter,
+        { initialRoute: window.location.pathname },
+        wrappedContent,
+      )
     }
 
     const root = createRoot(rootElement)

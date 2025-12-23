@@ -1,6 +1,5 @@
 'use client'
 
-import type { LayoutDiff } from '../router/LayoutManager'
 import React, { useEffect, useRef, useState } from 'react'
 import { LoadingComponentRegistry } from '../router/LoadingComponentRegistry'
 import { LoadingErrorBoundary } from './LoadingErrorBoundary'
@@ -16,11 +15,9 @@ interface NavigationDetail {
   to: string
   navigationId: number
   options: any
-  layoutDiff: LayoutDiff
-  currentLayoutChain: any[]
-  targetLayoutChain: any[]
-  layoutsNeedingRefetch?: any[]
+  routeInfo?: any
   abortSignal?: AbortSignal
+  rscWireFormat?: string
 }
 
 interface HMRFailure {
@@ -43,7 +40,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
 
-  const currentLayoutDiffRef = useRef<LayoutDiff | null>(null)
   const currentNavigationIdRef = useRef<number>(0)
 
   const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -260,7 +256,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return processed
   }
 
-  const parseRscWireFormat = (wireFormat: string, extractBoundaries = false, _layoutDiff?: LayoutDiff | null) => {
+  const parseRscWireFormat = (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
       const modules = new Map()
@@ -375,9 +371,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const refetchRscPayload = async (
     targetPath?: string,
-    layoutDiff?: LayoutDiff | null,
     abortSignal?: AbortSignal,
-    _layoutsNeedingRefetch?: any[],
   ) => {
     const pathToFetch = targetPath || window.location.pathname
 
@@ -429,8 +423,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         let parsedPayload
         try {
-          const shouldExtractBoundaries = layoutDiff !== undefined && layoutDiff !== null
-          parsedPayload = parseRscWireFormat(rscWireFormat, shouldExtractBoundaries, layoutDiff)
+          parsedPayload = parseRscWireFormat(rscWireFormat, false)
         }
         catch (parseError) {
           const error = parseError instanceof Error ? parseError : new Error(String(parseError))
@@ -501,7 +494,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const customEvent = event as CustomEvent<NavigationDetail>
       const detail = customEvent.detail
 
-      currentLayoutDiffRef.current = detail.layoutDiff
       currentNavigationIdRef.current = detail.navigationId
 
       scrollPositionRef.current = {
@@ -511,12 +503,18 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        await refetchRscPayload(
-          detail.to,
-          detail.layoutDiff,
-          detail.abortSignal,
-          detail.layoutsNeedingRefetch,
-        )
+        if (detail.rscWireFormat) {
+          const parsedPayload = parseRscWireFormat(detail.rscWireFormat, false)
+          setRscPayload(parsedPayload)
+          lastSuccessfulPayloadRef.current = detail.rscWireFormat
+          resetFailureTracking()
+        }
+        else {
+          await refetchRscPayload(
+            detail.to,
+            detail.abortSignal,
+          )
+        }
 
         if (currentNavigationIdRef.current === detail.navigationId) {
           setLoadingState({

@@ -1,15 +1,14 @@
 'use client'
 
-import type { AppRouteManifest, LayoutEntry, LoadingEntry } from './app-types'
 import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
+import type { RouteInfoResponse } from './route-info-types'
 import React, { useEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
-import { LayoutDataManager } from './LayoutDataManager'
-import { LayoutManager } from './LayoutManager'
 import { NavigationErrorHandler } from './navigation-error-handler'
-import { extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
+import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
+import { routeInfoCache } from './route-info-client'
 import { StatePreserver } from './StatePreserver'
 
 interface PageMetadata {
@@ -201,7 +200,6 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 
 export interface ClientRouterProps {
   children: React.ReactNode
-  manifest: AppRouteManifest
   initialRoute: string
 }
 
@@ -230,7 +228,7 @@ interface HistoryState {
   key: string
 }
 
-export function ClientRouter({ children, manifest, initialRoute }: ClientRouterProps) {
+export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute: normalizePath(initialRoute),
     targetRoute: null,
@@ -244,8 +242,6 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
   const abortControllerRef = useRef<AbortController | null>(null)
   const isMountedRef = useRef(true)
   const currentRouteRef = useRef<string>(normalizePath(initialRoute))
-  const layoutManagerRef = useRef<LayoutManager>(new LayoutManager())
-  const layoutDataManagerRef = useRef<LayoutDataManager>(new LayoutDataManager())
 
   const errorHandlerRef = useRef<NavigationErrorHandler>(
     new NavigationErrorHandler({
@@ -300,77 +296,11 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
     }
   }
 
-  const getLayoutChain = (route: string): LayoutEntry[] => {
-    return findLayoutChain(route, manifest)
-  }
-
-  const findLoadingComponent = (targetPath: string): LoadingEntry | null => {
-    if (!manifest.loading || manifest.loading.length === 0) {
-      return null
-    }
-
-    const exactMatch = manifest.loading.find(loading => loading.path === targetPath)
-    if (exactMatch) {
-      return exactMatch
-    }
-
-    const matchedRoute = manifest.routes.find((route) => {
-      const params = matchRouteParams(route.path, route.segments, targetPath)
-      return params !== null
-    })
-
-    if (matchedRoute) {
-      const routeLoading = manifest.loading.find(loading => loading.path === matchedRoute.path)
-      if (routeLoading) {
-        return routeLoading
-      }
-    }
-
-    const segments = targetPath.split('/').filter(Boolean)
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const parentPath = `/${segments.slice(0, i).join('/')}`
-      const parentMatch = manifest.loading.find(loading => loading.path === parentPath)
-      if (parentMatch) {
-        return parentMatch
-      }
-    }
-
-    const rootMatch = manifest.loading.find(loading => loading.path === '/')
-    if (rootMatch) {
-      return rootMatch
-    }
-
-    return null
-  }
-
-  const validateRoute = (targetPath: string): boolean => {
-    if (targetPath === '/') {
-      return true
-    }
-
-    const routeExists = manifest.routes.some((route) => {
-      if (route.path === targetPath) {
-        return true
-      }
-
-      if (targetPath.startsWith(`${route.path}/`)) {
-        return true
-      }
-      return false
-    })
-
-    return routeExists
+  const getRouteInfo = async (route: string): Promise<RouteInfoResponse> => {
+    return routeInfoCache.get(route)
   }
 
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
-
-  const queueNavigation = (path: string, options: NavigationOptions = {}) => {
-    navigationQueueRef.current.push({ path, options })
-
-    setTimeout(() => {
-      processNavigationQueueRef.current?.()
-    }, 50)
-  }
 
   const navigate = async (href: string, options: NavigationOptions = {}) => {
     if (!href || typeof href !== 'string') {
@@ -390,11 +320,11 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
     }
 
     if (navigationState.isNavigating && navigationState.targetRoute !== targetPath) {
-      queueNavigation(targetPath, options)
+      navigationQueueRef.current.push({ path: targetPath, options })
       return
     }
 
-    validateRoute(targetPath)
+    const routeInfo = await getRouteInfo(targetPath)
 
     cancelAllPendingNavigations()
     cancelNavigation()
@@ -404,7 +334,7 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
 
     const navigationId = navigationState.navigationId + 1
 
-    const loadingComponent = findLoadingComponent(targetPath)
+    const loadingComponentPath = routeInfo.loading
 
     setNavigationState(prev => ({
       ...prev,
@@ -412,16 +342,16 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
       isNavigating: true,
       navigationId,
       error: null,
-      showingLoadingComponent: !!loadingComponent,
-      loadingComponentRoute: loadingComponent?.path || null,
+      showingLoadingComponent: !!loadingComponentPath,
+      loadingComponentRoute: loadingComponentPath,
     }))
 
-    if (loadingComponent) {
+    if (loadingComponentPath) {
       window.dispatchEvent(new CustomEvent('rari:show-loading', {
         detail: {
           route: targetPath,
           navigationId,
-          loadingEntry: loadingComponent,
+          loadingPath: loadingComponentPath,
         },
       }))
     }
@@ -429,20 +359,6 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current
       try {
-        const currentLayoutChain = getLayoutChain(fromRoute)
-        const targetLayoutChain = getLayoutChain(targetPath)
-
-        const layoutDiff = layoutManagerRef.current.computeLayoutDiff(
-          currentLayoutChain,
-          targetLayoutChain,
-        )
-
-        const layoutsNeedingRefetch = layoutDataManagerRef.current.getLayoutsNeedingRefetch(
-          layoutDiff,
-          fromRoute,
-          targetPath,
-        )
-
         if (!options.historyKey) {
           statePreserverRef.current.captureState(fromRoute)
         }
@@ -508,14 +424,11 @@ export function ClientRouter({ children, manifest, initialRoute }: ClientRouterP
             to: targetPath,
             navigationId,
             options,
-            layoutDiff,
-            currentLayoutChain,
-            targetLayoutChain,
-            layoutsNeedingRefetch,
+            routeInfo,
             abortSignal: abortController.signal,
             rscWireFormat,
-            loadingComponent,
-            hasLoadingComponent: !!loadingComponent,
+            loadingComponentPath,
+            hasLoadingComponent: !!loadingComponentPath,
           },
         }))
 

@@ -317,11 +317,18 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     })
   }
 
+  let viteRoot: string
+
   return {
     name: 'rari-router',
 
-    async buildStart() {
-      cachedManifestContent = await generateAppRoutes(process.cwd())
+    configResolved(config) {
+      viteRoot = config.root
+    },
+
+    async writeBundle() {
+      const root = viteRoot || process.cwd()
+      cachedManifestContent = await generateAppRoutes(root, true)
     },
 
     configureServer(devServer: ViteDevServer) {
@@ -427,19 +434,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
         cachedManifestContent = await generateAppRoutes(server.config.root)
         return []
-      }
-    },
-
-    async generateBundle() {
-      if (cachedManifestContent) {
-        this.emitFile({
-          type: 'asset',
-          fileName: 'app-routes.json',
-          source: cachedManifestContent,
-        })
-      }
-      else {
-        console.error('App router manifest not generated, skipping emission')
       }
     },
 

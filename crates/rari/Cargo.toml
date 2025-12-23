@@ -85,66 +85,66 @@ async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = { version = "0.3.31", features = [ "std" ] }
 futures-util = "0.3.31"
-tokio = { version = "1.47.1", features = [ "full" ] }
+tokio = { version = "1.48.0", features = [ "full" ] }
 
 # === Serialization ===
-serde = { version = "1.0.219", features = [ "derive" ] }
-serde_json = "1.0.143"
+serde = { version = "1.0.228", features = [ "derive" ] }
+serde_json = "1.0.146"
 toml = "0.9.5"
 base64 = "0.22.1"
 
 # === HTTP Client & Server ===
-http = "1.3.1"
-reqwest = { version = "0.12.23", features = [
+http = "1.4.0"
+reqwest = { version = "0.12.28", features = [
   "json",
   "stream",
   "rustls-tls",
 ], default-features = false }
-axum = { version = "0.8.4", features = [
+axum = { version = "0.8.8", features = [
   "ws",
   "macros"
 ] }
 tower = { version = "0.5.2", default-features = false, features = [ "full" ] }
-tower-http = { version = "0.6.6", features = [
+tower-http = { version = "0.6.8", features = [
   "fs",
   "cors",
   "trace"
 ] }
 tower_governor = "0.8.0"
-governor = "0.10.2"
+governor = "0.10.4"
 colored = "3.0.0"
 url = "2.5.7"
 urlencoding = "2.1.3"
-tokio-tungstenite = { version = "0.28", features = [ "rustls-tls-native-roots" ] }
-tungstenite = "0.28"
+tokio-tungstenite = { version = "0.28.0", features = [ "rustls-tls-native-roots" ] }
+tungstenite = "0.28.0"
 
 # === Utilities ===
-bytes = "1.10.1"
+bytes = "1.11.0"
 dashmap = "6.1.0"
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 smallvec = { version = "1.15.1", features = [ "serde" ] }
-regex = "1.11.2"
+regex = "1.12.2"
 rustc-hash = "2.1.1"
-lru = "0.16.1"
-uuid = { version = "1.18.1", features = [
+lru = "0.16.2"
+uuid = { version = "1.19.0", features = [
   "v4",
   "serde"
 ] }
-thiserror = "2.0.16"
+thiserror = "2.0.17"
 chrono = { version = "0.4.42", features = [ "serde" ] }
 
 # === System Integration ===
-hyper-util = { version = "0.1.17", features = [
+hyper-util = { version = "0.1.19", features = [
   "tokio",
   "client",
   "client-legacy",
   "server",
   "server-auto",
 ] }
-libc = "0.2.175"
+libc = "0.2.178"
 nix = { version = "=0.27.1", features = [ "term" ] }
 sys_traits = "=0.1.17"
-sysinfo = "0.37.0"
+sysinfo = "0.37.2"
 
 # === Development Tools ===
 rustyline = "=13.0.0"
@@ -166,9 +166,9 @@ windows-sys = { version = "0.59.0", features = [
 ] }
 
 # === CLI & Logging ===
-clap = { version = "4.5.47", features = [ "derive" ] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = [ "env-filter" ] }
+clap = { version = "4.5.53", features = [ "derive" ] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = [ "env-filter" ] }
 
 # === TLS & Crypto ===
 rustls = { version = "=0.23.28", default-features = false, features = [

@@ -11,6 +11,7 @@ use crate::server::handlers::hmr_handlers::{
     hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
     hmr_reload_component, reload_component,
 };
+use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
     health_check, list_components, register_client_component, register_component,
     rsc_render_handler, rsc_status_handler, server_status, stream_component,
@@ -195,6 +196,7 @@ impl Server {
             .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/csrf-token", get(get_csrf_token))
+            .route("/api/rsc/route-info", post(get_route_info))
             .layer(small_body_limit)
             .route("/api/rsc/action", post(handle_server_action))
             .route("/api/rsc/form-action", post(handle_form_action))

@@ -1,8 +1,5 @@
 export {
-  AppRouteGenerator,
   generateAppRouteManifest,
-  loadManifest,
-  writeManifest,
 } from './app-routes'
 
 export type * from './app-types'
@@ -24,18 +21,7 @@ export type {
   AppRouterFileType,
 } from './hmr-utils'
 
-export { LayoutDataManager } from './LayoutDataManager'
-
-export type {
-  FetchLayoutDataOptions,
-  LayoutDataCache,
-} from './LayoutDataManager'
-
 export { LayoutErrorBoundary } from './LayoutErrorBoundary'
-
-export { LayoutManager } from './LayoutManager'
-
-export type { LayoutDiff, LayoutInstance } from './LayoutManager'
 
 export {
   generateLoadingComponentMap,
@@ -62,12 +48,8 @@ export type * from './navigation-types'
 
 export {
   areRoutesEqual,
-  createRouteInfo,
   extractPathname,
-  findCommonLayoutChainLength,
-  findLayoutChain,
   isExternalUrl,
-  matchRouteParams,
   normalizePath,
   parseRoutePath,
   parseSearchParams,
@@ -95,14 +77,18 @@ export type {
   StaticParamsResult,
 } from './props-extractor'
 
+export { routeInfoCache } from './route-info-client'
+export type * from './route-info-types'
+
 export {
   extractLayoutBoundaries,
   parseRscWireFormat,
   validateRSCPayload,
 } from './rsc-parser'
-export type { ParseRSCOptions } from './rsc-parser'
 
+export type { ParseRSCOptions } from './rsc-parser'
 export type * from './rsc-types'
+
 export { StatePreserver } from './StatePreserver'
 
 export type {

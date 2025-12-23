@@ -1,6 +1,5 @@
 'use client'
 
-import type { AppRouteManifest } from '../router/app-types'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ClientRouter } from '../router/ClientRouter'
 import { StatePreserver } from '../router/StatePreserver'
@@ -8,14 +7,12 @@ import { AppRouterProvider } from './AppRouterProvider'
 
 export interface NavigationProviderProps {
   children: React.ReactNode
-  manifest: AppRouteManifest
   initialRoute: string
   initialPayload?: any
 }
 
 export function NavigationProvider({
   children,
-  manifest,
   initialRoute,
   initialPayload,
 }: NavigationProviderProps) {
@@ -50,7 +47,7 @@ export function NavigationProvider({
   }, [])
 
   return (
-    <ClientRouter manifest={manifest} initialRoute={initialRoute}>
+    <ClientRouter initialRoute={initialRoute}>
       <AppRouterProvider initialPayload={initialPayload} onNavigate={handleNavigate}>
         {children}
       </AppRouterProvider>
