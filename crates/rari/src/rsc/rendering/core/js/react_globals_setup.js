@@ -2,7 +2,7 @@
 if (typeof globalThis.React === 'undefined') {
   React = {
     createElement(type, props, ...children) {
-      return { $$typeof: Symbol.for('react.element'), type, props: props || {}, children }
+      return { $$typeof: Symbol.for('react.transitional.element'), type, props: props || {}, children }
     },
     Fragment(props) { return props?.children || null },
     Suspense(props) { return props?.children || props?.fallback || null },

@@ -137,7 +137,7 @@ impl RSCTree {
             RSCTree::ServerElement { tag, props, children, key } => {
                 #[allow(clippy::disallowed_methods)]
                 let mut element = serde_json::json!({
-                    "$$typeof": "react.element",
+                    "$$typeof": "react.transitional.element",
                     "type": tag,
                     "key": key,
                     "props": props.clone().unwrap_or_default()
@@ -169,7 +169,7 @@ impl RSCTree {
                 #[allow(clippy::disallowed_methods)]
                 {
                     serde_json::json!({
-                        "$$typeof": "react.element",
+                        "$$typeof": "react.transitional.element",
                         "type": "div",
                         "props": {
                             "style": {
@@ -180,14 +180,14 @@ impl RSCTree {
                             },
                             "children": [
                                 {
-                                    "$$typeof": "react.element",
+                                    "$$typeof": "react.transitional.element",
                                     "type": "h3",
                                     "props": {
                                         "children": format!("Error in {}", component_name)
                                     }
                                 },
                                 {
-                                    "$$typeof": "react.element",
+                                    "$$typeof": "react.transitional.element",
                                     "type": "p",
                                     "props": {
                                         "children": message

@@ -46,8 +46,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   if (
     element
     && typeof element === 'object'
-    && (element.$$typeof === Symbol.for('react.element')
-      || element.$$typeof === Symbol.for('react.transitional.element'))
+    && element.$$typeof === Symbol.for('react.transitional.element')
   ) {
     return await traverseReactElement(element, clientComponents, depth + 1)
   }
@@ -55,9 +54,8 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   if (
     element
     && typeof element === 'object'
-    && (element.$$typeof === Symbol.for('react.fragment')
-      || (element.$$typeof === Symbol.for('react.transitional.element')
-        && element.type === Symbol.for('react.fragment')))
+    && element.$$typeof === Symbol.for('react.transitional.element')
+    && element.type === Symbol.for('react.fragment')
   ) {
     return await traverseToRsc(element.props.children, clientComponents, depth + 1)
   }
@@ -75,7 +73,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       }
 
       const fakeElement = {
-        $$typeof: Symbol.for('react.element'),
+        $$typeof: Symbol.for('react.transitional.element'),
         type: element.type,
         props: mergedProps,
         key: element.key ?? null,
@@ -92,7 +90,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       }
 
       const fakeSuspenseElement = {
-        $$typeof: Symbol.for('react.element'),
+        $$typeof: Symbol.for('react.transitional.element'),
         type: 'suspense',
         props: mergedProps,
         key: element.key ?? null,
