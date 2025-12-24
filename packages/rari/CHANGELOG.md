@@ -1,3 +1,17 @@
+## [0.5.21] - 2025-12-24
+
+### 🚀 Features
+
+- *(server)* Implement on-demand revalidation and response caching
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.21
+## [rari@0.5.26] - 2025-12-23
+
+### 💼 Other
+
+- Rari@0.5.26
 ## [0.5.20] - 2025-12-23
 
 ### 🚀 Features
