@@ -1,3 +1,30 @@
+## [0.5.22] - 2025-12-24
+
+### 🚀 Features
+
+- *(server)* Invalidate caches on server action redirects
+
+### 🐛 Bug Fixes
+
+- *(server)* Return correct HTTP status codes for not-found routes
+
+### 🚜 Refactor
+
+- *(examples)* Simplify todo actions and remove verbose error handling
+- *(module-loader)* Improve dynamic import path resolution logic
+
+### 🎨 Styling
+
+- *(examples)* Remove unnecessary blank line
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.22
+## [rari@0.5.27] - 2025-12-24
+
+### 💼 Other
+
+- Rari@0.5.27
 ## [0.5.21] - 2025-12-24
 
 ### 🚀 Features
