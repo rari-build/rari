@@ -23,7 +23,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(form)
-        const result = await addTodo(state, formData)
+        const result = await addTodo(formData)
         setState(result)
 
         if (result.success) {
