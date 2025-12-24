@@ -2,6 +2,7 @@ pub mod api_handler;
 pub mod app_handler;
 pub mod csrf_handler;
 pub mod hmr_handlers;
+pub mod revalidate_handlers;
 pub mod route_info_handler;
 pub mod rsc_handlers;
 pub mod static_handlers;

@@ -16,14 +16,36 @@ use serde_json::Value;
 use tracing::error;
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
-const CHUNKED_ENCODING: &str = "chunked";
 
 #[axum::debug_handler]
 pub async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
 ) -> Result<Response, StatusCode> {
+    use axum::http::HeaderMap;
+
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
+
+    let cache_key = if let Some(props) = &props_str {
+        format!("/api/rsc/stream/{}?props={}", request.component_id, props)
+    } else {
+        format!("/api/rsc/stream/{}", request.component_id)
+    };
+
+    if let Some(cached) = state.response_cache.get(&cache_key).await {
+        let mut response_builder = Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", RSC_CONTENT_TYPE)
+            .header("x-cache", "HIT");
+
+        for (key, value) in cached.headers.iter() {
+            response_builder = response_builder.header(key, value);
+        }
+
+        return Ok(response_builder
+            .body(Body::from(cached.body))
+            .expect("Valid cached RSC response"));
+    }
 
     let stream_result = {
         let renderer = state.renderer.lock().await;
@@ -32,22 +54,45 @@ pub async fn stream_component(
 
     match stream_result {
         Ok(mut rsc_stream) => {
-            let byte_stream = async_stream::stream! {
-                while let Some(chunk) = rsc_stream.next_chunk().await {
-                    yield Ok::<Vec<u8>, std::io::Error>(chunk.data);
-                }
-            };
-
-            let body = Body::from_stream(byte_stream);
+            let mut buffer = Vec::new();
+            while let Some(chunk) = rsc_stream.next_chunk().await {
+                buffer.extend_from_slice(&chunk.data);
+            }
 
             let cache_control = state.config.get_cache_control_for_route("/api/rsc/stream");
+
+            let cache_policy =
+                crate::server::cache::response_cache::RouteCachePolicy::from_cache_control(
+                    cache_control,
+                    &format!("/api/rsc/stream/{}", request.component_id),
+                );
+
+            if cache_policy.enabled && state.response_cache.config.enabled {
+                let mut headers = HeaderMap::new();
+                if let Ok(cache_control_value) = cache_control.parse() {
+                    headers.insert("cache-control", cache_control_value);
+                }
+
+                let cached_response = crate::server::cache::response_cache::CachedResponse {
+                    body: bytes::Bytes::from(buffer.clone()),
+                    headers,
+                    metadata: crate::server::cache::response_cache::CacheMetadata {
+                        cached_at: std::time::Instant::now(),
+                        ttl: cache_policy.ttl,
+                        etag: None,
+                        tags: cache_policy.tags,
+                    },
+                };
+
+                state.response_cache.set(cache_key, cached_response).await;
+            }
 
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
-                .header("transfer-encoding", CHUNKED_ENCODING)
-                .body(body)
-                .expect("Valid streaming response"))
+                .header("x-cache", "MISS")
+                .body(Body::from(buffer))
+                .expect("Valid RSC response"))
         }
         Err(e) => {
             error!("Failed to create true streaming for component {}: {}", request.component_id, e);

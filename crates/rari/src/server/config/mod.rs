@@ -154,7 +154,7 @@ impl Default for CacheControlConfig {
         Self {
             routes: FxHashMap::default(),
             static_files: "public, max-age=31536000, immutable".to_string(),
-            server_components: "no-cache".to_string(),
+            server_components: "public, max-age=31536000, stale-while-revalidate=86400".to_string(),
         }
     }
 }
@@ -763,7 +763,7 @@ mod tests {
         let config = Config::default();
 
         let cache_control = config.get_cache_control_for_route("/some/random/path");
-        assert_eq!(cache_control, "no-cache");
+        assert_eq!(cache_control, "public, max-age=31536000, stale-while-revalidate=86400");
     }
 
     #[test]

@@ -610,6 +610,36 @@ pub async fn handle_app_route(
 
     match render_mode {
         RenderMode::RscNavigation => {
+            let cache_key = response_cache::ResponseCache::generate_cache_key(
+                path,
+                if query_params_for_cache.is_empty() {
+                    None
+                } else {
+                    Some(&query_params_for_cache)
+                },
+            );
+
+            if let Some(cached) = state.response_cache.get(&cache_key).await {
+                let status_code = if route_match.not_found.is_some() {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::OK
+                };
+
+                let mut response_builder = Response::builder()
+                    .status(status_code)
+                    .header("content-type", "text/x-component")
+                    .header("x-cache", "HIT");
+
+                for (key, value) in cached.headers.iter() {
+                    response_builder = response_builder.header(key, value);
+                }
+
+                return Ok(response_builder
+                    .body(Body::from(cached.body))
+                    .expect("Valid cached RSC response"));
+            }
+
             match layout_renderer
                 .render_route_by_mode(
                     &route_match,
@@ -628,7 +658,10 @@ pub async fn handle_app_route(
 
                     let mut response_builder = Response::builder()
                         .status(status_code)
-                        .header("content-type", "text/x-component");
+                        .header("content-type", "text/x-component")
+                        .header("x-cache", "MISS");
+
+                    let mut cache_headers = axum::http::HeaderMap::new();
 
                     if let Some(ref metadata) = context.metadata
                         && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -636,6 +669,28 @@ pub async fn handle_app_route(
                         let encoded_metadata = urlencoding::encode(&metadata_json);
                         response_builder =
                             response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+                        if let Ok(header_value) = encoded_metadata.as_ref().parse() {
+                            cache_headers.insert("x-rari-metadata", header_value);
+                        }
+                    }
+
+                    let cache_control = state.config.get_cache_control_for_route(path);
+                    let cache_policy =
+                        response_cache::RouteCachePolicy::from_cache_control(cache_control, path);
+
+                    if cache_policy.enabled && state.response_cache.config.enabled {
+                        let cached_response = response_cache::CachedResponse {
+                            body: bytes::Bytes::from(rsc_wire_format.clone()),
+                            headers: cache_headers,
+                            metadata: response_cache::CacheMetadata {
+                                cached_at: std::time::Instant::now(),
+                                ttl: cache_policy.ttl,
+                                etag: None,
+                                tags: cache_policy.tags,
+                            },
+                        };
+
+                        state.response_cache.set(cache_key, cached_response).await;
                     }
 
                     Ok(response_builder

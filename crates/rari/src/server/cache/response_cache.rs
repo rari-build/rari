@@ -50,7 +50,7 @@ impl CacheConfig {
             default_ttl: std::env::var("RARI_CACHE_DEFAULT_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(60),
+                .unwrap_or(31536000),
             enabled: std::env::var("RARI_CACHE_ENABLED")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -322,6 +322,10 @@ impl ResponseCache {
     pub fn get_metrics(&self) -> CacheMetrics {
         let metrics = self.metrics.lock();
         metrics.clone()
+    }
+
+    pub fn get_all_keys(&self) -> Vec<String> {
+        self.cache.iter().map(|entry| entry.key().clone()).collect()
     }
 
     fn record_hit(&self) {
@@ -601,7 +605,7 @@ mod tests {
         let config = CacheConfig::from_env(true);
         assert!(config.enabled);
         assert_eq!(config.max_entries, 1000);
-        assert_eq!(config.default_ttl, 60);
+        assert_eq!(config.default_ttl, 31536000);
 
         let config = CacheConfig::from_env(false);
         assert!(!config.enabled);

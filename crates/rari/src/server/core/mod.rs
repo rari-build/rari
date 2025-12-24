@@ -11,6 +11,9 @@ use crate::server::handlers::hmr_handlers::{
     hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
     hmr_reload_component, reload_component,
 };
+use crate::server::handlers::revalidate_handlers::{
+    cache_stats, revalidate_by_path, revalidate_by_tag,
+};
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
     health_check, list_components, register_client_component, register_component,
@@ -41,6 +44,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tracing::error;
 
@@ -197,6 +201,9 @@ impl Server {
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/csrf-token", get(get_csrf_token))
             .route("/api/rsc/route-info", post(get_route_info))
+            .route("/api/revalidate/path", post(revalidate_by_path))
+            .route("/api/revalidate/tag", post(revalidate_by_tag))
+            .route("/api/cache/stats", get(cache_stats))
             .layer(small_body_limit)
             .route("/api/rsc/action", post(handle_server_action))
             .route("/api/rsc/form-action", post(handle_form_action))
@@ -257,6 +264,8 @@ impl Server {
                 ServeDir::new(config.public_dir()).append_index_html_on_directories(true);
             router = router.fallback_service(static_service);
         }
+
+        router = router.layer(CompressionLayer::new());
 
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));
