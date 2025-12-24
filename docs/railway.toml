@@ -1,6 +1,3 @@
-[build]
-builder = "RAILPACK"
-
 [deploy]
 startCommand = "pnpm start"
 healthcheckPath = "/"
