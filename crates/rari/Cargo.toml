@@ -108,7 +108,8 @@ tower = { version = "0.5.2", default-features = false, features = [ "full" ] }
 tower-http = { version = "0.6.8", features = [
   "fs",
   "cors",
-  "trace"
+  "trace",
+  "compression-full"
 ] }
 tower_governor = "0.8.0"
 governor = "0.10.4"
