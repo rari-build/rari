@@ -594,7 +594,10 @@ impl LayoutRenderer {
 
         let config_enable_streaming = Config::get().map(|c| c.rsc.enable_streaming).unwrap_or(true);
 
-        let should_stream = layout_structure.is_valid()
+        let is_not_found = route_match.not_found.is_some();
+
+        let should_stream = !is_not_found
+            && layout_structure.is_valid()
             && (suspense_detection.has_suspense || config_enable_streaming);
 
         if should_stream {

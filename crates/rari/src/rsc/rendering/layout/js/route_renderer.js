@@ -111,15 +111,6 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
 
       if (typeof globalThis.renderToRsc === 'function') {
         rscData = await globalThis.renderToRsc(currentElement, clientComponents)
-
-        rscData = ['$', '$LAppRouterProvider', null, {
-          children: rscData,
-        }]
-
-        rscData = ['$', '$LClientRouter', null, {
-          initialRoute: pageProps.pathname || '/',
-          children: rscData,
-        }]
       }
       else if (typeof globalThis.traverseToRsc === 'function') {
         rscData = await globalThis.traverseToRsc(currentElement, clientComponents)
