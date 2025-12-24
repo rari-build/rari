@@ -1,8 +1,0 @@
-[phases.install]
-cmds = [ "pnpm i --no-frozen-lockfile" ]
-
-[phases.build]
-cmds = [ "pnpm run build" ]
-
-[start]
-cmd = "pnpm start"
