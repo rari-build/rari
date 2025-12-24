@@ -226,12 +226,12 @@ pub async fn render_synchronous(
                     .expect("Valid HTML response"))
             }
             crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
-                render_fallback_html(&state, &route_match.route.path).await
+                render_fallback_html(&state, &route_match.route.path, is_not_found).await
             }
         },
         Err(e) => {
             error!("Synchronous rendering failed: {}", e);
-            render_fallback_html(&state, &route_match.route.path).await
+            render_fallback_html(&state, &route_match.route.path, is_not_found).await
         }
     }
 }
@@ -403,10 +403,16 @@ pub async fn render_streaming_with_layout(
         }
     };
 
-    Ok(StreamingHtmlResponse::new(html_stream).into_response())
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+    Ok(StreamingHtmlResponse::with_status(html_stream, status_code).into_response())
 }
 
-pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Response, StatusCode> {
+pub async fn render_fallback_html(
+    state: &ServerState,
+    path: &str,
+    is_not_found: bool,
+) -> Result<Response, StatusCode> {
     let index_path = if state.config.is_development() {
         let root_index = std::path::PathBuf::from("index.html");
         if root_index.exists() { root_index } else { state.config.public_dir().join("index.html") }
@@ -437,8 +443,10 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
                 state.html_cache.insert(path.to_string(), final_html.clone());
             }
 
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
             return Ok(Response::builder()
-                .status(StatusCode::OK)
+                .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .body(Body::from(final_html))
                 .expect("Valid HTML response"));
@@ -466,8 +474,10 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
             vite_port, vite_port
         );
 
+        let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
         return Ok(Response::builder()
-            .status(StatusCode::OK)
+            .status(status_code)
             .header("content-type", "text/html; charset=utf-8")
             .body(Body::from(html_shell))
             .expect("Valid HTML response"));
@@ -491,8 +501,10 @@ pub async fn render_fallback_html(state: &ServerState, path: &str) -> Result<Res
 </body>
 </html>"#;
 
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
     Ok(Response::builder()
-        .status(StatusCode::OK)
+        .status(status_code)
         .header("content-type", "text/html; charset=utf-8")
         .body(Body::from(error_html))
         .expect("Valid HTML response"))
@@ -513,6 +525,9 @@ pub async fn handle_app_route(
         route_match: &crate::server::routing::AppRouteMatch,
         config: &Config,
     ) -> bool {
+        if route_match.not_found.is_some() {
+            return false;
+        }
         config.rsc.enable_streaming && route_match.loading.is_some()
     }
 
@@ -762,7 +777,8 @@ pub async fn handle_app_route(
                 Ok(result) => result,
                 Err(e) => {
                     error!("Direct HTML rendering failed: {}, falling back to shell", e);
-                    return render_fallback_html(&state, path).await;
+                    return render_fallback_html(&state, path, route_match.not_found.is_some())
+                        .await;
                 }
             };
 
@@ -879,7 +895,14 @@ pub async fn handle_app_route(
                         }
                     };
 
-                    return Ok(StreamingHtmlResponse::new(html_stream).into_response());
+                    let status_code = if route_match.not_found.is_some() {
+                        StatusCode::NOT_FOUND
+                    } else {
+                        StatusCode::OK
+                    };
+
+                    return Ok(StreamingHtmlResponse::with_status(html_stream, status_code)
+                        .into_response());
                 }
             };
 

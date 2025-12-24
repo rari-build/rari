@@ -80,11 +80,9 @@ export async function renderApp() {
     }
 
     let contentToRender
-    let hasProviders = false
 
     if (payloadScript && element) {
       contentToRender = element
-      hasProviders = true
     }
     else if (isFullDocument) {
       const bodyContent = extractBodyContent(element, false)
@@ -102,26 +100,17 @@ export async function renderApp() {
 
     let wrappedContent
 
-    if (hasProviders) {
-      wrappedContent = React.createElement(
-        ClientRouter,
-        { initialRoute: window.location.pathname },
-        contentToRender,
-      )
-    }
-    else {
-      wrappedContent = React.createElement(
-        AppRouterProvider,
-        { initialPayload: { element } },
-        contentToRender,
-      )
+    wrappedContent = React.createElement(
+      AppRouterProvider,
+      { initialPayload: { element } },
+      contentToRender,
+    )
 
-      wrappedContent = React.createElement(
-        ClientRouter,
-        { initialRoute: window.location.pathname },
-        wrappedContent,
-      )
-    }
+    wrappedContent = React.createElement(
+      ClientRouter,
+      { initialRoute: window.location.pathname },
+      wrappedContent,
+    )
 
     const root = createRoot(rootElement)
     root.render(wrappedContent)

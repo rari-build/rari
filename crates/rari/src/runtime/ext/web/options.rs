@@ -31,7 +31,7 @@ impl Default for WebOptions {
             user_agent: String::new(),
             root_cert_store_provider: None,
             proxy: None,
-            request_builder_hook: None,
+            request_builder_hook: Some(fix_accept_encoding_for_deno),
             unsafely_ignore_certificate_errors: None,
             client_cert_chain_and_key: deno_tls::TlsKeys::Null,
             file_fetch_handler: std::rc::Rc::new(deno_fetch::DefaultFileFetchHandler),
@@ -43,6 +43,20 @@ impl Default for WebOptions {
             telemetry_config: deno_telemetry::OtelConfig::default(),
         }
     }
+}
+
+/// Deno's fetch only supports gzip and deflate, not zstd or brotli.
+/// This prevents issues where servers return zstd-compressed responses that Deno can't handle.
+fn fix_accept_encoding_for_deno(
+    req: &mut http::Request<deno_fetch::ReqBody>,
+) -> Result<(), deno_error::JsErrorBox> {
+    use http::header::{ACCEPT_ENCODING, HeaderValue};
+
+    if !req.headers().contains_key(ACCEPT_ENCODING) {
+        req.headers_mut().insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, deflate"));
+    }
+
+    Ok(())
 }
 
 impl WebOptions {

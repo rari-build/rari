@@ -34,7 +34,7 @@ export default function TodoListWithActions({
       try {
         const formData = new FormData()
         formData.append('id', id)
-        const result = await toggleTodo({ todos }, formData)
+        const result = await toggleTodo(formData)
         if (result.success && result.todos) {
           setTodos(result.todos)
           if (onUpdate)
@@ -59,7 +59,7 @@ export default function TodoListWithActions({
       try {
         const formData = new FormData()
         formData.append('id', id)
-        const result = await deleteTodo({ todos }, formData)
+        const result = await deleteTodo(formData)
         if (result.success && result.todos) {
           setTodos(result.todos)
           if (onUpdate)
@@ -82,14 +82,11 @@ export default function TodoListWithActions({
     setError(null)
     startTransition(async () => {
       try {
-        const result = await clearCompleted({ todos }, new FormData())
+        const result = await clearCompleted()
         if (result.success && result.todos) {
           setTodos(result.todos)
           if (onUpdate)
             onUpdate()
-        }
-        else if (result.error) {
-          setError(result.error)
         }
       }
       catch (error) {

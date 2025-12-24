@@ -547,12 +547,30 @@ export default {{}};
         if is_dyn_import && let Some(referrer) = maybe_referrer {
             let referrer_str = referrer.to_string();
 
-            if referrer_str.contains(NODE_MODULES_PATH)
-                && (specifier_str.starts_with(RELATIVE_CURRENT_PATH)
-                    || specifier_str.starts_with(RELATIVE_UP_PATH))
-                && specifier_str.starts_with(FILE_PROTOCOL)
-            {
-                let file_path = specifier_str.strip_prefix("file://").unwrap_or(specifier_str);
+            if referrer_str.contains(NODE_MODULES_PATH) {
+                let file_path = if specifier_str.starts_with(FILE_PROTOCOL) {
+                    specifier_str.strip_prefix("file://").unwrap_or(specifier_str)
+                } else if specifier_str.starts_with(RELATIVE_CURRENT_PATH)
+                    || specifier_str.starts_with(RELATIVE_UP_PATH)
+                {
+                    if let Ok(referrer_path) = referrer.to_file_path()
+                        && let Some(referrer_dir) = referrer_path.parent()
+                    {
+                        let resolved = referrer_dir.join(specifier_str);
+                        if let Ok(canonical) = resolved.canonicalize() {
+                            return if !canonical.exists() {
+                                Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
+                                    "Module not found",
+                                ))))
+                            } else {
+                                None
+                            };
+                        }
+                    }
+                    return None;
+                } else {
+                    return None;
+                };
 
                 if !std::path::Path::new(file_path).exists() {
                     return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(

@@ -1,4 +1,5 @@
 use axum::body::Body;
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
@@ -7,6 +8,7 @@ use crate::error::RariError;
 
 pub struct StreamingHtmlResponse {
     stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RariError>> + Send>>,
+    status_code: StatusCode,
 }
 
 impl StreamingHtmlResponse {
@@ -14,7 +16,14 @@ impl StreamingHtmlResponse {
     where
         S: Stream<Item = Result<Vec<u8>, RariError>> + Send + 'static,
     {
-        Self { stream: Box::pin(stream) }
+        Self { stream: Box::pin(stream), status_code: StatusCode::OK }
+    }
+
+    pub fn with_status<S>(stream: S, status_code: StatusCode) -> Self
+    where
+        S: Stream<Item = Result<Vec<u8>, RariError>> + Send + 'static,
+    {
+        Self { stream: Box::pin(stream), status_code }
     }
 }
 
@@ -46,7 +55,7 @@ impl IntoResponse for StreamingHtmlResponse {
         });
 
         Response::builder()
-            .status(200)
+            .status(self.status_code)
             .header("content-type", "text/html; charset=utf-8")
             .header("transfer-encoding", "chunked")
             .header("x-content-type-options", "nosniff")

@@ -180,6 +180,19 @@ pub async fn handle_server_action(
             let redirect_config = state.config.redirect_config();
             let redirect = extract_redirect_from_result(&value, &redirect_config);
 
+            if let Some(ref redirect_url) = redirect {
+                let redirect_path = if let Ok(parsed) = url::Url::parse(redirect_url) {
+                    parsed.path().to_string()
+                } else if redirect_url.starts_with('/') {
+                    redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
+                } else {
+                    redirect_url.clone()
+                };
+
+                state.response_cache.invalidate_by_tag(&redirect_path).await;
+                state.html_cache.remove(&redirect_path);
+            }
+
             let response =
                 ServerActionResponse { success: true, result: Some(value), error: None, redirect };
 
@@ -252,6 +265,17 @@ pub async fn handle_form_action(
         Ok(value) => {
             let redirect_config = state.config.redirect_config();
             if let Some(redirect_url) = extract_redirect_from_result(&value, &redirect_config) {
+                let redirect_path = if let Ok(parsed) = url::Url::parse(&redirect_url) {
+                    parsed.path().to_string()
+                } else if redirect_url.starts_with('/') {
+                    redirect_url.split('?').next().unwrap_or(&redirect_url).to_string()
+                } else {
+                    redirect_url.clone()
+                };
+
+                state.response_cache.invalidate_by_tag(&redirect_path).await;
+                state.html_cache.remove(&redirect_path);
+
                 return Response::builder()
                     .status(StatusCode::SEE_OTHER)
                     .header("Location", redirect_url)
@@ -261,6 +285,17 @@ pub async fn handle_form_action(
             }
 
             let redirect_url = headers.get("referer").and_then(|h| h.to_str().ok()).unwrap_or("/");
+
+            let redirect_path = if let Ok(parsed) = url::Url::parse(redirect_url) {
+                parsed.path().to_string()
+            } else if redirect_url.starts_with('/') {
+                redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
+            } else {
+                redirect_url.to_string()
+            };
+
+            state.response_cache.invalidate_by_tag(&redirect_path).await;
+            state.html_cache.remove(&redirect_path);
 
             Response::builder()
                 .status(StatusCode::SEE_OTHER)
