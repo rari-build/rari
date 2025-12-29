@@ -48,6 +48,30 @@ use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tracing::error;
 
+#[derive(Clone, Copy, Debug)]
+struct NotStreamingResponse;
+
+impl tower_http::compression::Predicate for NotStreamingResponse {
+    fn should_compress<B>(&self, response: &http::Response<B>) -> bool
+    where
+        B: axum::body::HttpBody,
+    {
+        if let Some(transfer_encoding) = response.headers().get("transfer-encoding")
+            && transfer_encoding == "chunked"
+        {
+            return false;
+        }
+
+        if let Some(buffering) = response.headers().get("x-accel-buffering")
+            && buffering == "no"
+        {
+            return false;
+        }
+
+        true
+    }
+}
+
 pub struct Server {
     router: Router,
     config: Config,
@@ -265,7 +289,9 @@ impl Server {
             router = router.fallback_service(static_service);
         }
 
-        router = router.layer(CompressionLayer::new());
+        let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
+
+        router = router.layer(compression_layer);
 
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));

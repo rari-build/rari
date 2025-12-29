@@ -43,6 +43,8 @@ pub struct BoundaryUpdate {
     pub row_id: u32,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dom_path: Vec<usize>,
+    #[serde(skip)]
+    pub import_rows: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -58,6 +60,7 @@ pub struct RscStreamChunk {
     pub chunk_type: RscChunkType,
     pub row_id: u32,
     pub is_final: bool,
+    pub boundary_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,4 +70,38 @@ pub enum RscChunkType {
     BoundaryUpdate,
     BoundaryError,
     StreamComplete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RscWireFormatTag {
+    ModuleImport,
+    Model,
+    Error,
+    Text,
+    Hint,
+    Debug,
+    Console,
+    StreamClose,
+}
+
+impl RscWireFormatTag {
+    pub fn tag_char(&self) -> Option<char> {
+        match self {
+            Self::ModuleImport => Some('I'),
+            Self::Model => None,
+            Self::Error => Some('E'),
+            Self::Text => Some('T'),
+            Self::Hint => Some('H'),
+            Self::Debug => Some('D'),
+            Self::Console => Some('W'),
+            Self::StreamClose => Some('C'),
+        }
+    }
+
+    pub fn format_row(&self, row_id: u32, data: &str) -> String {
+        match self.tag_char() {
+            Some(tag) => format!("{}:{}{}\n", row_id, tag, data),
+            None => format!("{}:{}\n", row_id, data),
+        }
+    }
 }

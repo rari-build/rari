@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
 use crate::rsc::wire_format::escape::escape_rsc_value;
 use rustc_hash::FxHashMap;
@@ -68,6 +69,7 @@ pub struct RscSerializer {
     pub output_lines: Vec<String>,
     serialized_modules: FxHashMap<String, String>,
     pub server_component_executor: Option<Box<dyn ServerComponentExecutor>>,
+    suspense_symbol_row_id: Option<u32>,
 }
 
 pub trait ServerComponentExecutor: Send + Sync {
@@ -110,6 +112,7 @@ impl RscSerializer {
             output_lines: Vec::new(),
             serialized_modules: FxHashMap::default(),
             server_component_executor: None,
+            suspense_symbol_row_id: None,
         }
     }
 
@@ -184,7 +187,60 @@ impl RscSerializer {
         let rsc_tree = crate::rsc::types::tree::RSCTree::from_json(rsc_data)
             .map_err(|e| format!("Failed to parse RSC tree from JSON: {e}"))?;
 
-        Ok(self.serialize_rsc_tree(&rsc_tree))
+        let has_suspense = self.tree_contains_suspense(&rsc_tree);
+
+        let _ = self.serialize_rsc_tree(&rsc_tree);
+
+        if has_suspense {
+            let row_id = self.get_next_row_id();
+            let symbol_line = format!("{}:\"$Sreact.suspense\"", row_id);
+            self.output_lines.insert(0, symbol_line);
+            self.suspense_symbol_row_id = Some(row_id);
+
+            for (i, line) in self.output_lines.iter().take(3).enumerate() {
+                tracing::info!("  Line {}: {}", i, line);
+            }
+
+            let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
+            let replace = format!("\"${}\"", row_id);
+            for i in 1..self.output_lines.len() {
+                for search in &searches {
+                    if self.output_lines[i].contains(search) {
+                        self.output_lines[i] = self.output_lines[i].replace(search, &replace);
+                    }
+                }
+            }
+            for (i, line) in self.output_lines.iter().take(3).enumerate() {
+                tracing::info!("  Line {}: {}", i, &line[..100.min(line.len())]);
+            }
+        }
+
+        Ok(self.output_lines.join("\n"))
+    }
+
+    fn tree_contains_suspense(&self, tree: &RSCTree) -> bool {
+        fn check_tree(tree: &RSCTree) -> bool {
+            match tree {
+                RSCTree::ServerElement { tag, children, .. } => {
+                    if tag == "$Sreact.suspense" || tag == "react.suspense" {
+                        return true;
+                    }
+                    if let Some(children) = children {
+                        for child in children {
+                            if check_tree(child) {
+                                return true;
+                            }
+                        }
+                    }
+                    false
+                }
+                RSCTree::Fragment { children, .. } | RSCTree::Array(children) => {
+                    children.iter().any(check_tree)
+                }
+                _ => false,
+            }
+        }
+        check_tree(tree)
     }
 
     fn collect_client_components_from_rsc_tree(&mut self, tree: &RSCTree) {
@@ -235,8 +291,7 @@ impl RscSerializer {
                 self.serialize_client_reference_rsc(id, key.as_deref(), props)
             }
             RSCTree::ServerElement { tag, props, children, key } => {
-                let normalized_tag = if tag == "react.suspense" { "react.suspense" } else { tag };
-                self.serialize_server_element_rsc(normalized_tag, props, children, key.as_deref())
+                self.serialize_server_element_rsc(tag, props, children, key.as_deref())
             }
             RSCTree::Text(content) => serde_json::to_string(content).unwrap_or_default(),
             RSCTree::Fragment { children, .. } => self.serialize_fragment_rsc(children),
@@ -472,8 +527,9 @@ impl RscSerializer {
 
         let module_data = serde_json::json!([module_ref.path, [chunk_name], export_name]);
 
-        let import_line = format!("{module_id}:I{module_data}");
-        self.output_lines.push(import_line);
+        let import_line =
+            RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
+        self.output_lines.push(import_line.trim_end().to_string());
 
         self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
     }
@@ -1122,7 +1178,7 @@ impl RscSerializer {
 
         let boundary_data = serde_json::json!([
             "$",
-            "react.suspense",
+            "$Sreact.suspense",
             null,
             {
                 "fallback": self.serialize_element_to_standard_format(fallback),
@@ -1217,7 +1273,7 @@ impl RscSerializer {
         #[allow(clippy::disallowed_methods)]
         let boundary_data = serde_json::json!([
             "$",
-            "react.suspense",
+            "$Sreact.suspense",
             null,
             {
                 "fallback": fallback_ref,

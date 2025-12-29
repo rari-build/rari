@@ -18,6 +18,100 @@ if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
   globalThis['~clientComponentPaths'] = {}
 }
 
+if (typeof window !== 'undefined') {
+  if (!window['~rari'].bufferedEvents) {
+    window['~rari'].bufferedEvents = []
+  }
+
+  globalThis['~rari'].processBoundaryUpdate = function (boundaryId, rscRow, rowId) {
+    const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
+
+    if (!boundaryElement) {
+      return
+    }
+
+    try {
+      const parts = rscRow.split(':')
+      if (parts.length < 2) {
+        return
+      }
+
+      const content = JSON.parse(parts.slice(1).join(':'))
+
+      function rscToHtml(element) {
+        if (!element) {
+          return ''
+        }
+
+        if (typeof element === 'string' || typeof element === 'number') {
+          return String(element)
+        }
+
+        if (Array.isArray(element)) {
+          if (element.length >= 4 && element[0] === '$') {
+            const [, tag, , props] = element
+            const children = props && props.children ? rscToHtml(props.children) : ''
+
+            let attrs = ''
+            if (props) {
+              for (const [key, value] of Object.entries(props)) {
+                if (key !== 'children' && key !== '~boundaryId') {
+                  if (typeof value === 'string') {
+                    attrs += ` ${key}="${value.replace(/"/g, '&quot;')}"`
+                  }
+                  else if (typeof value === 'boolean' && value) {
+                    attrs += ` ${key}`
+                  }
+                }
+              }
+            }
+
+            return `<${tag}${attrs}>${children}</${tag}>`
+          }
+
+          return element.map(rscToHtml).join('')
+        }
+
+        return ''
+      }
+
+      const htmlContent = rscToHtml(content)
+
+      if (htmlContent) {
+        boundaryElement.innerHTML = htmlContent
+        boundaryElement.classList.add('rari-boundary-resolved')
+      }
+    }
+    catch (e) {
+      console.error('[Rari] Error processing boundary update:', e)
+    }
+
+    window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+      detail: {
+        boundaryId,
+        rscRow,
+        rowId,
+        element: boundaryElement,
+      },
+    }))
+  }
+
+  if (window['~rari'].bufferedEvents && window['~rari'].bufferedEvents.length > 0) {
+    window['~rari'].bufferedEvents.forEach((event) => {
+      const { boundaryId, rscRow, rowId } = event
+      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    })
+    window['~rari'].bufferedEvents = []
+  }
+
+  window.addEventListener('rari:boundary-update', (event) => {
+    const { boundaryId, rscRow, rowId } = event.detail
+    if (globalThis['~rari'].processBoundaryUpdate) {
+      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    }
+  })
+}
+
 export function registerClientComponent(componentFunction, id, exportName) {
   const componentName = exportName === 'default'
     ? (componentFunction.name || id.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'DefaultComponent')
@@ -297,14 +391,13 @@ class RscClient {
           const [, type, key, props] = element
 
           if (type === 'react.suspense' || type === 'suspense') {
-            const boundaryId = props?.['~boundaryId']
-            const suspenseWrapper = createElement('div', {
-              'data-~boundary-id': boundaryId,
-              '~boundaryId': boundaryId,
-              'data-suspense-boundary': true,
-            }, convertRscToReact(props?.fallback || props?.children))
+            const suspenseProps = {
+              fallback: convertRscToReact(props?.fallback) || null,
+            }
 
-            return suspenseWrapper
+            const children = props?.children ? convertRscToReact(props.children) : null
+
+            return createElement(Suspense, suspenseProps, children)
           }
 
           let processedProps = props ? { ...props } : {}

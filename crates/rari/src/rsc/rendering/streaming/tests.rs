@@ -57,6 +57,7 @@ mod tests {
             chunk_type: RscChunkType::InitialShell,
             row_id: 1,
             is_final: false,
+            boundary_id: None,
         };
 
         assert_eq!(chunk.chunk_type, RscChunkType::InitialShell);
@@ -75,18 +76,6 @@ mod tests {
         let module_chunk = renderer.create_module_chunk().expect("module chunk");
         let s = String::from_utf8(module_chunk.data).expect("utf8");
         assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
-    }
-
-    #[test]
-    fn test_symbol_row_format() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = StreamingRenderer::new(runtime);
-
-        renderer.set_row_counter(2);
-
-        let sym_chunk = renderer.create_symbol_chunk("react.suspense").expect("symbol chunk");
-        let s = String::from_utf8(sym_chunk.data).expect("utf8");
-        assert!(s.starts_with("2:SSymbol.for(\"react.suspense\")"));
     }
 
     #[tokio::test]

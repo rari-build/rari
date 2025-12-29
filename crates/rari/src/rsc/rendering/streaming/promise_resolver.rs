@@ -6,7 +6,94 @@ use tracing::error;
 use crate::runtime::JsExecutionRuntime;
 
 use super::constants::PROMISE_RESOLUTION_SCRIPT;
-use super::types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise};
+use super::types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise, RscWireFormatTag};
+
+fn process_client_components(
+    content: &mut serde_json::Value,
+    row_counter: &mut u32,
+) -> Vec<String> {
+    let mut import_rows = Vec::new();
+    let mut component_map: FxHashMap<String, String> = FxHashMap::default();
+
+    collect_client_components(content, &mut component_map, row_counter, &mut import_rows);
+
+    replace_client_component_paths(content, &component_map);
+
+    import_rows
+}
+
+fn collect_client_components(
+    value: &serde_json::Value,
+    component_map: &mut FxHashMap<String, String>,
+    row_counter: &mut u32,
+    import_rows: &mut Vec<String>,
+) {
+    match value {
+        serde_json::Value::Array(arr) => {
+            if arr.len() >= 4
+                && arr[0].as_str() == Some("$")
+                && let Some(type_str) = arr[1].as_str()
+                && (type_str.contains('/') || type_str.contains('#'))
+                && !type_str.starts_with("$L")
+                && !component_map.contains_key(type_str)
+            {
+                *row_counter += 1;
+                let module_ref = format!("$L{}", row_counter);
+
+                let (file_path, export_name) = if let Some(idx) = type_str.find('#') {
+                    (&type_str[..idx], &type_str[idx + 1..])
+                } else {
+                    (type_str, "default")
+                };
+
+                #[allow(clippy::disallowed_methods)]
+                let import_data = serde_json::json!([file_path, ["default"], export_name]);
+                let import_row = RscWireFormatTag::ModuleImport
+                    .format_row(*row_counter, &import_data.to_string());
+                import_rows.push(import_row.trim_end().to_string());
+
+                component_map.insert(type_str.to_string(), module_ref);
+            }
+
+            for item in arr {
+                collect_client_components(item, component_map, row_counter, import_rows);
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            for value in obj.values() {
+                collect_client_components(value, component_map, row_counter, import_rows);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn replace_client_component_paths(
+    value: &mut serde_json::Value,
+    component_map: &FxHashMap<String, String>,
+) {
+    match value {
+        serde_json::Value::Array(arr) => {
+            if arr.len() >= 4
+                && arr[0].as_str() == Some("$")
+                && let Some(type_str) = arr[1].as_str()
+                && let Some(module_ref) = component_map.get(type_str)
+            {
+                arr[1] = serde_json::Value::String(module_ref.clone());
+            }
+
+            for item in arr {
+                replace_client_component_paths(item, component_map);
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            for value in obj.values_mut() {
+                replace_client_component_paths(value, component_map);
+            }
+        }
+        _ => {}
+    }
+}
 
 pub struct BackgroundPromiseResolver {
     runtime: Arc<JsExecutionRuntime>,
@@ -62,17 +149,22 @@ impl BackgroundPromiseResolver {
                     match serde_json::from_str::<serde_json::Value>(&result_string) {
                         Ok(result_data) => {
                             if result_data["success"].as_bool().unwrap_or(false) {
-                                let row_id = {
+                                let mut content = result_data["content"].clone();
+
+                                let (row_id, import_rows) = {
                                     let mut counter = shared_row_counter.lock().await;
+                                    let import_rows =
+                                        process_client_components(&mut content, &mut counter);
                                     *counter += 1;
-                                    *counter
+                                    (*counter, import_rows)
                                 };
 
                                 let update = BoundaryUpdate {
                                     boundary_id: boundary_id.clone(),
-                                    content: result_data["content"].clone(),
+                                    content,
                                     row_id,
                                     dom_path: Vec::new(),
+                                    import_rows,
                                 };
 
                                 if let Err(e) = update_sender.send(update) {

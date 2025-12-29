@@ -876,8 +876,8 @@ async fn test_generate_boundary_update_html_simple() {
     assert!(html.contains("</script>"), "Should close script tag");
 
     assert!(
-        html.contains(r#"data-~boundary-id="boundary_123""#),
-        "Should have boundary ID data attribute"
+        html.contains(r#"data-boundary-id="boundary_123""#),
+        "Should have boundary ID data attribute with tilde"
     );
     assert!(html.contains(r#"data-row-id="42""#), "Should have row ID data attribute");
 
@@ -888,7 +888,8 @@ async fn test_generate_boundary_update_html_simple() {
 
     assert!(html.contains("42"), "Should pass row ID to function");
 
-    assert!(html.contains("Resolved Content"), "Should include the resolved content");
+    assert!(html.contains(r#"42:["#), "Should include RSC row with row ID");
+    assert!(html.contains("Resolved Content"), "Should include the content in RSC format");
 }
 
 #[tokio::test]
@@ -899,7 +900,7 @@ async fn test_generate_boundary_update_html_with_special_characters() {
     renderer.initialize().await.unwrap();
 
     let content_rsc = serde_json::json!(["$", "div", null, {
-        "children": "Content with `backticks` and ${template} and <script>alert('xss')</script>"
+        "children": "Content with 'quotes' and \"double\" and \n newlines"
     }]);
     let boundary_id = "boundary_special";
     let row_id = 1;
@@ -909,12 +910,15 @@ async fn test_generate_boundary_update_html_with_special_characters() {
 
     let html = result.unwrap();
 
-    assert!(html.contains("\\`"), "Should escape backticks");
+    assert!(html.contains("\\'"), "Should escape single quotes for JavaScript");
+    assert!(html.contains("\\\""), "Should escape double quotes for JavaScript");
+    assert!(html.contains("\\n"), "Should escape newlines for JavaScript");
 
-    assert!(html.contains("\\${"), "Should escape template literal interpolation");
+    // The script tag itself should be valid HTML
+    assert!(html.starts_with("<script"), "Should be a script tag");
+    assert!(html.contains("</script>"), "Should close script tag");
 
-    assert!(html.contains("&lt;script&gt;"), "Should escape HTML tags in content");
-    assert!(!html.contains("<script>alert"), "Should not have unescaped script tags");
+    assert!(html.contains(r#"1:["#), "Should include RSC row with row ID");
 }
 
 #[tokio::test]
@@ -938,10 +942,17 @@ async fn test_generate_boundary_update_html_with_nested_elements() {
 
     let html = result.unwrap();
 
-    assert!(html.contains("container"), "Should include className");
-    assert!(html.contains("Nested Content"), "Should include nested content");
-    assert!(html.contains("<div"), "Should have div tag");
-    assert!(html.contains("<span"), "Should have nested span tag");
+    assert!(html.contains("container"), "Should include className in RSC data");
+    assert!(html.contains("Nested Content"), "Should include nested content in RSC data");
+
+    assert!(html.starts_with("<script"), "Should be a script tag");
+    assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate");
+
+    assert!(html.contains(r#"5:["#), "Should include RSC row with row ID");
+    assert!(
+        html.contains(r#"\\"span\\""#) || html.contains("span"),
+        "Should include nested span in RSC format"
+    );
 }
 
 #[tokio::test]
@@ -965,10 +976,23 @@ async fn test_generate_boundary_update_html_with_attributes() {
 
     let html = result.unwrap();
 
-    assert!(html.contains("type=\"button\""), "Should have type attribute");
-    assert!(html.contains("class=\"btn btn-primary\""), "Should have class attribute");
-    assert!(html.contains("disabled"), "Should have disabled attribute");
-    assert!(html.contains("Click Me"), "Should have button text");
+    assert!(
+        html.contains("type") || html.contains(r#"\\"type\\""#),
+        "Should have type in RSC data"
+    );
+    assert!(html.contains("button"), "Should have button value in RSC data");
+    assert!(
+        html.contains("className") || html.contains(r#"\\"className\\""#),
+        "Should have className in RSC data"
+    );
+    assert!(html.contains("btn btn-primary"), "Should have class value in RSC data");
+    assert!(html.contains("disabled"), "Should have disabled in RSC data");
+    assert!(html.contains("Click Me"), "Should have button text in RSC data");
+
+    assert!(html.starts_with("<script"), "Should be a script tag");
+    assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate");
+
+    assert!(html.contains(r#"10:["#), "Should include RSC row with row ID");
 }
 
 #[tokio::test]

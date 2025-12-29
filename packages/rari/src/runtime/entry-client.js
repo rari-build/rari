@@ -1,5 +1,5 @@
 import { ClientRouter } from 'rari/client'
-import React from 'react'
+import React, { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
@@ -30,26 +30,73 @@ export async function renderApp() {
     return
   }
 
+  const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
+  const hasServerRenderedContent = rootElement.children.length > 0
+
+  if (hasServerRenderedContent && !payloadScript) {
+    return
+  }
+
   try {
     let element
     let isFullDocument = false
-
-    const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
 
     if (payloadScript && payloadScript.textContent) {
       try {
         const payloadJson = payloadScript.textContent
 
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(payloadJson))
-            controller.close()
-          },
-        })
+        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
 
-        element = await createFromReadableStream(stream, {
-          moduleMap: globalThis['~clientComponents'] || {},
-        })
+        if (isStreaming) {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+
+              if (window['~rari']?.bufferedRows) {
+                for (const row of window['~rari'].bufferedRows) {
+                  controller.enqueue(new TextEncoder().encode(`\n${row}`))
+                }
+                window['~rari'].bufferedRows = []
+              }
+
+              const handleStreamUpdate = (event) => {
+                if (event.detail?.rscRow) {
+                  controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
+                }
+              }
+
+              const handleStreamComplete = () => {
+                controller.close()
+                window.removeEventListener('rari:rsc-row', handleStreamUpdate)
+                window.removeEventListener('rari:stream-complete', handleStreamComplete)
+              }
+
+              window.addEventListener('rari:rsc-row', handleStreamUpdate)
+              window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+              if (window['~rari']?.streamComplete) {
+                handleStreamComplete()
+              }
+            },
+          })
+
+          element = await createFromReadableStream(stream, {
+            moduleMap: globalThis['~clientComponents'] || {},
+          })
+        }
+        else {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+              controller.close()
+            },
+          })
+
+          element = await createFromReadableStream(stream, {
+            moduleMap: globalThis['~clientComponents'] || {},
+          })
+        }
       }
       catch (e) {
         console.error('[Rari] Failed to parse embedded RSC payload:', e)
@@ -247,6 +294,7 @@ function parseRscWireFormat(wireFormat, extractBoundaries = false) {
   let rootElement = null
   let isFullDocument = false
   const modules = new Map()
+  const symbols = new Map()
   const layoutBoundaries = []
   let currentLayoutPath = null
   let currentLayoutStartLine = null
@@ -261,6 +309,12 @@ function parseRscWireFormat(wireFormat, extractBoundaries = false) {
     const content = line.substring(colonIndex + 1)
 
     try {
+      if (content.startsWith('"$S') && content.endsWith('"')) {
+        const symbolRef = content.slice(1, -1)
+        symbols.set(rowId, symbolRef)
+        continue
+      }
+
       if (content.startsWith('I[')) {
         const importData = JSON.parse(content.substring(1))
         if (Array.isArray(importData) && importData.length >= 3) {
@@ -315,7 +369,7 @@ function parseRscWireFormat(wireFormat, extractBoundaries = false) {
         }
 
         if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
-          rootElement = rscToReact(elementData, modules)
+          rootElement = rscToReact(elementData, modules, symbols)
           if (elementData[1] === 'html') {
             isFullDocument = true
           }
@@ -347,12 +401,13 @@ function parseRscWireFormat(wireFormat, extractBoundaries = false) {
   return {
     element: rootElement,
     modules,
+    symbols,
     isFullDocument,
     layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
   }
 }
 
-function rscToReact(rsc, modules) {
+function rscToReact(rsc, modules, symbols) {
   if (!rsc)
     return null
 
@@ -363,6 +418,29 @@ function rscToReact(rsc, modules) {
   if (Array.isArray(rsc)) {
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
+      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && /^\d+$/.test(type.slice(1))) {
+        const symbolRowId = type.slice(1)
+        const symbolRef = symbols?.get(symbolRowId)
+        if (symbolRef && symbolRef.startsWith('$S')) {
+          const symbolName = symbolRef.slice(2)
+          if (symbolName === 'react.suspense') {
+            const processedProps = processProps(props, modules, symbols)
+            return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
+          }
+        }
+        else {
+          console.error('[RSC ERROR] Symbol not found or invalid:', { symbolRowId, symbolRef, symbolsSize: symbols?.size })
+        }
+      }
+
+      if (typeof type === 'string' && type.startsWith('$S')) {
+        const symbolName = type.slice(2)
+        if (symbolName === 'react.suspense') {
+          const processedProps = processProps(props, modules, symbols)
+          return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
+        }
+        return null
+      }
 
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
@@ -371,7 +449,7 @@ function rscToReact(rsc, modules) {
           if (Component) {
             const childProps = {
               ...props,
-              children: props.children ? rscToReact(props.children, modules) : undefined,
+              children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
             }
             return React.createElement(Component, { key, ...childProps })
           }
@@ -379,16 +457,22 @@ function rscToReact(rsc, modules) {
         return null
       }
 
-      const processedProps = processProps(props, modules)
-      return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+      const processedProps = processProps(props, modules, symbols)
+      try {
+        return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+      }
+      catch (error) {
+        console.error('[RSC ERROR] Failed to create element:', { type, key, props, error })
+        throw error
+      }
     }
-    return rsc.map(child => rscToReact(child, modules))
+    return rsc.map(child => rscToReact(child, modules, symbols))
   }
 
   return rsc
 }
 
-function processProps(props, modules) {
+function processProps(props, modules, symbols) {
   if (!props || typeof props !== 'object')
     return props
 
@@ -399,7 +483,7 @@ function processProps(props, modules) {
         continue
       }
       if (key === 'children') {
-        processed[key] = props.children ? rscToReact(props.children, modules) : undefined
+        processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
       }
       else {
         processed[key] = props[key]

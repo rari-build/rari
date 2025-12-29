@@ -136,7 +136,7 @@ impl LayoutRenderer {
             route_match,
             context,
             loading_component_id.as_deref(),
-            false,
+            loading_component_id.is_some(),
         )?;
 
         let renderer = self.renderer.lock().await;
@@ -280,7 +280,9 @@ impl LayoutRenderer {
                             structure.content_position = Some(*position);
                         }
 
-                        if (tag == "react.suspense" || tag == "Suspense")
+                        if (tag == "$Sreact.suspense"
+                            || tag == "react.suspense"
+                            || tag == "Suspense")
                             && let Some(props) = arr.get(3).and_then(|v| v.as_object())
                             && let Some(boundary_id) =
                                 props.get("~boundaryId").and_then(|v| v.as_str())
@@ -457,7 +459,8 @@ impl LayoutRenderer {
                 serde_json::Value::Array(arr) => {
                     if arr.len() >= 4
                         && arr[0].as_str() == Some("$")
-                        && (arr[1].as_str() == Some("react.suspense")
+                        && (arr[1].as_str() == Some("$Sreact.suspense")
+                            || arr[1].as_str() == Some("react.suspense")
                             || arr[1].as_str() == Some("Suspense"))
                     {
                         *count += 1;
@@ -592,24 +595,49 @@ impl LayoutRenderer {
 
         let suspense_detection = self.detect_suspense_boundaries_impl(rsc_data)?;
 
+        let has_suspense_from_result =
+            result.get("has_suspense").and_then(|v| v.as_bool()).unwrap_or(false);
+
         let config_enable_streaming = Config::get().map(|c| c.rsc.enable_streaming).unwrap_or(true);
 
         let is_not_found = route_match.not_found.is_some();
 
         let should_stream = !is_not_found
             && layout_structure.is_valid()
-            && (suspense_detection.has_suspense || config_enable_streaming);
+            && (suspense_detection.has_suspense
+                || has_suspense_from_result
+                || config_enable_streaming);
 
         if should_stream {
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
                 Arc::clone(&renderer.runtime),
             );
 
+            let pending_promises: Vec<
+                crate::rsc::rendering::streaming::types::PendingSuspensePromise,
+            > = result["pending_promises"]
+                .as_array()
+                .unwrap_or(&Vec::new())
+                .iter()
+                .filter_map(|p| {
+                    let id = p["id"].as_str()?.to_string();
+                    let boundary_id = p["boundaryId"].as_str()?.to_string();
+                    let component_path = p["componentPath"].as_str()?.to_string();
+                    Some(crate::rsc::rendering::streaming::types::PendingSuspensePromise {
+                        id: id.clone(),
+                        boundary_id,
+                        component_path,
+                        promise_handle: id,
+                    })
+                })
+                .collect();
+
             let stream = streaming_renderer
                 .start_streaming_with_precomputed_data(
                     rsc_data.clone(),
                     suspense_detection.boundaries.clone(),
                     layout_structure,
+                    pending_promises.clone(),
                 )
                 .await?;
 
@@ -726,6 +754,7 @@ impl LayoutRenderer {
                     chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
                     row_id: 0,
                     is_final: true,
+                    boundary_id: None,
                 })
                 .await;
             drop(tx);
@@ -752,6 +781,7 @@ impl LayoutRenderer {
                 chunk_type: crate::rsc::rendering::streaming::RscChunkType::InitialShell,
                 row_id: 0,
                 is_final: true,
+                boundary_id: None,
             })
             .await;
         drop(tx);
@@ -812,6 +842,31 @@ impl LayoutRenderer {
                 if (!globalThis['~render']) globalThis['~render'] = {{}};
                 globalThis['~render'].deferredAsyncComponents = [];
 
+                if (!globalThis['~react']) globalThis['~react'] = {{}};
+                if (!globalThis['~react'].originalCreateElement) {{
+                    globalThis['~react'].originalCreateElement = React.createElement;
+
+                    React.createElement = function(type, props, ...children) {{
+                        if (typeof type === 'function' &&
+                            (type.constructor.name === 'AsyncFunction' ||
+                             type.toString().trim().startsWith('async '))) {{
+
+                            const AsyncComponentMarker = function(props) {{
+                                return null;
+                            }};
+
+                            AsyncComponentMarker._isAsyncComponent = true;
+                            AsyncComponentMarker._originalType = type;
+                            AsyncComponentMarker.displayName = `AsyncWrapper(${{type.name || 'Anonymous'}})`;
+
+                            return globalThis['~react'].originalCreateElement(AsyncComponentMarker, props, ...children);
+                        }}
+
+                        return globalThis['~react'].originalCreateElement(type, props, ...children);
+                    }};
+                }}
+
+                const startPageRender = performance.now();
                 {}
             "#,
             page_render_script
@@ -851,7 +906,6 @@ impl LayoutRenderer {
             current_element = layout_var;
         }
 
-        script.push_str(JS_RENDER_TO_RSC);
         script.push_str("\n\n");
         script.push_str("                const startRSC = performance.now();\n");
         script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis['~rsc'].clientComponents || {{}});\n", current_element));
