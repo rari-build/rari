@@ -650,29 +650,20 @@ impl RscToHtmlConverter {
             RscChunkType::ModuleImport => {
                 let rsc_line = String::from_utf8_lossy(&chunk.data);
 
-                if !self.payload_embedding_disabled {
-                    self.rsc_wire_format.push(rsc_line.trim().to_string());
+                if !self.shell_sent {
+                    if !self.payload_embedding_disabled {
+                        self.rsc_wire_format.push(rsc_line.trim().to_string());
+                    }
+                    return Ok(Vec::new());
                 }
 
-                let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
-                if parts.len() == 2 {
-                    self.row_cache.insert(chunk.row_id, String::new());
-                }
-
-                if self.shell_sent {
-                    let escaped_row = rsc_line
-                        .trim()
-                        .replace('\\', "\\\\")
-                        .replace('\'', "\\'")
-                        .replace('\n', "\\n");
-                    let script = format!(
-                        r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
-                        escaped_row, escaped_row
-                    );
-                    Ok(script.into_bytes())
-                } else {
-                    Ok(Vec::new())
-                }
+                let escaped_row =
+                    rsc_line.trim().replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n");
+                let script = format!(
+                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                    escaped_row, escaped_row
+                );
+                Ok(script.into_bytes())
             }
 
             RscChunkType::InitialShell => {
@@ -682,6 +673,19 @@ impl RscToHtmlConverter {
                     match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
                         Ok(rsc_html) => {
                             output.extend(rsc_html);
+
+                            for buffered_line in &self.rsc_wire_format {
+                                let escaped_row = buffered_line
+                                    .replace('\\', "\\\\")
+                                    .replace('\'', "\\'")
+                                    .replace('\n', "\\n");
+                                let script = format!(
+                                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                                    escaped_row, escaped_row
+                                );
+                                output.extend(script.as_bytes());
+                            }
+
                             output
                         }
                         Err(e) => {
@@ -690,13 +694,17 @@ impl RscToHtmlConverter {
                         }
                     }
                 } else {
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(html) => html,
-                        Err(e) => {
-                            error!("Error parsing RSC chunk: {}", e);
-                            Vec::new()
-                        }
-                    }
+                    let rsc_line = String::from_utf8_lossy(&chunk.data);
+                    let escaped_row = rsc_line
+                        .trim()
+                        .replace('\\', "\\\\")
+                        .replace('\'', "\\'")
+                        .replace('\n', "\\n");
+                    let script = format!(
+                        r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                        escaped_row, escaped_row
+                    );
+                    script.into_bytes()
                 };
                 Ok(html)
             }
@@ -719,7 +727,24 @@ impl RscToHtmlConverter {
                 }
             },
 
-            RscChunkType::StreamComplete => Ok(b"</div></body></html>\n".to_vec()),
+            RscChunkType::StreamComplete => {
+                let csrf_script = self.csrf_script.as_deref().unwrap_or("");
+                let closing = format!(
+                    r#"
+{}
+<script>
+if (typeof window !== 'undefined') {{
+    if (!window['~rari']) window['~rari'] = {{}};
+    window['~rari'].streamComplete = true;
+    window.dispatchEvent(new Event('rari:stream-complete'));
+}}
+</script>
+</body>
+</html>"#,
+                    csrf_script
+                );
+                Ok(closing.as_bytes().to_vec())
+            }
         };
 
         if let Err(ref e) = result {
@@ -894,12 +919,19 @@ if (typeof window !== 'undefined') {{
                         && element_type.len() > 1
                         && element_type[1..].chars().all(|c| c.is_ascii_digit());
 
+                    let is_client_component = element_type.starts_with("$L")
+                        || element_type.contains('#')
+                        || element_type.contains('/');
+
                     if element_type == "$Sreact.suspense"
                         || element_type == "react.suspense"
-                        || element_type.starts_with("$L")
                         || is_suspense_symbol
                     {
                         return self.render_suspense_boundary(element_type, props).await;
+                    }
+
+                    if is_client_component {
+                        return self.render_client_component_placeholder(element_type, props).await;
                     }
 
                     return self.render_html_element(element_type, props).await;
@@ -932,6 +964,14 @@ if (typeof window !== 'undefined') {{
 
             Ok(String::new())
         })
+    }
+
+    async fn render_client_component_placeholder(
+        &self,
+        _component_ref: &str,
+        _props: Option<&serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<String, RariError> {
+        Ok(String::new())
     }
 
     async fn render_suspense_boundary(

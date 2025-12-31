@@ -61,4 +61,6 @@ if (!globalThis['~rsc'].rendererInitialized) {
   if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
     globalThis['~clientComponentPaths'] = {}
   }
+
+  globalThis['~rsc'].clientComponents = globalThis['~clientComponents']
 }

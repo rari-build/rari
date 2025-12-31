@@ -87,7 +87,6 @@ pub struct SuspenseDetectionResult {
 
 pub enum RenderResult {
     Static(String),
-    StaticWithPayload { html: String, rsc_payload: String },
     Streaming(RscStream),
 }
 

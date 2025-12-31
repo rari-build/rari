@@ -1,4 +1,4 @@
-/* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing */
+/* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing, antfu/no-top-level-await */
 // oxlint-disable vars-on-top, no-var, block-scoped-var
 const startPage = performance.now()
 const PageComponent = globalThis['{page_component_id}']
@@ -8,12 +8,9 @@ if (!PageComponent || typeof PageComponent !== 'function') {
 
 const LoadingComponent = globalThis['{loading_id}']
 if (!LoadingComponent || typeof LoadingComponent !== 'function') {
-  console.warn('Loading component {loading_id} not found, rendering page without Suspense')
   const pageProps = {page_props_json}
-  const pageResult = PageComponent(pageProps)
-  const isAsync = pageResult && typeof pageResult.then === 'function'
-  var pageElement = pageResult
-  timings.isAsync = isAsync
+  var pageElement = React.createElement(PageComponent, pageProps)
+  timings.isAsync = PageComponent.constructor.name === 'AsyncFunction'
 }
 else {
   const pageProps = {page_props_json}
@@ -21,10 +18,55 @@ else {
 
   const isAsync = PageComponent.constructor.name === 'AsyncFunction'
 
-  const pageResult = PageComponent(pageProps)
-  const isAsyncResult = pageResult && typeof pageResult.then === 'function'
+  if (isAsync && useSuspense) {
+    const streamingEnabled = globalThis.__RARI_STREAMING_SUSPENSE__ === true
 
-  var pageElement = pageResult
-  timings.isAsync = isAsync || isAsyncResult
+    if (streamingEnabled) {
+      if (!globalThis.__RARI_PENDING_PROMISES__) {
+        globalThis.__RARI_PENDING_PROMISES__ = new Map()
+      }
+
+      const promiseId = '{page_component_id}_promise'
+
+      if (!globalThis.__RARI_PENDING_PROMISES__.has(promiseId)) {
+        const promise = PageComponent(pageProps)
+
+        promise.catch((err) => {
+          console.error('[RARI] Promise rejected:', promiseId, err)
+        })
+
+        globalThis.__RARI_PENDING_PROMISES__.set(promiseId, promise)
+      }
+
+      const lazyMarker = {
+        __rari_lazy: true,
+        __rari_promise_id: promiseId,
+        __rari_component_id: '{page_component_id}',
+        __rari_loading_id: '{loading_id}',
+      }
+
+      const loadingFallback = React.createElement(LoadingComponent)
+      var pageElement = React.createElement(
+        React.Suspense,
+        { fallback: loadingFallback },
+        lazyMarker,
+      )
+    }
+    else {
+      const pageResult = await PageComponent(pageProps)
+
+      const loadingFallback = React.createElement(LoadingComponent)
+      var pageElement = React.createElement(
+        React.Suspense,
+        { fallback: loadingFallback },
+        pageResult,
+      )
+    }
+  }
+  else {
+    var pageElement = React.createElement(PageComponent, pageProps)
+  }
+
+  timings.isAsync = isAsync
 }
 timings.pageRender = performance.now() - startPage

@@ -122,8 +122,13 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       return await traverseReactElement(fakeSuspenseElement, clientComponents, depth + 1)
     }
 
-    if (Object.keys(element).length > 0) {
-      console.warn('RSC: Encountered unhandled object type', Object.keys(element))
+    if (element.__rari_lazy === true) {
+      return {
+        __rari_lazy: true,
+        __rari_promise_id: element.__rari_promise_id,
+        __rari_component_id: element.__rari_component_id,
+        __rari_loading_id: element.__rari_loading_id,
+      }
     }
 
     return null
@@ -355,9 +360,16 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       p => p.boundaryId === boundaryId,
     )
 
-    const traversedChildren = hasPendingPromises
-      ? null
-      : await traverseToRsc(props?.children, clientComponents, depth + 1)
+    const hasLazyMarker = processedChildren.some((child) => {
+      const isLazy = child && typeof child === 'object' && child.__rari_lazy === true
+      return isLazy
+    })
+
+    const traversedChildren = hasLazyMarker
+      ? await traverseToRsc(props?.children, clientComponents, depth + 1)
+      : hasPendingPromises
+        ? null
+        : await traverseToRsc(props?.children, clientComponents, depth + 1)
 
     globalThis['~suspense'].currentBoundaryId = previousBoundaryId
 
@@ -459,7 +471,7 @@ async function createRSCHTMLElement(
       : undefined,
   }
 
-  if (rscProps.children === undefined) {
+  if (rscProps.children === undefined || rscProps.children === null) {
     delete rscProps.children
   }
 
@@ -547,7 +559,7 @@ function isServerComponent(componentType) {
 }
 
 function getClientComponentId(componentType, clientComponents) {
-  if (componentType && typeof componentType === 'object') {
+  if (componentType && (typeof componentType === 'object' || typeof componentType === 'function')) {
     const reactClientSymbol = Symbol.for('react.client.reference')
     if (componentType.$$typeof === reactClientSymbol) {
       const clientId = componentType.$$id

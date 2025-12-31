@@ -32,71 +32,65 @@ export async function renderApp() {
 
   const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
   const hasServerRenderedContent = rootElement.children.length > 0
+  const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
 
-  if (hasServerRenderedContent && !payloadScript) {
+  if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
     return
   }
 
   try {
     let element
-    let isFullDocument = false
+    const isFullDocument = false
 
-    if (payloadScript && payloadScript.textContent) {
+    if (hasBufferedRows) {
+      const stream = new ReadableStream({
+        start(controller) {
+          if (window['~rari']?.bufferedRows) {
+            for (const row of window['~rari'].bufferedRows) {
+              controller.enqueue(new TextEncoder().encode(`${row}\n`))
+            }
+            window['~rari'].bufferedRows = []
+          }
+
+          const handleStreamUpdate = (event) => {
+            if (event.detail?.rscRow) {
+              controller.enqueue(new TextEncoder().encode(`${event.detail.rscRow}\n`))
+            }
+          }
+
+          const handleStreamComplete = () => {
+            controller.close()
+            window.removeEventListener('rari:rsc-row', handleStreamUpdate)
+            window.removeEventListener('rari:stream-complete', handleStreamComplete)
+          }
+
+          window.addEventListener('rari:rsc-row', handleStreamUpdate)
+          window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+          if (window['~rari']?.streamComplete) {
+            handleStreamComplete()
+          }
+        },
+      })
+
+      element = await createFromReadableStream(stream, {
+        moduleMap: globalThis['~clientComponents'] || {},
+      })
+    }
+    else if (payloadScript && payloadScript.textContent) {
       try {
         const payloadJson = payloadScript.textContent
 
-        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
-        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(payloadJson))
+            controller.close()
+          },
+        })
 
-        if (isStreaming) {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode(payloadJson))
-
-              if (window['~rari']?.bufferedRows) {
-                for (const row of window['~rari'].bufferedRows) {
-                  controller.enqueue(new TextEncoder().encode(`\n${row}`))
-                }
-                window['~rari'].bufferedRows = []
-              }
-
-              const handleStreamUpdate = (event) => {
-                if (event.detail?.rscRow) {
-                  controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
-                }
-              }
-
-              const handleStreamComplete = () => {
-                controller.close()
-                window.removeEventListener('rari:rsc-row', handleStreamUpdate)
-                window.removeEventListener('rari:stream-complete', handleStreamComplete)
-              }
-
-              window.addEventListener('rari:rsc-row', handleStreamUpdate)
-              window.addEventListener('rari:stream-complete', handleStreamComplete)
-
-              if (window['~rari']?.streamComplete) {
-                handleStreamComplete()
-              }
-            },
-          })
-
-          element = await createFromReadableStream(stream, {
-            moduleMap: globalThis['~clientComponents'] || {},
-          })
-        }
-        else {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode(payloadJson))
-              controller.close()
-            },
-          })
-
-          element = await createFromReadableStream(stream, {
-            moduleMap: globalThis['~clientComponents'] || {},
-          })
-        }
+        element = await createFromReadableStream(stream, {
+          moduleMap: globalThis['~clientComponents'] || {},
+        })
       }
       catch (e) {
         console.error('[Rari] Failed to parse embedded RSC payload:', e)
@@ -105,25 +99,7 @@ export async function renderApp() {
     }
 
     if (!element) {
-      const rariServerUrl = window.location.origin.includes(':5173')
-        ? 'http://localhost:3000'
-        : window.location.origin
-      const url = rariServerUrl + window.location.pathname + window.location.search
-
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'text/x-component',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch RSC data: ${response.status}`)
-      }
-
-      const rscWireFormat = await response.text()
-      const parsed = parseRscWireFormat(rscWireFormat)
-      element = parsed.element
-      isFullDocument = parsed.isFullDocument
+      throw new Error('No RSC data available for hydration')
     }
 
     let contentToRender
@@ -249,164 +225,6 @@ function injectHeadContent(headElement) {
   }
 }
 
-function parseRscWireFormat(wireFormat, extractBoundaries = false) {
-  const lines = []
-  let currentLine = ''
-  let inString = false
-  let escapeNext = false
-
-  for (let i = 0; i < wireFormat.length; i++) {
-    const char = wireFormat[i]
-
-    if (escapeNext) {
-      currentLine += char
-      escapeNext = false
-      continue
-    }
-
-    if (char === '\\') {
-      currentLine += char
-      escapeNext = true
-      continue
-    }
-
-    if (char === '"' && !escapeNext) {
-      inString = !inString
-      currentLine += char
-      continue
-    }
-
-    if (char === '\n' && !inString) {
-      if (currentLine.trim()) {
-        lines.push(currentLine)
-      }
-      currentLine = ''
-      continue
-    }
-
-    currentLine += char
-  }
-
-  if (currentLine.trim()) {
-    lines.push(currentLine)
-  }
-
-  let rootElement = null
-  let isFullDocument = false
-  const modules = new Map()
-  const symbols = new Map()
-  const layoutBoundaries = []
-  let currentLayoutPath = null
-  let currentLayoutStartLine = null
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex]
-    const colonIndex = line.indexOf(':')
-    if (colonIndex === -1)
-      continue
-
-    const rowId = line.substring(0, colonIndex)
-    const content = line.substring(colonIndex + 1)
-
-    try {
-      if (content.startsWith('"$S') && content.endsWith('"')) {
-        const symbolRef = content.slice(1, -1)
-        symbols.set(rowId, symbolRef)
-        continue
-      }
-
-      if (content.startsWith('I[')) {
-        const importData = JSON.parse(content.substring(1))
-        if (Array.isArray(importData) && importData.length >= 3) {
-          const [path, chunks, exportName] = importData
-          modules.set(`$L${rowId}`, {
-            id: path,
-            chunks: Array.isArray(chunks) ? chunks : [chunks],
-            name: exportName || 'default',
-          })
-
-          if (extractBoundaries && path.includes('layout')) {
-            if (currentLayoutPath !== null && currentLayoutStartLine !== null) {
-              layoutBoundaries.push({
-                layoutPath: currentLayoutPath,
-                startLine: currentLayoutStartLine,
-                endLine: lineIndex - 1,
-                props: {},
-              })
-            }
-
-            currentLayoutPath = path
-            currentLayoutStartLine = lineIndex
-          }
-        }
-      }
-      else if (content.startsWith('[')) {
-        const elementData = JSON.parse(content)
-
-        if (
-          extractBoundaries
-          && Array.isArray(elementData)
-          && elementData.length >= 4
-          && typeof elementData[1] === 'string'
-          && elementData[1].startsWith('$L')
-        ) {
-          const moduleRef = elementData[1]
-          const moduleInfo = modules.get(moduleRef)
-
-          if (moduleInfo && moduleInfo.id.includes('layout')) {
-            const props = elementData[3] || {}
-
-            if (currentLayoutPath && currentLayoutStartLine !== null) {
-              const existingBoundary = layoutBoundaries.find(
-                b => b.layoutPath === currentLayoutPath && b.startLine === currentLayoutStartLine,
-              )
-
-              if (existingBoundary) {
-                existingBoundary.props = props
-              }
-            }
-          }
-        }
-
-        if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
-          rootElement = rscToReact(elementData, modules, symbols)
-          if (elementData[1] === 'html') {
-            isFullDocument = true
-          }
-        }
-      }
-    }
-    catch (e) {
-      console.error('[Rari] Failed to parse RSC line:', line, e)
-    }
-  }
-
-  if (
-    extractBoundaries
-    && currentLayoutPath !== null
-    && currentLayoutStartLine !== null
-  ) {
-    layoutBoundaries.push({
-      layoutPath: currentLayoutPath,
-      startLine: currentLayoutStartLine,
-      endLine: lines.length - 1,
-      props: {},
-    })
-  }
-
-  if (!rootElement) {
-    throw new Error('No root element found in RSC wire format')
-  }
-
-  return {
-    element: rootElement,
-    modules,
-    symbols,
-    isFullDocument,
-    layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
-  }
-}
-
 function rscToReact(rsc, modules, symbols) {
   if (!rsc)
     return null
@@ -427,9 +245,6 @@ function rscToReact(rsc, modules, symbols) {
             const processedProps = processProps(props, modules, symbols)
             return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
           }
-        }
-        else {
-          console.error('[RSC ERROR] Symbol not found or invalid:', { symbolRowId, symbolRef, symbolsSize: symbols?.size })
         }
       }
 

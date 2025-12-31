@@ -217,7 +217,18 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
       const refType = rsc[1]
 
       if (refType === 'L') {
-        return rsc
+        const rowId = rsc.slice(2)
+        const referencedChunk = chunks?.get(rowId)
+
+        if (!referencedChunk) {
+          const suspendPromise = new Promise(() => {})
+
+          suspendPromise._rscLazyRef = rsc
+
+          throw suspendPromise
+        }
+
+        return rscToReact(referencedChunk, wireModules, moduleMap, symbols, chunks)
       }
 
       const rowId = rsc.slice(1)

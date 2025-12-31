@@ -119,13 +119,16 @@ export function registerClientComponent(componentFunction, id, exportName) {
 
   const componentId = componentName
 
-  globalThis['~clientComponents'][componentId] = {
+  const componentInfo = {
     id: componentId,
     path: id,
     type: 'client',
     component: componentFunction,
     registered: true,
   }
+
+  globalThis['~clientComponents'][componentId] = componentInfo
+  globalThis['~clientComponents'][id] = componentInfo
 
   globalThis['~clientComponentPaths'][id] = componentId
 

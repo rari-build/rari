@@ -205,12 +205,8 @@ export interface ClientRouterProps {
 
 interface NavigationState {
   currentRoute: string
-  targetRoute: string | null
-  isNavigating: boolean
   navigationId: number
   error: NavigationError | null
-  showingLoadingComponent: boolean
-  loadingComponentRoute: string | null
 }
 
 interface PendingNavigation {
@@ -231,12 +227,8 @@ interface HistoryState {
 export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute: normalizePath(initialRoute),
-    targetRoute: null,
-    isNavigating: false,
     navigationId: 0,
     error: null,
-    showingLoadingComponent: false,
-    loadingComponentRoute: null,
   }))
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -288,10 +280,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     if (isMountedRef.current && navigationState.navigationId === navigationId) {
       setNavigationState(prev => ({
         ...prev,
-        targetRoute: null,
-        isNavigating: false,
-        showingLoadingComponent: false,
-        loadingComponentRoute: null,
       }))
     }
   }
@@ -319,11 +307,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       return existingPending.promise
     }
 
-    if (navigationState.isNavigating && navigationState.targetRoute !== targetPath) {
-      navigationQueueRef.current.push({ path: targetPath, options })
-      return
-    }
-
     const routeInfo = await getRouteInfo(targetPath)
 
     cancelAllPendingNavigations()
@@ -333,28 +316,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     abortControllerRef.current = abortController
 
     const navigationId = navigationState.navigationId + 1
-
-    const loadingComponentPath = routeInfo.loading
-
-    setNavigationState(prev => ({
-      ...prev,
-      targetRoute: targetPath,
-      isNavigating: true,
-      navigationId,
-      error: null,
-      showingLoadingComponent: !!loadingComponentPath,
-      loadingComponentRoute: loadingComponentPath,
-    }))
-
-    if (loadingComponentPath) {
-      window.dispatchEvent(new CustomEvent('rari:show-loading', {
-        detail: {
-          route: targetPath,
-          navigationId,
-          loadingPath: loadingComponentPath,
-        },
-      }))
-    }
 
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current
@@ -427,8 +388,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
             routeInfo,
             abortSignal: abortController.signal,
             rscWireFormat,
-            loadingComponentPath,
-            hasLoadingComponent: !!loadingComponentPath,
           },
         }))
 
@@ -443,11 +402,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           setNavigationState(prev => ({
             ...prev,
             currentRoute: targetPath,
-            targetRoute: null,
-            isNavigating: false,
             error: null,
-            showingLoadingComponent: false,
-            loadingComponentRoute: null,
           }))
 
           errorHandlerRef.current.resetRetry(targetPath)
@@ -474,11 +429,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         if (isMountedRef.current) {
           setNavigationState(prev => ({
             ...prev,
-            targetRoute: null,
-            isNavigating: false,
             error: navError,
-            showingLoadingComponent: false,
-            loadingComponentRoute: null,
           }))
         }
 
@@ -508,7 +459,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   }
 
   const processNavigationQueue = async () => {
-    if (navigationQueueRef.current.length === 0 || navigationState.isNavigating) {
+    if (navigationQueueRef.current.length === 0) {
       return
     }
 
