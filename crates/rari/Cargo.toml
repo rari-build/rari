@@ -138,10 +138,7 @@ thiserror = "2.0.17"
 # === System Integration ===
 hyper-util = { version = "0.1.19", features = [
   "tokio",
-  "client",
   "client-legacy",
-  "server",
-  "server-auto",
 ] }
 libc = "0.2.178"
 nix = { version = "=0.27.1", features = [ "term" ] }
