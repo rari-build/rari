@@ -31,12 +31,26 @@ if (typeof window !== 'undefined') {
     }
 
     try {
-      const parts = rscRow.split(':')
-      if (parts.length < 2) {
+      const colonIndex = rscRow.indexOf(':')
+      if (colonIndex === -1) {
+        console.warn('[Rari] Invalid RSC row format (no colon):', rscRow)
         return
       }
 
-      const content = JSON.parse(parts.slice(1).join(':'))
+      const contentStr = rscRow.substring(colonIndex + 1)
+
+      if (contentStr.startsWith('I[')) {
+        return
+      }
+
+      let content
+      try {
+        content = JSON.parse(contentStr)
+      }
+      catch (parseError) {
+        console.error('[Rari] Failed to parse RSC content:', contentStr, parseError)
+        return
+      }
 
       function rscToHtml(element) {
         if (!element) {
@@ -501,10 +515,7 @@ class RscClient {
               const rowId = line.substring(0, colonIndex)
               const content = line.substring(colonIndex + 1)
 
-              if (content.includes('STREAM_COMPLETE')) {
-                // Stream complete
-              }
-              else if (content.startsWith('I[')) {
+              if (content.startsWith('I[')) {
                 try {
                   const importData = JSON.parse(content.substring(1))
                   if (Array.isArray(importData) && importData.length >= 3) {
@@ -1235,7 +1246,6 @@ if (import.meta.hot) {
         routes = affectedRoutes
         break
       default:
-        // Unknown file type, skip
         break
     }
 
