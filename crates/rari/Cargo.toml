@@ -65,7 +65,7 @@ deno_io = "0.135.0"
 
 # === Advanced Features ===
 deno_telemetry = "0.47.0"
-deno_terminal = "=0.2.3"
+deno_terminal = "0.2.3"
 deno_webgpu = "0.192.0"
 deno_kv = "0.133.0"
 deno_cron = "0.105.0"
@@ -147,9 +147,9 @@ sysinfo = "0.37.2"
 
 # === Development Tools ===
 rustyline = "=13.0.0"
-deno_ast = { version = "=0.52.0", features = [ "transpiling" ] }
+deno_ast = { version = "0.52.0", features = [ "transpiling" ] }
 deno_package_json = { version = "0.27.0", default-features = false }
-deno_semver = "=0.9.1"
+deno_semver = "0.9.1"
 
 # === Platform-specific Dependencies ===
 winapi = { version = "0.3.9", features = [
