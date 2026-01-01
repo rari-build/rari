@@ -23,6 +23,14 @@ if (typeof window !== 'undefined') {
     window['~rari'].bufferedEvents = []
   }
 
+  if (!window['~rari'].boundaryModules) {
+    window['~rari'].boundaryModules = new Map()
+  }
+
+  if (!window['~rari'].pendingBoundaryHydrations) {
+    window['~rari'].pendingBoundaryHydrations = new Map()
+  }
+
   globalThis['~rari'].processBoundaryUpdate = function (boundaryId, rscRow, rowId) {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
@@ -37,9 +45,25 @@ if (typeof window !== 'undefined') {
         return
       }
 
+      const actualRowId = rscRow.substring(0, colonIndex)
       const contentStr = rscRow.substring(colonIndex + 1)
 
       if (contentStr.startsWith('I[')) {
+        try {
+          const importData = JSON.parse(contentStr.substring(1))
+          if (Array.isArray(importData) && importData.length >= 3) {
+            const [path, chunks, exportName] = importData
+            const moduleKey = `$L${actualRowId}`
+            window['~rari'].boundaryModules.set(moduleKey, {
+              id: path,
+              chunks: Array.isArray(chunks) ? chunks : [chunks],
+              name: exportName || 'default',
+            })
+          }
+        }
+        catch (e) {
+          console.error('[Rari] Failed to parse import row:', contentStr, e)
+        }
         return
       }
 
@@ -49,6 +73,45 @@ if (typeof window !== 'undefined') {
       }
       catch (parseError) {
         console.error('[Rari] Failed to parse RSC content:', contentStr, parseError)
+        return
+      }
+
+      function containsClientComponents(element) {
+        if (!element) {
+          return false
+        }
+
+        if (typeof element === 'string') {
+          return element.startsWith('$L')
+        }
+
+        if (Array.isArray(element)) {
+          if (element.length >= 4 && element[0] === '$') {
+            const [, tag] = element
+            if (typeof tag === 'string' && tag.startsWith('$L')) {
+              return true
+            }
+            const props = element[3]
+            if (props && props.children) {
+              return containsClientComponents(props.children)
+            }
+          }
+          return element.some(child => containsClientComponents(child))
+        }
+
+        return false
+      }
+
+      if (containsClientComponents(content)) {
+        window['~rari'].pendingBoundaryHydrations.set(boundaryId, {
+          content,
+          element: boundaryElement,
+          rowId,
+        })
+
+        if (globalThis['~rari'].hydrateClientComponents) {
+          globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
+        }
         return
       }
 
@@ -70,11 +133,13 @@ if (typeof window !== 'undefined') {
             if (props) {
               for (const [key, value] of Object.entries(props)) {
                 if (key !== 'children' && key !== '~boundaryId') {
+                  const attrName = key === 'className' ? 'class' : key
+
                   if (typeof value === 'string') {
-                    attrs += ` ${key}="${value.replace(/"/g, '&quot;')}"`
+                    attrs += ` ${attrName}="${value.replace(/"/g, '&quot;')}"`
                   }
                   else if (typeof value === 'boolean' && value) {
-                    attrs += ` ${key}`
+                    attrs += ` ${attrName}`
                   }
                 }
               }
