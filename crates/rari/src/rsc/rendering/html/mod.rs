@@ -694,17 +694,13 @@ impl RscToHtmlConverter {
                         }
                     }
                 } else {
-                    let rsc_line = String::from_utf8_lossy(&chunk.data);
-                    let escaped_row = rsc_line
-                        .trim()
-                        .replace('\\', "\\\\")
-                        .replace('\'', "\\'")
-                        .replace('\n', "\\n");
-                    let script = format!(
-                        r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
-                        escaped_row, escaped_row
-                    );
-                    script.into_bytes()
+                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
+                        Ok(rsc_html) => rsc_html,
+                        Err(e) => {
+                            error!("Error parsing RSC: {}", e);
+                            Vec::new()
+                        }
+                    }
                 };
                 Ok(html)
             }
@@ -897,7 +893,8 @@ if (typeof window !== 'undefined') {{
                     let row_id: u32 = stripped.parse().map_err(|_| {
                         RariError::internal(format!("Invalid row reference: {}", s))
                     })?;
-                    return Ok(self.row_cache.get(&row_id).cloned().unwrap_or_default());
+                    let cached = self.row_cache.get(&row_id).cloned().unwrap_or_default();
+                    return Ok(cached);
                 }
 
                 if s.starts_with('$') && s.len() > 1 && s[1..].chars().all(|c| c.is_ascii_digit()) {

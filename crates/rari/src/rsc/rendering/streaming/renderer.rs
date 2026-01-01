@@ -717,10 +717,14 @@ impl StreamingRenderer {
                                 if let Some(json_str) = check_data.as_str() {
                                     if let Ok(parsed) =
                                         serde_json::from_str::<serde_json::Value>(json_str)
-                                        && parsed
+                                        && (parsed
                                             .get("complete")
                                             .and_then(|v| v.as_bool())
                                             .unwrap_or(false)
+                                            || parsed
+                                                .get("initialComplete")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false))
                                     {
                                         let mut tx = completion_tx_clone.lock().await;
                                         if let Some(sender) = tx.take() {
@@ -732,6 +736,10 @@ impl StreamingRenderer {
                                     .get("complete")
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(false)
+                                    || check_data
+                                        .get("initialComplete")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false)
                                 {
                                     let mut tx = completion_tx_clone.lock().await;
                                     if let Some(sender) = tx.take() {

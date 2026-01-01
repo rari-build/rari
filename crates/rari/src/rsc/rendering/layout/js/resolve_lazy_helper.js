@@ -5,14 +5,20 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
         throw new Error('No pending promises found')
       }
 
-      const promise = globalThis.__RARI_PENDING_PROMISES__.get(promiseId)
-      if (!promise) {
+      const promiseOrDeferred = globalThis.__RARI_PENDING_PROMISES__.get(promiseId)
+      if (!promiseOrDeferred) {
         throw new Error(`Promise not found: ${promiseId}`)
       }
 
       let result
       try {
-        result = await promise
+        if (promiseOrDeferred.isDeferred) {
+          const promise = promiseOrDeferred.component(promiseOrDeferred.props)
+          result = await promise
+        }
+        else {
+          result = await promiseOrDeferred
+        }
       }
       catch (promiseError) {
         globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)

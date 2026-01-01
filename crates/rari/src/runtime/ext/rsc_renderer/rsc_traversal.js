@@ -266,7 +266,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
   }
 
   if (isSuspenseComponent(type)) {
-    const boundaryId = `boundary:${globalThis['~rsc'].keyCounter++}`
+    const boundaryId = props?.['~boundaryId'] || `boundary:${globalThis['~rsc'].keyCounter++}`
 
     if (!globalThis['~suspense'])
       globalThis['~suspense'] = {}

@@ -29,13 +29,11 @@ else {
       const promiseId = '{page_component_id}_promise'
 
       if (!globalThis.__RARI_PENDING_PROMISES__.has(promiseId)) {
-        const promise = PageComponent(pageProps)
-
-        promise.catch((err) => {
-          console.error('[RARI] Promise rejected:', promiseId, err)
+        globalThis.__RARI_PENDING_PROMISES__.set(promiseId, {
+          component: PageComponent,
+          props: pageProps,
+          isDeferred: true,
         })
-
-        globalThis.__RARI_PENDING_PROMISES__.set(promiseId, promise)
       }
 
       const lazyMarker = {
@@ -48,7 +46,7 @@ else {
       const loadingFallback = React.createElement(LoadingComponent)
       var pageElement = React.createElement(
         React.Suspense,
-        { fallback: loadingFallback },
+        { 'fallback': loadingFallback, '~boundaryId': promiseId },
         lazyMarker,
       )
     }

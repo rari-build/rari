@@ -32,9 +32,8 @@ export async function renderApp() {
 
   const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
   const hasServerRenderedContent = rootElement.children.length > 0
-  const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
 
-  if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
+  if (hasServerRenderedContent && !payloadScript) {
     return
   }
 
@@ -42,55 +41,62 @@ export async function renderApp() {
     let element
     const isFullDocument = false
 
-    if (hasBufferedRows) {
-      const stream = new ReadableStream({
-        start(controller) {
-          if (window['~rari']?.bufferedRows) {
-            for (const row of window['~rari'].bufferedRows) {
-              controller.enqueue(new TextEncoder().encode(`${row}\n`))
-            }
-            window['~rari'].bufferedRows = []
-          }
-
-          const handleStreamUpdate = (event) => {
-            if (event.detail?.rscRow) {
-              controller.enqueue(new TextEncoder().encode(`${event.detail.rscRow}\n`))
-            }
-          }
-
-          const handleStreamComplete = () => {
-            controller.close()
-            window.removeEventListener('rari:rsc-row', handleStreamUpdate)
-            window.removeEventListener('rari:stream-complete', handleStreamComplete)
-          }
-
-          window.addEventListener('rari:rsc-row', handleStreamUpdate)
-          window.addEventListener('rari:stream-complete', handleStreamComplete)
-
-          if (window['~rari']?.streamComplete) {
-            handleStreamComplete()
-          }
-        },
-      })
-
-      element = await createFromReadableStream(stream, {
-        moduleMap: globalThis['~clientComponents'] || {},
-      })
-    }
-    else if (payloadScript && payloadScript.textContent) {
+    if (payloadScript && payloadScript.textContent) {
       try {
         const payloadJson = payloadScript.textContent
 
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(payloadJson))
-            controller.close()
-          },
-        })
+        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
 
-        element = await createFromReadableStream(stream, {
-          moduleMap: globalThis['~clientComponents'] || {},
-        })
+        if (isStreaming) {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+
+              if (window['~rari']?.bufferedRows) {
+                for (const row of window['~rari'].bufferedRows) {
+                  controller.enqueue(new TextEncoder().encode(`\n${row}`))
+                }
+                window['~rari'].bufferedRows = []
+              }
+
+              const handleStreamUpdate = (event) => {
+                if (event.detail?.rscRow) {
+                  controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
+                }
+              }
+
+              const handleStreamComplete = () => {
+                controller.close()
+                window.removeEventListener('rari:rsc-row', handleStreamUpdate)
+                window.removeEventListener('rari:stream-complete', handleStreamComplete)
+              }
+
+              window.addEventListener('rari:rsc-row', handleStreamUpdate)
+              window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+              if (window['~rari']?.streamComplete) {
+                handleStreamComplete()
+              }
+            },
+          })
+
+          element = await createFromReadableStream(stream, {
+            moduleMap: globalThis['~clientComponents'] || {},
+          })
+        }
+        else {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+              controller.close()
+            },
+          })
+
+          element = await createFromReadableStream(stream, {
+            moduleMap: globalThis['~clientComponents'] || {},
+          })
+        }
       }
       catch (e) {
         console.error('[Rari] Failed to parse embedded RSC payload:', e)

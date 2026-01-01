@@ -508,8 +508,9 @@ impl LayoutRenderer {
         >,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
+        let is_not_found = route_match.not_found.is_some();
 
-        if let Some(cached_html) = self.html_cache.get(cache_key) {
+        if is_not_found && let Some(cached_html) = self.html_cache.get(cache_key) {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -629,12 +630,15 @@ impl LayoutRenderer {
                 (wire_format, promises)
             };
 
+            let runtime_for_task = Arc::clone(&renderer.runtime);
+            let serializer_for_task = Arc::clone(&renderer.serializer);
+
+            drop(renderer);
+
             let wire_lines: Vec<String> = rsc_wire_format.lines().map(|s| s.to_string()).collect();
 
             let (chunk_sender, chunk_receiver) =
                 mpsc::channel::<crate::rsc::rendering::streaming::RscStreamChunk>(64);
-
-            let renderer_clone = Arc::clone(&self.renderer);
 
             tokio::spawn(async move {
                 let mut row_id = 0u32;
@@ -671,15 +675,14 @@ impl LayoutRenderer {
                         lazy_promise.promise_id
                     );
 
-                    let renderer = renderer_clone.lock().await;
-                    match renderer
-                        .runtime
+                    let result = runtime_for_task
                         .execute_script(
                             format!("resolve_promise_{}", lazy_promise.promise_id),
                             resolve_script,
                         )
-                        .await
-                    {
+                        .await;
+
+                    match result {
                         Ok(result) => {
                             if let Some(success) = result.get("success").and_then(|v| v.as_bool())
                                 && !success
@@ -699,7 +702,7 @@ impl LayoutRenderer {
                             let resolved_content = result.get("data").unwrap_or(&result);
 
                             let wire_format = {
-                                let mut serializer = renderer.serializer.lock();
+                                let mut serializer = serializer_for_task.lock();
                                 match serializer.serialize_rsc_json(resolved_content) {
                                     Ok(wire_format) => wire_format,
                                     Err(e) => {
