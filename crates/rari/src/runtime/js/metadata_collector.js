@@ -77,9 +77,7 @@
           return module.metadata
         }
       }
-      catch (importError) {
-        // Import failed, that's okay - module might not be an ES module
-      }
+      catch (importError) {}
 
       return {}
     }
