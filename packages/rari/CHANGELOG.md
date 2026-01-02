@@ -1,3 +1,47 @@
+## [0.5.23] - 2026-01-02
+
+### 🚀 Features
+
+- *(rsc)* Improve streaming updates
+- *(rsc)* Enhance lazy loading and streaming completion handling
+- *(rsc-client-runtime)* Improve RSC row parsing
+- *(rsc)* Optimize lazy loading and promise resolution handling
+- *(rari)* Implement partial hydration and dynamic module loading
+- *(rsc)* Implement lazy promise resolution and streaming suspense
+- *(rsc)* Rename internal module markers from double underscore to tilde prefix
+- *(rari)* Add chunked transfer encoding to streaming RSC responses
+- *(server)* Add stream compression support with zstd, brotli, and gzip
+- *(docs)* Make DocPage component async
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Correct row ID generation in serializer
+- *(rari)* Remove debug console.warn statements from RSC client
+
+### 🚜 Refactor
+
+- *(rsc)* Extract HTML closing generation into dedicated method
+- *(server)* Remove x-accel-buffering header from streaming responses
+- *(rsc)* Remove suspense module and consolidate functionality
+- *(docs)* Simplify doc page layout and remove wrapper divs
+
+### 🎨 Styling
+
+- *(rari)* Remove unnecessary comment
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Migrate deployment config from railway to railpack
+- *(docs)* Config fix
+- *(docs)* Remove railpack builder config, it's default
+- *(docs)* Reverting config change
+- *(workspace)* Remove catalogMode
+- *(release)* Bump rari binary version to 0.5.23
+## [rari@0.5.28] - 2025-12-24
+
+### 💼 Other
+
+- Rari@0.5.28
 ## [0.5.22] - 2025-12-24
 
 ### 🚀 Features
