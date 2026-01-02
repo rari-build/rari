@@ -9,11 +9,7 @@ export default async function DocPage({ params }: PageProps) {
   if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {
     return <div>Invalid documentation path.</div>
   }
-  return (
-    <div className="prose prose-invert max-w-none overflow-hidden">
-      <MdxRenderer filePath={`${slug}.mdx`} />
-    </div>
-  )
+  return <MdxRenderer filePath={`${slug}.mdx`} />
 }
 
 export async function getData({ params }: PageProps) {
