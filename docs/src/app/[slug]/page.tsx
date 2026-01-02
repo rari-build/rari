@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
 
-export default function DocPage({ params }: PageProps) {
+export default async function DocPage({ params }: PageProps) {
   const slug = params?.slug
   if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {
     return <div>Invalid documentation path.</div>
