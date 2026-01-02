@@ -674,18 +674,6 @@ impl RscToHtmlConverter {
                         Ok(rsc_html) => {
                             output.extend(rsc_html);
 
-                            for buffered_line in &self.rsc_wire_format {
-                                let escaped_row = buffered_line
-                                    .replace('\\', "\\\\")
-                                    .replace('\'', "\\'")
-                                    .replace('\n', "\\n");
-                                let script = format!(
-                                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
-                                    escaped_row, escaped_row
-                                );
-                                output.extend(script.as_bytes());
-                            }
-
                             output
                         }
                         Err(e) => {
@@ -723,24 +711,7 @@ impl RscToHtmlConverter {
                 }
             },
 
-            RscChunkType::StreamComplete => {
-                let csrf_script = self.csrf_script.as_deref().unwrap_or("");
-                let closing = format!(
-                    r#"
-{}
-<script>
-if (typeof window !== 'undefined') {{
-    if (!window['~rari']) window['~rari'] = {{}};
-    window['~rari'].streamComplete = true;
-    window.dispatchEvent(new Event('rari:stream-complete'));
-}}
-</script>
-</body>
-</html>"#,
-                    csrf_script
-                );
-                Ok(closing.as_bytes().to_vec())
-            }
+            RscChunkType::StreamComplete => Ok(self.generate_html_closing()),
         };
 
         if let Err(ref e) = result {
