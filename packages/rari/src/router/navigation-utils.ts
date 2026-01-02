@@ -6,18 +6,8 @@ export function parseRoutePath(path: string): string[] {
   return normalized ? normalized.split('/') : []
 }
 
-export function parseSearchParams(url: string): URLSearchParams {
-  try {
-    const urlObj = new URL(url, 'http://localhost')
-    return urlObj.searchParams
-  }
-  catch {
-    return new URLSearchParams()
-  }
-}
-
 export function matchRouteParams(
-  routePath: string,
+  _routePath: string,
   routeSegments: RouteSegment[],
   actualPath: string,
 ): Record<string, string | string[]> | null {
@@ -115,11 +105,6 @@ export function findLayoutChain(
   return chain
 }
 
-export function clearLayoutChainCache(): void {
-  layoutChainCache.clear()
-  cachedManifestVersion = undefined
-}
-
 export function findCommonLayoutChainLength(
   chain1: LayoutEntry[],
   chain2: LayoutEntry[],
@@ -138,12 +123,6 @@ export function findCommonLayoutChainLength(
   }
 
   return commonLength
-}
-
-export function areRoutesEqual(path1: string, path2: string): boolean {
-  const normalized1 = normalizePath(path1)
-  const normalized2 = normalizePath(path2)
-  return normalized1 === normalized2
 }
 
 export function normalizePath(path: string): string {

@@ -9,8 +9,6 @@ export { RariResponse } from './api-routes'
 export type Request = globalThis.Request
 export type Response = globalThis.Response
 
-export { headers } from './async-context'
-
 export type {
   AppRouteEntry,
   AppRouteManifest,

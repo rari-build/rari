@@ -124,14 +124,3 @@ export function debounce<T extends (...args: any[]) => any>(
 
   return debounced
 }
-
-export function throttle<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number,
-): (...args: Parameters<T>) => void {
-  return debounce(func, wait, {
-    leading: true,
-    trailing: true,
-    maxWait: wait,
-  })
-}
