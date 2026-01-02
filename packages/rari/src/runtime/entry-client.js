@@ -1,5 +1,6 @@
+/* eslint-disable no-undef */
 import { ClientRouter } from 'rari/client'
-import React from 'react'
+import React, { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
@@ -23,6 +24,113 @@ if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
 
 // CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
 
+function setupPartialHydration() {
+  if (globalThis['~rari'].hydrateClientComponents) {
+    return
+  }
+
+  globalThis['~rari'].hydrateClientComponents = function (_boundaryId, content, boundaryElement) {
+    const modules = window['~rari'].boundaryModules || new Map()
+
+    function rscToReactElement(element) {
+      if (!element) {
+        return null
+      }
+
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+        return element
+      }
+
+      if (Array.isArray(element)) {
+        if (element.length >= 4 && element[0] === '$') {
+          const [, type, key, props] = element
+
+          const processedProps = props ? { ...props } : {}
+          if (props?.children) {
+            processedProps.children = rscToReactElement(props.children)
+          }
+
+          if (processedProps['~boundaryId']) {
+            delete processedProps['~boundaryId']
+          }
+
+          if (typeof type === 'string') {
+            if (type.startsWith('$L')) {
+              const mod = modules.get(type)
+
+              if (mod) {
+                const clientKey = `${mod.id}#${mod.name || 'default'}`
+                let clientComponent = null
+
+                if (globalThis['~clientComponents'][clientKey]) {
+                  clientComponent = globalThis['~clientComponents'][clientKey].component
+                }
+                else if (globalThis['~clientComponents'][mod.id]) {
+                  clientComponent = globalThis['~clientComponents'][mod.id].component
+                }
+
+                if (clientComponent) {
+                  return React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
+                }
+                else {
+                  return processedProps.children || null
+                }
+              }
+              return processedProps.children || null
+            }
+
+            return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+          }
+
+          return null
+        }
+
+        return element.map((child, index) => {
+          const result = rscToReactElement(child)
+          if (React.isValidElement(result) && !result.key) {
+            // eslint-disable-next-line react/no-clone-element
+            return React.cloneElement(result, { key: index })
+          }
+          return result
+        })
+      }
+
+      return element
+    }
+
+    try {
+      const reactElement = rscToReactElement(content)
+
+      if (reactElement) {
+        const root = createRoot(boundaryElement)
+        root.render(reactElement)
+        boundaryElement.classList.add('rari-boundary-hydrated')
+      }
+    }
+    catch (error) {
+      console.error('[Rari] Failed to hydrate client components:', error)
+      console.error('[Rari] Error stack:', error.stack)
+    }
+  }
+}
+
+function processPendingBoundaryHydrations() {
+  const pending = window['~rari'].pendingBoundaryHydrations
+  if (!pending || pending.size === 0) {
+    return
+  }
+
+  for (const [boundaryId, data] of pending.entries()) {
+    if (globalThis['~rari'].hydrateClientComponents) {
+      globalThis['~rari'].hydrateClientComponents(boundaryId, data.content, data.element)
+    }
+  }
+
+  pending.clear()
+}
+
+setupPartialHydration()
+
 export async function renderApp() {
   const rootElement = document.getElementById('root')
   if (!rootElement) {
@@ -30,53 +138,231 @@ export async function renderApp() {
     return
   }
 
+  const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
+  const hasServerRenderedContent = rootElement.children.length > 0
+  const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+
+  setupPartialHydration()
+
+  if (hasServerRenderedContent && hasBufferedRows && !payloadScript) {
+    const hasBoundaries = document.querySelectorAll('[data-boundary-id]').length > 0
+
+    if (hasBoundaries) {
+      const hasPendingBoundaries = window['~rari'].pendingBoundaryHydrations
+        && window['~rari'].pendingBoundaryHydrations.size > 0
+
+      if (hasPendingBoundaries) {
+        processPendingBoundaryHydrations()
+      }
+
+      return
+    }
+  }
+
+  if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
+    return
+  }
+
   try {
     let element
-    let isFullDocument = false
-
-    const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
+    const isFullDocument = false
 
     if (payloadScript && payloadScript.textContent) {
       try {
         const payloadJson = payloadScript.textContent
 
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(payloadJson))
-            controller.close()
-          },
-        })
+        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
 
-        element = await createFromReadableStream(stream, {
-          moduleMap: globalThis['~clientComponents'] || {},
-        })
+        if (isStreaming) {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+
+              if (window['~rari']?.bufferedRows) {
+                for (const row of window['~rari'].bufferedRows) {
+                  controller.enqueue(new TextEncoder().encode(`\n${row}`))
+                }
+                window['~rari'].bufferedRows = []
+              }
+
+              const handleStreamUpdate = (event) => {
+                if (event.detail?.rscRow) {
+                  controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
+                }
+              }
+
+              const handleStreamComplete = () => {
+                controller.close()
+                window.removeEventListener('rari:rsc-row', handleStreamUpdate)
+                window.removeEventListener('rari:stream-complete', handleStreamComplete)
+              }
+
+              window.addEventListener('rari:rsc-row', handleStreamUpdate)
+              window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+              if (window['~rari']?.streamComplete) {
+                handleStreamComplete()
+              }
+            },
+          })
+
+          const ssrManifest = {
+            moduleMap: new Proxy({}, {
+              get(_target, moduleId) {
+                return new Proxy({}, {
+                  get(_moduleTarget, exportName) {
+                    return {
+                      id: `${moduleId}#${exportName}`,
+                      chunks: [],
+                      name: exportName,
+                    }
+                  },
+                })
+              },
+            }),
+            moduleLoading: new Proxy({}, {
+              get(_target, moduleId) {
+                return {
+                  async [exportName]() {
+                    try {
+                      const module = await import(/* @vite-ignore */ `/${moduleId}`)
+                      return module[exportName] || module.default
+                    }
+                    catch (error) {
+                      console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                      return null
+                    }
+                  },
+                }[exportName]
+              },
+            }),
+          }
+
+          element = await createFromReadableStream(stream, ssrManifest)
+        }
+        else {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(payloadJson))
+              controller.close()
+            },
+          })
+
+          const ssrManifest = {
+            moduleMap: new Proxy({}, {
+              get(_target, moduleId) {
+                return new Proxy({}, {
+                  get(_moduleTarget, exportName) {
+                    return {
+                      id: `${moduleId}#${exportName}`,
+                      chunks: [],
+                      name: exportName,
+                    }
+                  },
+                })
+              },
+            }),
+            moduleLoading: new Proxy({}, {
+              get(_target, moduleId) {
+                return {
+                  async [exportName]() {
+                    try {
+                      const module = await import(/* @vite-ignore */ `/${moduleId}`)
+                      return module[exportName] || module.default
+                    }
+                    catch (error) {
+                      console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                      return null
+                    }
+                  },
+                }[exportName]
+              },
+            }),
+          }
+
+          element = await createFromReadableStream(stream, ssrManifest)
+        }
       }
       catch (e) {
         console.error('[Rari] Failed to parse embedded RSC payload:', e)
         element = null
       }
     }
+    else if (hasBufferedRows) {
+      try {
+        const stream = new ReadableStream({
+          start(controller) {
+            if (window['~rari']?.bufferedRows) {
+              for (const row of window['~rari'].bufferedRows) {
+                controller.enqueue(new TextEncoder().encode(`${row}\n`))
+              }
+              window['~rari'].bufferedRows = []
+            }
+
+            const handleStreamUpdate = (event) => {
+              if (event.detail?.rscRow) {
+                controller.enqueue(new TextEncoder().encode(`${event.detail.rscRow}\n`))
+              }
+            }
+
+            const handleStreamComplete = () => {
+              controller.close()
+              window.removeEventListener('rari:rsc-row', handleStreamUpdate)
+              window.removeEventListener('rari:stream-complete', handleStreamComplete)
+            }
+
+            window.addEventListener('rari:rsc-row', handleStreamUpdate)
+            window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+            if (window['~rari']?.streamComplete) {
+              handleStreamComplete()
+            }
+          },
+        })
+
+        const ssrManifest = {
+          moduleMap: new Proxy({}, {
+            get(_target, moduleId) {
+              return new Proxy({}, {
+                get(_moduleTarget, exportName) {
+                  return {
+                    id: `${moduleId}#${exportName}`,
+                    chunks: [],
+                    name: exportName,
+                  }
+                },
+              })
+            },
+          }),
+          moduleLoading: new Proxy({}, {
+            get(_target, moduleId) {
+              return {
+                async [exportName]() {
+                  try {
+                    const module = await import(/* @vite-ignore */ `/${moduleId}`)
+                    return module[exportName] || module.default
+                  }
+                  catch (error) {
+                    console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                    return null
+                  }
+                },
+              }[exportName]
+            },
+          }),
+        }
+
+        element = await createFromReadableStream(stream, ssrManifest)
+      }
+      catch (e) {
+        console.error('[Rari] Failed to process streaming RSC payload:', e)
+        element = null
+      }
+    }
 
     if (!element) {
-      const rariServerUrl = window.location.origin.includes(':5173')
-        ? 'http://localhost:3000'
-        : window.location.origin
-      const url = rariServerUrl + window.location.pathname + window.location.search
-
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'text/x-component',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch RSC data: ${response.status}`)
-      }
-
-      const rscWireFormat = await response.text()
-      const parsed = parseRscWireFormat(rscWireFormat)
-      element = parsed.element
-      isFullDocument = parsed.isFullDocument
+      throw new Error('No RSC data available for hydration')
     }
 
     let contentToRender
@@ -202,157 +488,7 @@ function injectHeadContent(headElement) {
   }
 }
 
-function parseRscWireFormat(wireFormat, extractBoundaries = false) {
-  const lines = []
-  let currentLine = ''
-  let inString = false
-  let escapeNext = false
-
-  for (let i = 0; i < wireFormat.length; i++) {
-    const char = wireFormat[i]
-
-    if (escapeNext) {
-      currentLine += char
-      escapeNext = false
-      continue
-    }
-
-    if (char === '\\') {
-      currentLine += char
-      escapeNext = true
-      continue
-    }
-
-    if (char === '"' && !escapeNext) {
-      inString = !inString
-      currentLine += char
-      continue
-    }
-
-    if (char === '\n' && !inString) {
-      if (currentLine.trim()) {
-        lines.push(currentLine)
-      }
-      currentLine = ''
-      continue
-    }
-
-    currentLine += char
-  }
-
-  if (currentLine.trim()) {
-    lines.push(currentLine)
-  }
-
-  let rootElement = null
-  let isFullDocument = false
-  const modules = new Map()
-  const layoutBoundaries = []
-  let currentLayoutPath = null
-  let currentLayoutStartLine = null
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex]
-    const colonIndex = line.indexOf(':')
-    if (colonIndex === -1)
-      continue
-
-    const rowId = line.substring(0, colonIndex)
-    const content = line.substring(colonIndex + 1)
-
-    try {
-      if (content.startsWith('I[')) {
-        const importData = JSON.parse(content.substring(1))
-        if (Array.isArray(importData) && importData.length >= 3) {
-          const [path, chunks, exportName] = importData
-          modules.set(`$L${rowId}`, {
-            id: path,
-            chunks: Array.isArray(chunks) ? chunks : [chunks],
-            name: exportName || 'default',
-          })
-
-          if (extractBoundaries && path.includes('layout')) {
-            if (currentLayoutPath !== null && currentLayoutStartLine !== null) {
-              layoutBoundaries.push({
-                layoutPath: currentLayoutPath,
-                startLine: currentLayoutStartLine,
-                endLine: lineIndex - 1,
-                props: {},
-              })
-            }
-
-            currentLayoutPath = path
-            currentLayoutStartLine = lineIndex
-          }
-        }
-      }
-      else if (content.startsWith('[')) {
-        const elementData = JSON.parse(content)
-
-        if (
-          extractBoundaries
-          && Array.isArray(elementData)
-          && elementData.length >= 4
-          && typeof elementData[1] === 'string'
-          && elementData[1].startsWith('$L')
-        ) {
-          const moduleRef = elementData[1]
-          const moduleInfo = modules.get(moduleRef)
-
-          if (moduleInfo && moduleInfo.id.includes('layout')) {
-            const props = elementData[3] || {}
-
-            if (currentLayoutPath && currentLayoutStartLine !== null) {
-              const existingBoundary = layoutBoundaries.find(
-                b => b.layoutPath === currentLayoutPath && b.startLine === currentLayoutStartLine,
-              )
-
-              if (existingBoundary) {
-                existingBoundary.props = props
-              }
-            }
-          }
-        }
-
-        if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
-          rootElement = rscToReact(elementData, modules)
-          if (elementData[1] === 'html') {
-            isFullDocument = true
-          }
-        }
-      }
-    }
-    catch (e) {
-      console.error('[Rari] Failed to parse RSC line:', line, e)
-    }
-  }
-
-  if (
-    extractBoundaries
-    && currentLayoutPath !== null
-    && currentLayoutStartLine !== null
-  ) {
-    layoutBoundaries.push({
-      layoutPath: currentLayoutPath,
-      startLine: currentLayoutStartLine,
-      endLine: lines.length - 1,
-      props: {},
-    })
-  }
-
-  if (!rootElement) {
-    throw new Error('No root element found in RSC wire format')
-  }
-
-  return {
-    element: rootElement,
-    modules,
-    isFullDocument,
-    layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
-  }
-}
-
-function rscToReact(rsc, modules) {
+function rscToReact(rsc, modules, symbols) {
   if (!rsc)
     return null
 
@@ -363,6 +499,26 @@ function rscToReact(rsc, modules) {
   if (Array.isArray(rsc)) {
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
+      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && /^\d+$/.test(type.slice(1))) {
+        const symbolRowId = type.slice(1)
+        const symbolRef = symbols?.get(symbolRowId)
+        if (symbolRef && symbolRef.startsWith('$S')) {
+          const symbolName = symbolRef.slice(2)
+          if (symbolName === 'react.suspense') {
+            const processedProps = processProps(props, modules, symbols)
+            return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
+          }
+        }
+      }
+
+      if (typeof type === 'string' && type.startsWith('$S')) {
+        const symbolName = type.slice(2)
+        if (symbolName === 'react.suspense') {
+          const processedProps = processProps(props, modules, symbols)
+          return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
+        }
+        return null
+      }
 
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
@@ -371,7 +527,7 @@ function rscToReact(rsc, modules) {
           if (Component) {
             const childProps = {
               ...props,
-              children: props.children ? rscToReact(props.children, modules) : undefined,
+              children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
             }
             return React.createElement(Component, { key, ...childProps })
           }
@@ -379,16 +535,22 @@ function rscToReact(rsc, modules) {
         return null
       }
 
-      const processedProps = processProps(props, modules)
-      return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+      const processedProps = processProps(props, modules, symbols)
+      try {
+        return React.createElement(type, key ? { ...processedProps, key } : processedProps)
+      }
+      catch (error) {
+        console.error('[RSC ERROR] Failed to create element:', { type, key, props, error })
+        throw error
+      }
     }
-    return rsc.map(child => rscToReact(child, modules))
+    return rsc.map(child => rscToReact(child, modules, symbols))
   }
 
   return rsc
 }
 
-function processProps(props, modules) {
+function processProps(props, modules, symbols) {
   if (!props || typeof props !== 'object')
     return props
 
@@ -399,7 +561,7 @@ function processProps(props, modules) {
         continue
       }
       if (key === 'children') {
-        processed[key] = props.children ? rscToReact(props.children, modules) : undefined
+        processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
       }
       else {
         processed[key] = props[key]

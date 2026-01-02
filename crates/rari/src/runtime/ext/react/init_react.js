@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unnecessary-use-prefix */
 globalThis.ReactDOMServer = {
   renderToString(element) {
     try {
@@ -62,6 +63,51 @@ if (typeof globalThis.React === 'undefined') {
     Suspense: function Suspense(props) {
       return props?.children || null
     },
+    use(usable) {
+      if (usable && typeof usable.then === 'function') {
+        const promiseCache = globalThis['~promises']?.resolved
+        if (promiseCache && promiseCache.has(usable)) {
+          const cached = promiseCache.get(usable)
+          if (cached.status === 'fulfilled') {
+            return cached.value
+          }
+          if (cached.status === 'rejected') {
+            throw cached.reason
+          }
+        }
+
+        const suspenseError = new Error('Promise suspended')
+        suspenseError.$$typeof = Symbol.for('react.suspense.pending')
+        suspenseError.promise = usable
+        throw suspenseError
+      }
+
+      return usable
+    },
+  }
+}
+
+if (globalThis.React && !globalThis.React.use) {
+  globalThis.React.use = function use(usable) {
+    if (usable && typeof usable.then === 'function') {
+      const promiseCache = globalThis['~promises']?.resolved
+      if (promiseCache && promiseCache.has(usable)) {
+        const cached = promiseCache.get(usable)
+        if (cached.status === 'fulfilled') {
+          return cached.value
+        }
+        if (cached.status === 'rejected') {
+          throw cached.reason
+        }
+      }
+
+      const suspenseError = new Error('Promise suspended')
+      suspenseError.$$typeof = Symbol.for('react.suspense.pending')
+      suspenseError.promise = usable
+      throw suspenseError
+    }
+
+    return usable
   }
 }
 

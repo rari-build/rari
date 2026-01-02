@@ -1,7 +1,22 @@
 use serde_json::Value;
 
 pub fn escape_rsc_string(value: &str) -> String {
-    if value.starts_with('$') { format!("${}", value) } else { value.to_string() }
+    if value.len() >= 2 && value.starts_with('$') {
+        let prefix = &value[0..2];
+        let rest = &value[2..];
+
+        if matches!(
+            prefix,
+            "$L" | "$@" | "$F" | "$T" | "$S" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$h"
+        ) && (rest.is_empty() || rest.chars().next().is_some_and(|c| c.is_ascii_digit()))
+        {
+            return value.to_string();
+        }
+
+        return format!("${}", value);
+    }
+
+    value.to_string()
 }
 
 pub fn escape_rsc_value(value: &Value) -> Value {
@@ -72,10 +87,10 @@ mod tests {
     #[test]
     fn test_escape_rsc_string() {
         assert_eq!(escape_rsc_string("hello"), "hello");
-        assert_eq!(escape_rsc_string("$L999"), "$$L999");
-        assert_eq!(escape_rsc_string("$@123"), "$$@123");
-        assert_eq!(escape_rsc_string("$F456"), "$$F456");
-        assert_eq!(escape_rsc_string("$T789"), "$$T789");
+        assert_eq!(escape_rsc_string("$L999"), "$L999");
+        assert_eq!(escape_rsc_string("$@123"), "$@123");
+        assert_eq!(escape_rsc_string("$F456"), "$F456");
+        assert_eq!(escape_rsc_string("$T789"), "$T789");
         assert_eq!(escape_rsc_string("$already"), "$$already");
         assert_eq!(escape_rsc_string(""), "");
         assert_eq!(escape_rsc_string("no dollar"), "no dollar");
@@ -106,10 +121,11 @@ mod tests {
     }
 
     #[test]
-    fn test_escape_rsc_value_object() {
+    fn test_escape_preserves_rsc_references_in_objects() {
         let input = json!({
-            "message": "$L999",
+            "rscRef": "$L999",
             "normal": "hello",
+            "customDollar": "$injection",
             "nested": {
                 "value": "$@123"
             }
@@ -117,20 +133,23 @@ mod tests {
 
         let escaped = escape_rsc_value(&input);
 
-        assert_eq!(escaped["message"], "$$L999");
+        assert_eq!(escaped["rscRef"], "$L999");
+        assert_eq!(escaped["nested"]["value"], "$@123");
         assert_eq!(escaped["normal"], "hello");
-        assert_eq!(escaped["nested"]["value"], "$$@123");
+        assert_eq!(escaped["customDollar"], "$$injection");
     }
 
     #[test]
-    fn test_escape_rsc_value_array() {
-        let input = json!(["$L999", "normal", "$@123"]);
+    fn test_escape_preserves_rsc_references_in_arrays() {
+        let input = json!(["$L999", "normal", "$@123", "$custom"]);
 
         let escaped = escape_rsc_value(&input);
 
-        assert_eq!(escaped[0], "$$L999");
+        assert_eq!(escaped[0], "$L999");
+        assert_eq!(escaped[2], "$@123");
+
         assert_eq!(escaped[1], "normal");
-        assert_eq!(escaped[2], "$$@123");
+        assert_eq!(escaped[3], "$$custom");
     }
 
     #[test]
@@ -149,10 +168,10 @@ mod tests {
 
         let escaped = escape_rsc_value(&input);
 
-        assert_eq!(escaped["strings"][0], "$$L1");
-        assert_eq!(escaped["strings"][1], "$$@2");
+        assert_eq!(escaped["strings"][0], "$L1");
+        assert_eq!(escaped["strings"][1], "$@2");
         assert_eq!(escaped["strings"][2], "normal");
-        assert_eq!(escaped["nested"]["deep"]["value"], "$$F3");
+        assert_eq!(escaped["nested"]["deep"]["value"], "$F3");
         assert_eq!(escaped["number"], 42);
         assert_eq!(escaped["bool"], true);
         assert_eq!(escaped["null"], Value::Null);
@@ -178,10 +197,11 @@ mod tests {
     #[test]
     fn test_escape_unescape_value_roundtrip() {
         let input = json!({
-            "message": "$L999",
-            "array": ["$@123", "normal"],
+            "rscRef": "$L999",
+            "array": ["$@123", "normal", "$custom"],
             "nested": {
-                "value": "$F456"
+                "value": "$F456",
+                "dollar": "$injection"
             }
         });
 
@@ -193,14 +213,15 @@ mod tests {
 
     #[test]
     fn test_escape_preserves_rsc_element_structure() {
-        let input = json!(["$", "div", null, {"className": "$L999"}]);
+        let input = json!(["$", "div", null, {"className": "$L999", "data-custom": "$injection"}]);
 
         let escaped = escape_rsc_value(&input);
 
         assert_eq!(escaped[0], "$");
         assert_eq!(escaped[1], "div");
         assert_eq!(escaped[2], Value::Null);
-        assert_eq!(escaped[3]["className"], "$$L999");
+        assert_eq!(escaped[3]["className"], "$L999");
+        assert_eq!(escaped[3]["data-custom"], "$$injection");
     }
 
     #[test]
@@ -215,17 +236,6 @@ mod tests {
         assert_eq!(escaped[0], "$");
         assert_eq!(escaped[3]["className"], "$$injection");
         assert_eq!(escaped[3]["children"][0], "$");
-        assert_eq!(escaped[3]["children"][3]["children"], "$$L123");
-    }
-
-    #[test]
-    fn test_escape_regular_array_with_dollar_strings() {
-        let input = json!(["$L999", "$@123", "normal"]);
-
-        let escaped = escape_rsc_value(&input);
-
-        assert_eq!(escaped[0], "$$L999");
-        assert_eq!(escaped[1], "$$@123");
-        assert_eq!(escaped[2], "normal");
+        assert_eq!(escaped[3]["children"][3]["children"], "$L123");
     }
 }

@@ -18,6 +18,179 @@ if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
   globalThis['~clientComponentPaths'] = {}
 }
 
+if (typeof window !== 'undefined') {
+  if (!window['~rari'].bufferedEvents) {
+    window['~rari'].bufferedEvents = []
+  }
+
+  if (!window['~rari'].boundaryModules) {
+    window['~rari'].boundaryModules = new Map()
+  }
+
+  if (!window['~rari'].pendingBoundaryHydrations) {
+    window['~rari'].pendingBoundaryHydrations = new Map()
+  }
+
+  globalThis['~rari'].processBoundaryUpdate = function (boundaryId, rscRow, rowId) {
+    const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
+
+    if (!boundaryElement) {
+      return
+    }
+
+    try {
+      const colonIndex = rscRow.indexOf(':')
+      if (colonIndex === -1) {
+        console.warn('[Rari] Invalid RSC row format (no colon):', rscRow)
+        return
+      }
+
+      const actualRowId = rscRow.substring(0, colonIndex)
+      const contentStr = rscRow.substring(colonIndex + 1)
+
+      if (contentStr.startsWith('I[')) {
+        try {
+          const importData = JSON.parse(contentStr.substring(1))
+          if (Array.isArray(importData) && importData.length >= 3) {
+            const [path, chunks, exportName] = importData
+            const moduleKey = `$L${actualRowId}`
+            window['~rari'].boundaryModules.set(moduleKey, {
+              id: path,
+              chunks: Array.isArray(chunks) ? chunks : [chunks],
+              name: exportName || 'default',
+            })
+          }
+        }
+        catch (e) {
+          console.error('[Rari] Failed to parse import row:', contentStr, e)
+        }
+        return
+      }
+
+      let content
+      try {
+        content = JSON.parse(contentStr)
+      }
+      catch (parseError) {
+        console.error('[Rari] Failed to parse RSC content:', contentStr, parseError)
+        return
+      }
+
+      function containsClientComponents(element) {
+        if (!element) {
+          return false
+        }
+
+        if (typeof element === 'string') {
+          return element.startsWith('$L')
+        }
+
+        if (Array.isArray(element)) {
+          if (element.length >= 4 && element[0] === '$') {
+            const [, tag] = element
+            if (typeof tag === 'string' && tag.startsWith('$L')) {
+              return true
+            }
+            const props = element[3]
+            if (props && props.children) {
+              return containsClientComponents(props.children)
+            }
+          }
+          return element.some(child => containsClientComponents(child))
+        }
+
+        return false
+      }
+
+      if (containsClientComponents(content)) {
+        window['~rari'].pendingBoundaryHydrations.set(boundaryId, {
+          content,
+          element: boundaryElement,
+          rowId,
+        })
+
+        if (globalThis['~rari'].hydrateClientComponents) {
+          globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
+        }
+        return
+      }
+
+      function rscToHtml(element) {
+        if (!element) {
+          return ''
+        }
+
+        if (typeof element === 'string' || typeof element === 'number') {
+          return String(element)
+        }
+
+        if (Array.isArray(element)) {
+          if (element.length >= 4 && element[0] === '$') {
+            const [, tag, , props] = element
+            const children = props && props.children ? rscToHtml(props.children) : ''
+
+            let attrs = ''
+            if (props) {
+              for (const [key, value] of Object.entries(props)) {
+                if (key !== 'children' && key !== '~boundaryId') {
+                  const attrName = key === 'className' ? 'class' : key
+
+                  if (typeof value === 'string') {
+                    attrs += ` ${attrName}="${value.replace(/"/g, '&quot;')}"`
+                  }
+                  else if (typeof value === 'boolean' && value) {
+                    attrs += ` ${attrName}`
+                  }
+                }
+              }
+            }
+
+            return `<${tag}${attrs}>${children}</${tag}>`
+          }
+
+          return element.map(rscToHtml).join('')
+        }
+
+        return ''
+      }
+
+      const htmlContent = rscToHtml(content)
+
+      if (htmlContent) {
+        boundaryElement.innerHTML = htmlContent
+        boundaryElement.classList.add('rari-boundary-resolved')
+      }
+    }
+    catch (e) {
+      console.error('[Rari] Error processing boundary update:', e)
+    }
+
+    window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+      detail: {
+        boundaryId,
+        rscRow,
+        rowId,
+        element: boundaryElement,
+      },
+    }))
+  }
+
+  if (window['~rari'].bufferedEvents && window['~rari'].bufferedEvents.length > 0) {
+    window['~rari'].bufferedEvents.forEach((event) => {
+      const { boundaryId, rscRow, rowId } = event
+      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    })
+    window['~rari'].bufferedEvents = []
+  }
+
+  window.addEventListener('rari:boundary-update', (event) => {
+    const { boundaryId, rscRow, rowId } = event.detail
+    if (globalThis['~rari'].processBoundaryUpdate) {
+      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    }
+  })
+}
+
 export function registerClientComponent(componentFunction, id, exportName) {
   const componentName = exportName === 'default'
     ? (componentFunction.name || id.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'DefaultComponent')
@@ -25,13 +198,16 @@ export function registerClientComponent(componentFunction, id, exportName) {
 
   const componentId = componentName
 
-  globalThis['~clientComponents'][componentId] = {
+  const componentInfo = {
     id: componentId,
     path: id,
     type: 'client',
     component: componentFunction,
     registered: true,
   }
+
+  globalThis['~clientComponents'][componentId] = componentInfo
+  globalThis['~clientComponents'][id] = componentInfo
 
   globalThis['~clientComponentPaths'][id] = componentId
 
@@ -297,14 +473,13 @@ class RscClient {
           const [, type, key, props] = element
 
           if (type === 'react.suspense' || type === 'suspense') {
-            const boundaryId = props?.['~boundaryId']
-            const suspenseWrapper = createElement('div', {
-              'data-~boundary-id': boundaryId,
-              '~boundaryId': boundaryId,
-              'data-suspense-boundary': true,
-            }, convertRscToReact(props?.fallback || props?.children))
+            const suspenseProps = {
+              fallback: convertRscToReact(props?.fallback) || null,
+            }
 
-            return suspenseWrapper
+            const children = props?.children ? convertRscToReact(props.children) : null
+
+            return createElement(Suspense, suspenseProps, children)
           }
 
           let processedProps = props ? { ...props } : {}
@@ -405,10 +580,7 @@ class RscClient {
               const rowId = line.substring(0, colonIndex)
               const content = line.substring(colonIndex + 1)
 
-              if (content.includes('STREAM_COMPLETE')) {
-                // Stream complete
-              }
-              else if (content.startsWith('I[')) {
+              if (content.startsWith('I[')) {
                 try {
                   const importData = JSON.parse(content.substring(1))
                   if (Array.isArray(importData) && importData.length >= 3) {
@@ -1139,7 +1311,6 @@ if (import.meta.hot) {
         routes = affectedRoutes
         break
       default:
-        // Unknown file type, skip
         break
     }
 

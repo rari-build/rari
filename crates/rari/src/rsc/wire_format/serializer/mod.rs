@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
 use crate::rsc::wire_format::escape::escape_rsc_value;
 use rustc_hash::FxHashMap;
@@ -63,11 +64,29 @@ pub enum PropValidationErrorType {
 
 pub struct RscSerializer {
     pub module_map: FxHashMap<String, ModuleReference>,
-    pub chunk_counter: AtomicU32,
     pub row_counter: AtomicU32,
     pub output_lines: Vec<String>,
     serialized_modules: FxHashMap<String, String>,
     pub server_component_executor: Option<Box<dyn ServerComponentExecutor>>,
+    suspense_symbol_row_id: Option<u32>,
+    pub pending_lazy_promises: Vec<LazyPromiseInfo>,
+    pub seen_lazy_promise_ids: FxHashSet<String>,
+    module_registration_order: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LazyPromiseInfo {
+    pub promise_id: String,
+    pub lazy_row_id: u32,
+    pub component_id: String,
+    pub loading_id: String,
+}
+
+#[derive(Debug, Clone)]
+struct LazyMarker {
+    promise_id: String,
+    component_id: String,
+    loading_id: String,
 }
 
 pub trait ServerComponentExecutor: Send + Sync {
@@ -105,11 +124,14 @@ impl RscSerializer {
     pub fn new() -> Self {
         Self {
             module_map: FxHashMap::default(),
-            chunk_counter: AtomicU32::new(1),
             row_counter: AtomicU32::new(0),
             output_lines: Vec::new(),
             serialized_modules: FxHashMap::default(),
             server_component_executor: None,
+            suspense_symbol_row_id: None,
+            pending_lazy_promises: Vec::new(),
+            seen_lazy_promise_ids: FxHashSet::default(),
+            module_registration_order: Vec::new(),
         }
     }
 
@@ -125,13 +147,24 @@ impl RscSerializer {
         self.server_component_executor = Some(executor);
     }
 
+    pub fn clear_module_state(&mut self) {
+        self.serialized_modules.clear();
+    }
+
+    pub fn reset_for_new_request(&mut self) {
+        self.serialized_modules.clear();
+        self.module_registration_order.clear();
+        self.module_map.clear();
+        self.row_counter.store(0, Ordering::Relaxed);
+    }
+
     pub fn register_client_component(
         &mut self,
         component_id: &str,
         file_path: &str,
         export_name: &str,
     ) {
-        let chunk_name = format!("client{}", self.chunk_counter.fetch_add(1, Ordering::Relaxed));
+        let chunk_name = "main".to_string();
 
         let module_ref = ModuleReference::new(
             component_id.to_string(),
@@ -140,6 +173,10 @@ impl RscSerializer {
         )
         .with_export(export_name.to_string())
         .with_metadata("chunk", &chunk_name);
+
+        if !self.module_map.contains_key(component_id) {
+            self.module_registration_order.push(component_id.to_string());
+        }
 
         self.module_map.insert(component_id.to_string(), module_ref);
     }
@@ -168,6 +205,7 @@ impl RscSerializer {
     pub fn serialize_rsc_tree(&mut self, tree: &RSCTree) -> String {
         self.output_lines.clear();
         self.serialized_modules.clear();
+        self.module_registration_order.clear();
 
         self.collect_client_components_from_rsc_tree(tree);
         self.add_module_import_lines();
@@ -184,26 +222,87 @@ impl RscSerializer {
         let rsc_tree = crate::rsc::types::tree::RSCTree::from_json(rsc_data)
             .map_err(|e| format!("Failed to parse RSC tree from JSON: {e}"))?;
 
-        Ok(self.serialize_rsc_tree(&rsc_tree))
+        let has_suspense = self.tree_contains_suspense(&rsc_tree);
+
+        let current_counter = self.row_counter.load(Ordering::Relaxed);
+        let is_lazy_resolution = current_counter > 0;
+
+        self.output_lines.clear();
+
+        if !is_lazy_resolution {
+            self.serialized_modules.clear();
+            self.module_registration_order.clear();
+        }
+
+        self.collect_client_components_from_rsc_tree(&rsc_tree);
+
+        let suspense_symbol_row_id = if has_suspense {
+            let row_id = self.get_next_row_id();
+            let symbol_line = format!("{}:\"$Sreact.suspense\"", row_id);
+            self.output_lines.push(symbol_line);
+            self.suspense_symbol_row_id = Some(row_id);
+            Some(row_id)
+        } else {
+            None
+        };
+
+        self.add_module_import_lines();
+
+        let element_id = self.get_next_row_id();
+        let element_data = self.serialize_rsc_tree_to_format(&rsc_tree);
+        let element_line = format!("{element_id}:{element_data}");
+        self.output_lines.push(element_line);
+
+        if let Some(row_id) = suspense_symbol_row_id {
+            let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
+            let replace = format!("\"${}\"", row_id);
+
+            for i in 1..self.output_lines.len() {
+                for search in &searches {
+                    if self.output_lines[i].contains(search) {
+                        self.output_lines[i] = self.output_lines[i].replace(search, &replace);
+                    }
+                }
+            }
+        }
+
+        Ok(self.output_lines.join("\n"))
+    }
+
+    fn tree_contains_suspense(&self, tree: &RSCTree) -> bool {
+        fn check_tree(tree: &RSCTree) -> bool {
+            match tree {
+                RSCTree::ServerElement { tag, children, .. } => {
+                    if tag == "$Sreact.suspense" || tag == "react.suspense" {
+                        return true;
+                    }
+                    if let Some(children) = children {
+                        for child in children {
+                            if check_tree(child) {
+                                return true;
+                            }
+                        }
+                    }
+                    false
+                }
+                RSCTree::Fragment { children, .. } | RSCTree::Array(children) => {
+                    children.iter().any(check_tree)
+                }
+                _ => false,
+            }
+        }
+        check_tree(tree)
     }
 
     fn collect_client_components_from_rsc_tree(&mut self, tree: &RSCTree) {
         match tree {
             RSCTree::ClientReference { id, .. } => {
-                if id.contains('#') {
+                if id.contains('#') && !self.is_client_component_registered(id) {
                     let parts: Vec<&str> = id.split('#').collect();
                     if parts.len() == 2 {
                         let file_path = parts[0];
                         let export_name = parts[1];
-                        let component_name = file_path
-                            .split('/')
-                            .next_back()
-                            .and_then(|filename| filename.split('.').next())
-                            .unwrap_or("UnknownComponent");
-
-                        if !self.is_client_component_registered(component_name) {
-                            self.register_client_component(component_name, file_path, export_name);
-                        }
+                        self.register_client_component(id, file_path, export_name);
                     }
                 }
             }
@@ -212,9 +311,7 @@ impl RscSerializer {
                     self.collect_client_components_from_rsc_tree(child);
                 }
             }
-            RSCTree::ServerElement { children: None, .. } => {
-                // No children to process
-            }
+            RSCTree::ServerElement { children: None, .. } => {}
             RSCTree::Fragment { children, .. } => {
                 for child in children {
                     self.collect_client_components_from_rsc_tree(child);
@@ -224,6 +321,9 @@ impl RscSerializer {
                 for element in elements {
                     self.collect_client_components_from_rsc_tree(element);
                 }
+            }
+            RSCTree::Primitive(Value::Object(obj)) => {
+                if obj.get("__rari_lazy").and_then(|v| v.as_bool()) == Some(true) {}
             }
             _ => {}
         }
@@ -235,8 +335,7 @@ impl RscSerializer {
                 self.serialize_client_reference_rsc(id, key.as_deref(), props)
             }
             RSCTree::ServerElement { tag, props, children, key } => {
-                let normalized_tag = if tag == "react.suspense" { "react.suspense" } else { tag };
-                self.serialize_server_element_rsc(normalized_tag, props, children, key.as_deref())
+                self.serialize_server_element_rsc(tag, props, children, key.as_deref())
             }
             RSCTree::Text(content) => serde_json::to_string(content).unwrap_or_default(),
             RSCTree::Fragment { children, .. } => self.serialize_fragment_rsc(children),
@@ -286,8 +385,14 @@ impl RscSerializer {
             let component_info = self.parse_and_register_component(id);
             match component_info {
                 Some(component_name) => {
-                    if let Some(module_reference) = self.serialized_modules.get(&component_name) {
-                        module_reference.clone()
+                    if let Some(module_ref) = self.module_map.get(&component_name).cloned() {
+                        self.emit_module_import_line(&component_name, &module_ref);
+                        if let Some(module_reference) = self.serialized_modules.get(&component_name)
+                        {
+                            module_reference.clone()
+                        } else {
+                            return create_error_placeholder(id, key, props);
+                        }
                     } else {
                         return create_error_placeholder(id, key, props);
                     }
@@ -348,6 +453,10 @@ impl RscSerializer {
             return None;
         }
 
+        if let Some(_module_reference) = self.serialized_modules.get(id) {
+            return Some(id.to_string());
+        }
+
         let parts: Vec<&str> = id.split('#').collect();
         if parts.len() != 2 {
             return None;
@@ -356,24 +465,17 @@ impl RscSerializer {
         let file_path = parts[0];
         let export_name = parts[1];
 
-        let component_name = file_path
-            .split('/')
-            .next_back()
-            .and_then(|filename| filename.split('.').next())
-            .unwrap_or("UnknownComponent");
-
-        if let Some(_module_reference) = self.serialized_modules.get(component_name) {
-            return Some(component_name.to_string());
+        if !self.is_client_component_registered(id) {
+            self.register_client_component(id, file_path, export_name);
         }
 
-        if !self.is_client_component_registered(component_name) {
-            self.register_client_component(component_name, file_path, export_name);
-            if let Some(module_ref) = self.module_map.get(component_name).cloned() {
-                self.emit_module_import_line(component_name, &module_ref);
-            }
+        if !self.serialized_modules.contains_key(id)
+            && let Some(module_ref) = self.module_map.get(id).cloned()
+        {
+            self.emit_module_import_line(id, &module_ref);
         }
 
-        Some(component_name.to_string())
+        Some(id.to_string())
     }
 
     fn serialize_server_element_rsc(
@@ -389,11 +491,44 @@ impl RscSerializer {
 
         if let Some(children) = children {
             if children.len() == 1 {
-                let child_data = self.serialize_rsc_tree_to_format(&children[0]);
-                element_props.insert(
-                    "children".to_string(),
-                    serde_json::from_str(&child_data).unwrap_or(Value::String(child_data)),
-                );
+                if let Some(lazy_info) = self.extract_lazy_marker(&children[0]) {
+                    if self.seen_lazy_promise_ids.contains(&lazy_info.promise_id) {
+                        if let Some(original) = self
+                            .pending_lazy_promises
+                            .iter()
+                            .find(|p| p.promise_id == lazy_info.promise_id)
+                        {
+                            element_props.insert(
+                                "children".to_string(),
+                                Value::String(format!("$L{}", original.lazy_row_id)),
+                            );
+                        } else {
+                            element_props.insert("children".to_string(), Value::Null);
+                        }
+                    } else {
+                        self.seen_lazy_promise_ids.insert(lazy_info.promise_id.clone());
+
+                        let lazy_row_id = self.get_next_row_id();
+
+                        self.pending_lazy_promises.push(LazyPromiseInfo {
+                            promise_id: lazy_info.promise_id.clone(),
+                            lazy_row_id,
+                            component_id: lazy_info.component_id.clone(),
+                            loading_id: lazy_info.loading_id.clone(),
+                        });
+
+                        element_props.insert(
+                            "children".to_string(),
+                            Value::String(format!("$L{}", lazy_row_id)),
+                        );
+                    }
+                } else {
+                    let child_data = self.serialize_rsc_tree_to_format(&children[0]);
+                    element_props.insert(
+                        "children".to_string(),
+                        serde_json::from_str(&child_data).unwrap_or(Value::String(child_data)),
+                    );
+                }
             } else if children.len() > 1 {
                 let children_data: Vec<Value> = children
                     .iter()
@@ -418,6 +553,19 @@ impl RscSerializer {
         let props_json = serde_json::to_string(&escaped_props).unwrap_or("{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
+    }
+
+    fn extract_lazy_marker(&self, tree: &RSCTree) -> Option<LazyMarker> {
+        if let RSCTree::Primitive(Value::Object(obj)) = tree
+            && obj.get("__rari_lazy").and_then(|v| v.as_bool()) == Some(true)
+        {
+            let promise_id = obj.get("__rari_promise_id")?.as_str()?.to_string();
+            let component_id = obj.get("__rari_component_id")?.as_str()?.to_string();
+            let loading_id = obj.get("__rari_loading_id")?.as_str()?.to_string();
+
+            return Some(LazyMarker { promise_id, component_id, loading_id });
+        }
+        None
     }
 
     fn serialize_fragment_rsc(&mut self, children: &[RSCTree]) -> String {
@@ -456,9 +604,11 @@ impl RscSerializer {
     }
 
     fn add_module_import_lines(&mut self) {
-        for (component_id, module_ref) in &self.module_map.clone() {
-            if !self.serialized_modules.contains_key(component_id) {
-                self.emit_module_import_line(component_id, module_ref);
+        for component_id in self.module_registration_order.clone() {
+            if !self.serialized_modules.contains_key(&component_id)
+                && let Some(module_ref) = self.module_map.get(&component_id).cloned()
+            {
+                self.emit_module_import_line(&component_id, &module_ref);
             }
         }
     }
@@ -472,8 +622,9 @@ impl RscSerializer {
 
         let module_data = serde_json::json!([module_ref.path, [chunk_name], export_name]);
 
-        let import_line = format!("{module_id}:I{module_data}");
-        self.output_lines.push(import_line);
+        let import_line =
+            RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
+        self.output_lines.push(import_line.trim_end().to_string());
 
         self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
     }
@@ -1122,7 +1273,7 @@ impl RscSerializer {
 
         let boundary_data = serde_json::json!([
             "$",
-            "react.suspense",
+            "$Sreact.suspense",
             null,
             {
                 "fallback": self.serialize_element_to_standard_format(fallback),
@@ -1217,7 +1368,7 @@ impl RscSerializer {
         #[allow(clippy::disallowed_methods)]
         let boundary_data = serde_json::json!([
             "$",
-            "react.suspense",
+            "$Sreact.suspense",
             null,
             {
                 "fallback": fallback_ref,

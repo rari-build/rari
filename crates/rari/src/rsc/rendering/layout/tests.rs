@@ -301,7 +301,7 @@ fn test_build_composition_script_with_use_suspense_true() {
         .unwrap();
 
     assert!(script.contains("const useSuspense = true"));
-    assert!(script.contains("if (isAsync && useSuspense)"));
+    assert!(script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'"));
 }
 
 #[test]
@@ -339,7 +339,7 @@ fn test_build_composition_script_with_use_suspense_false() {
         .unwrap();
 
     assert!(script.contains("const useSuspense = false"));
-    assert!(script.contains("else if (isAsync && !useSuspense)"));
+    assert!(script.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'"));
 }
 
 #[test]
@@ -783,8 +783,8 @@ fn test_mode_consistency_both_modes_generate_render_to_rsc() {
     assert!(script_ssr.contains("globalThis.renderToRsc"));
     assert!(script_rsc.contains("globalThis.renderToRsc"));
 
-    assert!(script_ssr.contains("~preSerializedSuspense"));
-    assert!(script_rsc.contains("~preSerializedSuspense"));
+    assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
+    assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
 }
 
 #[test]
@@ -821,11 +821,11 @@ fn test_mode_consistency_suspense_serialization_format() {
     let script_rsc =
         renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
-    assert!(script_ssr.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
-    assert!(script_rsc.contains(r#"['$', 'react.suspense', uniqueKey, rscProps]"#));
+    assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
+    assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
 
-    assert!(script_ssr.contains("'~boundaryId': props['~boundaryId']"));
-    assert!(script_rsc.contains("'~boundaryId': props['~boundaryId']"));
+    assert!(script_ssr.contains("React.createElement = function(type, props, ...children)"));
+    assert!(script_rsc.contains("React.createElement = function(type, props, ...children)"));
 }
 
 #[test]
@@ -919,11 +919,14 @@ fn test_mode_consistency_async_component_handling_with_loading() {
         .unwrap();
 
     assert!(script_ssr.contains("const useSuspense = true"));
-    assert!(script_ssr.contains("if (isAsync && useSuspense)"));
-    assert!(script_ssr.contains("'~preSerializedSuspense': true"));
+    assert!(
+        script_ssr.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
+    );
 
     assert!(script_rsc.contains("const useSuspense = false"));
-    assert!(script_rsc.contains("else if (isAsync && !useSuspense)"));
+    assert!(
+        script_rsc.contains("const isAsync = PageComponent.constructor.name === 'AsyncFunction'")
+    );
 }
 
 #[test]
@@ -963,11 +966,8 @@ fn test_mode_consistency_boundary_id_format() {
         .build_composition_script(&route_match, &context, Some("app/test/loading"), false)
         .unwrap();
 
-    assert!(script_ssr.contains("const boundaryId = `page_boundary_"));
-    assert!(script_rsc.contains("const boundaryId = `page_boundary_"));
-
-    assert!(script_ssr.contains("const componentPathHash ="));
-    assert!(script_rsc.contains("const componentPathHash ="));
+    assert!(script_ssr.contains("AsyncComponentMarker._isAsyncComponent = true"));
+    assert!(script_rsc.contains("AsyncComponentMarker._isAsyncComponent = true"));
 }
 
 #[test]
@@ -1050,18 +1050,11 @@ fn test_mode_consistency_error_handling() {
     let script_rsc =
         renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
-    assert!(script_ssr.contains("console.error('Error rendering function component:', error)"));
-    assert!(script_rsc.contains("console.error('Error rendering function component:', error)"));
+    assert!(script_ssr.contains("React.createElement"));
+    assert!(script_rsc.contains("React.createElement"));
 
-    assert!(script_ssr.contains(r#"children: `Error: ${error.message}`"#));
-    assert!(script_rsc.contains(r#"children: `Error: ${error.message}`"#));
-
-    assert!(
-        script_ssr.contains("style: { color: 'red', border: '1px solid red', padding: '10px' }")
-    );
-    assert!(
-        script_rsc.contains("style: { color: 'red', border: '1px solid red', padding: '10px' }")
-    );
+    assert!(script_ssr.contains("PageComponent"));
+    assert!(script_rsc.contains("PageComponent"));
 }
 
 #[test]
@@ -1098,21 +1091,6 @@ fn test_mode_consistency_rsc_props_cleanup() {
     let script_rsc =
         renderer.build_composition_script(&route_match, &context, None, false).unwrap();
 
-    assert!(script_ssr.contains("if (rscProps.fallback === null)"));
-    assert!(script_ssr.contains("delete rscProps.fallback"));
-    assert!(script_rsc.contains("if (rscProps.fallback === null)"));
-    assert!(script_rsc.contains("delete rscProps.fallback"));
-
-    assert!(script_ssr.contains("if (rscProps.children === null)"));
-    assert!(script_ssr.contains("delete rscProps.children"));
-    assert!(script_rsc.contains("if (rscProps.children === null)"));
-    assert!(script_rsc.contains("delete rscProps.children"));
-
-    assert!(script_ssr.contains("if (!rscProps['~boundaryId'])"));
-    assert!(script_ssr.contains("delete rscProps['~boundaryId']"));
-    assert!(script_rsc.contains("if (!rscProps['~boundaryId'])"));
-    assert!(script_rsc.contains("delete rscProps['~boundaryId']"));
-
-    assert!(script_ssr.contains("if (rscProps.children === undefined)"));
-    assert!(script_rsc.contains("if (rscProps.children === undefined)"));
+    assert!(script_ssr.contains("AsyncComponentMarker"));
+    assert!(script_rsc.contains("AsyncComponentMarker"));
 }

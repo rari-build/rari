@@ -196,10 +196,15 @@ pub async fn list_components(State(state): State<ServerState>) -> Json<Value> {
 
 #[axum::debug_handler]
 pub async fn health_check() -> Json<Value> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("System time should be after UNIX epoch")
+        .as_secs();
+
     #[allow(clippy::disallowed_methods)]
     Json(serde_json::json!({
         "status": "healthy",
-        "timestamp": chrono::Utc::now().to_rfc3339()
+        "timestamp": timestamp
     }))
 }
 

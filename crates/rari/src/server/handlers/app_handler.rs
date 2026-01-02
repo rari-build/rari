@@ -6,8 +6,7 @@ use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::rendering::html_utils::{
-    extract_asset_links_from_index_html, inject_assets_into_html, inject_rsc_payload,
-    inject_vite_client,
+    extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
 };
 use crate::server::rendering::metadata_injection::inject_metadata;
 use crate::server::rendering::streaming_response::StreamingHtmlResponse;
@@ -140,6 +139,7 @@ pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
@@ -148,21 +148,125 @@ pub async fn render_with_fallback(
         route_match.clone(),
         context.clone(),
         &layout_renderer,
+        accept_encoding,
     )
     .await
     {
         Ok(response) => Ok(response),
         Err(e) => {
             error!("Streaming render failed, falling back to synchronous: {}", e);
-            render_synchronous(state, route_match, context).await
+            render_synchronous(state, route_match, context, accept_encoding).await
         }
     }
+}
+
+pub async fn render_rsc_navigation_streaming(
+    state: Arc<ServerState>,
+    route_match: crate::server::routing::AppRouteMatch,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
+) -> Result<Response, StatusCode> {
+    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let is_not_found = route_match.not_found.is_some();
+
+    let request_context =
+        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+            route_match.route.path.clone(),
+        ));
+
+    let render_result = match layout_renderer
+        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!(
+                "Failed to render RSC navigation for streaming '{}': {}",
+                route_match.route.path, e
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let rsc_stream = match render_result {
+        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
+        crate::rsc::rendering::layout::RenderResult::Static(_) => {
+            error!("Expected streaming result for RSC navigation with Suspense");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    render_rsc_streaming_response(
+        state,
+        route_match,
+        context,
+        rsc_stream,
+        is_not_found,
+        accept_encoding,
+    )
+    .await
+}
+
+async fn render_rsc_streaming_response(
+    _state: Arc<ServerState>,
+    _route_match: crate::server::routing::AppRouteMatch,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
+    is_not_found: bool,
+    accept_encoding: Option<&str>,
+) -> Result<Response, StatusCode> {
+    use crate::server::compression::{CompressionEncoding, compress_stream};
+
+    let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let should_continue_clone = should_continue.clone();
+
+    let rsc_wire_stream = async_stream::stream! {
+        while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
+            match rsc_stream.next_chunk().await {
+                Some(chunk) => {
+                    let data = String::from_utf8_lossy(&chunk.data).to_string();
+                    yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+    };
+
+    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let compressed_stream = compress_stream(rsc_wire_stream, encoding);
+
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+    let mut response_builder = Response::builder()
+        .status(status_code)
+        .header("content-type", "text/x-component")
+        .header("transfer-encoding", "chunked")
+        .header("x-render-mode", "streaming")
+        .header("cache-control", "no-cache")
+        .header("x-content-type-options", "nosniff");
+
+    if let Some(encoding_header) = encoding.as_header_value() {
+        response_builder = response_builder.header("content-encoding", encoding_header);
+    }
+
+    if let Some(ref metadata) = context.metadata
+        && let Ok(metadata_json) = serde_json::to_string(metadata)
+    {
+        let encoded_metadata = urlencoding::encode(&metadata_json);
+        response_builder = response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+    }
+
+    let body = Body::from_stream(compressed_stream);
+    Ok(response_builder.body(body).expect("Valid RSC streaming response"))
 }
 
 pub async fn render_synchronous(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
     let request_context =
@@ -199,34 +303,16 @@ pub async fn render_synchronous(
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
-            crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
-                html: html_content,
-                rsc_payload,
-            } => {
-                let html_with_metadata =
-                    wrap_html_with_metadata(html_content, context.metadata.as_ref());
-
-                let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
-                let final_html =
-                    match inject_assets_into_html(&html_with_payload, &state.config).await {
-                        Ok(html) => html,
-                        Err(e) => {
-                            error!("Failed to inject assets into HTML: {}", e);
-                            html_with_payload
-                        }
-                    };
-
-                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-                Ok(Response::builder()
-                    .status(status_code)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .header("x-render-mode", "synchronous-with-payload")
-                    .body(Body::from(final_html))
-                    .expect("Valid HTML response"))
-            }
-            crate::rsc::rendering::layout::RenderResult::Streaming(_) => {
-                render_fallback_html(&state, &route_match.route.path, is_not_found).await
+            crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
+                render_streaming_response(
+                    state,
+                    route_match,
+                    context,
+                    stream,
+                    is_not_found,
+                    accept_encoding,
+                )
+                .await
             }
         },
         Err(e) => {
@@ -236,86 +322,15 @@ pub async fn render_synchronous(
     }
 }
 
-pub async fn render_streaming_with_layout(
+async fn render_streaming_response(
     state: Arc<ServerState>,
-    route_match: crate::server::routing::AppRouteMatch,
+    _route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
-    layout_renderer: &LayoutRenderer,
+    mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
+    is_not_found: bool,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_count = route_match.layouts.len();
-    let is_not_found = route_match.not_found.is_some();
-
-    let request_context =
-        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
-            route_match.route.path.clone(),
-        ));
-
-    let render_result = match layout_renderer
-        .render_route_to_html_direct(&route_match, &context, Some(request_context))
-        .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            error!("Failed to render route for streaming '{}': {}", route_match.route.path, e);
-            error!(
-                "Route rendering failure context - Route: {}, Page component: {}, Layout count: {}",
-                route_match.route.path, route_match.route.file_path, layout_count
-            );
-
-            for (idx, layout) in route_match.layouts.iter().enumerate() {
-                error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
-            }
-
-            return render_synchronous(state, route_match, context).await;
-        }
-    };
-
-    let mut rsc_stream = match render_result {
-        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
-        crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
-
-            let final_html = match inject_assets_into_html(&html_with_metadata, &state.config).await
-            {
-                Ok(html) => html,
-                Err(e) => {
-                    error!("Failed to inject assets into HTML: {}", e);
-                    html_with_metadata
-                }
-            };
-
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-            return Ok(Response::builder()
-                .status(status_code)
-                .header("content-type", "text/html; charset=utf-8")
-                .header("x-render-mode", "static")
-                .body(Body::from(final_html))
-                .expect("Valid HTML response"));
-        }
-        crate::rsc::rendering::layout::RenderResult::StaticWithPayload { html, rsc_payload } => {
-            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
-
-            let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
-            let final_html = match inject_assets_into_html(&html_with_payload, &state.config).await
-            {
-                Ok(html) => html,
-                Err(e) => {
-                    error!("Failed to inject assets into HTML: {}", e);
-                    html_with_payload
-                }
-            };
-
-            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-            return Ok(Response::builder()
-                .status(status_code)
-                .header("content-type", "text/html; charset=utf-8")
-                .header("x-render-mode", "static-with-payload")
-                .body(Body::from(final_html))
-                .expect("Valid HTML response"));
-        }
-    };
+    use crate::server::compression::{CompressionEncoding, compress_stream};
 
     let asset_links = extract_asset_links_from_index_html().await;
 
@@ -354,7 +369,8 @@ pub async fn render_streaming_with_layout(
     </style>
 </head>
 <body>
-<div id="root">"#,
+<div id="root">
+"#,
         title, csrf_token, asset_tags
     );
 
@@ -382,7 +398,7 @@ pub async fn render_streaming_with_layout(
                     match conv.convert_chunk(chunk).await {
                         Ok(html_bytes) => {
                             if !html_bytes.is_empty() {
-                                yield Ok(html_bytes);
+                                yield Ok::<_, std::io::Error>(bytes::Bytes::from(html_bytes));
                             }
                         }
                         Err(e) => {
@@ -392,7 +408,7 @@ pub async fn render_streaming_with_layout(
                             }
 
                             error!("Error converting RSC chunk to HTML: {}", e);
-                            yield Err(e);
+                            yield Err(std::io::Error::other(e.to_string()));
                         }
                     }
                 }
@@ -403,9 +419,95 @@ pub async fn render_streaming_with_layout(
         }
     };
 
+    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let compressed_stream = compress_stream(html_stream, encoding);
+
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
-    Ok(StreamingHtmlResponse::with_status(html_stream, status_code).into_response())
+    let mut response_builder = Response::builder()
+        .status(status_code)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("transfer-encoding", "chunked")
+        .header("x-content-type-options", "nosniff")
+        .header("cache-control", "no-cache");
+
+    if let Some(encoding_header) = encoding.as_header_value() {
+        response_builder = response_builder.header("content-encoding", encoding_header);
+    }
+
+    let body = Body::from_stream(compressed_stream);
+    Ok(response_builder.body(body).expect("Valid streaming response"))
+}
+
+pub async fn render_streaming_with_layout(
+    state: Arc<ServerState>,
+    route_match: crate::server::routing::AppRouteMatch,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    layout_renderer: &LayoutRenderer,
+    accept_encoding: Option<&str>,
+) -> Result<Response, StatusCode> {
+    let layout_count = route_match.layouts.len();
+    let is_not_found = route_match.not_found.is_some();
+
+    let request_context =
+        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+            route_match.route.path.clone(),
+        ));
+
+    let render_result = match layout_renderer
+        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!("Failed to render route for streaming '{}': {}", route_match.route.path, e);
+            error!(
+                "Route rendering failure context - Route: {}, Page component: {}, Layout count: {}",
+                route_match.route.path, route_match.route.file_path, layout_count
+            );
+
+            for (idx, layout) in route_match.layouts.iter().enumerate() {
+                error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
+            }
+
+            return render_synchronous(state, route_match, context, accept_encoding).await;
+        }
+    };
+
+    let rsc_stream = match render_result {
+        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
+        crate::rsc::rendering::layout::RenderResult::Static(html) => {
+            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
+
+            let final_html = match inject_assets_into_html(&html_with_metadata, &state.config).await
+            {
+                Ok(html) => html,
+                Err(e) => {
+                    error!("Failed to inject assets into HTML: {}", e);
+                    html_with_metadata
+                }
+            };
+
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+            return Ok(Response::builder()
+                .status(status_code)
+                .header("content-type", "text/html; charset=utf-8")
+                .header("x-render-mode", "static")
+                .body(Body::from(final_html))
+                .expect("Valid HTML response"));
+        }
+    };
+
+    render_streaming_response(
+        state,
+        route_match,
+        context,
+        rsc_stream,
+        is_not_found,
+        accept_encoding,
+    )
+    .await
 }
 
 pub async fn render_fallback_html(
@@ -528,7 +630,7 @@ pub async fn handle_app_route(
         if route_match.not_found.is_some() {
             return false;
         }
-        config.rsc.enable_streaming && route_match.loading.is_some()
+        config.rsc.enable_streaming
     }
 
     if path.len() > 1 {
@@ -592,6 +694,7 @@ pub async fn handle_app_route(
     );
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
+    let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
     let query_params_for_cache = query_params.clone();
     let search_params = extract_search_params(query_params);
@@ -625,6 +728,17 @@ pub async fn handle_app_route(
 
     match render_mode {
         RenderMode::RscNavigation => {
+            let use_streaming = should_use_streaming(&route_match, &state.config);
+
+            if use_streaming {
+                return render_rsc_navigation_streaming(
+                    Arc::new(state),
+                    route_match,
+                    context,
+                    accept_encoding,
+                )
+                .await;
+            }
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
@@ -722,7 +836,13 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                return render_with_fallback(Arc::new(state), route_match, context).await;
+                return render_with_fallback(
+                    Arc::new(state),
+                    route_match,
+                    context,
+                    accept_encoding,
+                )
+                .await;
             }
 
             let cache_key = response_cache::ResponseCache::generate_cache_key(
@@ -793,29 +913,6 @@ pub async fn handle_app_route(
                             Err(e) => {
                                 error!("Failed to inject assets into HTML: {}", e);
                                 html_with_metadata
-                            }
-                        };
-
-                    let etag =
-                        response_cache::ResponseCache::generate_etag(html_with_assets.as_bytes());
-
-                    (html_with_assets, etag)
-                }
-                crate::rsc::rendering::layout::RenderResult::StaticWithPayload {
-                    html: html_content,
-                    rsc_payload,
-                } => {
-                    let html_with_metadata =
-                        wrap_html_with_metadata(html_content, context.metadata.as_ref());
-
-                    let html_with_payload = inject_rsc_payload(&html_with_metadata, &rsc_payload);
-
-                    let html_with_assets =
-                        match inject_assets_into_html(&html_with_payload, &state.config).await {
-                            Ok(html) => html,
-                            Err(e) => {
-                                error!("Failed to inject assets into HTML: {}", e);
-                                html_with_payload
                             }
                         };
 

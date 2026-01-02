@@ -1,8 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
-import { LoadingComponentRegistry } from '../router/LoadingComponentRegistry'
-import { LoadingErrorBoundary } from './LoadingErrorBoundary'
+import React, { Suspense, useEffect, useRef, useState, useTransition } from 'react'
 
 interface AppRouterProviderProps {
   children: React.ReactNode
@@ -18,6 +16,7 @@ interface NavigationDetail {
   routeInfo?: any
   abortSignal?: AbortSignal
   rscWireFormat?: string
+  isStreaming?: boolean
 }
 
 interface HMRFailure {
@@ -28,10 +27,39 @@ interface HMRFailure {
   filePath?: string
 }
 
-interface LoadingState {
-  isShowingLoading: boolean
-  loadingRoute: string | null
-  loadingComponent: React.ComponentType | null
+function GlobalLoadingFallback() {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+    >
+      <div
+        style={{
+          width: '40px',
+          height: '40px',
+          border: '4px solid rgba(0, 0, 0, 0.1)',
+          borderTopColor: '#3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+        }}
+      />
+      <style>
+        {`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}
+      </style>
+    </div>
+  )
 }
 
 export function AppRouterProvider({ children, initialPayload, onNavigate }: AppRouterProviderProps) {
@@ -39,16 +67,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const [, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
+  const streamingRowsRef = useRef<string[] | null>(null)
+  const [, startTransition] = useTransition()
 
   const currentNavigationIdRef = useRef<number>(0)
-
-  const [loadingState, setLoadingState] = useState<LoadingState>({
-    isShowingLoading: false,
-    loadingRoute: null,
-    loadingComponent: null,
-  })
-
-  const loadingRegistryRef = useRef<LoadingComponentRegistry>(new LoadingComponentRegistry())
   const pendingFetchesRef = useRef<Map<string, Promise<any>>>(new Map())
   const failureHistoryRef = useRef<HMRFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
@@ -164,7 +186,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return false
   }
 
-  function rscToReact(rsc: any, modules: Map<string, any>, layoutPath?: string): any {
+  function rscToReact(rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any {
     if (!rsc)
       return null
 
@@ -176,23 +198,41 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       if (rsc.length >= 4 && rsc[0] === '$') {
         const [, type, serverKey, props] = rsc
 
-        if (typeof type === 'string' && type.startsWith('$L')) {
-          const moduleInfo = modules.get(type)
+        let resolvedType = type
+        if (typeof type === 'string' && type.startsWith('$') && symbols) {
+          const symbolId = type.substring(1)
+          if (/^\d+$/.test(symbolId)) {
+            const symbolName = symbols.get(type)
+            if (symbolName) {
+              if (symbolName === '$Sreact.suspense' || symbolName === 'react.suspense') {
+                resolvedType = 'Suspense'
+              }
+              else {
+                console.warn('[AppRouterProvider] Unknown symbol:', symbolName)
+              }
+            }
+          }
+        }
+
+        if (resolvedType === 'Suspense' || type === 'Suspense') {
+          const processedProps = processProps(props, modules, layoutPath, symbols, rows)
+          return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
+        }
+
+        if (typeof resolvedType === 'string' && resolvedType.startsWith('$L')) {
+          const moduleInfo = modules.get(resolvedType)
 
           if (!moduleInfo) {
-            console.error('[AppRouterProvider] Module info not found for type:', type, '- skipping component')
             return null
           }
 
           const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
           if (!Component) {
-            console.error('[AppRouterProvider] Component not loaded for module:', moduleInfo.id, '- skipping component')
             return null
           }
 
           if (typeof Component !== 'function') {
-            console.error('[AppRouterProvider] Component is not a function for module:', moduleInfo.id, '- skipping component')
             return null
           }
 
@@ -200,7 +240,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           const childProps = {
             ...props,
-            children: props.children ? rscToReact(props.children, modules, layoutPath) : undefined,
+            children: props.children ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
           }
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
@@ -208,10 +248,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return element
         }
 
-        if (!type || (typeof type !== 'string' && typeof type !== 'function')) {
+        if (!resolvedType || (typeof resolvedType !== 'string' && typeof resolvedType !== 'function')) {
           console.error('[AppRouterProvider] Invalid component type:', {
-            type,
-            typeOf: typeof type,
+            type: resolvedType,
+            typeOf: typeof resolvedType,
             serverKey,
             props,
             rscData: rsc,
@@ -219,11 +259,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
         }
 
-        const processedProps = processProps(props, modules, layoutPath)
-        return React.createElement(type, serverKey ? { ...processedProps, key: serverKey } : processedProps)
+        const processedProps = processProps(props, modules, layoutPath, symbols, rows)
+        return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
       return rsc.map((child, index) => {
-        const element = rscToReact(child, modules, layoutPath)
+        const element = rscToReact(child, modules, layoutPath, symbols, rows)
         if (!element) {
           return null
         }
@@ -238,18 +278,74 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return rsc
   }
 
-  function processProps(props: any, modules: Map<string, any>, layoutPath?: string): any {
+  const pendingRefsRef = useRef<Set<string>>(new Set())
+  const rowsDataRef = useRef<Map<string, any>>(new Map())
+  const modulesDataRef = useRef<Map<string, any>>(new Map())
+  const symbolsDataRef = useRef<Map<string, string>>(new Map())
+
+  const suspendingPromisesRef = useRef<Map<string, Promise<never>>>(new Map())
+
+  function getSuspendingPromise(contentRef: string): Promise<never> {
+    if (!suspendingPromisesRef.current.has(contentRef)) {
+      const promise = new Promise<never>(() => {})
+      suspendingPromisesRef.current.set(contentRef, promise)
+    }
+    return suspendingPromisesRef.current.get(contentRef)!
+  }
+
+  function LazyContent({ contentRef }: { contentRef: string }): any {
+    const rows = rowsDataRef.current
+    const modules = modulesDataRef.current
+    const symbols = symbolsDataRef.current
+
+    if (rows.has(contentRef)) {
+      suspendingPromisesRef.current.delete(contentRef)
+
+      const rowData = rows.get(contentRef)
+      const result = rscToReact(rowData, modules, undefined, symbols, rows)
+      return result
+    }
+
+    throw getSuspendingPromise(contentRef)
+  }
+
+  function processProps(props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any {
     if (!props || typeof props !== 'object')
       return props
+
+    if (rows)
+      rowsDataRef.current = rows
+    if (modules)
+      modulesDataRef.current = modules
+    if (symbols)
+      symbolsDataRef.current = symbols
 
     const processed: any = {}
     for (const key in props) {
       if (Object.prototype.hasOwnProperty.call(props, key)) {
         if (key === 'children') {
-          processed[key] = props.children ? rscToReact(props.children, modules, layoutPath) : undefined
+          const children = props.children
+
+          if (typeof children === 'string' && children.startsWith('$L')) {
+            if (rows && rows.has(children)) {
+              const rowData = rows.get(children)
+              pendingRefsRef.current.delete(children)
+              processed[key] = rscToReact(rowData, modules, layoutPath, symbols, rows)
+            }
+            else {
+              pendingRefsRef.current.add(children)
+              processed[key] = React.createElement(LazyContent, {
+                key: `lazy-${children}`,
+                contentRef: children,
+              })
+            }
+          }
+          else {
+            processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
+          }
         }
         else {
-          processed[key] = props[key]
+          processed[key] = rscToReact(props[key], modules, layoutPath, symbols, rows)
         }
       }
     }
@@ -260,6 +356,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     try {
       const lines = wireFormat.trim().split('\n')
       const modules = new Map()
+      const symbols = new Map()
+      const rows = new Map()
       let rootElement = null
       const layoutBoundaries: Array<{
         layoutPath: string
@@ -280,6 +378,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const content = line.substring(colonIndex + 1)
 
         try {
+          if (content.startsWith('"$S')) {
+            const symbolName = content.slice(1, -1)
+            symbols.set(`$${rowId}`, symbolName)
+            continue
+          }
+
           if (content.startsWith('I[')) {
             const importData = JSON.parse(content.substring(1))
             if (Array.isArray(importData) && importData.length >= 3) {
@@ -307,6 +411,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
           else if (content.startsWith('[')) {
             const elementData = JSON.parse(content)
+            rows.set(`$L${rowId}`, elementData)
 
             if (
               extractBoundaries
@@ -334,7 +439,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             }
 
             if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
-              rootElement = rscToReact(elementData, modules)
+              rootElement = elementData
             }
           }
         }
@@ -356,9 +461,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
       }
 
+      if (rootElement && Array.isArray(rootElement) && rootElement[0] === '$') {
+        rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
+      }
+
       return {
         element: rootElement,
         modules,
+        symbols,
         wireFormat,
         layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
       }
@@ -471,30 +581,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (typeof window === 'undefined')
       return
 
-    const handleShowLoading = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ route: string, navigationId: number, loadingEntry: any }>
-      const { route, navigationId, loadingEntry } = customEvent.detail
-
-      currentNavigationIdRef.current = navigationId
-
-      const loadingComponentPath = loadingEntry?.path || route
-      const loadingComponent = await loadingRegistryRef.current.loadComponent(loadingComponentPath)
-
-      if (currentNavigationIdRef.current === navigationId && loadingComponent) {
-        setLoadingState({
-          isShowingLoading: true,
-          loadingRoute: route,
-          loadingComponent,
-        })
-        setRenderKey(prev => prev + 1)
-      }
-    }
-
     const handleNavigate = async (event: Event) => {
       const customEvent = event as CustomEvent<NavigationDetail>
       const detail = customEvent.detail
 
       currentNavigationIdRef.current = detail.navigationId
+      streamingRowsRef.current = null
 
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -502,70 +594,63 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
       saveFormState()
 
-      try {
-        if (detail.rscWireFormat) {
-          const parsedPayload = parseRscWireFormat(detail.rscWireFormat, false)
-          setRscPayload(parsedPayload)
-          lastSuccessfulPayloadRef.current = detail.rscWireFormat
-          resetFailureTracking()
-        }
-        else {
-          await refetchRscPayload(
-            detail.to,
-            detail.abortSignal,
-          )
-        }
+      startTransition(async () => {
+        try {
+          if (detail.rscWireFormat) {
+            const parsedPayload = parseRscWireFormat(detail.rscWireFormat, false)
+            setRscPayload(parsedPayload)
+            lastSuccessfulPayloadRef.current = detail.rscWireFormat
+            resetFailureTracking()
+          }
+          else if (detail.isStreaming) {
+            streamingRowsRef.current = []
+          }
+          else {
+            await refetchRscPayload(
+              detail.to,
+              detail.abortSignal,
+            )
+          }
 
-        if (currentNavigationIdRef.current === detail.navigationId) {
-          setLoadingState({
-            isShowingLoading: false,
-            loadingRoute: null,
-            loadingComponent: null,
-          })
+          if (currentNavigationIdRef.current === detail.navigationId) {
+            setRenderKey(prev => prev + 1)
+            setHmrError(null)
 
-          setRenderKey(prev => prev + 1)
-
-          setHmrError(null)
-
-          if (onNavigate) {
-            onNavigate(detail)
+            if (onNavigate) {
+              onNavigate(detail)
+            }
           }
         }
-      }
-      catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          setLoadingState({
-            isShowingLoading: false,
-            loadingRoute: null,
-            loadingComponent: null,
-          })
-          return
-        }
+        catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return
+          }
 
-        console.error('[AppRouterProvider] Navigation failed:', error)
+          console.error('[AppRouterProvider] Navigation failed:', error)
 
-        window.dispatchEvent(new CustomEvent('rari:navigate-error', {
-          detail: {
-            from: detail.from,
-            to: detail.to,
-            error,
-            navigationId: detail.navigationId,
-          },
-        }))
+          window.dispatchEvent(new CustomEvent('rari:navigate-error', {
+            detail: {
+              from: detail.from,
+              to: detail.to,
+              error,
+              navigationId: detail.navigationId,
+            },
+          }))
 
-        if (consecutiveFailuresRef.current >= MAX_RETRIES) {
-          handleFallbackReload()
+          if (consecutiveFailuresRef.current >= MAX_RETRIES) {
+            handleFallbackReload()
+          }
         }
-      }
-      finally {
-        if (!detail.options?.historyKey) {
-          requestAnimationFrame(() => {
-            if (detail.options?.scroll !== false) {
-              window.scrollTo(0, 0)
-            }
-          })
+        finally {
+          if (!detail.options?.historyKey) {
+            requestAnimationFrame(() => {
+              if (detail.options?.scroll !== false) {
+                window.scrollTo(0, 0)
+              }
+            })
+          }
         }
-      }
+      })
     }
 
     const handleAppRouterRerender = async () => {
@@ -604,7 +689,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         await refetchRscPayload()
 
         setRenderKey(prev => prev + 1)
-
         setHmrError(null)
       }
       catch (error) {
@@ -630,18 +714,45 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
-    window.addEventListener('rari:show-loading', handleShowLoading)
+    const handleRscRow = (event: Event) => {
+      const customEvent = event as CustomEvent<{ rscRow: string }>
+      const row = customEvent.detail.rscRow
+
+      if (!row || !row.trim())
+        return
+
+      if (!streamingRowsRef.current) {
+        streamingRowsRef.current = []
+      }
+
+      streamingRowsRef.current.push(row)
+
+      try {
+        const wireFormat = streamingRowsRef.current.join('\n')
+        const parsedPayload = parseRscWireFormat(wireFormat, false)
+
+        startTransition(() => {
+          setRscPayload(parsedPayload)
+          setRenderKey(prev => prev + 1)
+        })
+      }
+      catch (error) {
+        console.error('[AppRouterProvider] Failed to parse streaming RSC row:', error)
+      }
+    }
+
     window.addEventListener('rari:navigate', handleNavigate)
     window.addEventListener('rari:app-router-rerender', handleAppRouterRerender)
     window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
     window.addEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
+    window.addEventListener('rari:rsc-row', handleRscRow)
 
     return () => {
-      window.removeEventListener('rari:show-loading', handleShowLoading)
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
+      window.removeEventListener('rari:rsc-row', handleRscRow)
     }
   }, [onNavigate])
 
@@ -673,119 +784,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return element
   }
 
-  const injectLoadingIntoLayout = (layoutElement: any, loadingComponent: React.ReactNode) => {
-    if (!layoutElement || typeof layoutElement !== 'object') {
-      return loadingComponent || null
-    }
-
-    const cloneWithLoadingInjected = (element: any): any => {
-      if (!element || typeof element !== 'object') {
-        return element
-      }
-
-      if (element.type === 'main') {
-        return React.createElement(
-          'main',
-          element.props,
-          loadingComponent,
-        )
-      }
-
-      if (element.props?.children) {
-        const children = element.props.children
-        let newChildren
-
-        if (Array.isArray(children)) {
-          const hasMain = children.some((child: any) =>
-            child && typeof child === 'object' && child.type === 'main',
-          )
-
-          if (hasMain) {
-            newChildren = children.map((child: any, index: number) => {
-              const cloned = cloneWithLoadingInjected(child)
-              if (!cloned) {
-                return null
-              }
-
-              return cloned && typeof cloned === 'object' && !cloned.key && React.isValidElement(cloned)
-              // eslint-disable-next-line react/no-clone-element
-                ? React.cloneElement(cloned, { key: child?.key || index })
-                : cloned
-            }).filter(Boolean)
-          }
-          else {
-            newChildren = children.map((child: any, index: number) => {
-              if (!child) {
-                return null
-              }
-              if (child && typeof child === 'object') {
-                const cloned = cloneWithLoadingInjected(child)
-                if (!cloned) {
-                  return null
-                }
-
-                return cloned && !cloned.key && React.isValidElement(cloned)
-                // eslint-disable-next-line react/no-clone-element
-                  ? React.cloneElement(cloned, { key: child.key || index })
-                  : cloned
-              }
-              return child
-            }).filter(Boolean)
-          }
-        }
-        else if (typeof children === 'object') {
-          newChildren = cloneWithLoadingInjected(children)
-        }
-        else {
-          newChildren = children
-        }
-
-        if (!React.isValidElement(element)) {
-          console.error('[AppRouterProvider] Attempting to clone invalid React element')
-          return element
-        }
-
-        // eslint-disable-next-line react/no-clone-element
-        return React.cloneElement(element, element.props, newChildren)
-      }
-
-      return element
-    }
-
-    return cloneWithLoadingInjected(layoutElement)
-  }
-
   let contentToRender = children
 
-  if (loadingState.isShowingLoading) {
-    let loadingComponentElement
-    if (loadingState.loadingComponent && typeof loadingState.loadingComponent === 'function') {
-      try {
-        const element = React.createElement(loadingState.loadingComponent)
-        if (element) {
-          loadingComponentElement = (
-            <LoadingErrorBoundary>
-              {element}
-            </LoadingErrorBoundary>
-          )
-        }
-      }
-      catch (error) {
-        console.error('[AppRouterProvider] Failed to create loading component:', error)
-      }
-    }
-
-    if (rscPayload?.element) {
-      const injected = injectLoadingIntoLayout(rscPayload.element, loadingComponentElement)
-      if (injected) {
-        contentToRender = injected
-      }
-    }
-    else if (loadingComponentElement) {
-      contentToRender = loadingComponentElement
-    }
-  }
-  else if (rscPayload?.element) {
+  if (rscPayload?.element) {
     const extracted = extractBodyContent(rscPayload.element)
     contentToRender = extracted || rscPayload.element
   }
@@ -874,7 +875,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         </div>
       )}
 
-      {contentToRender}
+      <Suspense fallback={<GlobalLoadingFallback />}>
+        {contentToRender}
+      </Suspense>
     </>
   )
 }

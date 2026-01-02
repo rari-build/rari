@@ -56,9 +56,17 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
 
   try {
     const pageResult = PageComponent(pageProps)
-    let currentElement = pageResult && typeof pageResult.then === 'function'
-      ? await pageResult
-      : pageResult
+
+    let currentElement
+    if (pageResult && typeof pageResult.then === 'function') {
+      const AsyncWrapper = function AsyncPageComponent() {
+        return pageResult
+      }
+      currentElement = React.createElement(AsyncWrapper, null)
+    }
+    else {
+      currentElement = pageResult
+    }
 
     for (let i = layouts.length - 1; i >= 0; i--) {
       const layout = layouts[i]

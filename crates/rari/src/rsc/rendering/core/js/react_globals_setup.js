@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+/* eslint-disable no-undef, react/no-unnecessary-use-prefix  */
 if (typeof globalThis.React === 'undefined') {
   React = {
     createElement(type, props, ...children) {
@@ -71,5 +71,47 @@ if (typeof globalThis.jsx === 'undefined') {
 if (typeof globalThis.jsxs === 'undefined') {
   globalThis.jsxs = function (type, props, key) {
     return globalThis.React.createElement(type, { ...props, key })
+  }
+}
+
+if (typeof globalThis.React !== 'undefined' && typeof globalThis.React.use !== 'function') {
+  globalThis.React.use = function use(resource) {
+    if (resource && resource.$$typeof === Symbol.for('react.context')) {
+      console.warn('[Rari] React.use() with Context is not fully supported on server')
+      return null
+    }
+
+    if (resource && typeof resource === 'object' && typeof resource.then === 'function') {
+      if (resource.status === 'fulfilled') {
+        return resource.value
+      }
+
+      if (resource.status === 'rejected') {
+        throw resource.reason
+      }
+
+      if (!resource.status) {
+        resource.status = 'pending'
+
+        resource.then(
+          (value) => {
+            if (resource.status === 'pending') {
+              resource.status = 'fulfilled'
+              resource.value = value
+            }
+          },
+          (reason) => {
+            if (resource.status === 'pending') {
+              resource.status = 'rejected'
+              resource.reason = reason
+            }
+          },
+        )
+      }
+
+      throw resource
+    }
+
+    return resource
   }
 }

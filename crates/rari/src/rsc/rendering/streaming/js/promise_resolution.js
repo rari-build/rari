@@ -61,7 +61,21 @@
     const promiseId = '{promise_id}'
     const boundaryId = '{boundary_id}'
 
-    const promise = globalThis['~suspense']?.promises[promiseId]
+    let promise = globalThis['~suspense']?.promises[promiseId]
+
+    if (!promise) {
+      const pendingPromises = globalThis['~suspense']?.pendingPromises || []
+      const pendingPromise = pendingPromises.find(p => p.id === promiseId)
+
+      if (pendingPromise && pendingPromise.componentType) {
+        try {
+          promise = pendingPromise.componentType(pendingPromise.componentProps)
+        }
+        catch (callError) {
+          return Promise.resolve(safeSerializeError(callError, 'component_execution'))
+        }
+      }
+    }
 
     if (!promise) {
       return Promise.resolve({
@@ -114,6 +128,7 @@
         success: true,
         boundary_id: boundaryId,
         content: rscData,
+        needsClientComponentProcessing: true,
       }
     }).catch((awaitError) => {
       return safeSerializeError(awaitError, 'promise_resolution')

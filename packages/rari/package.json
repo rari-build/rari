@@ -98,11 +98,11 @@
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
-    "@typescript/native-preview": "^7.0.0-dev.20251223.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260102.1",
     "chokidar": "^5.0.0",
     "eslint": "^9.39.2",
-    "oxlint": "^1.35.0",
+    "oxlint": "^1.36.0",
     "rolldown-vite": "^7.3.0",
-    "tsdown": "^0.17.3"
+    "tsdown": "^0.18.4"
   }
 }

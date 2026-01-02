@@ -165,9 +165,9 @@
     return `
 // Stub module for ${moduleName} (dependency of ${originalPath})
 
-export const __isStub = true;
-export const __stubFor = "${moduleName}";
-export const __dependencyOf = "${originalPath}";
+export const ~isStub = true;
+export const ~stubFor = "${moduleName}";
+export const ~dependencyOf = "${originalPath}";
 
 export default {};
 `
@@ -199,15 +199,15 @@ if (typeof globalThis['~rsc'].modules === 'undefined') {
 
 // Reserve module slot
 globalThis['~rsc'].modules['${componentId}'] = {
-    __isLoaderStub: true,
-    __awaitingRegistration: true
+    ~isLoaderStub: true,
+    ~awaitingRegistration: true
 };
 
 // Export default
 export default {
-    __isLoaderStub: true,
-    __componentId: "${componentId}",
-    __awaitingRegistration: true
+    ~isLoaderStub: true,
+    ~componentId: "${componentId}",
+    ~awaitingRegistration: true
 };
 `
   }
@@ -222,8 +222,8 @@ export default {
     isInternalModule: true
 };
 
-export const __isStub = true;
-export const __moduleName = "${moduleName}";
+export const ~isStub = true;
+export const ~moduleName = "${moduleName}";
 `
   }
 
@@ -237,9 +237,9 @@ export const __moduleName = "${moduleName}";
 
 // Initialize module structure
 const moduleExports = {
-    __isStub: true,
-    __componentName: "${componentName}",
-    __awaitingRegistration: true
+    ~isStub: true,
+    ~componentName: "${componentName}",
+    ~awaitingRegistration: true
 };
 
 // Register the component structure if needed

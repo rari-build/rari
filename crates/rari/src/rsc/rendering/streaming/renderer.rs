@@ -37,16 +37,6 @@ impl StreamingRenderer {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_row_counter(&mut self, counter: u32) {
-        self.row_counter = counter;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_module_path(&mut self, path: String) {
-        self.module_path = Some(path);
-    }
-
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
@@ -99,6 +89,22 @@ impl StreamingRenderer {
         let partial_result = self.render_partial_from_composition(composition_script).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
+
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
+
+        let stream_complete_chunk = RscStreamChunk {
+            data: b"STREAM_COMPLETE\n".to_vec(),
+            chunk_type: RscChunkType::StreamComplete,
+            row_id: u32::MAX,
+            is_final: false,
+            boundary_id: None,
+        };
+        chunk_sender.send(stream_complete_chunk).await.map_err(|e| {
+            RariError::internal(format!("Failed to send initial stream complete: {}", e))
+        })?;
 
         if let Some(resolver) = &self.promise_resolver {
             let runtime = Arc::clone(&self.runtime);
@@ -221,6 +227,7 @@ impl StreamingRenderer {
                 chunk_type: RscChunkType::StreamComplete,
                 row_id: u32::MAX,
                 is_final: true,
+                boundary_id: None,
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
@@ -236,6 +243,7 @@ impl StreamingRenderer {
         rsc_data: serde_json::Value,
         boundaries: Vec<crate::rsc::rendering::layout::BoundaryInfo>,
         layout_structure: crate::rsc::rendering::layout::LayoutStructure,
+        pending_promises: Vec<PendingSuspensePromise>,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
             error!(
@@ -265,38 +273,38 @@ impl StreamingRenderer {
             Arc::clone(&self.shared_row_counter),
         )));
 
+        let suspense_boundaries =
+            Self::extract_suspense_boundaries(&rsc_data, &boundaries, &layout_structure);
+
         let partial_result = PartialRenderResult {
             initial_content: rsc_data,
-            pending_promises: Vec::new(),
-            boundaries: Vec::new(),
+            pending_promises,
+            boundaries: suspense_boundaries,
             has_suspense: !boundaries.is_empty(),
         };
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
+
+        let chunk_sender_clone = chunk_sender.clone();
+
+        drop(chunk_sender);
+
         if let Some(resolver) = &self.promise_resolver {
-            let runtime = Arc::clone(&self.runtime);
             let resolver_clone = Arc::clone(resolver);
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = runtime
-                    .execute_script(
-                        "<execute_deferred_components>".to_string(),
-                        DEFERRED_EXECUTION_SCRIPT.to_string(),
-                    )
-                    .await
-                {
-                    error!("Failed to execute deferred components: {}", e);
-                }
-
                 for promise in pending_promises {
                     resolver_clone.resolve_async(promise).await;
                 }
             });
         }
 
-        let chunk_sender_clone = chunk_sender.clone();
         let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
         let boundary_positions_clone = Arc::clone(&boundary_positions);
         let rendered_skeleton_ids = Arc::clone(&self.rendered_skeleton_ids);
@@ -348,6 +356,7 @@ impl StreamingRenderer {
                 chunk_type: RscChunkType::StreamComplete,
                 row_id: u32::MAX,
                 is_final: true,
+                boundary_id: None,
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
@@ -461,6 +470,7 @@ impl StreamingRenderer {
                                      chunk_type: RscChunkType::BoundaryUpdate,
                                      row_id: update.row_id,
                                      is_final: false,
+                                     boundary_id: Some(update.boundary_id.clone()),
                                  };
 
                                  if chunk_sender_clone.send(chunk).await.is_err() {
@@ -494,6 +504,7 @@ impl StreamingRenderer {
                                      chunk_type: RscChunkType::BoundaryError,
                                      row_id: error.row_id,
                                      is_final: false,
+                boundary_id: None,
                                  };
 
                                  if chunk_sender_clone.send(chunk).await.is_err() {
@@ -511,6 +522,7 @@ impl StreamingRenderer {
                 chunk_type: RscChunkType::StreamComplete,
                 row_id: 0,
                 is_final: true,
+                boundary_id: None,
             };
 
             let _ = chunk_sender_clone.send(final_chunk).await;
@@ -617,6 +629,7 @@ impl StreamingRenderer {
                 chunk_type: RscChunkType::StreamComplete,
                 row_id: u32::MAX,
                 is_final: true,
+                boundary_id: None,
             };
 
             if let Err(e) = chunk_sender_clone.send(final_chunk).await {
@@ -699,10 +712,14 @@ impl StreamingRenderer {
                                 if let Some(json_str) = check_data.as_str() {
                                     if let Ok(parsed) =
                                         serde_json::from_str::<serde_json::Value>(json_str)
-                                        && parsed
+                                        && (parsed
                                             .get("complete")
                                             .and_then(|v| v.as_bool())
                                             .unwrap_or(false)
+                                            || parsed
+                                                .get("initialComplete")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false))
                                     {
                                         let mut tx = completion_tx_clone.lock().await;
                                         if let Some(sender) = tx.take() {
@@ -714,6 +731,10 @@ impl StreamingRenderer {
                                     .get("complete")
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(false)
+                                    || check_data
+                                        .get("initialComplete")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false)
                                 {
                                     let mut tx = completion_tx_clone.lock().await;
                                     if let Some(sender) = tx.take() {
@@ -1122,60 +1143,137 @@ impl StreamingRenderer {
         })
     }
 
+    fn extract_suspense_boundaries(
+        rsc_data: &serde_json::Value,
+        boundaries: &[crate::rsc::rendering::layout::BoundaryInfo],
+        layout_structure: &crate::rsc::rendering::layout::LayoutStructure,
+    ) -> Vec<SuspenseBoundaryInfo> {
+        let mut result = Vec::new();
+
+        let boundary_ids: FxHashSet<String> = boundaries.iter().map(|b| b.id.clone()).collect();
+
+        let boundary_positions: FxHashMap<
+            String,
+            &crate::rsc::rendering::layout::BoundaryPosition,
+        > = layout_structure
+            .suspense_boundaries
+            .iter()
+            .map(|bp| (bp.boundary_id.clone(), bp))
+            .collect();
+
+        fn traverse(
+            value: &serde_json::Value,
+            boundary_ids: &FxHashSet<String>,
+            boundary_positions: &FxHashMap<
+                String,
+                &crate::rsc::rendering::layout::BoundaryPosition,
+            >,
+            result: &mut Vec<SuspenseBoundaryInfo>,
+            parent_path: &mut Vec<String>,
+        ) {
+            match value {
+                serde_json::Value::Array(arr) => {
+                    if arr.len() >= 4
+                        && arr[0].as_str() == Some("$")
+                        && (arr[1].as_str() == Some("$Sreact.suspense")
+                            || arr[1].as_str() == Some("react.suspense")
+                            || arr[1].as_str() == Some("Suspense"))
+                        && let Some(props) = arr.get(3).and_then(|v| v.as_object())
+                        && let Some(boundary_id) = props.get("~boundaryId").and_then(|v| v.as_str())
+                        && boundary_ids.contains(boundary_id)
+                    {
+                        let fallback_content =
+                            props.get("fallback").cloned().unwrap_or(serde_json::Value::Null);
+
+                        let position = boundary_positions.get(boundary_id);
+                        let is_in_content_area =
+                            position.map(|p| p.is_in_content_area).unwrap_or(false);
+
+                        let dom_path = position
+                            .map(|p| p.dom_path.iter().map(|n| n.to_string()).collect())
+                            .unwrap_or_default();
+
+                        result.push(SuspenseBoundaryInfo {
+                            id: boundary_id.to_string(),
+                            fallback_content,
+                            parent_boundary_id: None,
+                            pending_promise_count: 1,
+                            parent_path: parent_path.clone(),
+                            is_in_content_area,
+                            skeleton_rendered: false,
+                            is_resolved: false,
+                            position_hints: Some(PositionHints {
+                                in_content_area: is_in_content_area,
+                                dom_path,
+                                is_stable: true,
+                            }),
+                        });
+                    }
+
+                    for item in arr {
+                        traverse(item, boundary_ids, boundary_positions, result, parent_path);
+                    }
+                }
+                serde_json::Value::Object(obj) => {
+                    if obj.contains_key("~preSerializedSuspense") {
+                        if let Some(rsc_array) = obj.get("rscArray") {
+                            traverse(
+                                rsc_array,
+                                boundary_ids,
+                                boundary_positions,
+                                result,
+                                parent_path,
+                            );
+                        }
+                    } else {
+                        for value in obj.values() {
+                            traverse(value, boundary_ids, boundary_positions, result, parent_path);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut parent_path = Vec::new();
+        traverse(rsc_data, &boundary_ids, &boundary_positions, &mut result, &mut parent_path);
+
+        result
+    }
+
     async fn send_initial_shell(
         &mut self,
         sender: &mpsc::Sender<RscStreamChunk>,
         partial_result: &PartialRenderResult,
     ) -> Result<(), RariError> {
-        self.row_counter += 1;
-        let module_chunk = self.create_module_chunk()?;
-        sender
-            .send(module_chunk)
-            .await
-            .map_err(|e| RariError::internal(format!("Failed to send module chunk: {e}")))?;
+        self.validate_lazy_marker_structure(partial_result)?;
 
-        self.row_counter += 1;
-        let module_row_id = self.row_counter.saturating_sub(1);
-
-        let shell_chunk =
-            self.create_shell_chunk_with_module(&partial_result.initial_content, module_row_id)?;
-        sender
-            .send(shell_chunk)
-            .await
-            .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
-
-        if partial_result.has_suspense {
+        let symbol_row_id = if partial_result.has_suspense {
             self.row_counter += 1;
-            let symbol_chunk = self.create_symbol_chunk("react.suspense")?;
+            let symbol_row_id = self.row_counter;
+            let symbol_chunk =
+                self.create_symbol_reference_chunk(symbol_row_id, "react.suspense")?;
             sender
                 .send(symbol_chunk)
                 .await
                 .map_err(|e| RariError::internal(format!("Failed to send symbol chunk: {e}")))?;
+            Some(symbol_row_id)
+        } else {
+            None
+        };
 
-            for boundary in &partial_result.boundaries {
-                self.row_counter += 1;
+        self.row_counter += 1;
 
-                {
-                    let mut skeleton_ids = self.rendered_skeleton_ids.lock().await;
-                    skeleton_ids.insert(boundary.id.clone());
-                }
-
-                {
-                    let mut map = self.boundary_row_ids.lock().await;
-                    map.insert(boundary.id.clone(), self.row_counter);
-                }
-
-                let boundary_chunk = Self::create_boundary_chunk_static(
-                    self.row_counter,
-                    &boundary.id,
-                    &boundary.fallback_content,
-                )?;
-
-                sender.send(boundary_chunk).await.map_err(|e| {
-                    RariError::internal(format!("Failed to send boundary chunk: {e}"))
-                })?;
-            }
-        }
+        let shell_chunk = self.create_shell_chunk_with_module(
+            &partial_result.initial_content,
+            0,
+            symbol_row_id,
+            &FxHashMap::default(),
+        )?;
+        sender
+            .send(shell_chunk)
+            .await
+            .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
         Ok(())
     }
@@ -1185,35 +1283,28 @@ impl StreamingRenderer {
         update: BoundaryUpdate,
         _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
     ) {
-        let element = serde_json::Value::Object({
-            let mut map = serde_json::Map::new();
-            map.insert(
-                "boundary_id".to_string(),
-                serde_json::Value::String(update.boundary_id.clone()),
-            );
-            map.insert("content".to_string(), update.content.clone());
-            if !update.dom_path.is_empty() {
-                map.insert(
-                    "dom_path".to_string(),
-                    serde_json::Value::Array(
-                        update
-                            .dom_path
-                            .iter()
-                            .map(|&i| serde_json::Value::Number(i.into()))
-                            .collect(),
-                    ),
-                );
-            }
-            map
-        });
+        for import_row in &update.import_rows {
+            let import_chunk = RscStreamChunk {
+                data: format!("{}\n", import_row).into_bytes(),
+                chunk_type: RscChunkType::ModuleImport,
+                row_id: 0,
+                is_final: false,
+                boundary_id: None,
+            };
 
-        let update_row = format!("{}:{}\n", update.row_id, element);
+            if let Err(e) = sender.send(import_chunk).await {
+                error!("Failed to send import row chunk: {}", e);
+            }
+        }
+
+        let update_row = format!("{}:{}\n", update.row_id, update.content);
 
         let chunk = RscStreamChunk {
             data: update_row.into_bytes(),
             chunk_type: RscChunkType::BoundaryUpdate,
             row_id: update.row_id,
             is_final: false,
+            boundary_id: Some(update.boundary_id.clone()),
         };
 
         match sender.send(chunk).await {
@@ -1241,6 +1332,7 @@ impl StreamingRenderer {
             chunk_type: RscChunkType::BoundaryError,
             row_id: error.row_id,
             is_final: false,
+            boundary_id: None,
         };
 
         if let Err(e) = sender.send(chunk).await {
@@ -1251,28 +1343,14 @@ impl StreamingRenderer {
         }
     }
 
-    pub(crate) fn create_module_chunk(&self) -> Result<RscStreamChunk, RariError> {
-        let path = self
-            .module_path
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| "app/UnknownComponent.js".to_string());
-        let module_data = format!("{}:I[\"{}\",[\"main\"],\"default\"]\n", self.row_counter, path);
-
-        Ok(RscStreamChunk {
-            data: module_data.into_bytes(),
-            chunk_type: RscChunkType::ModuleImport,
-            row_id: self.row_counter,
-            is_final: false,
-        })
-    }
-
     fn create_shell_chunk_with_module(
         &self,
         content: &serde_json::Value,
         _module_row_id: u32,
+        symbol_row_id: Option<u32>,
+        boundary_lazy_refs: &FxHashMap<String, u32>,
     ) -> Result<RscStreamChunk, RariError> {
-        let rsc_element = self.json_to_rsc_element(content)?;
+        let rsc_element = self.json_to_rsc_element(content, symbol_row_id, boundary_lazy_refs)?;
         let row = format!("{}:{}\n", self.row_counter, rsc_element);
 
         Ok(RscStreamChunk {
@@ -1280,13 +1358,86 @@ impl StreamingRenderer {
             chunk_type: RscChunkType::InitialShell,
             row_id: self.row_counter,
             is_final: false,
+            boundary_id: None,
         })
     }
 
     fn json_to_rsc_element(
         &self,
         json: &serde_json::Value,
+        symbol_row_id: Option<u32>,
+        boundary_lazy_refs: &FxHashMap<String, u32>,
     ) -> Result<serde_json::Value, RariError> {
+        if let Some(arr) = json.as_array() {
+            if arr.len() >= 4 && arr[0].as_str() == Some("$") {
+                let element_type = &arr[1];
+                let key = &arr[2];
+                let props = &arr[3];
+
+                let final_element_type = if let Some(type_str) = element_type.as_str()
+                    && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
+                    && let Some(row_id) = symbol_row_id
+                {
+                    serde_json::Value::String(format!("${}", row_id))
+                } else {
+                    element_type.clone()
+                };
+
+                let final_props = if let Some(props_obj) = props.as_object() {
+                    let mut new_props = serde_json::Map::new();
+                    for (k, v) in props_obj {
+                        if k == "children" {
+                            new_props.insert(
+                                k.clone(),
+                                self.convert_children(v, symbol_row_id, boundary_lazy_refs)?,
+                            );
+                        } else {
+                            new_props.insert(k.clone(), v.clone());
+                        }
+                    }
+
+                    if let Some(type_str) = element_type.as_str()
+                        && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
+                        && let Some(boundary_id) =
+                            props_obj.get("~boundaryId").and_then(|v| v.as_str())
+                    {
+                        if let Some(fallback) = props_obj.get("fallback") {
+                            new_props.insert(
+                                "fallback".to_string(),
+                                self.convert_children(fallback, symbol_row_id, boundary_lazy_refs)?,
+                            );
+                        }
+
+                        new_props.insert(
+                            "~boundaryId".to_string(),
+                            serde_json::Value::String(boundary_id.to_string()),
+                        );
+                    }
+
+                    serde_json::Value::Object(new_props)
+                } else {
+                    props.clone()
+                };
+
+                return Ok(serde_json::Value::Array(vec![
+                    serde_json::Value::String("$".to_string()),
+                    final_element_type,
+                    key.clone(),
+                    final_props,
+                ]));
+            } else {
+                let mut converted = Vec::new();
+                for item in arr {
+                    converted.push(self.json_to_rsc_element(
+                        item,
+                        symbol_row_id,
+                        boundary_lazy_refs,
+                    )?);
+                }
+                return Ok(serde_json::Value::Array(converted));
+            }
+        }
+
         if let Some(obj) = json.as_object()
             && let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
         {
@@ -1295,16 +1446,28 @@ impl StreamingRenderer {
             if let Some(props_obj) = props.as_object() {
                 for (key, value) in props_obj {
                     if key == "children" {
-                        converted_props.insert(key.clone(), self.convert_children(value)?);
+                        converted_props.insert(
+                            key.clone(),
+                            self.convert_children(value, symbol_row_id, boundary_lazy_refs)?,
+                        );
                     } else {
                         converted_props.insert(key.clone(), value.clone());
                     }
                 }
             }
 
+            let final_element_type = if let Some(type_str) = element_type.as_str()
+                && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
+                && let Some(row_id) = symbol_row_id
+            {
+                serde_json::Value::String(format!("${}", row_id))
+            } else {
+                element_type.clone()
+            };
+
             return Ok(serde_json::Value::Array(vec![
                 serde_json::Value::String("$".to_string()),
-                element_type.clone(),
+                final_element_type,
                 serde_json::Value::Null,
                 serde_json::Value::Object(converted_props),
             ]));
@@ -1316,54 +1479,71 @@ impl StreamingRenderer {
     fn convert_children(
         &self,
         children: &serde_json::Value,
+        symbol_row_id: Option<u32>,
+        boundary_lazy_refs: &FxHashMap<String, u32>,
     ) -> Result<serde_json::Value, RariError> {
         match children {
             serde_json::Value::Array(arr) => {
                 let mut converted = Vec::new();
                 for child in arr {
-                    converted.push(self.json_to_rsc_element(child)?);
+                    converted.push(self.json_to_rsc_element(
+                        child,
+                        symbol_row_id,
+                        boundary_lazy_refs,
+                    )?);
                 }
                 Ok(serde_json::Value::Array(converted))
             }
-            _ => self.json_to_rsc_element(children),
+            _ => self.json_to_rsc_element(children, symbol_row_id, boundary_lazy_refs),
         }
     }
 
-    pub(crate) fn create_symbol_chunk(
+    pub(crate) fn create_symbol_reference_chunk(
         &self,
-        symbol_ref: &str,
+        row_id: u32,
+        symbol_name: &str,
     ) -> Result<RscStreamChunk, RariError> {
-        let symbol_row = format!("{}:SSymbol.for(\"{}\")\n", self.row_counter, symbol_ref);
+        let symbol_row = format!("{}:\"$S{}\"\n", row_id, symbol_name);
 
         Ok(RscStreamChunk {
             data: symbol_row.into_bytes(),
-            chunk_type: RscChunkType::InitialShell,
-            row_id: self.row_counter,
+            chunk_type: RscChunkType::ModuleImport,
+            row_id,
             is_final: false,
+            boundary_id: None,
         })
     }
 
-    fn create_boundary_chunk_static(
-        row_id: u32,
-        boundary_id: &str,
-        fallback_content: &serde_json::Value,
-    ) -> Result<RscStreamChunk, RariError> {
-        let mut props = serde_json::Map::new();
-        props.insert("fallback".to_string(), fallback_content.clone());
-        props.insert("~boundaryId".to_string(), serde_json::Value::String(boundary_id.to_string()));
-        let element = serde_json::Value::Array(vec![
-            serde_json::Value::String("$".to_string()),
-            serde_json::Value::String("react.suspense".to_string()),
-            serde_json::Value::Null,
-            serde_json::Value::Object(props),
-        ]);
-        let row = format!("{row_id}:{element}\n");
+    fn validate_lazy_marker_structure(
+        &self,
+        partial_result: &PartialRenderResult,
+    ) -> Result<(), RariError> {
+        let mut promise_ids = FxHashSet::default();
+        for promise in &partial_result.pending_promises {
+            if !promise_ids.insert(promise.id.clone()) {
+                return Err(RariError::internal(format!(
+                    "Duplicate promise ID detected: {}",
+                    promise.id
+                )));
+            }
+        }
 
-        Ok(RscStreamChunk {
-            data: row.into_bytes(),
-            chunk_type: RscChunkType::InitialShell,
-            row_id,
-            is_final: false,
-        })
+        let mut boundary_ids = FxHashSet::default();
+        for boundary in &partial_result.boundaries {
+            if !boundary_ids.insert(boundary.id.clone()) {
+                return Err(RariError::internal(format!(
+                    "Duplicate boundary ID detected: {}",
+                    boundary.id
+                )));
+            }
+        }
+
+        for boundary in &partial_result.boundaries {
+            if boundary.id.is_empty() {
+                return Err(RariError::internal("Boundary ID cannot be empty".to_string()));
+            }
+        }
+
+        Ok(())
     }
 }

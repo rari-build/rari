@@ -1,6 +1,5 @@
 pub mod components;
 pub mod rendering;
-pub mod suspense;
 pub mod types;
 pub mod utils;
 pub mod wire_format;
