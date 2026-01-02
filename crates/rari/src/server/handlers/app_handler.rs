@@ -225,6 +225,7 @@ async fn render_rsc_streaming_response(
     let mut response_builder = Response::builder()
         .status(status_code)
         .header("content-type", "text/x-component")
+        .header("transfer-encoding", "chunked")
         .header("x-render-mode", "streaming")
         .header("cache-control", "no-cache")
         .header("x-content-type-options", "nosniff");
