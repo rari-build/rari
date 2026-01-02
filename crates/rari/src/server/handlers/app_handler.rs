@@ -158,6 +158,89 @@ pub async fn render_with_fallback(
     }
 }
 
+pub async fn render_rsc_navigation_streaming(
+    state: Arc<ServerState>,
+    route_match: crate::server::routing::AppRouteMatch,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
+) -> Result<Response, StatusCode> {
+    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let is_not_found = route_match.not_found.is_some();
+
+    let request_context =
+        std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
+            route_match.route.path.clone(),
+        ));
+
+    let render_result = match layout_renderer
+        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!(
+                "Failed to render RSC navigation for streaming '{}': {}",
+                route_match.route.path, e
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let rsc_stream = match render_result {
+        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
+        crate::rsc::rendering::layout::RenderResult::Static(_) => {
+            error!("Expected streaming result for RSC navigation with Suspense");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    render_rsc_streaming_response(state, route_match, context, rsc_stream, is_not_found).await
+}
+
+async fn render_rsc_streaming_response(
+    _state: Arc<ServerState>,
+    _route_match: crate::server::routing::AppRouteMatch,
+    context: crate::rsc::rendering::layout::LayoutRenderContext,
+    mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
+    is_not_found: bool,
+) -> Result<Response, StatusCode> {
+    let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let should_continue_clone = should_continue.clone();
+
+    let rsc_wire_stream = async_stream::stream! {
+        while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
+            match rsc_stream.next_chunk().await {
+                Some(chunk) => {
+                    let data = String::from_utf8_lossy(&chunk.data).to_string();
+                    yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+    };
+
+    let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+    let mut response_builder = Response::builder()
+        .status(status_code)
+        .header("content-type", "text/x-component")
+        .header("x-render-mode", "streaming")
+        .header("cache-control", "no-cache")
+        .header("x-accel-buffering", "no")
+        .header("x-content-type-options", "nosniff");
+
+    if let Some(ref metadata) = context.metadata
+        && let Ok(metadata_json) = serde_json::to_string(metadata)
+    {
+        let encoded_metadata = urlencoding::encode(&metadata_json);
+        response_builder = response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+    }
+
+    let body = Body::from_stream(rsc_wire_stream);
+    Ok(response_builder.body(body).expect("Valid RSC streaming response"))
+}
+
 pub async fn render_synchronous(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
@@ -589,6 +672,12 @@ pub async fn handle_app_route(
 
     match render_mode {
         RenderMode::RscNavigation => {
+            let use_streaming = should_use_streaming(&route_match, &state.config);
+
+            if use_streaming {
+                return render_rsc_navigation_streaming(Arc::new(state), route_match, context)
+                    .await;
+            }
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {

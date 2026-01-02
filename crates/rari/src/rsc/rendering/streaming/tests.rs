@@ -5,7 +5,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::super::boundary_manager::SuspenseBoundaryManager;
-    use super::super::renderer::StreamingRenderer;
     use super::super::types::*;
     use super::super::validation::validate_suspense_boundaries;
 
@@ -63,19 +62,6 @@ mod tests {
         assert_eq!(chunk.chunk_type, RscChunkType::InitialShell);
         assert_eq!(chunk.row_id, 1);
         assert!(!chunk.is_final);
-    }
-
-    #[test]
-    fn test_module_row_format() {
-        let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let mut renderer = StreamingRenderer::new(runtime);
-
-        renderer.set_row_counter(1);
-        renderer.set_module_path("app/MyComponent.js".to_string());
-
-        let module_chunk = renderer.create_module_chunk().expect("module chunk");
-        let s = String::from_utf8(module_chunk.data).expect("utf8");
-        assert!(s.starts_with("1:I[\"app/MyComponent.js\",[\"main\"],\"default\"]"));
     }
 
     #[tokio::test]

@@ -39,11 +39,11 @@ else {
       const lazyMarker = {
         __rari_lazy: true,
         __rari_promise_id: promiseId,
-        __rari_component_id: '{page_component_id}',
-        __rari_loading_id: '{loading_id}',
+        __rari_component_id: '{route_file_path}#default',
+        __rari_loading_id: '{loading_file_path}#default',
       }
 
-      const loadingFallback = React.createElement(LoadingComponent)
+      const loadingFallback = LoadingComponent()
       var pageElement = React.createElement(
         React.Suspense,
         { 'fallback': loadingFallback, '~boundaryId': promiseId },
@@ -53,7 +53,7 @@ else {
     else {
       const pageResult = await PageComponent(pageProps)
 
-      const loadingFallback = React.createElement(LoadingComponent)
+      const loadingFallback = LoadingComponent()
       var pageElement = React.createElement(
         React.Suspense,
         { fallback: loadingFallback },

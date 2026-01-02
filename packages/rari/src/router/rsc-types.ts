@@ -22,6 +22,7 @@ export interface EnhancedRSCPayload {
 export interface ParsedRSCPayload {
   element: any
   modules: Map<string, any>
+  symbols?: Map<string, string>
   wireFormat: string
   layoutBoundaries?: LayoutBoundary[]
   routeMetadata?: RSCRouteMetadata

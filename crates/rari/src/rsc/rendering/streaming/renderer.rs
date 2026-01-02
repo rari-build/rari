@@ -37,16 +37,6 @@ impl StreamingRenderer {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_row_counter(&mut self, counter: u32) {
-        self.row_counter = counter;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_module_path(&mut self, path: String) {
-        self.module_path = Some(path);
-    }
-
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
@@ -99,6 +89,11 @@ impl StreamingRenderer {
         let partial_result = self.render_partial_from_composition(composition_script).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
+
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
 
         let stream_complete_chunk = RscStreamChunk {
             data: b"STREAM_COMPLETE\n".to_vec(),
@@ -1251,14 +1246,7 @@ impl StreamingRenderer {
         sender: &mpsc::Sender<RscStreamChunk>,
         partial_result: &PartialRenderResult,
     ) -> Result<(), RariError> {
-        self.row_counter += 1;
-        let module_chunk = self.create_module_chunk()?;
-        sender
-            .send(module_chunk)
-            .await
-            .map_err(|e| RariError::internal(format!("Failed to send module chunk: {e}")))?;
-
-        let module_row_id = self.row_counter;
+        self.validate_lazy_marker_structure(partial_result)?;
 
         let symbol_row_id = if partial_result.has_suspense {
             self.row_counter += 1;
@@ -1276,19 +1264,11 @@ impl StreamingRenderer {
 
         self.row_counter += 1;
 
-        let mut boundary_lazy_refs = FxHashMap::default();
-        if partial_result.has_suspense {
-            for (idx, boundary) in partial_result.boundaries.iter().enumerate() {
-                let lazy_row_id = self.row_counter + 1 + idx as u32;
-                boundary_lazy_refs.insert(boundary.id.clone(), lazy_row_id);
-            }
-        }
-
         let shell_chunk = self.create_shell_chunk_with_module(
             &partial_result.initial_content,
-            module_row_id,
+            0,
             symbol_row_id,
-            &boundary_lazy_refs,
+            &FxHashMap::default(),
         )?;
         sender
             .send(shell_chunk)
@@ -1363,27 +1343,6 @@ impl StreamingRenderer {
         }
     }
 
-    pub(crate) fn create_module_chunk(&self) -> Result<RscStreamChunk, RariError> {
-        let path = self
-            .module_path
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| "app/UnknownComponent.js".to_string());
-
-        #[allow(clippy::disallowed_methods)]
-        let import_data = serde_json::json!([path, ["main"], "default"]);
-        let module_data =
-            RscWireFormatTag::ModuleImport.format_row(self.row_counter, &import_data.to_string());
-
-        Ok(RscStreamChunk {
-            data: module_data.into_bytes(),
-            chunk_type: RscChunkType::ModuleImport,
-            row_id: self.row_counter,
-            is_final: false,
-            boundary_id: None,
-        })
-    }
-
     fn create_shell_chunk_with_module(
         &self,
         content: &serde_json::Value,
@@ -1441,23 +1400,18 @@ impl StreamingRenderer {
                         && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
                         && let Some(boundary_id) =
                             props_obj.get("~boundaryId").and_then(|v| v.as_str())
-                        && let Some(&lazy_row_id) = boundary_lazy_refs.get(boundary_id)
                     {
-                        let children_value = new_props.get("children");
-                        let should_replace = if let Some(children) = children_value {
-                            !children.is_null()
-                                && children
-                                    != &serde_json::Value::Array(vec![serde_json::Value::Null])
-                        } else {
-                            false
-                        };
-
-                        if should_replace {
+                        if let Some(fallback) = props_obj.get("fallback") {
                             new_props.insert(
-                                "children".to_string(),
-                                serde_json::Value::String(format!("${}", lazy_row_id)),
+                                "fallback".to_string(),
+                                self.convert_children(fallback, symbol_row_id, boundary_lazy_refs)?,
                             );
                         }
+
+                        new_props.insert(
+                            "~boundaryId".to_string(),
+                            serde_json::Value::String(boundary_id.to_string()),
+                        );
                     }
 
                     serde_json::Value::Object(new_props)
@@ -1558,5 +1512,38 @@ impl StreamingRenderer {
             is_final: false,
             boundary_id: None,
         })
+    }
+
+    fn validate_lazy_marker_structure(
+        &self,
+        partial_result: &PartialRenderResult,
+    ) -> Result<(), RariError> {
+        let mut promise_ids = FxHashSet::default();
+        for promise in &partial_result.pending_promises {
+            if !promise_ids.insert(promise.id.clone()) {
+                return Err(RariError::internal(format!(
+                    "Duplicate promise ID detected: {}",
+                    promise.id
+                )));
+            }
+        }
+
+        let mut boundary_ids = FxHashSet::default();
+        for boundary in &partial_result.boundaries {
+            if !boundary_ids.insert(boundary.id.clone()) {
+                return Err(RariError::internal(format!(
+                    "Duplicate boundary ID detected: {}",
+                    boundary.id
+                )));
+            }
+        }
+
+        for boundary in &partial_result.boundaries {
+            if boundary.id.is_empty() {
+                return Err(RariError::internal("Boundary ID cannot be empty".to_string()));
+            }
+        }
+
+        Ok(())
     }
 }

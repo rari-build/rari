@@ -88,6 +88,7 @@ function setupPartialHydration() {
         return element.map((child, index) => {
           const result = rscToReactElement(child)
           if (React.isValidElement(result) && !result.key) {
+            // eslint-disable-next-line react/no-clone-element
             return React.cloneElement(result, { key: index })
           }
           return result

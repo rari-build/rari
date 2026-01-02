@@ -151,6 +151,13 @@ impl RscSerializer {
         self.serialized_modules.clear();
     }
 
+    pub fn reset_for_new_request(&mut self) {
+        self.serialized_modules.clear();
+        self.module_registration_order.clear();
+        self.module_map.clear();
+        self.row_counter.store(0, Ordering::Relaxed);
+    }
+
     pub fn register_client_component(
         &mut self,
         component_id: &str,
@@ -217,7 +224,8 @@ impl RscSerializer {
 
         let has_suspense = self.tree_contains_suspense(&rsc_tree);
 
-        let is_lazy_resolution = !self.serialized_modules.is_empty();
+        let current_counter = self.row_counter.load(Ordering::Relaxed);
+        let is_lazy_resolution = current_counter > 0;
 
         self.output_lines.clear();
 
@@ -225,8 +233,6 @@ impl RscSerializer {
             self.serialized_modules.clear();
             self.module_registration_order.clear();
         }
-
-        self.row_counter.store(1, Ordering::Relaxed);
 
         self.collect_client_components_from_rsc_tree(&rsc_tree);
 
@@ -315,6 +321,9 @@ impl RscSerializer {
                 for element in elements {
                     self.collect_client_components_from_rsc_tree(element);
                 }
+            }
+            RSCTree::Primitive(Value::Object(obj)) => {
+                if obj.get("__rari_lazy").and_then(|v| v.as_bool()) == Some(true) {}
             }
             _ => {}
         }
@@ -458,9 +467,12 @@ impl RscSerializer {
 
         if !self.is_client_component_registered(id) {
             self.register_client_component(id, file_path, export_name);
-            if let Some(module_ref) = self.module_map.get(id).cloned() {
-                self.emit_module_import_line(id, &module_ref);
-            }
+        }
+
+        if !self.serialized_modules.contains_key(id)
+            && let Some(module_ref) = self.module_map.get(id).cloned()
+        {
+            self.emit_module_import_line(id, &module_ref);
         }
 
         Some(id.to_string())
@@ -494,9 +506,9 @@ impl RscSerializer {
                             element_props.insert("children".to_string(), Value::Null);
                         }
                     } else {
-                        let lazy_row_id = self.get_next_row_id();
-
                         self.seen_lazy_promise_ids.insert(lazy_info.promise_id.clone());
+
+                        let lazy_row_id = self.get_next_row_id();
 
                         self.pending_lazy_promises.push(LazyPromiseInfo {
                             promise_id: lazy_info.promise_id.clone(),
@@ -588,7 +600,7 @@ impl RscSerializer {
     }
 
     fn get_next_row_id(&self) -> u32 {
-        self.row_counter.fetch_add(1, Ordering::Relaxed)
+        self.row_counter.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     fn add_module_import_lines(&mut self) {

@@ -377,19 +377,79 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         }
         catch {}
 
-        const rscWireFormat = await response.text()
+        const renderMode = response.headers.get('x-render-mode')
+        const isStreaming = renderMode === 'streaming'
 
-        window.dispatchEvent(new CustomEvent('rari:navigate', {
-          detail: {
-            from: fromRoute,
-            to: targetPath,
-            navigationId,
-            options,
-            routeInfo,
-            abortSignal: abortController.signal,
-            rscWireFormat,
-          },
-        }))
+        if (isStreaming && response.body) {
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+
+              if (done)
+                break
+
+              if (abortController.signal.aborted) {
+                await reader.cancel()
+                cleanupAbortedNavigation(targetPath, navigationId)
+                return
+              }
+
+              buffer += decoder.decode(value, { stream: true })
+
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+
+              for (const line of lines) {
+                if (line.trim()) {
+                  window.dispatchEvent(new CustomEvent('rari:rsc-row', {
+                    detail: { rscRow: line },
+                  }))
+                }
+              }
+            }
+
+            if (buffer.trim()) {
+              window.dispatchEvent(new CustomEvent('rari:rsc-row', {
+                detail: { rscRow: buffer },
+              }))
+            }
+
+            window.dispatchEvent(new CustomEvent('rari:navigate', {
+              detail: {
+                from: fromRoute,
+                to: targetPath,
+                navigationId,
+                options,
+                routeInfo,
+                abortSignal: abortController.signal,
+                isStreaming: true,
+              },
+            }))
+          }
+          catch (streamError) {
+            console.error('[ClientRouter] Streaming error:', streamError)
+            throw streamError
+          }
+        }
+        else {
+          const rscWireFormat = await response.text()
+
+          window.dispatchEvent(new CustomEvent('rari:navigate', {
+            detail: {
+              from: fromRoute,
+              to: targetPath,
+              navigationId,
+              options,
+              routeInfo,
+              abortSignal: abortController.signal,
+              rscWireFormat,
+            },
+          }))
+        }
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)

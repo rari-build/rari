@@ -13,6 +13,7 @@ export function parseRscWireFormat(
   try {
     const lines = wireFormat.trim().split('\n')
     const modules = new Map<string, any>()
+    const symbols = new Map<string, string>()
     let rootElement = null
     const layoutBoundaries: LayoutBoundary[] = []
     let currentLayoutPath: string | null = null
@@ -30,6 +31,12 @@ export function parseRscWireFormat(
       const content = line.substring(colonIndex + 1)
 
       try {
+        if (content.startsWith('"$S')) {
+          const symbolName = content.slice(1, -1)
+          symbols.set(`$${rowId}`, symbolName)
+          continue
+        }
+
         if (content.startsWith('I[')) {
           const importData = JSON.parse(content.substring(1))
           if (Array.isArray(importData) && importData.length >= 3) {
@@ -118,6 +125,7 @@ export function parseRscWireFormat(
     return {
       element: rootElement,
       modules,
+      symbols,
       wireFormat,
       layoutBoundaries: options.extractLayoutBoundaries ? layoutBoundaries : undefined,
       routeMetadata,
