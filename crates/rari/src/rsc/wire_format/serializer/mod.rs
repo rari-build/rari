@@ -600,7 +600,7 @@ impl RscSerializer {
     }
 
     fn get_next_row_id(&self) -> u32 {
-        self.row_counter.fetch_add(1, Ordering::Relaxed) + 1
+        self.row_counter.fetch_add(1, Ordering::Relaxed)
     }
 
     fn add_module_import_lines(&mut self) {
