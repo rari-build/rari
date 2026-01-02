@@ -133,7 +133,6 @@ function parseWireFormat(wireFormat) {
       const isSymbol = currentRow.startsWith('"$S') && currentRow.endsWith('"')
       if (!isSymbol && chunks.has(rowID.toString())) {
         rootChunkId = rowID.toString()
-        console.warn('[RSC] Set rootChunkId to:', rootChunkId, '(from remaining row)')
       }
     }
   }
@@ -183,7 +182,6 @@ function processRow(id, tag, data, modules, chunks, symbols) {
         break
 
       case TAG_STREAM_CLOSE: {
-        console.warn('[RSC] Stream close:', data)
         break
       }
 
