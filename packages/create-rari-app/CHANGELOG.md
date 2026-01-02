@@ -1,3 +1,115 @@
+## [rari@0.5.29] - 2026-01-02
+
+### 💼 Other
+
+- Rari@0.5.29
+## [0.5.23] - 2026-01-02
+
+### 🚀 Features
+
+- *(rsc)* Improve streaming updates
+- *(rsc)* Enhance lazy loading and streaming completion handling
+- *(rsc-client-runtime)* Improve RSC row parsing
+- *(rsc)* Optimize lazy loading and promise resolution handling
+- *(rari)* Implement partial hydration and dynamic module loading
+- *(rsc)* Implement lazy promise resolution and streaming suspense
+- *(rsc)* Rename internal module markers from double underscore to tilde prefix
+- *(rari)* Add chunked transfer encoding to streaming RSC responses
+- *(server)* Add stream compression support with zstd, brotli, and gzip
+- *(docs)* Make DocPage component async
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Correct row ID generation in serializer
+- *(rari)* Remove debug console.warn statements from RSC client
+
+### 🚜 Refactor
+
+- *(rsc)* Extract HTML closing generation into dedicated method
+- *(server)* Remove x-accel-buffering header from streaming responses
+- *(rsc)* Remove suspense module and consolidate functionality
+- *(docs)* Simplify doc page layout and remove wrapper divs
+
+### 🎨 Styling
+
+- *(rari)* Remove unnecessary comment
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Migrate deployment config from railway to railpack
+- *(docs)* Config fix
+- *(docs)* Remove railpack builder config, it's default
+- *(docs)* Reverting config change
+- *(workspace)* Remove catalogMode
+- *(release)* Bump rari binary version to 0.5.23
+## [rari@0.5.28] - 2025-12-24
+
+### 💼 Other
+
+- Rari@0.5.28
+## [0.5.22] - 2025-12-24
+
+### 🚀 Features
+
+- *(server)* Invalidate caches on server action redirects
+
+### 🐛 Bug Fixes
+
+- *(server)* Return correct HTTP status codes for not-found routes
+
+### 🚜 Refactor
+
+- *(examples)* Simplify todo actions and remove verbose error handling
+- *(module-loader)* Improve dynamic import path resolution logic
+
+### 🎨 Styling
+
+- *(examples)* Remove unnecessary blank line
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.22
+## [rari@0.5.27] - 2025-12-24
+
+### 💼 Other
+
+- Rari@0.5.27
+## [0.5.21] - 2025-12-24
+
+### 🚀 Features
+
+- *(server)* Implement on-demand revalidation and response caching
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.21
+## [rari@0.5.26] - 2025-12-23
+
+### 💼 Other
+
+- Rari@0.5.26
+## [0.5.20] - 2025-12-23
+
+### 🚀 Features
+
+- *(routing)* Implement dynamic route info endpoint and remove manifest injection
+
+### 🐛 Bug Fixes
+
+- *(server)* Block access to app-routes.json in request handlers
+
+### 🎨 Styling
+
+- *(docs)* Simplify error handling in metadata generation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump rari version to 0.5.20
+## [create-rari-app@0.2.13] - 2025-12-23
+
+### 💼 Other
+
+- Create-rari-app@0.2.13
 ## [rari@0.5.25] - 2025-12-23
 
 ### 💼 Other
@@ -906,7 +1018,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update optionalDependencies for rari to version 0.2.14
-## [0.2.14] - 2025-09-02
+## [0.2.14] - 2026-01-02
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -923,7 +1035,7 @@
 ### 💼 Other
 
 - Rari@0.2.18
-## [0.2.13] - 2025-12-23
+## [0.2.13] - 2025-08-22
 
 ### ⚙️ Miscellaneous Tasks
 
