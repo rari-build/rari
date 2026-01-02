@@ -139,6 +139,7 @@ pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
@@ -147,13 +148,14 @@ pub async fn render_with_fallback(
         route_match.clone(),
         context.clone(),
         &layout_renderer,
+        accept_encoding,
     )
     .await
     {
         Ok(response) => Ok(response),
         Err(e) => {
             error!("Streaming render failed, falling back to synchronous: {}", e);
-            render_synchronous(state, route_match, context).await
+            render_synchronous(state, route_match, context, accept_encoding).await
         }
     }
 }
@@ -162,6 +164,7 @@ pub async fn render_rsc_navigation_streaming(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
     let is_not_found = route_match.not_found.is_some();
@@ -193,7 +196,15 @@ pub async fn render_rsc_navigation_streaming(
         }
     };
 
-    render_rsc_streaming_response(state, route_match, context, rsc_stream, is_not_found).await
+    render_rsc_streaming_response(
+        state,
+        route_match,
+        context,
+        rsc_stream,
+        is_not_found,
+        accept_encoding,
+    )
+    .await
 }
 
 async fn render_rsc_streaming_response(
@@ -202,7 +213,10 @@ async fn render_rsc_streaming_response(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
     is_not_found: bool,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
+    use crate::server::compression::{CompressionEncoding, compress_stream};
+
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
 
@@ -220,6 +234,9 @@ async fn render_rsc_streaming_response(
         }
     };
 
+    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let compressed_stream = compress_stream(rsc_wire_stream, encoding);
+
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
     let mut response_builder = Response::builder()
@@ -230,6 +247,10 @@ async fn render_rsc_streaming_response(
         .header("cache-control", "no-cache")
         .header("x-content-type-options", "nosniff");
 
+    if let Some(encoding_header) = encoding.as_header_value() {
+        response_builder = response_builder.header("content-encoding", encoding_header);
+    }
+
     if let Some(ref metadata) = context.metadata
         && let Ok(metadata_json) = serde_json::to_string(metadata)
     {
@@ -237,7 +258,7 @@ async fn render_rsc_streaming_response(
         response_builder = response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
     }
 
-    let body = Body::from_stream(rsc_wire_stream);
+    let body = Body::from_stream(compressed_stream);
     Ok(response_builder.body(body).expect("Valid RSC streaming response"))
 }
 
@@ -245,6 +266,7 @@ pub async fn render_synchronous(
     state: Arc<ServerState>,
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
     let request_context =
@@ -282,7 +304,15 @@ pub async fn render_synchronous(
                     .expect("Valid HTML response"))
             }
             crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
-                render_streaming_response(state, route_match, context, stream, is_not_found).await
+                render_streaming_response(
+                    state,
+                    route_match,
+                    context,
+                    stream,
+                    is_not_found,
+                    accept_encoding,
+                )
+                .await
             }
         },
         Err(e) => {
@@ -298,7 +328,10 @@ async fn render_streaming_response(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
     is_not_found: bool,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
+    use crate::server::compression::{CompressionEncoding, compress_stream};
+
     let asset_links = extract_asset_links_from_index_html().await;
 
     let html_renderer = {
@@ -365,7 +398,7 @@ async fn render_streaming_response(
                     match conv.convert_chunk(chunk).await {
                         Ok(html_bytes) => {
                             if !html_bytes.is_empty() {
-                                yield Ok(html_bytes);
+                                yield Ok::<_, std::io::Error>(bytes::Bytes::from(html_bytes));
                             }
                         }
                         Err(e) => {
@@ -375,7 +408,7 @@ async fn render_streaming_response(
                             }
 
                             error!("Error converting RSC chunk to HTML: {}", e);
-                            yield Err(e);
+                            yield Err(std::io::Error::other(e.to_string()));
                         }
                     }
                 }
@@ -386,11 +419,24 @@ async fn render_streaming_response(
         }
     };
 
+    let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+    let compressed_stream = compress_stream(html_stream, encoding);
+
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
-    let response = StreamingHtmlResponse::with_status(html_stream, status_code).into_response();
+    let mut response_builder = Response::builder()
+        .status(status_code)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("transfer-encoding", "chunked")
+        .header("x-content-type-options", "nosniff")
+        .header("cache-control", "no-cache");
 
-    Ok(response)
+    if let Some(encoding_header) = encoding.as_header_value() {
+        response_builder = response_builder.header("content-encoding", encoding_header);
+    }
+
+    let body = Body::from_stream(compressed_stream);
+    Ok(response_builder.body(body).expect("Valid streaming response"))
 }
 
 pub async fn render_streaming_with_layout(
@@ -398,6 +444,7 @@ pub async fn render_streaming_with_layout(
     route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
+    accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
@@ -423,7 +470,7 @@ pub async fn render_streaming_with_layout(
                 error!("  Layout {}: {} (is_root: {})", idx, layout.file_path, layout.is_root);
             }
 
-            return render_synchronous(state, route_match, context).await;
+            return render_synchronous(state, route_match, context, accept_encoding).await;
         }
     };
 
@@ -452,7 +499,15 @@ pub async fn render_streaming_with_layout(
         }
     };
 
-    render_streaming_response(state, route_match, context, rsc_stream, is_not_found).await
+    render_streaming_response(
+        state,
+        route_match,
+        context,
+        rsc_stream,
+        is_not_found,
+        accept_encoding,
+    )
+    .await
 }
 
 pub async fn render_fallback_html(
@@ -639,6 +694,7 @@ pub async fn handle_app_route(
     );
 
     let render_mode = RequestTypeDetector::detect_render_mode(&headers);
+    let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
     let query_params_for_cache = query_params.clone();
     let search_params = extract_search_params(query_params);
@@ -675,8 +731,13 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                return render_rsc_navigation_streaming(Arc::new(state), route_match, context)
-                    .await;
+                return render_rsc_navigation_streaming(
+                    Arc::new(state),
+                    route_match,
+                    context,
+                    accept_encoding,
+                )
+                .await;
             }
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
@@ -775,7 +836,13 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                return render_with_fallback(Arc::new(state), route_match, context).await;
+                return render_with_fallback(
+                    Arc::new(state),
+                    route_match,
+                    context,
+                    accept_encoding,
+                )
+                .await;
             }
 
             let cache_key = response_cache::ResponseCache::generate_cache_key(

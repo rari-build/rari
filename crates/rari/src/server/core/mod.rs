@@ -56,6 +56,10 @@ impl tower_http::compression::Predicate for NotStreamingResponse {
     where
         B: axum::body::HttpBody,
     {
+        if response.headers().get("content-encoding").is_some() {
+            return false;
+        }
+
         if let Some(transfer_encoding) = response.headers().get("transfer-encoding")
             && transfer_encoding == "chunked"
         {
@@ -284,7 +288,6 @@ impl Server {
         }
 
         let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
-
         router = router.layer(compression_layer);
 
         if config.is_development() {
