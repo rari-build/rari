@@ -59,7 +59,6 @@ impl IntoResponse for StreamingHtmlResponse {
             .header("content-type", "text/html; charset=utf-8")
             .header("transfer-encoding", "chunked")
             .header("x-content-type-options", "nosniff")
-            .header("x-accel-buffering", "no")
             .header("cache-control", "no-cache")
             .body(Body::from_stream(stream))
             .expect("Failed to build streaming response")
@@ -88,7 +87,6 @@ mod tests {
         assert_eq!(response.headers().get("content-type").unwrap(), "text/html; charset=utf-8");
         assert_eq!(response.headers().get("transfer-encoding").unwrap(), "chunked");
         assert_eq!(response.headers().get("x-content-type-options").unwrap(), "nosniff");
-        assert_eq!(response.headers().get("x-accel-buffering").unwrap(), "no");
         assert_eq!(response.headers().get("cache-control").unwrap(), "no-cache");
 
         let body_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -139,7 +137,6 @@ mod tests {
         assert!(headers.contains_key("content-type"));
         assert!(headers.contains_key("transfer-encoding"));
         assert!(headers.contains_key("x-content-type-options"));
-        assert!(headers.contains_key("x-accel-buffering"));
         assert!(headers.contains_key("cache-control"));
     }
 }

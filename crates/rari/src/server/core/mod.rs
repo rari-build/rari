@@ -62,12 +62,6 @@ impl tower_http::compression::Predicate for NotStreamingResponse {
             return false;
         }
 
-        if let Some(buffering) = response.headers().get("x-accel-buffering")
-            && buffering == "no"
-        {
-            return false;
-        }
-
         true
     }
 }

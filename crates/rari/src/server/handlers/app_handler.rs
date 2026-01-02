@@ -227,7 +227,6 @@ async fn render_rsc_streaming_response(
         .header("content-type", "text/x-component")
         .header("x-render-mode", "streaming")
         .header("cache-control", "no-cache")
-        .header("x-accel-buffering", "no")
         .header("x-content-type-options", "nosniff");
 
     if let Some(ref metadata) = context.metadata
