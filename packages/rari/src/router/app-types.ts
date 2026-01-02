@@ -97,12 +97,6 @@ export interface ErrorProps {
   reset: () => void
 }
 
-export interface LoadingProps {
-}
-
-export interface NotFoundProps {
-}
-
 export interface AppRouteMatch {
   route: AppRouteEntry
   params: Record<string, string | string[]>
