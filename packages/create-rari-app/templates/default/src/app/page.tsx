@@ -1,6 +1,6 @@
 import type { PageProps } from 'rari/client'
-import ServerTime from '../components/ServerTime'
-import Welcome from '../components/Welcome'
+import ServerTime from '@/components/ServerTime'
+import Welcome from '@/components/Welcome'
 
 export default function HomePage(_params: PageProps) {
   return (
