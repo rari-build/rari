@@ -1,0 +1,79 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/**/*.js"
+      ],
+      "project": [
+        "scripts/**/*.js"
+      ],
+      "ignore": [
+        "scripts/releaseUtils.js"
+      ]
+    },
+    "packages/rari": {
+      "entry": [
+        "src/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,js,jsx}"
+      ],
+      "ignore": [
+        "src/router/navigation-utils.ts",
+        "src/router/navigation-error-handler.ts",
+        "src/router/props-extractor.ts",
+        "src/runtime/csrf.ts",
+        "src/runtime/entry-client.js",
+        "src/runtime/entry-server.js",
+        "src/runtime/AppRouterProvider.tsx",
+        "src/runtime/LoadingErrorBoundary.tsx",
+        "src/runtime/react-server-dom-rari-client.js",
+        "src/runtime/react-server-dom-shim.js",
+        "src/runtime/rsc-client-runtime.js",
+        "src/vite/loading-component-bundler.ts"
+      ],
+      "ignoreDependencies": [
+        "vite"
+      ]
+    },
+    "packages/create-rari-app": {
+      "entry": [
+        "src/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ],
+      "ignore": [
+        "templates/**"
+      ]
+    },
+    "docs": {
+      "entry": [
+        "src/app/**/*.{ts,tsx}",
+        "vite.config.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "ignoreDependencies": [
+        "tailwindcss"
+      ]
+    },
+    "examples/app-router-example": {
+      "entry": [
+        "src/app/**/*.{ts,tsx}",
+        "vite.config.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "ignoreDependencies": [
+        "tailwindcss"
+      ]
+    }
+  },
+  "ignore": [
+    "crates/**"
+  ]
+}

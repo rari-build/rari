@@ -1,6 +1,6 @@
-import type { Buffer } from 'node:buffer'
 import type { Plugin, UserConfig } from 'rolldown-vite'
 import type { ServerBuildOptions } from './server-build'
+import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1187,6 +1187,77 @@ const ${componentName} = registerClientReference(
       }
 
       startRustServer()
+
+      server.middlewares.use(async (req, res, next) => {
+        const acceptHeader = req.headers.accept
+        const isRscRequest = acceptHeader && acceptHeader.includes('text/x-component')
+
+        if (isRscRequest && req.url && !req.url.startsWith('/api') && !req.url.startsWith('/rsc') && !req.url.includes('.')) {
+          const serverPort = process.env.SERVER_PORT
+            ? Number(process.env.SERVER_PORT)
+            : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+
+          const targetUrl = `http://localhost:${serverPort}${req.url}`
+
+          try {
+            const headers: Record<string, string> = {}
+            for (const [key, value] of Object.entries(req.headers)) {
+              if (value && typeof value === 'string') {
+                headers[key] = value
+              }
+            }
+            headers.host = `localhost:${serverPort}`
+            headers['accept-encoding'] = 'identity'
+
+            const response = await fetch(targetUrl, {
+              method: req.method,
+              headers,
+            })
+
+            res.statusCode = response.status
+            response.headers.forEach((value, key) => {
+              if (key.toLowerCase() !== 'content-encoding') {
+                res.setHeader(key, value)
+              }
+            })
+
+            if (response.body) {
+              const reader = response.body.getReader()
+
+              try {
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done)
+                    break
+                  res.write(Buffer.from(value))
+                }
+                res.end()
+              }
+              catch (streamError) {
+                console.error('[Rari] Stream error:', streamError)
+                if (!res.headersSent) {
+                  res.statusCode = 500
+                }
+                res.end()
+              }
+            }
+            else {
+              res.end()
+            }
+            return
+          }
+          catch (error) {
+            console.error('[Rari] Failed to proxy RSC request:', error)
+            if (!res.headersSent) {
+              res.statusCode = 500
+              res.end('Internal Server Error')
+            }
+            return
+          }
+        }
+
+        next()
+      })
 
       server.watcher.on('change', async (filePath) => {
         if (/\.(?:tsx?|jsx?)$/.test(filePath)) {
