@@ -167,7 +167,63 @@ export async function renderApp() {
     let element
     const isFullDocument = false
 
-    if (payloadScript && payloadScript.textContent) {
+    const needsInitialFetch = !payloadScript && !hasBufferedRows && !hasServerRenderedContent
+
+    if (needsInitialFetch) {
+      try {
+        const currentPath = window.location.pathname + window.location.search
+        const response = await fetch(currentPath, {
+          headers: {
+            Accept: 'text/x-component',
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch RSC data: ${response.status}`)
+        }
+
+        const stream = response.body
+
+        const ssrManifest = {
+          moduleMap: new Proxy({}, {
+            get(_target, moduleId) {
+              return new Proxy({}, {
+                get(_moduleTarget, exportName) {
+                  return {
+                    id: `${moduleId}#${exportName}`,
+                    chunks: [],
+                    name: exportName,
+                  }
+                },
+              })
+            },
+          }),
+          moduleLoading: new Proxy({}, {
+            get(_target, moduleId) {
+              return {
+                async [exportName]() {
+                  try {
+                    const module = await import(/* @vite-ignore */ `/${moduleId}`)
+                    return module[exportName] || module.default
+                  }
+                  catch (error) {
+                    console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                    return null
+                  }
+                },
+              }[exportName]
+            },
+          }),
+        }
+
+        element = await createFromReadableStream(stream, ssrManifest)
+      }
+      catch (e) {
+        console.error('[Rari] Failed to fetch initial RSC data:', e)
+        element = null
+      }
+    }
+    else if (payloadScript && payloadScript.textContent) {
       try {
         const payloadJson = payloadScript.textContent
 
