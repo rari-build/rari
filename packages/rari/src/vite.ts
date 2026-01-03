@@ -9,6 +9,10 @@ export { RariResponse } from './api-routes'
 export type Request = globalThis.Request
 export type Response = globalThis.Response
 
+export {
+  generateAppRouteManifest,
+} from './router/app-routes'
+
 export type {
   AppRouteEntry,
   AppRouteManifest,
@@ -24,11 +28,7 @@ export type {
   PageProps,
   RouteSegment,
   RouteSegmentType,
-} from './router'
-
-export {
-  generateAppRouteManifest,
-} from './router'
+} from './router/app-types'
 
 export {
   clearPropsCache,
@@ -38,13 +38,13 @@ export {
   extractServerPropsWithCache,
   extractStaticParams,
   hasServerSideDataFetching,
-} from './router'
+} from './router/props-extractor'
 
 export type {
   MetadataResult,
   ServerPropsResult,
   StaticParamsResult,
-} from './router'
+} from './router/props-extractor'
 
 export { rariRouter } from './router/vite-plugin'
 

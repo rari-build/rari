@@ -105,26 +105,6 @@ export function findLayoutChain(
   return chain
 }
 
-export function findCommonLayoutChainLength(
-  chain1: LayoutEntry[],
-  chain2: LayoutEntry[],
-): number {
-  let commonLength = 0
-
-  const minLength = Math.min(chain1.length, chain2.length)
-
-  for (let i = 0; i < minLength; i++) {
-    if (chain1[i].path === chain2[i].path) {
-      commonLength++
-    }
-    else {
-      break
-    }
-  }
-
-  return commonLength
-}
-
 export function normalizePath(path: string): string {
   if (!path || path === '/') {
     return '/'
