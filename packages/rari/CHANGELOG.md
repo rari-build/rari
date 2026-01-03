@@ -1,3 +1,27 @@
+## [0.5.30] - 2026-01-03
+
+### 🚀 Features
+
+- *(rsc)* Add client-side RSC fetching and dev server proxying
+
+### 🚜 Refactor
+
+- *(router)* Remove unused exports and internal utilities
+- *(router)* Remove legacy layout and runtime management systems
+
+### ⚙️ Miscellaneous Tasks
+
+- *(router)* Remove router index barrel export and consolidate exports
+## [create-rari-app@0.2.14] - 2026-01-02
+
+### 💼 Other
+
+- Create-rari-app@0.2.14
+## [rari@0.5.29] - 2026-01-02
+
+### 💼 Other
+
+- Rari@0.5.29
 ## [0.5.23] - 2026-01-02
 
 ### 🚀 Features
