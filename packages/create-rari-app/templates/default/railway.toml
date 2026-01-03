@@ -1,10 +1,5 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "pnpm run build"
-nixpacksPlan = { phases = { setup = { nixPkgs = [
-  "nodejs_20",
-  "pnpm"
-] } } }
+builder = "RAILPACK"
 
 [deploy]
 startCommand = "pnpm start"
