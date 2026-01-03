@@ -7,9 +7,6 @@
       ],
       "project": [
         "scripts/**/*.js"
-      ],
-      "ignore": [
-        "scripts/releaseUtils.js"
       ]
     },
     "packages/rari": {
@@ -37,9 +34,6 @@
       ],
       "project": [
         "src/**/*.ts"
-      ],
-      "ignore": [
-        "templates/**"
       ]
     },
     "docs": {
