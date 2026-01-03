@@ -60,8 +60,5 @@
         "tailwindcss"
       ]
     }
-  },
-  "ignore": [
-    "crates/**"
-  ]
+  }
 }
