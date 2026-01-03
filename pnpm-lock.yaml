@@ -76,7 +76,7 @@ importers:
         version: 3.20.0
       rari:
         specifier: latest
-        version: 0.5.28(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 0.5.30(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: ^19.2.3
         version: 19.2.3
@@ -2797,24 +2797,10 @@ packages:
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
 
-  rari-darwin-arm64@0.5.22:
-    resolution: {integrity: sha512-qQB92Qs2Xm2SUbV4whHohnXUHJUQabYYpKfDOqM2VB4IeM1jupuqC+uzCzRjhqt8LsMYuahw5VosAqb7yZRvEQ==}
-    engines: {node: '>=20.0.0'}
-    cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
   rari-darwin-arm64@0.5.23:
     resolution: {integrity: sha512-UBC0JPhqdgOwZnnY8NkORtiC3HmrW/raELctjthAMcIwgE+I977M36rBkWNpJoXAR2KMr8kvpbcCOZ5PMZif4w==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
-  rari-darwin-x64@0.5.22:
-    resolution: {integrity: sha512-xf10W3RK2HQKOuD71+D4n6i3Cxfs+DH30K0wiQcF0Qg0Xa6D0GuAw19HngwgcmsoHdEbxmj/4aDEKYrn/exzoA==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
     os: [darwin]
     hasBin: true
 
@@ -2825,24 +2811,10 @@ packages:
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.5.22:
-    resolution: {integrity: sha512-DMXT46r9uFlNzh7JaPIGmzvqLbMhVCUQtsWbXwWQ1LnqpNzXrCgTpKO+8HeKiBkwEHxqDS2l/9mMIoQ6zrC8aA==}
-    engines: {node: '>=20.0.0'}
-    cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
   rari-linux-arm64@0.5.23:
     resolution: {integrity: sha512-43KmI/H67+uYjF6Za9+YrTIhNSiYlHkyK/JSo1ScmVWSJ+Yf33Fwgsjaa2xgCg+GF8rD7YM0AUo/AMOsZFFg6A==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
-    os: [linux]
-    hasBin: true
-
-  rari-linux-x64@0.5.22:
-    resolution: {integrity: sha512-7SvmQKuJ5Du3PG86EgdZNNd9w7Ob8E7NFOHzbrLduWlj2stC0YjN/6DgxSgJx04T24PUPtsWkE4OuKv3DNJW3w==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
     os: [linux]
     hasBin: true
 
@@ -2853,13 +2825,6 @@ packages:
     os: [linux]
     hasBin: true
 
-  rari-win32-x64@0.5.22:
-    resolution: {integrity: sha512-2TSK4nceIgRfArl9s9HQ2DOwXVtH5sceoaJQTg7ioOx5QRDCvelSBrJ7V6XhGGMxGaLtpeLooBtJfaMULyL/Nw==}
-    engines: {node: '>=20.0.0'}
-    cpu: [x64]
-    os: [win32]
-    hasBin: true
-
   rari-win32-x64@0.5.23:
     resolution: {integrity: sha512-l2eC9QJZ5vQCDxPLd0EX5+gq3TzwdQq/1uZRkYMJSkQRGxtcY8/KyikUGZbZRdjgMhrSXeDVS60PeFDzLorRyA==}
     engines: {node: '>=20.0.0'}
@@ -2867,8 +2832,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.5.28:
-    resolution: {integrity: sha512-Fd37kwtpnEvgxM06ET0Dsk36XAunY/yG5nu9CrX1qFaBCm4EDO4WUm0e8Z2dYqVbOlwgY+ft8BUEMXlT6Jd0Pg==}
+  rari@0.5.30:
+    resolution: {integrity: sha512-xdS7iRzCod6lGHSGdqPx0fK//s/EICNALR6uhzDCPZGGm6NYZg59qyHGNziO3pqdEdlJUSMTEmYXTod/mlMQpw==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -6171,37 +6136,22 @@ snapshots:
 
   quansync@1.0.0: {}
 
-  rari-darwin-arm64@0.5.22:
-    optional: true
-
   rari-darwin-arm64@0.5.23:
-    optional: true
-
-  rari-darwin-x64@0.5.22:
     optional: true
 
   rari-darwin-x64@0.5.23:
     optional: true
 
-  rari-linux-arm64@0.5.22:
-    optional: true
-
   rari-linux-arm64@0.5.23:
-    optional: true
-
-  rari-linux-x64@0.5.22:
     optional: true
 
   rari-linux-x64@0.5.23:
     optional: true
 
-  rari-win32-x64@0.5.22:
-    optional: true
-
   rari-win32-x64@0.5.23:
     optional: true
 
-  rari@0.5.28(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  rari@0.5.30(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       acorn: 8.15.0
       esbuild: 0.27.2
@@ -6209,11 +6159,11 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
     optionalDependencies:
-      rari-darwin-arm64: 0.5.22
-      rari-darwin-x64: 0.5.22
-      rari-linux-arm64: 0.5.22
-      rari-linux-x64: 0.5.22
-      rari-win32-x64: 0.5.22
+      rari-darwin-arm64: 0.5.23
+      rari-darwin-x64: 0.5.23
+      rari-linux-arm64: 0.5.23
+      rari-linux-x64: 0.5.23
+      rari-win32-x64: 0.5.23
 
   react-dom@19.2.1(react@19.2.1):
     dependencies:
