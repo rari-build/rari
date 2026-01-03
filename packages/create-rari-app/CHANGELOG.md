@@ -1,3 +1,34 @@
+## [0.2.15] - 2026-01-03
+
+### ⚙️ Miscellaneous Tasks
+
+- *(knip)* Remove unused router and vite entries from ignore list
+- *(knip)* Remove unused ignore entries from config
+- *(create-rari-app)* Remove unused linting and react plugin dependencies
+- *(create-rari-app)* Simplify railway.toml configuration
+## [rari@0.5.30] - 2026-01-03
+
+### 🚀 Features
+
+- *(rsc)* Add client-side RSC fetching and dev server proxying
+
+### 💼 Other
+
+- Rari@0.5.30
+
+### 🚜 Refactor
+
+- *(router)* Remove unused exports and internal utilities
+- *(router)* Remove legacy layout and runtime management systems
+
+### ⚙️ Miscellaneous Tasks
+
+- *(router)* Remove router index barrel export and consolidate exports
+## [create-rari-app@0.2.14] - 2026-01-02
+
+### 💼 Other
+
+- Create-rari-app@0.2.14
 ## [rari@0.5.29] - 2026-01-02
 
 ### 💼 Other
@@ -983,7 +1014,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update rari dependencies to version 0.2.15 and remove unused client-dev entry
-## [0.2.15] - 2025-09-04
+## [0.2.15] - 2026-01-03
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -1018,7 +1049,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update optionalDependencies for rari to version 0.2.14
-## [0.2.14] - 2026-01-02
+## [0.2.14] - 2025-09-02
 
 ### ⚙️ Miscellaneous Tasks
 
