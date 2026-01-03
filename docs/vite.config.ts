@@ -1,7 +1,5 @@
 import path from 'node:path'
-import mdx from '@mdx-js/rollup'
 import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
 import { rari, rariRouter } from 'rari/vite'
 import { defineConfig } from 'rolldown-vite'
 
@@ -13,8 +11,6 @@ export default defineConfig({
       },
     }),
     rariRouter(),
-    mdx(),
-    react(),
     tailwindcss(),
   ],
   build: {

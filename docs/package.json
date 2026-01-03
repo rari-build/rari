@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "3.1.1",
-    "@mdx-js/rollup": "^3.1.1",
     "@shikijs/core": "^3.20.0",
     "@shikijs/engine-oniguruma": "^3.20.0",
     "@shikijs/langs": "^3.20.0",
@@ -37,7 +36,6 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260102.1",
-    "@vitejs/plugin-react": "^5.1.2",
     "eslint": "^9.39.2",
     "oxlint": "^1.36.0",
     "rolldown-vite": "^7.3.0",

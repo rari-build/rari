@@ -44,25 +44,25 @@
     },
     "docs": {
       "entry": [
-        "src/app/**/*.{ts,tsx}",
-        "vite.config.ts"
+        "src/app/**/*.{ts,tsx}"
       ],
       "project": [
         "src/**/*.{ts,tsx}"
       ],
       "ignoreDependencies": [
+        "@tailwindcss/vite",
         "tailwindcss"
       ]
     },
     "examples/app-router-example": {
       "entry": [
-        "src/app/**/*.{ts,tsx}",
-        "vite.config.ts"
+        "src/app/**/*.{ts,tsx}"
       ],
       "project": [
         "src/**/*.{ts,tsx}"
       ],
       "ignoreDependencies": [
+        "@tailwindcss/vite",
         "tailwindcss"
       ]
     }
