@@ -26,9 +26,7 @@ function findContentFile(filePath: string): string | null {
     try {
       return readFileSync(path, 'utf-8')
     }
-    catch {
-      // File doesn't exist at this path, try next
-    }
+    catch {}
   }
 
   return null
