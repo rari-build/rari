@@ -1,4 +1,5 @@
 import Bluesky from './icons/Bluesky'
+import Discord from './icons/Discord'
 import Github from './icons/Github'
 import Npm from './icons/Npm'
 
@@ -103,6 +104,17 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                 >
                   <Npm className="w-4 h-4 mr-2" />
                   npm
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://discord.gg/GSh2Ak3b8Q"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                >
+                  <Discord className="w-4 h-4 mr-2" />
+                  Discord
                 </a>
               </li>
               <li>
