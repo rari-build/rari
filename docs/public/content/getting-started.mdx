@@ -9,8 +9,8 @@ This guide will walk you through creating your first Rari application from scrat
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js 20+**
-- **A modern package manager (e.g. npm, pnpm, bun or deno)**
+- **Node.js `20.x`** (<a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer">Active LTS</a> release recommended)
+- **A modern package manager** (we recommended <a href="https://pnpm.io/" target="_blank" rel="noopener noreferrer">pnpm</a>)
 - **A modern code editor**
 
 ## Installation
@@ -19,29 +19,42 @@ Before you begin, ensure you have the following installed:
 
 The fastest way to get started is with our project generator:
 
-```bash
-pnpm create rari-app@latest my-rari-app
-cd my-rari-app
-pnpm dev
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm create rari-app@latest my-rari-app',
+    npm: 'npm create rari-app@latest my-rari-app',
+    yarn: 'yarn create rari-app my-rari-app',
+    bun: 'bun create rari-app my-rari-app'
+  }}
+/>
 
-Or with other package managers:
+Navigate to your project directory:
 
-```bash
-# Using npm
-npm create rari-app my-rari-app
+<TerminalBlock command="cd my-rari-app" />
 
-# Using bun
-bun create rari-app my-rari-app
-```
+Start the development server:
+
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm dev',
+    npm: 'npm run dev',
+    yarn: 'yarn dev',
+    bun: 'bun dev'
+  }}
+/>
 
 ### Option 2: Add to Existing Vite Project
 
 If you have an existing Vite + React project:
 
-```bash
-pnpm add rari
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm add rari',
+    npm: 'npm install rari',
+    yarn: 'yarn add rari',
+    bun: 'bun add rari'
+  }}
+/>
 
 Update your `vite.config.ts`:
 
@@ -146,9 +159,14 @@ export default function Counter() {
 
 One of Rari's superpowers is seamless NPM package integration. Let's add markdown support:
 
-```bash
-pnpm add marked
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm add marked',
+    npm: 'npm install marked',
+    yarn: 'yarn add marked',
+    bun: 'bun add marked'
+  }}
+/>
 
 Create `src/components/MarkdownPost.tsx`:
 
@@ -211,9 +229,14 @@ export const metadata = {
 
 ### Start Development Server
 
-```bash
-pnpm dev
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm dev',
+    npm: 'npm run dev',
+    yarn: 'yarn dev',
+    bun: 'bun dev'
+  }}
+/>
 
 Your app will be available at `http://localhost:5173` (Vite default) with:
 - **Hot module reloading** for instant updates
@@ -223,9 +246,14 @@ Your app will be available at `http://localhost:5173` (Vite default) with:
 
 ### Build for Production
 
-```bash
-pnpm build
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm build',
+    npm: 'npm run build',
+    yarn: 'yarn build',
+    bun: 'bun build'
+  }}
+/>
 
 This creates an optimized production build with:
 - **Automatic code splitting**
@@ -234,9 +262,14 @@ This creates an optimized production build with:
 
 ### Start Production Server
 
-```bash
-pnpm start
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm start',
+    npm: 'npm start',
+    yarn: 'yarn start',
+    bun: 'bun start'
+  }}
+/>
 
 Runs your optimized app in production mode.
 

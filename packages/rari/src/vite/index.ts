@@ -384,7 +384,19 @@ if (import.meta.hot) {
     importPath: string,
     importerPath: string,
   ): string {
-    const resolvedPath = path.resolve(path.dirname(importerPath), importPath)
+    let resolvedImportPath = importPath
+    for (const [alias, replacement] of Object.entries(resolvedAlias)) {
+      if (importPath.startsWith(`${alias}/`)) {
+        resolvedImportPath = importPath.replace(alias, replacement)
+        break
+      }
+      else if (importPath === alias) {
+        resolvedImportPath = replacement
+        break
+      }
+    }
+
+    const resolvedPath = path.resolve(path.dirname(importerPath), resolvedImportPath)
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
     for (const ext of extensions) {
@@ -621,6 +633,31 @@ if (import.meta.hot) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
+        const importRegex
+          = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+        const lines = code.split('\n')
+
+        for (const line of lines) {
+          const importMatch = line.match(importRegex)
+          if (!importMatch)
+            continue
+
+          const importPath = importMatch[4]
+          if (!importPath)
+            continue
+
+          const resolvedImportPath = resolveImportToFilePath(importPath, id)
+
+          if (fs.existsSync(resolvedImportPath)) {
+            componentTypeCache.set(resolvedImportPath, 'client')
+            clientComponents.add(resolvedImportPath)
+          }
+        }
+
+        return transformClientModuleForClient(code, id)
+      }
+
+      if (componentTypeCache.get(id) === 'client' || clientComponents.has(id)) {
         return transformClientModuleForClient(code, id)
       }
 
@@ -699,6 +736,10 @@ ${clientTransformedCode}`
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
+        const importingFileIsClient = hasTopLevelDirective(code, 'use client')
+          || componentTypeCache.get(id) === 'client'
+          || id.includes('entry-client')
+
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
             || (fs.existsSync(resolvedImportPath)
@@ -716,10 +757,6 @@ ${clientTransformedCode}`
           && environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          const importingFileIsClient = hasTopLevelDirective(code, 'use client')
-            || componentTypeCache.get(id) === 'client'
-            || id.includes('entry-client')
-
           if (!importingFileIsClient) {
             serverImportedClientComponents.add(resolvedImportPath)
 
@@ -744,7 +781,7 @@ const ${componentName} = registerClientReference(
             needsReactImport = true
           }
         }
-        else if (isServerComponent(resolvedImportPath)) {
+        else if (!importingFileIsClient && isServerComponent(resolvedImportPath)) {
           hasServerImports = true
           needsReactImport = true
           needsWrapperImport = true

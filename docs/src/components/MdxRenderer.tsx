@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
-import { compile } from '@mdx-js/mdx'
+import { evaluate } from '@mdx-js/mdx'
 import rehypeShikiFromHighlighter from '@shikijs/rehype/core'
-import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
+import { createMDXClientReferences } from 'rari/mdx'
+import * as runtime from 'react/jsx-runtime'
 import NotFoundPage from '@/app/not-found'
+import PackageManagerTabs from '@/components/PackageManagerTabs'
+import TerminalBlock from '@/components/TerminalBlock'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
 interface MdxRendererProps {
@@ -43,8 +46,9 @@ export default async function MdxRenderer({
 
     const highlighter = await getHighlighter()
 
-    const compiled = await compile(content, {
-      outputFormat: 'function-body',
+    const { default: MDXContent } = await evaluate(content, {
+      ...runtime,
+      baseUrl: import.meta.url,
       development: false,
       rehypePlugins: highlighter
         ? [
@@ -59,11 +63,16 @@ export default async function MdxRenderer({
         : [],
     })
 
-    const compiledString = String(compiled)
-
-    // oxlint-disable-next-line no-new-func
-    const fn = new Function(compiledString)
-    const { default: MDXContent } = fn({ Fragment, jsx, jsxs })
+    const mdxComponents = createMDXClientReferences({
+      PackageManagerTabs: {
+        component: PackageManagerTabs,
+        id: 'src/components/PackageManagerTabs.tsx',
+      },
+      TerminalBlock: {
+        component: TerminalBlock,
+        id: 'src/components/TerminalBlock.tsx',
+      },
+    })
 
     return (
       <div
@@ -73,7 +82,7 @@ export default async function MdxRenderer({
           overflowWrap: 'break-word',
         }}
       >
-        <MDXContent />
+        <MDXContent components={mdxComponents} />
       </div>
     )
   }

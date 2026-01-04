@@ -6,6 +6,7 @@ export default defineConfig({
     'client': 'src/client.ts',
     'vite': 'src/vite.ts',
     'cli': 'src/cli.ts',
+    'mdx': 'src/mdx.ts',
     'runtime/actions': 'src/runtime/actions.ts',
     'hooks/useActionState': 'src/hooks/useActionState.ts',
   },

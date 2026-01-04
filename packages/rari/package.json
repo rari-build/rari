@@ -47,6 +47,10 @@
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
     },
+    "./mdx": {
+      "types": "./dist/mdx.d.mts",
+      "default": "./dist/mdx.mjs"
+    },
     "./runtime/actions": {
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
