@@ -1,7 +1,6 @@
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
-import Npm from './icons/Npm'
 
 interface GitHubRepo {
   stargazers_count: number
@@ -31,11 +30,6 @@ export default async function Footer() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3">
         <div className="flex items-center justify-center lg:justify-start lg:flex-1 gap-x-1.5 mt-3 lg:mt-0 lg:order-1">
           <p className="text-gray-400 text-sm">
-            Copyright © 2025-
-            {currentYear}
-            {' '}
-            Ryan Skinner -
-            {' '}
             <a
               href="https://github.com/rari-build/rari/blob/main/LICENSE"
               target="_blank"
@@ -44,6 +38,12 @@ export default async function Footer() {
             >
               MIT License
             </a>
+            {' '}
+            ©
+            {' '}
+            {currentYear}
+            {' '}
+            Ryan Skinner
           </p>
         </div>
 
@@ -60,17 +60,6 @@ export default async function Footer() {
               <span className="text-xs text-gray-500">{stars.toLocaleString()}</span>
             )}
             <span className="sr-only">Rari on GitHub</span>
-          </a>
-
-          <a
-            href="https://npmjs.com/package/rari"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-md font-medium inline-flex items-center transition-colors px-2.5 py-1.5 text-sm gap-1.5 text-gray-400 hover:bg-[#21262d] hover:text-gray-200"
-            aria-label="Rari on npm"
-          >
-            <Npm className="w-5 h-5" />
-            <span className="sr-only">Rari on npm</span>
           </a>
 
           <a
