@@ -62,7 +62,7 @@ export default function HomePage() {
 }
 
 export const metadata = {
-  title: 'Home | Rari',
+  title: 'Rari | Runtime Accelerated Rendering Infrastructure',
   description:
     'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
 }

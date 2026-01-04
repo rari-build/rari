@@ -3,8 +3,28 @@ import Discord from './icons/Discord'
 import Github from './icons/Github'
 import Npm from './icons/Npm'
 
-export default function Footer() {
+interface GitHubRepo {
+  stargazers_count: number
+}
+
+async function fetchGitHubStars(): Promise<number | null> {
+  try {
+    const response = await fetch('https://api.github.com/repos/rari-build/rari')
+    if (!response.ok) {
+      return null
+    }
+    const data: GitHubRepo = await response.json()
+    return data.stargazers_count
+  }
+  catch (error) {
+    console.error('Error fetching GitHub stars:', error)
+    return null
+  }
+}
+
+export default async function Footer() {
   const currentYear = new Date().getFullYear()
+  const stars = await fetchGitHubStars()
 
   return (
     <footer className="w-full border-t border-[#30363d] bg-[#0d1117] mt-auto">
@@ -36,6 +56,9 @@ export default function Footer() {
             aria-label="Rari on GitHub"
           >
             <Github className="w-5 h-5" />
+            {stars !== null && (
+              <span className="text-xs text-gray-500">{stars.toLocaleString()}</span>
+            )}
             <span className="sr-only">Rari on GitHub</span>
           </a>
 
