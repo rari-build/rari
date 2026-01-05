@@ -2,12 +2,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 import { evaluate } from '@mdx-js/mdx'
-import rehypeShikiFromHighlighter from '@shikijs/rehype/core'
 import { createMDXClientReferences } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
 import NotFoundPage from '@/app/not-found'
-import PackageManagerTabs from '@/components/PackageManagerTabs'
-import TerminalBlock from '@/components/TerminalBlock'
+import { mdxComponentMetadata } from '@/lib/mdx-components'
+import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
 interface MdxRendererProps {
@@ -44,33 +43,33 @@ export default async function MdxRenderer({
 
     const highlighter = await getHighlighter()
 
+    const remarkPlugins: any[] = []
+
+    if (highlighter) {
+      remarkPlugins.push([
+        remarkCodeBlock,
+        {
+          highlighter,
+          theme: SHIKI_THEME,
+        },
+      ])
+    }
+
     const { default: MDXContent } = await evaluate(content, {
       ...runtime,
       baseUrl: import.meta.url,
       development: false,
-      rehypePlugins: highlighter
-        ? [
-            [
-              rehypeShikiFromHighlighter,
-              highlighter,
-              {
-                theme: SHIKI_THEME,
-              },
-            ],
-          ]
-        : [],
+      remarkPlugins,
     })
 
-    const mdxComponents = createMDXClientReferences({
-      PackageManagerTabs: {
-        component: PackageManagerTabs,
-        id: 'src/components/PackageManagerTabs.tsx',
-      },
-      TerminalBlock: {
-        component: TerminalBlock,
-        id: 'src/components/TerminalBlock.tsx',
-      },
-    })
+    const mdxComponents = createMDXClientReferences(
+      Object.fromEntries(
+        mdxComponentMetadata.map(({ name, component, id }) => [
+          name,
+          { component, id },
+        ]),
+      ),
+    )
 
     return (
       <div
