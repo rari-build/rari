@@ -139,9 +139,8 @@ function detectHttpMethods(fileContent: string): string[] {
       `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
     )
 
-    if (functionExportRegex.test(fileContent) || constExportRegex.test(fileContent)) {
+    if (functionExportRegex.test(fileContent) || constExportRegex.test(fileContent))
       methods.push(method)
-    }
   }
 
   return methods

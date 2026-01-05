@@ -111,9 +111,8 @@ async function main() {
   console.warn(pc.cyan('Next steps:'))
   console.warn(pc.gray(`  cd ${options.name}`))
 
-  if (!options.installDeps) {
+  if (!options.installDeps)
     console.warn(pc.gray(`  ${options.packageManager} install`))
-  }
 
   console.warn(pc.gray(`  ${options.packageManager} run dev`))
   console.warn()

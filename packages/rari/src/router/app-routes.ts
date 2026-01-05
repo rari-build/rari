@@ -49,9 +49,8 @@ class AppRouteGenerator {
   }
 
   async generateManifest(): Promise<AppRouteManifest> {
-    if (this.verbose) {
+    if (this.verbose)
       console.warn(`[AppRouter] Scanning app directory: ${this.appDir}`)
-    }
 
     const routes: AppRouteEntry[] = []
     const layouts: LayoutEntry[] = []
