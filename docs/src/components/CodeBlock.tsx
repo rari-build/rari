@@ -18,16 +18,12 @@ interface CodeBlockProps {
 
 function getFileIcon(filename: string) {
   const lowerFilename = filename.toLowerCase()
-
   if (lowerFilename.includes('vite.config'))
     return Vite
-
   if (lowerFilename.endsWith('.tsx') || lowerFilename.endsWith('.jsx'))
     return React
-
   if (lowerFilename.endsWith('.ts') || lowerFilename.endsWith('.mts') || lowerFilename.endsWith('.cts'))
     return TypeScript
-
   return File
 }
 
