@@ -1,6 +1,7 @@
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
+import Menu from './icons/Menu'
 import Npm from './icons/Npm'
 
 interface SidebarProps {
@@ -27,19 +28,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         htmlFor="mobile-menu-toggle"
         className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer"
       >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
+        <Menu className="w-6 h-6" />
       </label>
 
       <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">

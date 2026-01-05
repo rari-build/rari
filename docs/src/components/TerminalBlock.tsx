@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { highlightCommand } from '@/lib/highlight-command'
+import Check from './icons/Check'
+import Copy from './icons/Copy'
+import Terminal from './icons/Terminal'
 
 interface TerminalBlockProps {
   command: string
@@ -26,9 +29,7 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
     <div className="not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117]">
       {showHeader && (
         <div className="flex items-center gap-1.5 bg-[#161b22] px-4 py-2.5 border-b border-[#30363d]">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+          <Terminal className="w-4 h-4 text-gray-400" />
           <span className="text-sm text-gray-400 font-medium">Terminal</span>
         </div>
       )}
@@ -41,14 +42,10 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
       >
         {copied
           ? (
-              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-green-600" />
             )
           : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <Copy className="w-4 h-4" />
             )}
       </button>
 
