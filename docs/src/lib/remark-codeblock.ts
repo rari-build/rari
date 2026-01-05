@@ -28,13 +28,11 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
 
   return (tree: ASTNode, file: VFile) => {
     visit(tree, (node: ASTNode) => {
-      if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') {
+      if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement')
         return
-      }
 
-      if (node.name !== 'CodeBlock') {
+      if (node.name !== 'CodeBlock')
         return
-      }
 
       let code = ''
 
@@ -69,13 +67,11 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
         return text
       }
 
-      if (node.children && node.children.length > 0) {
+      if (node.children && node.children.length > 0)
         code = extractText(node.children)
-      }
 
-      if (!code.trim()) {
+      if (!code.trim())
         return
-      }
 
       const languageProp = node.attributes?.find(
         (attr: { type: string, name: string, value?: string }) => attr.type === 'mdxJsxAttribute' && attr.name === 'language',
@@ -88,9 +84,8 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
           theme,
         })
 
-        if (!node.attributes) {
+        if (!node.attributes)
           node.attributes = []
-        }
 
         node.attributes.push({
           type: 'mdxJsxAttribute',
