@@ -98,12 +98,12 @@ export function enhanceFormWithAction(
       const result = await action(formData)
 
       if (result && result.redirect) {
-        if (options.onRedirect) {
+        if (options.onRedirect)
           options.onRedirect(result.redirect)
-        }
-        if (typeof window !== 'undefined') {
+
+        if (typeof window !== 'undefined')
           window.location.href = result.redirect
-        }
+
         return
       }
 

@@ -133,9 +133,8 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
     catch (error) {
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
+        if (error.name === 'AbortError')
           throw new Error(`Request timeout after ${this.timeout}ms`)
-        }
         if (error.message.includes('ECONNREFUSED')) {
           throw new Error(
             `Failed to connect to Rari server at ${this.baseUrl}. Make sure the server is running.`,
@@ -150,9 +149,8 @@ export class HttpRuntimeClient implements RuntimeClient {
     try {
       const health = await this.request<HealthResponse>('/api/rsc/health')
 
-      if (health.status !== 'healthy') {
+      if (health.status !== 'healthy')
         throw new Error(`Server is not healthy: ${health.status}`)
-      }
 
       this.initialized = true
     }
@@ -188,9 +186,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         )
       }
 
-      if (!this.components.includes(componentId)) {
+      if (!this.components.includes(componentId))
         this.components.push(componentId)
-      }
     }
     catch (error) {
       throw new Error(`Failed to register component ${componentId}: ${error}`)
@@ -219,9 +216,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         body: request,
       })
 
-      if (!response.success) {
+      if (!response.success)
         throw new Error(response.error || 'Render failed')
-      }
 
       return response.data || ''
     }
@@ -249,9 +245,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         body: request,
       })
 
-      if (!response.success) {
+      if (!response.success)
         throw new Error(response.error || 'Render failed')
-      }
 
       return response.data || ''
     }

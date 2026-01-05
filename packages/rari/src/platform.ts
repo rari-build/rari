@@ -93,9 +93,8 @@ export function getBinaryPath(): string {
       const packageDir = join(workspaceRoot, 'packages', packageName)
       const binaryPath = join(packageDir, 'bin', binaryName)
 
-      if (existsSync(binaryPath)) {
+      if (existsSync(binaryPath))
         return binaryPath
-      }
     }
   }
   catch {
@@ -106,9 +105,8 @@ export function getBinaryPath(): string {
     const packageDir = packagePath.replace('/package.json', '')
     const binaryPath = join(packageDir, 'bin', binaryName)
 
-    if (existsSync(binaryPath)) {
+    if (existsSync(binaryPath))
       return binaryPath
-    }
 
     throw new Error(`Binary not found at ${binaryPath}`)
   }

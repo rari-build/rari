@@ -17,9 +17,8 @@ export function createMDXClientReference(
 
   if (typeof globalThis !== 'undefined') {
     const globalAny = globalThis as any
-    if (!globalAny['~clientComponents']) {
+    if (!globalAny['~clientComponents'])
       globalAny['~clientComponents'] = {}
-    }
 
     const componentId = id.replace(/\.[^.]+$/, '').split('/').pop() || exportName
 

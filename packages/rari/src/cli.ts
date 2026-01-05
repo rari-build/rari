@@ -98,9 +98,8 @@ async function startRustServer(): Promise<void> {
 
   rustServer.on('error', (error: Error) => {
     logError(`Failed to start Rari server: ${error.message}`)
-    if (error.message.includes('ENOENT')) {
+    if (error.message.includes('ENOENT'))
       logError('Binary not found. Please ensure Rari is properly installed.')
-    }
     process.exit(1)
   })
 

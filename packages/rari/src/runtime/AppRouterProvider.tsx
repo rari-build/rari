@@ -142,9 +142,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       timestamp: new Date(failure.timestamp).toISOString(),
     })
 
-    if (consecutiveFailuresRef.current >= MAX_RETRIES - 1) {
+    if (consecutiveFailuresRef.current >= MAX_RETRIES - 1)
       setHmrError(failure)
-    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rari:hmr-failure', {
@@ -160,27 +159,23 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   const resetFailureTracking = () => {
-    if (consecutiveFailuresRef.current > 0) {
+    if (consecutiveFailuresRef.current > 0)
       consecutiveFailuresRef.current = 0
-    }
   }
 
   const isStaleContent = (wireFormat: string): boolean => {
-    if (!lastSuccessfulPayloadRef.current) {
+    if (!lastSuccessfulPayloadRef.current)
       return false
-    }
 
-    if (wireFormat === lastSuccessfulPayloadRef.current) {
+    if (wireFormat === lastSuccessfulPayloadRef.current)
       return true
-    }
 
     const timestampMatch = wireFormat.match(/"timestamp":(\d+)/)
     if (timestampMatch) {
       const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
       const now = Date.now()
-      if (now - payloadTimestamp > 5000) {
+      if (now - payloadTimestamp > 5000)
         return true
-      }
     }
 
     return false
@@ -190,9 +185,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (!rsc)
       return null
 
-    if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean') {
+    if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
       return rsc
-    }
 
     if (Array.isArray(rsc)) {
       if (rsc.length >= 4 && rsc[0] === '$') {
@@ -222,19 +216,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         if (typeof resolvedType === 'string' && resolvedType.startsWith('$L')) {
           const moduleInfo = modules.get(resolvedType)
 
-          if (!moduleInfo) {
+          if (!moduleInfo)
             return null
-          }
 
           const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
-          if (!Component) {
+          if (!Component)
             return null
-          }
 
-          if (typeof Component !== 'function') {
+          if (typeof Component !== 'function')
             return null
-          }
 
           const effectiveKey = serverKey || `fallback-${Math.random()}`
 
@@ -264,13 +255,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
       return rsc.map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
-        if (!element) {
+        if (!element)
           return null
-        }
-        if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
+
+        if (typeof element === 'object' && React.isValidElement(element) && !element.key)
           // eslint-disable-next-line react/no-clone-element
           return React.cloneElement(element, { key: index })
-        }
+
         return element
       }).filter(Boolean)
     }
@@ -438,9 +429,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               }
             }
 
-            if (!rootElement && Array.isArray(elementData) && elementData[0] === '$') {
+            if (!rootElement && Array.isArray(elementData) && elementData[0] === '$')
               rootElement = elementData
-            }
           }
         }
         catch (e) {
@@ -486,9 +476,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const pathToFetch = targetPath || window.location.pathname
 
     const existingFetch = pendingFetchesRef.current.get(pathToFetch)
-    if (existingFetch) {
+    if (existingFetch)
       return existingFetch
-    }
 
     const fetchPromise = (async () => {
       try {
@@ -616,15 +605,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             setRenderKey(prev => prev + 1)
             setHmrError(null)
 
-            if (onNavigate) {
+            if (onNavigate)
               onNavigate(detail)
-            }
           }
         }
         catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
+          if (error instanceof Error && error.name === 'AbortError')
             return
-          }
 
           console.error('[AppRouterProvider] Navigation failed:', error)
 
@@ -637,9 +624,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             },
           }))
 
-          if (consecutiveFailuresRef.current >= MAX_RETRIES) {
+          if (consecutiveFailuresRef.current >= MAX_RETRIES)
             handleFallbackReload()
-          }
         }
         finally {
           if (!detail.options?.historyKey) {
@@ -671,9 +657,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       catch (error) {
         console.error('[AppRouterProvider] HMR update failed:', error)
 
-        if (consecutiveFailuresRef.current >= MAX_RETRIES) {
+        if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
-        }
       }
       finally {
         requestAnimationFrame(() => {
@@ -694,9 +679,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       catch (error) {
         console.error('[AppRouterProvider] RSC invalidation failed:', error)
 
-        if (consecutiveFailuresRef.current >= MAX_RETRIES) {
+        if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
-        }
       }
     }
 
@@ -708,9 +692,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       catch (error) {
         console.error('[AppRouterProvider] Manifest update failed:', error)
 
-        if (consecutiveFailuresRef.current >= MAX_RETRIES) {
+        if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
-        }
       }
     }
 
@@ -721,9 +704,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       if (!row || !row.trim())
         return
 
-      if (!streamingRowsRef.current) {
+      if (!streamingRowsRef.current)
         streamingRowsRef.current = []
-      }
 
       streamingRowsRef.current.push(row)
 
@@ -765,9 +747,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   const extractBodyContent = (element: any) => {
-    if (!element || typeof element !== 'object') {
+    if (!element || typeof element !== 'object')
       return null
-    }
 
     if (element.type === 'html' && element.props?.children) {
       const children = Array.isArray(element.props.children)
@@ -775,9 +756,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         : [element.props.children]
 
       for (const child of children) {
-        if (child && typeof child === 'object' && child.type === 'body') {
+        if (child && typeof child === 'object' && child.type === 'body')
           return child.props?.children || null
-        }
       }
     }
 
