@@ -59,10 +59,6 @@
       "types": "./dist/runtime/AppRouterProvider.d.mts",
       "default": "./dist/runtime/AppRouterProvider.mjs"
     },
-    "./hooks/useActionState": {
-      "types": "./dist/hooks/useActionState.d.mts",
-      "default": "./dist/hooks/useActionState.mjs"
-    },
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.mts",

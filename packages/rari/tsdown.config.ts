@@ -8,7 +8,6 @@ export default defineConfig({
     'cli': 'src/cli.ts',
     'mdx': 'src/mdx.ts',
     'runtime/actions': 'src/runtime/actions.ts',
-    'hooks/useActionState': 'src/hooks/useActionState.ts',
   },
   external: ['fsevents'],
   dts: true,
