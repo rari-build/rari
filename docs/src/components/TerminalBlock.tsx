@@ -36,7 +36,7 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
 
       <button
         onClick={() => copyToClipboard(command)}
-        className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-0 group-hover:opacity-100 z-10"
+        className={`absolute ${showHeader ? 'top-12' : 'top-2'} right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-0 group-hover:opacity-100 z-10`}
         type="button"
         aria-label="Copy code to clipboard"
       >

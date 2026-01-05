@@ -1,4 +1,5 @@
 import Bluesky from './icons/Bluesky'
+import Close from './icons/Close'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
 import Menu from './icons/Menu'
@@ -26,12 +27,19 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
       <label
         htmlFor="mobile-menu-toggle"
-        className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer peer-checked:hidden"
       >
         <Menu className="w-6 h-6" />
       </label>
 
       <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">
+        <label
+          htmlFor="mobile-menu-toggle"
+          className="absolute top-4 right-4 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer z-10"
+        >
+          <Close className="w-6 h-6" />
+        </label>
+
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
             <div className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg">
