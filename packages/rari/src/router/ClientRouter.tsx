@@ -295,14 +295,12 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
     const targetPath = normalizePath(href)
 
-    if (targetPath === currentRouteRef.current && !options.replace) {
+    if (targetPath === currentRouteRef.current && !options.replace)
       return
-    }
 
     const existingPending = pendingNavigationsRef.current.get(targetPath)
-    if (existingPending) {
+    if (existingPending)
       return existingPending.promise
-    }
 
     const routeInfo = await getRouteInfo(targetPath)
 
@@ -317,9 +315,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current
       try {
-        if (!options.historyKey) {
+        if (!options.historyKey)
           statePreserverRef.current.captureState(fromRoute)
-        }
 
         const historyKey = options.historyKey || generateHistoryKey()
         const historyState: HistoryState = {
@@ -355,9 +352,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           signal: abortController.signal,
         })
 
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error(`Failed to fetch: ${response.status}`)
-        }
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
@@ -516,9 +512,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   }
 
   const processNavigationQueue = async () => {
-    if (navigationQueueRef.current.length === 0) {
+    if (navigationQueueRef.current.length === 0)
       return
-    }
 
     const lastNavigation = navigationQueueRef.current[navigationQueueRef.current.length - 1]
 
@@ -548,41 +543,34 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   const debouncedNavigate = debouncedNavigateRef.current
 
   const handleLinkClick = (event: MouseEvent) => {
-    if (event.button !== 0) {
+    if (event.button !== 0)
       return
-    }
 
-    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey)
       return
-    }
 
     let target = event.target as HTMLElement | null
     while (target && target.tagName !== 'A') {
       target = target.parentElement
     }
 
-    if (!target || target.tagName !== 'A') {
+    if (!target || target.tagName !== 'A')
       return
-    }
 
     const anchor = target as HTMLAnchorElement
 
-    if (anchor.target && anchor.target !== '_self') {
+    if (anchor.target && anchor.target !== '_self')
       return
-    }
 
-    if (anchor.hasAttribute('download')) {
+    if (anchor.hasAttribute('download'))
       return
-    }
 
     const href = anchor.getAttribute('href')
-    if (!href) {
+    if (!href)
       return
-    }
 
-    if (isExternalUrl(href)) {
+    if (isExternalUrl(href))
       return
-    }
 
     event.preventDefault()
 
@@ -656,9 +644,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       requestAnimationFrame(() => {
         statePreserverRef.current.restoreState(currentPath)
 
-        if (historyState?.scrollPosition) {
+        if (historyState?.scrollPosition)
           window.scrollTo(historyState.scrollPosition.x, historyState.scrollPosition.y)
-        }
       })
     }
   }
@@ -680,9 +667,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       cancelNavigation()
       cancelAllPendingNavigations()
 
-      if (debouncedNavigate.cancel) {
+      if (debouncedNavigate.cancel)
         debouncedNavigate.cancel()
-      }
     }
   }, [])
 

@@ -282,9 +282,8 @@ export async function extractServerPropsWithCache(
   const cacheKey = `${componentPath}:${JSON.stringify(params)}:${JSON.stringify(searchParams)}`
   const cached = propsCache.get(cacheKey)
 
-  if (cached && Date.now() - cached.timestamp < cacheTime) {
+  if (cached && Date.now() - cached.timestamp < cacheTime)
     return cached.result
-  }
 
   const result = await extractServerProps(componentPath, params, searchParams)
 
@@ -302,9 +301,8 @@ export function clearPropsCache(): void {
 
 export function clearPropsCacheForComponent(componentPath: string): void {
   for (const key of propsCache.keys()) {
-    if (key.startsWith(componentPath)) {
+    if (key.startsWith(componentPath))
       propsCache.delete(key)
-    }
   }
 }
 

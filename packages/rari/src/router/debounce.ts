@@ -47,9 +47,8 @@ export function debounce<T extends (...args: any[]) => any>(
 
   function timerExpired() {
     const time = Date.now()
-    if (shouldInvoke(time)) {
+    if (shouldInvoke(time))
       return trailingEdge(time)
-    }
     const timeSinceLastCall = time - lastCallTime
     const timeSinceLastInvoke = time - lastInvokeTime
     const timeWaiting = wait - timeSinceLastCall
@@ -102,17 +101,15 @@ export function debounce<T extends (...args: any[]) => any>(
     lastCallTime = time
 
     if (isInvoking) {
-      if (timeoutId === null) {
+      if (timeoutId === null)
         return leadingEdge(lastCallTime)
-      }
       if (maxWait !== undefined) {
         timeoutId = setTimeout(timerExpired, wait)
         return invokeFunc(lastCallTime)
       }
     }
-    if (timeoutId === null) {
+    if (timeoutId === null)
       timeoutId = setTimeout(timerExpired, wait)
-    }
     return undefined
   }
 

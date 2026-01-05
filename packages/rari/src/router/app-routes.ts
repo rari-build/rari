@@ -107,9 +107,8 @@ class AppRouteGenerator {
       const stat = await fs.stat(entryPath)
 
       if (stat.isDirectory()) {
-        if (this.shouldScanDirectory(entry)) {
+        if (this.shouldScanDirectory(entry))
           dirs.push(entry)
-        }
       }
       else if (stat.isFile()) {
         files.push(entry)
@@ -205,9 +204,8 @@ class AppRouteGenerator {
   private findFile(files: string[], baseName: string): string | undefined {
     for (const ext of this.extensions) {
       const fileName = `${baseName}${ext}`
-      if (files.includes(fileName)) {
+      if (files.includes(fileName))
         return fileName
-      }
     }
     return undefined
   }
