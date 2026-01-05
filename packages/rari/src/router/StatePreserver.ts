@@ -159,10 +159,8 @@ export class StatePreserver {
 
     if (!this.restoreScrollPositions(state.scrollPositions))
       success = false
-
     if (!this.restoreFormData(state.formData))
       success = false
-
     if (state.focusedElement)
       this.restoreFocus(state.focusedElement)
 

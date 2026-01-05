@@ -58,9 +58,8 @@ export function createServerReference(
       const result: ServerActionResponse = await response.json()
 
       if (result.redirect) {
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined')
           window.location.href = result.redirect
-        }
         return { redirect: result.redirect }
       }
 

@@ -370,9 +370,8 @@ class AppRouteGenerator {
         `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
       )
 
-      if (functionExportRegex.test(content) || constExportRegex.test(content)) {
+      if (functionExportRegex.test(content) || constExportRegex.test(content))
         methods.push(method)
-      }
     }
 
     return methods

@@ -310,9 +310,8 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
     }
   }
 
-  if (moduleMap[componentName]) {
+  if (moduleMap[componentName])
     return moduleMap[componentName]
-  }
 
   const clientComponents = globalThis['~clientComponents'] || {}
   for (const [id, info] of Object.entries(clientComponents)) {

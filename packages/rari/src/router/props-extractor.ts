@@ -93,13 +93,10 @@ export async function extractServerProps(
       if (result) {
         if (result.notFound)
           notFound = true
-
         if (result.redirect)
           redirect = result.redirect
-
         if (result.revalidate !== undefined)
           revalidate = result.revalidate
-
         if (result.props)
           props = { ...props, ...result.props }
       }
@@ -110,10 +107,8 @@ export async function extractServerProps(
       if (result) {
         if (result.notFound)
           notFound = true
-
         if (result.redirect)
           redirect = result.redirect.destination
-
         if (result.props)
           props = { ...props, ...result.props }
       }
@@ -124,13 +119,10 @@ export async function extractServerProps(
       if (result) {
         if (result.notFound)
           notFound = true
-
         if (result.redirect)
           redirect = result.redirect.destination
-
         if (result.revalidate !== undefined)
           revalidate = result.revalidate
-
         if (result.props)
           props = { ...props, ...result.props }
       }
@@ -198,31 +190,22 @@ export function mergeMetadata(
 
   if (childMetadata.description !== undefined)
     merged.description = childMetadata.description
-
   if (childMetadata.keywords !== undefined)
     merged.keywords = childMetadata.keywords
-
   if (childMetadata.openGraph !== undefined)
     merged.openGraph = { ...parentMetadata.openGraph, ...childMetadata.openGraph }
-
   if (childMetadata.twitter !== undefined)
     merged.twitter = { ...parentMetadata.twitter, ...childMetadata.twitter }
-
   if (childMetadata.robots !== undefined)
     merged.robots = { ...parentMetadata.robots, ...childMetadata.robots }
-
   if (childMetadata.icons !== undefined)
     merged.icons = { ...parentMetadata.icons, ...childMetadata.icons }
-
   if (childMetadata.manifest !== undefined)
     merged.manifest = childMetadata.manifest
-
   if (childMetadata.viewport !== undefined)
     merged.viewport = { ...parentMetadata.viewport, ...childMetadata.viewport }
-
   if (childMetadata.verification !== undefined)
     merged.verification = { ...parentMetadata.verification, ...childMetadata.verification }
-
   if (childMetadata.alternates !== undefined)
     merged.alternates = { ...parentMetadata.alternates, ...childMetadata.alternates }
 

@@ -94,10 +94,8 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
     const robotsContent: string[] = []
     if (metadata.robots.index !== undefined)
       robotsContent.push(metadata.robots.index ? 'index' : 'noindex')
-
     if (metadata.robots.follow !== undefined)
       robotsContent.push(metadata.robots.follow ? 'follow' : 'nofollow')
-
     if (metadata.robots.nocache)
       robotsContent.push('nocache')
     if (robotsContent.length > 0) {
