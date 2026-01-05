@@ -409,17 +409,6 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
-      // Suppress the esbuildOptions deprecation warning from @vitejs/plugin-react
-      // The React plugin internally sets optimizeDeps.esbuildOptions, but Vite 7+ uses Rolldown
-      // This warning is expected and can be safely ignored until the React plugin is updated for Vite 7
-      const originalWarn = console.warn
-      console.warn = (...args: any[]) => {
-        const message = args[0]
-        if (typeof message === 'string' && message.includes('optimizeDeps.esbuildOptions') && message.includes('deprecated')) {
-          return
-        }
-        originalWarn.apply(console, args)
-      }
       config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
         ? ((config.resolve as any).dedupe as string[])
