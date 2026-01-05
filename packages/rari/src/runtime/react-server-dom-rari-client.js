@@ -108,9 +108,8 @@ function parseWireFormat(wireFormat) {
 
           if (rootChunkId === null && rowTag !== TAG_MODULE_IMPORT && currentRow.trim()) {
             const isSymbol = currentRow.startsWith('"$S') && currentRow.endsWith('"')
-            if (!isSymbol && chunks.has(rowID.toString())) {
+            if (!isSymbol && chunks.has(rowID.toString()))
               rootChunkId = rowID.toString()
-            }
           }
 
           rowState = ROW_ID
@@ -131,9 +130,8 @@ function parseWireFormat(wireFormat) {
     processRow(rowID, rowTag, currentRow, modules, chunks, symbols)
     if (rootChunkId === null && rowTag !== TAG_MODULE_IMPORT) {
       const isSymbol = currentRow.startsWith('"$S') && currentRow.endsWith('"')
-      if (!isSymbol && chunks.has(rowID.toString())) {
+      if (!isSymbol && chunks.has(rowID.toString()))
         rootChunkId = rowID.toString()
-      }
     }
   }
 
@@ -231,9 +229,8 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
 
       const rowId = rsc.slice(1)
       const referencedChunk = chunks?.get(rowId)
-      if (referencedChunk) {
+      if (referencedChunk)
         return rscToReact(referencedChunk, wireModules, moduleMap, symbols, chunks)
-      }
       return null
     }
     return rsc
@@ -267,9 +264,8 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
       if (typeof type === 'string' && type.startsWith('$L')) {
         const componentName = type.substring(2)
 
-        if (componentName === 'ClientRouter' && (!props || !props.manifest)) {
+        if (componentName === 'ClientRouter' && (!props || !props.manifest))
           return props && props.children ? rscToReact(props.children, wireModules, moduleMap, symbols, chunks) : null
-        }
 
         const Component = resolveClientComponent(componentName, wireModules, moduleMap)
 
@@ -309,9 +305,8 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
     const moduleInfo = wireModules.get(moduleRef)
     if (moduleInfo) {
       const clientComponents = globalThis['~clientComponents'] || {}
-      if (clientComponents[moduleInfo.id]) {
+      if (clientComponents[moduleInfo.id])
         return clientComponents[moduleInfo.id].component
-      }
     }
   }
 
@@ -321,9 +316,8 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
 
   const clientComponents = globalThis['~clientComponents'] || {}
   for (const [id, info] of Object.entries(clientComponents)) {
-    if (id.includes(componentName) || info.name === componentName) {
+    if (id.includes(componentName) || info.name === componentName)
       return info.component
-    }
   }
 
   return null
@@ -336,9 +330,8 @@ function processProps(props, wireModules, moduleMap, symbols, chunks) {
   const processed = {}
   for (const key in props) {
     if (Object.prototype.hasOwnProperty.call(props, key)) {
-      if (key.startsWith('~') || key === 'ref') {
+      if (key.startsWith('~') || key === 'ref')
         continue
-      }
       if (key === 'children') {
         processed[key] = props.children ? rscToReact(props.children, wireModules, moduleMap, symbols, chunks) : undefined
       }
