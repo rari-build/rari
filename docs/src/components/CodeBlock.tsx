@@ -4,6 +4,9 @@ import { useState } from 'react'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
 import File from './icons/File'
+import React from './icons/React'
+import TypeScript from './icons/TypeScript'
+import Vite from './icons/Vite'
 
 interface CodeBlockProps {
   children: string
@@ -13,8 +16,24 @@ interface CodeBlockProps {
   highlightedHtml?: string
 }
 
+function getFileIcon(filename: string) {
+  const lowerFilename = filename.toLowerCase()
+
+  if (lowerFilename.includes('vite.config'))
+    return Vite
+
+  if (lowerFilename.endsWith('.tsx') || lowerFilename.endsWith('.jsx'))
+    return React
+
+  if (lowerFilename.endsWith('.ts') || lowerFilename.endsWith('.mts') || lowerFilename.endsWith('.cts'))
+    return TypeScript
+
+  return File
+}
+
 export default function CodeBlock({ children, filename, className, language = 'typescript', highlightedHtml }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
+  const FileIcon = filename ? getFileIcon(filename) : File
 
   const copyToClipboard = async () => {
     try {
@@ -31,7 +50,7 @@ export default function CodeBlock({ children, filename, className, language = 't
     <div className={`not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] ${className || ''}`}>
       {filename && (
         <div className="flex items-center gap-2 bg-[#161b22] px-4 py-2.5 border-b border-[#30363d]">
-          <File className="w-4 h-4 text-gray-400" />
+          <FileIcon className="w-4 h-4 text-gray-400" />
           <span className="text-sm text-gray-400 font-medium">{filename}</span>
         </div>
       )}
