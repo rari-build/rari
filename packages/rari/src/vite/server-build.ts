@@ -122,9 +122,8 @@ export class ServerComponentBuilder {
   }
 
   isServerComponent(filePath: string): boolean {
-    if (filePath.includes('node_modules')) {
+    if (filePath.includes('node_modules'))
       return false
-    }
 
     try {
       if (!fs.existsSync(filePath)) {
@@ -137,9 +136,8 @@ export class ServerComponentBuilder {
       let hasServerDirective = false
       for (const line of lines) {
         const trimmed = line.trim()
-        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
           continue
-        }
         if (trimmed === '\'use client\'' || trimmed === '"use client"'
           || trimmed === '\'use client\';' || trimmed === '"use client";') {
           hasClientDirective = true
@@ -150,9 +148,8 @@ export class ServerComponentBuilder {
           hasServerDirective = true
           break
         }
-        if (trimmed) {
+        if (trimmed)
           break
-        }
       }
       return !hasClientDirective && !hasServerDirective
     }
@@ -163,9 +160,8 @@ export class ServerComponentBuilder {
 
   private isClientComponent(filePath: string): boolean {
     try {
-      if (!fs.existsSync(filePath)) {
+      if (!fs.existsSync(filePath))
         return false
-      }
       const code = fs.readFileSync(filePath, 'utf-8')
 
       const clientDirectives = [
@@ -205,9 +201,8 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!this.isServerComponent(filePath)) {
+    if (!this.isServerComponent(filePath))
       return
-    }
 
     const dependencies = this.extractDependencies(code)
     const hasNodeImports = this.hasNodeImports(code)
@@ -224,16 +219,14 @@ export class ServerComponentBuilder {
     const lines = code.split('\n')
     for (const line of lines) {
       const trimmed = line.trim()
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
         continue
-      }
       if (trimmed === '\'use server\'' || trimmed === '"use server"'
         || trimmed === '\'use server\';' || trimmed === '"use server";') {
         return true
       }
-      if (trimmed) {
+      if (trimmed)
         break
-      }
     }
     return false
   }
@@ -487,17 +480,14 @@ const ${importName} = (props) => {
                   return { path: args.path, namespace: 'component-stub' }
                 }
 
-                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime')
                   return { path: args.path, external: true }
-                }
 
-                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
                   return { path: args.path, external: true }
-                }
 
-                if (args.path === 'rari/client') {
+                if (args.path === 'rari/client')
                   return null
-                }
 
                 if (args.path.startsWith('@/actions/') || args.path.includes('/actions/')) {
                   const resolvedPath = path.resolve(args.resolveDir, args.path)
@@ -508,9 +498,8 @@ const ${importName} = (props) => {
                     if (fs.existsSync(pathWithExt)) {
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        if (content.includes('\'use server\'') || content.includes('"use server"')) {
+                        if (content.includes('\'use server\'') || content.includes('"use server"'))
                           return { path: args.path, external: true }
-                        }
                       }
                       catch {}
                       break
@@ -552,9 +541,8 @@ const ${importName} = (props) => {
                   ]
                   for (const ext of possibleExtensions) {
                     const fullPath = resolvedPath + ext
-                    if (fs.existsSync(fullPath)) {
+                    if (fs.existsSync(fullPath))
                       return { path: fullPath }
-                    }
                   }
 
                   return null
@@ -750,9 +738,8 @@ const ${importName} = (props) => {
             name: 'external-server-actions',
             setup: (build) => {
               build.onResolve({ filter: /.*/ }, async (args) => {
-                if (args.namespace !== 'file' && args.namespace !== '') {
+                if (args.namespace !== 'file' && args.namespace !== '')
                   return null
-                }
 
                 if (args.path.startsWith('node:') || isNodeBuiltin(args.path)
                   || args.path === 'react' || args.path === 'react-dom'
@@ -772,9 +759,8 @@ const ${importName} = (props) => {
                   }
                 }
 
-                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../'))) {
+                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../')))
                   resolvedPath = path.resolve(args.resolveDir, args.path)
-                }
 
                 if (resolvedPath) {
                   const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
@@ -787,16 +773,14 @@ const ${importName} = (props) => {
 
                         for (const line of lines) {
                           const trimmed = line.trim()
-                          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+                          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
                             continue
-                          }
                           if (trimmed === '\'use server\'' || trimmed === '"use server"'
                             || trimmed === '\'use server\';' || trimmed === '"use server";') {
                             return { path: args.path, external: true }
                           }
-                          if (trimmed) {
+                          if (trimmed)
                             break
-                          }
                         }
                       }
                       catch {}
@@ -823,9 +807,8 @@ const ${importName} = (props) => {
                   const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
                   for (const ext of possibleExtensions) {
                     const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
                       return { path: pathWithExt }
-                    }
                   }
 
                   return { path: resolvedPath }
@@ -852,17 +835,14 @@ const ${importName} = (props) => {
             name: 'auto-external',
             setup(build) {
               build.onResolve({ filter: /^[^./]/ }, async (args) => {
-                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime')
                   return { path: args.path, external: true }
-                }
 
-                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)) {
+                if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
                   return { path: args.path, external: true }
-                }
 
-                if (args.path === 'rari/client') {
+                if (args.path === 'rari/client')
                   return null
-                }
 
                 return null
               })
@@ -889,9 +869,8 @@ const ${importName} = (props) => {
                   ]
                   for (const ext of possibleExtensions) {
                     const fullPath = resolvedPath + ext
-                    if (fs.existsSync(fullPath)) {
+                    if (fs.existsSync(fullPath))
                       return { path: fullPath }
-                    }
                   }
 
                   return null
@@ -926,9 +905,8 @@ const ${importName} = (props) => {
         code = code.replace(
           /import\s*(\{[^}]+\}|\w+)\s*from\s*["']([^"']+)["'];?/g,
           (match, imports, importPath) => {
-            if (importPath.startsWith('file://') || importPath.startsWith('npm:')) {
+            if (importPath.startsWith('file://') || importPath.startsWith('npm:'))
               return match
-            }
 
             if (importPath.startsWith('node:') || isNodeBuiltin(importPath)
               || importPath === 'react' || importPath === 'react-dom'
@@ -957,16 +935,14 @@ const ${importName} = (props) => {
               return `import ${imports} from "${fileUrl}";`
             }
 
-            // If we couldn't resolve it, leave it as is
             return match
           },
         )
 
         await fs.promises.writeFile(outputPath, code, 'utf-8')
 
-        if (returnCode) {
+        if (returnCode)
           return code
-        }
       }
 
       if (result.errors.length > 0) {
@@ -1076,9 +1052,8 @@ const ${importName} = (props) => {
 
     if (!defaultExportName) {
       const possibleDefault = `${componentId}_default`
-      if (transformedCode.includes(`var ${possibleDefault}`)) {
+      if (transformedCode.includes(`var ${possibleDefault}`))
         defaultExportName = possibleDefault
-      }
     }
 
     const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
@@ -1245,24 +1220,21 @@ function registerClientReference(clientReference, id, exportName) {
       }
     }
 
-    if (!path.isAbsolute(resolvedPath)) {
+    if (!path.isAbsolute(resolvedPath))
       resolvedPath = path.resolve(path.dirname(importerPath), resolvedPath)
-    }
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
     for (const ext of extensions) {
       const pathWithExt = `${resolvedPath}${ext}`
-      if (fs.existsSync(pathWithExt)) {
+      if (fs.existsSync(pathWithExt))
         return pathWithExt
-      }
     }
 
     if (fs.existsSync(resolvedPath)) {
       for (const ext of extensions) {
         const indexPath = path.join(resolvedPath, `index${ext}`)
-        if (fs.existsSync(indexPath)) {
+        if (fs.existsSync(indexPath))
           return indexPath
-        }
       }
     }
 
@@ -1479,21 +1451,18 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
           let hasServerDirective = false
           for (const line of lines) {
             const trimmed = line.trim()
-            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed) {
+            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
               continue
-            }
             if (trimmed === '\'use server\'' || trimmed === '"use server"'
               || trimmed === '\'use server\';' || trimmed === '"use server";') {
               hasServerDirective = true
               break
             }
-            if (trimmed) {
+            if (trimmed)
               break
-            }
           }
-          if (hasServerDirective) {
+          if (hasServerDirective)
             builder.addServerComponent(fullPath)
-          }
         }
       }
       catch (error) {
@@ -1525,16 +1494,14 @@ export function createServerBuildPlugin(
         const aliasConfig = config.resolve.alias
         if (Array.isArray(aliasConfig)) {
           aliasConfig.forEach((entry) => {
-            if (typeof entry.find === 'string' && typeof entry.replacement === 'string') {
+            if (typeof entry.find === 'string' && typeof entry.replacement === 'string')
               alias[entry.find] = entry.replacement
-            }
           })
         }
         else if (typeof aliasConfig === 'object') {
           Object.entries(aliasConfig).forEach(([key, value]) => {
-            if (typeof value === 'string') {
+            if (typeof value === 'string')
               alias[key] = value
-            }
           })
         }
       }
@@ -1547,15 +1514,13 @@ export function createServerBuildPlugin(
         return
 
       const srcDir = path.join(projectRoot, 'src')
-      if (fs.existsSync(srcDir)) {
+      if (fs.existsSync(srcDir))
         scanDirectory(srcDir, builder)
-      }
     },
 
     async closeBundle() {
-      if (builder) {
+      if (builder)
         await builder.buildServerComponents()
-      }
     },
 
     async handleHotUpdate({ file }) {
@@ -1563,15 +1528,13 @@ export function createServerBuildPlugin(
         return
 
       const relativePath = path.relative(projectRoot, file)
-      if (!relativePath.startsWith('src/') || !relativePath.match(/\.(tsx?|jsx?)$/)) {
+      if (!relativePath.startsWith('src/') || !relativePath.match(/\.(tsx?|jsx?)$/))
         return
-      }
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
-        if (content.includes('use client')) {
+        if (content.includes('use client'))
           return
-        }
 
         await builder.buildServerComponents()
       }

@@ -109,9 +109,8 @@ export class HMRCoordinator {
               file,
             ) as ComponentRebuildResult
 
-            if (!result.success) {
+            if (!result.success)
               throw new Error(result.error || 'Build failed')
-            }
 
             await this.notifyRustServer(result.componentId, result.bundlePath)
 
@@ -273,9 +272,8 @@ export class HMRCoordinator {
       timestamp: Date.now(),
     })
 
-    if (this.logBatchTimer) {
+    if (this.logBatchTimer)
       clearTimeout(this.logBatchTimer)
-    }
 
     this.logBatchTimer = setTimeout(() => {
       this.flushLogs()
@@ -287,9 +285,8 @@ export class HMRCoordinator {
       return
 
     const grouped = this.logBatch.reduce((acc, log) => {
-      if (!acc[log.type]) {
+      if (!acc[log.type])
         acc[log.type] = []
-      }
       acc[log.type].push(log)
       return acc
     }, {} as Record<string, typeof this.logBatch>)
@@ -345,7 +342,6 @@ export class HMRCoordinator {
     }
     this.pendingUpdates.clear()
     this.pendingFiles.clear()
-
     this.errorHandler.dispose()
   }
 }

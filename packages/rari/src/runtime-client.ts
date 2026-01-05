@@ -376,9 +376,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         success: boolean
         components: string[]
       }>('/api/rsc/components')
-      if (response.success) {
+      if (response.success)
         this.components = response.components
-      }
       return this.components
     }
     catch (error) {
@@ -439,9 +438,8 @@ export class ErrorBoundary extends Component<
     if (this.state.hasError) {
       const reset = () => this.setState({ hasError: false, error: null })
 
-      if (this.props.fallback) {
+      if (this.props.fallback)
         return this.props.fallback(this.state.error!, reset)
-      }
 
       return React.createElement('div', {
         style: { padding: '1rem', border: '1px solid #ef4444', borderRadius: '0.5rem', backgroundColor: '#fef2f2' },

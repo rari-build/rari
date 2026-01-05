@@ -12,9 +12,8 @@ export function scanForLoadingComponents(appDir: string): LoadingComponentEntry[
   const loadingComponents: LoadingComponentEntry[] = []
 
   function scanDirectory(dir: string, routePath: string) {
-    if (!fs.existsSync(dir)) {
+    if (!fs.existsSync(dir))
       return
-    }
 
     const entries = fs.readdirSync(dir, { withFileTypes: true })
 
@@ -107,9 +106,8 @@ export function createLoadingComponentPlugin(): Plugin {
 
     transform(code, id) {
       if (id.includes('loading.tsx') && id.includes('?loading-component')) {
-        if (!code.trim().startsWith('\'use client\'') && !code.trim().startsWith('"use client"')) {
+        if (!code.trim().startsWith('\'use client\'') && !code.trim().startsWith('"use client"'))
           return `'use client';\n\n${code}`
-        }
       }
       return null
     },

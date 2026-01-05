@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+/// <reference types="rolldown-vite/client" />
 
 interface ImportMetaHot {
   on: <T = any>(event: string, callback: (data: T) => void) => void
