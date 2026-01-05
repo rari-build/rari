@@ -102,10 +102,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
   const resolvedAlias: Record<string, string> = {}
 
   function isServerComponent(filePath: string): boolean {
-    if (filePath.includes('node_modules'))
-      return false
-
-    if (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\'))
+    if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
       return false
 
     let pathForFsOperations = filePath
@@ -119,8 +116,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
     try {
       if (!fs.existsSync(pathForFsOperations))
         return false
-      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
 
+      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
       const hasClientDirective = hasTopLevelDirective(code, 'use client')
       const hasServerDirective = hasTopLevelDirective(code, 'use server')
 
@@ -668,7 +665,6 @@ ${clientTransformedCode}`
       const cachedType = componentTypeCache.get(id)
       if (cachedType === 'server')
         return transformServerModule(code, id)
-
       if (cachedType === 'client')
         return transformClientModuleForClient(code, id)
 
@@ -773,16 +769,12 @@ const ${componentName} = registerClientReference(
 
         if (needsReactImport && !hasReactImport)
           importsToAdd += `import React from 'react';\n`
-
         if (needsWrapperImport && !hasWrapperImport)
           importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`
-
         if (serverComponentReplacements.length > 0)
           importsToAdd += `${serverComponentReplacements.join('\n')}\n`
-
         if (importsToAdd)
           modifiedCode = importsToAdd + modifiedCode
-
         if (!modifiedCode.includes('Suspense')) {
           const reactImportMatch = modifiedCode.match(
             /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/,
@@ -1329,25 +1321,18 @@ const ${componentName} = registerClientReference(
     resolveId(id) {
       if (id === 'virtual:rsc-integration')
         return id
-
       if (id === 'virtual:rari-entry-client')
         return id
-
       if (id === 'virtual:react-server-dom-rari-client')
         return id
-
       if (id === 'virtual:app-router-provider')
         return `${id}.tsx`
-
       if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
         return 'virtual:default-loading-indicator.tsx'
-
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-
       if (id === '../router/LoadingComponentRegistry' || id === '../router/LoadingComponentRegistry.ts')
         return 'virtual:loading-component-registry.ts'
-
       if (id === 'react-server-dom-rari/server')
         return id
 
