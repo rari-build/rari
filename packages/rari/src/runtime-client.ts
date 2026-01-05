@@ -112,9 +112,8 @@ export class HttpRuntimeClient implements RuntimeClient {
       signal: AbortSignal.timeout(this.timeout),
     }
 
-    if (body && (method === 'POST' || method === 'PUT')) {
+    if (body && (method === 'POST' || method === 'PUT'))
       requestOptions.body = JSON.stringify(body)
-    }
 
     try {
       const response = await fetch(url, requestOptions)
@@ -305,8 +304,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     filePath: string,
     exportName: string,
   ): void {
-    // For HTTP client, we need to make this async, but the interface requires sync
-    // We'll handle this by queuing the request
     this.queueClientComponentRegistration(componentId, filePath, exportName)
   }
 
@@ -353,7 +350,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     filePath: string,
     exportName: string,
   ): void {
-    // Client references are handled similarly to client components
     this.queueClientComponentRegistration(referenceId, filePath, exportName)
   }
 
@@ -363,8 +359,6 @@ export class HttpRuntimeClient implements RuntimeClient {
 
   async shutdown(): Promise<void> {
     try {
-      // The HTTP server doesn't need explicit shutdown from client side
-      // Just mark as not initialized
       this.initialized = false
       this.components = []
     }

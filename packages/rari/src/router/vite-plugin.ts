@@ -57,9 +57,8 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
 function filePathToRoutePath(filePath: string, appDir: string): string {
   const relativePath = path.relative(appDir, path.dirname(filePath))
 
-  if (!relativePath || relativePath === '.') {
+  if (!relativePath || relativePath === '.')
     return '/'
-  }
 
   const normalized = relativePath.replace(/\\/g, '/')
   const segments = normalized.split('/').filter(Boolean)
@@ -72,9 +71,8 @@ function getAffectedRoutes(
   fileType: AppRouterFileType,
   allRoutes: string[],
 ): string[] {
-  if (fileType === 'page') {
+  if (fileType === 'page')
     return [routePath]
-  }
 
   const affected = allRoutes.filter((route) => {
     return route === routePath || route.startsWith(`${routePath}/`)
@@ -88,23 +86,20 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
     const metadataRegex = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
     const match = fileContent.match(metadataRegex)
 
-    if (!match) {
+    if (!match)
       return null
-    }
 
     const metadataString = match[1]
 
     const metadata: Record<string, any> = {}
 
     const titleMatch = metadataString.match(/title\s*:\s*['"]([^'"]+)['"]/)
-    if (titleMatch) {
+    if (titleMatch)
       metadata.title = titleMatch[1]
-    }
 
     const descMatch = metadataString.match(/description\s*:\s*['"]([^'"]+)['"]/)
-    if (descMatch) {
+    if (descMatch)
       metadata.description = descMatch[1]
-    }
 
     const keywordsMatch = metadataString.match(/keywords\s*:\s*\[([\s\S]*?)\]/)
     if (keywordsMatch) {
@@ -120,9 +115,8 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
     for (const field of fieldsToExtract) {
       const fieldRegex = new RegExp(`${field}\\s*:\\s*['"]([^'"]+)['"]`, 'm')
       const fieldMatch = metadataString.match(fieldRegex)
-      if (fieldMatch) {
+      if (fieldMatch)
         metadata[field] = fieldMatch[1]
-      }
     }
 
     return Object.keys(metadata).length > 0 ? metadata : null
@@ -213,15 +207,12 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           }
           else if (entry.isFile() && opts.extensions.some(ext => entry.name.endsWith(ext))) {
             const fileType = getAppRouterFileType(fullPath)
-            if (fileType) {
+            if (fileType)
               files.add(fullPath)
-            }
           }
         }
       }
-      catch {
-        // Directory might not exist or be accessible
-      }
+      catch {}
     }
 
     await scanDir(appDir)

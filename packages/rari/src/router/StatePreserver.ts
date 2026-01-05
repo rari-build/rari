@@ -82,9 +82,8 @@ export class StatePreserver {
 
         const formData = new FormData(form)
 
-        if (Array.from(formData.entries()).length > 0) {
+        if (Array.from(formData.entries()).length > 0)
           formDataMap.set(formId, formData)
-        }
       })
     }
     catch {}
@@ -97,14 +96,12 @@ export class StatePreserver {
       const activeElement = document.activeElement
 
       if (activeElement && activeElement !== document.body) {
-        if (activeElement.id) {
+        if (activeElement.id)
           return `#${activeElement.id}`
-        }
 
         if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-          if (activeElement.name) {
+          if (activeElement.name)
             return `[name="${activeElement.name}"]`
-          }
         }
       }
     }
@@ -115,18 +112,16 @@ export class StatePreserver {
 
   private storeState(route: string, state: PreservedState): void {
     const existingIndex = this.routeAccessOrder.indexOf(route)
-    if (existingIndex !== -1) {
+    if (existingIndex !== -1)
       this.routeAccessOrder.splice(existingIndex, 1)
-    }
 
     this.routeAccessOrder.push(route)
     this.stateHistory.set(route, state)
 
     while (this.routeAccessOrder.length > this.maxHistorySize) {
       const oldestRoute = this.routeAccessOrder.shift()
-      if (oldestRoute) {
+      if (oldestRoute)
         this.stateHistory.delete(oldestRoute)
-      }
     }
   }
 
@@ -150,31 +145,26 @@ export class StatePreserver {
   public clearState(route: string): void {
     this.stateHistory.delete(route)
     const index = this.routeAccessOrder.indexOf(route)
-    if (index !== -1) {
+    if (index !== -1)
       this.routeAccessOrder.splice(index, 1)
-    }
   }
 
   public restoreState(route: string): boolean {
     const state = this.stateHistory.get(route)
 
-    if (!state) {
+    if (!state)
       return false
-    }
 
     let success = true
 
-    if (!this.restoreScrollPositions(state.scrollPositions)) {
+    if (!this.restoreScrollPositions(state.scrollPositions))
       success = false
-    }
 
-    if (!this.restoreFormData(state.formData)) {
+    if (!this.restoreFormData(state.formData))
       success = false
-    }
 
-    if (state.focusedElement) {
+    if (state.focusedElement)
       this.restoreFocus(state.focusedElement)
-    }
 
     return success
   }

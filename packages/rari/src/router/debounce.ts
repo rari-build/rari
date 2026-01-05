@@ -68,18 +68,16 @@ export function debounce<T extends (...args: any[]) => any>(
   function trailingEdge(time: number) {
     timeoutId = null
 
-    if (trailing && lastArgs) {
+    if (trailing && lastArgs)
       return invokeFunc(time)
-    }
     lastArgs = null
     lastThis = null
     return undefined
   }
 
   function cancel() {
-    if (timeoutId !== null) {
+    if (timeoutId !== null)
       clearTimeout(timeoutId)
-    }
     lastInvokeTime = 0
     lastArgs = null
     lastCallTime = 0

@@ -214,9 +214,8 @@ class AppRouteGenerator {
   }
 
   private pathToRoute(filePath: string): string {
-    if (!filePath) {
+    if (!filePath)
       return '/'
-    }
 
     const normalized = filePath.replace(/\\/g, '/')
 
@@ -241,9 +240,8 @@ class AppRouteGenerator {
   }
 
   private parseRouteSegments(filePath: string): RouteSegment[] {
-    if (!filePath) {
+    if (!filePath)
       return []
-    }
 
     const segments = filePath.split(/[/\\]/).filter(Boolean)
     return segments.map((segment) => {
@@ -288,13 +286,12 @@ class AppRouteGenerator {
   }
 
   private getParentPath(filePath: string): string | null {
-    if (!filePath) {
+    if (!filePath)
       return null
-    }
+
     const parts = filePath.split(/[/\\]/).filter(Boolean)
-    if (parts.length === 0) {
+    if (parts.length === 0)
       return null
-    }
     return parts.slice(0, -1).join('/')
   }
 
