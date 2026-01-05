@@ -79,9 +79,8 @@ export class HMRCoordinator {
       this.pendingUpdates.delete(filePath)
     }
 
-    if (this.batchTimer) {
+    if (this.batchTimer)
       clearTimeout(this.batchTimer)
-    }
 
     this.batchTimer = setTimeout(async () => {
       const filesToProcess = Array.from(this.pendingFiles)

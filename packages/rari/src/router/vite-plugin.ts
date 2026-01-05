@@ -165,9 +165,8 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
     }
 
     const result = await response.json()
-    if (!result.success) {
+    if (!result.success)
       console.error(`[HMR] Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
-    }
   }
   catch (error) {
     console.error('Failed to notify API route invalidation:', error)
@@ -270,9 +269,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   }
 
   const setupWatcher = (root: string): void => {
-    if (watcher) {
+    if (watcher)
       watcher.close()
-    }
 
     const watchPaths = [path.resolve(root, opts.appDir)]
 
@@ -342,9 +340,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
         if (fileType) {
           const existingTimer = pendingHMRUpdates.get(file)
-          if (existingTimer) {
+          if (existingTimer)
             clearTimeout(existingTimer)
-          }
 
           const timer = setTimeout(async () => {
             pendingHMRUpdates.delete(file)
@@ -434,9 +431,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       }
       pendingHMRUpdates.clear()
 
-      if (watcher) {
+      if (watcher)
         await watcher.close()
-      }
     },
   }
 }

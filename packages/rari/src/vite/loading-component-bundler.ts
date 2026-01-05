@@ -94,16 +94,14 @@ export function createLoadingComponentPlugin(): Plugin {
     },
 
     resolveId(id) {
-      if (id === 'virtual:loading-component-map') {
+      if (id === 'virtual:loading-component-map')
         return id
-      }
       return null
     },
 
     load(id) {
-      if (id === 'virtual:loading-component-map') {
+      if (id === 'virtual:loading-component-map')
         return generateLoadingComponentMapContent(loadingComponents, projectRoot)
-      }
       return null
     },
 

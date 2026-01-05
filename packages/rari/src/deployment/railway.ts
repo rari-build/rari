@@ -46,9 +46,8 @@ export async function createRailwayDeployment() {
     packageJson.scripts['deploy:railway'] = 'echo "Push to GitHub and connect to Railway to deploy"'
 
     packageJson.engines = packageJson.engines || {}
-    if (!packageJson.engines.node) {
+    if (!packageJson.engines.node)
       packageJson.engines.node = '>=20.0.0'
-    }
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')

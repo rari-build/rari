@@ -19,17 +19,15 @@ export class HMRErrorHandler {
     this.errorCount++
     this.lastError = error
 
-    if (this.resetTimer) {
+    if (this.resetTimer)
       clearTimeout(this.resetTimer)
-    }
 
     this.resetTimer = setTimeout(() => {
       this.reset()
     }, this.resetTimeout)
 
-    if (this.errorCount >= this.maxErrors) {
+    if (this.errorCount >= this.maxErrors)
       this.handleMaxErrorsReached()
-    }
   }
 
   reset(): void {
