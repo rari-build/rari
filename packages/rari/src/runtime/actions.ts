@@ -107,9 +107,8 @@ export function enhanceFormWithAction(
         return
       }
 
-      if (options.onSuccess) {
+      if (options.onSuccess)
         options.onSuccess(result)
-      }
 
       form.reset()
     }

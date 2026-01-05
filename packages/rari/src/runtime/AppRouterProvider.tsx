@@ -128,9 +128,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     failureHistoryRef.current.push(failure)
     consecutiveFailuresRef.current += 1
 
-    if (failureHistoryRef.current.length > 10) {
+    if (failureHistoryRef.current.length > 10)
       failureHistoryRef.current.shift()
-    }
 
     console.error('[HMR Failure]', {
       type,
@@ -422,9 +421,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                     b => b.layoutPath === currentLayoutPath && b.startLine === currentLayoutStartLine,
                   )
 
-                  if (existingBoundary) {
+                  if (existingBoundary)
                     existingBoundary.props = props
-                  }
                 }
               }
             }
@@ -451,9 +449,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
       }
 
-      if (rootElement && Array.isArray(rootElement) && rootElement[0] === '$') {
+      if (rootElement && Array.isArray(rootElement) && rootElement[0] === '$')
         rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
-      }
 
       return {
         element: rootElement,
