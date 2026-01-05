@@ -9,7 +9,6 @@ export default defineConfig({
     'mdx': 'src/mdx.ts',
     'runtime/actions': 'src/runtime/actions.ts',
   },
-  external: ['fsevents'],
   dts: true,
   fixedExtension: true,
   format: 'esm',
