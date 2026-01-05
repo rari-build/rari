@@ -453,9 +453,7 @@ const ${importName} = (props) => {
                           return { path: args.path, external: true }
                         }
                       }
-                      catch {
-                        // If we can't read the file, continue with normal bundling
-                      }
+                      catch {}
 
                       return { path: pathWithExt }
                     }
@@ -514,9 +512,7 @@ const ${importName} = (props) => {
                           return { path: args.path, external: true }
                         }
                       }
-                      catch {
-                        // If we can't read the file, continue
-                      }
+                      catch {}
                       break
                     }
                   }
@@ -803,9 +799,7 @@ const ${importName} = (props) => {
                           }
                         }
                       }
-                      catch {
-                        // If we can't read the file, let it continue
-                      }
+                      catch {}
                       break
                     }
                   }

@@ -41,9 +41,8 @@ interface PageMetadata {
 }
 
 function updateDocumentMetadata(metadata: PageMetadata): void {
-  if (metadata.title) {
+  if (metadata.title)
     document.title = metadata.title
-  }
 
   const updateOrCreateMetaTag = (selector: string, attributes: Record<string, string>) => {
     let element = document.querySelector(selector) as HTMLMetaElement | null
@@ -55,9 +54,8 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
       document.head.appendChild(element)
     }
     else {
-      if (attributes.content) {
+      if (attributes.content)
         element.setAttribute('content', attributes.content)
-      }
     }
   }
 
@@ -94,15 +92,14 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 
   if (metadata.robots) {
     const robotsContent: string[] = []
-    if (metadata.robots.index !== undefined) {
+    if (metadata.robots.index !== undefined)
       robotsContent.push(metadata.robots.index ? 'index' : 'noindex')
-    }
-    if (metadata.robots.follow !== undefined) {
+
+    if (metadata.robots.follow !== undefined)
       robotsContent.push(metadata.robots.follow ? 'follow' : 'nofollow')
-    }
-    if (metadata.robots.nocache) {
+
+    if (metadata.robots.nocache)
       robotsContent.push('nocache')
-    }
     if (robotsContent.length > 0) {
       updateOrCreateMetaTag('meta[name="robots"]', {
         name: 'robots',
