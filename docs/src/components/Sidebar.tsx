@@ -2,8 +2,8 @@ import Bluesky from './icons/Bluesky'
 import Close from './icons/Close'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
+import Heart from './icons/Heart'
 import Menu from './icons/Menu'
-import Npm from './icons/Npm'
 
 interface SidebarProps {
   version: string
@@ -83,6 +83,17 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             <ul className="space-y-1">
               <li>
                 <a
+                  href="https://github.com/sponsors/skiniks"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                >
+                  <Heart className="w-4 h-4 mr-2 text-red-600" />
+                  Become a Sponsor
+                </a>
+              </li>
+              <li>
+                <a
                   href="https://github.com/rari-build/rari"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -90,17 +101,6 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                 >
                   <Github className="w-4 h-4 mr-2" />
                   GitHub
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://npmjs.com/package/rari"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-[#21262d] rounded-md transition-colors duration-200"
-                >
-                  <Npm className="w-4 h-4 mr-2" />
-                  npm
                 </a>
               </li>
               <li>

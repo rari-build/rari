@@ -1,4 +1,6 @@
-export default function HomePage() {
+import PackageManagerTabs from '@/components/PackageManagerTabs'
+
+export default async function HomePage() {
   return (
     <div className="space-y-8 lg:space-y-12">
       <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">
@@ -42,11 +44,15 @@ export default function HomePage() {
         <h2 className="text-xl lg:text-2xl font-bold text-[#f0f6fc] mb-4 lg:mb-6 font-mono">
           Quick Start
         </h2>
-        <div className="bg-[#0d1117] border border-[#30363d] rounded-md p-3 lg:p-4 mb-4 lg:mb-6 overflow-x-auto min-h-10 lg:min-h-12">
-          <code className="text-[#fd7e14] font-mono text-xs lg:text-sm whitespace-nowrap block">
-            npm create rari-app@latest my-app
-          </code>
-        </div>
+        <PackageManagerTabs
+          commands={{
+            pnpm: 'pnpm create rari-app@latest my-rari-app',
+            npm: 'npm create rari-app@latest my-rari-app',
+            yarn: 'yarn create rari-app my-rari-app',
+            bun: 'bun create rari-app my-rari-app',
+            deno: 'deno run -A npm:create-rari-app@latest my-rari-app',
+          }}
+        />
         <p className="text-gray-400 mb-4 min-h-6">
           Create a new Rari project in seconds with our zero-config generator.
         </p>
