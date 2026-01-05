@@ -55,10 +55,6 @@
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
     },
-    "./runtime/AppRouterProvider": {
-      "types": "./dist/runtime/AppRouterProvider.d.mts",
-      "default": "./dist/runtime/AppRouterProvider.mjs"
-    },
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.mts",
