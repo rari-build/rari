@@ -5,11 +5,7 @@ import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
   plugins: [
-    rari({
-      serverBuild: {
-        external: ['@shikijs/*'],
-      },
-    }),
+    rari(),
     rariRouter(),
     tailwindcss(),
   ],
@@ -21,12 +17,8 @@ export default defineConfig({
             {
               name: (moduleId) => {
                 if (moduleId.includes('node_modules')) {
-                  if (moduleId.includes('react') || moduleId.includes('react-dom')) {
+                  if (moduleId.includes('react') || moduleId.includes('react-dom'))
                     return 'vendor'
-                  }
-                  if (moduleId.includes('@shikijs')) {
-                    return 'shiki'
-                  }
                 }
                 return null
               },
