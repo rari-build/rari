@@ -18,7 +18,7 @@ export interface MetadataResult {
     description?: string
     url?: string
     siteName?: string
-    images?: Array<{
+    images?: Array<string | {
       url: string
       width?: number
       height?: number
@@ -48,11 +48,35 @@ export interface MetadataResult {
     }
   }
   icons?: {
-    icon?: string | string[]
-    shortcut?: string | string[]
-    apple?: string | string[]
+    icon?: Array<{
+      url: string
+      type?: string
+      sizes?: string
+      rel?: string
+    }> | string | string[]
+    apple?: Array<{
+      url: string
+      sizes?: string
+      rel?: string
+    }> | string | string[]
+    other?: Array<{
+      url: string
+      rel?: string
+      type?: string
+      sizes?: string
+      color?: string
+    }>
   }
   manifest?: string
+  themeColor?: string | Array<{
+    color: string
+    media?: string
+  }>
+  appleWebApp?: {
+    title?: string
+    statusBarStyle?: 'default' | 'black' | 'black-translucent'
+    capable?: boolean
+  }
   viewport?: {
     width?: string | number
     height?: string | number

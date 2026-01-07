@@ -35,6 +35,14 @@
       merged.twitter = { ...parent.twitter, ...child.twitter }
     if (child.robots !== undefined)
       merged.robots = { ...parent.robots, ...child.robots }
+    if (child.icons !== undefined)
+      merged.icons = { ...parent.icons, ...child.icons }
+    if (child.manifest !== undefined)
+      merged.manifest = child.manifest
+    if (child.themeColor !== undefined)
+      merged.themeColor = child.themeColor
+    if (child.appleWebApp !== undefined)
+      merged.appleWebApp = { ...parent.appleWebApp, ...child.appleWebApp }
     if (child.viewport !== undefined)
       merged.viewport = child.viewport
     if (child.canonical !== undefined)

@@ -25,6 +25,14 @@ pub struct PageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub robots: Option<RobotsMetadata>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<IconsMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "themeColor")]
+    pub theme_color: Option<ThemeColorMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "appleWebApp")]
+    pub apple_web_app: Option<AppleWebAppMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub viewport: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical: Option<String>,
@@ -41,9 +49,27 @@ pub struct OpenGraphMetadata {
     #[serde(skip_serializing_if = "Option::is_none", rename = "siteName")]
     pub site_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub images: Option<Vec<String>>,
+    pub images: Option<Vec<OpenGraphImage>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
     pub og_type: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum OpenGraphImage {
+    Simple(String),
+    Detailed(OpenGraphImageDescriptor),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenGraphImageDescriptor {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -70,6 +96,61 @@ pub struct RobotsMetadata {
     pub follow: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nocache: Option<bool>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IconsMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<IconValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apple: Option<IconValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub other: Option<Vec<IconDescriptor>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum IconValue {
+    Single(String),
+    Multiple(Vec<String>),
+    Detailed(Vec<IconDescriptor>),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IconDescriptor {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rel: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub icon_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sizes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum ThemeColorMetadata {
+    Simple(String),
+    Detailed(Vec<ThemeColorDescriptor>),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ThemeColorDescriptor {
+    pub color: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AppleWebAppMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "statusBarStyle")]
+    pub status_bar_style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "capable")]
+    pub capable: Option<bool>,
 }
 
 #[derive(Debug, Clone)]

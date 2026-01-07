@@ -930,6 +930,13 @@ pub async fn handle_app_route(
                         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
                     };
 
+                    let title = context
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.title.as_ref())
+                        .map(|t| t.as_str())
+                        .unwrap_or("Rari App");
+
                     let asset_tags = asset_links.as_deref().unwrap_or("");
                     let base_shell = format!(
                         r#"<!DOCTYPE html>
@@ -937,7 +944,7 @@ pub async fn handle_app_route(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rari App</title>
+    <title>{}</title>
     {}
     <style>
         .rari-loading {{
@@ -951,8 +958,14 @@ pub async fn handle_app_route(
 </head>
 <body>
 <div id="root">"#,
-                        asset_tags
+                        title, asset_tags
                     );
+
+                    let base_shell = if let Some(ref metadata) = context.metadata {
+                        inject_metadata(&base_shell, metadata)
+                    } else {
+                        base_shell
+                    };
 
                     let converter = Arc::new(tokio::sync::Mutex::new(
                         RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),

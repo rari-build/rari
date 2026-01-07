@@ -47,4 +47,30 @@ export const metadata = {
   title: 'Runtime Accelerated Rendering Infrastructure (Rari)',
   description:
     'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon.ico', sizes: '32x32' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180' },
+    ],
+    other: [
+      { rel: 'mask-icon', url: '/safari-pinned-tab.svg', color: '#ffffff' },
+    ],
+  },
+  themeColor: [
+    { color: '#0d1117' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d1117' },
+  ],
+  appleWebApp: {
+    title: 'Rari | Runtime Accelerated Rendering Infrastructure',
+    statusBarStyle: 'black-translucent',
+    capable: true,
+  },
+  openGraph: {
+    title: 'Runtime Accelerated Rendering Infrastructure (Rari)',
+    description: 'A performance-first React framework powered by Rust',
+    type: 'website',
+  },
 }
