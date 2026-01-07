@@ -61,13 +61,12 @@ If you have an existing Vite + React project:
 
 Update your `vite.config.ts`:
 
-<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari, rariRouter } from 'rari/vite'
+<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
     rari(),
-    rariRouter(),
   ],
 })
 `}</CodeBlock>

@@ -24,6 +24,7 @@ use crate::server::handlers::static_handlers::{
 };
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::loaders::component_loader::ComponentLoader;
+use crate::server::middleware::proxy_middleware::ProxyLayer;
 use crate::server::middleware::rate_limit::{create_rate_limit_layer, rate_limit_logger};
 use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
@@ -35,7 +36,8 @@ use crate::server::vite::proxy::{
 };
 use axum::extract::DefaultBodyLimit;
 use axum::{
-    Router, middleware,
+    Router,
+    middleware::{self},
     routing::{any, get, post},
 };
 use colored::Colorize;
@@ -177,6 +179,11 @@ impl Server {
             CacheLoader::load_vite_cache_config(&state).await?;
         }
 
+        if let Err(e) = crate::server::middleware::proxy_middleware::initialize_proxy(&state).await
+        {
+            error!("Failed to initialize proxy: {}", e);
+        }
+
         let router = Self::build_router(&config, state.clone()).await?;
 
         let address = config.server_address();
@@ -202,7 +209,7 @@ impl Server {
         }
     }
 
-    async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
+    async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
         let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
@@ -305,7 +312,13 @@ impl Server {
 
         router = router.layer(middleware_stack);
 
-        Ok(router.with_state(state))
+        let mut router = router.with_state(state.clone());
+
+        if has_app_router {
+            router = router.layer(ProxyLayer::new(state));
+        }
+
+        Ok(router)
     }
 
     pub async fn start(self) -> Result<(), RariError> {

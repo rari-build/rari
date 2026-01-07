@@ -8,6 +8,7 @@ export default defineConfig({
     'cli': 'src/cli.ts',
     'mdx': 'src/mdx.ts',
     'runtime/actions': 'src/runtime/actions.ts',
+    'proxy/runtime-executor': 'src/proxy/runtime-executor.ts',
   },
   dts: true,
   fixedExtension: true,

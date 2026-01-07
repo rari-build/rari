@@ -24,6 +24,10 @@ impl ComponentLoader {
         sorted_components.sort_by_key(|(id, _)| if id.starts_with("components/") { 0 } else { 1 });
 
         for (component_id, component_info) in sorted_components {
+            if component_id == "proxy" || component_id.ends_with("/proxy") {
+                continue;
+            }
+
             let module_specifier = component_info.get("moduleSpecifier").and_then(|s| s.as_str());
 
             let bundle_path =
@@ -369,6 +373,11 @@ impl ComponentLoader {
                 if path.is_dir() {
                     Self::load_server_components_recursive(&path, base_dir, renderer).await?;
                 } else if path.extension().and_then(|s| s.to_str()) == Some("js") {
+                    let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    if file_name == "proxy" {
+                        continue;
+                    }
+
                     let component_code = std::fs::read_to_string(&path).map_err(|e| {
                         RariError::io(format!("Failed to read component file: {e}"))
                     })?;

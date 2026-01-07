@@ -1,4 +1,5 @@
 import type { Plugin, UserConfig } from 'rolldown-vite'
+import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
@@ -7,14 +8,23 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import * as acorn from 'acorn'
+import { rariProxy } from '../proxy/vite-plugin'
+import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
 import { createLoadingComponentPlugin } from './loading-component-bundler'
 import { createServerBuildPlugin } from './server-build'
+
+interface RouterPluginOptions {
+  appDir?: string
+  extensions?: string[]
+}
 
 interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  proxy?: ProxyPluginOptions | false
+  router?: RouterPluginOptions | false
 }
 
 async function loadRuntimeFile(filename: string): Promise<string> {
@@ -1547,7 +1557,17 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
   const loadingComponentPlugin = createLoadingComponentPlugin()
 
-  return [mainPlugin, serverBuildPlugin, loadingComponentPlugin]
+  const plugins: Plugin[] = [mainPlugin, serverBuildPlugin, loadingComponentPlugin]
+
+  if (options.proxy !== false) {
+    plugins.push(rariProxy(options.proxy || {}))
+  }
+
+  if (options.router !== false) {
+    plugins.push(rariRouter(options.router || {}))
+  }
+
+  return plugins
 }
 
 export function defineRariConfig(
@@ -1558,3 +1578,7 @@ export function defineRariConfig(
     ...config,
   }
 }
+
+export { RariRequest, RariResponse } from '../proxy/index'
+export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/index'
+export { rariProxy } from '../proxy/vite-plugin'

@@ -4,10 +4,29 @@ export type {
   RouteHandler,
 } from './api-routes'
 
-export { RariResponse } from './api-routes'
+export { ApiResponse } from './api-routes'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response
+
+export { RariRequest, RariResponse } from './proxy'
+
+export type {
+  CookieOptions,
+  ProxyConfig,
+  ProxyFunction,
+  ProxyMatcher,
+  ProxyModule,
+  ProxyResult,
+  RariFetchEvent,
+  RariURL,
+  RequestCookies,
+  ResponseCookies,
+} from './proxy/types'
+
+export { rariProxy } from './proxy/vite-plugin'
+
+export type { ProxyPluginOptions } from './proxy/vite-plugin'
 
 export {
   generateAppRouteManifest,

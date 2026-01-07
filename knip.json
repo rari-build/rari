@@ -52,6 +52,9 @@
       "project": [
         "src/**/*.{ts,tsx}"
       ],
+      "ignore": [
+        "src/proxy.ts"
+      ],
       "ignoreDependencies": [
         "@tailwindcss/vite",
         "tailwindcss"
