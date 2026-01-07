@@ -5,7 +5,6 @@ import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import 'virtual:rsc-integration'
-import 'virtual:loading-component-map'
 
 if (typeof globalThis['~rari'] === 'undefined') {
   globalThis['~rari'] = {}

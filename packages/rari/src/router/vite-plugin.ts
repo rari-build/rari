@@ -247,14 +247,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       await fs.mkdir(outDir, { recursive: true })
       await fs.writeFile(path.join(outDir, 'app-routes.json'), manifestContent, 'utf-8')
 
-      const { generateLoadingComponentMap, getLoadingComponentMapPath } = await import('./loading-component-map')
-      const loadingMapCode = generateLoadingComponentMap({
-        appDir: opts.appDir,
-        loadingComponents: manifest.loading,
-      })
-      const loadingMapPath = getLoadingComponentMapPath(outDir)
-      await fs.writeFile(loadingMapPath, loadingMapCode, 'utf-8')
-
       routeStructureHash = currentHash
       routeFiles.clear()
       currentRouteFiles.forEach(file => routeFiles.add(file))

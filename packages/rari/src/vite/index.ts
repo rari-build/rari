@@ -11,7 +11,6 @@ import * as acorn from 'acorn'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
-import { createLoadingComponentPlugin } from './loading-component-bundler'
 import { createServerBuildPlugin } from './server-build'
 
 interface RouterPluginOptions {
@@ -1555,9 +1554,8 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
   }
 
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
-  const loadingComponentPlugin = createLoadingComponentPlugin()
 
-  const plugins: Plugin[] = [mainPlugin, serverBuildPlugin, loadingComponentPlugin]
+  const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
 
   if (options.proxy !== false) {
     plugins.push(rariProxy(options.proxy || {}))
