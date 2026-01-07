@@ -104,7 +104,7 @@ impl Server {
         }
 
         let app_router = {
-            let manifest_path = "dist/app-routes.json";
+            let manifest_path = "dist/server/app-routes.json";
 
             match app_router::AppRouter::from_file(manifest_path).await {
                 Ok(router) => Some(Arc::new(router)),
@@ -113,7 +113,7 @@ impl Server {
         };
 
         let api_route_handler = {
-            let manifest_path = "dist/app-routes.json";
+            let manifest_path = "dist/server/app-routes.json";
 
             match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
                 .await
@@ -266,7 +266,7 @@ impl Server {
             }
         }
 
-        let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
+        let has_app_router = std::path::Path::new("dist/server/app-routes.json").exists();
 
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
@@ -300,8 +300,8 @@ impl Server {
 
         let spam_blocker = SpamBlocker::new();
         spam_blocker.clone().start_cleanup_task();
-        router = router.layer(axum::Extension(spam_blocker));
         router = router.layer(middleware::from_fn(spam_blocker_middleware));
+        router = router.layer(axum::Extension(spam_blocker));
 
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));

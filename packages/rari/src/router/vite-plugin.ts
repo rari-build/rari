@@ -245,7 +245,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
       const outDir = path.resolve(root, opts.outDir)
       await fs.mkdir(outDir, { recursive: true })
-      await fs.writeFile(path.join(outDir, 'app-routes.json'), manifestContent, 'utf-8')
+      const serverDir = path.join(outDir, 'server')
+      await fs.mkdir(serverDir, { recursive: true })
+      await fs.writeFile(path.join(serverDir, 'app-routes.json'), manifestContent, 'utf-8')
 
       routeStructureHash = currentHash
       routeFiles.clear()

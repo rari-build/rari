@@ -843,7 +843,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server-manifest.json',
+            manifestPath: 'server/server-manifest.json',
             alias: resolvedAlias,
           })
 
@@ -1118,7 +1118,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server-manifest.json',
+            manifestPath: 'server/server-manifest.json',
             alias: resolvedAlias,
           })
 

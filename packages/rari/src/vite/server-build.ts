@@ -113,7 +113,7 @@ export class ServerComponentBuilder {
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
       serverDir: options.serverDir || 'server',
-      manifestPath: options.manifestPath || 'server-manifest.json',
+      manifestPath: options.manifestPath || 'server/server-manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
     }
