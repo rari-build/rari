@@ -1515,8 +1515,21 @@ export function createServerBuildPlugin(
     },
 
     async closeBundle() {
-      if (builder)
+      if (builder) {
         await builder.buildServerComponents()
+
+        try {
+          const { generateRobotsFile } = await import('../router/robots-generator')
+          await generateRobotsFile({
+            appDir: path.join(projectRoot, 'src', 'app'),
+            outDir: path.join(projectRoot, 'dist'),
+            extensions: ['.ts', '.tsx', '.js', '.jsx'],
+          })
+        }
+        catch (error) {
+          console.warn('[rari] Failed to generate robots.txt:', error)
+        }
+      }
     },
 
     async handleHotUpdate({ file }) {
