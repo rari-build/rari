@@ -88,7 +88,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   rel="noopener noreferrer"
                   className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-[#21262d] rounded-md transition-colors duration-200"
                 >
-                  <Heart className="w-4 h-4 mr-2 text-red-600" />
+                  <Heart className="w-4 h-4 mr-2 text-pink-400" />
                   Become a Sponsor
                 </a>
               </li>
