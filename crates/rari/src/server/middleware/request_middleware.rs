@@ -40,6 +40,11 @@ pub async fn request_logger(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response<axum::body::Body> {
+    if request.extensions().get::<crate::server::middleware::spam_blocker::SpamRequest>().is_some()
+    {
+        return next.run(request).await;
+    }
+
     let request_id = Uuid::new_v4();
 
     let method = request.method().clone();

@@ -29,6 +29,7 @@ use crate::server::middleware::rate_limit::{create_rate_limit_layer, rate_limit_
 use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
+use crate::server::middleware::spam_blocker::{SpamBlocker, spam_blocker_middleware};
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
@@ -296,6 +297,11 @@ impl Server {
 
         let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
         router = router.layer(compression_layer);
+
+        let spam_blocker = SpamBlocker::new();
+        spam_blocker.clone().start_cleanup_task();
+        router = router.layer(axum::Extension(spam_blocker));
+        router = router.layer(middleware::from_fn(spam_blocker_middleware));
 
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));
