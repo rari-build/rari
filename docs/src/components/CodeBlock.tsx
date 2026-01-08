@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useClipboard } from '@/lib/use-clipboard'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
 import File from './icons/File'
@@ -28,19 +28,8 @@ function getFileIcon(filename: string) {
 }
 
 export default function CodeBlock({ children, filename, className, language = 'typescript', highlightedHtml }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copyToClipboard } = useClipboard()
   const FileIcon = filename ? getFileIcon(filename) : File
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(children.trim())
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-    catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
 
   return (
     <div className={`not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full ${className || ''}`}>
@@ -52,7 +41,7 @@ export default function CodeBlock({ children, filename, className, language = 't
       )}
 
       <button
-        onClick={copyToClipboard}
+        onClick={() => copyToClipboard(children.trim())}
         className={`absolute ${filename ? 'top-14' : 'top-2'} right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10`}
         type="button"
         aria-label="Copy code to clipboard"

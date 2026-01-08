@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { highlightCommand } from '@/lib/highlight-command'
+import { useClipboard } from '@/lib/use-clipboard'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
 import Terminal from './icons/Terminal'
@@ -12,18 +12,7 @@ interface TerminalBlockProps {
 }
 
 export default function TerminalBlock({ command, showHeader = true }: TerminalBlockProps) {
-  const [copied, setCopied] = useState(false)
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-    catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
+  const { copied, copyToClipboard } = useClipboard()
 
   return (
     <div className="not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full">
