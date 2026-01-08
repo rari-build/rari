@@ -1,18 +1,10 @@
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
-import { rari, rariRouter } from 'rari/vite'
+import { rari } from 'rari/vite'
 import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
-  plugins: [
-    rari({
-      serverBuild: {
-        external: ['@shikijs/*'],
-      },
-    }),
-    rariRouter(),
-    tailwindcss(),
-  ],
+  plugins: [rari(), tailwindcss()],
   build: {
     rolldownOptions: {
       output: {
@@ -21,12 +13,8 @@ export default defineConfig({
             {
               name: (moduleId) => {
                 if (moduleId.includes('node_modules')) {
-                  if (moduleId.includes('react') || moduleId.includes('react-dom')) {
+                  if (moduleId.includes('react') || moduleId.includes('react-dom'))
                     return 'vendor'
-                  }
-                  if (moduleId.includes('@shikijs')) {
-                    return 'shiki'
-                  }
                 }
                 return null
               },

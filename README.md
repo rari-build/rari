@@ -265,13 +265,12 @@ Rari works with zero configuration, but you can customize it:
 
 ```typescript
 // vite.config.ts
-import { rari, rariRouter } from 'rari/vite'
+import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    rari(), // Core Rari plugin
-    rariRouter() // App router support
+    rari()
   ]
 })
 ```

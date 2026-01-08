@@ -112,9 +112,8 @@ export class HttpRuntimeClient implements RuntimeClient {
       signal: AbortSignal.timeout(this.timeout),
     }
 
-    if (body && (method === 'POST' || method === 'PUT')) {
+    if (body && (method === 'POST' || method === 'PUT'))
       requestOptions.body = JSON.stringify(body)
-    }
 
     try {
       const response = await fetch(url, requestOptions)
@@ -134,9 +133,8 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
     catch (error) {
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
+        if (error.name === 'AbortError')
           throw new Error(`Request timeout after ${this.timeout}ms`)
-        }
         if (error.message.includes('ECONNREFUSED')) {
           throw new Error(
             `Failed to connect to Rari server at ${this.baseUrl}. Make sure the server is running.`,
@@ -151,9 +149,8 @@ export class HttpRuntimeClient implements RuntimeClient {
     try {
       const health = await this.request<HealthResponse>('/api/rsc/health')
 
-      if (health.status !== 'healthy') {
+      if (health.status !== 'healthy')
         throw new Error(`Server is not healthy: ${health.status}`)
-      }
 
       this.initialized = true
     }
@@ -189,9 +186,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         )
       }
 
-      if (!this.components.includes(componentId)) {
+      if (!this.components.includes(componentId))
         this.components.push(componentId)
-      }
     }
     catch (error) {
       throw new Error(`Failed to register component ${componentId}: ${error}`)
@@ -220,9 +216,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         body: request,
       })
 
-      if (!response.success) {
+      if (!response.success)
         throw new Error(response.error || 'Render failed')
-      }
 
       return response.data || ''
     }
@@ -250,9 +245,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         body: request,
       })
 
-      if (!response.success) {
+      if (!response.success)
         throw new Error(response.error || 'Render failed')
-      }
 
       return response.data || ''
     }
@@ -305,8 +299,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     filePath: string,
     exportName: string,
   ): void {
-    // For HTTP client, we need to make this async, but the interface requires sync
-    // We'll handle this by queuing the request
     this.queueClientComponentRegistration(componentId, filePath, exportName)
   }
 
@@ -353,7 +345,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     filePath: string,
     exportName: string,
   ): void {
-    // Client references are handled similarly to client components
     this.queueClientComponentRegistration(referenceId, filePath, exportName)
   }
 
@@ -363,8 +354,6 @@ export class HttpRuntimeClient implements RuntimeClient {
 
   async shutdown(): Promise<void> {
     try {
-      // The HTTP server doesn't need explicit shutdown from client side
-      // Just mark as not initialized
       this.initialized = false
       this.components = []
     }
@@ -387,9 +376,8 @@ export class HttpRuntimeClient implements RuntimeClient {
         success: boolean
         components: string[]
       }>('/api/rsc/components')
-      if (response.success) {
+      if (response.success)
         this.components = response.components
-      }
       return this.components
     }
     catch (error) {
@@ -450,9 +438,8 @@ export class ErrorBoundary extends Component<
     if (this.state.hasError) {
       const reset = () => this.setState({ hasError: false, error: null })
 
-      if (this.props.fallback) {
+      if (this.props.fallback)
         return this.props.fallback(this.state.error!, reset)
-      }
 
       return React.createElement('div', {
         style: { padding: '1rem', border: '1px solid #ef4444', borderRadius: '0.5rem', backgroundColor: '#fef2f2' },

@@ -53,7 +53,8 @@ pub async fn static_or_spa_handler(
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
-    const BLOCKED_FILES: &[&str] = &["server-manifest.json", "app-routes.json", "server/"];
+    const BLOCKED_FILES: &[&str] =
+        &["server/server-manifest.json", "server/app-routes.json", "server/"];
 
     for blocked in BLOCKED_FILES {
         if path.starts_with(blocked) || path == *blocked {
@@ -133,8 +134,8 @@ pub async fn serve_static_asset(
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
-    if asset_path.contains("server-manifest.json")
-        || asset_path.contains("app-routes.json")
+    if asset_path.contains("server/server-manifest.json")
+        || asset_path.contains("server/app-routes.json")
         || asset_path.starts_with("../")
     {
         return Err(StatusCode::NOT_FOUND);

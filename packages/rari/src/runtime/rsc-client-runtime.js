@@ -1,42 +1,34 @@
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 
-if (typeof globalThis['~rari'] === 'undefined') {
+if (typeof globalThis['~rari'] === 'undefined')
   globalThis['~rari'] = {}
-}
 
 // eslint-disable-next-line node/prefer-global/process
 globalThis['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
-if (typeof globalThis['~clientComponents'] === 'undefined') {
+if (typeof globalThis['~clientComponents'] === 'undefined')
   globalThis['~clientComponents'] = {}
-}
-if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+if (typeof globalThis['~clientComponentNames'] === 'undefined')
   globalThis['~clientComponentNames'] = {}
-}
-if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+if (typeof globalThis['~clientComponentPaths'] === 'undefined')
   globalThis['~clientComponentPaths'] = {}
-}
 
 if (typeof window !== 'undefined') {
-  if (!window['~rari'].bufferedEvents) {
+  if (!window['~rari'].bufferedEvents)
     window['~rari'].bufferedEvents = []
-  }
 
-  if (!window['~rari'].boundaryModules) {
+  if (!window['~rari'].boundaryModules)
     window['~rari'].boundaryModules = new Map()
-  }
 
-  if (!window['~rari'].pendingBoundaryHydrations) {
+  if (!window['~rari'].pendingBoundaryHydrations)
     window['~rari'].pendingBoundaryHydrations = new Map()
-  }
 
   globalThis['~rari'].processBoundaryUpdate = function (boundaryId, rscRow, rowId) {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
-    if (!boundaryElement) {
+    if (!boundaryElement)
       return
-    }
 
     try {
       const colonIndex = rscRow.indexOf(':')
@@ -77,24 +69,20 @@ if (typeof window !== 'undefined') {
       }
 
       function containsClientComponents(element) {
-        if (!element) {
+        if (!element)
           return false
-        }
 
-        if (typeof element === 'string') {
+        if (typeof element === 'string')
           return element.startsWith('$L')
-        }
 
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
             const [, tag] = element
-            if (typeof tag === 'string' && tag.startsWith('$L')) {
+            if (typeof tag === 'string' && tag.startsWith('$L'))
               return true
-            }
             const props = element[3]
-            if (props && props.children) {
+            if (props && props.children)
               return containsClientComponents(props.children)
-            }
           }
           return element.some(child => containsClientComponents(child))
         }
@@ -109,20 +97,17 @@ if (typeof window !== 'undefined') {
           rowId,
         })
 
-        if (globalThis['~rari'].hydrateClientComponents) {
+        if (globalThis['~rari'].hydrateClientComponents)
           globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
-        }
         return
       }
 
       function rscToHtml(element) {
-        if (!element) {
+        if (!element)
           return ''
-        }
 
-        if (typeof element === 'string' || typeof element === 'number') {
+        if (typeof element === 'string' || typeof element === 'number')
           return String(element)
-        }
 
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
@@ -185,9 +170,8 @@ if (typeof window !== 'undefined') {
 
   window.addEventListener('rari:boundary-update', (event) => {
     const { boundaryId, rscRow, rowId } = event.detail
-    if (globalThis['~rari'].processBoundaryUpdate) {
+    if (globalThis['~rari'].processBoundaryUpdate)
       globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
-    }
   })
 }
 
@@ -236,9 +220,8 @@ export function registerClientComponent(componentFunction, id, exportName) {
 }
 
 export function getClientComponent(id) {
-  if (globalThis['~clientComponents'][id]?.component) {
+  if (globalThis['~clientComponents'][id]?.component)
     return globalThis['~clientComponents'][id].component
-  }
 
   if (id.includes('#')) {
     const [path, exportName] = id.split('#')
@@ -246,22 +229,19 @@ export function getClientComponent(id) {
     const componentId = globalThis['~clientComponentPaths'][path]
     if (componentId && globalThis['~clientComponents'][componentId]) {
       const componentInfo = globalThis['~clientComponents'][componentId]
-      if (exportName === 'default' || !exportName) {
+      if (exportName === 'default' || !exportName)
         return componentInfo.component
-      }
     }
 
     const normalizedPath = path.startsWith('./') ? path.slice(2) : path
     const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath]) {
+    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
       return globalThis['~clientComponents'][componentIdByNormalizedPath].component
-    }
   }
 
   const componentId = globalThis['~clientComponentNames'][id]
-  if (componentId && globalThis['~clientComponents'][componentId]) {
+  if (componentId && globalThis['~clientComponents'][componentId])
     return globalThis['~clientComponents'][componentId].component
-  }
 
   return null
 }
@@ -285,21 +265,18 @@ let createFromReadableStream = ReactDOMClient.createFromReadableStream || null
 let rscClientLoadPromise = null
 
 async function loadRscClient() {
-  if (rscClientLoadPromise) {
+  if (rscClientLoadPromise)
     return rscClientLoadPromise
-  }
 
   rscClientLoadPromise = (async () => {
     try {
       createFromFetch = ReactDOMClient.createFromFetch
       createFromReadableStream = ReactDOMClient.createFromReadableStream
 
-      if (typeof createFromReadableStream !== 'function') {
+      if (typeof createFromReadableStream !== 'function')
         createFromReadableStream = null
-      }
-      if (typeof createFromFetch !== 'function') {
+      if (typeof createFromFetch !== 'function')
         createFromFetch = null
-      }
 
       return ReactDOMClient
     }
@@ -340,13 +317,11 @@ class RscClient {
     const hmrCounter = (typeof window !== 'undefined' && window['~rscRefreshCounters'] && window['~rscRefreshCounters'][componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
-    if (this.componentCache.has(cacheKey)) {
+    if (this.componentCache.has(cacheKey))
       return this.componentCache.get(cacheKey)
-    }
 
-    if (this.inflightRequests.has(cacheKey)) {
+    if (this.inflightRequests.has(cacheKey))
       return this.inflightRequests.get(cacheKey)
-    }
 
     let requestPromise
     if (this.config.enableStreaming) {
@@ -398,9 +373,8 @@ class RscClient {
       const list = ['/api/rsc/stream']
       try {
         const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        if (isLocalHost) {
+        if (isLocalHost)
           list.push('http://127.0.0.1:3000/api/rsc/stream', 'http://localhost:3000/api/rsc/stream')
-        }
       }
       catch {}
       return list
@@ -418,9 +392,8 @@ class RscClient {
             },
             body: JSON.stringify({ component_id: componentId, props }),
           })
-          if (r.ok) {
+          if (r.ok)
             return r
-          }
           lastError = new Error(`HTTP ${r.status}: ${await r.text()}`)
         }
         catch (e) {
@@ -435,9 +408,8 @@ class RscClient {
       await new Promise(r => setTimeout(r, 150))
       response = await attempt()
     }
-    if (!response) {
+    if (!response)
       throw lastError || new Error('Failed to reach stream endpoint')
-    }
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -445,9 +417,8 @@ class RscClient {
     }
 
     const stream = response.body
-    if (!stream) {
+    if (!stream)
       throw new Error('No ReadableStream from stream response')
-    }
 
     const reader = stream.getReader()
     const decoder = new TextDecoder()
@@ -460,13 +431,11 @@ class RscClient {
         return null
       }
 
-      if (!element) {
+      if (!element)
         return null
-      }
 
-      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
         return element
-      }
 
       if (Array.isArray(element)) {
         if (element.length >= 3 && element[0] === '$') {
@@ -642,9 +611,8 @@ class RscClient {
                   }
                   if (canUseAsRoot) {
                     initialContent = convertRscToReact(parsed)
-                    if (streamingComponent && typeof streamingComponent.updateRoot === 'function') {
+                    if (streamingComponent && typeof streamingComponent.updateRoot === 'function')
                       streamingComponent.updateRoot()
-                    }
                   }
                 }
               }
@@ -687,9 +655,8 @@ class RscClient {
           const boundaryId = element.props?.['~boundaryId']
           if (element.props && boundaryId) {
             const resolvedContent = boundaryUpdates.get(boundaryId)
-            if (resolvedContent) {
+            if (resolvedContent)
               return resolvedContent
-            }
           }
 
           if (element.props && element.props.children) {
@@ -703,9 +670,8 @@ class RscClient {
           return element
         }
 
-        if (Array.isArray(element)) {
+        if (Array.isArray(element))
           return element.map(child => renderWithBoundaryUpdates(child))
-        }
 
         return element
       }
@@ -731,9 +697,8 @@ class RscClient {
       'Cache-Control': 'no-cache, no-transform',
     }
 
-    if (this.config.enableStreaming) {
+    if (this.config.enableStreaming)
       headers['X-RSC-Streaming'] = 'enabled'
-    }
 
     return headers
   }
@@ -866,13 +831,11 @@ class RscClient {
   }
 
   reconstructElementFromRscData(elementData, modules) {
-    if (elementData === null || elementData === undefined) {
+    if (elementData === null || elementData === undefined)
       return null
-    }
 
-    if (typeof elementData === 'string' || typeof elementData === 'number' || typeof elementData === 'boolean') {
+    if (typeof elementData === 'string' || typeof elementData === 'number' || typeof elementData === 'boolean')
       return elementData
-    }
 
     if (Array.isArray(elementData)) {
       if (elementData.length >= 2 && elementData[0] === '$') {
@@ -944,9 +907,8 @@ class RscClient {
       }
     }
 
-    if (typeof elementData === 'object') {
+    if (typeof elementData === 'object')
       return null
-    }
 
     return elementData
   }
@@ -1019,9 +981,8 @@ class RscClient {
       }
       catch {
         retries++
-        if (retries < this.config.maxRetries) {
+        if (retries < this.config.maxRetries)
           await new Promise(resolve => setTimeout(resolve, this.config.retryDelay))
-        }
       }
     }
 
@@ -1068,14 +1029,12 @@ function ServerComponentWrapper({
 
     rscClient.fetchServerComponent(componentId, props)
       .then((result) => {
-        if (mounted) {
+        if (mounted)
           setState({ data: result, loading: false, error: null })
-        }
       })
       .catch((err) => {
-        if (mounted) {
+        if (mounted)
           setState({ data: null, loading: false, error: err })
-        }
       })
 
     return () => {
@@ -1085,9 +1044,8 @@ function ServerComponentWrapper({
 
   const { data, loading, error } = state
 
-  if (loading) {
+  if (loading)
     return fallback || null
-  }
 
   if (error) {
     return createElement(RscErrorComponent, {
@@ -1117,9 +1075,8 @@ function createServerComponentWrapper(componentName) {
 
   if (typeof window !== 'undefined') {
     window['~rscRefreshCounters'] = window['~rscRefreshCounters'] || {}
-    if (window['~rscRefreshCounters'][componentName] === undefined) {
+    if (window['~rscRefreshCounters'][componentName] === undefined)
       window['~rscRefreshCounters'][componentName] = 0
-    }
     globalRefreshCounter = window['~rscRefreshCounters'][componentName]
   }
 
@@ -1132,17 +1089,15 @@ function createServerComponentWrapper(componentName) {
         if (detail && detail.filePath && isServerComponent(detail.filePath)) {
           rscClient.clearCache()
 
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined')
             window['~rscRefreshCounters'][componentName] = (window['~rscRefreshCounters'][componentName] || 0) + 1
-            setMountKey(window['~rscRefreshCounters'][componentName])
-          }
+          setMountKey(window['~rscRefreshCounters'][componentName])
         }
       }
 
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined')
         window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
-        return () => window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
-      }
+      return () => window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
     }, [])
 
     return createElement(Suspense, {
@@ -1167,14 +1122,12 @@ export function fetchServerComponent(componentId, props) {
 }
 
 function isServerComponent(filePath) {
-  if (!filePath) {
+  if (!filePath)
     return false
-  }
 
   try {
-    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents) {
+    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents)
       return globalThis['~rari'].serverComponents.has(filePath)
-    }
 
     return false
   }
@@ -1206,9 +1159,8 @@ if (import.meta.hot) {
   })
 
   import.meta.hot.on('vite:beforeFullReload', async (data) => {
-    if (data?.path && isServerComponent(data.path)) {
+    if (data?.path && isServerComponent(data.path))
       await invalidateRscCache({ filePath: data.path, forceReload: true })
-    }
   })
 
   import.meta.hot.on('rari:server-component-updated', async (data) => {
@@ -1267,18 +1219,16 @@ if (import.meta.hot) {
     const metadata = data.metadata
     const metadataChanged = data.metadataChanged
 
-    if (metadataChanged && metadata) {
+    if (metadataChanged && metadata)
       updateDocumentMetadata(metadata)
-    }
 
     try {
       const rariServerUrl = window.location.origin
       const reloadUrl = `${rariServerUrl}/api/rsc/hmr-register`
 
       let componentId = filePath
-      if (componentId.startsWith('src/')) {
+      if (componentId.startsWith('src/'))
         componentId = componentId.substring(4)
-      }
       componentId = componentId.replace(/\.(tsx|ts|jsx|js)$/, '')
 
       const reloadResponse = await fetch(reloadUrl, {
@@ -1291,9 +1241,8 @@ if (import.meta.hot) {
         }),
       })
 
-      if (!reloadResponse.ok) {
+      if (!reloadResponse.ok)
         console.error('[HMR] Component reload failed:', reloadResponse.status)
-      }
     }
     catch (error) {
       console.error('[HMR] Failed to reload component:', error)
@@ -1316,9 +1265,8 @@ if (import.meta.hot) {
 
     await invalidateAppRouterCache({ routes, fileType, filePath, componentId: routePath })
 
-    if (manifestUpdated) {
+    if (manifestUpdated)
       await reloadAppRouterManifest()
-    }
 
     await triggerAppRouterRerender({ routePath, affectedRoutes })
   }
@@ -1327,9 +1275,8 @@ if (import.meta.hot) {
     if (typeof document === 'undefined')
       return
 
-    if (metadata.title) {
+    if (metadata.title)
       document.title = metadata.title
-    }
 
     if (metadata.description) {
       let metaDesc = document.querySelector('meta[name="description"]')
@@ -1392,9 +1339,8 @@ if (import.meta.hot) {
           }),
         })
 
-        if (!invalidateResponse.ok) {
+        if (!invalidateResponse.ok)
           console.error('[HMR] Server cache invalidation failed:', invalidateResponse.status)
-        }
       }
       catch (error) {
         console.error('[HMR] Failed to call server invalidation endpoint:', error)
@@ -1424,9 +1370,8 @@ if (import.meta.hot) {
             cache: 'no-cache',
           })
 
-          if (!response.ok) {
+          if (!response.ok)
             console.error('[HMR] Failed to re-fetch route:', response.status)
-          }
         }
         catch (error) {
           console.error('[HMR] Failed to re-fetch route:', error)
@@ -1439,9 +1384,8 @@ if (import.meta.hot) {
     const routePath = data.routePath
     const affectedRoutes = data.affectedRoutes || [routePath]
 
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined')
       return
-    }
 
     try {
       const currentPath = window.location.pathname
@@ -1463,9 +1407,8 @@ if (import.meta.hot) {
   }
 
   async function reloadAppRouterManifest() {
-    if (typeof window !== 'undefined' && window['~rari']?.routeInfoCache) {
+    if (typeof window !== 'undefined' && window['~rari']?.routeInfoCache)
       window['~rari'].routeInfoCache.clear()
-    }
   }
 
   async function invalidateRscCache(data) {
@@ -1542,9 +1485,8 @@ class HMRErrorOverlay {
 let hmrErrorOverlay = null
 
 function getErrorOverlay() {
-  if (!hmrErrorOverlay) {
+  if (!hmrErrorOverlay)
     hmrErrorOverlay = new HMRErrorOverlay()
-  }
   return hmrErrorOverlay
 }
 
@@ -1560,13 +1502,11 @@ if (import.meta.hot) {
 
     console.error('[HMR] Build error:', message)
 
-    if (filePath) {
+    if (filePath)
       console.error('[HMR] File:', filePath)
-    }
 
-    if (data.stack) {
+    if (data.stack)
       console.error('[HMR] Stack:', data.stack)
-    }
 
     overlay.show({
       message,

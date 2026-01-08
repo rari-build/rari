@@ -24,10 +24,12 @@ use crate::server::handlers::static_handlers::{
 };
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::loaders::component_loader::ComponentLoader;
+use crate::server::middleware::proxy_middleware::ProxyLayer;
 use crate::server::middleware::rate_limit::{create_rate_limit_layer, rate_limit_logger};
 use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
+use crate::server::middleware::spam_blocker::{SpamBlocker, spam_blocker_middleware};
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
@@ -35,7 +37,8 @@ use crate::server::vite::proxy::{
 };
 use axum::extract::DefaultBodyLimit;
 use axum::{
-    Router, middleware,
+    Router,
+    middleware::{self},
     routing::{any, get, post},
 };
 use colored::Colorize;
@@ -101,7 +104,7 @@ impl Server {
         }
 
         let app_router = {
-            let manifest_path = "dist/app-routes.json";
+            let manifest_path = "dist/server/app-routes.json";
 
             match app_router::AppRouter::from_file(manifest_path).await {
                 Ok(router) => Some(Arc::new(router)),
@@ -110,7 +113,7 @@ impl Server {
         };
 
         let api_route_handler = {
-            let manifest_path = "dist/app-routes.json";
+            let manifest_path = "dist/server/app-routes.json";
 
             match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
                 .await
@@ -177,6 +180,11 @@ impl Server {
             CacheLoader::load_vite_cache_config(&state).await?;
         }
 
+        if let Err(e) = crate::server::middleware::proxy_middleware::initialize_proxy(&state).await
+        {
+            error!("Failed to initialize proxy: {}", e);
+        }
+
         let router = Self::build_router(&config, state.clone()).await?;
 
         let address = config.server_address();
@@ -202,7 +210,7 @@ impl Server {
         }
     }
 
-    async fn build_router(config: &Config, state: ServerState) -> Result<Router<()>, RariError> {
+    async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
         let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
@@ -258,7 +266,7 @@ impl Server {
             }
         }
 
-        let has_app_router = std::path::Path::new("dist/app-routes.json").exists();
+        let has_app_router = std::path::Path::new("dist/server/app-routes.json").exists();
 
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
@@ -290,6 +298,11 @@ impl Server {
         let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
         router = router.layer(compression_layer);
 
+        let spam_blocker = SpamBlocker::new();
+        spam_blocker.clone().start_cleanup_task();
+        router = router.layer(middleware::from_fn(spam_blocker_middleware));
+        router = router.layer(axum::Extension(spam_blocker));
+
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));
         } else {
@@ -305,7 +318,13 @@ impl Server {
 
         router = router.layer(middleware_stack);
 
-        Ok(router.with_state(state))
+        let mut router = router.with_state(state.clone());
+
+        if has_app_router {
+            router = router.layer(ProxyLayer::new(state));
+        }
+
+        Ok(router)
     }
 
     pub async fn start(self) -> Result<(), RariError> {

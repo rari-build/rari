@@ -46,9 +46,8 @@ export async function fetchWithCsrf(
   }
 
   const headers = new Headers(options.headers)
-  if (token) {
+  if (token)
     headers.set('X-CSRF-Token', token)
-  }
 
   const response = await fetch(url, {
     ...options,

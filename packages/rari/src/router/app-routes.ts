@@ -49,9 +49,8 @@ class AppRouteGenerator {
   }
 
   async generateManifest(): Promise<AppRouteManifest> {
-    if (this.verbose) {
+    if (this.verbose)
       console.warn(`[AppRouter] Scanning app directory: ${this.appDir}`)
-    }
 
     const routes: AppRouteEntry[] = []
     const layouts: LayoutEntry[] = []
@@ -108,9 +107,8 @@ class AppRouteGenerator {
       const stat = await fs.stat(entryPath)
 
       if (stat.isDirectory()) {
-        if (this.shouldScanDirectory(entry)) {
+        if (this.shouldScanDirectory(entry))
           dirs.push(entry)
-        }
       }
       else if (stat.isFile()) {
         files.push(entry)
@@ -206,17 +204,15 @@ class AppRouteGenerator {
   private findFile(files: string[], baseName: string): string | undefined {
     for (const ext of this.extensions) {
       const fileName = `${baseName}${ext}`
-      if (files.includes(fileName)) {
+      if (files.includes(fileName))
         return fileName
-      }
     }
     return undefined
   }
 
   private pathToRoute(filePath: string): string {
-    if (!filePath) {
+    if (!filePath)
       return '/'
-    }
 
     const normalized = filePath.replace(/\\/g, '/')
 
@@ -241,9 +237,8 @@ class AppRouteGenerator {
   }
 
   private parseRouteSegments(filePath: string): RouteSegment[] {
-    if (!filePath) {
+    if (!filePath)
       return []
-    }
 
     const segments = filePath.split(/[/\\]/).filter(Boolean)
     return segments.map((segment) => {
@@ -288,13 +283,12 @@ class AppRouteGenerator {
   }
 
   private getParentPath(filePath: string): string | null {
-    if (!filePath) {
+    if (!filePath)
       return null
-    }
+
     const parts = filePath.split(/[/\\]/).filter(Boolean)
-    if (parts.length === 0) {
+    if (parts.length === 0)
       return null
-    }
     return parts.slice(0, -1).join('/')
   }
 
@@ -376,9 +370,8 @@ class AppRouteGenerator {
         `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
       )
 
-      if (functionExportRegex.test(content) || constExportRegex.test(content)) {
+      if (functionExportRegex.test(content) || constExportRegex.test(content))
         methods.push(method)
-      }
     }
 
     return methods

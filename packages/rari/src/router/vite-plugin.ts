@@ -57,9 +57,8 @@ function getAppRouterFileType(filePath: string): AppRouterFileType | null {
 function filePathToRoutePath(filePath: string, appDir: string): string {
   const relativePath = path.relative(appDir, path.dirname(filePath))
 
-  if (!relativePath || relativePath === '.') {
+  if (!relativePath || relativePath === '.')
     return '/'
-  }
 
   const normalized = relativePath.replace(/\\/g, '/')
   const segments = normalized.split('/').filter(Boolean)
@@ -72,9 +71,8 @@ function getAffectedRoutes(
   fileType: AppRouterFileType,
   allRoutes: string[],
 ): string[] {
-  if (fileType === 'page') {
+  if (fileType === 'page')
     return [routePath]
-  }
 
   const affected = allRoutes.filter((route) => {
     return route === routePath || route.startsWith(`${routePath}/`)
@@ -88,23 +86,20 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
     const metadataRegex = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
     const match = fileContent.match(metadataRegex)
 
-    if (!match) {
+    if (!match)
       return null
-    }
 
     const metadataString = match[1]
 
     const metadata: Record<string, any> = {}
 
     const titleMatch = metadataString.match(/title\s*:\s*['"]([^'"]+)['"]/)
-    if (titleMatch) {
+    if (titleMatch)
       metadata.title = titleMatch[1]
-    }
 
     const descMatch = metadataString.match(/description\s*:\s*['"]([^'"]+)['"]/)
-    if (descMatch) {
+    if (descMatch)
       metadata.description = descMatch[1]
-    }
 
     const keywordsMatch = metadataString.match(/keywords\s*:\s*\[([\s\S]*?)\]/)
     if (keywordsMatch) {
@@ -120,9 +115,8 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
     for (const field of fieldsToExtract) {
       const fieldRegex = new RegExp(`${field}\\s*:\\s*['"]([^'"]+)['"]`, 'm')
       const fieldMatch = metadataString.match(fieldRegex)
-      if (fieldMatch) {
+      if (fieldMatch)
         metadata[field] = fieldMatch[1]
-      }
     }
 
     return Object.keys(metadata).length > 0 ? metadata : null
@@ -145,9 +139,8 @@ function detectHttpMethods(fileContent: string): string[] {
       `export\\s+(?:async\\s+)?(?:const|let|var)\\s+${method}\\s*=`,
     )
 
-    if (functionExportRegex.test(fileContent) || constExportRegex.test(fileContent)) {
+    if (functionExportRegex.test(fileContent) || constExportRegex.test(fileContent))
       methods.push(method)
-    }
   }
 
   return methods
@@ -171,9 +164,8 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
     }
 
     const result = await response.json()
-    if (!result.success) {
+    if (!result.success)
       console.error(`[HMR] Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
-    }
   }
   catch (error) {
     console.error('Failed to notify API route invalidation:', error)
@@ -213,15 +205,12 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           }
           else if (entry.isFile() && opts.extensions.some(ext => entry.name.endsWith(ext))) {
             const fileType = getAppRouterFileType(fullPath)
-            if (fileType) {
+            if (fileType)
               files.add(fullPath)
-            }
           }
         }
       }
-      catch {
-        // Directory might not exist or be accessible
-      }
+      catch {}
     }
 
     await scanDir(appDir)
@@ -256,15 +245,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
       const outDir = path.resolve(root, opts.outDir)
       await fs.mkdir(outDir, { recursive: true })
-      await fs.writeFile(path.join(outDir, 'app-routes.json'), manifestContent, 'utf-8')
-
-      const { generateLoadingComponentMap, getLoadingComponentMapPath } = await import('./loading-component-map')
-      const loadingMapCode = generateLoadingComponentMap({
-        appDir: opts.appDir,
-        loadingComponents: manifest.loading,
-      })
-      const loadingMapPath = getLoadingComponentMapPath(outDir)
-      await fs.writeFile(loadingMapPath, loadingMapCode, 'utf-8')
+      const serverDir = path.join(outDir, 'server')
+      await fs.mkdir(serverDir, { recursive: true })
+      await fs.writeFile(path.join(serverDir, 'app-routes.json'), manifestContent, 'utf-8')
 
       routeStructureHash = currentHash
       routeFiles.clear()
@@ -279,9 +262,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   }
 
   const setupWatcher = (root: string): void => {
-    if (watcher) {
+    if (watcher)
       watcher.close()
-    }
 
     const watchPaths = [path.resolve(root, opts.appDir)]
 
@@ -351,9 +333,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
         if (fileType) {
           const existingTimer = pendingHMRUpdates.get(file)
-          if (existingTimer) {
+          if (existingTimer)
             clearTimeout(existingTimer)
-          }
 
           const timer = setTimeout(async () => {
             pendingHMRUpdates.delete(file)
@@ -443,9 +424,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       }
       pendingHMRUpdates.clear()
 
-      if (watcher) {
+      if (watcher)
         await watcher.close()
-      }
     },
   }
 }

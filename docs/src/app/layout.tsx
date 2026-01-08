@@ -1,4 +1,5 @@
 import type { LayoutProps } from 'rari/client'
+import Footer from '@/components/Footer'
 import Sidebar from '@/components/Sidebar'
 
 interface NpmPackageInfo {
@@ -29,11 +30,14 @@ export default async function RootLayout({ children, pathname }: LayoutProps) {
     <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans">
       <div className="flex min-h-screen">
         <Sidebar version={version} pathname={pathname} />
-        <main className="flex-1 min-h-screen bg-[#0d1117]">
-          <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
-            {children}
-          </div>
-        </main>
+        <div className="flex-1 flex flex-col min-h-screen bg-[#0d1117]">
+          <main className="flex-1">
+            <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
+              {children}
+            </div>
+          </main>
+          <Footer />
+        </div>
       </div>
     </div>
   )
@@ -43,4 +47,30 @@ export const metadata = {
   title: 'Runtime Accelerated Rendering Infrastructure (Rari)',
   description:
     'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon.ico', sizes: '32x32' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180' },
+    ],
+    other: [
+      { rel: 'mask-icon', url: '/safari-pinned-tab.svg', color: '#ffffff' },
+    ],
+  },
+  themeColor: [
+    { color: '#0d1117' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d1117' },
+  ],
+  appleWebApp: {
+    title: 'Rari | Runtime Accelerated Rendering Infrastructure',
+    statusBarStyle: 'black-translucent',
+    capable: true,
+  },
+  openGraph: {
+    title: 'Runtime Accelerated Rendering Infrastructure (Rari)',
+    description: 'A performance-first React framework powered by Rust',
+    type: 'website',
+  },
 }

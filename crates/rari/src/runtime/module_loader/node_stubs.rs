@@ -118,7 +118,82 @@ export default {
   readdir: () => Promise.resolve([]),
 };
 
-export { readFileSync, readFile, existsSync, readdirSync, statSync, lstatSync, realpathSync, constants };
+const promises = {
+  readFile,
+  writeFile: () => Promise.resolve(),
+  readdir: () => Promise.resolve([]),
+  stat: async (path) => {
+    try {
+      if (globalThis.Deno?.stat) {
+        const stat = await globalThis.Deno.stat(path);
+        return {
+          isFile: () => stat.isFile,
+          isDirectory: () => stat.isDirectory,
+          isSymbolicLink: () => stat.isSymlink,
+          size: stat.size,
+          mtime: stat.mtime,
+          atime: stat.atime,
+          birthtime: stat.birthtime,
+        };
+      }
+      throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+    } catch (error) {
+      throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+    }
+  },
+  mkdir: () => Promise.resolve(),
+  rm: () => Promise.resolve(),
+  rmdir: () => Promise.resolve(),
+  unlink: () => Promise.resolve(),
+  access: () => Promise.resolve(),
+};
+
+const stat = async (path, callback) => {
+  try {
+    if (globalThis.Deno?.stat) {
+      const statResult = await globalThis.Deno.stat(path);
+      const result = {
+        isFile: () => statResult.isFile,
+        isDirectory: () => statResult.isDirectory,
+        isSymbolicLink: () => statResult.isSymlink,
+        size: statResult.size,
+        mtime: statResult.mtime,
+        atime: statResult.atime,
+        birthtime: statResult.birthtime,
+      };
+      if (callback) callback(null, result);
+      return result;
+    }
+    const error = new Error(`ENOENT: no such file or directory, stat '${path}'`);
+    if (callback) callback(error);
+    throw error;
+  } catch (error) {
+    if (callback) callback(error);
+    throw error;
+  }
+};
+
+const watchFile = (path, options, listener) => {
+  if (typeof options === 'function') {
+    listener = options;
+  }
+  console.warn('fs.watchFile is not supported in this environment');
+  return { close: () => {} };
+};
+
+const unwatchFile = (path, listener) => {
+  console.warn('fs.unwatchFile is not supported in this environment');
+};
+
+const watch = (path, options, listener) => {
+  if (typeof options === 'function') {
+    listener = options;
+  }
+  console.warn('fs.watch is not supported in this environment');
+  return { close: () => {} };
+};
+
+export { readFileSync, readFile, existsSync, readdirSync, statSync, lstatSync, realpathSync, constants, promises, stat, watchFile, unwatchFile, watch };
 export const writeFileSync = () => {};
 export const writeFile = () => Promise.resolve();
 export const exists = () => Promise.resolve(false);
@@ -791,3 +866,521 @@ export default moduleExports;
 "#
     )
 }
+
+pub const NODE_STREAM_STUB: &str = r#"
+// ESM-compatible stub for node:stream
+
+class EventEmitter {
+  constructor() {
+    this._events = {};
+  }
+
+  on(event, listener) {
+    if (!this._events[event]) {
+      this._events[event] = [];
+    }
+    this._events[event].push(listener);
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (!this._events[event]) return false;
+    this._events[event].forEach(listener => {
+      try {
+        listener.apply(this, args);
+      } catch (error) {
+        console.error('EventEmitter error:', error);
+      }
+    });
+    return true;
+  }
+
+  removeListener(event, listener) {
+    if (!this._events[event]) return this;
+    this._events[event] = this._events[event].filter(l => l !== listener);
+    return this;
+  }
+
+  off(event, listener) {
+    return this.removeListener(event, listener);
+  }
+}
+
+export class Readable extends EventEmitter {
+  constructor(options = {}) {
+    super();
+    this.readable = true;
+  }
+
+  pipe(destination) {
+    this.on('data', (chunk) => {
+      if (destination.write) destination.write(chunk);
+    });
+    this.on('end', () => {
+      if (destination.end) destination.end();
+    });
+    return destination;
+  }
+
+  push(chunk) {
+    if (chunk === null) {
+      this.emit('end');
+      return false;
+    }
+    this.emit('data', chunk);
+    return true;
+  }
+}
+
+export class Writable extends EventEmitter {
+  constructor(options = {}) {
+    super();
+    this.writable = true;
+  }
+
+  write(chunk, encoding, callback) {
+    if (typeof encoding === 'function') {
+      callback = encoding;
+    }
+    if (callback) callback();
+    return true;
+  }
+
+  end(chunk, encoding, callback) {
+    if (chunk) this.write(chunk, encoding);
+    this.emit('finish');
+    if (callback) callback();
+    return this;
+  }
+}
+
+export class Transform extends Readable {
+  constructor(options = {}) {
+    super(options);
+    this.writable = true;
+  }
+
+  write(chunk, encoding, callback) {
+    this.push(chunk);
+    if (callback) callback();
+    return true;
+  }
+
+  end(chunk, encoding, callback) {
+    if (chunk) this.write(chunk, encoding);
+    this.push(null);
+    if (callback) callback();
+    return this;
+  }
+}
+
+export class PassThrough extends Transform {}
+
+export class Duplex extends Readable {
+  constructor(options = {}) {
+    super(options);
+    this.writable = true;
+  }
+
+  write(chunk, encoding, callback) {
+    if (callback) callback();
+    return true;
+  }
+
+  end(chunk, encoding, callback) {
+    if (chunk) this.write(chunk, encoding);
+    this.push(null);
+    if (callback) callback();
+    return this;
+  }
+}
+
+export const Stream = Readable;
+
+export default {
+  Readable,
+  Writable,
+  Transform,
+  PassThrough,
+  Duplex,
+  Stream,
+};
+
+export const __esModule = true;
+"#;
+
+pub const NODE_BUFFER_STUB: &str = r#"
+// ESM-compatible stub for node:buffer
+
+class BufferImpl extends Uint8Array {
+  toString(encoding = 'utf8') {
+    if (encoding === 'utf8' || encoding === 'utf-8') {
+      return new TextDecoder().decode(this);
+    }
+    if (encoding === 'hex') {
+      return Array.from(this).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    if (encoding === 'base64') {
+      return btoa(String.fromCharCode(...this));
+    }
+    return new TextDecoder().decode(this);
+  }
+
+  toJSON() {
+    return { type: 'Buffer', data: Array.from(this) };
+  }
+}
+
+BufferImpl.from = function(arg, encoding) {
+  if (typeof arg === 'string') {
+    return new BufferImpl(new TextEncoder().encode(arg));
+  }
+  return new BufferImpl(arg);
+};
+
+BufferImpl.alloc = function(size) {
+  return new BufferImpl(size);
+};
+
+BufferImpl.isBuffer = function(obj) {
+  return obj instanceof BufferImpl || obj instanceof Uint8Array;
+};
+
+export const Buffer = BufferImpl;
+export default { Buffer };
+export const __esModule = true;
+"#;
+
+pub const NODE_OS_STUB: &str = r#"
+// ESM-compatible stub for node:os
+
+export function platform() {
+  try {
+    const os = globalThis.Deno?.build?.os;
+    if (os === 'darwin') return 'darwin';
+    if (os === 'linux') return 'linux';
+    if (os === 'windows') return 'win32';
+    return 'linux';
+  } catch {
+    return 'linux';
+  }
+}
+
+export function arch() {
+  try {
+    const a = globalThis.Deno?.build?.arch;
+    if (a === 'x86_64') return 'x64';
+    if (a === 'aarch64') return 'arm64';
+    return 'x64';
+  } catch {
+    return 'x64';
+  }
+}
+
+export function type() {
+  try {
+    const os = globalThis.Deno?.build?.os;
+    if (os === 'darwin') return 'Darwin';
+    if (os === 'linux') return 'Linux';
+    if (os === 'windows') return 'Windows_NT';
+    return 'Linux';
+  } catch {
+    return 'Linux';
+  }
+}
+
+export function homedir() {
+  try {
+    return globalThis.Deno?.env?.get('HOME') || globalThis.Deno?.env?.get('USERPROFILE') || '/';
+  } catch {
+    return '/';
+  }
+}
+
+export function tmpdir() {
+  try {
+    return globalThis.Deno?.env?.get('TMPDIR') || globalThis.Deno?.env?.get('TMP') || '/tmp';
+  } catch {
+    return '/tmp';
+  }
+}
+
+export const EOL = '\n';
+
+export default { platform, arch, type, homedir, tmpdir, EOL };
+export const __esModule = true;
+"#;
+
+pub const NODE_EVENTS_STUB: &str = r#"
+// ESM-compatible stub for node:events
+
+export class EventEmitter {
+  constructor() {
+    this._events = {};
+  }
+
+  on(event, listener) {
+    if (!this._events[event]) {
+      this._events[event] = [];
+    }
+    this._events[event].push(listener);
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (!this._events[event]) return false;
+    this._events[event].forEach(listener => {
+      try {
+        listener.apply(this, args);
+      } catch (error) {
+        console.error('EventEmitter error:', error);
+      }
+    });
+    return true;
+  }
+
+  removeListener(event, listener) {
+    if (!this._events[event]) return this;
+    this._events[event] = this._events[event].filter(l => l !== listener);
+    return this;
+  }
+
+  off(event, listener) {
+    return this.removeListener(event, listener);
+  }
+
+  removeAllListeners(event) {
+    if (event) {
+      delete this._events[event];
+    } else {
+      this._events = {};
+    }
+    return this;
+  }
+}
+
+export default EventEmitter;
+export const __esModule = true;
+"#;
+
+pub const NODE_CHILD_PROCESS_STUB: &str = r#"
+// ESM-compatible stub for node:child_process
+
+export function spawn(command, args = [], options = {}) {
+  console.warn('child_process.spawn is not supported in this environment');
+  return {
+    stdout: { on: () => {}, pipe: () => {} },
+    stderr: { on: () => {}, pipe: () => {} },
+    stdin: { write: () => {}, end: () => {} },
+    on: () => {},
+    kill: () => {},
+    pid: -1,
+  };
+}
+
+export function exec(command, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  console.warn('child_process.exec is not supported in this environment');
+  if (callback) {
+    setTimeout(() => callback(new Error('child_process not supported'), '', ''), 0);
+  }
+  return spawn(command);
+}
+
+export function execFile(file, args, options, callback) {
+  if (typeof args === 'function') {
+    callback = args;
+    args = [];
+    options = {};
+  } else if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  console.warn('child_process.execFile is not supported in this environment');
+  if (callback) {
+    setTimeout(() => callback(new Error('child_process not supported'), '', ''), 0);
+  }
+  return spawn(file, args, options);
+}
+
+export function fork(modulePath, args = [], options = {}) {
+  console.warn('child_process.fork is not supported in this environment');
+  return spawn(modulePath, args, options);
+}
+
+export function execSync(command, options = {}) {
+  console.warn('child_process.execSync is not supported in this environment');
+  return '';
+}
+
+export function execFileSync(file, args = [], options = {}) {
+  console.warn('child_process.execFileSync is not supported in this environment');
+  return '';
+}
+
+export function spawnSync(command, args = [], options = {}) {
+  console.warn('child_process.spawnSync is not supported in this environment');
+  return {
+    pid: -1,
+    output: [],
+    stdout: '',
+    stderr: '',
+    status: 1,
+    signal: null,
+    error: new Error('child_process not supported'),
+  };
+}
+
+export default {
+  spawn,
+  exec,
+  execFile,
+  fork,
+  execSync,
+  execFileSync,
+  spawnSync,
+};
+
+export const __esModule = true;
+"#;
+
+pub const NODE_FS_PROMISES_STUB: &str = r#"
+// ESM-compatible stub for node:fs/promises
+
+export async function readFile(path, encoding) {
+  try {
+    if (globalThis.Deno?.readTextFile) {
+      const content = await globalThis.Deno.readTextFile(path);
+      if (encoding === 'utf-8' || encoding === 'utf8') {
+        return content;
+      }
+      return new TextEncoder().encode(content);
+    }
+    return new Uint8Array(0);
+  } catch (error) {
+    throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+  }
+}
+
+export async function writeFile(path, data, encoding) {
+  try {
+    if (globalThis.Deno?.writeTextFile) {
+      const content = typeof data === 'string' ? data : new TextDecoder().decode(data);
+      await globalThis.Deno.writeTextFile(path, content);
+    }
+  } catch (error) {
+    throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+  }
+}
+
+export async function stat(path) {
+  try {
+    if (globalThis.Deno?.stat) {
+      const stat = await globalThis.Deno.stat(path);
+      return {
+        isFile: () => stat.isFile,
+        isDirectory: () => stat.isDirectory,
+        isSymbolicLink: () => stat.isSymlink,
+        size: stat.size,
+        mtime: stat.mtime,
+        atime: stat.atime,
+        birthtime: stat.birthtime,
+      };
+    }
+    throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+  } catch (error) {
+    throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
+  }
+}
+
+export async function readdir(path) {
+  try {
+    if (globalThis.Deno?.readDir) {
+      const entries = [];
+      for await (const entry of globalThis.Deno.readDir(path)) {
+        entries.push(entry.name);
+      }
+      return entries;
+    }
+    return [];
+  } catch (error) {
+    throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
+  }
+}
+
+export async function mkdir(path, options) {
+  return Promise.resolve();
+}
+
+export async function rm(path, options) {
+  return Promise.resolve();
+}
+
+export async function rmdir(path, options) {
+  return Promise.resolve();
+}
+
+export async function unlink(path) {
+  return Promise.resolve();
+}
+
+export async function access(path, mode) {
+  return Promise.resolve();
+}
+
+export default {
+  readFile,
+  writeFile,
+  stat,
+  readdir,
+  mkdir,
+  rm,
+  rmdir,
+  unlink,
+  access,
+};
+
+export const __esModule = true;
+"#;
+
+pub const NODE_MODULE_STUB: &str = r#"
+// ESM-compatible stub for node:module
+
+export function createRequire(filename) {
+  return function require(id) {
+    console.warn(`require('${id}') is not supported in this environment`);
+    return {};
+  };
+}
+
+export function isBuiltin(moduleName) {
+  const builtins = [
+    'assert', 'buffer', 'child_process', 'cluster', 'crypto',
+    'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https',
+    'net', 'os', 'path', 'punycode', 'querystring', 'readline',
+    'stream', 'string_decoder', 'timers', 'tls', 'tty', 'url',
+    'util', 'v8', 'vm', 'zlib'
+  ];
+  const name = moduleName.replace(/^node:/, '');
+  return builtins.includes(name);
+}
+
+export const builtinModules = [
+  'assert', 'buffer', 'child_process', 'cluster', 'crypto',
+  'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https',
+  'net', 'os', 'path', 'punycode', 'querystring', 'readline',
+  'stream', 'string_decoder', 'timers', 'tls', 'tty', 'url',
+  'util', 'v8', 'vm', 'zlib'
+];
+
+export default {
+  createRequire,
+  isBuiltin,
+  builtinModules,
+};
+
+export const __esModule = true;
+"#;

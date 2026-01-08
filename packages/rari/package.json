@@ -47,17 +47,13 @@
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
     },
+    "./mdx": {
+      "types": "./dist/mdx.d.mts",
+      "default": "./dist/mdx.mjs"
+    },
     "./runtime/actions": {
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
-    },
-    "./runtime/AppRouterProvider": {
-      "types": "./dist/runtime/AppRouterProvider.d.mts",
-      "default": "./dist/runtime/AppRouterProvider.mjs"
-    },
-    "./hooks/useActionState": {
-      "types": "./dist/hooks/useActionState.d.mts",
-      "default": "./dist/hooks/useActionState.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -98,10 +94,10 @@
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
-    "@typescript/native-preview": "^7.0.0-dev.20260102.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260107.1",
     "chokidar": "^5.0.0",
     "eslint": "^9.39.2",
-    "oxlint": "^1.36.0",
+    "oxlint": "^1.38.0",
     "rolldown-vite": "^7.3.0",
     "tsdown": "^0.18.4"
   }

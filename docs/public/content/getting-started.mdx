@@ -9,8 +9,8 @@ This guide will walk you through creating your first Rari application from scrat
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js 20+**
-- **A modern package manager (e.g. npm, pnpm, bun or deno)**
+- **Node.js `20.x`** (<a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer">Active LTS</a> release recommended)
+- **A modern package manager** (we recommended <a href="https://pnpm.io/" target="_blank" rel="noopener noreferrer">pnpm</a>)
 - **A modern code editor**
 
 ## Installation
@@ -19,43 +19,57 @@ Before you begin, ensure you have the following installed:
 
 The fastest way to get started is with our project generator:
 
-```bash
-pnpm create rari-app@latest my-rari-app
-cd my-rari-app
-pnpm dev
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm create rari-app@latest my-rari-app',
+    npm: 'npm create rari-app@latest my-rari-app',
+    yarn: 'yarn create rari-app my-rari-app',
+    bun: 'bun create rari-app my-rari-app',
+    deno: 'deno run -A npm:create-rari-app@latest my-rari-app'
+  }}
+/>
 
-Or with other package managers:
+Navigate to your project directory:
 
-```bash
-# Using npm
-npm create rari-app my-rari-app
+<TerminalBlock command="cd my-rari-app" />
 
-# Using bun
-bun create rari-app my-rari-app
-```
+Start the development server:
+
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm dev',
+    npm: 'npm run dev',
+    yarn: 'yarn dev',
+    bun: 'bun dev',
+    deno: 'deno task dev'
+  }}
+/>
 
 ### Option 2: Add to Existing Vite Project
 
 If you have an existing Vite + React project:
 
-```bash
-pnpm add rari
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm add rari',
+    npm: 'npm install rari',
+    yarn: 'yarn add rari',
+    bun: 'bun add rari',
+    deno: 'deno add npm:rari'
+  }}
+/>
 
 Update your `vite.config.ts`:
 
-```typescript
-import { rari, rariRouter } from 'rari/vite'
+<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
     rari(),
-    rariRouter(),
   ],
 })
-```
+`}</CodeBlock>
 
 ## Your First App Router Page
 
@@ -63,8 +77,7 @@ With the app router, your application structure is based on the `src/app/` direc
 
 Create `src/app/layout.tsx` (root layout):
 
-```tsx
-import type { LayoutProps } from 'rari/client'
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari/client'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -82,12 +95,11 @@ export const metadata = {
   title: 'My Rari App',
   description: 'Built with Rari',
 }
-```
+`}</CodeBlock>
 
 Create `src/app/page.tsx` (home page):
 
-```tsx
-import type { PageProps } from 'rari/client'
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import type { PageProps } from 'rari/client'
 import Counter from '@/components/Counter'
 
 // This is a React Server Component - runs on the server!
@@ -119,12 +131,11 @@ export const metadata = {
   title: 'Home | My Rari App',
   description: 'Welcome to my Rari application',
 }
-```
+`}</CodeBlock>
 
 Create `src/components/Counter.tsx` (client component):
 
-```tsx
-'use client'
+<CodeBlock filename="src/components/Counter.tsx" language="tsx">{`'use client'
 
 import { useState } from 'react'
 
@@ -140,20 +151,25 @@ export default function Counter() {
     </div>
   )
 }
-```
+`}</CodeBlock>
 
 ## Using NPM Packages
 
 One of Rari's superpowers is seamless NPM package integration. Let's add markdown support:
 
-```bash
-pnpm add marked
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm add marked',
+    npm: 'npm install marked',
+    yarn: 'yarn add marked',
+    bun: 'bun add marked',
+    deno: 'deno add npm:marked'
+  }}
+/>
 
 Create `src/components/MarkdownPost.tsx`:
 
-```tsx
-import { marked } from 'marked'
+<CodeBlock filename="src/components/MarkdownPost.tsx" language="tsx">{`import { marked } from 'marked'
 
 interface MarkdownPostProps {
   content: string
@@ -175,23 +191,21 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
     </article>
   )
 }
-```
+`}</CodeBlock>
 
 Use it in a page:
 
-```tsx
-// src/app/blog/page.tsx
-import MarkdownPost from '@/components/MarkdownPost'
+<CodeBlock filename="src/app/blog/page.tsx" language="tsx">{`import MarkdownPost from '@/components/MarkdownPost'
 
-const blogPost = `
+const blogPost = \`
 # Welcome to Rari!
 
-This markdown is processed **on the server** using the \`marked\` package.
+This markdown is processed **on the server** using the \\\`marked\\\` package.
 
 - Fast server-side rendering
 - Universal NPM package support
 - Zero configuration required
-`
+\`
 
 export default function BlogPage() {
   return (
@@ -205,15 +219,21 @@ export const metadata = {
   title: 'Blog | My Rari App',
   description: 'Read our latest posts',
 }
-```
+`}</CodeBlock>
 
 ## Development Workflow
 
 ### Start Development Server
 
-```bash
-pnpm dev
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm dev',
+    npm: 'npm run dev',
+    yarn: 'yarn dev',
+    bun: 'bun dev',
+    deno: 'deno task dev'
+  }}
+/>
 
 Your app will be available at `http://localhost:5173` (Vite default) with:
 - **Hot module reloading** for instant updates
@@ -223,9 +243,15 @@ Your app will be available at `http://localhost:5173` (Vite default) with:
 
 ### Build for Production
 
-```bash
-pnpm build
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm build',
+    npm: 'npm run build',
+    yarn: 'yarn build',
+    bun: 'bun build',
+    deno: 'deno task build'
+  }}
+/>
 
 This creates an optimized production build with:
 - **Automatic code splitting**
@@ -234,9 +260,15 @@ This creates an optimized production build with:
 
 ### Start Production Server
 
-```bash
-pnpm start
-```
+<PackageManagerTabs
+  commands={{
+    pnpm: 'pnpm start',
+    npm: 'npm start',
+    yarn: 'yarn start',
+    bun: 'bun start',
+    deno: 'deno task start'
+  }}
+/>
 
 Runs your optimized app in production mode.
 
@@ -244,8 +276,7 @@ Runs your optimized app in production mode.
 
 A typical Rari project (created with `create-rari-app`) looks like this:
 
-```
-my-rari-app/
+<CodeBlock language="bash">{`my-rari-app/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx
@@ -262,18 +293,15 @@ my-rari-app/
 │   │           └── page.tsx
 │   ├── components/
 │   │   └── Counter.tsx
-│   ├── actions/
-│   │   └── todo-actions.ts
-│   └── vite-env.d.ts
+│   └── actions/
+│       └── todo-actions.ts
 ├── public/
 ├── index.html
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
-├── tsconfig.app.json
-├── tsconfig.node.json
 └── .gitignore
-```
+`}</CodeBlock>
 
 ## App Router
 
@@ -287,9 +315,7 @@ Routes are created by adding `page.tsx` files in the `src/app/` directory:
 - `src/app/about/page.tsx` → `/about`
 - `src/app/contact/page.tsx` → `/contact`
 
-```tsx
-// src/app/about/page.tsx
-import type { PageProps } from 'rari/client'
+<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`import type { PageProps } from 'rari/client'
 
 export default function AboutPage({ params, searchParams }: PageProps) {
   return (
@@ -304,7 +330,7 @@ export const metadata = {
   title: 'About | My App',
   description: 'Learn more about us',
 }
-```
+`}</CodeBlock>
 
 ### Dynamic Routes
 
@@ -313,9 +339,7 @@ Use square brackets for dynamic route parameters:
 - `src/app/users/[id]/page.tsx` → `/users/123`
 - `src/app/blog/[slug]/page.tsx` → `/blog/my-post`
 
-```tsx
-// src/app/users/[id]/page.tsx
-import type { PageProps } from 'rari/client'
+<CodeBlock filename="src/app/users/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari/client'
 
 export default function UserPage({ params }: PageProps<{ id: string }>) {
   const { id } = params
@@ -330,19 +354,17 @@ export default function UserPage({ params }: PageProps<{ id: string }>) {
 
 export async function generateMetadata({ params }: PageProps<{ id: string }>) {
   return {
-    title: `User ${params.id} | My App`,
-    description: `Profile page for user ${params.id}`,
+    title: \`User \${params.id} | My App\`,
+    description: \`Profile page for user \${params.id}\`,
   }
 }
-```
+`}</CodeBlock>
 
 ### Layouts
 
 Layouts wrap pages and can be nested. They persist across route changes:
 
-```tsx
-// src/app/layout.tsx - Root layout (required)
-import type { LayoutProps } from 'rari/client'
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari/client'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -360,11 +382,9 @@ export const metadata = {
   title: 'My App',
   description: 'Built with Rari',
 }
-```
+`}</CodeBlock>
 
-```tsx
-// src/app/dashboard/layout.tsx - Nested layout
-import type { LayoutProps } from 'rari/client'
+<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari/client'
 
 export default function DashboardLayout({ children }: LayoutProps) {
   return (
@@ -380,14 +400,13 @@ export default function DashboardLayout({ children }: LayoutProps) {
     </div>
   )
 }
-```
+`}</CodeBlock>
 
 ### Navigation
 
 Use standard HTML links for navigation - the app router handles client-side navigation automatically:
 
-```tsx
-export default function Navigation() {
+<CodeBlock language="tsx">{`export default function Navigation() {
   return (
     <nav>
       <a href="/">Home</a>
@@ -396,7 +415,7 @@ export default function Navigation() {
     </nav>
   )
 }
-```
+`}</CodeBlock>
 
 ## Server vs Client Components
 
@@ -406,13 +425,12 @@ export default function Navigation() {
 - Cannot use browser APIs or event handlers
 - Automatically serialized for the client
 
-```tsx
-export default async function ServerComponent() {
+<CodeBlock language="tsx">{`export default async function ServerComponent() {
   const data = await fetch('https://api.example.com/data')
   const result = await data.json()
   return <div>{result.message}</div>
 }
-```
+`}</CodeBlock>
 
 ### Client Components
 - Run in the browser
@@ -420,8 +438,7 @@ export default async function ServerComponent() {
 - Cannot use server-only APIs
 - Use `'use client'` directive to mark explicitly
 
-```tsx
-'use client'
+<CodeBlock language="tsx">{`'use client'
 
 import { useState } from 'react'
 
@@ -434,15 +451,13 @@ export default function ClientComponent() {
     </button>
   )
 }
-```
+`}</CodeBlock>
 
 ### Server Actions
 - Use `'use server'` directive for server functions that can be called from client components
 - Place in `src/actions/` directory for organization
 
-```tsx
-// src/actions/user-actions.ts
-'use server'
+<CodeBlock filename="src/actions/user-actions.ts" language="tsx">{`'use server'
 
 export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
@@ -456,13 +471,11 @@ export async function deleteUser(id: string) {
   await database.users.delete(id)
   return { success: true }
 }
-```
+`}</CodeBlock>
 
 Use server actions in client components with `useActionState`:
 
-```tsx
-// src/components/UserForm.tsx
-'use client'
+<CodeBlock filename="src/components/UserForm.tsx" language="tsx">{`'use client'
 
 import { useActionState } from 'react'
 import { createUser } from '@/actions/user-actions'
@@ -481,21 +494,19 @@ export default function UserForm() {
     </form>
   )
 }
-```
+`}</CodeBlock>
 
 ## Common Patterns
 
 ### Loading Data in Pages
 
-```tsx
-// src/app/users/[id]/page.tsx
-import type { PageProps } from 'rari/client'
+<CodeBlock filename="src/app/users/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari/client'
 
 export default async function UserProfile({ params }: PageProps<{ id: string }>) {
   const { id } = params
 
   // Fetch data on the server
-  const user = await fetch(`https://api.example.com/users/${id}`)
+  const user = await fetch(\`https://api.example.com/users/\${id}\`)
     .then(r => r.json())
 
   return (
@@ -508,21 +519,19 @@ export default async function UserProfile({ params }: PageProps<{ id: string }>)
 }
 
 export async function generateMetadata({ params }: PageProps<{ id: string }>) {
-  const user = await fetch(`https://api.example.com/users/${params.id}`)
+  const user = await fetch(\`https://api.example.com/users/\${params.id}\`)
     .then(r => r.json())
 
   return {
-    title: `${user.name} | Users`,
-    description: `Profile page for ${user.name}`,
+    title: \`\${user.name} | Users\`,
+    description: \`Profile page for \${user.name}\`,
   }
 }
-```
+`}</CodeBlock>
 
 ### Combining Server and Client
 
-```tsx
-// src/app/dashboard/page.tsx - Server component that includes client components
-import type { PageProps } from 'rari/client'
+<CodeBlock filename="src/app/dashboard/page.tsx" language="tsx">{`import type { PageProps } from 'rari/client'
 import ClientCounter from '@/components/ClientCounter'
 
 export default async function Dashboard({ params, searchParams }: PageProps) {
@@ -541,12 +550,11 @@ export const metadata = {
   title: 'Dashboard | My App',
   description: 'Your dashboard',
 }
-```
+`}</CodeBlock>
 
 ### Error Handling
 
-```tsx
-export default async function DataComponent() {
+<CodeBlock language="tsx">{`export default async function DataComponent() {
   let data
   let error
 
@@ -568,4 +576,4 @@ export default async function DataComponent() {
 
   return <div>{data.content}</div>
 }
-```
+`}</CodeBlock>

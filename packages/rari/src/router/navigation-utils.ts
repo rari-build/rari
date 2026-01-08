@@ -21,9 +21,8 @@ export function matchRouteParams(
 
     if (actualIndex >= actualSegments.length) {
       if (segment.type === 'optional-catch-all') {
-        if (segment.param) {
+        if (segment.param)
           params[segment.param] = []
-        }
         continue
       }
       return null
@@ -31,32 +30,28 @@ export function matchRouteParams(
 
     switch (segment.type) {
       case 'static':
-        if (actualSegments[actualIndex] !== segment.value) {
+        if (actualSegments[actualIndex] !== segment.value)
           return null
-        }
         actualIndex++
         break
 
       case 'dynamic':
-        if (segment.param) {
+        if (segment.param)
           params[segment.param] = actualSegments[actualIndex]
-        }
         actualIndex++
         break
 
       case 'catch-all':
       case 'optional-catch-all':
-        if (segment.param) {
+        if (segment.param)
           params[segment.param] = actualSegments.slice(actualIndex)
-        }
         actualIndex = actualSegments.length
         break
     }
   }
 
-  if (actualIndex !== actualSegments.length) {
+  if (actualIndex !== actualSegments.length)
     return null
-  }
 
   return params
 }
@@ -85,9 +80,8 @@ export function findLayoutChain(
   invalidateCacheIfNeeded(manifest)
 
   const cached = layoutChainCache.get(routePath)
-  if (cached) {
+  if (cached)
     return cached
-  }
 
   const chain: LayoutEntry[] = []
   const segments = parseRoutePath(routePath)
@@ -95,9 +89,8 @@ export function findLayoutChain(
   for (let i = 0; i <= segments.length; i++) {
     const currentPath = i === 0 ? '/' : `/${segments.slice(0, i).join('/')}`
     const layout = manifest.layouts.find(l => l.path === currentPath)
-    if (layout) {
+    if (layout)
       chain.push(layout)
-    }
   }
 
   layoutChainCache.set(routePath, chain)
@@ -106,15 +99,13 @@ export function findLayoutChain(
 }
 
 export function normalizePath(path: string): string {
-  if (!path || path === '/') {
+  if (!path || path === '/')
     return '/'
-  }
 
   let normalized = path.replace(/\/+$/, '')
 
-  if (!normalized.startsWith('/')) {
+  if (!normalized.startsWith('/'))
     normalized = `/${normalized}`
-  }
 
   return normalized
 }
@@ -135,9 +126,8 @@ export function createRouteInfo(
   const params: Record<string, string | string[]> = {}
   if (route) {
     const matchedParams = matchRouteParams(route.path, route.segments, normalizedPath)
-    if (matchedParams) {
+    if (matchedParams)
       Object.assign(params, matchedParams)
-    }
   }
 
   return {

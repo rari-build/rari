@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
-import { compile } from '@mdx-js/mdx'
-import rehypeShikiFromHighlighter from '@shikijs/rehype/core'
-import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
+import { evaluate } from '@mdx-js/mdx'
+import { createMDXClientReferences } from 'rari/mdx'
+import * as runtime from 'react/jsx-runtime'
 import NotFoundPage from '@/app/not-found'
+import { mdxComponentMetadata } from '@/lib/mdx-components'
+import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 
 interface MdxRendererProps {
@@ -23,9 +25,7 @@ function findContentFile(filePath: string): string | null {
     try {
       return readFileSync(path, 'utf-8')
     }
-    catch {
-      // File doesn't exist at this path, try next
-    }
+    catch {}
   }
 
   return null
@@ -43,27 +43,33 @@ export default async function MdxRenderer({
 
     const highlighter = await getHighlighter()
 
-    const compiled = await compile(content, {
-      outputFormat: 'function-body',
+    const remarkPlugins: any[] = []
+
+    if (highlighter) {
+      remarkPlugins.push([
+        remarkCodeBlock,
+        {
+          highlighter,
+          theme: SHIKI_THEME,
+        },
+      ])
+    }
+
+    const { default: MDXContent } = await evaluate(content, {
+      ...runtime,
+      baseUrl: import.meta.url,
       development: false,
-      rehypePlugins: highlighter
-        ? [
-            [
-              rehypeShikiFromHighlighter,
-              highlighter,
-              {
-                theme: SHIKI_THEME,
-              },
-            ],
-          ]
-        : [],
+      remarkPlugins,
     })
 
-    const compiledString = String(compiled)
-
-    // oxlint-disable-next-line no-new-func
-    const fn = new Function(compiledString)
-    const { default: MDXContent } = fn({ Fragment, jsx, jsxs })
+    const mdxComponents = createMDXClientReferences(
+      Object.fromEntries(
+        mdxComponentMetadata.map(({ name, component, id }) => [
+          name,
+          { component, id },
+        ]),
+      ),
+    )
 
     return (
       <div
@@ -73,7 +79,7 @@ export default async function MdxRenderer({
           overflowWrap: 'break-word',
         }}
       >
-        <MDXContent />
+        <MDXContent components={mdxComponents} />
       </div>
     )
   }

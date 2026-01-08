@@ -32,11 +32,59 @@ if (!globalThis.process) {
         return 'linux'
       }
     })(),
+    arch: (() => {
+      try {
+        const arch = globalThis.Deno?.build?.arch
+        if (arch === 'x86_64')
+          return 'x64'
+        if (arch === 'aarch64')
+          return 'arm64'
+        return 'x64'
+      }
+      catch {
+        return 'x64'
+      }
+    })(),
+    version: 'v20.0.0',
+    versions: {
+      node: '20.0.0',
+      v8: '11.0.0',
+      uv: '1.0.0',
+      zlib: '1.0.0',
+      modules: '108',
+    },
     argv: ['node'],
+    execPath: '/usr/bin/node',
+    execArgv: [],
+    pid: 1,
+    ppid: 0,
+    title: 'node',
     exit: (code = 0) => {
       if (globalThis.Deno?.exit) {
         globalThis.Deno.exit(code)
       }
+    },
+    kill: () => {},
+    memoryUsage: () => ({
+      rss: 0,
+      heapTotal: 0,
+      heapUsed: 0,
+      external: 0,
+      arrayBuffers: 0,
+    }),
+    uptime: () => 0,
+    hrtime: () => [0, 0],
+    binding: () => ({}),
+    stdout: {
+      write: data => console.warn(data),
+      isTTY: false,
+    },
+    stderr: {
+      write: data => console.error(data),
+      isTTY: false,
+    },
+    stdin: {
+      isTTY: false,
     },
   }
 }
@@ -418,17 +466,43 @@ const EventEmitter = class {
 
 const nodeModules = new Map([
   ['node:process', globalThis.process],
+  ['process', globalThis.process],
   ['node:fs', fs],
+  ['fs', fs],
   ['node:fs/promises', fs.promises],
+  ['fs/promises', fs.promises],
   ['node:path', path],
+  ['path', path],
   ['node:crypto', crypto],
+  ['crypto', crypto],
   ['node:util', util],
+  ['util', util],
   ['node:os', os],
+  ['os', os],
   ['node:buffer', { Buffer }],
+  ['buffer', { Buffer }],
   ['node:events', { EventEmitter }],
-  ['node:stream', { Stream: EventEmitter }],
+  ['events', { EventEmitter }],
+  ['node:stream', {
+    Stream: EventEmitter,
+    Readable: EventEmitter,
+    Writable: EventEmitter,
+    Transform: EventEmitter,
+    PassThrough: EventEmitter,
+  }],
+  ['stream', {
+    Stream: EventEmitter,
+    Readable: EventEmitter,
+    Writable: EventEmitter,
+    Transform: EventEmitter,
+    PassThrough: EventEmitter,
+  }],
   [
     'node:url',
+    { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams },
+  ],
+  [
+    'url',
     { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams },
   ],
   [
@@ -448,7 +522,34 @@ const nodeModules = new Map([
     },
   ],
   [
+    'querystring',
+    {
+      parse: (str) => {
+        const params = new URLSearchParams(str)
+        const result = {}
+        for (const [key, value] of params) {
+          result[key] = value
+        }
+        return result
+      },
+      stringify: (obj) => {
+        return new URLSearchParams(obj).toString()
+      },
+    },
+  ],
+  [
     'node:timers',
+    {
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
+      setInterval: globalThis.setInterval,
+      clearInterval: globalThis.clearInterval,
+      setImmediate: fn => setTimeout(fn, 0),
+      clearImmediate: clearTimeout,
+    },
+  ],
+  [
+    'timers',
     {
       setTimeout: globalThis.setTimeout,
       clearTimeout: globalThis.clearTimeout,
@@ -478,12 +579,195 @@ const nodeModules = new Map([
       },
     },
   ],
+  [
+    'assert',
+    {
+      ok: (value, message) => {
+        if (!value) {
+          throw new Error(message || 'Assertion failed')
+        }
+      },
+      equal: (actual, expected, message) => {
+        if (actual !== expected) {
+          throw new Error(message || `Expected ${expected}, got ${actual}`)
+        }
+      },
+      deepEqual: (actual, expected, message) => {
+        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+          throw new Error(message || 'Deep equality assertion failed')
+        }
+      },
+    },
+  ],
+  [
+    'node:child_process',
+    {
+      spawn: () => {
+        console.warn('child_process.spawn is not supported')
+        return { on: () => {}, stdout: { on: () => {} }, stderr: { on: () => {} } }
+      },
+      exec: (cmd, cb) => {
+        console.warn('child_process.exec is not supported')
+        if (cb)
+          cb(new Error('Not supported'), '', '')
+      },
+    },
+  ],
+  [
+    'child_process',
+    {
+      spawn: () => {
+        console.warn('child_process.spawn is not supported')
+        return { on: () => {}, stdout: { on: () => {} }, stderr: { on: () => {} } }
+      },
+      exec: (cmd, cb) => {
+        console.warn('child_process.exec is not supported')
+        if (cb)
+          cb(new Error('Not supported'), '', '')
+      },
+    },
+  ],
+  [
+    'node:tty',
+    {
+      isatty: () => false,
+      ReadStream: class {},
+      WriteStream: class {},
+    },
+  ],
+  [
+    'tty',
+    {
+      isatty: () => false,
+      ReadStream: class {},
+      WriteStream: class {},
+    },
+  ],
+  [
+    'node:net',
+    {
+      createServer: () => {
+        console.warn('net.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      connect: () => {
+        console.warn('net.connect is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'net',
+    {
+      createServer: () => {
+        console.warn('net.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      connect: () => {
+        console.warn('net.connect is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'node:http',
+    {
+      createServer: () => {
+        console.warn('http.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      request: () => {
+        console.warn('http.request is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'http',
+    {
+      createServer: () => {
+        console.warn('http.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      request: () => {
+        console.warn('http.request is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'node:https',
+    {
+      createServer: () => {
+        console.warn('https.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      request: () => {
+        console.warn('https.request is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'https',
+    {
+      createServer: () => {
+        console.warn('https.createServer is not supported')
+        return { listen: () => {}, on: () => {} }
+      },
+      request: () => {
+        console.warn('https.request is not supported')
+        return { on: () => {}, write: () => {}, end: () => {} }
+      },
+    },
+  ],
+  [
+    'node:zlib',
+    {
+      createGzip: () => ({ pipe: x => x, on: () => {} }),
+      createGunzip: () => ({ pipe: x => x, on: () => {} }),
+    },
+  ],
+  [
+    'zlib',
+    {
+      createGzip: () => ({ pipe: x => x, on: () => {} }),
+      createGunzip: () => ({ pipe: x => x, on: () => {} }),
+    },
+  ],
+  [
+    'node:readline',
+    {
+      createInterface: () => ({ on: () => {}, close: () => {} }),
+    },
+  ],
+  [
+    'readline',
+    {
+      createInterface: () => ({ on: () => {}, close: () => {} }),
+    },
+  ],
+  [
+    'node:module',
+    {
+      createRequire: () => globalThis.require,
+      builtinModules: ['fs', 'path', 'os', 'util', 'crypto', 'stream', 'buffer', 'events'],
+    },
+  ],
+  [
+    'module',
+    {
+      createRequire: () => globalThis.require,
+      builtinModules: ['fs', 'path', 'os', 'util', 'crypto', 'stream', 'buffer', 'events'],
+    },
+  ],
 ])
 
 if (!globalThis['~node'])
   globalThis['~node'] = {}
 if (!globalThis['~node'].modules) {
   globalThis['~node'].modules = nodeModules
+  const streamExports = nodeModules.get('node:stream')
 }
 
 if (globalThis.import) {
@@ -515,4 +799,24 @@ if (!globalThis.Buffer) {
 
 if (!globalThis.global) {
   globalThis.global = globalThis
+}
+
+if (!globalThis.require) {
+  globalThis.require = function (specifier) {
+    const nodeSpecifier = specifier.startsWith('node:') ? specifier : `node:${specifier}`
+
+    if (nodeModules.has(nodeSpecifier)) {
+      return nodeModules.get(nodeSpecifier)
+    }
+
+    if (nodeModules.has(specifier)) {
+      return nodeModules.get(specifier)
+    }
+
+    throw new Error(`Cannot find module '${specifier}'`)
+  }
+
+  globalThis.require.resolve = function (specifier) {
+    return specifier
+  }
 }

@@ -6,14 +6,12 @@ class RouteInfoCache {
 
   async get(path: string): Promise<RouteInfoResponse> {
     const cached = this.cache.get(path)
-    if (cached) {
+    if (cached)
       return cached
-    }
 
     const pending = this.pendingRequests.get(path)
-    if (pending) {
+    if (pending)
       return pending
-    }
 
     const promise = this.fetchRouteInfo(path)
     this.pendingRequests.set(path, promise)
@@ -61,8 +59,7 @@ export const routeInfoCache = new RouteInfoCache()
 
 if (typeof window !== 'undefined') {
   const globalRari = (window as any)['~rari'] || {}
-  if (!(window as any)['~rari']) {
+  if (!(window as any)['~rari'])
     (window as any)['~rari'] = globalRari
-  }
   globalRari.routeInfoCache = routeInfoCache
 }

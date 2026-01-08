@@ -121,11 +121,40 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
             }
             if let Some(images) = &og.images {
                 for image in images {
+                    use crate::rsc::rendering::layout::types::OpenGraphImage;
+                    let image_url = match image {
+                        OpenGraphImage::Simple(url) => url.as_str(),
+                        OpenGraphImage::Detailed(desc) => desc.url.as_str(),
+                    };
                     meta_tags.push_str(&format!(
                         r#"    <meta property="og:image" content="{}" />
 "#,
-                        escape_html(image)
+                        escape_html(image_url)
                     ));
+
+                    if let OpenGraphImage::Detailed(desc) = image {
+                        if let Some(width) = desc.width {
+                            meta_tags.push_str(&format!(
+                                r#"    <meta property="og:image:width" content="{}" />
+"#,
+                                width
+                            ));
+                        }
+                        if let Some(height) = desc.height {
+                            meta_tags.push_str(&format!(
+                                r#"    <meta property="og:image:height" content="{}" />
+"#,
+                                height
+                            ));
+                        }
+                        if let Some(alt) = &desc.alt {
+                            meta_tags.push_str(&format!(
+                                r#"    <meta property="og:image:alt" content="{}" />
+"#,
+                                escape_html(alt)
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -177,6 +206,149 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
             }
         }
 
+        if let Some(icons) = &metadata.icons {
+            if let Some(icon_value) = &icons.icon {
+                use crate::rsc::rendering::layout::types::IconValue;
+                match icon_value {
+                    IconValue::Single(url) => {
+                        meta_tags.push_str(&format!(
+                            r#"    <link rel="icon" href="{}" />
+"#,
+                            escape_html(url)
+                        ));
+                    }
+                    IconValue::Multiple(urls) => {
+                        for url in urls {
+                            meta_tags.push_str(&format!(
+                                r#"    <link rel="icon" href="{}" />
+"#,
+                                escape_html(url)
+                            ));
+                        }
+                    }
+                    IconValue::Detailed(icon_list) => {
+                        for icon in icon_list {
+                            let rel = icon.rel.as_deref().unwrap_or("icon");
+                            let mut attrs =
+                                format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                            if let Some(icon_type) = &icon.icon_type {
+                                attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
+                            }
+                            if let Some(sizes) = &icon.sizes {
+                                attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                            }
+                            meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                        }
+                    }
+                }
+            }
+            if let Some(apple_value) = &icons.apple {
+                use crate::rsc::rendering::layout::types::IconValue;
+                match apple_value {
+                    IconValue::Single(url) => {
+                        meta_tags.push_str(&format!(
+                            r#"    <link rel="apple-touch-icon" href="{}" />
+"#,
+                            escape_html(url)
+                        ));
+                    }
+                    IconValue::Multiple(urls) => {
+                        for url in urls {
+                            meta_tags.push_str(&format!(
+                                r#"    <link rel="apple-touch-icon" href="{}" />
+"#,
+                                escape_html(url)
+                            ));
+                        }
+                    }
+                    IconValue::Detailed(apple_list) => {
+                        for icon in apple_list {
+                            let rel = icon.rel.as_deref().unwrap_or("apple-touch-icon");
+                            let mut attrs =
+                                format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                            if let Some(sizes) = &icon.sizes {
+                                attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                            }
+                            meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                        }
+                    }
+                }
+            }
+            if let Some(other_list) = &icons.other {
+                for icon in other_list {
+                    let rel = icon.rel.as_deref().unwrap_or("icon");
+                    let mut attrs = format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                    if let Some(icon_type) = &icon.icon_type {
+                        attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
+                    }
+                    if let Some(sizes) = &icon.sizes {
+                        attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
+                    }
+                    if let Some(color) = &icon.color {
+                        attrs.push_str(&format!(r#" color="{}""#, escape_html(color)));
+                    }
+                    meta_tags.push_str(&format!("    <link {} />\n", attrs));
+                }
+            }
+        }
+
+        if let Some(manifest) = &metadata.manifest {
+            meta_tags.push_str(&format!(
+                r#"    <link rel="manifest" href="{}" />
+"#,
+                escape_html(manifest)
+            ));
+        }
+
+        if let Some(theme_color) = &metadata.theme_color {
+            use crate::rsc::rendering::layout::types::ThemeColorMetadata;
+            match theme_color {
+                ThemeColorMetadata::Simple(color) => {
+                    meta_tags.push_str(&format!(
+                        r#"    <meta name="theme-color" content="{}" />
+"#,
+                        escape_html(color)
+                    ));
+                }
+                ThemeColorMetadata::Detailed(colors) => {
+                    for color_desc in colors {
+                        let mut attrs = format!(
+                            r#"name="theme-color" content="{}""#,
+                            escape_html(&color_desc.color)
+                        );
+                        if let Some(media) = &color_desc.media {
+                            attrs.push_str(&format!(r#" media="{}""#, escape_html(media)));
+                        }
+                        meta_tags.push_str(&format!("    <meta {} />\n", attrs));
+                    }
+                }
+            }
+        }
+
+        if let Some(apple_web_app) = &metadata.apple_web_app {
+            if let Some(title) = &apple_web_app.title {
+                meta_tags.push_str(&format!(
+                    r#"    <meta name="apple-mobile-web-app-title" content="{}" />
+"#,
+                    escape_html(title)
+                ));
+            }
+            if let Some(status_bar_style) = &apple_web_app.status_bar_style {
+                meta_tags.push_str(&format!(
+                    r#"    <meta name="apple-mobile-web-app-status-bar-style" content="{}" />
+"#,
+                    escape_html(status_bar_style)
+                ));
+            }
+            if let Some(capable) = apple_web_app.capable {
+                meta_tags.push_str(&format!(
+                    r#"    <meta name="apple-mobile-web-app-capable" content="{}" />
+"#,
+                    if capable { "yes" } else { "no" }
+                ));
+            }
+        }
+
         if !meta_tags.is_empty() {
             result.insert_str(head_end, &meta_tags);
         }
@@ -220,6 +392,10 @@ mod tests {
             robots: None,
             viewport: None,
             canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
         };
 
         let result = inject_metadata(html, &metadata);
@@ -239,6 +415,8 @@ mod tests {
 <body></body>
 </html>"#;
 
+        use crate::rsc::rendering::layout::types::{OpenGraphImage, OpenGraphImageDescriptor};
+
         let metadata = PageMetadata {
             title: Some("Test".to_string()),
             description: None,
@@ -248,13 +426,25 @@ mod tests {
                 description: Some("OG Description".to_string()),
                 url: Some("https://example.com".to_string()),
                 site_name: Some("Example Site".to_string()),
-                images: Some(vec!["https://example.com/image.jpg".to_string()]),
+                images: Some(vec![
+                    OpenGraphImage::Simple("https://example.com/simple.jpg".to_string()),
+                    OpenGraphImage::Detailed(OpenGraphImageDescriptor {
+                        url: "https://example.com/image.jpg".to_string(),
+                        width: Some(1200),
+                        height: Some(630),
+                        alt: Some("Example Image".to_string()),
+                    }),
+                ]),
                 og_type: Some("website".to_string()),
             }),
             twitter: None,
             robots: None,
             viewport: None,
             canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
         };
 
         let result = inject_metadata(html, &metadata);
@@ -266,9 +456,17 @@ mod tests {
         assert!(result.contains(r#"<meta property="og:type" content="website" />"#));
         assert!(
             result.contains(
+                r#"<meta property="og:image" content="https://example.com/simple.jpg" />"#
+            )
+        );
+        assert!(
+            result.contains(
                 r#"<meta property="og:image" content="https://example.com/image.jpg" />"#
             )
         );
+        assert!(result.contains(r#"<meta property="og:image:width" content="1200" />"#));
+        assert!(result.contains(r#"<meta property="og:image:height" content="630" />"#));
+        assert!(result.contains(r#"<meta property="og:image:alt" content="Example Image" />"#));
     }
 
     #[test]
@@ -297,6 +495,10 @@ mod tests {
             robots: None,
             viewport: None,
             canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
         };
 
         let result = inject_metadata(html, &metadata);
@@ -336,6 +538,10 @@ mod tests {
             }),
             viewport: None,
             canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
         };
 
         let result = inject_metadata(html, &metadata);
@@ -362,6 +568,10 @@ mod tests {
             robots: None,
             viewport: None,
             canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
         };
 
         let result = inject_metadata(html, &metadata);

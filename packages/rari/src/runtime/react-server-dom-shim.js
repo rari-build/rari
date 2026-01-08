@@ -3,9 +3,8 @@ const serverReferenceRegistry = new Map()
 
 let rustBridge = null
 
-if (typeof globalThis['~rari']?.bridge !== 'undefined') {
+if (typeof globalThis['~rari']?.bridge !== 'undefined')
   rustBridge = globalThis['~rari'].bridge
-}
 
 export function registerClientReference(clientReference, id, exportName) {
   const key = `${id}#${exportName}`
@@ -33,9 +32,8 @@ export function registerClientReference(clientReference, id, exportName) {
   })
 
   try {
-    if (rustBridge && typeof rustBridge.registerClientReference === 'function') {
+    if (rustBridge && typeof rustBridge.registerClientReference === 'function')
       rustBridge.registerClientReference(key, id, exportName)
-    }
   }
   catch (error) {
     console.error(error)
@@ -86,9 +84,8 @@ export function registerServerReference(serverReference, id, exportName) {
   })
 
   try {
-    if (rustBridge && typeof rustBridge.registerServerReference === 'function') {
+    if (rustBridge && typeof rustBridge.registerServerReference === 'function')
       rustBridge.registerServerReference(key, id, exportName)
-    }
   }
   catch (error) {
     console.error(error)

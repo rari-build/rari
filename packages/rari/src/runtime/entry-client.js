@@ -5,7 +5,6 @@ import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import 'virtual:rsc-integration'
-import 'virtual:loading-component-map'
 
 if (typeof globalThis['~rari'] === 'undefined') {
   globalThis['~rari'] = {}
@@ -25,17 +24,15 @@ if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
 // CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
 
 function setupPartialHydration() {
-  if (globalThis['~rari'].hydrateClientComponents) {
+  if (globalThis['~rari'].hydrateClientComponents)
     return
-  }
 
   globalThis['~rari'].hydrateClientComponents = function (_boundaryId, content, boundaryElement) {
     const modules = window['~rari'].boundaryModules || new Map()
 
     function rscToReactElement(element) {
-      if (!element) {
+      if (!element)
         return null
-      }
 
       if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
         return element
@@ -46,13 +43,11 @@ function setupPartialHydration() {
           const [, type, key, props] = element
 
           const processedProps = props ? { ...props } : {}
-          if (props?.children) {
+          if (props?.children)
             processedProps.children = rscToReactElement(props.children)
-          }
 
-          if (processedProps['~boundaryId']) {
+          if (processedProps['~boundaryId'])
             delete processedProps['~boundaryId']
-          }
 
           if (typeof type === 'string') {
             if (type.startsWith('$L')) {
@@ -87,10 +82,9 @@ function setupPartialHydration() {
 
         return element.map((child, index) => {
           const result = rscToReactElement(child)
-          if (React.isValidElement(result) && !result.key) {
+          if (React.isValidElement(result) && !result.key)
             // eslint-disable-next-line react/no-clone-element
             return React.cloneElement(result, { key: index })
-          }
           return result
         })
       }
@@ -116,9 +110,8 @@ function setupPartialHydration() {
 
 function processPendingBoundaryHydrations() {
   const pending = window['~rari'].pendingBoundaryHydrations
-  if (!pending || pending.size === 0) {
+  if (!pending || pending.size === 0)
     return
-  }
 
   for (const [boundaryId, data] of pending.entries()) {
     if (globalThis['~rari'].hydrateClientComponents) {
@@ -151,9 +144,8 @@ export async function renderApp() {
       const hasPendingBoundaries = window['~rari'].pendingBoundaryHydrations
         && window['~rari'].pendingBoundaryHydrations.size > 0
 
-      if (hasPendingBoundaries) {
+      if (hasPendingBoundaries)
         processPendingBoundaryHydrations()
-      }
 
       return
     }
@@ -178,9 +170,8 @@ export async function renderApp() {
           },
         })
 
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error(`Failed to fetch RSC data: ${response.status}`)
-        }
 
         const stream = response.body
 
@@ -243,9 +234,8 @@ export async function renderApp() {
               }
 
               const handleStreamUpdate = (event) => {
-                if (event.detail?.rscRow) {
+                if (event.detail?.rscRow)
                   controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
-                }
               }
 
               const handleStreamComplete = () => {
@@ -257,9 +247,8 @@ export async function renderApp() {
               window.addEventListener('rari:rsc-row', handleStreamUpdate)
               window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-              if (window['~rari']?.streamComplete) {
+              if (window['~rari']?.streamComplete)
                 handleStreamComplete()
-              }
             },
           })
 
@@ -357,9 +346,8 @@ export async function renderApp() {
             }
 
             const handleStreamUpdate = (event) => {
-              if (event.detail?.rscRow) {
+              if (event.detail?.rscRow)
                 controller.enqueue(new TextEncoder().encode(`${event.detail.rscRow}\n`))
-              }
             }
 
             const handleStreamComplete = () => {
@@ -371,9 +359,8 @@ export async function renderApp() {
             window.addEventListener('rari:rsc-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-            if (window['~rari']?.streamComplete) {
+            if (window['~rari']?.streamComplete)
               handleStreamComplete()
-            }
           },
         })
 
@@ -417,9 +404,8 @@ export async function renderApp() {
       }
     }
 
-    if (!element) {
+    if (!element)
       throw new Error('No RSC data available for hydration')
-    }
 
     let contentToRender
 
@@ -548,9 +534,8 @@ function rscToReact(rsc, modules, symbols) {
   if (!rsc)
     return null
 
-  if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean') {
+  if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
     return rsc
-  }
 
   if (Array.isArray(rsc)) {
     if (rsc.length >= 4 && rsc[0] === '$') {
@@ -613,9 +598,8 @@ function processProps(props, modules, symbols) {
   const processed = {}
   for (const key in props) {
     if (Object.prototype.hasOwnProperty.call(props, key)) {
-      if (key.startsWith('$') || key === 'ref') {
+      if (key.startsWith('$') || key === 'ref')
         continue
-      }
       if (key === 'children') {
         processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
       }

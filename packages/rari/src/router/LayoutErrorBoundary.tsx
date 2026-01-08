@@ -41,9 +41,8 @@ export class LayoutErrorBoundary extends Component<
       errorInfo,
     )
 
-    if (this.props.onError) {
+    if (this.props.onError)
       this.props.onError(error, errorInfo)
-    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
@@ -68,9 +67,8 @@ export class LayoutErrorBoundary extends Component<
 
   render(): ReactNode {
     if (this.state.hasError && this.state.error) {
-      if (this.props.fallback) {
+      if (this.props.fallback)
         return this.props.fallback(this.state.error, this.reset)
-      }
 
       return (
         <div

@@ -23,9 +23,6 @@
         "src/runtime/react-server-dom-rari-client.js",
         "src/runtime/react-server-dom-shim.js",
         "src/runtime/rsc-client-runtime.js"
-      ],
-      "ignoreDependencies": [
-        "vite"
       ]
     },
     "packages/create-rari-app": {
@@ -54,6 +51,9 @@
       ],
       "project": [
         "src/**/*.{ts,tsx}"
+      ],
+      "ignore": [
+        "src/proxy.ts"
       ],
       "ignoreDependencies": [
         "@tailwindcss/vite",

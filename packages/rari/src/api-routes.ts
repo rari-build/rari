@@ -17,13 +17,12 @@ export interface ApiRouteHandlers<TParams extends Record<string, string> = Recor
   OPTIONS?: RouteHandler<TParams>
 }
 
-export class RariResponse extends Response {
+export class ApiResponse extends Response {
   static json(data: any, init?: ResponseInit): Response {
     const headers = new Headers(init?.headers)
 
-    if (!headers.has('content-type')) {
+    if (!headers.has('content-type'))
       headers.set('content-type', 'application/json')
-    }
 
     return new Response(JSON.stringify(data), {
       ...init,

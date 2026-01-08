@@ -1,4 +1,5 @@
 import type { Plugin, UserConfig } from 'rolldown-vite'
+import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
@@ -7,14 +8,22 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import * as acorn from 'acorn'
+import { rariProxy } from '../proxy/vite-plugin'
+import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
-import { createLoadingComponentPlugin } from './loading-component-bundler'
 import { createServerBuildPlugin } from './server-build'
+
+interface RouterPluginOptions {
+  appDir?: string
+  extensions?: string[]
+}
 
 interface RariOptions {
   projectRoot?: string
   serverBuild?: ServerBuildOptions
   serverHandler?: boolean
+  proxy?: ProxyPluginOptions | false
+  router?: RouterPluginOptions | false
 }
 
 async function loadRuntimeFile(filename: string): Promise<string> {
@@ -31,9 +40,7 @@ async function loadRuntimeFile(filename: string): Promise<string> {
     try {
       return await fs.promises.readFile(filePath, 'utf-8')
     }
-    catch {
-      // Try next path
-    }
+    catch {}
   }
 
   throw new Error(`Could not find ${filename}. Tried: ${possiblePaths.join(', ')}`)
@@ -79,9 +86,7 @@ function scanForClientComponents(srcDir: string): Set<string> {
             clientComponents.add(fullPath)
           }
         }
-        catch {
-          // Skip files that can't be read
-        }
+        catch {}
       }
     }
   }
@@ -106,13 +111,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
   const resolvedAlias: Record<string, string> = {}
 
   function isServerComponent(filePath: string): boolean {
-    if (filePath.includes('node_modules')) {
+    if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
       return false
-    }
-
-    if (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')) {
-      return false
-    }
 
     let pathForFsOperations = filePath
     try {
@@ -123,17 +123,15 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
 
     try {
-      if (!fs.existsSync(pathForFsOperations)) {
+      if (!fs.existsSync(pathForFsOperations))
         return false
-      }
-      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
 
+      const code = fs.readFileSync(pathForFsOperations, 'utf-8')
       const hasClientDirective = hasTopLevelDirective(code, 'use client')
       const hasServerDirective = hasTopLevelDirective(code, 'use server')
 
-      if (hasServerDirective) {
+      if (hasServerDirective)
         return false
-      }
 
       return !hasClientDirective
     }
@@ -160,9 +158,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
             if (node.declaration) {
               if (node.declaration.type === 'VariableDeclaration') {
                 for (const declarator of node.declaration.declarations) {
-                  if (declarator.id.type === 'Identifier') {
+                  if (declarator.id.type === 'Identifier')
                     exportedNames.push(declarator.id.name)
-                  }
                 }
               }
               else if (node.declaration.id) {
@@ -176,9 +173,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
             }
             break
           case 'ExportAllDeclaration':
-            if (node.exported && node.exported.type === 'Identifier') {
+            if (node.exported && node.exported.type === 'Identifier')
               exportedNames.push(node.exported.name)
-            }
             break
         }
       }
@@ -217,14 +213,12 @@ export function rari(options: RariOptions = {}): Plugin[] {
   function transformServerModule(code: string, id: string): string {
     const hasUseServer = hasTopLevelDirective(code, 'use server')
 
-    if (!hasUseServer) {
+    if (!hasUseServer)
       return code
-    }
 
     const exportedNames = parseExportedNames(code)
-    if (exportedNames.length === 0) {
+    if (exportedNames.length === 0)
       return code
-    }
 
     let newCode = code
     newCode
@@ -282,9 +276,8 @@ if (import.meta.hot) {
 
     if (isServerFunction) {
       const exportedNames = parseExportedNames(code)
-      if (exportedNames.length === 0) {
+      if (exportedNames.length === 0)
         return ''
-      }
 
       const relativePath = path.relative(process.cwd(), id)
       const moduleId = relativePath
@@ -309,9 +302,8 @@ if (import.meta.hot) {
 
     if (isServerComp) {
       const exportedNames = parseExportedNames(code)
-      if (exportedNames.length === 0) {
+      if (exportedNames.length === 0)
         return ''
-      }
 
       const relativePath = path.relative(process.cwd(), id)
       const componentId = relativePath
@@ -336,14 +328,12 @@ if (import.meta.hot) {
       return newCode
     }
 
-    if (!hasTopLevelDirective(code, 'use client')) {
+    if (!hasTopLevelDirective(code, 'use client'))
       return code
-    }
 
     const exportedNames = parseExportedNames(code)
-    if (exportedNames.length === 0) {
+    if (exportedNames.length === 0)
       return ''
-    }
 
     let newCode
       = 'import {registerClientReference} from "react-server-dom-rari/server";\n'
@@ -368,14 +358,12 @@ if (import.meta.hot) {
   }
 
   function transformClientModuleForClient(code: string, _id: string): string {
-    if (!hasTopLevelDirective(code, 'use client')) {
+    if (!hasTopLevelDirective(code, 'use client'))
       return code
-    }
 
     const exportedNames = parseExportedNames(code)
-    if (exportedNames.length === 0) {
+    if (exportedNames.length === 0)
       return code
-    }
 
     return code.replace(/^['"]use client['"];?\s*$/gm, '')
   }
@@ -384,22 +372,32 @@ if (import.meta.hot) {
     importPath: string,
     importerPath: string,
   ): string {
-    const resolvedPath = path.resolve(path.dirname(importerPath), importPath)
+    let resolvedImportPath = importPath
+    for (const [alias, replacement] of Object.entries(resolvedAlias)) {
+      if (importPath.startsWith(`${alias}/`)) {
+        resolvedImportPath = importPath.replace(alias, replacement)
+        break
+      }
+      else if (importPath === alias) {
+        resolvedImportPath = replacement
+        break
+      }
+    }
+
+    const resolvedPath = path.resolve(path.dirname(importerPath), resolvedImportPath)
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
     for (const ext of extensions) {
       const pathWithExt = `${resolvedPath}${ext}`
-      if (fs.existsSync(pathWithExt)) {
+      if (fs.existsSync(pathWithExt))
         return pathWithExt
-      }
     }
 
     if (fs.existsSync(resolvedPath)) {
       for (const ext of extensions) {
         const indexPath = path.join(resolvedPath, `index${ext}`)
-        if (fs.existsSync(indexPath)) {
+        if (fs.existsSync(indexPath))
           return indexPath
-        }
       }
     }
 
@@ -417,17 +415,6 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
-      // Suppress the esbuildOptions deprecation warning from @vitejs/plugin-react
-      // The React plugin internally sets optimizeDeps.esbuildOptions, but Vite 7+ uses Rolldown
-      // This warning is expected and can be safely ignored until the React plugin is updated for Vite 7
-      const originalWarn = console.warn
-      console.warn = (...args: any[]) => {
-        const message = args[0]
-        if (typeof message === 'string' && message.includes('optimizeDeps.esbuildOptions') && message.includes('deprecated')) {
-          return
-        }
-        originalWarn.apply(console, args)
-      }
       config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
         ? ((config.resolve as any).dedupe as string[])
@@ -476,10 +463,9 @@ if (import.meta.hot) {
             })
           }
         }
-        catch { }
-        if (!aliasFinds.has('react')) {
+        catch {}
+        if (!aliasFinds.has('react'))
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
-        }
         if (!aliasFinds.has('react-dom/client')) {
           aliasesToAppend.push({
             find: 'react-dom/client',
@@ -493,7 +479,7 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch { }
+      catch {}
 
       config.environments = config.environments || {}
 
@@ -520,16 +506,14 @@ if (import.meta.hot) {
 
       config.optimizeDeps = config.optimizeDeps || {}
       config.optimizeDeps.include = config.optimizeDeps.include || []
-      if (!config.optimizeDeps.include.includes('react-dom/server')) {
+      if (!config.optimizeDeps.include.includes('react-dom/server'))
         config.optimizeDeps.include.push('react-dom/server')
-      }
 
       if (command === 'build') {
         for (const envName of ['rsc', 'ssr', 'client']) {
           const env = config.environments[envName]
-          if (env && env.build) {
+          if (env && env.build)
             env.build.rolldownOptions = env.build.rolldownOptions || {}
-          }
         }
       }
 
@@ -574,15 +558,12 @@ if (import.meta.hot) {
       }
 
       if (config.environments && config.environments.client) {
-        if (!config.environments.client.build) {
+        if (!config.environments.client.build)
           config.environments.client.build = {}
-        }
-        if (!config.environments.client.build.rolldownOptions) {
+        if (!config.environments.client.build.rolldownOptions)
           config.environments.client.build.rolldownOptions = {}
-        }
-        if (!config.environments.client.build.rolldownOptions.input) {
+        if (!config.environments.client.build.rolldownOptions.input)
           config.environments.client.build.rolldownOptions.input = {}
-        }
       }
 
       return config
@@ -595,16 +576,14 @@ if (import.meta.hot) {
         const aliasConfig = config.resolve.alias
         if (Array.isArray(aliasConfig)) {
           aliasConfig.forEach((entry) => {
-            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find)) {
+            if (typeof entry.find === 'string' && typeof entry.replacement === 'string' && !excludeAliases.has(entry.find))
               resolvedAlias[entry.find] = entry.replacement
-            }
           })
         }
         else if (typeof aliasConfig === 'object') {
           Object.entries(aliasConfig).forEach(([key, value]) => {
-            if (typeof value === 'string' && !excludeAliases.has(key)) {
+            if (typeof value === 'string' && !excludeAliases.has(key))
               resolvedAlias[key] = value
-            }
           })
         }
       }
@@ -621,8 +600,32 @@ if (import.meta.hot) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
+        const importRegex
+          = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+        const lines = code.split('\n')
+
+        for (const line of lines) {
+          const importMatch = line.match(importRegex)
+          if (!importMatch)
+            continue
+
+          const importPath = importMatch[4]
+          if (!importPath)
+            continue
+
+          const resolvedImportPath = resolveImportToFilePath(importPath, id)
+
+          if (fs.existsSync(resolvedImportPath)) {
+            componentTypeCache.set(resolvedImportPath, 'client')
+            clientComponents.add(resolvedImportPath)
+          }
+        }
+
         return transformClientModuleForClient(code, id)
       }
+
+      if (componentTypeCache.get(id) === 'client' || clientComponents.has(id))
+        return transformClientModuleForClient(code, id)
 
       if (isServerComponent(id)) {
         componentTypeCache.set(id, 'server')
@@ -669,13 +672,10 @@ ${clientTransformedCode}`
       }
 
       const cachedType = componentTypeCache.get(id)
-      if (cachedType === 'server') {
+      if (cachedType === 'server')
         return transformServerModule(code, id)
-      }
-
-      if (cachedType === 'client') {
+      if (cachedType === 'client')
         return transformClientModuleForClient(code, id)
-      }
 
       componentTypeCache.set(id, 'unknown')
 
@@ -699,6 +699,10 @@ ${clientTransformedCode}`
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
+        const importingFileIsClient = hasTopLevelDirective(code, 'use client')
+          || componentTypeCache.get(id) === 'client'
+          || id.includes('entry-client')
+
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
             || (fs.existsSync(resolvedImportPath)
@@ -716,10 +720,6 @@ ${clientTransformedCode}`
           && environment
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
-          const importingFileIsClient = hasTopLevelDirective(code, 'use client')
-            || componentTypeCache.get(id) === 'client'
-            || id.includes('entry-client')
-
           if (!importingFileIsClient) {
             serverImportedClientComponents.add(resolvedImportPath)
 
@@ -744,7 +744,7 @@ const ${componentName} = registerClientReference(
             needsReactImport = true
           }
         }
-        else if (isServerComponent(resolvedImportPath)) {
+        else if (!importingFileIsClient && isServerComponent(resolvedImportPath)) {
           hasServerImports = true
           needsReactImport = true
           needsWrapperImport = true
@@ -776,22 +776,14 @@ const ${componentName} = registerClientReference(
 
         let importsToAdd = ''
 
-        if (needsReactImport && !hasReactImport) {
+        if (needsReactImport && !hasReactImport)
           importsToAdd += `import React from 'react';\n`
-        }
-
-        if (needsWrapperImport && !hasWrapperImport) {
+        if (needsWrapperImport && !hasWrapperImport)
           importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`
-        }
-
-        if (serverComponentReplacements.length > 0) {
+        if (serverComponentReplacements.length > 0)
           importsToAdd += `${serverComponentReplacements.join('\n')}\n`
-        }
-
-        if (importsToAdd) {
+        if (importsToAdd)
           modifiedCode = importsToAdd + modifiedCode
-        }
-
         if (!modifiedCode.includes('Suspense')) {
           const reactImportMatch = modifiedCode.match(
             /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/,
@@ -851,7 +843,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server-manifest.json',
+            manifestPath: 'server/server-manifest.json',
             alias: resolvedAlias,
           })
 
@@ -1126,7 +1118,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server-manifest.json',
+            manifestPath: 'server/server-manifest.json',
             alias: resolvedAlias,
           })
 
@@ -1135,9 +1127,8 @@ const ${componentName} = registerClientReference(
           const components
             = await builder.getTransformedComponentsForDevelopment()
 
-          if (components.length === 0) {
+          if (components.length === 0)
             return
-          }
 
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
@@ -1216,9 +1207,8 @@ const ${componentName} = registerClientReference(
 
             res.statusCode = response.status
             response.headers.forEach((value, key) => {
-              if (key.toLowerCase() !== 'content-encoding') {
+              if (key.toLowerCase() !== 'content-encoding')
                 res.setHeader(key, value)
-              }
             })
 
             if (response.body) {
@@ -1235,9 +1225,8 @@ const ${componentName} = registerClientReference(
               }
               catch (streamError) {
                 console.error('[Rari] Stream error:', streamError)
-                if (!res.headersSent) {
+                if (!res.headersSent)
                   res.statusCode = 500
-                }
                 res.end()
               }
             }
@@ -1260,9 +1249,8 @@ const ${componentName} = registerClientReference(
       })
 
       server.watcher.on('change', async (filePath) => {
-        if (/\.(?:tsx?|jsx?)$/.test(filePath)) {
+        if (/\.(?:tsx?|jsx?)$/.test(filePath))
           componentTypeCache.delete(filePath)
-        }
 
         if (/\.(?:tsx?|jsx?)$/.test(filePath) && filePath.includes(srcDir)) {
           if (isServerComponent(filePath)) {
@@ -1340,37 +1328,22 @@ const ${componentName} = registerClientReference(
     },
 
     resolveId(id) {
-      if (id === 'virtual:rsc-integration') {
+      if (id === 'virtual:rsc-integration')
         return id
-      }
-
-      if (id === 'virtual:rari-entry-client') {
+      if (id === 'virtual:rari-entry-client')
         return id
-      }
-
-      if (id === 'virtual:react-server-dom-rari-client') {
+      if (id === 'virtual:react-server-dom-rari-client')
         return id
-      }
-
-      if (id === 'virtual:app-router-provider') {
+      if (id === 'virtual:app-router-provider')
         return `${id}.tsx`
-      }
-
-      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx') {
+      if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
         return 'virtual:default-loading-indicator.tsx'
-      }
-
-      if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx') {
+      if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-      }
-
-      if (id === '../router/LoadingComponentRegistry' || id === '../router/LoadingComponentRegistry.ts') {
+      if (id === '../router/LoadingComponentRegistry' || id === '../router/LoadingComponentRegistry.ts')
         return 'virtual:loading-component-registry.ts'
-      }
-
-      if (id === 'react-server-dom-rari/server') {
+      if (id === 'react-server-dom-rari/server')
         return id
-      }
 
       if (process.env.NODE_ENV === 'production') {
         try {
@@ -1379,7 +1352,7 @@ const ${componentName} = registerClientReference(
             return { id, external: true }
           }
         }
-        catch { }
+        catch {}
       }
 
       return null
@@ -1401,9 +1374,8 @@ const ${componentName} = registerClientReference(
             const lines = code.split('\n')
             for (const line of lines) {
               const trimmed = line.trim()
-              if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+              if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
                 continue
-              }
               if (trimmed === '\'use client\'' || trimmed === '"use client"'
                 || trimmed === '\'use client\';' || trimmed === '"use client";') {
                 return true
@@ -1443,9 +1415,8 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         return await loadEntryClient(imports, registrations)
       }
 
-      if (id === 'react-server-dom-rari/server') {
+      if (id === 'react-server-dom-rari/server')
         return await loadReactServerDomShim()
-      }
 
       if (id === 'virtual:app-router-provider.tsx') {
         const possiblePaths = [
@@ -1455,9 +1426,8 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         ]
 
         for (const providerSourcePath of possiblePaths) {
-          if (fs.existsSync(providerSourcePath)) {
+          if (fs.existsSync(providerSourcePath))
             return fs.readFileSync(providerSourcePath, 'utf-8')
-          }
         }
 
         return 'export function AppRouterProvider({ children }) { return children; }'
@@ -1471,9 +1441,8 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         ]
 
         for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath)) {
+          if (fs.existsSync(sourcePath))
             return fs.readFileSync(sourcePath, 'utf-8')
-          }
         }
 
         return 'export function DefaultLoadingIndicator() { return null; }'
@@ -1487,9 +1456,8 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         ]
 
         for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath)) {
+          if (fs.existsSync(sourcePath))
             return fs.readFileSync(sourcePath, 'utf-8')
-          }
         }
 
         return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
@@ -1503,33 +1471,28 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         ]
 
         for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath)) {
+          if (fs.existsSync(sourcePath))
             return fs.readFileSync(sourcePath, 'utf-8')
-          }
         }
 
         return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
-      if (id === 'virtual:rsc-integration') {
+      if (id === 'virtual:rsc-integration')
         return await loadRscClientRuntime()
-      }
 
-      if (id === 'virtual:react-server-dom-rari-client') {
+      if (id === 'virtual:react-server-dom-rari-client')
         return await loadRuntimeFile('react-server-dom-rari-client.js')
-      }
     },
 
     async handleHotUpdate({ file, server }) {
       const isReactFile = /\.(?:tsx?|jsx?)$/.test(file)
 
-      if (!isReactFile) {
+      if (!isReactFile)
         return undefined
-      }
 
-      if (file.includes('/dist/') || file.includes('\\dist\\')) {
+      if (file.includes('/dist/') || file.includes('\\dist\\'))
         return []
-      }
 
       const componentType = hmrCoordinator?.detectComponentType(file) || 'unknown'
 
@@ -1575,16 +1538,14 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
       }
 
       if (componentType === 'client') {
-        if (hmrCoordinator) {
+        if (hmrCoordinator)
           await hmrCoordinator.handleClientComponentUpdate(file, server)
-        }
         return undefined
       }
 
       if (componentType === 'server') {
-        if (hmrCoordinator) {
+        if (hmrCoordinator)
           await hmrCoordinator.handleServerComponentUpdate(file, server)
-        }
         return []
       }
 
@@ -1593,9 +1554,18 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
   }
 
   const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
-  const loadingComponentPlugin = createLoadingComponentPlugin()
 
-  return [mainPlugin, serverBuildPlugin, loadingComponentPlugin]
+  const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
+
+  if (options.proxy !== false) {
+    plugins.push(rariProxy(options.proxy || {}))
+  }
+
+  if (options.router !== false) {
+    plugins.push(rariRouter(options.router || {}))
+  }
+
+  return plugins
 }
 
 export function defineRariConfig(
@@ -1606,3 +1576,7 @@ export function defineRariConfig(
     ...config,
   }
 }
+
+export { RariRequest, RariResponse } from '../proxy/index'
+export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/index'
+export { rariProxy } from '../proxy/vite-plugin'

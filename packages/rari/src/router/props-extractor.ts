@@ -18,7 +18,7 @@ export interface MetadataResult {
     description?: string
     url?: string
     siteName?: string
-    images?: Array<{
+    images?: Array<string | {
       url: string
       width?: number
       height?: number
@@ -48,11 +48,35 @@ export interface MetadataResult {
     }
   }
   icons?: {
-    icon?: string | string[]
-    shortcut?: string | string[]
-    apple?: string | string[]
+    icon?: Array<{
+      url: string
+      type?: string
+      sizes?: string
+      rel?: string
+    }> | string | string[]
+    apple?: Array<{
+      url: string
+      sizes?: string
+      rel?: string
+    }> | string | string[]
+    other?: Array<{
+      url: string
+      rel?: string
+      type?: string
+      sizes?: string
+      color?: string
+    }>
   }
   manifest?: string
+  themeColor?: string | Array<{
+    color: string
+    media?: string
+  }>
+  appleWebApp?: {
+    title?: string
+    statusBarStyle?: 'default' | 'black' | 'black-translucent'
+    capable?: boolean
+  }
   viewport?: {
     width?: string | number
     height?: string | number
@@ -91,51 +115,40 @@ export async function extractServerProps(
     if (typeof module.getData === 'function') {
       const result = await module.getData({ params, searchParams })
       if (result) {
-        if (result.notFound) {
+        if (result.notFound)
           notFound = true
-        }
-        if (result.redirect) {
+        if (result.redirect)
           redirect = result.redirect
-        }
-        if (result.revalidate !== undefined) {
+        if (result.revalidate !== undefined)
           revalidate = result.revalidate
-        }
-        if (result.props) {
+        if (result.props)
           props = { ...props, ...result.props }
-        }
       }
     }
 
     if (typeof module.getServerSideProps === 'function') {
       const result = await module.getServerSideProps({ params, searchParams })
       if (result) {
-        if (result.notFound) {
+        if (result.notFound)
           notFound = true
-        }
-        if (result.redirect) {
+        if (result.redirect)
           redirect = result.redirect.destination
-        }
-        if (result.props) {
+        if (result.props)
           props = { ...props, ...result.props }
-        }
       }
     }
 
     if (typeof module.getStaticProps === 'function') {
       const result = await module.getStaticProps({ params })
       if (result) {
-        if (result.notFound) {
+        if (result.notFound)
           notFound = true
-        }
-        if (result.redirect) {
+        if (result.redirect)
           redirect = result.redirect.destination
-        }
-        if (result.revalidate !== undefined) {
+        if (result.revalidate !== undefined)
           revalidate = result.revalidate
-        }
-        if (result.props) {
+        if (result.props)
           props = { ...props, ...result.props }
-        }
       }
     }
 
@@ -164,14 +177,12 @@ export async function extractMetadata(
 
     if (typeof module.generateMetadata === 'function') {
       const metadata = await module.generateMetadata({ params, searchParams })
-      if (metadata && typeof metadata === 'object') {
+      if (metadata && typeof metadata === 'object')
         return metadata
-      }
     }
 
-    if (module.metadata && typeof module.metadata === 'object') {
+    if (module.metadata && typeof module.metadata === 'object')
       return module.metadata
-    }
 
     return {}
   }
@@ -201,36 +212,26 @@ export function mergeMetadata(
     }
   }
 
-  if (childMetadata.description !== undefined) {
+  if (childMetadata.description !== undefined)
     merged.description = childMetadata.description
-  }
-  if (childMetadata.keywords !== undefined) {
+  if (childMetadata.keywords !== undefined)
     merged.keywords = childMetadata.keywords
-  }
-  if (childMetadata.openGraph !== undefined) {
+  if (childMetadata.openGraph !== undefined)
     merged.openGraph = { ...parentMetadata.openGraph, ...childMetadata.openGraph }
-  }
-  if (childMetadata.twitter !== undefined) {
+  if (childMetadata.twitter !== undefined)
     merged.twitter = { ...parentMetadata.twitter, ...childMetadata.twitter }
-  }
-  if (childMetadata.robots !== undefined) {
+  if (childMetadata.robots !== undefined)
     merged.robots = { ...parentMetadata.robots, ...childMetadata.robots }
-  }
-  if (childMetadata.icons !== undefined) {
+  if (childMetadata.icons !== undefined)
     merged.icons = { ...parentMetadata.icons, ...childMetadata.icons }
-  }
-  if (childMetadata.manifest !== undefined) {
+  if (childMetadata.manifest !== undefined)
     merged.manifest = childMetadata.manifest
-  }
-  if (childMetadata.viewport !== undefined) {
+  if (childMetadata.viewport !== undefined)
     merged.viewport = { ...parentMetadata.viewport, ...childMetadata.viewport }
-  }
-  if (childMetadata.verification !== undefined) {
+  if (childMetadata.verification !== undefined)
     merged.verification = { ...parentMetadata.verification, ...childMetadata.verification }
-  }
-  if (childMetadata.alternates !== undefined) {
+  if (childMetadata.alternates !== undefined)
     merged.alternates = { ...parentMetadata.alternates, ...childMetadata.alternates }
-  }
 
   return merged
 }
@@ -243,9 +244,8 @@ export async function extractStaticParams(
 
     if (typeof module.generateStaticParams === 'function') {
       const params = await module.generateStaticParams()
-      if (Array.isArray(params)) {
+      if (Array.isArray(params))
         return params
-      }
     }
 
     return []
@@ -289,9 +289,8 @@ export async function extractServerPropsWithCache(
   const cacheKey = `${componentPath}:${JSON.stringify(params)}:${JSON.stringify(searchParams)}`
   const cached = propsCache.get(cacheKey)
 
-  if (cached && Date.now() - cached.timestamp < cacheTime) {
+  if (cached && Date.now() - cached.timestamp < cacheTime)
     return cached.result
-  }
 
   const result = await extractServerProps(componentPath, params, searchParams)
 
@@ -309,9 +308,8 @@ export function clearPropsCache(): void {
 
 export function clearPropsCacheForComponent(componentPath: string): void {
   for (const key of propsCache.keys()) {
-    if (key.startsWith(componentPath)) {
+    if (key.startsWith(componentPath))
       propsCache.delete(key)
-    }
   }
 }
 

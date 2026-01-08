@@ -38,7 +38,14 @@ const NODE_PREFIX: &str = "node:";
 const PATH_MODULE: &str = "path";
 const PROCESS_MODULE: &str = "process";
 const FS_MODULE: &str = "fs";
+const FS_PROMISES_MODULE: &str = "fs/promises";
 const URL_MODULE: &str = "url";
+const STREAM_MODULE: &str = "stream";
+const BUFFER_MODULE: &str = "buffer";
+const OS_MODULE: &str = "os";
+const EVENTS_MODULE: &str = "events";
+const CHILD_PROCESS_MODULE: &str = "child_process";
+const MODULE_MODULE: &str = "module";
 const REACT_MODULE: &str = "react";
 const FUNCTIONS_MODULE: &str = "functions";
 
@@ -630,7 +637,14 @@ export default {{}};
                 PATH_MODULE => NODE_PATH_STUB.to_string(),
                 PROCESS_MODULE => NODE_PROCESS_STUB.to_string(),
                 FS_MODULE => NODE_FS_STUB.to_string(),
+                FS_PROMISES_MODULE => NODE_FS_PROMISES_STUB.to_string(),
                 URL_MODULE => NODE_URL_STUB.to_string(),
+                STREAM_MODULE => NODE_STREAM_STUB.to_string(),
+                BUFFER_MODULE => NODE_BUFFER_STUB.to_string(),
+                OS_MODULE => NODE_OS_STUB.to_string(),
+                EVENTS_MODULE => NODE_EVENTS_STUB.to_string(),
+                CHILD_PROCESS_MODULE => NODE_CHILD_PROCESS_STUB.to_string(),
+                MODULE_MODULE => NODE_MODULE_STUB.to_string(),
                 REACT_MODULE => REACT_STUB.to_string(),
                 _ => format!(
                     r#"

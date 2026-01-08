@@ -111,9 +111,8 @@ async function main() {
   console.warn(pc.cyan('Next steps:'))
   console.warn(pc.gray(`  cd ${options.name}`))
 
-  if (!options.installDeps) {
+  if (!options.installDeps)
     console.warn(pc.gray(`  ${options.packageManager} install`))
-  }
 
   console.warn(pc.gray(`  ${options.packageManager} run dev`))
   console.warn()
@@ -157,13 +156,10 @@ async function copyTemplate(
     'package.json',
     'vite.config.ts',
     'tsconfig.json',
-    'tsconfig.app.json',
-    'tsconfig.node.json',
     'index.html',
     'README.md',
     'railway.toml',
     'render.yaml',
-    'src/vite-env.d.ts',
     'src/app/globals.css',
     'src/app/layout.tsx',
     'src/app/page.tsx',
