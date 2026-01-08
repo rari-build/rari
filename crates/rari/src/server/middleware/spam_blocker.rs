@@ -35,12 +35,21 @@ impl SpamBlocker {
             Regex::new(r"(?i)/wp-").expect("Valid regex pattern"),
             Regex::new(r"(?i)/wordpress").expect("Valid regex pattern"),
             Regex::new(r"(?i)/xmlrpc").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/wp-content/themes/").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/wp-content/plugins/").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/theme/[^/]+/assets/").expect("Valid regex pattern"),
             Regex::new(r"(?i)/(laravel|artisan|_ignition|telescope|horizon)")
                 .expect("Valid regex pattern"),
             Regex::new(r"(?i)/(symfony|drupal|joomla|magento)").expect("Valid regex pattern"),
             Regex::new(r"(?i)/\.(env|git|svn|hg|bzr)").expect("Valid regex pattern"),
             Regex::new(r"(?i)/\.(vscode|idea|DS_Store)").expect("Valid regex pattern"),
             Regex::new(r"(?i)\.(swp|swo)$").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/\.vscode/").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/\.idea/").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/sftp-config\.json").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/\.ftpconfig").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/\.remote-sync\.json").expect("Valid regex pattern"),
+            Regex::new(r"(?i)/deployment\.xml").expect("Valid regex pattern"),
             Regex::new(r"(?i)/(phpmyadmin|adminer|pgadmin|mongo-express)")
                 .expect("Valid regex pattern"),
             Regex::new(r"(?i)/administrator").expect("Valid regex pattern"),
@@ -247,6 +256,47 @@ mod tests {
         assert!(!blocker.is_blocked("/api/users", "Mozilla/5.0", "127.0.0.1"));
         assert!(!blocker.is_blocked("/about", "Chrome/120.0", "127.0.0.1"));
         assert!(!blocker.is_blocked("/blog/post-123", "Safari/17.0", "127.0.0.1"));
+    }
+
+    #[test]
+    fn test_blocks_wordpress_themes() {
+        let blocker = SpamBlocker::new();
+        assert!(blocker.is_blocked("/wp-content/themes/twentytwenty/style.css", "", "127.0.0.1"));
+        assert!(blocker.is_blocked(
+            "/wp-content/themes/default/assets/js/main.js",
+            "",
+            "127.0.0.1"
+        ));
+        assert!(blocker.is_blocked("/theme/default/assets/components.js", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/theme/custom/assets/style.css", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/wp-content/plugins/akismet/akismet.php", "", "127.0.0.1"));
+    }
+
+    #[test]
+    fn test_blocks_vscode_config() {
+        let blocker = SpamBlocker::new();
+        assert!(blocker.is_blocked("/.vscode/settings.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.vscode/launch.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.vscode/sftp.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.idea/workspace.xml", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.idea/modules.xml", "", "127.0.0.1"));
+    }
+
+    #[test]
+    fn test_blocks_sftp_config() {
+        let blocker = SpamBlocker::new();
+        assert!(blocker.is_blocked("/sftp-config.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.ftpconfig", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/.remote-sync.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/deployment.xml", "", "127.0.0.1"));
+    }
+
+    #[test]
+    fn test_blocks_ide_files_in_subdirs() {
+        let blocker = SpamBlocker::new();
+        assert!(blocker.is_blocked("/project/.vscode/settings.json", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/app/.idea/workspace.xml", "", "127.0.0.1"));
+        assert!(blocker.is_blocked("/src/sftp-config.json", "", "127.0.0.1"));
     }
 
     #[test]
