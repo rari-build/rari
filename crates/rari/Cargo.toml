@@ -141,6 +141,16 @@ lru = "0.16.3"
 uuid = { version = "1.19.0", features = [ "v4" ] }
 thiserror = "2.0.17"
 
+# === Image Processing ===
+image = { version = "0.25.9", default-features = false, features = [
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "avif"
+] }
+webp = "0.3.1"
+
 # === System Integration ===
 hyper-util = { version = "0.1.19", features = [
   "tokio",

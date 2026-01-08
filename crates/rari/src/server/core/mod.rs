@@ -179,6 +179,15 @@ impl Server {
             CacheLoader::load_vite_cache_config(&state).await?;
         }
 
+        let mut config = config;
+        let config_path = "dist/server/image-config.json";
+
+        if let Ok(image_config_str) = std::fs::read_to_string(config_path)
+            && let Ok(image_config) = serde_json::from_str(&image_config_str)
+        {
+            config.images = image_config;
+        }
+
         if let Err(e) = crate::server::middleware::proxy_middleware::initialize_proxy(&state).await
         {
             error!("Failed to initialize proxy: {}", e);
@@ -214,6 +223,9 @@ impl Server {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
         let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
+        let image_optimizer =
+            Arc::new(crate::server::image::ImageOptimizer::new(config.images.clone()));
+
         let revalidation_router = Router::new()
             .route("/api/revalidate/path", post(revalidate_by_path))
             .route("/api/revalidate/tag", post(revalidate_by_tag))
@@ -239,6 +251,12 @@ impl Server {
             .route("/api/rsc/form-action", post(handle_form_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);
+
+        let image_router = Router::new()
+            .route("/_rari/image", get(crate::server::image::handle_image_request))
+            .with_state(image_optimizer);
+
+        router = router.merge(image_router);
 
         if config.is_development() {
             let small_body_limit = DefaultBodyLimit::max(100 * 1024);
