@@ -80,7 +80,6 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
           lang: language,
           theme,
         })
-
         if (!node.attributes)
           node.attributes = []
         node.attributes.push({

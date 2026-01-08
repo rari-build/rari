@@ -15,7 +15,6 @@ export async function getData({ params }: PageProps) {
   const slug = params?.slug
   if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/'))
     return { notFound: true }
-
   try {
     const filePath = join(process.cwd(), 'public', 'content', `${slug}.mdx`)
     await access(filePath)
@@ -38,7 +37,6 @@ export async function generateMetadata({ params }: PageProps) {
   try {
     const filePath = join(process.cwd(), 'public', 'content', `${slug}.mdx`)
     const content = await readFile(filePath, 'utf-8')
-
     const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
     const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
 

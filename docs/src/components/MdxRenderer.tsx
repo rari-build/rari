@@ -20,14 +20,12 @@ function findContentFile(filePath: string): string | null {
     resolve(cwd(), 'content', filePath),
     resolve(cwd(), 'dist', 'content', filePath),
   ]
-
   for (const path of searchPaths) {
     try {
       return readFileSync(path, 'utf-8')
     }
     catch {}
   }
-
   return null
 }
 
