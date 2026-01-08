@@ -1,8 +1,81 @@
-## [0.5.30] - 2026-01-03
+## [0.6.0] - 2026-01-08
+
+### 🚀 Features
+
+- *(docs)* Add package manager tabs and terminal blocks to MDX
+- *(docs)* Add footer component with social links and improve layout structure
+- *(docs)* Enhance homepage metadata and add GitHub stars to footer
+- *(docs)* Add custom CodeBlock component with syntax highlighting
+- *(docs)* Extract inline SVG icons into reusable components
+- *(docs)* Add Close icon and improve mobile sidebar navigation
+- *(docs)* Add Deno support to getting-started guide
+- *(docs)* Add Heart icon and enhance homepage quick start section
+- *(docs)* Add React, TypeScript, and Vite file icons to CodeBlock
+- *(proxy)* Add request/response proxy middleware and runtime execution
+- *(middleware)* Add spam blocker middleware for request filtering
+- *(robots)* Add robots.txt generation support
+- *(metadata)* Add comprehensive metadata support for icons, theme, and apple web app
+- *(vite)* Skip robots and sitemap files in server component scanning
+
+### 🚜 Refactor
+
+- *(router)* Remove loading component map generation
+
+### 🎨 Styling
+
+- *(docs)* Simplify error handling in MdxRenderer
+- *(docs)* Refactor footer copyright text and remove npm link
+- *(docs)* Remove unnecessary braces from conditional statements
+- *(router)* Remove unnecessary braces from conditional statements
+- *(rari)* Remove unnecessary braces from conditional statements
+- *(router)* Remove unnecessary braces from conditional statements
+- Remove unnecessary braces from conditional statements
+- Remove unnecessary braces from conditional statements
+- *(vite)* Remove unnecessary braces from conditional statements
+- *(rari)* Remove unnecessary braces from conditional statements
+- *(rari)* Remove unnecessary braces from conditional statements
+- *(router)* Remove unnecessary braces from conditional statements
+- *(vite)* Remove esbuildOptions deprecation warning suppression
+- *(rari)* Remove unnecessary blank lines from conditional statements
+- *(rari)* Remove unnecessary blank lines from vite plugin
+- *(docs)* Remove unnecessary blank lines from highlight-command
+- *(docs)* Remove unnecessary blank lines from CodeBlock
+- *(docs)* Update sponsor button heart icon color
+
+### ⚙️ Miscellaneous Tasks
+
+- *(knip)* Remove unused crates ignore entry from config
+- *(rari)* Remove useActionState hook and exports
+- *(rari)* Remove file extensions from mdx exports
+- *(rari)* Remove AppRouterProvider export from package.json
+- *(rari)* Remove fsevents from external dependencies
+- *(tsconfig)* Consolidate TypeScript configuration files
+- *(create-rari-app)* Consolidate TypeScript configuration files
+- *(vite)* Remove external dependencies configuration
+- *(build)* Reorganize server manifests into dist/server directory
+- *(eslint)* Remove markdown-specific ESLint rule overrides
+- *(release)* Binaries bump version to 0.6.0
+## [create-rari-app@0.2.15] - 2026-01-03
+
+### 💼 Other
+
+- Create-rari-app@0.2.15
+
+### ⚙️ Miscellaneous Tasks
+
+- *(knip)* Remove unused router and vite entries from ignore list
+- *(knip)* Remove unused ignore entries from config
+- *(create-rari-app)* Remove unused linting and react plugin dependencies
+- *(create-rari-app)* Simplify railway.toml configuration
+## [rari@0.5.30] - 2026-01-03
 
 ### 🚀 Features
 
 - *(rsc)* Add client-side RSC fetching and dev server proxying
+
+### 💼 Other
+
+- Rari@0.5.30
 
 ### 🚜 Refactor
 
