@@ -20,9 +20,8 @@ export async function getTodos() {
 export async function addTodo(formData: FormData) {
   const text = formData.get('text') as string
 
-  if (!text?.trim()) {
+  if (!text?.trim())
     return { success: false, error: 'Todo text is required', todos }
-  }
 
   todos.push({
     id: Date.now().toString(),
@@ -38,10 +37,8 @@ export async function toggleTodo(formData: FormData) {
   const id = formData.get('id') as string
   const todo = todos.find(t => t.id === id)
 
-  if (!todo) {
+  if (!todo)
     return { success: false, error: 'Todo not found', todos }
-  }
-
   todo.completed = !todo.completed
   return { success: true, todos }
 }
@@ -51,10 +48,8 @@ export async function deleteTodo(formData: FormData) {
   const initialLength = todos.length
   todos = todos.filter(t => t.id !== id)
 
-  if (todos.length === initialLength) {
+  if (todos.length === initialLength)
     return { success: false, error: 'Todo not found', todos }
-  }
-
   return { success: true, todos }
 }
 
@@ -66,9 +61,8 @@ export async function clearCompleted() {
 export async function createTodoAndRedirect(formData: FormData) {
   const text = formData.get('text') as string
 
-  if (!text?.trim()) {
+  if (!text?.trim())
     return { success: false, error: 'Todo text is required' }
-  }
 
   todos.push({
     id: Date.now().toString(),

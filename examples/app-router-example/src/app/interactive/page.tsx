@@ -1,7 +1,7 @@
 import Counter from '@/components/Counter'
 import TodoList from '@/components/TodoList'
 
-export default function InteractivePage() {
+export default async function InteractivePage() {
   return (
     <div className="grid gap-8">
       <div className="bg-white rounded-xl p-12 shadow-2xl">

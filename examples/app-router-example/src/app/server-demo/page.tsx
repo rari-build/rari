@@ -1,6 +1,6 @@
 import FetchExample from '@/components/FetchExample'
 
-export default function ServerDemoPage() {
+export default async function ServerDemoPage() {
   const serverTime = new Date().toISOString()
 
   return (

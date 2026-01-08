@@ -1,4 +1,4 @@
-export default function BlogPage() {
+export default async function BlogPage() {
   const posts = [
     { slug: 'hello-world', title: 'Hello World', date: '2025-10-15' },
     { slug: 'app-router-guide', title: 'App Router Guide', date: '2025-10-20' },

@@ -1,6 +1,6 @@
 import type { PageProps } from 'rari/client'
 
-export default function HomePage({ params, searchParams }: PageProps) {
+export default async function HomePage({ params, searchParams }: PageProps) {
   return (
     <div className="space-y-8">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">

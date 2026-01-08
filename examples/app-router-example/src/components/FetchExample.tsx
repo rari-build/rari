@@ -1,9 +1,8 @@
 async function FetchExample() {
   const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
 
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(`Failed to fetch: ${response.status}`)
-  }
 
   const post = await response.json()
   const currentTime = new Date().toLocaleTimeString()
