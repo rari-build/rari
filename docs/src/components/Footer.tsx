@@ -9,9 +9,8 @@ interface GitHubRepo {
 async function fetchGitHubStars(): Promise<number | null> {
   try {
     const response = await fetch('https://api.github.com/repos/rari-build/rari')
-    if (!response.ok) {
+    if (!response.ok)
       return null
-    }
     const data: GitHubRepo = await response.json()
     return data.stargazers_count
   }

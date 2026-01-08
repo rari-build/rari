@@ -43,17 +43,17 @@ export default function CodeBlock({ children, filename, className, language = 't
   }
 
   return (
-    <div className={`not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] ${className || ''}`}>
+    <div className={`not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full ${className || ''}`}>
       {filename && (
         <div className="flex items-center gap-2 bg-[#161b22] px-4 py-2.5 border-b border-[#30363d]">
-          <FileIcon className="w-4 h-4 text-gray-400" />
-          <span className="text-sm text-gray-400 font-medium">{filename}</span>
+          <FileIcon className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="text-sm text-gray-400 font-medium truncate">{filename}</span>
         </div>
       )}
 
       <button
         onClick={copyToClipboard}
-        className={`absolute ${filename ? 'top-14' : 'top-2'} right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-0 group-hover:opacity-100 z-10`}
+        className={`absolute ${filename ? 'top-14' : 'top-2'} right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10`}
         type="button"
         aria-label="Copy code to clipboard"
       >
@@ -69,14 +69,14 @@ export default function CodeBlock({ children, filename, className, language = 't
       {highlightedHtml
         ? (
             <div
-              className="[&>pre]:m-0 [&>pre]:px-4 [&>pre]:py-3 [&>pre]:bg-transparent [&>pre]:overflow-x-auto"
+              className="[&>pre]:m-0 [&>pre]:px-4 [&>pre]:py-3 [&>pre]:pr-12 [&>pre]:bg-transparent [&>pre]:overflow-x-auto [&>pre]:max-w-full"
               // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
               dangerouslySetInnerHTML={{ __html: highlightedHtml }}
             />
           )
         : (
-            <pre className="font-mono text-sm px-4 py-3 m-0 whitespace-pre-wrap overflow-wrap-break-word overflow-x-auto">
-              <code className={language ? `language-${language}` : ''}>{children.trim()}</code>
+            <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
+              <code className={`whitespace-pre wrap-break-word ${language ? `language-${language}` : ''}`}>{children.trim()}</code>
             </pre>
           )}
     </div>

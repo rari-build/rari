@@ -2,7 +2,7 @@ import PackageManagerTabs from '@/components/PackageManagerTabs'
 
 export default async function HomePage() {
   return (
-    <div className="space-y-8 lg:space-y-12">
+    <div className="space-y-8 lg:space-y-12 w-full overflow-x-hidden">
       <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">
         <div className="flex flex-col lg:flex-row items-center justify-center lg:space-x-4 space-y-4 lg:space-y-0 mb-6 lg:mb-8">
           <div className="w-16 h-16 lg:w-20 lg:h-20 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl flex items-center justify-center shadow-xl">
@@ -40,7 +40,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 lg:p-8 min-h-4 lg:min-h-56">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 lg:p-8 min-h-4 lg:min-h-56 w-full overflow-x-hidden">
         <h2 className="text-xl lg:text-2xl font-bold text-[#f0f6fc] mb-4 lg:mb-6 font-mono">
           Quick Start
         </h2>

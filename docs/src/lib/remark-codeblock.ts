@@ -30,10 +30,8 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
     visit(tree, (node: ASTNode) => {
       if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement')
         return
-
       if (node.name !== 'CodeBlock')
         return
-
       let code = ''
 
       function extractText(children: ASTNode[]): string {
@@ -69,7 +67,6 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
 
       if (node.children && node.children.length > 0)
         code = extractText(node.children)
-
       if (!code.trim())
         return
 
@@ -86,7 +83,6 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
 
         if (!node.attributes)
           node.attributes = []
-
         node.attributes.push({
           type: 'mdxJsxAttribute',
           name: 'highlightedHtml',

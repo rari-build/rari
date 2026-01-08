@@ -6,17 +6,15 @@ import MdxRenderer from '@/components/MdxRenderer'
 
 export default async function DocPage({ params }: PageProps) {
   const slug = params?.slug
-  if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {
+  if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/'))
     return <div>Invalid documentation path.</div>
-  }
   return <MdxRenderer filePath={`${slug}.mdx`} />
 }
 
 export async function getData({ params }: PageProps) {
   const slug = params?.slug
-  if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/')) {
+  if (typeof slug !== 'string' || slug.includes('..') || slug.includes('/'))
     return { notFound: true }
-  }
 
   try {
     const filePath = join(process.cwd(), 'public', 'content', `${slug}.mdx`)

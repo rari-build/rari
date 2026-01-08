@@ -11,10 +11,12 @@
 
 html {
   background-color: #0d1117;
+  overflow-x: hidden;
 }
 
 body {
   background-color: #0d1117;
+  overflow-x: hidden;
 }
 
 code {
@@ -33,24 +35,18 @@ code {
   font-size: 0.875rem;
   line-height: 1.5;
   margin: 1rem 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  max-width: 100%;
 }
 
 code {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
   font-weight: 500;
   letter-spacing: -0.01em;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
 }
 
 .prose {
   color: #c9d1d9;
   max-width: none;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: break-word;
 }
 
 @media (max-width: 768px) {
@@ -167,6 +163,9 @@ code {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .prose th, .prose td {
@@ -196,8 +195,7 @@ code {
   font-size: 0.875rem;
   line-height: 1.5;
   overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  max-width: 100%;
 }
 
 ::-webkit-scrollbar-track {
@@ -222,4 +220,13 @@ button:focus {
 ::selection {
   background: var(--rust-orange);
   color: white;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+img, video, iframe {
+  max-width: 100%;
+  height: auto;
 }

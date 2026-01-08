@@ -37,12 +37,10 @@ export default async function MdxRenderer({
 }: MdxRendererProps) {
   try {
     const content = findContentFile(filePath)
-    if (!content) {
+    if (!content)
       return <NotFoundPage />
-    }
 
     const highlighter = await getHighlighter()
-
     const remarkPlugins: any[] = []
 
     if (highlighter) {

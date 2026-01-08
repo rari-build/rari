@@ -11,10 +11,8 @@ interface NpmPackageInfo {
 async function fetchRariVersion(): Promise<string> {
   try {
     const response = await fetch('https://registry.npmjs.org/rari')
-    if (!response.ok) {
+    if (!response.ok)
       throw new Error(`Failed to fetch version: ${response.status}`)
-    }
-
     const data: NpmPackageInfo = await response.json()
     return data['dist-tags'].latest
   }
@@ -27,12 +25,12 @@ async function fetchRariVersion(): Promise<string> {
 export default async function RootLayout({ children, pathname }: LayoutProps) {
   const version = await fetchRariVersion()
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans">
+    <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans overflow-x-hidden">
       <div className="flex min-h-screen">
         <Sidebar version={version} pathname={pathname} />
-        <div className="flex-1 flex flex-col min-h-screen bg-[#0d1117]">
-          <main className="flex-1">
-            <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8">
+        <div className="flex-1 flex flex-col min-h-screen bg-[#0d1117] min-w-0">
+          <main className="flex-1 min-w-0">
+            <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
               {children}
             </div>
           </main>
