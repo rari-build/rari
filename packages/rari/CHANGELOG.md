@@ -1,3 +1,33 @@
+## [0.6.1] - 2026-01-08
+
+### 🚀 Features
+
+- *(server)* Implement separate rate limiting for revalidation endpoints
+- *(server)* Expand spam blocker patterns for WordPress and IDE configs
+
+### 💼 Other
+
+- V0.6.1
+
+### 🚜 Refactor
+
+- *(docs)* Extract clipboard logic into reusable hook
+- *(docs)* Remove unused syntax highlighter language imports
+
+### 🎨 Styling
+
+- *(docs)* Improve responsive layout and text overflow handling
+- *(docs)* Remove unnecessary blank lines for consistency
+## [create-rari-app@0.3.0] - 2026-01-08
+
+### 💼 Other
+
+- Create-rari-app@0.3.0
+## [rari@0.6.0] - 2026-01-08
+
+### 💼 Other
+
+- Rari@0.6.0
 ## [0.6.0] - 2026-01-08
 
 ### 🚀 Features
