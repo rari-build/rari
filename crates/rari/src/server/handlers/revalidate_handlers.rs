@@ -1,7 +1,6 @@
 use crate::server::ServerState;
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 pub struct RevalidatePathRequest {
@@ -31,7 +30,7 @@ pub async fn revalidate_by_path(
 ) -> Result<Json<RevalidateResponse>, StatusCode> {
     let expected_secret = std::env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
         tracing::error!("RARI_REVALIDATE_SECRET not configured. Set this environment variable to enable revalidation.");
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     })?;
 
     match request.secret {
@@ -69,7 +68,7 @@ pub async fn revalidate_by_tag(
 ) -> Result<Json<RevalidateResponse>, StatusCode> {
     let expected_secret = std::env::var("RARI_REVALIDATE_SECRET").map_err(|_| {
         tracing::error!("RARI_REVALIDATE_SECRET not configured. Set this environment variable to enable revalidation.");
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     })?;
 
     match request.secret {
@@ -88,22 +87,5 @@ pub async fn revalidate_by_tag(
     Ok(Json(RevalidateResponse {
         revalidated: true,
         message: Some(format!("Revalidated tag: {}", request.tag)),
-    }))
-}
-
-#[axum::debug_handler]
-pub async fn cache_stats(State(state): State<ServerState>) -> Json<Value> {
-    let metrics = state.response_cache.get_metrics();
-
-    #[allow(clippy::disallowed_methods)]
-    Json(serde_json::json!({
-        "total_entries": metrics.total_entries,
-        "memory_usage_bytes": metrics.memory_usage_bytes,
-        "hits": metrics.cache_hits,
-        "misses": metrics.cache_misses,
-        "hit_rate": metrics.hit_rate,
-        "enabled": state.response_cache.config.enabled,
-        "max_entries": state.response_cache.config.max_entries,
-        "default_ttl": state.response_cache.config.default_ttl,
     }))
 }

@@ -24,6 +24,26 @@ pub fn create_rate_limit_layer(
     Some(GovernorLayer::new(governor_conf))
 }
 
+pub fn create_strict_rate_limit_layer(
+    requests_per_minute: Option<u32>,
+) -> GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body> {
+    let rpm = requests_per_minute.unwrap_or(10);
+
+    let period_secs = if rpm > 0 { 60 / rpm } else { 60 };
+    let period_secs = period_secs.max(1);
+
+    let burst_size = (rpm / 2).max(1);
+
+    let governor_conf = GovernorConfigBuilder::default()
+        .period(std::time::Duration::from_secs(period_secs as u64))
+        .burst_size(burst_size)
+        .use_headers()
+        .finish()
+        .expect("Failed to create strict rate limit configuration");
+
+    GovernorLayer::new(governor_conf)
+}
+
 pub async fn rate_limit_logger(
     ConnectInfo(_): ConnectInfo<SocketAddr>,
     request: Request<Body>,
@@ -63,14 +83,32 @@ mod tests {
         assert!(config.enabled);
         assert_eq!(config.requests_per_second, 100);
         assert_eq!(config.burst_size, 200);
+        assert_eq!(config.revalidate_requests_per_minute, 10);
     }
 
     #[test]
     fn test_rate_limit_config_custom() {
-        let config =
-            RateLimitConfig { enabled: false, requests_per_second: 1000, burst_size: 2000 };
+        let config = RateLimitConfig {
+            enabled: false,
+            requests_per_second: 1000,
+            burst_size: 2000,
+            revalidate_requests_per_minute: 20,
+        };
         assert!(!config.enabled);
         assert_eq!(config.requests_per_second, 1000);
         assert_eq!(config.burst_size, 2000);
+        assert_eq!(config.revalidate_requests_per_minute, 20);
+    }
+
+    #[test]
+    fn test_strict_rate_limit_layer() {
+        let _layer = create_strict_rate_limit_layer(Some(10));
+        assert!(true);
+    }
+
+    #[test]
+    fn test_strict_rate_limit_layer_default() {
+        let _layer = create_strict_rate_limit_layer(None);
+        assert!(true);
     }
 }

@@ -11,13 +11,10 @@ use crate::server::handlers::hmr_handlers::{
     hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
     hmr_reload_component, reload_component,
 };
-use crate::server::handlers::revalidate_handlers::{
-    cache_stats, revalidate_by_path, revalidate_by_tag,
-};
+use crate::server::handlers::revalidate_handlers::{revalidate_by_path, revalidate_by_tag};
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
-    health_check, list_components, register_client_component, register_component,
-    rsc_render_handler, rsc_status_handler, server_status, stream_component,
+    register_client_component, register_component, rsc_render_handler, stream_component,
 };
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -25,7 +22,9 @@ use crate::server::handlers::static_handlers::{
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::loaders::component_loader::ComponentLoader;
 use crate::server::middleware::proxy_middleware::ProxyLayer;
-use crate::server::middleware::rate_limit::{create_rate_limit_layer, rate_limit_logger};
+use crate::server::middleware::rate_limit::{
+    create_rate_limit_layer, create_strict_rate_limit_layer, rate_limit_logger,
+};
 use crate::server::middleware::request_middleware::{
     cors_middleware, request_logger, security_headers_middleware,
 };
@@ -215,6 +214,14 @@ impl Server {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
         let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
+        let revalidation_router = Router::new()
+            .route("/api/revalidate/path", post(revalidate_by_path))
+            .route("/api/revalidate/tag", post(revalidate_by_tag))
+            .layer(small_body_limit)
+            .layer(create_strict_rate_limit_layer(Some(
+                config.rate_limit.revalidate_requests_per_minute,
+            )));
+
         let mut router = Router::new()
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
@@ -224,20 +231,14 @@ impl Server {
             .route("/api/rsc/hmr-register", post(hmr_register_component))
             .route("/api/rsc/hmr-register", axum::routing::options(cors_preflight_ok))
             .layer(large_body_limit)
-            .route("/api/rsc/components", get(list_components))
-            .route("/api/rsc/health", get(health_check))
-            .route("/api/rsc/status", get(server_status))
-            .route("/_rsc_status", get(rsc_status_handler))
             .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/csrf-token", get(get_csrf_token))
             .route("/api/rsc/route-info", post(get_route_info))
-            .route("/api/revalidate/path", post(revalidate_by_path))
-            .route("/api/revalidate/tag", post(revalidate_by_tag))
-            .route("/api/cache/stats", get(cache_stats))
             .layer(small_body_limit)
             .route("/api/rsc/action", post(handle_server_action))
             .route("/api/rsc/form-action", post(handle_form_action))
-            .layer(medium_body_limit);
+            .layer(medium_body_limit)
+            .merge(revalidation_router);
 
         if config.is_development() {
             let small_body_limit = DefaultBodyLimit::max(100 * 1024);

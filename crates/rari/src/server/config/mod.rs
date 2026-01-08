@@ -96,11 +96,22 @@ pub struct RateLimitConfig {
     pub enabled: bool,
     pub requests_per_second: u32,
     pub burst_size: u32,
+    #[serde(default = "default_revalidate_rpm")]
+    pub revalidate_requests_per_minute: u32,
+}
+
+fn default_revalidate_rpm() -> u32 {
+    10
 }
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
-        Self { enabled: true, requests_per_second: 100, burst_size: 200 }
+        Self {
+            enabled: true,
+            requests_per_second: 100,
+            burst_size: 200,
+            revalidate_requests_per_minute: 10,
+        }
     }
 }
 
@@ -469,6 +480,13 @@ impl Config {
             config.rate_limit.burst_size = rate_limit_burst
                 .parse()
                 .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_BURST".to_string()))?;
+        }
+
+        if let Ok(revalidate_rpm) = std::env::var("RARI_REVALIDATE_RATE_LIMIT_RPM") {
+            config.rate_limit.revalidate_requests_per_minute =
+                revalidate_rpm.parse().map_err(|_| {
+                    ConfigError::InvalidConfig("RARI_REVALIDATE_RATE_LIMIT_RPM".to_string())
+                })?;
         }
 
         Ok(config)
