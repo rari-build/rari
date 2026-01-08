@@ -1437,6 +1437,9 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
       scanDirectory(fullPath, builder)
     }
     else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+      if (/^(?:robots|sitemap)\.(?:tsx?|jsx?)$/.test(entry.name))
+        continue
+
       try {
         if (builder.isServerComponent(fullPath)) {
           builder.addServerComponent(fullPath)
