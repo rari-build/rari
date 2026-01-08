@@ -300,7 +300,6 @@ class AppRouteGenerator {
     const skipDirs = [
       'node_modules',
       '.git',
-      '.next',
       'dist',
       'build',
       '__tests__',
