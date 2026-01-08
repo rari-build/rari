@@ -74,13 +74,3 @@ pub struct ReloadComponentResponse {
     pub success: bool,
     pub message: String,
 }
-
-#[derive(Debug, Serialize)]
-pub struct StatusResponse {
-    pub status: String,
-    pub mode: String,
-    pub uptime_seconds: u64,
-    pub request_count: u64,
-    pub components_registered: usize,
-    pub memory_usage: Option<u64>,
-}

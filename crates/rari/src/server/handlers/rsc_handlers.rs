@@ -1,10 +1,7 @@
 use crate::server::utils::component_utils::{
     get_dist_path_for_component, wrap_server_action_module,
 };
-use crate::server::utils::http_utils::get_memory_usage;
-use crate::server::{
-    RegisterClientRequest, RegisterRequest, RenderRequest, ServerState, StatusResponse,
-};
+use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
     extract::{Path, Query, State},
@@ -181,42 +178,6 @@ pub async fn register_client_component(
 }
 
 #[axum::debug_handler]
-pub async fn list_components(State(state): State<ServerState>) -> Json<Value> {
-    let components = {
-        let renderer = state.renderer.lock().await;
-        renderer.list_components()
-    };
-
-    #[allow(clippy::disallowed_methods)]
-    Json(serde_json::json!({
-        "success": true,
-        "components": components
-    }))
-}
-
-#[axum::debug_handler]
-pub async fn health_check() -> Json<Value> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("System time should be after UNIX epoch")
-        .as_secs();
-
-    #[allow(clippy::disallowed_methods)]
-    Json(serde_json::json!({
-        "status": "healthy",
-        "timestamp": timestamp
-    }))
-}
-
-#[axum::debug_handler]
-pub async fn rsc_status_handler() -> Json<Value> {
-    #[allow(clippy::disallowed_methods)]
-    Json(serde_json::json!({
-        "status": "ready"
-    }))
-}
-
-#[axum::debug_handler]
 pub async fn rsc_render_handler(
     State(state): State<ServerState>,
     Path(component_id): Path<String>,
@@ -259,25 +220,6 @@ pub async fn rsc_render_handler(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
-}
-
-#[axum::debug_handler]
-pub async fn server_status(State(state): State<ServerState>) -> Json<StatusResponse> {
-    let uptime = state.start_time.elapsed().as_secs();
-    let request_count = state.request_count.load(std::sync::atomic::Ordering::Relaxed);
-    let components = {
-        let renderer = state.renderer.lock().await;
-        renderer.list_components()
-    };
-
-    Json(StatusResponse {
-        status: "running".to_string(),
-        mode: state.config.mode.to_string(),
-        uptime_seconds: uptime,
-        request_count,
-        components_registered: components.len(),
-        memory_usage: get_memory_usage(),
-    })
 }
 
 pub async fn reload_component_from_dist(
