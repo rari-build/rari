@@ -70,7 +70,7 @@ importers:
         version: 3.21.0
       rari:
         specifier: latest
-        version: 0.6.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 0.6.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: ^19.2.3
         version: 19.2.3
@@ -209,20 +209,20 @@ importers:
         version: 0.18.4(@typescript/native-preview@7.0.0-dev.20260107.1)(synckit@0.11.11)(typescript@5.9.3)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       rari-darwin-x64:
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       rari-linux-arm64:
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       rari-linux-x64:
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       rari-win32-x64:
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
 
   packages/rari-darwin-arm64: {}
 
@@ -375,10 +375,6 @@ packages:
 
   '@emnapi/wasi-threads@1.1.0':
     resolution: {integrity: sha512-WI0DdZ8xFSbgMjR1sFsKABJ/C5OnRrjT06JXbZKexJGrDuPTzZdDYfFlsgcCXCyf+suG5QU2e/y1Wo2V/OapLQ==}
-
-  '@es-joy/jsdoccomment@0.76.0':
-    resolution: {integrity: sha512-g+RihtzFgGTx2WYCuTHbdOXJeAlGnROws0TeALx9ow/ZmOROOZkVg5wp/B44n0WJgI4SQFP1eWM2iRPlU2Y14w==}
-    engines: {node: '>=20.11.0'}
 
   '@es-joy/jsdoccomment@0.78.0':
     resolution: {integrity: sha512-rQkU5u8hNAq2NVRzHnIUUvR6arbO0b6AOlvpTNS48CkiKSn/xtNfOzBK23JE4SiW89DgvU7GtxLVgV4Vn2HBAw==}
@@ -1519,8 +1515,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  baseline-browser-mapping@2.9.12:
-    resolution: {integrity: sha512-Mij6Lij93pTAIsSYy5cyBQ975Qh9uLEc5rwGTpomiZeXZL9yIS6uORJakb3ScHgfs0serMMfIbXzokPMuEiRyw==}
+  baseline-browser-mapping@2.9.13:
+    resolution: {integrity: sha512-WhtvB2NG2wjr04+h77sg3klAIwrgOqnjS49GGudnUPGFFgg7G17y7Qecqp+2Dr5kUDxNRBca0SK7cG8JwzkWDQ==}
     hasBin: true
 
   birecord@0.1.1:
@@ -1555,8 +1551,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001762:
-    resolution: {integrity: sha512-PxZwGNvH7Ak8WX5iXzoK1KPZttBXNPuaOvI2ZYU7NrlM+d9Ov+TUvlLOBNGzVXAntMSMMlJPd+jY6ovrVjSmUw==}
+  caniuse-lite@1.0.30001763:
+    resolution: {integrity: sha512-mh/dGtq56uN98LlNX9qdbKnzINhX0QzhiWBFEkFfsFO4QyCvL8YegrJAazCwXIeqkIob8BlZPGM3xdnY+sgmvQ==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -1794,8 +1790,8 @@ packages:
       typescript:
         optional: true
 
-  eslint-plugin-jsdoc@61.5.0:
-    resolution: {integrity: sha512-PR81eOGq4S7diVnV9xzFSBE4CDENRQGP0Lckkek8AdHtbj+6Bm0cItwlFnxsLFriJHspiE3mpu8U20eODyToIg==}
+  eslint-plugin-jsdoc@61.7.1:
+    resolution: {integrity: sha512-36DpldF95MlTX//n3/naULFVt8d1cV4jmSkx7ZKrE9ikkKHAgMLesuWp1SmwpVwAs5ndIM6abKd6PeOYZUgdWg==}
     engines: {node: '>=20.11.0'}
     peerDependencies:
       eslint: ^7.0.0 || ^8.0.0 || ^9.0.0
@@ -1941,6 +1937,10 @@ packages:
     resolution: {integrity: sha512-Uhdk5sfqcee/9H/rCOJikYz67o0a2Tw2hGRPOG2Y1R2dg7brRe1uG0yaNQDHu+TO/uQPF/5eCapvYSmHUjt7JQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  eslint-visitor-keys@5.0.0:
+    resolution: {integrity: sha512-A0XeIi7CXU7nPlfHS9loMYEKxUaONu/hTEzHTGba9Huu94Cq1hPivf+DE5erJozZOky0LfvXAyrV/tcswpLI0Q==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
   eslint@9.39.2:
     resolution: {integrity: sha512-LEyamqS7W5HB3ujJyvi0HQK/dtVINZvd5mAAp9eT5S/ujByGjiZLCzPcHVzuXbpJDJF/cxwHlfceVUDZ2lnSTw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -1954,6 +1954,10 @@ packages:
   espree@10.4.0:
     resolution: {integrity: sha512-j6PAQ2uUr79PZhBjP5C5fhl8e39FmRnOjsD5lGnWrFU8i2G776tBK7+nP8KuQUTTyAZUwfQqXAgrVH5MbH9CYQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  espree@11.0.0:
+    resolution: {integrity: sha512-+gMeWRrIh/NsG+3NaLeWHuyeyk70p2tbvZIWBYcqQ4/7Xvars6GYTZNhF1sIeLcc6Wb11He5ffz3hsHyXFrw5A==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
   espree@9.6.1:
     resolution: {integrity: sha512-oruZaFkjorTpF32kDSI5/75ViwGeZginGGy2NoOSg3Q9bnwlnmDm4HLnkl0RE3n+njDXR037aY1+x58Z/zFdwQ==}
@@ -2257,10 +2261,6 @@ packages:
   jsdoc-type-pratt-parser@4.8.0:
     resolution: {integrity: sha512-iZ8Bdb84lWRuGHamRXFyML07r21pcwBrLkHEuHgEY5UbCouBwv7ECknDRKzsQIXMiqpPymqtIf8TC/shYKB5rw==}
     engines: {node: '>=12.0.0'}
-
-  jsdoc-type-pratt-parser@6.10.0:
-    resolution: {integrity: sha512-+LexoTRyYui5iOhJGn13N9ZazL23nAHGkXsa1p/C8yeq79WRfLBag6ZZ0FQG2aRoc9yfo59JT9EYCQonOkHKkQ==}
-    engines: {node: '>=20.0.0'}
 
   jsdoc-type-pratt-parser@7.0.0:
     resolution: {integrity: sha512-c7YbokssPOSHmqTbSAmTtnVgAVa/7lumWNYqomgd5KOMyPrRve2anx6lonfOsXEQacqF9FKVUj7bLg4vRSvdYA==}
@@ -2709,43 +2709,43 @@ packages:
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
 
-  rari-darwin-arm64@0.6.0:
-    resolution: {integrity: sha512-wWLVlQGHSOdWNacCagEqbx+z1JB4XwoZOYDFRzFxIRLO4YqE34tv4kiHjCc7n+NldBZpAYa1OTjpN2oGHJ3QfA==}
+  rari-darwin-arm64@0.6.1:
+    resolution: {integrity: sha512-TeFZoDdr7rG4RpzA0Ef+wmGy2ZE1h6TxpukJHLUH4TInPjXzUGr9hZlOspWfSc0gF0p6xyLrQFGUvFQsKXmIWA==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  rari-darwin-x64@0.6.0:
-    resolution: {integrity: sha512-jpL64iZLIWFMuWIYQ4DwOsTtEN6UxCMjeZQs3RJMTv1xXabRkiINmqOJfPBbwv3Qmc3KCsigaPjRtExbrj9LbA==}
+  rari-darwin-x64@0.6.1:
+    resolution: {integrity: sha512-IL2BLyXcI/X57FJa6xEhCXQBN6QEZ4hU2p8f9eSWy+pUImMsltDQ32kJvEyIM0wIiUlJkmfzFz00Qu09uUHtdw==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.6.0:
-    resolution: {integrity: sha512-mybGZN3vy4Cy728mLdtx4yXiMcCd3r8DkYAbB0nLa+buviQBhIlGbSeGzuqWEqLICP3E+asVimlgdLfBfFig+A==}
+  rari-linux-arm64@0.6.1:
+    resolution: {integrity: sha512-1NutNVWR1zTkOnqtIo5INKxwR8+jlr8uIERA5R/gxWqwDalxlN4UVMTMyAX2NfTiFNKnGHgt7fpWUNc4Lc2vCQ==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  rari-linux-x64@0.6.0:
-    resolution: {integrity: sha512-tjGUXwA2nfOhHtvn4/jJ+j945JKOsWgB4C0BfQcTbSvhKE5Jc8x+AAoJoGz7L4gaYlc0bdnsQXbx9b3jnjaSuw==}
+  rari-linux-x64@0.6.1:
+    resolution: {integrity: sha512-f6lJkve6rI19dWm8zUd9mL4WYi5XbP4pAJSJbgSphjUKol4xEItdaFQGQQew87P/FYz6oJF4slKXYXbY1fLcQg==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  rari-win32-x64@0.6.0:
-    resolution: {integrity: sha512-NsiJhSCely1cplzvagVVZpRyMPgxWLRMCWdUlZsFYBn1Y7VuPhCuSlUIfmN2r9qqcU9lfgQ43F9rqRfDHFGVUw==}
+  rari-win32-x64@0.6.1:
+    resolution: {integrity: sha512-df0UiLAn13ayr4mhO/TL1I+nEivmOal5Mwe0mDb70WjfikNw/07ZPAYOvN3Wfrgeua73CfoOC/aM5CEQkiUkaQ==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  rari@0.6.0:
-    resolution: {integrity: sha512-YOY8YNH135O1zpmvkixG/pvb1s/3ovwlBr8cALgUc7/1ITAWwzQosrcnVAcMsMry5tHVR8PcJOhRCIKRQHsJXA==}
+  rari@0.6.1:
+    resolution: {integrity: sha512-E/KobFkESFcBqBPBH+i5bwEdgfyHhNeOeQpgim+9DgrGbeFUvvUDHwWPYBkzwJLlqtHFnxmndkNSrLDrEPTPyQ==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -3242,7 +3242,7 @@ snapshots:
       eslint-plugin-antfu: 3.1.3(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-command: 3.4.0(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-import-lite: 0.4.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
-      eslint-plugin-jsdoc: 61.5.0(eslint@9.39.2(jiti@2.6.1))
+      eslint-plugin-jsdoc: 61.7.1(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-jsonc: 2.21.0(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-n: 17.23.1(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       eslint-plugin-no-only-tests: 3.3.0
@@ -3404,14 +3404,6 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
-
-  '@es-joy/jsdoccomment@0.76.0':
-    dependencies:
-      '@types/estree': 1.0.8
-      '@typescript-eslint/types': 8.52.0
-      comment-parser: 1.4.1
-      esquery: 1.7.0
-      jsdoc-type-pratt-parser: 6.10.0
 
   '@es-joy/jsdoccomment@0.78.0':
     dependencies:
@@ -4351,7 +4343,7 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  baseline-browser-mapping@2.9.12: {}
+  baseline-browser-mapping@2.9.13: {}
 
   birecord@0.1.1: {}
 
@@ -4370,8 +4362,8 @@ snapshots:
 
   browserslist@4.28.1:
     dependencies:
-      baseline-browser-mapping: 2.9.12
-      caniuse-lite: 1.0.30001762
+      baseline-browser-mapping: 2.9.13
+      caniuse-lite: 1.0.30001763
       electron-to-chromium: 1.5.267
       node-releases: 2.0.27
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
@@ -4382,7 +4374,7 @@ snapshots:
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001762: {}
+  caniuse-lite@1.0.30001763: {}
 
   ccount@2.0.1: {}
 
@@ -4618,16 +4610,16 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  eslint-plugin-jsdoc@61.5.0(eslint@9.39.2(jiti@2.6.1)):
+  eslint-plugin-jsdoc@61.7.1(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
-      '@es-joy/jsdoccomment': 0.76.0
+      '@es-joy/jsdoccomment': 0.78.0
       '@es-joy/resolve.exports': 1.2.0
       are-docs-informative: 0.0.2
       comment-parser: 1.4.1
       debug: 4.4.3
       escape-string-regexp: 4.0.0
       eslint: 9.39.2(jiti@2.6.1)
-      espree: 10.4.0
+      espree: 11.0.0
       esquery: 1.7.0
       html-entities: 2.6.0
       object-deep-merge: 2.0.0
@@ -4891,6 +4883,8 @@ snapshots:
 
   eslint-visitor-keys@4.2.1: {}
 
+  eslint-visitor-keys@5.0.0: {}
+
   eslint@9.39.2(jiti@2.6.1):
     dependencies:
       '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.2(jiti@2.6.1))
@@ -4937,6 +4931,12 @@ snapshots:
       acorn: 8.15.0
       acorn-jsx: 5.3.2(acorn@8.15.0)
       eslint-visitor-keys: 4.2.1
+
+  espree@11.0.0:
+    dependencies:
+      acorn: 8.15.0
+      acorn-jsx: 5.3.2(acorn@8.15.0)
+      eslint-visitor-keys: 5.0.0
 
   espree@9.6.1:
     dependencies:
@@ -5249,8 +5249,6 @@ snapshots:
       argparse: 2.0.1
 
   jsdoc-type-pratt-parser@4.8.0: {}
-
-  jsdoc-type-pratt-parser@6.10.0: {}
 
   jsdoc-type-pratt-parser@7.0.0: {}
 
@@ -5951,22 +5949,22 @@ snapshots:
 
   quansync@1.0.0: {}
 
-  rari-darwin-arm64@0.6.0:
+  rari-darwin-arm64@0.6.1:
     optional: true
 
-  rari-darwin-x64@0.6.0:
+  rari-darwin-x64@0.6.1:
     optional: true
 
-  rari-linux-arm64@0.6.0:
+  rari-linux-arm64@0.6.1:
     optional: true
 
-  rari-linux-x64@0.6.0:
+  rari-linux-x64@0.6.1:
     optional: true
 
-  rari-win32-x64@0.6.0:
+  rari-win32-x64@0.6.1:
     optional: true
 
-  rari@0.6.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  rari@0.6.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       acorn: 8.15.0
       esbuild: 0.27.2
@@ -5974,11 +5972,11 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
     optionalDependencies:
-      rari-darwin-arm64: 0.6.0
-      rari-darwin-x64: 0.6.0
-      rari-linux-arm64: 0.6.0
-      rari-linux-x64: 0.6.0
-      rari-win32-x64: 0.6.0
+      rari-darwin-arm64: 0.6.1
+      rari-darwin-x64: 0.6.1
+      rari-linux-arm64: 0.6.1
+      rari-linux-x64: 0.6.1
+      rari-win32-x64: 0.6.1
 
   react-dom@19.2.1(react@19.2.1):
     dependencies:
