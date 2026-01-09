@@ -1210,6 +1210,8 @@ if (import.meta.hot) {
 
       if (!reloadResponse.ok)
         console.error('[HMR] Component reload failed:', reloadResponse.status)
+
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
     catch (error) {
       console.error('[HMR] Failed to reload component:', error)

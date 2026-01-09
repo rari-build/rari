@@ -222,6 +222,10 @@ impl LayoutRenderer {
                     {
                         let error_msg =
                             result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                        if error_msg.contains("Promise not found") {
+                            continue;
+                        }
+
                         tracing::error!(
                             "Failed to resolve lazy promise {}: {}",
                             lazy_promise.promise_id,
@@ -273,6 +277,11 @@ impl LayoutRenderer {
                     }
                 }
                 Err(e) => {
+                    let error_msg = e.to_string();
+                    if error_msg.contains("Promise not found") {
+                        continue;
+                    }
+
                     tracing::error!(
                         "Failed to resolve lazy promise {}: {}",
                         lazy_promise.promise_id,
@@ -800,6 +809,11 @@ impl LayoutRenderer {
                                     .get("error")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("Unknown error");
+
+                                if error_msg.contains("Promise not found") {
+                                    continue;
+                                }
+
                                 tracing::error!(
                                     "Failed to resolve lazy promise {}: {}",
                                     lazy_promise.promise_id,
@@ -879,15 +893,16 @@ impl LayoutRenderer {
                                 };
 
                                 if chunk_sender.send(chunk).await.is_err() {
-                                    tracing::error!(
-                                        "[Streaming] Failed to send chunk for lazy promise {}",
-                                        lazy_promise.promise_id
-                                    );
                                     break;
                                 }
                             }
                         }
                         Err(e) => {
+                            let error_msg = e.to_string();
+                            if error_msg.contains("Promise not found") {
+                                continue;
+                            }
+
                             tracing::error!(
                                 "Failed to resolve lazy promise {}: {}",
                                 lazy_promise.promise_id,

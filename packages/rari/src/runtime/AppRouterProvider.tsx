@@ -508,13 +508,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const rscWireFormat = await response.text()
 
         if (isStaleContent(rscWireFormat)) {
-          const error = new Error('Server returned stale content')
-          trackHMRFailure(
-            error,
-            'stale',
-            'RSC payload appears to be stale (identical to previous or old timestamp)',
-            window.location.pathname,
-          )
+          if (rscPayload)
+            return rscPayload
         }
 
         let parsedPayload

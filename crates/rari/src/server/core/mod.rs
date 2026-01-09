@@ -11,7 +11,7 @@ use crate::server::handlers::hmr_handlers::handle_hmr_action;
 use crate::server::handlers::revalidate_handlers::revalidate_by_path;
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
-    register_client_component, register_component, stream_component,
+    health_check, register_client_component, register_component, stream_component,
 };
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -252,6 +252,7 @@ impl Server {
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
+                .route("/api/rsc/health", get(health_check))
                 .route("/api/rsc/register", post(register_component))
                 .route("/api/rsc/register-client", post(register_client_component))
                 .layer(large_body_limit)

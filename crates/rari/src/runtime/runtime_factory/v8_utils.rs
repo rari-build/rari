@@ -36,6 +36,11 @@ pub async fn run_event_loop_with_error_handling(
         Ok(()) => Ok(()),
         Err(e) => {
             let error_str = e.to_string();
+
+            if error_str.contains("Illegal invocation") && error_str.contains("dispatchEvent") {
+                return Ok(());
+            }
+
             if error_str.contains("assertion") || error_str.contains("panicked") {
                 Err(RariError::js_runtime(format!(
                     "Critical runtime error in {context}: {error_str}"

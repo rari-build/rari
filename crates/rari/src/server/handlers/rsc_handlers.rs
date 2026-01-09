@@ -626,3 +626,12 @@ pub async fn immediate_component_reregistration(
         }
     }
 }
+
+#[axum::debug_handler]
+pub async fn health_check() -> Result<Json<Value>, StatusCode> {
+    #[allow(clippy::disallowed_methods)]
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "service": "rari-rsc-server"
+    })))
+}
