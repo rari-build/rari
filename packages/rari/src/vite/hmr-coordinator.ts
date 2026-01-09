@@ -218,13 +218,14 @@ export class HMRCoordinator {
   ): Promise<void> {
     try {
       const response = await fetch(
-        `${this.rustServerUrl}/api/rsc/reload-component`,
+        `${this.rustServerUrl}/api/rsc/hmr`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            action: 'reload-component',
             component_id: componentId,
             bundle_path: bundlePath,
           }),

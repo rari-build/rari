@@ -7,14 +7,11 @@ use crate::server::config::Config;
 use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app_handler::handle_app_route;
 use crate::server::handlers::csrf_handler::get_csrf_token;
-use crate::server::handlers::hmr_handlers::{
-    hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
-    hmr_reload_component, reload_component,
-};
-use crate::server::handlers::revalidate_handlers::{revalidate_by_path, revalidate_by_tag};
+use crate::server::handlers::hmr_handlers::handle_hmr_action;
+use crate::server::handlers::revalidate_handlers::revalidate_by_path;
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
-    register_client_component, register_component, rsc_render_handler, stream_component,
+    register_client_component, register_component, stream_component,
 };
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -227,8 +224,7 @@ impl Server {
             Arc::new(crate::server::image::ImageOptimizer::new(config.images.clone()));
 
         let revalidation_router = Router::new()
-            .route("/api/revalidate/path", post(revalidate_by_path))
-            .route("/api/revalidate/tag", post(revalidate_by_tag))
+            .route("/api/revalidate", post(revalidate_by_path))
             .layer(small_body_limit)
             .layer(create_strict_rate_limit_layer(Some(
                 config.rate_limit.revalidate_requests_per_minute,
@@ -240,10 +236,7 @@ impl Server {
             .layer(medium_body_limit)
             .route("/api/rsc/register", post(register_component))
             .route("/api/rsc/register-client", post(register_client_component))
-            .route("/api/rsc/hmr-register", post(hmr_register_component))
-            .route("/api/rsc/hmr-register", axum::routing::options(cors_preflight_ok))
             .layer(large_body_limit)
-            .route("/rsc/render/{component_id}", get(rsc_render_handler))
             .route("/api/rsc/csrf-token", get(get_csrf_token))
             .route("/api/rsc/route-info", post(get_route_info))
             .layer(small_body_limit)
@@ -259,23 +252,12 @@ impl Server {
         router = router.merge(image_router);
 
         if config.is_development() {
-            let small_body_limit = DefaultBodyLimit::max(100 * 1024);
-            let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
+            let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
             router = router
-                .route("/api/rsc/hmr-invalidate", post(hmr_invalidate_component))
-                .route("/api/rsc/hmr-invalidate", axum::routing::options(cors_preflight_ok))
-                .route("/api/rsc/hmr-reload", post(hmr_reload_component))
-                .route("/api/rsc/hmr-reload", axum::routing::options(cors_preflight_ok))
-                .route("/api/rsc/hmr-invalidate-api-route", post(hmr_invalidate_api_route))
-                .route(
-                    "/api/rsc/hmr-invalidate-api-route",
-                    axum::routing::options(cors_preflight_ok),
-                )
-                .layer(small_body_limit)
-                .route("/api/rsc/reload-component", post(reload_component))
-                .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
-                .layer(large_body_limit)
+                .route("/api/rsc/hmr", post(handle_hmr_action))
+                .route("/api/rsc/hmr", axum::routing::options(cors_preflight_ok))
+                .layer(medium_body_limit)
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));

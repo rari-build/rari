@@ -6,8 +6,6 @@ export interface RuntimeClient {
     componentId: string,
     componentCode: string,
   ) => Promise<void>
-  renderToRscFormat: (componentId: string, props?: string) => Promise<string>
-  renderToString: (componentId: string, props?: string) => Promise<string>
   renderToStreamCallbacks: (
     componentId: string,
     props?: string,
@@ -30,14 +28,6 @@ interface RenderRequest {
   component_id: string
   props?: any
   ssr?: boolean
-}
-
-interface RenderResponse {
-  success: boolean
-  data?: string
-  error?: string
-  component_id: string
-  render_time_ms: number
 }
 
 interface RegisterRequest {
@@ -191,69 +181,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
     catch (error) {
       throw new Error(`Failed to register component ${componentId}: ${error}`)
-    }
-  }
-
-  async renderToRscFormat(
-    componentId: string,
-    props?: string,
-  ): Promise<string> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
-
-    const request: RenderRequest = {
-      component_id: componentId,
-      props: props ? JSON.parse(props) : undefined,
-      ssr: false,
-    }
-
-    try {
-      const response = await this.request<RenderResponse>('/api/rsc/render', {
-        method: 'POST',
-        body: request,
-      })
-
-      if (!response.success)
-        throw new Error(response.error || 'Render failed')
-
-      return response.data || ''
-    }
-    catch (error) {
-      throw new Error(`Failed to render component ${componentId}: ${error}`)
-    }
-  }
-
-  async renderToString(componentId: string, props?: string): Promise<string> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
-
-    const request: RenderRequest = {
-      component_id: componentId,
-      props: props ? JSON.parse(props) : undefined,
-      ssr: true,
-    }
-
-    try {
-      const response = await this.request<RenderResponse>('/api/rsc/render', {
-        method: 'POST',
-        body: request,
-      })
-
-      if (!response.success)
-        throw new Error(response.error || 'Render failed')
-
-      return response.data || ''
-    }
-    catch (error) {
-      throw new Error(
-        `Failed to render component ${componentId} to string: ${error}`,
-      )
     }
   }
 

@@ -4,12 +4,11 @@ use crate::server::utils::component_utils::{
 use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
+    extract::State,
     http::StatusCode,
     response::{Json, Response},
 };
 use cow_utils::CowUtils;
-use rustc_hash::FxHashMap;
 use serde_json::Value;
 use tracing::error;
 
@@ -176,52 +175,6 @@ pub async fn register_client_component(
         "success": true,
         "component_id": request.component_id
     })))
-}
-
-#[axum::debug_handler]
-pub async fn rsc_render_handler(
-    State(state): State<ServerState>,
-    Path(component_id): Path<String>,
-    Query(params): Query<FxHashMap<String, String>>,
-) -> Result<Response, StatusCode> {
-    state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-    let props: Option<Value> = params.get("props").and_then(|p| {
-        if p.trim().is_empty() || p == "{}" { None } else { serde_json::from_str(p).ok() }
-    });
-
-    let props_str = props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
-
-    let result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.render_to_rsc_format(&component_id, props_str.as_deref()).await
-    };
-
-    match result {
-        Ok(rsc_data) => {
-            let cache_configs = state.component_cache_configs.read().await;
-            let mut response_builder = Response::builder().header("content-type", RSC_CONTENT_TYPE);
-
-            if let Some(component_cache_config) = cache_configs.get(&component_id) {
-                for (key, value) in component_cache_config {
-                    response_builder =
-                        response_builder.header(key.cow_to_lowercase().as_ref(), value);
-                }
-            } else {
-                let cache_control = state
-                    .config
-                    .get_cache_control_for_route(&format!("/rsc/render/{}", component_id));
-                response_builder = response_builder.header("cache-control", cache_control);
-            }
-
-            Ok(response_builder.body(Body::from(rsc_data)).expect("Valid RSC response"))
-        }
-        Err(e) => {
-            error!("Failed to render RSC component {}: {}", component_id, e);
-
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
 }
 
 pub async fn reload_component_from_dist(
