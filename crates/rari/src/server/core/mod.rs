@@ -218,7 +218,6 @@ impl Server {
     async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
-        let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
         let image_optimizer =
             Arc::new(crate::server::image::ImageOptimizer::new(config.images.clone()));
@@ -234,9 +233,6 @@ impl Server {
             .route("/api/rsc/stream", post(stream_component))
             .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
-            .route("/api/rsc/register", post(register_component))
-            .route("/api/rsc/register-client", post(register_client_component))
-            .layer(large_body_limit)
             .route("/api/rsc/csrf-token", get(get_csrf_token))
             .route("/api/rsc/route-info", post(get_route_info))
             .layer(small_body_limit)
@@ -253,8 +249,12 @@ impl Server {
 
         if config.is_development() {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
+            let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
+                .route("/api/rsc/register", post(register_component))
+                .route("/api/rsc/register-client", post(register_client_component))
+                .layer(large_body_limit)
                 .route("/api/rsc/hmr", post(handle_hmr_action))
                 .route("/api/rsc/hmr", axum::routing::options(cors_preflight_ok))
                 .layer(medium_body_limit)
