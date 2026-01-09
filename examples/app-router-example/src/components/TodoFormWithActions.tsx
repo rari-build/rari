@@ -1,44 +1,37 @@
 'use client'
 
-import { useId, useState, useTransition } from 'react'
+import type { Todo } from '@/actions/todo-actions'
+import { useActionState, useId, useState } from 'react'
 import { addTodo } from '@/actions/todo-actions'
 
 interface TodoFormProps {
   onSuccess?: () => void
 }
 
+type FormState = {
+  success: boolean
+  error?: string
+  todos?: Todo[]
+}
+
 export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
   const formId = useId()
-  const [isPending, startTransition] = useTransition()
-  const [state, setState] = useState<{
-    error?: string
-    success?: boolean
-    todos?: any[]
-  }>({})
+  const [resetKey, setResetKey] = useState(0)
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const form = e.currentTarget
-
-    startTransition(async () => {
-      try {
-        const formData = new FormData(form)
-        const result = await addTodo(formData)
-        setState(result)
-
-        if (result.success) {
-          form.reset()
+  const [state, formAction, isPending] = useActionState<FormState, FormData>(
+    async (_prevState, formData) => {
+      const result = await addTodo(formData)
+      if (result.success) {
+        queueMicrotask(() => {
+          setResetKey(prev => prev + 1)
           if (onSuccess)
             onSuccess()
-        }
-      }
-      catch (error) {
-        setState({
-          error: error instanceof Error ? error.message : 'Failed to add todo',
         })
       }
-    })
-  }
+      return result
+    },
+    { success: false, todos: [] },
+  )
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -49,7 +42,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
         </span>
       </div>
 
-      <form onSubmit={handleSubmit} key={formId} className="space-y-4">
+      <form action={formAction} key={resetKey} className="space-y-4">
         <div className="flex gap-3">
           <input
             type="text"
