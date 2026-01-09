@@ -709,11 +709,18 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       try {
         const wireFormat = streamingRowsRef.current.join('\n')
         const parsedPayload = parseRscWireFormat(wireFormat, false)
+        const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
 
-        startTransition(() => {
+        if (isInitialShell) {
           setRscPayload(parsedPayload)
           setRenderKey(prev => prev + 1)
-        })
+        }
+        else {
+          startTransition(() => {
+            setRscPayload(parsedPayload)
+            setRenderKey(prev => prev + 1)
+          })
+        }
       }
       catch (error) {
         console.error('[AppRouterProvider] Failed to parse streaming RSC row:', error)

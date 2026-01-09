@@ -19,8 +19,6 @@ pub async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
 ) -> Result<Response, StatusCode> {
-    use axum::http::HeaderMap;
-
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let cache_key = if let Some(props) = &props_str {
@@ -50,45 +48,18 @@ pub async fn stream_component(
     };
 
     match stream_result {
-        Ok(mut rsc_stream) => {
-            let mut buffer = Vec::new();
-            while let Some(chunk) = rsc_stream.next_chunk().await {
-                buffer.extend_from_slice(&chunk.data);
-            }
-
+        Ok(rsc_stream) => {
             let cache_control = state.config.get_cache_control_for_route("/api/rsc/stream");
 
-            let cache_policy =
-                crate::server::cache::response_cache::RouteCachePolicy::from_cache_control(
-                    cache_control,
-                    &format!("/api/rsc/stream/{}", request.component_id),
-                );
-
-            if cache_policy.enabled && state.response_cache.config.enabled {
-                let mut headers = HeaderMap::new();
-                if let Ok(cache_control_value) = cache_control.parse() {
-                    headers.insert("cache-control", cache_control_value);
-                }
-
-                let cached_response = crate::server::cache::response_cache::CachedResponse {
-                    body: bytes::Bytes::from(buffer.clone()),
-                    headers,
-                    metadata: crate::server::cache::response_cache::CacheMetadata {
-                        cached_at: std::time::Instant::now(),
-                        ttl: cache_policy.ttl,
-                        etag: None,
-                        tags: cache_policy.tags,
-                    },
-                };
-
-                state.response_cache.set(cache_key, cached_response).await;
-            }
+            use futures::StreamExt;
+            let byte_stream = rsc_stream
+                .map(|result| result.map(bytes::Bytes::from).map_err(std::io::Error::other));
 
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
                 .header("x-cache", "MISS")
-                .body(Body::from(buffer))
+                .body(Body::from_stream(byte_stream))
                 .expect("Valid RSC response"))
         }
         Err(e) => {
