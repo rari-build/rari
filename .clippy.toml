@@ -3,6 +3,12 @@ disallowed-types = [
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },
 ]
 disallowed-methods = [
+  { path = "str::to_ascii_lowercase", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_to_ascii_lowercase` instead." },
+  { path = "str::to_ascii_uppercase", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_to_ascii_uppercase` instead." },
+  { path = "str::to_lowercase", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_to_lowercase` instead." },
+  { path = "str::to_uppercase", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_to_uppercase` instead." },
+  { path = "str::replace", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_replace` instead." },
+  { path = "str::replacen", reason = "To avoid unecessary allocation, use `cow_utils::CowUtils::cow_replacen` instead." },
   { path = "std::result::Result::unwrap", reason = "Use proper error handling instead of unwrap(). Consider expect() with a descriptive message or proper error propagation." },
   { path = "std::option::Option::unwrap", reason = "Use proper error handling instead of unwrap(). Consider expect() with a descriptive message or pattern matching." },
 ]

@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
+use cow_utils::CowUtils;
 use tracing::error;
 
 pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
@@ -30,7 +31,8 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
                     CacheLoader::find_matching_cache_config(&page_configs, "/")
                 {
                     for (key, value) in page_cache_config {
-                        response_builder = response_builder.header(key.to_lowercase(), value);
+                        response_builder =
+                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
                     }
                 }
 
@@ -111,7 +113,8 @@ pub async fn static_or_spa_handler(
                     CacheLoader::find_matching_cache_config(&page_configs, route_path)
                 {
                     for (key, value) in page_cache_config {
-                        response_builder = response_builder.header(key.to_lowercase(), value);
+                        response_builder =
+                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
                     }
                 }
 

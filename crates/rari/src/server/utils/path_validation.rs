@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
 
 pub fn validate_safe_path(base: &Path, requested: &str) -> Result<PathBuf, RariError> {
@@ -65,14 +66,14 @@ pub fn normalize_component_path(file_path: &str) -> String {
 
         if let Some(src_idx) = components.iter().position(|c| c.as_os_str() == "src") {
             let after_src: PathBuf = components[src_idx..].iter().collect();
-            return after_src.to_string_lossy().replace('\\', "/");
+            return after_src.to_string_lossy().cow_replace('\\', "/").into_owned();
         } else if let Some(app_idx) = components.iter().position(|c| c.as_os_str() == "app") {
             let after_app: PathBuf = components[app_idx..].iter().collect();
-            return after_app.to_string_lossy().replace('\\', "/");
+            return after_app.to_string_lossy().cow_replace('\\', "/").into_owned();
         }
     }
 
-    file_path.replace('\\', "/")
+    file_path.cow_replace('\\', "/").into_owned()
 }
 
 pub fn validate_component_path(file_path: &str) -> Result<(), RariError> {

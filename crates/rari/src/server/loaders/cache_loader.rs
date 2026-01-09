@@ -1,5 +1,6 @@
 use crate::error::RariError;
 use crate::server::ServerState;
+use cow_utils::CowUtils;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use tracing::error;
@@ -78,7 +79,8 @@ impl CacheLoader {
             RariError::configuration("Page path is not within pages directory".to_string())
         })?;
 
-        let route = relative_path.with_extension("").to_string_lossy().replace('\\', "/");
+        let route =
+            relative_path.with_extension("").to_string_lossy().cow_replace('\\', "/").into_owned();
 
         let route = if route == "index" { "/".to_string() } else { format!("/{}", route) };
 
@@ -142,7 +144,7 @@ impl CacheLoader {
         }
 
         if pattern.contains('*') {
-            let regex_pattern = pattern.replace('*', ".*").replace('/', "\\/");
+            let regex_pattern = pattern.cow_replace('*', ".*").cow_replace('/', "\\/").into_owned();
             if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
                 return regex.is_match(path);
             }

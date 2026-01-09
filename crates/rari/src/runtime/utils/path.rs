@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
 
 pub struct DistPathResolver {
@@ -36,12 +37,12 @@ impl DistPathResolver {
         let path_str = relative_path.to_string_lossy();
 
         path_str
-            .replace('\\', "/") // Normalize Windows paths
+            .cow_replace('\\', "/")
             .trim_end_matches(".tsx")
             .trim_end_matches(".ts")
             .trim_end_matches(".jsx")
             .trim_end_matches(".js")
-            .replace(|c: char| !c.is_alphanumeric() && c != '/' && c != '-', "_")
+            .cow_replace(|c: char| !c.is_alphanumeric() && c != '/' && c != '-', "_")
             .trim_start_matches("src/")
             .to_string()
     }

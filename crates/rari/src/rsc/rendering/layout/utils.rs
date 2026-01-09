@@ -1,5 +1,6 @@
 use crate::error::RariError;
 use crate::server::routing::app_router::AppRouteMatch;
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
@@ -30,8 +31,12 @@ pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderCon
 }
 
 pub fn create_component_id(file_path: &str) -> String {
-    let normalized =
-        file_path.replace(".tsx", "").replace(".ts", "").replace("[", "_").replace("]", "_");
+    let normalized = file_path
+        .cow_replace(".tsx", "")
+        .cow_replace(".ts", "")
+        .cow_replace("[", "_")
+        .cow_replace("]", "_")
+        .into_owned();
     format!("app/{}", normalized)
 }
 

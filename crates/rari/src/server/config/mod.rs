@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -298,7 +299,7 @@ impl Config {
         let mut config = Self::default();
 
         if let Ok(mode_str) = std::env::var("RARI_MODE") {
-            config.mode = match mode_str.to_lowercase().as_str() {
+            config.mode = match mode_str.cow_to_lowercase().as_ref() {
                 "development" | "dev" => Mode::Development,
                 "production" | "prod" => Mode::Production,
                 _ => return Err(ConfigError::InvalidMode(mode_str)),
@@ -342,9 +343,9 @@ impl Config {
         }
 
         if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
-            config.rsc.hmr_reload_enabled = disable_hmr.to_lowercase() != "true"
+            config.rsc.hmr_reload_enabled = disable_hmr.cow_to_lowercase() != "true"
                 && disable_hmr != "1"
-                && disable_hmr.to_lowercase() != "yes";
+                && disable_hmr.cow_to_lowercase() != "yes";
         }
 
         if let Ok(max_retry_str) = std::env::var("RARI_HMR_MAX_RETRY_ATTEMPTS") {
@@ -360,9 +361,9 @@ impl Config {
         }
 
         if let Ok(parallel_str) = std::env::var("RARI_HMR_PARALLEL_RELOADS") {
-            config.rsc.hmr_parallel_reloads = parallel_str.to_lowercase() == "true"
+            config.rsc.hmr_parallel_reloads = parallel_str.cow_to_lowercase() == "true"
                 || parallel_str == "1"
-                || parallel_str.to_lowercase() == "yes";
+                || parallel_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(debounce_str) = std::env::var("RARI_HMR_DEBOUNCE_DELAY_MS") {
@@ -378,16 +379,16 @@ impl Config {
         }
 
         if let Ok(memory_monitoring_str) = std::env::var("RARI_HMR_ENABLE_MEMORY_MONITORING") {
-            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.to_lowercase()
+            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.cow_to_lowercase()
                 == "true"
                 || memory_monitoring_str == "1"
-                || memory_monitoring_str.to_lowercase() == "yes";
+                || memory_monitoring_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
-            config.rsc_html.enabled = rsc_html_enabled_str.to_lowercase() == "true"
+            config.rsc_html.enabled = rsc_html_enabled_str.cow_to_lowercase() == "true"
                 || rsc_html_enabled_str == "1"
-                || rsc_html_enabled_str.to_lowercase() == "yes";
+                || rsc_html_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_timeout_str) = std::env::var("RARI_RSC_HTML_TIMEOUT_MS") {
@@ -397,21 +398,22 @@ impl Config {
         }
 
         if let Ok(rsc_html_cache_template_str) = std::env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
-            config.rsc_html.cache_template = rsc_html_cache_template_str.to_lowercase() == "true"
+            config.rsc_html.cache_template = rsc_html_cache_template_str.cow_to_lowercase()
+                == "true"
                 || rsc_html_cache_template_str == "1"
-                || rsc_html_cache_template_str.to_lowercase() == "yes";
+                || rsc_html_cache_template_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_pretty_print_str) = std::env::var("RARI_RSC_HTML_PRETTY_PRINT") {
-            config.rsc_html.pretty_print = rsc_html_pretty_print_str.to_lowercase() == "true"
+            config.rsc_html.pretty_print = rsc_html_pretty_print_str.cow_to_lowercase() == "true"
                 || rsc_html_pretty_print_str == "1"
-                || rsc_html_pretty_print_str.to_lowercase() == "yes";
+                || rsc_html_pretty_print_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(loading_enabled_str) = std::env::var("RARI_LOADING_ENABLED") {
-            config.loading.enabled = loading_enabled_str.to_lowercase() == "true"
+            config.loading.enabled = loading_enabled_str.cow_to_lowercase() == "true"
                 || loading_enabled_str == "1"
-                || loading_enabled_str.to_lowercase() == "yes";
+                || loading_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(min_display_time_str) = std::env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
@@ -421,15 +423,16 @@ impl Config {
         }
 
         if let Ok(cache_loading_str) = std::env::var("RARI_LOADING_CACHE_COMPONENTS") {
-            config.loading.cache_loading_components = cache_loading_str.to_lowercase() == "true"
+            config.loading.cache_loading_components = cache_loading_str.cow_to_lowercase()
+                == "true"
                 || cache_loading_str == "1"
-                || cache_loading_str.to_lowercase() == "yes";
+                || cache_loading_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(streaming_enabled_str) = std::env::var("RARI_STREAMING_ENABLED") {
-            config.streaming.enabled = streaming_enabled_str.to_lowercase() == "true"
+            config.streaming.enabled = streaming_enabled_str.cow_to_lowercase() == "true"
                 || streaming_enabled_str == "1"
-                || streaming_enabled_str.to_lowercase() == "yes";
+                || streaming_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
@@ -467,9 +470,9 @@ impl Config {
         }
 
         if let Ok(rate_limit_enabled) = std::env::var("RARI_RATE_LIMIT_ENABLED") {
-            config.rate_limit.enabled = rate_limit_enabled.to_lowercase() == "true"
+            config.rate_limit.enabled = rate_limit_enabled.cow_to_lowercase() == "true"
                 || rate_limit_enabled == "1"
-                || rate_limit_enabled.to_lowercase() == "yes";
+                || rate_limit_enabled.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rate_limit_rps) = std::env::var("RARI_RATE_LIMIT_RPS") {
@@ -621,7 +624,7 @@ impl Config {
         }
 
         if pattern.contains('*') {
-            let regex_pattern = pattern.replace("*", ".*").replace("/", "\\/");
+            let regex_pattern = pattern.cow_replace("*", ".*").cow_replace("/", "\\/").into_owned();
             if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
                 return regex.is_match(path);
             }

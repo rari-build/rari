@@ -7,6 +7,7 @@ use crate::server::{
     HmrRegisterRequest, ReloadComponentRequest, ReloadComponentResponse, ServerState,
 };
 use axum::{extract::State, http::StatusCode, response::Json};
+use cow_utils::CowUtils;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::error;
@@ -248,7 +249,7 @@ pub async fn hmr_invalidate_component(
         renderer
             .runtime
             .execute_script(
-                format!("hmr_clear_cache_{}.js", payload.component_id.replace('/', "_")),
+                format!("hmr_clear_cache_{}.js", payload.component_id.cow_replace('/', "_")),
                 clear_script,
             )
             .await

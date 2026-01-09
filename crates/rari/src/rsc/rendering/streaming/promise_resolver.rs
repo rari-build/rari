@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
@@ -136,9 +137,10 @@ impl BackgroundPromiseResolver {
 
         tokio::spawn(async move {
             let resolution_script = PROMISE_RESOLUTION_SCRIPT
-                .replace("{promise_id}", &promise_id)
-                .replace("{boundary_id}", &boundary_id)
-                .replace("{component_path}", &promise.component_path);
+                .cow_replace("{promise_id}", &promise_id)
+                .cow_replace("{boundary_id}", &boundary_id)
+                .cow_replace("{component_path}", &promise.component_path)
+                .into_owned();
 
             let script_name = format!("<promise_resolution_{promise_id}>");
 

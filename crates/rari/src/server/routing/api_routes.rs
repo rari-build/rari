@@ -4,6 +4,7 @@ use crate::runtime::bridge::RequestBridge;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
+use cow_utils::CowUtils;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -261,10 +262,13 @@ impl ApiRouteHandler {
             .trim_end_matches(".tsx")
             .trim_end_matches(".js")
             .trim_end_matches(".jsx")
-            .replace('/', "_");
+            .cow_replace('/', "_");
 
-        let compiled =
-            CompiledHandler { module_id: module_id.clone(), code: code.clone(), last_modified };
+        let compiled = CompiledHandler {
+            module_id: module_id.into_owned(),
+            code: code.clone(),
+            last_modified,
+        };
 
         self.handler_cache.insert(file_path.clone(), compiled.clone());
 

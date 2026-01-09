@@ -18,6 +18,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::error;
@@ -94,14 +95,20 @@ async fn collect_page_metadata(
         .layouts
         .iter()
         .filter_map(|layout| {
-            let js_filename = layout.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+            let js_filename =
+                layout.file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
             let dist_filename = convert_route_path_to_dist_path(&js_filename);
             let file_path = base_path.join("app").join(&dist_filename);
             if file_path.exists() { Some(format!("file://{}", file_path.display())) } else { None }
         })
         .collect();
 
-    let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+    let js_filename = route_match
+        .route
+        .file_path
+        .cow_replace(".tsx", ".js")
+        .cow_replace(".ts", ".js")
+        .into_owned();
     let dist_filename = convert_route_path_to_dist_path(&js_filename);
     let page_file_path = base_path.join("app").join(&dist_filename);
     let page_path = if page_file_path.exists() {
@@ -1037,8 +1044,8 @@ pub async fn handle_app_route(
                 CacheLoader::find_matching_cache_config(&page_configs, path)
             {
                 for (key, value) in page_cache_config {
-                    let header_name = key.to_lowercase();
-                    response_builder = response_builder.header(&header_name, value);
+                    let header_name = key.cow_to_lowercase();
+                    response_builder = response_builder.header(header_name.as_ref(), value);
 
                     if header_name == "cache-control" {
                         cache_control_value = Some(value.clone());

@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     response::{Json, Response},
 };
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
 use tracing::error;
@@ -134,7 +135,7 @@ pub async fn register_component(
                 if let Err(e) = renderer
                     .runtime
                     .execute_script(
-                        format!("mark_client_{}.js", request.component_id.replace('/', "_")),
+                        format!("mark_client_{}.js", request.component_id.cow_replace('/', "_")),
                         mark_script,
                     )
                     .await
@@ -203,7 +204,8 @@ pub async fn rsc_render_handler(
 
             if let Some(component_cache_config) = cache_configs.get(&component_id) {
                 for (key, value) in component_cache_config {
-                    response_builder = response_builder.header(key.to_lowercase(), value);
+                    response_builder =
+                        response_builder.header(key.cow_to_lowercase().as_ref(), value);
                 }
             } else {
                 let cache_control = state
@@ -407,7 +409,7 @@ pub async fn reload_component_from_dist(
         renderer
             .runtime
             .execute_script(
-                format!("clear_old_{}.js", component_id.replace('/', "_")),
+                format!("clear_old_{}.js", component_id.cow_replace('/', "_")),
                 clear_script,
             )
             .await
@@ -466,7 +468,7 @@ pub async fn reload_component_from_dist(
         renderer
             .runtime
             .execute_script(
-                format!("register_esm_{}.js", component_id.replace('/', "_")),
+                format!("register_esm_{}.js", component_id.cow_replace('/', "_")),
                 registration_script,
             )
             .await
@@ -504,7 +506,7 @@ pub async fn reload_component_from_dist(
         let execution_result = renderer
             .runtime
             .execute_script(
-                format!("hmr_reload_{}.js", component_id.replace('/', "_")),
+                format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
                 wrapped_code.clone(),
             )
             .await;
@@ -551,7 +553,7 @@ pub async fn reload_component_from_dist(
     let result_json = match renderer
         .runtime
         .execute_script(
-            format!("verify_{}.js", component_id.replace('/', "_")),
+            format!("verify_{}.js", component_id.cow_replace('/', "_")),
             verification_script,
         )
         .await

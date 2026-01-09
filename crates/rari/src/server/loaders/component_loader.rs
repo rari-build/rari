@@ -4,6 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
+use cow_utils::CowUtils;
 use tracing::error;
 
 const DIST_DIR: &str = "dist";
@@ -121,7 +122,10 @@ impl ComponentLoader {
                                 match renderer
                                     .runtime
                                     .execute_script(
-                                        format!("register_{}.js", component_id.replace('/', "_")),
+                                        format!(
+                                            "register_{}.js",
+                                            component_id.cow_replace('/', "_")
+                                        ),
                                         registration_script,
                                     )
                                     .await
@@ -212,11 +216,12 @@ impl ComponentLoader {
                         let action_id = relative_path
                             .to_str()
                             .unwrap_or("unknown")
-                            .replace(".ts", "")
-                            .replace(".tsx", "")
-                            .replace(".js", "")
-                            .replace(".jsx", "")
-                            .replace('\\', "/");
+                            .cow_replace(".ts", "")
+                            .cow_replace(".tsx", "")
+                            .cow_replace(".js", "")
+                            .cow_replace(".jsx", "")
+                            .cow_replace('\\', "/")
+                            .into_owned();
 
                         let dist_path = std::path::Path::new("dist")
                             .join("server")
@@ -284,7 +289,7 @@ impl ComponentLoader {
                                                         .execute_script(
                                                             format!(
                                                                 "register_action_{}.js",
-                                                                action_id.replace('/', "_")
+                                                                action_id.cow_replace('/', "_")
                                                             ),
                                                             registration_script,
                                                         )
@@ -312,7 +317,7 @@ impl ComponentLoader {
                                             .execute_script(
                                                 format!(
                                                     "load_action_{}.js",
-                                                    action_id.replace('/', "_")
+                                                    action_id.cow_replace('/', "_")
                                                 ),
                                                 wrapped_code,
                                             )
@@ -387,8 +392,9 @@ impl ComponentLoader {
                         let relative_str = relative_path
                             .to_str()
                             .unwrap_or("unknown")
-                            .replace(".js", "")
-                            .replace('\\', "/");
+                            .cow_replace(".js", "")
+                            .cow_replace('\\', "/")
+                            .into_owned();
 
                         let module_specifier = format!(
                             "file://{}",
@@ -441,7 +447,7 @@ impl ComponentLoader {
                                             .execute_script(
                                                 format!(
                                                     "register_{}.js",
-                                                    relative_str.replace('/', "_")
+                                                    relative_str.cow_replace('/', "_")
                                                 ),
                                                 registration_script,
                                             )
@@ -467,7 +473,7 @@ impl ComponentLoader {
                             match renderer
                                 .runtime
                                 .execute_script(
-                                    format!("load_{}.js", relative_str.replace('/', "_")),
+                                    format!("load_{}.js", relative_str.cow_replace('/', "_")),
                                     wrapped_code,
                                 )
                                 .await
@@ -488,8 +494,9 @@ impl ComponentLoader {
                     let relative_str = relative_path
                         .to_str()
                         .unwrap_or("unknown")
-                        .replace(".js", "")
-                        .replace('\\', "/");
+                        .cow_replace(".js", "")
+                        .cow_replace('\\', "/")
+                        .into_owned();
 
                     let component_id = relative_str.clone();
 
@@ -571,7 +578,7 @@ impl ComponentLoader {
                                         .execute_script(
                                             format!(
                                                 "register_{}.js",
-                                                component_id.replace('/', "_")
+                                                component_id.cow_replace('/', "_")
                                             ),
                                             registration_script,
                                         )
@@ -601,7 +608,7 @@ impl ComponentLoader {
                                             .execute_script(
                                                 format!(
                                                     "mark_client_{}.js",
-                                                    component_id.replace('/', "_")
+                                                    component_id.cow_replace('/', "_")
                                                 ),
                                                 mark_client_script,
                                             )
@@ -626,7 +633,7 @@ impl ComponentLoader {
                         match renderer
                             .runtime
                             .execute_script(
-                                format!("load_{}.js", component_id.replace('/', "_")),
+                                format!("load_{}.js", component_id.cow_replace('/', "_")),
                                 transformed_module_code,
                             )
                             .await
@@ -650,7 +657,7 @@ impl ComponentLoader {
                                         .execute_script(
                                             format!(
                                                 "mark_client_{}.js",
-                                                component_id.replace('/', "_")
+                                                component_id.cow_replace('/', "_")
                                             ),
                                             mark_client_script,
                                         )

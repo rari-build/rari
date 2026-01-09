@@ -132,6 +132,7 @@ tungstenite = "0.28.0"
 
 # === Utilities ===
 bytes = "1.11.0"
+cow-utils = "0.1.3"
 dashmap = "6.1.0"
 parking_lot = "0.12.5"
 smallvec = "1.15.1"

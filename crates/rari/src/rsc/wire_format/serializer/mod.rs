@@ -2,6 +2,7 @@ use crate::error::RariError;
 use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
 use crate::rsc::wire_format::escape::escape_rsc_value;
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use serde_json::Value;
@@ -260,7 +261,8 @@ impl RscSerializer {
             for i in 1..self.output_lines.len() {
                 for search in &searches {
                     if self.output_lines[i].contains(search) {
-                        self.output_lines[i] = self.output_lines[i].replace(search, &replace);
+                        self.output_lines[i] =
+                            self.output_lines[i].cow_replace(search, &replace).into_owned();
                     }
                 }
             }

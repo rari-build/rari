@@ -4,6 +4,7 @@ use crate::rsc::rendering::streaming::RscStream;
 use crate::server::config::Config;
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::types::request::RenderMode;
+use cow_utils::CowUtils;
 use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
@@ -71,7 +72,12 @@ impl LayoutRenderer {
             None => return Ok(false),
         };
 
-        let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+        let js_filename = route_match
+            .route
+            .file_path
+            .cow_replace(".tsx", ".js")
+            .cow_replace(".ts", ".js")
+            .into_owned();
         let dist_filename = convert_route_path_to_dist_path(&js_filename);
         let page_file_path = base_path.join("app").join(&dist_filename);
 
@@ -1063,16 +1069,18 @@ impl LayoutRenderer {
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
 
             JS_PAGE_RENDER_WITH_LOADING
-                .replace("{page_component_id}", &page_component_id)
-                .replace("{loading_id}", loading_id)
-                .replace("{page_props_json}", &page_props_json)
-                .replace("{use_suspense}", if use_suspense { "true" } else { "false" })
-                .replace("{route_file_path}", &route_match.route.file_path)
-                .replace("{loading_file_path}", loading_file_path)
+                .cow_replace("{page_component_id}", &page_component_id)
+                .cow_replace("{loading_id}", loading_id)
+                .cow_replace("{page_props_json}", &page_props_json)
+                .cow_replace("{use_suspense}", if use_suspense { "true" } else { "false" })
+                .cow_replace("{route_file_path}", &route_match.route.file_path)
+                .cow_replace("{loading_file_path}", loading_file_path)
+                .into_owned()
         } else {
             JS_PAGE_RENDER_SIMPLE
-                .replace("{page_component_id}", &page_component_id)
-                .replace("{page_props_json}", &page_props_json)
+                .cow_replace("{page_component_id}", &page_component_id)
+                .cow_replace("{page_props_json}", &page_props_json)
+                .into_owned()
         };
 
         let mut script = format!(

@@ -1,5 +1,6 @@
 use crate::server::config::Config;
 use axum::http::StatusCode;
+use cow_utils::CowUtils;
 use tracing::error;
 
 pub async fn extract_asset_links_from_index_html() -> Option<String> {
@@ -179,7 +180,7 @@ fn extract_asset_signature(asset_tag: &str) -> String {
 }
 
 pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
-    let escaped_payload = rsc_payload.replace("</script>", "<\\/script>");
+    let escaped_payload = rsc_payload.cow_replace("</script>", "<\\/script>");
 
     let script_tag = format!(
         r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>"#,
@@ -240,16 +241,20 @@ async fn inject_content_into_template(
 
                 result
             } else {
-                template.replace(
+                template
+                    .cow_replace(
+                        r#"<div id="root"></div>"#,
+                        &format!(r#"<div id="root">{}</div>"#, content),
+                    )
+                    .into_owned()
+            }
+        } else {
+            template
+                .cow_replace(
                     r#"<div id="root"></div>"#,
                     &format!(r#"<div id="root">{}</div>"#, content),
                 )
-            }
-        } else {
-            template.replace(
-                r#"<div id="root"></div>"#,
-                &format!(r#"<div id="root">{}</div>"#, content),
-            )
+                .into_owned()
         }
     } else if let Some(body_end) = template.rfind("</body>") {
         let mut result = template.clone();

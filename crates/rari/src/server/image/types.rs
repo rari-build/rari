@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -15,7 +16,7 @@ impl<'de> Deserialize<'de> for ImageFormat {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        match s.to_lowercase().as_str() {
+        match s.cow_to_lowercase().as_ref() {
             "avif" => Ok(ImageFormat::Avif),
             "webp" => Ok(ImageFormat::WebP),
             "jpeg" | "jpg" => Ok(ImageFormat::Jpeg),
