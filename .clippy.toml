@@ -1,3 +1,4 @@
+avoid-breaking-exported-api = false
 disallowed-types = [
   { path = "std::collections::HashMap", reason = "Use `rustc_hash::FxHashMap` instead, which is typically faster." },
   { path = "std::collections::HashSet", reason = "Use `rustc_hash::FxHashSet` instead, which is typically faster." },

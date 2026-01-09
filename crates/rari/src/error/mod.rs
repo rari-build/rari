@@ -6,34 +6,24 @@ use thiserror::Error as ThisError;
 pub enum Error {
     #[error("{0} has no entrypoint. Register one, or add a default to the runtime")]
     MissingEntrypoint(String),
-
     #[error("{0} could not be found in global, or module exports")]
     ValueNotFound(String),
-
     #[error("{0} is not a function")]
     ValueNotCallable(String),
-
     #[error("{0} could not be encoded as a v8 value")]
     V8Encoding(String),
-
     #[error("value could not be deserialized: {0}")]
     JsonDecode(String),
-
     #[error("{0}")]
     ModuleNotFound(String),
-
     #[error("This worker has been destroyed")]
     WorkerHasStopped,
-
     #[error("{0}")]
     Runtime(String),
-
     #[error("{0}")]
-    JsError(Box<deno_core::error::JsError>),
-
+    Js(Box<deno_core::error::JsError>),
     #[error("Module timed out: {0}")]
     Timeout(String),
-
     #[error("Heap exhausted")]
     HeapExhausted,
 }
@@ -46,7 +36,7 @@ impl From<deno_core::error::CoreError> for Error {
 
 impl From<deno_core::error::JsError> for Error {
     fn from(e: deno_core::error::JsError) -> Self {
-        Error::JsError(Box::new(e))
+        Error::Js(Box::new(e))
     }
 }
 
