@@ -1628,9 +1628,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       }
 
       if (componentType === 'client') {
-        if (hmrCoordinator)
-          await hmrCoordinator.handleClientComponentUpdate(file, server)
-        return undefined
+        return
       }
 
       if (componentType === 'server') {
