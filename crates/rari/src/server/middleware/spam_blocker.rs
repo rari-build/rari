@@ -4,10 +4,11 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use parking_lot::RwLock;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SUSPICIOUS_REQUEST_THRESHOLD: u32 = 20;
@@ -82,7 +83,7 @@ impl SpamBlocker {
     }
 
     pub fn is_blocked(&self, path: &str, user_agent: &str, ip: &str) -> bool {
-        if self.blocked_ips.read().expect("Spam blocker: RwLock poisoned").contains(ip) {
+        if self.blocked_ips.read().contains(ip) {
             return true;
         }
 
@@ -105,7 +106,7 @@ impl SpamBlocker {
             .expect("System time before UNIX epoch")
             .as_secs();
 
-        let mut tracker = self.ip_tracker.write().expect("Spam blocker: RwLock poisoned");
+        let mut tracker = self.ip_tracker.write();
 
         let ip_data = tracker.entry(ip.to_string()).or_insert(IpData { count: 0, first_seen: now });
 
@@ -123,12 +124,12 @@ impl SpamBlocker {
     }
 
     pub fn block_ip(&self, ip: &str) {
-        self.blocked_ips.write().expect("Spam blocker: RwLock poisoned").insert(ip.to_string());
+        self.blocked_ips.write().insert(ip.to_string());
     }
 
     #[allow(dead_code)]
     pub fn unblock_ip(&self, ip: &str) {
-        self.blocked_ips.write().expect("Spam blocker: RwLock poisoned").remove(ip);
+        self.blocked_ips.write().remove(ip);
     }
 
     pub fn cleanup_old_records(&self) {
@@ -137,7 +138,7 @@ impl SpamBlocker {
             .expect("System time before UNIX epoch")
             .as_secs();
 
-        let mut tracker = self.ip_tracker.write().expect("Spam blocker: RwLock poisoned");
+        let mut tracker = self.ip_tracker.write();
         tracker.retain(|_, data| now - data.first_seen <= TIME_WINDOW_SECS);
     }
 

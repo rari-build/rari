@@ -1,7 +1,7 @@
+use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use std::sync::Mutex;
 use std::time::Instant;
 
 static CIRCULAR_DETECTION: std::sync::OnceLock<Mutex<FxHashSet<String>>> =
@@ -178,8 +178,7 @@ impl ComponentRegistry {
         let has_circular_dependency = {
             let circular_detection =
                 CIRCULAR_DETECTION.get_or_init(|| Mutex::new(FxHashSet::default()));
-            let mut circular_set =
-                circular_detection.lock().expect("Circular detection mutex should not be poisoned");
+            let mut circular_set = circular_detection.lock();
             if circular_set.contains(component_id) {
                 true
             } else {
@@ -206,8 +205,7 @@ impl ComponentRegistry {
         {
             let circular_detection =
                 CIRCULAR_DETECTION.get_or_init(|| Mutex::new(FxHashSet::default()));
-            let mut circular_set =
-                circular_detection.lock().expect("Circular detection mutex should not be poisoned");
+            let mut circular_set = circular_detection.lock();
             circular_set.remove(component_id);
         }
 
