@@ -1,14 +1,12 @@
 if (!globalThis.__RARI_RESOLVE_LAZY__) {
   globalThis.__RARI_RESOLVE_LAZY__ = async function (promiseId) {
     try {
-      if (!globalThis.__RARI_PENDING_PROMISES__) {
+      if (!globalThis.__RARI_PENDING_PROMISES__)
         throw new Error('No pending promises found')
-      }
 
       const promiseOrDeferred = globalThis.__RARI_PENDING_PROMISES__.get(promiseId)
-      if (!promiseOrDeferred) {
+      if (!promiseOrDeferred)
         throw new Error(`Promise not found: ${promiseId}`)
-      }
 
       let result
       try {

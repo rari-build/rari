@@ -50,17 +50,14 @@ if (!globalThis.React.Component) {
   }
 }
 
-if (typeof globalThis.Component === 'undefined') {
+if (typeof globalThis.Component === 'undefined')
   globalThis.Component = globalThis.React.Component
-}
 
-if (typeof globalThis.Suspense === 'undefined') {
+if (typeof globalThis.Suspense === 'undefined')
   globalThis.Suspense = globalThis.React.Suspense
-}
 
-if (typeof globalThis.Fragment === 'undefined') {
+if (typeof globalThis.Fragment === 'undefined')
   globalThis.Fragment = globalThis.React.Fragment
-}
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {
@@ -82,13 +79,11 @@ if (typeof globalThis.React !== 'undefined' && typeof globalThis.React.use !== '
     }
 
     if (resource && typeof resource === 'object' && typeof resource.then === 'function') {
-      if (resource.status === 'fulfilled') {
+      if (resource.status === 'fulfilled')
         return resource.value
-      }
 
-      if (resource.status === 'rejected') {
+      if (resource.status === 'rejected')
         throw resource.reason
-      }
 
       if (!resource.status) {
         resource.status = 'pending'

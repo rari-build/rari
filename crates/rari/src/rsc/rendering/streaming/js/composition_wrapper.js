@@ -11,13 +11,11 @@
     // eslint-disable-next-line no-undef
     const compositionResult = await { composition_script }
 
-    if (!compositionResult) {
+    if (!compositionResult)
       throw new Error('Composition script returned null/undefined')
-    }
 
-    if (!compositionResult.rsc_data) {
+    if (!compositionResult.rsc_data)
       throw new Error(`Composition script result missing rsc_data property. Keys: ${Object.keys(compositionResult).join(', ')}`)
-    }
 
     const rscData = compositionResult.rsc_data
 
@@ -55,9 +53,8 @@
       else if (error.toString && typeof error.toString === 'function') {
         try {
           const str = error.toString()
-          if (str && str !== '[object Object]') {
+          if (str && str !== '[object Object]')
             errorMessage = str
-          }
         }
         catch {
         }

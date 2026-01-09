@@ -6,14 +6,12 @@
         const reactModule = globalThis['~rsc'].modules.react
           || globalThis['~rsc'].modules.React
           || Object.values(globalThis['~rsc'].modules).find(m => m && m.createElement)
-        if (reactModule) {
+        if (reactModule)
           globalThis.React = reactModule
-        }
       }
 
-      if (typeof React === 'undefined' && typeof require !== 'undefined') {
+      if (typeof React === 'undefined' && typeof require !== 'undefined')
         globalThis.React = require('react')
-      }
 
       if (typeof React !== 'undefined' && React.createElement && !globalThis['~react']?.patched) {
         if (!globalThis['~react'])

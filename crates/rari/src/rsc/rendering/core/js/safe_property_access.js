@@ -1,19 +1,16 @@
 const hasOwn = Object.prototype.hasOwnProperty
 
 function safeHasOwnProperty(obj, key) {
-  if (obj == null || typeof obj !== 'object') {
+  if (obj == null || typeof obj !== 'object')
     return false
-  }
   return hasOwn.call(obj, key)
 }
 
 function safeGetProperty(obj, key) {
-  if (obj == null || typeof obj !== 'object') {
+  if (obj == null || typeof obj !== 'object')
     return undefined
-  }
-  if (safeHasOwnProperty(obj, key)) {
+  if (safeHasOwnProperty(obj, key))
     return obj[key]
-  }
   return undefined
 }
 
@@ -30,20 +27,17 @@ function isDangerousProperty(key) {
 }
 
 function sanitizeValue(value) {
-  if (value == null) {
+  if (value == null)
     return value
-  }
 
-  if (Array.isArray(value)) {
+  if (Array.isArray(value))
     return value.map(item => sanitizeValue(item))
-  }
 
   if (typeof value === 'object') {
     const sanitized = {}
     for (const key in value) {
-      if (safeHasOwnProperty(value, key) && !isDangerousProperty(key)) {
+      if (safeHasOwnProperty(value, key) && !isDangerousProperty(key))
         sanitized[key] = sanitizeValue(value[key])
-      }
     }
     return sanitized
   }

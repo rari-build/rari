@@ -1,11 +1,9 @@
-/* eslint-disable style/max-statements-per-line, no-use-before-define */
+/* eslint-disable no-use-before-define */
 // oxlint-disable block-scoped-var, no-var, vars-on-top
-if (typeof _jsx === 'undefined') {
+if (typeof _jsx === 'undefined')
   var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
-}
-if (typeof _jsxs === 'undefined') {
+if (typeof _jsxs === 'undefined')
   var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || (() => null)
-}
 
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
@@ -36,9 +34,8 @@ if (typeof globalThis.React === 'undefined') {
   }
 }
 
-if (!globalThis.React.Suspense) {
+if (!globalThis.React.Suspense)
   globalThis.React.Suspense = function (props) { return props?.children || props?.fallback || null }
-}
 
 if (!globalThis.React.Component) {
   globalThis.React.Component = class Component {
@@ -62,17 +59,14 @@ if (!globalThis.React.Component) {
   }
 }
 
-if (typeof globalThis.Suspense === 'undefined') {
+if (typeof globalThis.Suspense === 'undefined')
   globalThis.Suspense = globalThis.React.Suspense
-}
 
-if (typeof globalThis.Fragment === 'undefined') {
+if (typeof globalThis.Fragment === 'undefined')
   globalThis.Fragment = globalThis.React.Fragment
-}
 
-if (typeof globalThis.Component === 'undefined') {
+if (typeof globalThis.Component === 'undefined')
   globalThis.Component = globalThis.React.Component
-}
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {
@@ -122,11 +116,9 @@ if (!globalThis.readFileSync && globalThis['~node']?.modules && globalThis['~nod
     globalThis.existsSync = nodeFs.existsSync
   }
   const nodePath = globalThis['~node'].modules.get('node:path')
-  if (nodePath && nodePath.join) {
+  if (nodePath && nodePath.join)
     globalThis.join = nodePath.join
-  }
   const nodeProcess = globalThis['~node'].modules.get('node:process')
-  if (nodeProcess && nodeProcess.cwd) {
+  if (nodeProcess && nodeProcess.cwd)
     globalThis.cwd = nodeProcess.cwd
-  }
 }

@@ -104,9 +104,8 @@ const fs = {
   },
   readFileSync: (path, encoding = 'utf8') => {
     try {
-      if (globalThis.Deno?.readTextFileSync) {
+      if (globalThis.Deno?.readTextFileSync)
         return globalThis.Deno.readTextFileSync(path)
-      }
       throw new Error('readFileSync not available')
     }
     catch (error) {
@@ -115,9 +114,8 @@ const fs = {
   },
   writeFileSync: (path, data, encoding = 'utf8') => {
     try {
-      if (globalThis.Deno?.writeTextFileSync) {
+      if (globalThis.Deno?.writeTextFileSync)
         return globalThis.Deno.writeTextFileSync(path, data)
-      }
       throw new Error('writeFileSync not available')
     }
     catch (error) {
@@ -167,9 +165,8 @@ const fs = {
   promises: {
     readFile: async (path, encoding = 'utf8') => {
       try {
-        if (globalThis.Deno?.readTextFile) {
+        if (globalThis.Deno?.readTextFile)
           return await globalThis.Deno.readTextFile(path)
-        }
         throw new Error('readFile not available')
       }
       catch (error) {
@@ -178,9 +175,8 @@ const fs = {
     },
     writeFile: async (path, data, encoding = 'utf8') => {
       try {
-        if (globalThis.Deno?.writeTextFile) {
+        if (globalThis.Deno?.writeTextFile)
           return await globalThis.Deno.writeTextFile(path, data)
-        }
         throw new Error('writeFile not available')
       }
       catch (error) {
@@ -200,9 +196,8 @@ const path = {
       const segment = paths[i]
       if (segment) {
         resolved = `${segment}/${resolved}`
-        if (segment.startsWith('/')) {
+        if (segment.startsWith('/'))
           break
-        }
       }
     }
     return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
@@ -214,9 +209,8 @@ const path = {
   },
   basename: (path, ext) => {
     let base = path.split('/').pop() || ''
-    if (ext && base.endsWith(ext)) {
+    if (ext && base.endsWith(ext))
       base = base.slice(0, -ext.length)
-    }
     return base
   },
   extname: (path) => {
@@ -240,9 +234,8 @@ const path = {
         const segment = paths[i]
         if (segment) {
           resolved = `${segment}/${resolved}`
-          if (segment.startsWith('/')) {
+          if (segment.startsWith('/'))
             break
-          }
         }
       }
       return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
@@ -254,9 +247,8 @@ const path = {
     },
     basename: (path, ext) => {
       let base = path.split('/').pop() || ''
-      if (ext && base.endsWith(ext)) {
+      if (ext && base.endsWith(ext))
         base = base.slice(0, -ext.length)
-      }
       return base
     },
     extname: (path) => {
@@ -285,15 +277,13 @@ const crypto = {
     throw new Error('crypto.createHash not available')
   },
   randomBytes: (size) => {
-    if (globalThis.crypto?.getRandomValues) {
+    if (globalThis.crypto?.getRandomValues)
       return globalThis.crypto.getRandomValues(new Uint8Array(size))
-    }
     throw new Error('crypto.randomBytes not available')
   },
   randomUUID: () => {
-    if (globalThis.crypto?.randomUUID) {
+    if (globalThis.crypto?.randomUUID)
       return globalThis.crypto.randomUUID()
-    }
     throw new Error('crypto.randomUUID not available')
   },
 }
@@ -410,9 +400,8 @@ const os = {
 
 const Buffer = globalThis.Buffer || {
   from: (data, encoding = 'utf8') => {
-    if (typeof data === 'string') {
+    if (typeof data === 'string')
       return new TextEncoder().encode(data)
-    }
     return new Uint8Array(data)
   },
   alloc: (size, fill = 0) => {
@@ -431,9 +420,8 @@ const EventEmitter = class {
   }
 
   on(event, listener) {
-    if (!this._events[event]) {
+    if (!this._events[event])
       this._events[event] = []
-    }
     this._events[event].push(listener)
     return this
   }
@@ -563,19 +551,16 @@ const nodeModules = new Map([
     'node:assert',
     {
       ok: (value, message) => {
-        if (!value) {
+        if (!value)
           throw new Error(message || 'Assertion failed')
-        }
       },
       equal: (actual, expected, message) => {
-        if (actual !== expected) {
+        if (actual !== expected)
           throw new Error(message || `Expected ${expected}, got ${actual}`)
-        }
       },
       deepEqual: (actual, expected, message) => {
-        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        if (JSON.stringify(actual) !== JSON.stringify(expected))
           throw new Error(message || 'Deep equality assertion failed')
-        }
       },
     },
   ],
@@ -583,19 +568,16 @@ const nodeModules = new Map([
     'assert',
     {
       ok: (value, message) => {
-        if (!value) {
+        if (!value)
           throw new Error(message || 'Assertion failed')
-        }
       },
       equal: (actual, expected, message) => {
-        if (actual !== expected) {
+        if (actual !== expected)
           throw new Error(message || `Expected ${expected}, got ${actual}`)
-        }
       },
       deepEqual: (actual, expected, message) => {
-        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        if (JSON.stringify(actual) !== JSON.stringify(expected))
           throw new Error(message || 'Deep equality assertion failed')
-        }
       },
     },
   ],
@@ -793,26 +775,19 @@ if (globalThis.import) {
   }
 }
 
-if (!globalThis.Buffer) {
+if (!globalThis.Buffer)
   globalThis.Buffer = Buffer
-}
 
-if (!globalThis.global) {
+if (!globalThis.global)
   globalThis.global = globalThis
-}
 
 if (!globalThis.require) {
   globalThis.require = function (specifier) {
     const nodeSpecifier = specifier.startsWith('node:') ? specifier : `node:${specifier}`
-
-    if (nodeModules.has(nodeSpecifier)) {
+    if (nodeModules.has(nodeSpecifier))
       return nodeModules.get(nodeSpecifier)
-    }
-
-    if (nodeModules.has(specifier)) {
+    if (nodeModules.has(specifier))
       return nodeModules.get(specifier)
-    }
-
     throw new Error(`Cannot find module '${specifier}'`)
   }
 

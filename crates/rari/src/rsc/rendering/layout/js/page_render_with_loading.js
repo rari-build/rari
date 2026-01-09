@@ -2,9 +2,8 @@
 // oxlint-disable vars-on-top, no-var, block-scoped-var
 const startPage = performance.now()
 const PageComponent = globalThis['{page_component_id}']
-if (!PageComponent || typeof PageComponent !== 'function') {
+if (!PageComponent || typeof PageComponent !== 'function')
   throw new Error('Page component {page_component_id} not found')
-}
 
 const LoadingComponent = globalThis['{loading_id}']
 if (!LoadingComponent || typeof LoadingComponent !== 'function') {
@@ -22,9 +21,8 @@ else {
     const streamingEnabled = globalThis.__RARI_STREAMING_SUSPENSE__ === true
 
     if (streamingEnabled) {
-      if (!globalThis.__RARI_PENDING_PROMISES__) {
+      if (!globalThis.__RARI_PENDING_PROMISES__)
         globalThis.__RARI_PENDING_PROMISES__ = new Map()
-      }
 
       const promiseId = '{page_component_id}_promise'
 

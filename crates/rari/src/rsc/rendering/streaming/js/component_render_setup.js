@@ -8,13 +8,11 @@ globalThis['~render'].componentAsync = async function () {
       || globalThis['{component_id}']
       || (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}'])
 
-    if (Component && typeof Component === 'object' && typeof Component.default === 'function') {
+    if (Component && typeof Component === 'object' && typeof Component.default === 'function')
       Component = Component.default
-    }
 
-    if (!Component || typeof Component !== 'function') {
+    if (!Component || typeof Component !== 'function')
       throw new Error('Component {component_id} not found or not a function')
-    }
 
     const props = {props_json}
     if (!globalThis['~suspense'])
@@ -32,18 +30,15 @@ globalThis['~render'].componentAsync = async function () {
       if (!isOverrideActive) {
         if (!globalThis['~react'])
           globalThis['~react'] = {}
-        if (!globalThis['~react'].originalCreateElement) {
+        if (!globalThis['~react'].originalCreateElement)
           globalThis['~react'].originalCreateElement = React.createElement
-        }
 
         React.createElement = function (type, props, ...children) {
           const isSuspenseComponent = (type) => {
-            if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense) {
+            if (typeof React !== 'undefined' && React.Suspense && type === React.Suspense)
               return true
-            }
-            if (typeof type === 'function' && type.name === 'Suspense') {
+            if (typeof type === 'function' && type.name === 'Suspense')
               return true
-            }
             return false
           }
 

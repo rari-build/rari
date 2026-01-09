@@ -60,14 +60,12 @@
         if (module) {
           if (typeof module.generateMetadata === 'function') {
             const result = await module.generateMetadata({ params, searchParams })
-            if (result && typeof result === 'object') {
+            if (result && typeof result === 'object')
               return result
-            }
           }
 
-          if (module.metadata && typeof module.metadata === 'object') {
+          if (module.metadata && typeof module.metadata === 'object')
             return module.metadata
-          }
         }
       }
 
@@ -76,14 +74,12 @@
 
         if (typeof module.generateMetadata === 'function') {
           const result = await module.generateMetadata({ params, searchParams })
-          if (result && typeof result === 'object') {
+          if (result && typeof result === 'object')
             return result
-          }
         }
 
-        if (module.metadata && typeof module.metadata === 'object') {
+        if (module.metadata && typeof module.metadata === 'object')
           return module.metadata
-        }
       }
       catch (importError) {}
 

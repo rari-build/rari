@@ -11,9 +11,8 @@
     }
   }
 
-  if (!globalThis['~render']?.deferredAsyncComponents) {
+  if (!globalThis['~render']?.deferredAsyncComponents)
     return { success: true, count: 0, total: 0, results: [] }
-  }
 
   if (!Array.isArray(globalThis['~render'].deferredAsyncComponents)) {
     return {

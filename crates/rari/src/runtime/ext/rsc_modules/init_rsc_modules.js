@@ -66,9 +66,8 @@
     const matches = code.matchAll(exportRegex)
 
     for (const match of matches) {
-      if (match[2]) {
+      if (match[2])
         exports.push(match[2])
-      }
     }
 
     return exports

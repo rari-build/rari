@@ -68,12 +68,10 @@ if (typeof globalThis.React === 'undefined') {
         const promiseCache = globalThis['~promises']?.resolved
         if (promiseCache && promiseCache.has(usable)) {
           const cached = promiseCache.get(usable)
-          if (cached.status === 'fulfilled') {
+          if (cached.status === 'fulfilled')
             return cached.value
-          }
-          if (cached.status === 'rejected') {
+          if (cached.status === 'rejected')
             throw cached.reason
-          }
         }
 
         const suspenseError = new Error('Promise suspended')
@@ -93,12 +91,10 @@ if (globalThis.React && !globalThis.React.use) {
       const promiseCache = globalThis['~promises']?.resolved
       if (promiseCache && promiseCache.has(usable)) {
         const cached = promiseCache.get(usable)
-        if (cached.status === 'fulfilled') {
+        if (cached.status === 'fulfilled')
           return cached.value
-        }
-        if (cached.status === 'rejected') {
+        if (cached.status === 'rejected')
           throw cached.reason
-        }
       }
 
       const suspenseError = new Error('Promise suspended')
@@ -185,9 +181,8 @@ function renderElementToString(element, isStatic = false) {
       }
     }
 
-    if (type === Symbol.for('react.fragment')) {
+    if (type === Symbol.for('react.fragment'))
       return renderElementToString(elementChildren, isStatic)
-    }
   }
 
   if (
