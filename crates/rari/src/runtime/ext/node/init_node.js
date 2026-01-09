@@ -326,7 +326,8 @@ const util = {
         fn.call(this, ...args, (err, result) => {
           if (err)
             reject(err)
-          else resolve(result)
+          else
+            resolve(result)
         })
       })
     }
