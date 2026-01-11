@@ -686,7 +686,13 @@ pub async fn handle_app_route(
 
     let app_router = match &state.app_router {
         Some(router) => router,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => {
+            tracing::error!(
+                "App router not initialized - routes.json may be missing or invalid. Path: {}",
+                path
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
     };
 
     let mut route_match = match app_router.match_route(path) {

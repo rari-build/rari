@@ -104,7 +104,14 @@ impl Server {
 
             match app_router::AppRouter::from_file(manifest_path).await {
                 Ok(router) => Some(Arc::new(router)),
-                Err(_) => None,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to load app router from {}: {}. All routes will return 404.",
+                        manifest_path,
+                        e
+                    );
+                    None
+                }
             }
         };
 
@@ -295,7 +302,7 @@ impl Server {
             }
         }
 
-        let has_app_router = std::path::Path::new("dist/server/routes.json").exists();
+        let has_app_router = state.app_router.is_some();
 
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
