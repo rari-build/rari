@@ -9,7 +9,7 @@ export interface ImageProps {
   width?: number
   height?: number
   quality?: number
-  priority?: boolean
+  preload?: boolean
   loading?: 'lazy' | 'eager'
   placeholder?: 'blur' | 'empty'
   blurDataURL?: string
@@ -20,7 +20,9 @@ export interface ImageProps {
   onLoad?: (event: React.SyntheticEvent<HTMLImageElement>) => void
   onError?: (event: React.SyntheticEvent<HTMLImageElement>) => void
   unoptimized?: boolean
-  formats?: ('avif' | 'webp')[]
+  loader?: (props: { src: string, width: number, quality: number }) => string
+  overrideSrc?: string
+  decoding?: 'async' | 'sync' | 'auto'
 }
 
 export interface StaticImageData {
@@ -51,7 +53,7 @@ export function Image({
   width,
   height,
   quality = 75,
-  priority = false,
+  preload = false,
   loading = 'lazy',
   placeholder = 'empty',
   blurDataURL,
@@ -62,12 +64,17 @@ export function Image({
   onLoad,
   onError,
   unoptimized = false,
-  formats = ['avif', 'webp'],
+  loader,
+  overrideSrc,
+  decoding,
 }: ImageProps) {
   const imgSrc = typeof src === 'string' ? src : src.src
   const imgWidth = width || (typeof src !== 'string' ? src.width : undefined)
   const imgHeight = height || (typeof src !== 'string' ? src.height : undefined)
   const imgBlurDataURL = blurDataURL || (typeof src !== 'string' ? src.blurDataURL : undefined)
+  const finalSrc = overrideSrc || imgSrc
+  const shouldPreload = preload
+  const imgDecoding = decoding || (preload ? 'sync' : 'async')
 
   const [blurComplete, setBlurComplete] = useState(false)
   const [showAltText, setShowAltText] = useState(false)
@@ -107,7 +114,25 @@ export function Image({
   )
 
   useEffect(() => {
-    if (priority || unoptimized || loading === 'eager')
+    if (shouldPreload) {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'image'
+      link.href = loader
+        ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
+        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality))
+      if (sizes)
+        link.setAttribute('imagesizes', sizes)
+      document.head.appendChild(link)
+
+      return () => {
+        document.head.removeChild(link)
+      }
+    }
+  }, [shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized])
+
+  useEffect(() => {
+    if (shouldPreload || unoptimized || loading === 'eager')
       return
 
     const img = imgRef.current
@@ -132,7 +157,7 @@ export function Image({
     return () => {
       observer.disconnect()
     }
-  }, [priority, unoptimized, loading])
+  }, [shouldPreload, unoptimized, loading])
 
   const imgStyle: React.CSSProperties = {
     ...style,
@@ -156,17 +181,21 @@ export function Image({
     }),
   }
 
-  if (unoptimized || formats.length === 0) {
+  if (unoptimized) {
+    const finalImgSrc = loader
+      ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
+      : finalSrc
+
     return (
       <img
         ref={imgRef}
-        src={imgSrc}
+        src={finalImgSrc}
         alt={showAltText ? alt : ''}
         width={fill ? undefined : imgWidth}
         height={fill ? undefined : imgHeight}
-        loading={priority ? 'eager' : loading}
-        fetchPriority={priority ? 'high' : 'auto'}
-        decoding={priority ? 'sync' : 'async'}
+        loading={shouldPreload ? 'eager' : loading}
+        fetchPriority={shouldPreload ? 'high' : 'auto'}
+        decoding={imgDecoding}
         onLoad={handleLoad}
         onError={handleError}
         style={imgStyle}
@@ -178,21 +207,29 @@ export function Image({
   const sizesArray = fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES
   const defaultWidth = imgWidth || 1920
 
-  const buildSrcSet = (format?: 'avif' | 'webp') =>
-    sizesArray.map(w => `${buildImageUrl(imgSrc, w, quality, format)} ${w}w`).join(', ')
+  const buildSrcSet = (format?: 'avif' | 'webp') => {
+    if (loader) {
+      return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
+    }
+    return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
+  }
+
+  const mainSrc = loader
+    ? loader({ src: finalSrc, width: defaultWidth, quality })
+    : buildImageUrl(finalSrc, defaultWidth, quality)
 
   const imgElement = (
     <img
       ref={imgRef}
-      src={buildImageUrl(imgSrc, defaultWidth, quality)}
+      src={mainSrc}
       srcSet={buildSrcSet()}
       sizes={sizes}
       alt={showAltText ? alt : ''}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
-      loading={priority ? 'eager' : loading}
-      fetchPriority={priority ? 'high' : 'auto'}
-      decoding={priority ? 'sync' : 'async'}
+      loading={shouldPreload ? 'eager' : loading}
+      fetchPriority={shouldPreload ? 'high' : 'auto'}
+      decoding={imgDecoding}
       onLoad={handleLoad}
       onError={handleError}
       style={imgStyle}
@@ -200,25 +237,18 @@ export function Image({
     />
   )
 
-  if (formats.length === 1 && !formats.includes('avif') && !formats.includes('webp'))
-    return imgElement
-
   return (
     <picture ref={pictureRef}>
-      {formats.includes('avif') && (
-        <source
-          type="image/avif"
-          srcSet={buildSrcSet('avif')}
-          sizes={sizes}
-        />
-      )}
-      {formats.includes('webp') && (
-        <source
-          type="image/webp"
-          srcSet={buildSrcSet('webp')}
-          sizes={sizes}
-        />
-      )}
+      <source
+        type="image/avif"
+        srcSet={buildSrcSet('avif')}
+        sizes={sizes}
+      />
+      <source
+        type="image/webp"
+        srcSet={buildSrcSet('webp')}
+        sizes={sizes}
+      />
       {imgElement}
     </picture>
   )
