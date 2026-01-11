@@ -13,10 +13,6 @@ impl DistPathResolver {
         Self { project_root, dist_dir, server_dir: "server".to_string() }
     }
 
-    pub fn with_custom_paths(project_root: PathBuf, dist_dir: PathBuf, server_dir: String) -> Self {
-        Self { project_root, dist_dir, server_dir }
-    }
-
     pub fn get_dist_path(&self, component_id: &str) -> PathBuf {
         let filename = format!("{}.js", component_id);
         self.dist_dir.join(&self.server_dir).join(filename)
@@ -128,17 +124,5 @@ mod tests {
 
         let id = resolver.file_path_to_component_id(Path::new("/project/src/pages/about.tsx"));
         assert_eq!(id, "pages/about");
-    }
-
-    #[test]
-    fn test_custom_paths() {
-        let resolver = DistPathResolver::with_custom_paths(
-            PathBuf::from("/project"),
-            PathBuf::from("/project/build"),
-            "rsc".to_string(),
-        );
-
-        let path = resolver.get_dist_path("pages/home");
-        assert_eq!(path, PathBuf::from("/project/build/pages/home.js"));
     }
 }
