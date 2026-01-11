@@ -8,6 +8,8 @@ pub struct ImageConfig {
     pub max_cache_size: usize,
     #[serde(default)]
     pub remote_patterns: Vec<RemotePattern>,
+    #[serde(default)]
+    pub local_patterns: Vec<LocalPattern>,
     #[serde(default = "default_device_sizes")]
     pub device_sizes: Vec<u32>,
     #[serde(default = "default_image_sizes")]
@@ -28,6 +30,13 @@ pub struct RemotePattern {
     pub hostname: String,
     pub port: Option<String>,
     pub pathname: Option<String>,
+    pub search: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalPattern {
+    pub pathname: String,
+    pub search: Option<String>,
 }
 
 impl Default for ImageConfig {
@@ -35,6 +44,7 @@ impl Default for ImageConfig {
         Self {
             max_cache_size: default_max_cache_size(),
             remote_patterns: Vec::new(),
+            local_patterns: Vec::new(),
             device_sizes: default_device_sizes(),
             image_sizes: default_image_sizes(),
             formats: default_formats(),

@@ -38,6 +38,11 @@ interface RariOptions {
       hostname: string
       port?: string
       pathname?: string
+      search?: string
+    }>
+    localPatterns?: Array<{
+      pathname: string
+      search?: string
     }>
     deviceSizes?: number[]
     imageSizes?: number[]
@@ -50,6 +55,7 @@ interface RariOptions {
 
 const DEFAULT_IMAGE_CONFIG = {
   remotePatterns: [],
+  localPatterns: [],
   deviceSizes: DEFAULT_DEVICE_SIZES,
   imageSizes: DEFAULT_IMAGE_SIZES,
   formats: DEFAULT_FORMATS,

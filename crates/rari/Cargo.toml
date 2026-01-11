@@ -149,7 +149,8 @@ image = { version = "0.25.9", default-features = false, features = [
   "png",
   "gif",
   "webp",
-  "avif"
+  "avif",
+  "avif-native"
 ] }
 webp = "0.3.1"
 

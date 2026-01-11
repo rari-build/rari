@@ -3,7 +3,7 @@ mod config;
 mod optimizer;
 mod types;
 
-pub use config::{ImageConfig, RemotePattern};
+pub use config::{ImageConfig, LocalPattern, RemotePattern};
 pub use optimizer::ImageOptimizer;
 pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
 

@@ -1,12 +1,12 @@
 use super::{
     ImageError,
     cache::ImageCache,
-    config::{ImageConfig, RemotePattern},
+    config::{ImageConfig, LocalPattern, RemotePattern},
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
 use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use url::Url;
 
@@ -18,6 +18,7 @@ pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
     config: ImageConfig,
     http_client: Client,
+    project_path: PathBuf,
 }
 
 impl ImageOptimizer {
@@ -28,7 +29,7 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { cache, config, http_client }
+        Self { cache, config, http_client, project_path: project_path.to_path_buf() }
     }
 
     pub async fn optimize(
@@ -103,11 +104,30 @@ impl ImageOptimizer {
     }
 
     fn validate_url(&self, url_str: &str) -> Result<(), ImageError> {
+        if url_str.starts_with('/') {
+            if !self.config.local_patterns.is_empty() {
+                let mut allowed = false;
+                for pattern in &self.config.local_patterns {
+                    if self.matches_local_pattern(url_str, pattern) {
+                        allowed = true;
+                        break;
+                    }
+                }
+                if !allowed {
+                    return Err(ImageError::UnauthorizedDomain(format!(
+                        "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
+                        url_str
+                    )));
+                }
+            }
+            return Ok(());
+        }
+
         let url = Url::parse(url_str)
             .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL: {}", e)))?;
 
-        if url.scheme() == "file" || url_str.starts_with('/') {
-            return Ok(());
+        if url.scheme() == "file" {
+            return Err(ImageError::InvalidUrl("file:// URLs are not allowed".to_string()));
         }
 
         if self.config.remote_patterns.is_empty() {
@@ -124,6 +144,63 @@ impl ImageOptimizer {
         }
 
         Err(ImageError::UnauthorizedDomain(url_str.to_string()))
+    }
+
+    fn matches_local_pattern(&self, path: &str, pattern: &LocalPattern) -> bool {
+        if !self.pathname_matches(path, &pattern.pathname) {
+            return false;
+        }
+
+        if let Some(ref search) = pattern.search {
+            if let Some(query_start) = path.find('?') {
+                let query = &path[query_start..];
+                if query != search {
+                    return false;
+                }
+            } else if !search.is_empty() {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn pathname_matches(&self, path: &str, pattern: &str) -> bool {
+        let path_without_query = if let Some(idx) = path.find('?') { &path[..idx] } else { path };
+
+        if let Some(prefix) = pattern.strip_suffix("/**") {
+            path_without_query.starts_with(prefix)
+        } else if pattern.contains('*') {
+            self.glob_match(path_without_query, pattern)
+        } else {
+            path_without_query == pattern
+        }
+    }
+
+    fn glob_match(&self, text: &str, pattern: &str) -> bool {
+        let pattern_parts: Vec<&str> = pattern.split('*').collect();
+        if pattern_parts.len() == 1 {
+            return text == pattern;
+        }
+
+        let mut pos = 0;
+        for (i, part) in pattern_parts.iter().enumerate() {
+            if i == 0 {
+                if !text.starts_with(part) {
+                    return false;
+                }
+                pos = part.len();
+            } else if i == pattern_parts.len() - 1 {
+                if !text[pos..].ends_with(part) {
+                    return false;
+                }
+            } else if let Some(idx) = text[pos..].find(part) {
+                pos += idx + part.len();
+            } else {
+                return false;
+            }
+        }
+        true
     }
 
     fn matches_pattern(&self, url: &Url, pattern: &RemotePattern) -> bool {
@@ -148,9 +225,20 @@ impl ImageOptimizer {
         }
 
         if let Some(ref pathname) = pattern.pathname
-            && !url.path().starts_with(pathname)
+            && !self.pathname_matches(url.path(), pathname)
         {
             return false;
+        }
+
+        if let Some(ref search) = pattern.search {
+            if let Some(query) = url.query() {
+                let full_query = format!("?{}", query);
+                if &full_query != search {
+                    return false;
+                }
+            } else if !search.is_empty() {
+                return false;
+            }
         }
 
         true
@@ -166,7 +254,26 @@ impl ImageOptimizer {
 
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
         if url.starts_with('/') {
-            return Err(ImageError::InvalidUrl("Local file paths not yet supported".to_string()));
+            let public_path = self.project_path.join("public");
+            let file_path = public_path.join(url.trim_start_matches('/'));
+
+            let bytes = std::fs::read(&file_path).map_err(|e| {
+                ImageError::FetchError(format!(
+                    "Failed to read local file {}: {}",
+                    file_path.display(),
+                    e
+                ))
+            })?;
+
+            if bytes.len() > MAX_SOURCE_IMAGE_SIZE {
+                return Err(ImageError::InvalidParams(format!(
+                    "Image too large: {} bytes (max {} bytes)",
+                    bytes.len(),
+                    MAX_SOURCE_IMAGE_SIZE
+                )));
+            }
+
+            return Ok(bytes);
         }
 
         let response = self
@@ -224,7 +331,7 @@ impl ImageOptimizer {
         params: &OptimizeParams,
     ) -> Result<OptimizedImage, ImageError> {
         let img = image::load_from_memory(&source)
-            .map_err(|e| ImageError::ProcessingError(e.to_string()))?;
+            .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {}", e)))?;
 
         if img.width() > MAX_OUTPUT_WIDTH * 2 || img.height() > MAX_OUTPUT_HEIGHT * 2 {
             return Err(ImageError::InvalidParams(format!(
