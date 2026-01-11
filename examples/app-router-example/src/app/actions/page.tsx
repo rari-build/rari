@@ -142,7 +142,7 @@ export default async function ActionsPage() {
               Server actions are called via
               {' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
-                POST /api/rsc/action
+                POST /_rari/action
               </code>
               {' '}
               with JSON payloads containing serialized arguments.
@@ -160,7 +160,7 @@ export default async function ActionsPage() {
               Forms can post to
               {' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
-                /api/rsc/form-action
+                /_rari/form-action
               </code>
               {' '}
               for progressive enhancement, working without JavaScript.

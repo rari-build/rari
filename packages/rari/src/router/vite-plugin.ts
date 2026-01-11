@@ -148,7 +148,7 @@ function detectHttpMethods(fileContent: string): string[] {
 
 async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
   try {
-    const response = await fetch('http://localhost:3000/api/rsc/hmr', {
+    const response = await fetch('http://localhost:3000/_rari/hmr', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

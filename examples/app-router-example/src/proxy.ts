@@ -43,6 +43,6 @@ export function proxy(request: RariRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api/rsc|favicon.ico|.*\\.png$).*)',
+    '/((?!_rari/rsc|favicon.ico|.*\\.png$).*)',
   ],
 }

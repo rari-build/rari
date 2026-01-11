@@ -29,7 +29,7 @@ class RouteInfoCache {
   private async fetchRouteInfo(path: string): Promise<RouteInfoResponse> {
     const request: RouteInfoRequest = { path }
 
-    const response = await fetch('/api/rsc/route-info', {
+    const response = await fetch('/_rari/route-info', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

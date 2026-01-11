@@ -45,7 +45,7 @@ pub fn generate_csrf_helper_script() -> &'static str {
       headers
     });
 
-    if (response.status === 403 && url.includes('/api/rsc/')) {
+    if (response.status === 403 && url.includes('/_rari/')) {
       const refreshed = await window.refreshCsrfToken();
       if (refreshed) {
         const retryToken = window.getCsrfToken();
@@ -66,7 +66,7 @@ pub fn generate_csrf_helper_script() -> &'static str {
     const token = window.getCsrfToken();
     if (!token) return;
 
-    document.querySelectorAll('form[action*="/api/rsc/"]').forEach(form => {
+    document.querySelectorAll('form[action*="/_rari/"]').forEach(form => {
       let csrfInput = form.querySelector('input[name="__csrf_token"]');
 
       if (!csrfInput) {
@@ -82,7 +82,7 @@ pub fn generate_csrf_helper_script() -> &'static str {
 
   window.refreshCsrfToken = async function() {
     try {
-      const response = await fetch('/api/rsc/csrf-token');
+      const response = await fetch('/_rari/csrf-token');
       if (!response.ok) {
         console.warn('Failed to refresh CSRF token:', response.status);
         return false;

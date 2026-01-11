@@ -218,7 +218,7 @@ export class HMRCoordinator {
   ): Promise<void> {
     try {
       const response = await fetch(
-        `${this.rustServerUrl}/api/rsc/hmr`,
+        `${this.rustServerUrl}/_rari/hmr`,
         {
           method: 'POST',
           headers: {

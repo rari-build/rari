@@ -10,7 +10,7 @@ export async function refreshCsrfToken(): Promise<boolean> {
     return false
 
   try {
-    const response = await fetch('/api/rsc/csrf-token')
+    const response = await fetch('/_rari/csrf-token')
     if (!response.ok) {
       console.error('Failed to refresh CSRF token:', response.status)
       return false
@@ -54,7 +54,7 @@ export async function fetchWithCsrf(
     headers,
   })
 
-  if (response.status === 403 && url.includes('/api/rsc/')) {
+  if (response.status === 403 && url.includes('/_rari/')) {
     const refreshed = await refreshCsrfToken()
     if (refreshed) {
       const retryToken = getCsrfToken()

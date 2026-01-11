@@ -139,6 +139,6 @@ mod tests {
         );
 
         let path = resolver.get_dist_path("pages/home");
-        assert_eq!(path, PathBuf::from("/project/build/rsc/pages/home.js"));
+        assert_eq!(path, PathBuf::from("/project/build/pages/home.js"));
     }
 }

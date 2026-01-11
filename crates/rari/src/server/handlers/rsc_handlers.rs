@@ -22,9 +22,9 @@ pub async fn stream_component(
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let cache_key = if let Some(props) = &props_str {
-        format!("/api/rsc/stream/{}?props={}", request.component_id, props)
+        format!("/_rari/stream/{}?props={}", request.component_id, props)
     } else {
-        format!("/api/rsc/stream/{}", request.component_id)
+        format!("/_rari/stream/{}", request.component_id)
     };
 
     if let Some(cached) = state.response_cache.get(&cache_key).await {
@@ -49,7 +49,7 @@ pub async fn stream_component(
 
     match stream_result {
         Ok(rsc_stream) => {
-            let cache_control = state.config.get_cache_control_for_route("/api/rsc/stream");
+            let cache_control = state.config.get_cache_control_for_route("/_rari/stream");
 
             use futures::StreamExt;
             let byte_stream = rsc_stream

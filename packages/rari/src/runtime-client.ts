@@ -137,7 +137,7 @@ export class HttpRuntimeClient implements RuntimeClient {
 
   async initialize(): Promise<void> {
     try {
-      const health = await this.request<HealthResponse>('/api/rsc/health')
+      const health = await this.request<HealthResponse>('/_rari/health')
 
       if (health.status !== 'healthy')
         throw new Error(`Server is not healthy: ${health.status}`)
@@ -165,7 +165,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await this.request('/api/rsc/register', {
+      const response = await this.request('/_rari/register', {
         method: 'POST',
         body: request,
       })
@@ -200,7 +200,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/rsc/stream`, {
+      const response = await fetch(`${this.baseUrl}/_rari/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -248,7 +248,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await this.request('/api/rsc/register-client', {
+      const response = await this.request('/_rari/register-client', {
         method: 'POST',
         body: request,
       })
@@ -290,27 +290,11 @@ export class HttpRuntimeClient implements RuntimeClient {
   }
 
   async getServerStatus(): Promise<StatusResponse> {
-    return await this.request<StatusResponse>('/api/rsc/status')
+    return await this.request<StatusResponse>('/_rari/status')
   }
 
   async checkHealth(): Promise<HealthResponse> {
-    return await this.request<HealthResponse>('/api/rsc/health')
-  }
-
-  async refreshComponentList(): Promise<string[]> {
-    try {
-      const response = await this.request<{
-        success: boolean
-        components: string[]
-      }>('/api/rsc/components')
-      if (response.success)
-        this.components = response.components
-      return this.components
-    }
-    catch (error) {
-      console.error('Failed to refresh component list:', error)
-      return this.components
-    }
+    return await this.request<HealthResponse>('/_rari/health')
   }
 
   isInitialized(): boolean {

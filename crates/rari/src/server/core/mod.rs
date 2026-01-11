@@ -243,21 +243,21 @@ impl Server {
         ));
 
         let revalidation_router = Router::new()
-            .route("/api/revalidate", post(revalidate_by_path))
+            .route("/_rari/revalidate", post(revalidate_by_path))
             .layer(small_body_limit)
             .layer(create_strict_rate_limit_layer(Some(
                 config.rate_limit.revalidate_requests_per_minute,
             )));
 
         let mut router = Router::new()
-            .route("/api/rsc/stream", post(stream_component))
-            .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
+            .route("/_rari/stream", post(stream_component))
+            .route("/_rari/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
-            .route("/api/rsc/csrf-token", get(get_csrf_token))
-            .route("/api/rsc/route-info", post(get_route_info))
+            .route("/_rari/csrf-token", get(get_csrf_token))
+            .route("/_rari/route-info", post(get_route_info))
             .layer(small_body_limit)
-            .route("/api/rsc/action", post(handle_server_action))
-            .route("/api/rsc/form-action", post(handle_form_action))
+            .route("/_rari/action", post(handle_server_action))
+            .route("/_rari/form-action", post(handle_form_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);
 
@@ -279,12 +279,12 @@ impl Server {
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
-                .route("/api/rsc/health", get(health_check))
-                .route("/api/rsc/register", post(register_component))
-                .route("/api/rsc/register-client", post(register_client_component))
+                .route("/_rari/health", get(health_check))
+                .route("/_rari/register", post(register_component))
+                .route("/_rari/register-client", post(register_client_component))
                 .layer(large_body_limit)
-                .route("/api/rsc/hmr", post(handle_hmr_action))
-                .route("/api/rsc/hmr", axum::routing::options(cors_preflight_ok))
+                .route("/_rari/hmr", post(handle_hmr_action))
+                .route("/_rari/hmr", axum::routing::options(cors_preflight_ok))
                 .layer(medium_body_limit)
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))

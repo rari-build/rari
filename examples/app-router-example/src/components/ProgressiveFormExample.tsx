@@ -165,7 +165,7 @@ export default function ProgressiveFormExample() {
                   Form posts to
                   {' '}
                   <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-                    /api/rsc/form-action
+                    /_rari/form-action
                   </code>
                   {' '}
                   endpoint using standard HTML form submission

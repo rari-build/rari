@@ -561,21 +561,14 @@ if (import.meta.hot) {
         changeOrigin: true,
         secure: false,
         rewrite: path => path.replace(/^\/api/, '/api'),
-        ws: false,
+        ws: true,
       }
 
-      config.server.proxy['/rsc'] = {
+      config.server.proxy['/_rari'] = {
         target: `http://localhost:${serverPort}`,
         changeOrigin: true,
         secure: false,
-        ws: false,
-      }
-
-      config.server.proxy['/_rsc_status'] = {
-        target: `http://localhost:${serverPort}`,
-        changeOrigin: true,
-        secure: false,
-        ws: false,
+        ws: true,
       }
 
       if (command === 'build') {
@@ -957,7 +950,7 @@ const ${componentName} = registerClientReference(
               }
 
               const registerResponse = await fetch(
-                `${baseUrl}/api/rsc/register`,
+                `${baseUrl}/_rari/register`,
                 {
                   method: 'POST',
                   headers: {
@@ -1009,7 +1002,7 @@ const ${componentName} = registerClientReference(
               .replace(/\.[^.]+$/, '')
 
             try {
-              await fetch(`${baseUrl}/api/rsc/register-client`, {
+              await fetch(`${baseUrl}/_rari/register-client`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1126,7 +1119,7 @@ const ${componentName} = registerClientReference(
             let serverReady = false
             for (let i = 0; i < 10; i++) {
               try {
-                const healthResponse = await fetch(`${baseUrl}/api/rsc/health`)
+                const healthResponse = await fetch(`${baseUrl}/_rari/health`)
                 if (healthResponse.ok) {
                   serverReady = true
                   break
@@ -1183,7 +1176,7 @@ const ${componentName} = registerClientReference(
           for (const component of components) {
             try {
               const registerResponse = await fetch(
-                `${baseUrl}/api/rsc/register`,
+                `${baseUrl}/_rari/register`,
                 {
                   method: 'POST',
                   headers: {

@@ -203,7 +203,7 @@ export function registerClientComponent(componentFunction, id, exportName) {
   }
 
   if (typeof window !== 'undefined') {
-    fetch('/api/rsc/register-client', {
+    fetch('/_rari/register-client', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -339,11 +339,11 @@ class RscClient {
     await loadRscClient()
 
     const endpoints = (() => {
-      const list = ['/api/rsc/stream']
+      const list = ['/_rari/stream']
       try {
         const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocalHost)
-          list.push('http://127.0.0.1:3000/api/rsc/stream', 'http://localhost:3000/api/rsc/stream')
+          list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
       }
       catch {}
       return list
@@ -924,38 +924,6 @@ class RscClient {
 
     return processed
   }
-
-  async waitForServerReady() {
-    let serverReady = false
-    let retries = 0
-
-    while (!serverReady && retries < this.config.maxRetries) {
-      try {
-        const statusResponse = await fetch('/_rsc_status')
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          if (statusData.status === 'ready') {
-            serverReady = true
-          }
-          else {
-            throw new Error(`Server status: ${statusData.status}`)
-          }
-        }
-        else {
-          throw new Error(`Status check failed: ${statusResponse.status}`)
-        }
-      }
-      catch {
-        retries++
-        if (retries < this.config.maxRetries)
-          await new Promise(resolve => setTimeout(resolve, this.config.retryDelay))
-      }
-    }
-
-    if (!serverReady) {
-      throw new Error('RSC server is not ready after multiple attempts')
-    }
-  }
 }
 
 const rscClient = new RscClient()
@@ -1190,7 +1158,7 @@ if (import.meta.hot) {
 
     try {
       const rariServerUrl = window.location.origin
-      const reloadUrl = `${rariServerUrl}/api/rsc/hmr`
+      const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       let componentId = filePath
       if (componentId.startsWith('src/'))
@@ -1295,7 +1263,7 @@ if (import.meta.hot) {
           ? 'http://localhost:3000'
           : window.location.origin
 
-        const invalidateUrl = `${rariServerUrl}/api/rsc/hmr`
+        const invalidateUrl = `${rariServerUrl}/_rari/hmr`
 
         const invalidateResponse = await fetch(invalidateUrl, {
           method: 'POST',

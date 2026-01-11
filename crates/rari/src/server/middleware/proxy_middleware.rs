@@ -117,12 +117,7 @@ where
             }
 
             let path = request.uri().path();
-            if path.starts_with("/api/rsc/")
-                || path.starts_with("/api/revalidate/")
-                || path.starts_with("/api/cache/")
-                || path.starts_with("/_rsc_")
-                || path.starts_with("/vite-server/")
-            {
+            if path.starts_with("/_rari/") || path.starts_with("/vite-server/") {
                 return inner.call(request).await;
             }
 
