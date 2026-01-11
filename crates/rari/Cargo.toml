@@ -152,7 +152,6 @@ image = { version = "0.25.9", default-features = false, features = [
   "avif"
 ] }
 webp = "0.3.1"
-resvg = "0.45.1"
 
 # Layout and text rendering
 taffy = "0.9.2"
