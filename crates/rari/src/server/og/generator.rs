@@ -85,6 +85,42 @@ impl OgImageGenerator {
         manifest.insert(path, entry);
     }
 
+    pub async fn find_og_image_for_route(&self, route_path: &str) -> Option<OgImageEntry> {
+        let manifest = self.manifest.read().await;
+
+        if let Some(entry) = manifest.get(route_path) {
+            return Some(entry.clone());
+        }
+
+        let path_segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+
+        for (pattern, entry) in manifest.iter() {
+            let pattern_segments: Vec<&str> =
+                pattern.split('/').filter(|s| !s.is_empty()).collect();
+
+            if pattern_segments.len() != path_segments.len() {
+                continue;
+            }
+
+            let mut matches = true;
+
+            for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
+                if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
+                    continue;
+                } else if pattern_seg != path_seg {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if matches {
+                return Some(entry.clone());
+            }
+        }
+
+        None
+    }
+
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
         const MAX_OG_WIDTH: u32 = 2400;
         const MAX_OG_HEIGHT: u32 = 1260;
@@ -315,5 +351,96 @@ impl OgImageGenerator {
 
     pub fn invalidate(&self, route_path: &str) {
         self.cache.remove(route_path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_find_og_image_for_static_route() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let entry = OgImageEntry {
+            path: "/blog".to_string(),
+            file_path: "blog/opengraph-image.tsx".to_string(),
+            width: Some(1200),
+            height: Some(630),
+            content_type: Some("image/png".to_string()),
+        };
+
+        generator.register_component("/blog".to_string(), entry.clone()).await;
+
+        let found = generator.find_og_image_for_route("/blog").await;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.path, "/blog");
+        assert_eq!(found.width, Some(1200));
+        assert_eq!(found.height, Some(630));
+    }
+
+    #[tokio::test]
+    async fn test_find_og_image_for_dynamic_route() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let entry = OgImageEntry {
+            path: "/blog/[slug]".to_string(),
+            file_path: "blog/[slug]/opengraph-image.tsx".to_string(),
+            width: Some(1200),
+            height: Some(630),
+            content_type: Some("image/png".to_string()),
+        };
+
+        generator.register_component("/blog/[slug]".to_string(), entry.clone()).await;
+
+        let found = generator.find_og_image_for_route("/blog/hello-world").await;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.path, "/blog/[slug]");
+        assert_eq!(found.width, Some(1200));
+        assert_eq!(found.height, Some(630));
+    }
+
+    #[tokio::test]
+    async fn test_find_og_image_not_found() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let found = generator.find_og_image_for_route("/nonexistent").await;
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_og_image_prefers_exact_match() {
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        let generator = OgImageGenerator::new(runtime, std::path::PathBuf::from("."));
+
+        let dynamic_entry = OgImageEntry {
+            path: "/blog/[slug]".to_string(),
+            file_path: "blog/[slug]/opengraph-image.tsx".to_string(),
+            width: Some(1200),
+            height: Some(630),
+            content_type: Some("image/png".to_string()),
+        };
+
+        let static_entry = OgImageEntry {
+            path: "/blog/featured".to_string(),
+            file_path: "blog/featured/opengraph-image.tsx".to_string(),
+            width: Some(1600),
+            height: Some(900),
+            content_type: Some("image/png".to_string()),
+        };
+
+        generator.register_component("/blog/[slug]".to_string(), dynamic_entry).await;
+        generator.register_component("/blog/featured".to_string(), static_entry).await;
+
+        let found = generator.find_og_image_for_route("/blog/featured").await;
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.path, "/blog/featured");
+        assert_eq!(found.width, Some(1600));
     }
 }

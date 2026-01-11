@@ -129,7 +129,11 @@ async fn collect_page_metadata(
         .await
     {
         Ok(metadata_value) => match serde_json::from_value::<PageMetadata>(metadata_value) {
-            Ok(metadata) => Some(metadata),
+            Ok(mut metadata) => {
+                inject_og_image_into_metadata(state, &route_match.pathname, &mut metadata, context)
+                    .await;
+                Some(metadata)
+            }
             Err(e) => {
                 error!("Failed to deserialize metadata: {}", e);
                 None
@@ -139,6 +143,80 @@ async fn collect_page_metadata(
             error!("Failed to collect metadata from runtime: {}", e);
             None
         }
+    }
+}
+
+async fn inject_og_image_into_metadata(
+    state: &ServerState,
+    route_path: &str,
+    metadata: &mut PageMetadata,
+    context: &LayoutRenderContext,
+) {
+    if let Some(og_generator) = &state.og_generator
+        && let Some(og_entry) = og_generator.find_og_image_for_route(route_path).await
+    {
+        let base_url = get_base_url_from_context(context, &state.config);
+        let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
+
+        use crate::rsc::rendering::layout::types::{
+            OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
+        };
+
+        let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
+            OpenGraphImage::Detailed(OpenGraphImageDescriptor {
+                url: og_image_url.clone(),
+                width: og_entry.width,
+                height: og_entry.height,
+                alt: None,
+            })
+        } else {
+            OpenGraphImage::Simple(og_image_url.clone())
+        };
+
+        if let Some(ref mut og) = metadata.open_graph {
+            if og.images.is_none() {
+                og.images = Some(vec![og_image]);
+            } else if let Some(ref mut images) = og.images {
+                images.insert(0, og_image);
+            }
+        } else {
+            metadata.open_graph = Some(OpenGraphMetadata {
+                title: None,
+                description: None,
+                url: None,
+                site_name: None,
+                images: Some(vec![og_image]),
+                og_type: None,
+            });
+        }
+
+        if let Some(ref mut twitter) = metadata.twitter {
+            if twitter.images.is_none() {
+                twitter.images = Some(vec![og_image_url]);
+            } else if let Some(ref mut images) = twitter.images {
+                images.insert(0, og_image_url);
+            }
+        }
+    }
+}
+
+fn get_base_url_from_context(
+    context: &LayoutRenderContext,
+    config: &crate::server::config::Config,
+) -> String {
+    if let Some(host) = context.headers.get("host") {
+        let protocol = context
+            .headers
+            .get("x-forwarded-proto")
+            .or_else(|| context.headers.get("x-forwarded-protocol"))
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
+
+        format!("{}://{}", protocol, host)
+    } else if config.is_production() {
+        "https://localhost".to_string()
+    } else {
+        format!("http://localhost:{}", config.server.port)
     }
 }
 
