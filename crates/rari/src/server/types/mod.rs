@@ -1,12 +1,14 @@
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub mod request;
 
 use crate::server::cache::response_cache;
 use crate::server::config;
+use crate::server::og::OgImageGenerator;
 use crate::server::routing;
 use crate::server::security::csrf::CsrfTokenManager;
 
@@ -26,6 +28,8 @@ pub struct ServerState {
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub response_cache: Arc<response_cache::ResponseCache>,
     pub csrf_manager: Arc<CsrfTokenManager>,
+    pub og_generator: Option<Arc<OgImageGenerator>>,
+    pub project_root: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]

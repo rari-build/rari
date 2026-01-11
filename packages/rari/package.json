@@ -51,6 +51,10 @@
       "types": "./dist/image/index.d.mts",
       "default": "./dist/image/index.mjs"
     },
+    "./og": {
+      "types": "./dist/og/index.d.mts",
+      "default": "./dist/og/index.mjs"
+    },
     "./mdx": {
       "types": "./dist/mdx.d.mts",
       "default": "./dist/mdx.mjs"

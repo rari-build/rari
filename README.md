@@ -136,7 +136,7 @@ my-rari-app/
 ### App Router Layout
 ```tsx
 // src/app/layout.tsx - Server component by default
-import type { LayoutProps } from 'rari/client'
+import type { LayoutProps } from 'rari'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -159,7 +159,7 @@ export const metadata = {
 ### Server Component (Default)
 ```tsx
 // src/app/page.tsx - Runs on the server, no directive needed
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 
 export default async function HomePage({ params, searchParams }: PageProps) {
   const data = await fetch('https://api.example.com/data').then(r => r.json())
@@ -181,7 +181,7 @@ export const metadata = {
 ### Dynamic Routes
 ```tsx
 // src/app/blog/[slug]/page.tsx - Dynamic route with params
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 
 export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
   return (

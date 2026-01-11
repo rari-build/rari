@@ -645,7 +645,7 @@ pub async fn handle_app_route(
 
         if path_without_leading_slash.contains('.') {
             const BLOCKED_FILES: &[&str] =
-                &["server/server-manifest.json", "server/app-routes.json", "server/"];
+                &["server/manifest.json", "server/routes.json", "server/"];
 
             for blocked in BLOCKED_FILES {
                 if path_without_leading_slash.starts_with(blocked)

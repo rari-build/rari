@@ -43,6 +43,14 @@ export interface NotFoundEntry {
   filePath: string
 }
 
+export interface OgImageEntry {
+  path: string
+  filePath: string
+  width?: number
+  height?: number
+  contentType?: string
+}
+
 export interface ApiRouteEntry {
   path: string
   filePath: string
@@ -59,6 +67,7 @@ export interface AppRouteManifest {
   errors: ErrorEntry[]
   notFound: NotFoundEntry[]
   apiRoutes: ApiRouteEntry[]
+  ogImages: OgImageEntry[]
   generated: string
 }
 

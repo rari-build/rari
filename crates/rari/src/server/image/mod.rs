@@ -18,7 +18,7 @@ pub async fn handle_image_request(
     State(optimizer): State<Arc<ImageOptimizer>>,
     Query(params): Query<OptimizeParams>,
 ) -> Result<Response, ImageError> {
-    let optimized = optimizer.optimize(params).await?;
+    let (optimized, cache_hit) = optimizer.optimize(params).await?;
 
     let content_type = match optimized.format {
         ImageFormat::Avif => "image/avif",
@@ -28,15 +28,28 @@ pub async fn handle_image_request(
         ImageFormat::Gif => "image/gif",
     };
 
-    Ok((
+    let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+
+    let cache_header = if is_production {
+        "public, max-age=31536000, immutable"
+    } else {
+        "public, max-age=0, must-revalidate"
+    };
+
+    let x_cache = if cache_hit { "HIT" } else { "MISS" };
+
+    let mut response = (
         StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, content_type),
-            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
-        ],
+        [(header::CONTENT_TYPE, content_type), (header::CACHE_CONTROL, cache_header)],
         optimized.data,
     )
-        .into_response())
+        .into_response();
+
+    response
+        .headers_mut()
+        .insert("x-cache", x_cache.parse().expect("x-cache header value should be valid ASCII"));
+
+    Ok(response)
 }
 
 #[derive(Debug, thiserror::Error)]

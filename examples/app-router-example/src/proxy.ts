@@ -1,4 +1,4 @@
-import { RariRequest, RariResponse } from 'rari/vite'
+import { RariRequest, RariResponse } from 'rari'
 
 export function proxy(request: RariRequest) {
   const { pathname } = request.rariUrl

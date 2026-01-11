@@ -6,6 +6,7 @@ use super::{
 };
 use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
+use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
@@ -16,8 +17,8 @@ pub struct ImageOptimizer {
 }
 
 impl ImageOptimizer {
-    pub fn new(config: ImageConfig) -> Self {
-        let cache = Arc::new(ImageCache::new(config.max_cache_size));
+    pub fn new(config: ImageConfig, project_path: &Path) -> Self {
+        let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
         let http_client = Client::builder()
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects as usize))
             .build()
@@ -26,7 +27,10 @@ impl ImageOptimizer {
         Self { cache, config, http_client }
     }
 
-    pub async fn optimize(&self, params: OptimizeParams) -> Result<OptimizedImage, ImageError> {
+    pub async fn optimize(
+        &self,
+        params: OptimizeParams,
+    ) -> Result<(OptimizedImage, bool), ImageError> {
         if !self.config.quality_allowlist.is_empty()
             && !self.config.quality_allowlist.contains(&params.q)
         {
@@ -38,18 +42,23 @@ impl ImageOptimizer {
 
         let cache_key = self.generate_cache_key(&params);
 
-        if let Some(cached) = self.cache.get(&cache_key) {
+        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+
+        if is_production && let Some(cached) = self.cache.get(&cache_key) {
             let img = image::load_from_memory(&cached)
                 .map_err(|e| ImageError::ProcessingError(e.to_string()))?;
 
             let format = self.determine_format(&params);
 
-            return Ok(OptimizedImage {
-                data: (*cached).clone(),
-                format,
-                width: img.width(),
-                height: img.height(),
-            });
+            return Ok((
+                OptimizedImage {
+                    data: (*cached).clone(),
+                    format,
+                    width: img.width(),
+                    height: img.height(),
+                },
+                true,
+            ));
         }
 
         self.validate_url(&params.url)?;
@@ -57,9 +66,13 @@ impl ImageOptimizer {
         let source = self.fetch_image(&params.url).await?;
         let optimized = self.process_image(source, &params)?;
 
-        self.cache.put(cache_key, optimized.data.clone());
+        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
-        Ok(optimized)
+        if is_production {
+            self.cache.put(cache_key, optimized.data.clone());
+        }
+
+        Ok((optimized, false))
     }
 
     fn generate_cache_key(&self, params: &OptimizeParams) -> String {

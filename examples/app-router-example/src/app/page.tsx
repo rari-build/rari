@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 
 export default async function HomePage({ params, searchParams }: PageProps) {
   return (
@@ -180,6 +180,91 @@ export default async function HomePage({ params, searchParams }: PageProps) {
               View demo →
             </span>
           </a>
+
+          <a
+            href="/_rari/og/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block bg-linear-to-br from-purple-50 to-indigo-50 rounded-lg shadow-sm border-2 border-purple-200 p-6 no-underline hover:shadow-md hover:border-purple-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">🎨</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                OG Image Generation
+              </h3>
+              <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded-full">
+                NEW
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              Dynamic Open Graph images for social media sharing
+            </p>
+            <span className="text-sm font-medium text-purple-600 group-hover:text-purple-700">
+              View OG image →
+            </span>
+          </a>
+
+          <a
+            href="/blog/hello-world"
+            className="group block bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-underline hover:shadow-md hover:border-gray-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">📝</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                Blog Posts
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              Dynamic routes with custom OG images per post
+            </p>
+            <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+              View demo →
+            </span>
+          </a>
+        </div>
+      </div>
+
+      <div className="bg-linear-to-r from-purple-50 to-indigo-50 rounded-lg border-2 border-purple-200 p-8">
+        <div className="flex items-start gap-4">
+          <span className="text-4xl">🎨</span>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              New: OG Image Generation
+            </h2>
+            <p className="text-gray-700 mb-4 leading-relaxed">
+              Rari now supports automatic Open Graph image generation for social media sharing!
+              Create dynamic images using JSX, powered by Rust for blazing-fast performance.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-4">
+              <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 border border-purple-200 rounded-full">
+                ⚡ 10x faster than Next.js
+              </span>
+              <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 border border-purple-200 rounded-full">
+                🎯 Zero npm dependencies
+              </span>
+              <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 border border-purple-200 rounded-full">
+                🚀 Rust-powered
+              </span>
+            </div>
+            <div className="flex gap-3">
+              <a
+                href="/_rari/og/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors no-underline"
+              >
+                View Home OG Image
+              </a>
+              <a
+                href="/_rari/og/blog/hello-world"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-purple-700 bg-white border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors no-underline"
+              >
+                View Blog OG Image
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 

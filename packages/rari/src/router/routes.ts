@@ -6,9 +6,10 @@ import type {
   LayoutEntry,
   LoadingEntry,
   NotFoundEntry,
+  OgImageEntry,
   RouteSegment,
   RouteSegmentType,
-} from './app-types'
+} from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
@@ -27,6 +28,10 @@ const SPECIAL_FILES = {
   TEMPLATE: 'template',
   DEFAULT: 'default',
   ROUTE: 'route',
+  OG_IMAGE: 'opengraph-image',
+  TWITTER_IMAGE: 'twitter-image',
+  ICON: 'icon',
+  APPLE_ICON: 'apple-icon',
 } as const
 
 const SEGMENT_PATTERNS = {
@@ -58,8 +63,9 @@ class AppRouteGenerator {
     const errors: ErrorEntry[] = []
     const notFound: NotFoundEntry[] = []
     const apiRoutes: ApiRouteEntry[] = []
+    const ogImages: OgImageEntry[] = []
 
-    await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes)
+    await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
 
     if (this.verbose) {
       console.warn(`[AppRouter] Found ${routes.length} routes`)
@@ -67,6 +73,7 @@ class AppRouteGenerator {
       console.warn(`[AppRouter] Found ${loading.length} loading components`)
       console.warn(`[AppRouter] Found ${errors.length} error boundaries`)
       console.warn(`[AppRouter] Found ${apiRoutes.length} API routes`)
+      console.warn(`[AppRouter] Found ${ogImages.length} OG images`)
     }
 
     return {
@@ -76,6 +83,7 @@ class AppRouteGenerator {
       errors,
       notFound,
       apiRoutes: this.sortApiRoutes(apiRoutes),
+      ogImages,
       generated: new Date().toISOString(),
     }
   }
@@ -88,6 +96,7 @@ class AppRouteGenerator {
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
     apiRoutes: ApiRouteEntry[],
+    ogImages: OgImageEntry[],
   ): Promise<void> {
     const fullPath = path.join(this.appDir, relativePath)
 
@@ -124,11 +133,12 @@ class AppRouteGenerator {
       errors,
       notFound,
       apiRoutes,
+      ogImages,
     )
 
     for (const dir of dirs) {
       const subPath = relativePath ? path.join(relativePath, dir) : dir
-      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, apiRoutes)
+      await this.scanDirectory(subPath, routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
     }
   }
 
@@ -141,6 +151,7 @@ class AppRouteGenerator {
     errors: ErrorEntry[],
     notFound: NotFoundEntry[],
     apiRoutes: ApiRouteEntry[],
+    ogImages: OgImageEntry[],
   ): Promise<void> {
     const routePath = this.pathToRoute(relativePath)
 
@@ -191,6 +202,39 @@ class AppRouteGenerator {
       notFound.push({
         path: routePath,
         filePath: path.join(relativePath, notFoundFile),
+      })
+    }
+
+    const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
+    if (ogImageFile) {
+      const filePath = path.join(relativePath, ogImageFile)
+      const fullFilePath = path.join(this.appDir, filePath)
+
+      let width: number | undefined
+      let height: number | undefined
+      let contentType: string | undefined
+
+      try {
+        const content = await fs.readFile(fullFilePath, 'utf-8')
+
+        const sizeMatch = content.match(/export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/)
+        if (sizeMatch) {
+          width = Number.parseInt(sizeMatch[1], 10)
+          height = Number.parseInt(sizeMatch[2], 10)
+        }
+
+        const contentTypeMatch = content.match(/export\s+const\s+contentType\s*=\s*['"]([^'"]+)['"]/)
+        if (contentTypeMatch)
+          contentType = contentTypeMatch[1]
+      }
+      catch {}
+
+      ogImages.push({
+        path: routePath,
+        filePath,
+        width,
+        height,
+        contentType,
       })
     }
 

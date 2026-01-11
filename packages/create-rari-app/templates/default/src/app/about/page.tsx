@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 
 export default function AboutPage(_params: PageProps) {
   return (

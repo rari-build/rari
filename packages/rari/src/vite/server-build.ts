@@ -113,7 +113,7 @@ export class ServerComponentBuilder {
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
       serverDir: options.serverDir || 'server',
-      manifestPath: options.manifestPath || 'server/server-manifest.json',
+      manifestPath: options.manifestPath || 'server/manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
     }
@@ -1550,6 +1550,25 @@ export function createServerBuildPlugin(
     buildStart() {
       if (!builder)
         return
+
+      const isProduction = process.env.NODE_ENV === 'production'
+      const cacheDirs = [
+        path.join(projectRoot, 'dist', 'cache', 'og'),
+        path.join(projectRoot, 'dist', 'cache', 'images'),
+      ]
+
+      if (isProduction)
+        cacheDirs.push('/tmp/rari-og-cache', '/tmp/rari-image-cache')
+
+      for (const dir of cacheDirs) {
+        try {
+          if (fs.existsSync(dir))
+            fs.rmSync(dir, { recursive: true, force: true })
+        }
+        catch (error) {
+          console.warn(`[rari] Failed to clear cache ${dir}:`, error)
+        }
+      }
 
       const srcDir = path.join(projectRoot, 'src')
       if (fs.existsSync(srcDir))

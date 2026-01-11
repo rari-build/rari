@@ -236,7 +236,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         return cachedManifestContent
       }
 
-      const { generateAppRouteManifest } = await import('./app-routes')
+      const { generateAppRouteManifest } = await import('./routes')
 
       const manifest = await generateAppRouteManifest(appDir, {
         extensions: opts.extensions,
@@ -248,7 +248,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       await fs.mkdir(outDir, { recursive: true })
       const serverDir = path.join(outDir, 'server')
       await fs.mkdir(serverDir, { recursive: true })
-      await fs.writeFile(path.join(serverDir, 'app-routes.json'), manifestContent, 'utf-8')
+      await fs.writeFile(path.join(serverDir, 'routes.json'), manifestContent, 'utf-8')
 
       routeStructureHash = currentHash
       routeFiles.clear()

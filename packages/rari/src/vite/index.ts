@@ -874,7 +874,7 @@ const ${componentName} = registerClientReference(
       const serverDir = path.join(distDir, 'server')
       if (!fs.existsSync(serverDir))
         fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image-config.json')
+      const configPath = path.join(serverDir, 'image.json')
       fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
 
       let serverComponentBuilder: any = null
@@ -888,7 +888,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server/server-manifest.json',
+            manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
           })
 
@@ -1163,7 +1163,7 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server/server-manifest.json',
+            manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
           })
 
@@ -1650,7 +1650,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       const serverDir = path.join(distDir, 'server')
       if (!fs.existsSync(serverDir))
         fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image-config.json')
+      const configPath = path.join(serverDir, 'image.json')
       fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
     },
   }

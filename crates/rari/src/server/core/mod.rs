@@ -89,7 +89,7 @@ impl Server {
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
         let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
         let mut renderer =
-            crate::rsc::RscRenderer::with_resource_limits(js_runtime, resource_limits);
+            crate::rsc::RscRenderer::with_resource_limits(js_runtime.clone(), resource_limits);
         renderer.initialize().await?;
 
         if config.is_production() {
@@ -100,7 +100,7 @@ impl Server {
         }
 
         let app_router = {
-            let manifest_path = "dist/server/app-routes.json";
+            let manifest_path = "dist/server/routes.json";
 
             match app_router::AppRouter::from_file(manifest_path).await {
                 Ok(router) => Some(Arc::new(router)),
@@ -109,7 +109,7 @@ impl Server {
         };
 
         let api_route_handler = {
-            let manifest_path = "dist/server/app-routes.json";
+            let manifest_path = "dist/server/routes.json";
 
             match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
                 .await
@@ -136,7 +136,7 @@ impl Server {
 
         let project_root =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let dist_path_resolver = Arc::new(DistPathResolver::new(project_root));
+        let dist_path_resolver = Arc::new(DistPathResolver::new(project_root.clone()));
         module_reload_manager.set_dist_path_resolver(dist_path_resolver);
 
         let module_reload_manager = Arc::new(module_reload_manager);
@@ -155,6 +155,22 @@ impl Server {
 
         let csrf_manager = Arc::new(Self::initialize_csrf_manager());
 
+        let og_generator = {
+            let runtime = js_runtime.clone();
+            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity(
+                runtime,
+                project_root.clone(),
+                100,
+            ));
+
+            let manifest_path = "dist/server/routes.json";
+            if let Err(e) = generator.load_manifest(manifest_path).await {
+                tracing::error!("Failed to load OG image manifest: {}", e);
+            }
+
+            Some(generator)
+        };
+
         let state = ServerState {
             renderer: renderer_arc,
             ssr_renderer,
@@ -169,6 +185,8 @@ impl Server {
             html_cache: Arc::new(dashmap::DashMap::new()),
             response_cache,
             csrf_manager,
+            og_generator,
+            project_root,
         };
 
         if config.is_production() {
@@ -177,7 +195,7 @@ impl Server {
         }
 
         let mut config = config;
-        let config_path = "dist/server/image-config.json";
+        let config_path = "dist/server/image.json";
 
         if let Ok(image_config_str) = std::fs::read_to_string(config_path)
             && let Ok(image_config) = serde_json::from_str(&image_config_str)
@@ -219,8 +237,10 @@ impl Server {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
-        let image_optimizer =
-            Arc::new(crate::server::image::ImageOptimizer::new(config.images.clone()));
+        let image_optimizer = Arc::new(crate::server::image::ImageOptimizer::new(
+            config.images.clone(),
+            &state.project_root,
+        ));
 
         let revalidation_router = Router::new()
             .route("/api/revalidate", post(revalidate_by_path))
@@ -247,6 +267,13 @@ impl Server {
 
         router = router.merge(image_router);
 
+        let og_router = Router::new()
+            .route("/_rari/og/", get(crate::server::handlers::og_handler::og_image_handler_root))
+            .route("/_rari/og/{*path}", get(crate::server::handlers::og_handler::og_image_handler))
+            .with_state(state.clone());
+
+        router = router.merge(og_router);
+
         if config.is_development() {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
@@ -268,7 +295,7 @@ impl Server {
             }
         }
 
-        let has_app_router = std::path::Path::new("dist/server/app-routes.json").exists();
+        let has_app_router = std::path::Path::new("dist/server/routes.json").exists();
 
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);

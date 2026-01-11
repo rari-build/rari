@@ -1,4 +1,4 @@
-import type { LayoutProps } from 'rari/client'
+import type { LayoutProps } from 'rari'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (

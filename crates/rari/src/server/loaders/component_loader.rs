@@ -13,7 +13,7 @@ pub struct ComponentLoader;
 
 impl ComponentLoader {
     pub async fn load_production_components(renderer: &mut RscRenderer) -> Result<(), RariError> {
-        let manifest_path = std::path::Path::new("dist/server/server-manifest.json");
+        let manifest_path = std::path::Path::new("dist/server/manifest.json");
         if !manifest_path.exists() {
             return Ok(());
         }
