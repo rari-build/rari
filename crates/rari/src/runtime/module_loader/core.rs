@@ -169,11 +169,6 @@ impl RariModuleLoader {
         self.storage.flush_pending_batch()
     }
 
-    #[cfg(test)]
-    pub fn with_test_config() -> Self {
-        Self::with_config(RuntimeConfig::test())
-    }
-
     fn calculate_memory_savings(hits: usize, _misses: usize) -> usize {
         hits * 24
     }

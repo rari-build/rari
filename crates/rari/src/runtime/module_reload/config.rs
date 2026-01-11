@@ -48,19 +48,6 @@ impl ReloadConfig {
         }
     }
 
-    #[cfg(test)]
-    pub fn test() -> Self {
-        Self {
-            enabled: true,
-            max_retry_attempts: 1,
-            reload_timeout_ms: 1000,
-            parallel_reloads: false,
-            debounce_delay_ms: 10,
-            max_history_size: 10,
-            enable_memory_monitoring: false,
-        }
-    }
-
     pub fn validate(&self) -> Result<(), String> {
         if self.max_retry_attempts == 0 {
             return Err("max_retry_attempts must be greater than 0".to_string());

@@ -75,34 +75,6 @@ pub fn create_page_props(
     Ok(result)
 }
 
-pub fn calculate_boundary_positions(
-    layout_structure: &super::LayoutStructure,
-) -> FxHashMap<String, Vec<usize>> {
-    let mut positions = FxHashMap::default();
-
-    for boundary in &layout_structure.suspense_boundaries {
-        let mut dom_path = Vec::new();
-
-        if layout_structure.has_navigation {
-            if let Some(_nav_pos) = layout_structure.navigation_position
-                && boundary.is_in_content_area
-            {
-                dom_path.push(1);
-            }
-        } else if boundary.is_in_content_area {
-            dom_path.push(0);
-        }
-
-        for &index in &boundary.parent_path {
-            dom_path.push(index);
-        }
-
-        positions.insert(boundary.boundary_id.clone(), dom_path);
-    }
-
-    positions
-}
-
 pub fn create_layout_context(
     params: FxHashMap<String, String>,
     search_params: FxHashMap<String, Vec<String>>,
