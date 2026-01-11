@@ -86,6 +86,9 @@ impl OgImageGenerator {
     }
 
     pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
+        const MAX_OG_WIDTH: u32 = 2400;
+        const MAX_OG_HEIGHT: u32 = 1260;
+
         let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
         if is_production && let Some(cached) = self.cache.get(route_path) {
@@ -103,8 +106,8 @@ impl OgImageGenerator {
 
         let jsx_element = self.execute_og_component(&entry, route_path, &params).await?;
 
-        let width = entry.width.unwrap_or(1200);
-        let height = entry.height.unwrap_or(630);
+        let width = entry.width.unwrap_or(1200).min(MAX_OG_WIDTH);
+        let height = entry.height.unwrap_or(630).min(MAX_OG_HEIGHT);
 
         let (computed_layout, font_context) = {
             let mut layout_engine = LayoutEngine::new();

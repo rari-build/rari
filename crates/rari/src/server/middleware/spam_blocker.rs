@@ -189,9 +189,9 @@ pub async fn spam_blocker_middleware(
     let user_agent = req.headers().get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("");
     let ip = addr.ip().to_string();
 
-    if let Some(reason) = spam_blocker.check_blocked(path, user_agent, &ip) {
+    if let Some(_reason) = spam_blocker.check_blocked(path, user_agent, &ip) {
         #[cfg(debug_assertions)]
-        eprintln!("[spam_blocker] Blocked {} from {}: {:?}", path, ip, reason);
+        eprintln!("[spam_blocker] Blocked {} from {}: {:?}", path, ip, _reason);
 
         req.extensions_mut().insert(SpamRequest);
 

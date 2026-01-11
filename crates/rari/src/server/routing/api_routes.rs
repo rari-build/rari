@@ -428,6 +428,8 @@ impl ApiRouteHandler {
         request: Request<Body>,
         is_development: bool,
     ) -> Result<Response<Body>, RariError> {
+        const MAX_API_BODY_SIZE: usize = 10 * 1024 * 1024;
+
         let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
@@ -440,12 +442,12 @@ impl ApiRouteHandler {
 
         let (parts, body) = request.into_parts();
 
-        let body_bytes = axum::body::to_bytes(body, usize::MAX).await.map_err(|e| {
+        let body_bytes = axum::body::to_bytes(body, MAX_API_BODY_SIZE).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
                 method = %route_match.method,
                 error = %e,
-                "Failed to read request body"
+                "Failed to read request body (may exceed size limit)"
             );
             RariError::bad_request(format!("Failed to read request body: {e}"))
         })?;

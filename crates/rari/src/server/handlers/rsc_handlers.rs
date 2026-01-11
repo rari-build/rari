@@ -19,6 +19,15 @@ pub async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
 ) -> Result<Response, StatusCode> {
+    {
+        let renderer = state.renderer.lock().await;
+        let registry = renderer.component_registry.lock();
+        if !registry.is_component_registered(&request.component_id) {
+            error!("Attempted to stream unregistered component: {}", request.component_id);
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let cache_key = if let Some(props) = &props_str {

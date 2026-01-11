@@ -10,6 +10,10 @@ use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
+const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
+const MAX_OUTPUT_WIDTH: u32 = 3840;
+const MAX_OUTPUT_HEIGHT: u32 = 2160;
+
 pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
     config: ImageConfig,
@@ -31,6 +35,15 @@ impl ImageOptimizer {
         &self,
         params: OptimizeParams,
     ) -> Result<(OptimizedImage, bool), ImageError> {
+        if let Some(w) = params.w
+            && w > MAX_OUTPUT_WIDTH
+        {
+            return Err(ImageError::InvalidParams(format!(
+                "Width {} exceeds maximum allowed ({})",
+                w, MAX_OUTPUT_WIDTH
+            )));
+        }
+
         if !self.config.quality_allowlist.is_empty()
             && !self.config.quality_allowlist.contains(&params.q)
         {
@@ -167,9 +180,31 @@ impl ImageOptimizer {
             return Err(ImageError::FetchError(format!("HTTP {}: {}", response.status(), url)));
         }
 
-        let bytes = response.bytes().await.map_err(|e| ImageError::FetchError(e.to_string()))?;
+        if let Some(content_length) = response.content_length()
+            && content_length as usize > MAX_SOURCE_IMAGE_SIZE
+        {
+            return Err(ImageError::InvalidParams(format!(
+                "Image too large: {} bytes (max {} bytes)",
+                content_length, MAX_SOURCE_IMAGE_SIZE
+            )));
+        }
 
-        Ok(bytes.to_vec())
+        let mut bytes = Vec::new();
+        let mut stream = response.bytes_stream();
+        use futures::StreamExt;
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
+            if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
+                return Err(ImageError::InvalidParams(format!(
+                    "Image too large (max {} bytes)",
+                    MAX_SOURCE_IMAGE_SIZE
+                )));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+
+        Ok(bytes)
     }
 
     fn determine_format(&self, params: &OptimizeParams) -> ImageFormat {
@@ -191,12 +226,28 @@ impl ImageOptimizer {
         let img = image::load_from_memory(&source)
             .map_err(|e| ImageError::ProcessingError(e.to_string()))?;
 
+        if img.width() > MAX_OUTPUT_WIDTH * 2 || img.height() > MAX_OUTPUT_HEIGHT * 2 {
+            return Err(ImageError::InvalidParams(format!(
+                "Source image too large: {}x{} (max {}x{})",
+                img.width(),
+                img.height(),
+                MAX_OUTPUT_WIDTH * 2,
+                MAX_OUTPUT_HEIGHT * 2
+            )));
+        }
+
         let processed = if let Some(width) = params.w {
-            if width < img.width() {
-                img.resize(width, u32::MAX, FilterType::Lanczos3)
+            let target_width = width.min(MAX_OUTPUT_WIDTH);
+            if target_width < img.width() {
+                img.resize(target_width, u32::MAX, FilterType::Lanczos3)
             } else {
                 img
             }
+        } else if img.width() > MAX_OUTPUT_WIDTH || img.height() > MAX_OUTPUT_HEIGHT {
+            let scale = (MAX_OUTPUT_WIDTH as f32 / img.width() as f32)
+                .min(MAX_OUTPUT_HEIGHT as f32 / img.height() as f32);
+            let new_width = (img.width() as f32 * scale) as u32;
+            img.resize(new_width, u32::MAX, FilterType::Lanczos3)
         } else {
             img
         };

@@ -11,6 +11,7 @@ use crate::server::config;
 use crate::server::og::OgImageGenerator;
 use crate::server::routing;
 use crate::server::security::csrf::CsrfTokenManager;
+use crate::server::security::ip_rate_limiter::EndpointRateLimiters;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -30,6 +31,7 @@ pub struct ServerState {
     pub csrf_manager: Arc<CsrfTokenManager>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
+    pub endpoint_rate_limiters: EndpointRateLimiters,
 }
 
 #[derive(Debug, Deserialize)]

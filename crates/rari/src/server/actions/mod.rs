@@ -258,8 +258,22 @@ pub async fn handle_form_action(
 
     let args = convert_form_data_to_args(&form_data);
 
+    let validation_config = if state.config.is_development() {
+        ValidationConfig::development()
+    } else {
+        ValidationConfig::production()
+    };
+
+    let sanitized_args = match validate_and_sanitize_args(&args, &validation_config) {
+        Ok(args) => args,
+        Err(e) => {
+            error!("Form action input validation failed: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
     let renderer = state.renderer.lock().await;
-    let result = renderer.execute_server_function(action_id, export_name, &args).await;
+    let result = renderer.execute_server_function(action_id, export_name, &sanitized_args).await;
 
     match result {
         Ok(value) => {

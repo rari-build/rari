@@ -1,12 +1,14 @@
 use crate::server::ServerState;
 use axum::{
-    extract::{Path, State},
+    extract::{ConnectInfo, Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use std::net::SocketAddr;
 
 pub async fn og_image_handler(
     State(state): State<ServerState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path(route_path): Path<String>,
 ) -> Result<Response, StatusCode> {
     if let Some(og_generator) = &state.og_generator {
@@ -15,6 +17,19 @@ pub async fn og_image_handler(
         } else {
             format!("/{}", route_path.trim_start_matches('/'))
         };
+
+        let ip = addr.ip().to_string();
+        if let Err(retry_after) = state.endpoint_rate_limiters.og_generation.check(&ip) {
+            return Ok((
+                StatusCode::TOO_MANY_REQUESTS,
+                [
+                    (header::RETRY_AFTER, retry_after.to_string()),
+                    (header::CONTENT_TYPE, "text/plain".to_string()),
+                ],
+                "Rate limit exceeded for OG image generation. Please try again later.",
+            )
+                .into_response());
+        }
 
         match og_generator.generate(&normalized_path).await {
             Ok((image_data, cache_hit)) => {
@@ -60,6 +75,7 @@ pub async fn og_image_handler(
 
 pub async fn og_image_handler_root(
     State(state): State<ServerState>,
+    connect_info: ConnectInfo<SocketAddr>,
 ) -> Result<Response, StatusCode> {
-    og_image_handler(State(state), Path("/".to_string())).await
+    og_image_handler(State(state), connect_info, Path("/".to_string())).await
 }

@@ -178,6 +178,10 @@ impl Server {
             Some(generator)
         };
 
+        let endpoint_rate_limiters =
+            crate::server::security::ip_rate_limiter::EndpointRateLimiters::new();
+        endpoint_rate_limiters.start_cleanup_tasks();
+
         let state = ServerState {
             renderer: renderer_arc,
             ssr_renderer,
@@ -194,6 +198,7 @@ impl Server {
             csrf_manager,
             og_generator,
             project_root,
+            endpoint_rate_limiters,
         };
 
         if config.is_production() {
@@ -249,6 +254,11 @@ impl Server {
             &state.project_root,
         ));
 
+        let image_state = crate::server::image::ImageState {
+            optimizer: image_optimizer,
+            rate_limiters: state.endpoint_rate_limiters.clone(),
+        };
+
         let revalidation_router = Router::new()
             .route("/_rari/revalidate", post(revalidate_by_path))
             .layer(small_body_limit)
@@ -270,7 +280,7 @@ impl Server {
 
         let image_router = Router::new()
             .route("/_rari/image", get(crate::server::image::handle_image_request))
-            .with_state(image_optimizer);
+            .with_state(image_state);
 
         router = router.merge(image_router);
 
