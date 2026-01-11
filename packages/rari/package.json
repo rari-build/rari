@@ -102,7 +102,7 @@
   "devDependencies": {
     "@types/node": "^25.0.6",
     "@types/react": "^19.2.8",
-    "@typescript/native-preview": "^7.0.0-dev.20260109.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260111.1",
     "chokidar": "^5.0.0",
     "eslint": "^9.39.2",
     "oxlint": "^1.38.0",
