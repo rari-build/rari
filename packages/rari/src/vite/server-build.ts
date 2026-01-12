@@ -57,6 +57,20 @@ interface ServerComponentManifest {
   }
   version: string
   buildTime: string
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
 }
 
 export interface ServerBuildOptions {
@@ -65,6 +79,20 @@ export interface ServerBuildOptions {
   manifestPath?: string
   minify?: boolean
   alias?: Record<string, string>
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
 }
 
 export interface ComponentRebuildResult {
@@ -72,6 +100,11 @@ export interface ComponentRebuildResult {
   bundlePath: string
   success: boolean
   error?: string
+}
+
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit'>> & {
+  csp?: ServerBuildOptions['csp']
+  rateLimit?: ServerBuildOptions['rateLimit']
 }
 
 export class ServerComponentBuilder {
@@ -95,7 +128,7 @@ export class ServerComponentBuilder {
     }
   >()
 
-  private options: Required<ServerBuildOptions>
+  private options: ResolvedServerBuildOptions
   private projectRoot: string
 
   private buildCache = new Map<string, {
@@ -116,6 +149,8 @@ export class ServerComponentBuilder {
       manifestPath: options.manifestPath || 'server/manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
+      csp: options.csp,
+      rateLimit: options.rateLimit,
     }
   }
 
@@ -602,6 +637,8 @@ const ${importName} = (props) => {
       },
       version: '1.0.0',
       buildTime: new Date().toISOString(),
+      csp: this.options.csp,
+      rateLimit: this.options.rateLimit,
     }
 
     for (const [filePath, component] of this.serverComponents) {
@@ -1393,6 +1430,8 @@ function registerClientReference(clientReference, id, exportName) {
         },
         version: '1.0.0',
         buildTime: new Date().toISOString(),
+        csp: this.options.csp,
+        rateLimit: this.options.rateLimit,
       }
       this.manifestCache = manifest
     }

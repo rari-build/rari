@@ -51,6 +51,20 @@ interface RariOptions {
     minimumCacheTTL?: number
     maxCacheSize?: number
   }
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -889,6 +903,8 @@ const ${componentName} = registerClientReference(
             serverDir: 'server',
             manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
+            csp: options.csp,
+            rateLimit: options.rateLimit,
           })
 
           serverComponentBuilder = builder
@@ -1164,6 +1180,8 @@ const ${componentName} = registerClientReference(
             serverDir: 'server',
             manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
+            csp: options.csp,
+            rateLimit: options.rateLimit,
           })
 
           builder.addServerComponent(filePath)
@@ -1654,7 +1672,11 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
     },
   }
 
-  const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
+  const serverBuildPlugin = createServerBuildPlugin({
+    ...options.serverBuild,
+    csp: options.csp,
+    rateLimit: options.rateLimit,
+  })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
 

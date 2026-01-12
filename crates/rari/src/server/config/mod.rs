@@ -448,50 +448,61 @@ impl Config {
                 })?;
         }
 
-        if let Ok(script_src) = std::env::var("RARI_CSP_SCRIPT_SRC") {
-            config.csp.script_src = script_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
+        if let Ok(manifest_json) = std::fs::read_to_string("dist/server/manifest.json")
+            && let Ok(manifest_data) = serde_json::from_str::<serde_json::Value>(&manifest_json)
+        {
+            if let Some(csp_data) = manifest_data.get("csp") {
+                if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
+                    config.csp.script_src = script_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
+                    config.csp.style_src = style_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
+                    config.csp.img_src =
+                        img_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                }
+                if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
+                    config.csp.font_src =
+                        font_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                }
+                if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
+                    config.csp.connect_src = connect_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array()) {
+                    config.csp.default_src = default_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
 
-        if let Ok(style_src) = std::env::var("RARI_CSP_STYLE_SRC") {
-            config.csp.style_src = style_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(img_src) = std::env::var("RARI_CSP_IMG_SRC") {
-            config.csp.img_src = img_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(font_src) = std::env::var("RARI_CSP_FONT_SRC") {
-            config.csp.font_src = font_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(connect_src) = std::env::var("RARI_CSP_CONNECT_SRC") {
-            config.csp.connect_src =
-                connect_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(rate_limit_enabled) = std::env::var("RARI_RATE_LIMIT_ENABLED") {
-            config.rate_limit.enabled = rate_limit_enabled.cow_to_lowercase() == "true"
-                || rate_limit_enabled == "1"
-                || rate_limit_enabled.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(rate_limit_rps) = std::env::var("RARI_RATE_LIMIT_RPS") {
-            config.rate_limit.requests_per_second = rate_limit_rps
-                .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_RPS".to_string()))?;
-        }
-
-        if let Ok(rate_limit_burst) = std::env::var("RARI_RATE_LIMIT_BURST") {
-            config.rate_limit.burst_size = rate_limit_burst
-                .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_BURST".to_string()))?;
-        }
-
-        if let Ok(revalidate_rpm) = std::env::var("RARI_REVALIDATE_RATE_LIMIT_RPM") {
-            config.rate_limit.revalidate_requests_per_minute =
-                revalidate_rpm.parse().map_err(|_| {
-                    ConfigError::InvalidConfig("RARI_REVALIDATE_RATE_LIMIT_RPM".to_string())
-                })?;
+            if let Some(rate_limit_data) = manifest_data.get("rateLimit") {
+                if let Some(enabled) = rate_limit_data.get("enabled").and_then(|v| v.as_bool()) {
+                    config.rate_limit.enabled = enabled;
+                }
+                if let Some(rps) = rate_limit_data.get("requestsPerSecond").and_then(|v| v.as_u64())
+                {
+                    config.rate_limit.requests_per_second = rps as u32;
+                }
+                if let Some(burst) = rate_limit_data.get("burstSize").and_then(|v| v.as_u64()) {
+                    config.rate_limit.burst_size = burst as u32;
+                }
+                if let Some(revalidate_rpm) =
+                    rate_limit_data.get("revalidateRequestsPerMinute").and_then(|v| v.as_u64())
+                {
+                    config.rate_limit.revalidate_requests_per_minute = revalidate_rpm as u32;
+                }
+            }
         }
 
         Ok(config)
