@@ -34,29 +34,7 @@ fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>
             html_content
         }
     } else {
-        let title =
-            metadata.and_then(|m| m.title.as_ref()).map(|t| t.as_str()).unwrap_or("Rari App");
-
-        let base_shell = format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-            title, html_content
-        );
-
-        if let Some(metadata) = metadata {
-            inject_metadata(&base_shell, metadata)
-        } else {
-            base_shell
-        }
+        html_content
     }
 }
 
@@ -367,12 +345,25 @@ pub async fn render_synchronous(
     {
         Ok(render_result) => match render_result {
             crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
+                let is_complete_before_wrap = html_content.trim_start().starts_with("<!DOCTYPE")
+                    || html_content.trim_start().starts_with("<html");
+
                 let html_with_metadata =
                     wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
-                        Ok(html) => html,
+                        Ok(html) => {
+                            if !is_complete_before_wrap {
+                                if let Some(metadata) = context.metadata.as_ref() {
+                                    inject_metadata(&html, metadata)
+                                } else {
+                                    html
+                                }
+                            } else {
+                                html
+                            }
+                        }
                         Err(e) => {
                             error!("Failed to inject assets into HTML: {}", e);
                             html_with_metadata

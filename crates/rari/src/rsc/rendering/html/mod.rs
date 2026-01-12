@@ -591,6 +591,7 @@ pub struct RscToHtmlConverter {
     csrf_script: Option<String>,
     rsc_wire_format: Vec<String>,
     payload_embedding_disabled: bool,
+    root_div_closed: bool,
 }
 
 impl RscToHtmlConverter {
@@ -605,6 +606,7 @@ impl RscToHtmlConverter {
             csrf_script: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -619,6 +621,7 @@ impl RscToHtmlConverter {
             csrf_script: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -637,6 +640,7 @@ impl RscToHtmlConverter {
             csrf_script,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -704,11 +708,21 @@ impl RscToHtmlConverter {
             }
 
             RscChunkType::BoundaryUpdate => {
+                let mut html = Vec::new();
+
+                if !self.root_div_closed {
+                    self.root_div_closed = true;
+                    html.extend(b"</div>\n");
+                }
+
                 match self.generate_boundary_replacement(&chunk).await {
-                    Ok(html) => Ok(html),
+                    Ok(boundary_html) => {
+                        html.extend(boundary_html);
+                        Ok(html)
+                    }
                     Err(e) => {
                         error!("Error generating boundary replacement: {}", e);
-                        Ok(Vec::new())
+                        Ok(html)
                     }
                 }
             }
@@ -721,7 +735,17 @@ impl RscToHtmlConverter {
                 }
             },
 
-            RscChunkType::StreamComplete => Ok(self.generate_html_closing()),
+            RscChunkType::StreamComplete => {
+                let mut html = Vec::new();
+
+                if !self.root_div_closed {
+                    self.root_div_closed = true;
+                    html.extend(b"</div>\n");
+                }
+
+                html.extend(self.generate_html_closing());
+                Ok(html)
+            }
         };
 
         if let Err(ref e) = result {
@@ -795,8 +819,7 @@ impl RscToHtmlConverter {
         };
 
         format!(
-            r#"
-{}{}
+            r#"{}{}
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
@@ -806,7 +829,7 @@ if (typeof window !== 'undefined') {{
 </script>
 </body>
 </html>"#,
-            csrf_script, rsc_script
+            rsc_script, csrf_script
         )
         .as_bytes()
         .to_vec()

@@ -11,15 +11,71 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
     for path in possible_paths {
         if let Ok(content) = fs::read_to_string(path).await {
             let mut asset_links = String::new();
+            let mut in_inline_script = false;
+            let mut script_base_indent = 0;
+            let mut is_first_line = true;
 
             for line in content.lines() {
                 let trimmed = line.trim();
+
                 if (trimmed.starts_with("<script") && trimmed.contains("/assets/"))
                     || (trimmed.starts_with("<link") && trimmed.contains("/assets/"))
                 {
-                    asset_links.push_str("    ");
+                    if !is_first_line {
+                        asset_links.push_str("    ");
+                    }
                     asset_links.push_str(trimmed);
                     asset_links.push('\n');
+                    is_first_line = false;
+                    continue;
+                }
+
+                if trimmed.starts_with("<script") && !trimmed.contains("src=") {
+                    in_inline_script = true;
+
+                    script_base_indent = line.len() - line.trim_start().len();
+                    if !is_first_line {
+                        asset_links.push_str("    ");
+                    }
+                    asset_links.push_str(trimmed);
+                    asset_links.push('\n');
+                    is_first_line = false;
+
+                    if trimmed.contains("</script>") {
+                        in_inline_script = false;
+                    }
+                    continue;
+                }
+
+                if in_inline_script {
+                    let current_indent = line.len() - line.trim_start().len();
+                    if current_indent >= script_base_indent {
+                        let relative_indent = current_indent - script_base_indent;
+                        asset_links.push_str("    ");
+                        asset_links.push_str(&" ".repeat(relative_indent));
+                        asset_links.push_str(trimmed);
+                    } else {
+                        asset_links.push_str("    ");
+                        asset_links.push_str(trimmed);
+                    }
+                    asset_links.push('\n');
+                    is_first_line = false;
+
+                    if trimmed.contains("</script>") {
+                        in_inline_script = false;
+                    }
+                    continue;
+                }
+
+                if trimmed.starts_with("<link")
+                    && (trimmed.contains("preconnect") || trimmed.contains("dns-prefetch"))
+                {
+                    if !is_first_line {
+                        asset_links.push_str("    ");
+                    }
+                    asset_links.push_str(trimmed);
+                    asset_links.push('\n');
+                    is_first_line = false;
                 }
             }
 
@@ -94,6 +150,8 @@ async fn inject_assets_into_complete_document(
     };
 
     let mut asset_tags = Vec::new();
+    let mut other_head_content = Vec::new();
+
     for line in template.lines() {
         let trimmed = line.trim();
         if (trimmed.contains("<link") && trimmed.contains("stylesheet") && trimmed.contains("href"))
@@ -103,10 +161,29 @@ async fn inject_assets_into_complete_document(
             if !html.contains(&asset_signature) {
                 asset_tags.push(trimmed.to_string());
             }
+        } else if trimmed.contains("<script")
+            && !trimmed.contains("src")
+            && !trimmed.contains("type=\"module\"")
+        {
+            if !html.contains(trimmed) {
+                other_head_content.push(trimmed.to_string());
+            }
+        } else if ((trimmed.contains("<link") && !trimmed.contains("stylesheet"))
+            || trimmed.contains("<meta") && trimmed.contains("name="))
+            && !html.contains(trimmed)
+        {
+            other_head_content.push(trimmed.to_string());
         }
     }
 
-    if asset_tags.is_empty() {
+    let inline_scripts = extract_inline_scripts(&template);
+    for script in inline_scripts {
+        if !html.contains(&script) {
+            other_head_content.push(script);
+        }
+    }
+
+    if asset_tags.is_empty() && other_head_content.is_empty() {
         if html.trim_start().starts_with("<!DOCTYPE") {
             return Ok(html.to_string());
         }
@@ -125,6 +202,13 @@ async fn inject_assets_into_complete_document(
     }
 
     let mut final_html = html.to_string();
+
+    if !other_head_content.is_empty() {
+        let other_content_html = other_head_content.join("\n    ");
+        if let Some(head_end) = final_html.find("</head>") {
+            final_html.insert_str(head_end, &format!("    {}\n  ", other_content_html));
+        }
+    }
 
     if !stylesheets.is_empty() {
         let stylesheets_html = stylesheets.join("\n    ");
@@ -177,6 +261,40 @@ fn extract_asset_signature(asset_tag: &str) -> String {
     }
 
     asset_tag.trim().to_string()
+}
+
+fn extract_inline_scripts(html: &str) -> Vec<String> {
+    let mut scripts = Vec::new();
+    let mut in_script = false;
+    let mut current_script = String::new();
+
+    for line in html.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("<script") && !trimmed.contains("src=") {
+            in_script = true;
+            current_script.clear();
+            current_script.push_str(line);
+            current_script.push('\n');
+
+            if trimmed.contains("</script>") {
+                scripts.push(current_script.trim().to_string());
+                in_script = false;
+                current_script.clear();
+            }
+        } else if in_script {
+            current_script.push_str(line);
+            current_script.push('\n');
+
+            if trimmed.contains("</script>") {
+                scripts.push(current_script.trim().to_string());
+                in_script = false;
+                current_script.clear();
+            }
+        }
+    }
+
+    scripts
 }
 
 pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
