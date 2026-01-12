@@ -72,10 +72,22 @@ pub struct EndpointRateLimiters {
 
 impl EndpointRateLimiters {
     pub fn new() -> Self {
-        Self {
-            og_generation: Arc::new(IpRateLimiter::new(10, 60)),
-            csrf_token: Arc::new(IpRateLimiter::new(60, 60)),
-            image_optimization: Arc::new(IpRateLimiter::new(30, 60)),
+        Self::for_environment(false)
+    }
+
+    pub fn for_environment(is_production: bool) -> Self {
+        if is_production {
+            Self {
+                og_generation: Arc::new(IpRateLimiter::new(10, 60)),
+                csrf_token: Arc::new(IpRateLimiter::new(60, 60)),
+                image_optimization: Arc::new(IpRateLimiter::new(30, 60)),
+            }
+        } else {
+            Self {
+                og_generation: Arc::new(IpRateLimiter::new(1000, 60)),
+                csrf_token: Arc::new(IpRateLimiter::new(1000, 60)),
+                image_optimization: Arc::new(IpRateLimiter::new(1000, 60)),
+            }
         }
     }
 
