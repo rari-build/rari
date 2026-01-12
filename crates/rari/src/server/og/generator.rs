@@ -125,9 +125,7 @@ impl OgImageGenerator {
         const MAX_OG_WIDTH: u32 = 2400;
         const MAX_OG_HEIGHT: u32 = 1260;
 
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
-
-        if is_production && let Some(cached) = self.cache.get(route_path) {
+        if let Some(cached) = self.cache.get(route_path) {
             return Ok((cached, true));
         }
 
@@ -163,11 +161,7 @@ impl OgImageGenerator {
         let webp_data = Self::encode_webp(&image)
             .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {}", e)))?;
 
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
-
-        if is_production {
-            self.cache.insert(route_path.to_string(), webp_data.clone());
-        }
+        self.cache.insert(route_path.to_string(), webp_data.clone());
 
         Ok((webp_data, false))
     }

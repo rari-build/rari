@@ -56,9 +56,7 @@ impl ImageOptimizer {
 
         let cache_key = self.generate_cache_key(&params);
 
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
-
-        if is_production && let Some(cached) = self.cache.get(&cache_key) {
+        if let Some(cached) = self.cache.get(&cache_key) {
             let img = image::load_from_memory(&cached)
                 .map_err(|e| ImageError::ProcessingError(e.to_string()))?;
 
@@ -80,11 +78,7 @@ impl ImageOptimizer {
         let source = self.fetch_image(&params.url).await?;
         let optimized = self.process_image(source, &params)?;
 
-        let is_production = std::env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
-
-        if is_production {
-            self.cache.put(cache_key, optimized.data.clone());
-        }
+        self.cache.put(cache_key, optimized.data.clone());
 
         Ok((optimized, false))
     }
