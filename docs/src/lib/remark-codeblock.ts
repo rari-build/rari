@@ -51,9 +51,10 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
               if (match) {
                 let extracted = match[1]
 
-                extracted = extracted.replace(/\\\\\\`/g, '`')
+                extracted = extracted.replace(/\\\\\\`/g, '\u02CB')
                 extracted = extracted.replace(/\\`/g, '`')
                 extracted = extracted.replace(/\\\$/g, '$')
+
                 text += extracted
               }
             }
