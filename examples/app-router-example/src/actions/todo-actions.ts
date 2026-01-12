@@ -59,19 +59,3 @@ export async function clearCompleted() {
   todos = todos.filter(t => !t.completed)
   return { success: true, todos }
 }
-
-export async function createTodoAndRedirect(formData: FormData) {
-  const text = formData.get('text') as string
-
-  if (!text?.trim())
-    return { success: false, error: 'Todo text is required' }
-
-  todos.push({
-    id: Date.now().toString(),
-    text: text.trim(),
-    completed: false,
-    createdAt: new Date().toISOString(),
-  })
-
-  return { success: true, redirect: '/actions', todos }
-}
