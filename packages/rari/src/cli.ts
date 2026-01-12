@@ -1,9 +1,41 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import colors from 'picocolors'
 import { getBinaryPath, getInstallationInstructions } from './platform'
+
+function loadEnvFile() {
+  const envPath = resolve(process.cwd(), '.env')
+  if (existsSync(envPath)) {
+    const envContent = readFileSync(envPath, 'utf-8')
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim()
+
+      if (!trimmed || trimmed.startsWith('#'))
+        continue
+
+      const match = trimmed.match(/^([^=]+)=(.*)$/)
+      if (match) {
+        const [, key, value] = match
+        const cleanKey = key.trim()
+        let cleanValue = value.trim()
+
+        if ((cleanValue.startsWith('"') && cleanValue.endsWith('"'))
+          || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) {
+          cleanValue = cleanValue.slice(1, -1)
+        }
+
+        if (!process.env[cleanKey])
+          process.env[cleanKey] = cleanValue
+      }
+    }
+  }
+}
+
+loadEnvFile()
 
 const [, , command, ...args] = process.argv
 

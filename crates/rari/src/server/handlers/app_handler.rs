@@ -415,7 +415,7 @@ async fn render_streaming_response(
         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
     };
 
-    let csrf_token = state.csrf_manager.generate_token();
+    let csrf_token = state.csrf_manager.as_ref().map(|m| m.generate_token());
     let asset_tags = asset_links.as_deref().unwrap_or("");
 
     let title = context
@@ -425,8 +425,9 @@ async fn render_streaming_response(
         .map(|t| t.as_str())
         .unwrap_or("Rari App");
 
-    let base_shell = format!(
-        r#"<!DOCTYPE html>
+    let base_shell = if let Some(csrf_token) = &csrf_token {
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -447,8 +448,33 @@ async fn render_streaming_response(
 <body>
 <div id="root">
 "#,
-        title, csrf_token, asset_tags
-    );
+            title, csrf_token, asset_tags
+        )
+    } else {
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">
+"#,
+            title, asset_tags
+        )
+    };
 
     let base_shell = if let Some(ref metadata) = context.metadata {
         inject_metadata(&base_shell, metadata)

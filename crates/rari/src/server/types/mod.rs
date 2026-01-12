@@ -28,7 +28,7 @@ pub struct ServerState {
     pub module_reload_manager: Arc<crate::runtime::module_reload::ModuleReloadManager>,
     pub html_cache: Arc<dashmap::DashMap<String, String>>,
     pub response_cache: Arc<response_cache::ResponseCache>,
-    pub csrf_manager: Arc<CsrfTokenManager>,
+    pub csrf_manager: Option<Arc<CsrfTokenManager>>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub endpoint_rate_limiters: EndpointRateLimiters,

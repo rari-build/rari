@@ -16,6 +16,15 @@ pub async fn get_csrf_token(
     State(state): State<ServerState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> Result<Response, StatusCode> {
+    let Some(csrf_manager) = &state.csrf_manager else {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/plain".to_string())],
+            "CSRF protection is not enabled. Set RARI_CSRF_SECRET environment variable to enable it.",
+        )
+            .into_response());
+    };
+
     let ip = addr.ip().to_string();
 
     if let Err(retry_after) = state.endpoint_rate_limiters.csrf_token.check(&ip) {
@@ -30,7 +39,7 @@ pub async fn get_csrf_token(
             .into_response());
     }
 
-    let token = state.csrf_manager.generate_token();
+    let token = csrf_manager.generate_token();
     let response = CsrfTokenResponse { token };
 
     Ok(Json(response).into_response())

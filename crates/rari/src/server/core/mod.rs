@@ -160,7 +160,7 @@ impl Server {
         let cache_config = response_cache::CacheConfig::from_env(config.is_production());
         let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
 
-        let csrf_manager = Arc::new(Self::initialize_csrf_manager());
+        let csrf_manager = Self::initialize_csrf_manager().map(Arc::new);
 
         let og_generator = {
             let runtime = js_runtime.clone();
@@ -235,13 +235,13 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
-    fn initialize_csrf_manager() -> crate::server::security::csrf::CsrfTokenManager {
+    fn initialize_csrf_manager() -> Option<crate::server::security::csrf::CsrfTokenManager> {
         use crate::server::security::csrf::CsrfTokenManager;
 
         if let Ok(secret) = std::env::var("RARI_CSRF_SECRET") {
-            CsrfTokenManager::new(secret.into_bytes())
+            Some(CsrfTokenManager::new(secret.into_bytes()))
         } else {
-            CsrfTokenManager::new_with_random_secret()
+            None
         }
     }
 
