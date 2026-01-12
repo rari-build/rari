@@ -315,7 +315,7 @@ impl ImageOptimizer {
             Some("jpeg") | Some("jpg") => ImageFormat::Jpeg,
             Some("png") => ImageFormat::Png,
             Some("gif") => ImageFormat::Gif,
-            _ => ImageFormat::WebP,
+            _ => ImageFormat::Avif,
         }
     }
 

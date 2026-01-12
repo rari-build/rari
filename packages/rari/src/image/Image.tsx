@@ -1,7 +1,8 @@
 'use client'
 
+import type { ImageFormat } from './constants'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from './constants'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES } from './constants'
 
 export interface ImageProps {
   src: string | StaticImageData
@@ -36,7 +37,7 @@ function buildImageUrl(
   src: string,
   width: number,
   quality: number,
-  format?: 'avif' | 'webp',
+  format?: ImageFormat,
 ): string {
   const params = new URLSearchParams()
   params.set('url', src)
@@ -207,7 +208,7 @@ export function Image({
   const sizesArray = fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES
   const defaultWidth = imgWidth || 1920
 
-  const buildSrcSet = (format?: 'avif' | 'webp') => {
+  const buildSrcSet = (format?: ImageFormat) => {
     if (loader) {
       return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
     }
@@ -239,16 +240,20 @@ export function Image({
 
   return (
     <picture ref={pictureRef}>
-      <source
-        type="image/avif"
-        srcSet={buildSrcSet('avif')}
-        sizes={sizes}
-      />
-      <source
-        type="image/webp"
-        srcSet={buildSrcSet('webp')}
-        sizes={sizes}
-      />
+      {DEFAULT_FORMATS.includes('avif') && (
+        <source
+          type="image/avif"
+          srcSet={buildSrcSet('avif')}
+          sizes={sizes}
+        />
+      )}
+      {DEFAULT_FORMATS.includes('webp') && (
+        <source
+          type="image/webp"
+          srcSet={buildSrcSet('webp')}
+          sizes={sizes}
+        />
+      )}
       {imgElement}
     </picture>
   )
