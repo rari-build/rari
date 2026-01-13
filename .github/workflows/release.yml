@@ -51,7 +51,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libdav1d-dev
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
+            sudo dpkg --add-architecture arm64
+            sudo apt-get update
+            sudo apt-get install -y gcc-aarch64-linux-gnu libdav1d-dev:arm64
           fi
 
       - name: Cache cargo registry
