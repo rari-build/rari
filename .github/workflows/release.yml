@@ -51,9 +51,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libdav1d-dev
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            sudo dpkg --add-architecture arm64
-            sudo apt-get update
-            sudo apt-get install -y gcc-aarch64-linux-gnu libdav1d-dev:arm64
+            cargo install cross --git https://github.com/cross-rs/cross
           fi
 
       - name: Cache cargo registry
@@ -90,7 +88,11 @@ jobs:
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin rari
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            cross build --release --target ${{ matrix.target }} --bin rari
+          else
+            cargo build --release --target ${{ matrix.target }} --bin rari
+          fi
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
