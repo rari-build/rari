@@ -1,6 +1,7 @@
 /* eslint-disable no-undef */
 import { ClientRouter } from 'rari/client'
-import React, { Suspense } from 'react'
+import * as React from 'react'
+import { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'

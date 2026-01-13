@@ -1,6 +1,7 @@
 'use client'
 
-import React, { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import * as React from 'react'
+import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
 
 interface AppRouterProviderProps {
   children: React.ReactNode
