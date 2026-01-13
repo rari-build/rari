@@ -1,20 +1,11 @@
 import type { PageProps } from 'rari'
 import { access, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
+import { getBlogFilePath, isValidSlug } from '@/lib/content-utils'
 
 const DEFAULT_METADATA = {
   title: 'Rari Blog',
   description: 'Latest news and updates from the Rari team.',
-}
-
-function isValidSlug(slug: unknown): slug is string {
-  return typeof slug === 'string' && !slug.includes('..') && !slug.includes('/')
-}
-
-function getFilePath(slug: string) {
-  return join(process.cwd(), 'public', 'content', 'blog', `${slug}.mdx`)
 }
 
 export default async function BlogPage({ params }: PageProps) {
@@ -33,7 +24,7 @@ export async function getData({ params }: PageProps) {
     return { notFound: true }
 
   try {
-    await access(getFilePath(slug))
+    await access(getBlogFilePath(slug))
     return { props: {} }
   }
   catch {
@@ -48,7 +39,7 @@ export async function generateMetadata({ params }: PageProps) {
     return DEFAULT_METADATA
 
   try {
-    const content = await readFile(getFilePath(slug), 'utf-8')
+    const content = await readFile(getBlogFilePath(slug), 'utf-8')
     const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
     const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
 
