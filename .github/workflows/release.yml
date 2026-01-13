@@ -54,7 +54,9 @@ jobs:
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install dav1d pkg-config fontconfig
+          brew list dav1d &>/dev/null || brew install dav1d
+          brew list pkg-config &>/dev/null || brew install pkg-config
+          brew list fontconfig &>/dev/null || brew install fontconfig
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
