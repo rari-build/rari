@@ -19,7 +19,7 @@ categories = [
 ]
 readme = "../../README.md"
 homepage = "https://github.com/rari-build/rari"
-documentation = "https://github.com/rari-build/rari/tree/main/docs"
+documentation = "https://github.com/rari-build/rari/tree/main/web"
 
 [package.metadata.cargo-machete]
 ignored = [

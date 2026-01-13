@@ -58,7 +58,7 @@ The Rari binary is automatically downloaded and configured during installation. 
 
 ## Documentation
 
-- [Getting Started](docs/public/content/getting-started.md)
+- [Getting Started](web/public/content/docs/getting-started.mdx)
 - [Contributing](.github/CONTRIBUTING.md)
 
 ## Why Rari?
@@ -214,7 +214,9 @@ export default function Counter({ initialValue }: { initialValue: number }) {
 
   return (
     <button onClick={() => setCount(count + 1)}>
-      Count: {count}
+      Count:
+      {' '}
+      {count}
     </button>
   )
 }
