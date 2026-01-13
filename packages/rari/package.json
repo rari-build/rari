@@ -100,9 +100,9 @@
     "rari-win32-x64": "0.7.1"
   },
   "devDependencies": {
-    "@types/node": "^25.0.7",
+    "@types/node": "^25.0.8",
     "@types/react": "^19.2.8",
-    "@typescript/native-preview": "^7.0.0-dev.20260112.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260113.1",
     "chokidar": "^5.0.0",
     "eslint": "^9.39.2",
     "oxlint": "^1.39.0",

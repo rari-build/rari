@@ -50,8 +50,8 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^25.0.7",
-    "@typescript/native-preview": "^7.0.0-dev.20260112.1",
+    "@types/node": "^25.0.8",
+    "@typescript/native-preview": "^7.0.0-dev.20260113.1",
     "eslint": "^9.39.2",
     "oxlint": "^1.39.0",
     "tsdown": "^0.18.4"

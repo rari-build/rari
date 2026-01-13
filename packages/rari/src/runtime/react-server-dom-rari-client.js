@@ -1,4 +1,4 @@
-import React from 'react'
+import * as React from 'react'
 
 export async function createFromReadableStream(stream, options = {}) {
   const { moduleMap = {} } = options
