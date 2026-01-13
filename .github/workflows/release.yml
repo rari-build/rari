@@ -20,7 +20,7 @@ jobs:
             os: ubuntu-24.04
             name: rari-linux-x64
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-24.04-arm64
             name: rari-linux-arm64
           - target: x86_64-apple-darwin
             os: macos-15-intel
@@ -50,9 +50,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libdav1d-dev
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            cargo install cross --git https://github.com/cross-rs/cross
-          fi
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -88,14 +85,7 @@ jobs:
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            cross build --release --target ${{ matrix.target }} --bin rari
-          else
-            cargo build --release --target ${{ matrix.target }} --bin rari
-          fi
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
+          cargo build --release --target ${{ matrix.target }} --bin rari
 
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
