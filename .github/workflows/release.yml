@@ -49,18 +49,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libdav1d-dev
+          sudo apt-get install -y pkg-config libdav1d-dev libfontconfig1-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install dav1d pkg-config
+          brew install dav1d pkg-config fontconfig
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
           choco install pkgconfiglite
-          vcpkg install dav1d:x64-windows
+          vcpkg install dav1d:x64-windows fontconfig:x64-windows
         shell: pwsh
 
       - name: Cache cargo registry
