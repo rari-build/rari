@@ -1,3 +1,30 @@
+## [rari@0.7.1] - 2026-01-13
+
+### 💼 Other
+
+- Rari@0.7.1
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.7.1
+## [0.7.1] - 2026-01-13
+
+### 💼 Other
+
+- Binaries 0.7.1
+
+### 📚 Documentation
+
+- Update rari dependency to published version and fix typo
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove dav1d dependency and update dependencies
+## [create-rari-app@0.3.1] - 2026-01-13
+
+### 💼 Other
+
+- Create-rari-app@0.3.1
 ## [rari@0.7.0] - 2026-01-13
 
 ### 💼 Other
@@ -979,7 +1006,7 @@
 ### 💼 Other
 
 - Rari@0.3.2
-## [0.3.2] - 2025-10-28
+## [0.3.2] - 2026-01-13
 
 ### 🐛 Bug Fixes
 
@@ -993,7 +1020,7 @@
 ### 💼 Other
 
 - Rari@0.3.1
-## [0.3.1] - 2026-01-13
+## [0.3.1] - 2025-10-24
 
 ### 🚀 Features
 
