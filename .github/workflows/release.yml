@@ -51,6 +51,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libdav1d-dev
 
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install dav1d pkg-config
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite
+          vcpkg install dav1d:x64-windows
+        shell: pwsh
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -81,6 +93,8 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
+          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          VCPKG_ROOT: C:\vcpkg
 
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
