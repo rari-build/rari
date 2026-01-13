@@ -6416,7 +6416,7 @@ checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
 
 [[package]]
 name = "rari"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-compression",
  "async-stream",
