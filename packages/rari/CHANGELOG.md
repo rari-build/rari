@@ -1,4 +1,24 @@
-## [0.7.1] - 2026-01-13
+## [0.7.2] - 2026-01-13
+
+### 💼 Other
+
+- Rari@0.7.2
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update rari dependency to 0.7.1
+- *(release)* Downgrade ubuntu runner versions for compatibility
+- *(release)* Update ubuntu runner to arm64 compatible version
+## [create-rari-app@0.3.2] - 2026-01-13
+
+### 💼 Other
+
+- Create-rari-app@0.3.2
+## [rari@0.7.1] - 2026-01-13
+
+### 💼 Other
+
+- Rari@0.7.1
 
 ### ⚙️ Miscellaneous Tasks
 
