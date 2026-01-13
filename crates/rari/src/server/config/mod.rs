@@ -302,7 +302,7 @@ impl Config {
             config.mode = match mode_str.cow_to_lowercase().as_ref() {
                 "development" | "dev" => Mode::Development,
                 "production" | "prod" => Mode::Production,
-                _ => return Err(ConfigError::InvalidMode(mode_str)),
+                _ => return Err(ConfigError::Mode(mode_str)),
             };
         }
 
@@ -311,8 +311,7 @@ impl Config {
         }
 
         if let Ok(port_str) = std::env::var("RARI_PORT") {
-            config.server.port =
-                port_str.parse().map_err(|_| ConfigError::InvalidPort(port_str))?;
+            config.server.port = port_str.parse().map_err(|_| ConfigError::Port(port_str))?;
         }
 
         if let Ok(origin) = std::env::var("RARI_ORIGIN") {
@@ -325,7 +324,7 @@ impl Config {
 
         if let Ok(vite_port_str) = std::env::var("RARI_VITE_PORT") {
             config.vite.port =
-                vite_port_str.parse().map_err(|_| ConfigError::InvalidVitePort(vite_port_str))?;
+                vite_port_str.parse().map_err(|_| ConfigError::VitePort(vite_port_str))?;
         }
 
         if let Ok(public_dir) = std::env::var("RARI_PUBLIC_DIR") {
@@ -337,9 +336,8 @@ impl Config {
         }
 
         if let Ok(timeout_str) = std::env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
-            config.rsc.script_execution_timeout_ms = timeout_str
-                .parse()
-                .map_err(|_| ConfigError::InvalidTimeout(timeout_str.clone()))?;
+            config.rsc.script_execution_timeout_ms =
+                timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
         if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
@@ -349,15 +347,15 @@ impl Config {
         }
 
         if let Ok(max_retry_str) = std::env::var("RARI_HMR_MAX_RETRY_ATTEMPTS") {
-            config.rsc.hmr_max_retry_attempts = max_retry_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string())
-            })?;
+            config.rsc.hmr_max_retry_attempts = max_retry_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string()))?;
         }
 
         if let Ok(timeout_str) = std::env::var("RARI_HMR_RELOAD_TIMEOUT_MS") {
-            config.rsc.hmr_reload_timeout_ms = timeout_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_RELOAD_TIMEOUT_MS".to_string())
-            })?;
+            config.rsc.hmr_reload_timeout_ms = timeout_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_RELOAD_TIMEOUT_MS".to_string()))?;
         }
 
         if let Ok(parallel_str) = std::env::var("RARI_HMR_PARALLEL_RELOADS") {
@@ -367,15 +365,15 @@ impl Config {
         }
 
         if let Ok(debounce_str) = std::env::var("RARI_HMR_DEBOUNCE_DELAY_MS") {
-            config.rsc.hmr_debounce_delay_ms = debounce_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_DEBOUNCE_DELAY_MS".to_string())
-            })?;
+            config.rsc.hmr_debounce_delay_ms = debounce_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_DEBOUNCE_DELAY_MS".to_string()))?;
         }
 
         if let Ok(history_size_str) = std::env::var("RARI_HMR_MAX_HISTORY_SIZE") {
             config.rsc.hmr_max_history_size = history_size_str
                 .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
+                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
         }
 
         if let Ok(memory_monitoring_str) = std::env::var("RARI_HMR_ENABLE_MEMORY_MONITORING") {
@@ -394,7 +392,7 @@ impl Config {
         if let Ok(rsc_html_timeout_str) = std::env::var("RARI_RSC_HTML_TIMEOUT_MS") {
             config.rsc_html.timeout_ms = rsc_html_timeout_str
                 .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
+                .map_err(|_| ConfigError::Config("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
         }
 
         if let Ok(rsc_html_cache_template_str) = std::env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
@@ -417,9 +415,9 @@ impl Config {
         }
 
         if let Ok(min_display_time_str) = std::env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
-            config.loading.min_display_time_ms = min_display_time_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string())
-            })?;
+            config.loading.min_display_time_ms = min_display_time_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string()))?;
         }
 
         if let Ok(cache_loading_str) = std::env::var("RARI_LOADING_CACHE_COMPONENTS") {
@@ -436,15 +434,15 @@ impl Config {
         }
 
         if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
-            config.streaming.buffer_size = buffer_size_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_STREAMING_BUFFER_SIZE".to_string())
-            })?;
+            config.streaming.buffer_size = buffer_size_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_STREAMING_BUFFER_SIZE".to_string()))?;
         }
 
         if let Ok(resolution_timeout_str) = std::env::var("RARI_STREAMING_RESOLUTION_TIMEOUT_MS") {
             config.streaming.resolution_timeout_ms =
                 resolution_timeout_str.parse().map_err(|_| {
-                    ConfigError::InvalidConfig("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
+                    ConfigError::Config("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
                 })?;
         }
 
@@ -506,18 +504,6 @@ impl Config {
         }
 
         Ok(config)
-    }
-
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ConfigError> {
-        let contents = std::fs::read_to_string(path).map_err(ConfigError::FileRead)?;
-
-        toml::from_str(&contents).map_err(ConfigError::TomlParse)
-    }
-
-    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), ConfigError> {
-        let contents = toml::to_string_pretty(self).map_err(ConfigError::TomlSerialize)?;
-
-        std::fs::write(path, contents).map_err(ConfigError::FileWrite)
     }
 
     pub fn get() -> Option<&'static Config> {
@@ -697,31 +683,15 @@ impl Config {
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("Invalid mode: {0}")]
-    InvalidMode(String),
-
+    Mode(String),
     #[error("Invalid port: {0}")]
-    InvalidPort(String),
-
+    Port(String),
     #[error("Invalid Vite port: {0}")]
-    InvalidVitePort(String),
-
+    VitePort(String),
     #[error("Invalid timeout: {0}")]
-    InvalidTimeout(String),
-
+    Timeout(String),
     #[error("Invalid config value for {0}")]
-    InvalidConfig(String),
-
-    #[error("Failed to read config file: {0}")]
-    FileRead(std::io::Error),
-
-    #[error("Failed to write config file: {0}")]
-    FileWrite(std::io::Error),
-
-    #[error("Failed to parse TOML: {0}")]
-    TomlParse(toml::de::Error),
-
-    #[error("Failed to serialize TOML: {0}")]
-    TomlSerialize(toml::ser::Error),
+    Config(String),
 }
 
 #[cfg(test)]

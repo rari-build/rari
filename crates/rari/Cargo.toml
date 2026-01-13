@@ -104,7 +104,6 @@ async-compression = { version = "0.4.37", features = [
 # === Serialization ===
 serde = { version = "1.0.228", features = [ "derive" ] }
 serde_json = "1.0.149"
-toml = "0.9.5"
 base64 = "0.22.1"
 
 # === HTTP Client & Server ===
@@ -118,7 +117,7 @@ axum = { version = "0.8.8", features = [
   "ws",
   "macros"
 ] }
-tower = { version = "0.5.2", default-features = false, features = [ "util" ] }
+tower = { version = "0.5.3", default-features = false, features = [ "util" ] }
 tower-http = { version = "0.6.8", features = [
   "fs",
   "compression-full"

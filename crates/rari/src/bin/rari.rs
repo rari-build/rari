@@ -24,14 +24,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .default_value("development"),
         )
         .arg(
-            Arg::new("config")
-                .short('c')
-                .long("config")
-                .value_name("FILE")
-                .help("Configuration file path (TOML format)")
-                .required(false),
-        )
-        .arg(
             Arg::new("host")
                 .short('H')
                 .long("host")
@@ -138,17 +130,11 @@ async fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariEr
         mode => return Err(RariError::configuration(format!("Invalid mode: {mode}"))),
     };
 
-    let mut config = if let Some(config_file) = matches.get_one::<String>("config") {
-        Config::from_file(config_file).map_err(|e| {
-            RariError::configuration(format!("Failed to load config file '{config_file}': {e}"))
-        })?
-    } else {
-        match Config::from_env() {
-            Ok(config) => config,
-            Err(e) => {
-                error!("No environment config found, using defaults: {}", e);
-                Config::new(mode)
-            }
+    let mut config = match Config::from_env() {
+        Ok(config) => config,
+        Err(e) => {
+            error!("No environment config found, using defaults: {}", e);
+            Config::new(mode)
         }
     };
 
