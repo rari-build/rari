@@ -1,3 +1,105 @@
+## [rari@0.7.0] - 2026-01-13
+
+### 💼 Other
+
+- Rari@0.7.0
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.7.0
+## [0.7.0] - 2026-01-13
+
+### 🚀 Features
+
+- *(image)* Add image optimization and caching system
+- *(og)* Add open graph image generation with dynamic rendering
+- *(security)* Add IP-based rate limiting for critical endpoints
+- *(image)* Add local image pattern matching and AVIF native support
+- *(og)* Inject generated OG images into page metadata
+- *(security)* Add environment-aware rate limiting configuration
+- *(image)* Change default image format from WebP to AVIF
+- *(security)* Make CSRF protection optional with environment configuration
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Handle stale content and missing promises gracefully
+- *(docs)* Fix nested backticks in docs mdx
+
+### 🚜 Refactor
+
+- *(examples)* Simplify app router proxy matcher pattern
+- *(error)* Simplify error enum and clippy configuration
+- *(hmr)* Consolidate HMR handlers into unified action endpoint
+- *(server)* Move register endpoints to development-only routes
+- *(rsc)* Stream RSC responses directly without buffering
+- *(sync)* Replace std::sync with parking_lot for better performance
+- *(vite)* Fix client component HMR handling
+- *(todo-actions)* Improve immutability and form handling
+- *(image)* Rename priority to preload and add custom loader support
+- *(api)* Consolidate internal routes under /_rari namespace
+- *(path)* Remove unused custom paths constructor and test
+- *(layout)* Remove unused skeleton validation and layout structure methods
+- *(spam_blocker)* Add block reason tracking and improve response handling
+- *(server)* Improve app router error handling and validation
+- *(cache)* Remove production environment check from caching logic
+- *(examples)* Simplify server actions demo and remove progressive enhancement
+- *(rendering)* Improve HTML structure handling and asset extraction
+- *(config)* Migrate CSP and rate limit config from environment variables to manifest
+- *(config)* Remove TOML file support and simplify configuration loading
+
+### ⚡ Performance
+
+- *(rsc)* Replace string allocations with cow-utils for efficiency
+
+### 🎨 Styling
+
+- *(examples)* Remove unnecessary braces from single-statement conditionals
+- *(rsc)* Remove unnecessary braces from single-statement conditionals
+- *(node)* Fix formatting in promisify callback handler
+
+### ⚙️ Miscellaneous Tasks
+
+- *(router)* Remove item from skip directories list
+- *(release)* Bump binary version to 0.7.0
+- *(release)* Add libdav1d-dev dependency for Linux builds
+- *(release)* Add arm64 libdav1d-dev for cross-compilation
+- *(release)* Use cross tool for aarch64 builds with native dependencies
+- *(release)* Upgrade to Ubuntu 24.04 for dav1d 1.3.0+ support
+- *(release)* Use native ARM64 runners instead of cross-compilation
+- *(release)* Add dav1d installation for macOS and Windows
+- *(release)* Add fontconfig dependency for text rendering
+- *(release)* Suppress macOS brew warnings for already installed packages
+- *(release)* Fix ARM64 runner label to ubuntu-24.04-arm
+## [rari@0.6.1] - 2026-01-08
+
+### 💼 Other
+
+- Rari@0.6.1
+## [0.6.1] - 2026-01-08
+
+### 🚀 Features
+
+- *(server)* Implement separate rate limiting for revalidation endpoints
+- *(server)* Expand spam blocker patterns for WordPress and IDE configs
+
+### 💼 Other
+
+- V0.6.1
+
+### 🚜 Refactor
+
+- *(docs)* Extract clipboard logic into reusable hook
+- *(docs)* Remove unused syntax highlighter language imports
+
+### 🎨 Styling
+
+- *(docs)* Improve responsive layout and text overflow handling
+- *(docs)* Remove unnecessary blank lines for consistency
+## [create-rari-app@0.3.0] - 2026-01-08
+
+### 💼 Other
+
+- Create-rari-app@0.3.0
 ## [rari@0.6.0] - 2026-01-08
 
 ### 💼 Other
@@ -891,7 +993,7 @@
 ### 💼 Other
 
 - Rari@0.3.1
-## [0.3.1] - 2025-10-24
+## [0.3.1] - 2026-01-13
 
 ### 🚀 Features
 
@@ -934,7 +1036,7 @@
 ### 💼 Other
 
 - Rari@0.3.0
-## [0.3.0] - 2026-01-08
+## [0.3.0] - 2025-10-21
 
 ### 🚀 Features
 
