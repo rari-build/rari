@@ -66,7 +66,7 @@ export async function createRailwayDeployment() {
   const railwayConfig = {
     $schema: 'https://railway.app/railway.schema.json',
     build: {
-      builder: 'NIXPACKS',
+      builder: 'RAILPACK',
     },
     deploy: {
       startCommand: 'npm start',
@@ -79,6 +79,7 @@ export async function createRailwayDeployment() {
         variables: {
           NODE_ENV: 'production',
           RUST_LOG: 'info',
+          RAILPACK_DEPLOY_APT_PACKAGES: 'libfontconfig1',
         },
       },
     },

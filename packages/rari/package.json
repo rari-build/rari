@@ -100,7 +100,7 @@
     "rari-win32-x64": "0.7.0"
   },
   "devDependencies": {
-    "@types/node": "^25.0.6",
+    "@types/node": "^25.0.7",
     "@types/react": "^19.2.8",
     "@typescript/native-preview": "^7.0.0-dev.20260112.1",
     "chokidar": "^5.0.0",
