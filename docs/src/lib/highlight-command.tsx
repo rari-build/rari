@@ -16,6 +16,7 @@ export function highlightCommand(command: string): JSX.Element {
           return <span key={index} className="text-[#ffa657]">{part}</span>
         if (part.match(/^[@\w.:/-]+$/))
           return <span key={index} className="text-[#a5d6ff]">{part}</span>
+
         return <span key={index}>{part}</span>
       })}
     </>

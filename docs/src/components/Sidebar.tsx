@@ -11,8 +11,8 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { href: '/', label: 'Home', id: 'home' },
-  { href: '/getting-started', label: 'Getting Started', id: 'getting-started' },
+  { href: '/docs', label: 'Docs', id: 'docs' },
+  { href: '/blog', label: 'Blog', id: 'blog' },
 ]
 
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
@@ -42,13 +42,19 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
-            <div className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg">
+            <a
+              href="/"
+              className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg hover:opacity-80 transition-opacity"
+            >
               <span className="text-white font-bold text-lg">R</span>
-            </div>
+            </a>
             <div>
-              <span className="text-xl font-semibold text-[#f0f6fc] font-mono">
+              <a
+                href="/"
+                className="text-xl font-semibold text-[#f0f6fc] font-mono hover:opacity-80 transition-opacity"
+              >
                 rari
-              </span>
+              </a>
               <div className="text-xs text-gray-400 font-mono">
                 v
                 {version}
@@ -58,13 +64,15 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
           <ul className="space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = item.href === '/'
+                ? pathname === item.href
+                : pathname?.startsWith(item.href)
               return (
                 <li key={item.id}>
                   <a
                     href={item.href}
                     className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${isActive
-                      ? 'bg-[#21262d] text-white'
+                      ? 'bg-[#21262d] text-white border-l-2 border-[#fd7e14]'
                       : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                     }`}
                     aria-current={isActive ? 'page' : undefined}

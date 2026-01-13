@@ -32,6 +32,7 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
         return
       if (node.name !== 'CodeBlock')
         return
+
       let code = ''
 
       function extractText(children: ASTNode[]): string {
