@@ -2,14 +2,12 @@
 (async () => {
   try {
     const hasOwn = Object.prototype.hasOwnProperty
-    if (!hasOwn.call(globalThis, '{function_name}')) {
+    if (!hasOwn.call(globalThis, '{function_name}'))
       throw new TypeError('Function \'{function_name}\' not found in globalThis')
-    }
 
     const fn = globalThis['{function_name}']
-    if (typeof fn !== 'function') {
+    if (typeof fn !== 'function')
       throw new TypeError('Function \'{function_name}\' is not a function')
-    }
 
     const rawArgs = {args_json}
     const processedArgs = rawArgs.map((arg) => {

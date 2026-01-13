@@ -4,11 +4,11 @@ use crate::server::utils::component_utils::{
 use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
+    extract::State,
     http::StatusCode,
     response::{Json, Response},
 };
-use rustc_hash::FxHashMap;
+use cow_utils::CowUtils;
 use serde_json::Value;
 use tracing::error;
 
@@ -19,14 +19,21 @@ pub async fn stream_component(
     State(state): State<ServerState>,
     Json(request): Json<RenderRequest>,
 ) -> Result<Response, StatusCode> {
-    use axum::http::HeaderMap;
+    {
+        let renderer = state.renderer.lock().await;
+        let registry = renderer.component_registry.lock();
+        if !registry.is_component_registered(&request.component_id) {
+            error!("Attempted to stream unregistered component: {}", request.component_id);
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
 
     let props_str = request.props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
 
     let cache_key = if let Some(props) = &props_str {
-        format!("/api/rsc/stream/{}?props={}", request.component_id, props)
+        format!("/_rari/stream/{}?props={}", request.component_id, props)
     } else {
-        format!("/api/rsc/stream/{}", request.component_id)
+        format!("/_rari/stream/{}", request.component_id)
     };
 
     if let Some(cached) = state.response_cache.get(&cache_key).await {
@@ -50,45 +57,18 @@ pub async fn stream_component(
     };
 
     match stream_result {
-        Ok(mut rsc_stream) => {
-            let mut buffer = Vec::new();
-            while let Some(chunk) = rsc_stream.next_chunk().await {
-                buffer.extend_from_slice(&chunk.data);
-            }
+        Ok(rsc_stream) => {
+            let cache_control = state.config.get_cache_control_for_route("/_rari/stream");
 
-            let cache_control = state.config.get_cache_control_for_route("/api/rsc/stream");
-
-            let cache_policy =
-                crate::server::cache::response_cache::RouteCachePolicy::from_cache_control(
-                    cache_control,
-                    &format!("/api/rsc/stream/{}", request.component_id),
-                );
-
-            if cache_policy.enabled && state.response_cache.config.enabled {
-                let mut headers = HeaderMap::new();
-                if let Ok(cache_control_value) = cache_control.parse() {
-                    headers.insert("cache-control", cache_control_value);
-                }
-
-                let cached_response = crate::server::cache::response_cache::CachedResponse {
-                    body: bytes::Bytes::from(buffer.clone()),
-                    headers,
-                    metadata: crate::server::cache::response_cache::CacheMetadata {
-                        cached_at: std::time::Instant::now(),
-                        ttl: cache_policy.ttl,
-                        etag: None,
-                        tags: cache_policy.tags,
-                    },
-                };
-
-                state.response_cache.set(cache_key, cached_response).await;
-            }
+            use futures::StreamExt;
+            let byte_stream = rsc_stream
+                .map(|result| result.map(bytes::Bytes::from).map_err(std::io::Error::other));
 
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
                 .header("x-cache", "MISS")
-                .body(Body::from(buffer))
+                .body(Body::from_stream(byte_stream))
                 .expect("Valid RSC response"))
         }
         Err(e) => {
@@ -134,7 +114,7 @@ pub async fn register_component(
                 if let Err(e) = renderer
                     .runtime
                     .execute_script(
-                        format!("mark_client_{}.js", request.component_id.replace('/', "_")),
+                        format!("mark_client_{}.js", request.component_id.cow_replace('/', "_")),
                         mark_script,
                     )
                     .await
@@ -175,51 +155,6 @@ pub async fn register_client_component(
         "success": true,
         "component_id": request.component_id
     })))
-}
-
-#[axum::debug_handler]
-pub async fn rsc_render_handler(
-    State(state): State<ServerState>,
-    Path(component_id): Path<String>,
-    Query(params): Query<FxHashMap<String, String>>,
-) -> Result<Response, StatusCode> {
-    state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-    let props: Option<Value> = params.get("props").and_then(|p| {
-        if p.trim().is_empty() || p == "{}" { None } else { serde_json::from_str(p).ok() }
-    });
-
-    let props_str = props.as_ref().map(|p| serde_json::to_string(p).unwrap_or_default());
-
-    let result = {
-        let mut renderer = state.renderer.lock().await;
-        renderer.render_to_rsc_format(&component_id, props_str.as_deref()).await
-    };
-
-    match result {
-        Ok(rsc_data) => {
-            let cache_configs = state.component_cache_configs.read().await;
-            let mut response_builder = Response::builder().header("content-type", RSC_CONTENT_TYPE);
-
-            if let Some(component_cache_config) = cache_configs.get(&component_id) {
-                for (key, value) in component_cache_config {
-                    response_builder = response_builder.header(key.to_lowercase(), value);
-                }
-            } else {
-                let cache_control = state
-                    .config
-                    .get_cache_control_for_route(&format!("/rsc/render/{}", component_id));
-                response_builder = response_builder.header("cache-control", cache_control);
-            }
-
-            Ok(response_builder.body(Body::from(rsc_data)).expect("Valid RSC response"))
-        }
-        Err(e) => {
-            error!("Failed to render RSC component {}: {}", component_id, e);
-
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
 }
 
 pub async fn reload_component_from_dist(
@@ -407,7 +342,7 @@ pub async fn reload_component_from_dist(
         renderer
             .runtime
             .execute_script(
-                format!("clear_old_{}.js", component_id.replace('/', "_")),
+                format!("clear_old_{}.js", component_id.cow_replace('/', "_")),
                 clear_script,
             )
             .await
@@ -466,7 +401,7 @@ pub async fn reload_component_from_dist(
         renderer
             .runtime
             .execute_script(
-                format!("register_esm_{}.js", component_id.replace('/', "_")),
+                format!("register_esm_{}.js", component_id.cow_replace('/', "_")),
                 registration_script,
             )
             .await
@@ -504,7 +439,7 @@ pub async fn reload_component_from_dist(
         let execution_result = renderer
             .runtime
             .execute_script(
-                format!("hmr_reload_{}.js", component_id.replace('/', "_")),
+                format!("hmr_reload_{}.js", component_id.cow_replace('/', "_")),
                 wrapped_code.clone(),
             )
             .await;
@@ -551,7 +486,7 @@ pub async fn reload_component_from_dist(
     let result_json = match renderer
         .runtime
         .execute_script(
-            format!("verify_{}.js", component_id.replace('/', "_")),
+            format!("verify_{}.js", component_id.cow_replace('/', "_")),
             verification_script,
         )
         .await
@@ -699,4 +634,13 @@ pub async fn immediate_component_reregistration(
             Ok(())
         }
     }
+}
+
+#[axum::debug_handler]
+pub async fn health_check() -> Result<Json<Value>, StatusCode> {
+    #[allow(clippy::disallowed_methods)]
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "service": "rari-rsc-server"
+    })))
 }

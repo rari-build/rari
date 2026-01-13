@@ -2,9 +2,8 @@ function invalidateModuleCache(moduleSpecifier) {
   try {
     let specifier = moduleSpecifier
     if (moduleSpecifier.startsWith('/') || moduleSpecifier.match(/^[A-Z]:\\/i)) {
-      if (!moduleSpecifier.startsWith('file://')) {
+      if (!moduleSpecifier.startsWith('file://'))
         specifier = `file://${moduleSpecifier}`
-      }
     }
 
     return specifier
@@ -82,9 +81,7 @@ function verifyComponentAfterReload(componentId) {
     }
 
     const isFunction = typeof component === 'function'
-
     const isValidComponent = isFunction
-
     const componentName = component.name || 'anonymous'
     const componentType = component.prototype && component.prototype.isReactComponent
       ? 'class'

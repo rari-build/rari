@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
+use cow_utils::CowUtils;
 use tracing::error;
 
 pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
@@ -30,7 +31,8 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
                     CacheLoader::find_matching_cache_config(&page_configs, "/")
                 {
                     for (key, value) in page_cache_config {
-                        response_builder = response_builder.header(key.to_lowercase(), value);
+                        response_builder =
+                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
                     }
                 }
 
@@ -53,8 +55,7 @@ pub async fn static_or_spa_handler(
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
-    const BLOCKED_FILES: &[&str] =
-        &["server/server-manifest.json", "server/app-routes.json", "server/"];
+    const BLOCKED_FILES: &[&str] = &["server/manifest.json", "server/routes.json", "server/"];
 
     for blocked in BLOCKED_FILES {
         if path.starts_with(blocked) || path == *blocked {
@@ -111,7 +112,8 @@ pub async fn static_or_spa_handler(
                     CacheLoader::find_matching_cache_config(&page_configs, route_path)
                 {
                     for (key, value) in page_cache_config {
-                        response_builder = response_builder.header(key.to_lowercase(), value);
+                        response_builder =
+                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
                     }
                 }
 
@@ -134,8 +136,8 @@ pub async fn serve_static_asset(
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
-    if asset_path.contains("server/server-manifest.json")
-        || asset_path.contains("server/app-routes.json")
+    if asset_path.contains("server/manifest.json")
+        || asset_path.contains("server/routes.json")
         || asset_path.starts_with("../")
     {
         return Err(StatusCode::NOT_FOUND);

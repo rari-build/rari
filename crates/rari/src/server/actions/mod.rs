@@ -71,33 +71,35 @@ pub async fn handle_server_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token_str) = csrf_token.to_str() {
-            if let Err(e) = state.csrf_manager.validate_token(token_str) {
-                error!("CSRF token validation failed: {}", e);
-                let mut response = Json(ServerActionResponse {
-                    success: false,
-                    result: None,
-                    error: Some("CSRF token validation failed".to_string()),
-                    redirect: None,
-                })
-                .into_response();
-                response.headers_mut().insert(
-                    header::CACHE_CONTROL,
-                    "no-store, no-cache, must-revalidate, private"
-                        .parse()
-                        .expect("Valid cache-control header"),
-                );
-                *response.status_mut() = StatusCode::FORBIDDEN;
-                return Ok(response);
+    if let Some(csrf_manager) = &state.csrf_manager {
+        if let Some(csrf_token) = headers.get("x-csrf-token") {
+            if let Ok(token_str) = csrf_token.to_str() {
+                if let Err(e) = csrf_manager.validate_token(token_str) {
+                    error!("CSRF token validation failed: {}", e);
+                    let mut response = Json(ServerActionResponse {
+                        success: false,
+                        result: None,
+                        error: Some("CSRF token validation failed".to_string()),
+                        redirect: None,
+                    })
+                    .into_response();
+                    response.headers_mut().insert(
+                        header::CACHE_CONTROL,
+                        "no-store, no-cache, must-revalidate, private"
+                            .parse()
+                            .expect("Valid cache-control header"),
+                    );
+                    *response.status_mut() = StatusCode::FORBIDDEN;
+                    return Ok(response);
+                }
+            } else {
+                error!("Invalid CSRF token header format");
+                return Err(StatusCode::FORBIDDEN);
             }
         } else {
-            error!("Invalid CSRF token header format");
+            error!("Missing CSRF token in server action request");
             return Err(StatusCode::FORBIDDEN);
         }
-    } else {
-        error!("Missing CSRF token in server action request");
-        return Err(StatusCode::FORBIDDEN);
     }
 
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
@@ -238,14 +240,16 @@ pub async fn handle_form_action(
         }
     };
 
-    let csrf_token = form_data.get("__csrf_token").ok_or_else(|| {
-        error!("Missing CSRF token in form action");
-        StatusCode::FORBIDDEN
-    })?;
+    if let Some(csrf_manager) = &state.csrf_manager {
+        let csrf_token = form_data.get("__csrf_token").ok_or_else(|| {
+            error!("Missing CSRF token in form action");
+            StatusCode::FORBIDDEN
+        })?;
 
-    if let Err(e) = state.csrf_manager.validate_token(csrf_token) {
-        error!("CSRF token validation failed: {}", e);
-        return Err(StatusCode::FORBIDDEN);
+        if let Err(e) = csrf_manager.validate_token(csrf_token) {
+            error!("CSRF token validation failed: {}", e);
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
 
     let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
@@ -258,8 +262,22 @@ pub async fn handle_form_action(
 
     let args = convert_form_data_to_args(&form_data);
 
+    let validation_config = if state.config.is_development() {
+        ValidationConfig::development()
+    } else {
+        ValidationConfig::production()
+    };
+
+    let sanitized_args = match validate_and_sanitize_args(&args, &validation_config) {
+        Ok(args) => args,
+        Err(e) => {
+            error!("Form action input validation failed: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
     let renderer = state.renderer.lock().await;
-    let result = renderer.execute_server_function(action_id, export_name, &args).await;
+    let result = renderer.execute_server_function(action_id, export_name, &sanitized_args).await;
 
     match result {
         Ok(value) => {

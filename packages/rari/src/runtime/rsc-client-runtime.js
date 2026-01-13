@@ -203,7 +203,7 @@ export function registerClientComponent(componentFunction, id, exportName) {
   }
 
   if (typeof window !== 'undefined') {
-    fetch('/api/rsc/register-client', {
+    fetch('/_rari/register-client', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -297,7 +297,6 @@ class RscClient {
     this.moduleCache = new Map()
     this.inflightRequests = new Map()
     this.config = {
-      enableStreaming: true,
       maxRetries: 5,
       retryDelay: 500,
       timeout: 10000,
@@ -323,37 +322,7 @@ class RscClient {
     if (this.inflightRequests.has(cacheKey))
       return this.inflightRequests.get(cacheKey)
 
-    let requestPromise
-    if (this.config.enableStreaming) {
-      requestPromise = this.fetchServerComponentStream(componentId, props)
-    }
-    else {
-      requestPromise = (async () => {
-        const encodedProps = encodeURIComponent(JSON.stringify(props))
-        const cacheBuster = Date.now()
-        const fetchUrl = `/rsc/render/${componentId}?props=${encodedProps}&_t=${cacheBuster}`
-        await this.waitForServerReady()
-        const response = await this.fetchWithTimeout(fetchUrl, {
-          method: 'GET',
-          headers: {
-            ...this.buildRequestHeaders(),
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-          },
-        })
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
-        }
-        try {
-          return await this.processRscResponseManually(response)
-        }
-        catch {
-          const fallback = await this.processRscResponse(response)
-          return fallback
-        }
-      })()
-    }
+    const requestPromise = this.fetchServerComponentStream(componentId, props)
 
     this.inflightRequests.set(cacheKey, requestPromise)
     try {
@@ -370,11 +339,11 @@ class RscClient {
     await loadRscClient()
 
     const endpoints = (() => {
-      const list = ['/api/rsc/stream']
+      const list = ['/_rari/stream']
       try {
         const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocalHost)
-          list.push('http://127.0.0.1:3000/api/rsc/stream', 'http://localhost:3000/api/rsc/stream')
+          list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
       }
       catch {}
       return list
@@ -697,9 +666,6 @@ class RscClient {
       'Cache-Control': 'no-cache, no-transform',
     }
 
-    if (this.config.enableStreaming)
-      headers['X-RSC-Streaming'] = 'enabled'
-
     return headers
   }
 
@@ -958,38 +924,6 @@ class RscClient {
 
     return processed
   }
-
-  async waitForServerReady() {
-    let serverReady = false
-    let retries = 0
-
-    while (!serverReady && retries < this.config.maxRetries) {
-      try {
-        const statusResponse = await fetch('/_rsc_status')
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          if (statusData.status === 'ready') {
-            serverReady = true
-          }
-          else {
-            throw new Error(`Server status: ${statusData.status}`)
-          }
-        }
-        else {
-          throw new Error(`Status check failed: ${statusResponse.status}`)
-        }
-      }
-      catch {
-        retries++
-        if (retries < this.config.maxRetries)
-          await new Promise(resolve => setTimeout(resolve, this.config.retryDelay))
-      }
-    }
-
-    if (!serverReady) {
-      throw new Error('RSC server is not ready after multiple attempts')
-    }
-  }
 }
 
 const rscClient = new RscClient()
@@ -1224,7 +1158,7 @@ if (import.meta.hot) {
 
     try {
       const rariServerUrl = window.location.origin
-      const reloadUrl = `${rariServerUrl}/api/rsc/hmr-register`
+      const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       let componentId = filePath
       if (componentId.startsWith('src/'))
@@ -1237,12 +1171,15 @@ if (import.meta.hot) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'register',
           file_path: filePath,
         }),
       })
 
       if (!reloadResponse.ok)
         console.error('[HMR] Component reload failed:', reloadResponse.status)
+
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
     catch (error) {
       console.error('[HMR] Failed to reload component:', error)
@@ -1326,7 +1263,7 @@ if (import.meta.hot) {
           ? 'http://localhost:3000'
           : window.location.origin
 
-        const invalidateUrl = `${rariServerUrl}/api/rsc/hmr-invalidate`
+        const invalidateUrl = `${rariServerUrl}/_rari/hmr`
 
         const invalidateResponse = await fetch(invalidateUrl, {
           method: 'POST',
@@ -1334,6 +1271,7 @@ if (import.meta.hot) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            action: 'invalidate',
             componentId: componentId || filePath,
             filePath,
           }),

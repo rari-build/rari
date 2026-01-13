@@ -1,33 +1,10 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
+import { getBlogPost } from '@/data/blog-posts'
 
 export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
   const { slug } = params
 
-  const posts: Record<
-    string,
-    { title: string, content: string, date: string }
-  > = {
-    'hello-world': {
-      title: 'Hello World',
-      content:
-        'Welcome to our first blog post! This demonstrates dynamic routing with the app router.',
-      date: '2025-01-15',
-    },
-    'app-router-guide': {
-      title: 'App Router Guide',
-      content:
-        'Learn how to use the app router for building modern web applications with server components.',
-      date: '2025-01-20',
-    },
-    'server-components': {
-      title: 'Server Components Explained',
-      content:
-        'Server components allow you to render components on the server, improving performance and SEO.',
-      date: '2025-01-25',
-    },
-  }
-
-  const post = posts[slug] || {
+  const post = getBlogPost(slug) || {
     title: 'Post Not Found',
     content: 'The requested blog post could not be found.',
     date: '',
@@ -68,22 +45,7 @@ export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
 export async function generateMetadata({
   params,
 }: PageProps<{ slug: string }>) {
-  const posts: Record<string, { title: string, content: string }> = {
-    'hello-world': {
-      title: 'Hello World',
-      content: 'Welcome to our first blog post!',
-    },
-    'app-router-guide': {
-      title: 'App Router Guide',
-      content: 'Learn about the app router',
-    },
-    'server-components': {
-      title: 'Server Components Explained',
-      content: 'Understanding server components',
-    },
-  }
-
-  const post = posts[params.slug]
+  const post = getBlogPost(params.slug)
 
   return {
     title: post ? `${post.title} | Blog` : 'Post Not Found',

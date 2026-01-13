@@ -14,7 +14,7 @@ let todos: Todo[] = [
 ]
 
 export async function getTodos() {
-  return todos
+  return [...todos]
 }
 
 export async function addTodo(formData: FormData) {
@@ -23,14 +23,16 @@ export async function addTodo(formData: FormData) {
   if (!text?.trim())
     return { success: false, error: 'Todo text is required', todos }
 
-  todos.push({
+  const newTodo = {
     id: Date.now().toString(),
     text: text.trim(),
     completed: false,
     createdAt: new Date().toISOString(),
-  })
+  }
 
-  return { success: true, todos }
+  todos.push(newTodo)
+
+  return { success: true, todos: [...todos] }
 }
 
 export async function toggleTodo(formData: FormData) {
@@ -56,20 +58,4 @@ export async function deleteTodo(formData: FormData) {
 export async function clearCompleted() {
   todos = todos.filter(t => !t.completed)
   return { success: true, todos }
-}
-
-export async function createTodoAndRedirect(formData: FormData) {
-  const text = formData.get('text') as string
-
-  if (!text?.trim())
-    return { success: false, error: 'Todo text is required' }
-
-  todos.push({
-    id: Date.now().toString(),
-    text: text.trim(),
-    completed: false,
-    createdAt: new Date().toISOString(),
-  })
-
-  return { success: true, redirect: '/actions', todos }
 }

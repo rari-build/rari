@@ -1,4 +1,5 @@
 use crate::rsc::rendering::layout::types::PageMetadata;
+use cow_utils::CowUtils;
 
 pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
     let mut result = html.to_string();
@@ -358,11 +359,12 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
 }
 
 fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
+    s.cow_replace('&', "&amp;")
+        .cow_replace('<', "&lt;")
+        .cow_replace('>', "&gt;")
+        .cow_replace('"', "&quot;")
+        .cow_replace('\'', "&#x27;")
+        .into_owned()
 }
 
 #[cfg(test)]

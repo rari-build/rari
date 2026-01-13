@@ -29,8 +29,24 @@ export { rariProxy } from './proxy/vite-plugin'
 export type { ProxyPluginOptions } from './proxy/vite-plugin'
 
 export {
+  clearPropsCache,
+  clearPropsCacheForComponent,
+  extractMetadata,
+  extractServerProps,
+  extractServerPropsWithCache,
+  extractStaticParams,
+  hasServerSideDataFetching,
+} from './router/props-extractor'
+
+export type {
+  MetadataResult,
+  ServerPropsResult,
+  StaticParamsResult,
+} from './router/props-extractor'
+
+export {
   generateAppRouteManifest,
-} from './router/app-routes'
+} from './router/routes'
 
 export type {
   AppRouteEntry,
@@ -47,23 +63,7 @@ export type {
   PageProps,
   RouteSegment,
   RouteSegmentType,
-} from './router/app-types'
-
-export {
-  clearPropsCache,
-  clearPropsCacheForComponent,
-  extractMetadata,
-  extractServerProps,
-  extractServerPropsWithCache,
-  extractStaticParams,
-  hasServerSideDataFetching,
-} from './router/props-extractor'
-
-export type {
-  MetadataResult,
-  ServerPropsResult,
-  StaticParamsResult,
-} from './router/props-extractor'
+} from './router/types'
 
 export { rariRouter } from './router/vite-plugin'
 

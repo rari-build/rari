@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -318,7 +319,7 @@ globalThis['~errors'].batch.push({{
         self.runtime.clear_module_loader_caches(component_id).await?;
 
         let force_v8_cache_clear_script =
-            V8_CACHE_CLEAR_SCRIPT.replace("{component_id}", component_id);
+            V8_CACHE_CLEAR_SCRIPT.cow_replace("{component_id}", component_id).into_owned();
 
         self.runtime
             .execute_script(
@@ -367,7 +368,7 @@ globalThis['~errors'].batch.push({{
             let mut resolved_path_candidates: Vec<std::path::PathBuf> = Vec::new();
             if current.starts_with("../") {
                 let up_count = current.matches("../").count();
-                let remaining_path = current.replacen("../", "", up_count);
+                let remaining_path = current.cow_replacen("../", "", up_count).into_owned();
                 if up_count == 1 {
                     resolved_path_candidates.push(src_dir.join(&remaining_path));
                 } else if up_count == 2 {
@@ -930,8 +931,9 @@ globalThis['~errors'].batch.push({{
 
         self.execute_batched_scripts(setup_scripts).await?;
 
-        let resolve_server_functions_script =
-            RESOLVE_SERVER_FUNCTIONS_SCRIPT.replace("{component_id}", component_id);
+        let resolve_server_functions_script = RESOLVE_SERVER_FUNCTIONS_SCRIPT
+            .cow_replace("{component_id}", component_id)
+            .into_owned();
 
         self.execute_script_with_timeout(
             format!("resolve_server_functions_{component_id}.js"),
@@ -1038,10 +1040,10 @@ globalThis['~errors'].batch.push({{
                 </div>
             </div>"#,
             component_id,
-            rsc_payload.replace('"', "&quot;"),
+            rsc_payload.cow_replace('"', "&quot;"),
             component_id,
             component_id,
-            rsc_payload.replace('"', "&quot;")
+            rsc_payload.cow_replace('"', "&quot;")
         ))
     }
 
@@ -1128,12 +1130,13 @@ globalThis['~errors'].batch.push({{
             .map_err(|e| RariError::serialization(format!("Failed to serialize args: {}", e)))?;
 
         let script = SERVER_ACTION_INVOCATION_SCRIPT
-            .replace("{function_name}", export_name)
-            .replace("{args_json}", &args_json);
+            .cow_replace("{function_name}", export_name)
+            .cow_replace("{args_json}", &args_json)
+            .into_owned();
 
         self.runtime
             .execute_script(
-                format!("execute_action_{}_{}.js", function_id.replace('/', "_"), export_name),
+                format!("execute_action_{}_{}.js", function_id.cow_replace('/', "_"), export_name),
                 script,
             )
             .await
@@ -1243,7 +1246,7 @@ globalThis['~errors'].batch.push({{
             out.push(path.to_string());
         }
 
-        let path_like = id.replace('\\', "/");
+        let path_like = id.cow_replace('\\', "/");
         if let Some(basename) = path_like.rsplit('/').next() {
             out.push(basename.to_string());
         }
@@ -1338,8 +1341,9 @@ globalThis['~errors'].batch.push({{
             let module_namespace_json =
                 serde_json::to_string(&module_namespace).unwrap_or_else(|_| "null".to_string());
             let register_from_namespace_script = MODULE_REGISTRATION_SCRIPT
-                .replace("{module_namespace}", &module_namespace_json)
-                .replace("{component_id}", component_id);
+                .cow_replace("{module_namespace}", &module_namespace_json)
+                .cow_replace("{component_id}", component_id)
+                .into_owned();
 
             self.runtime
                 .execute_script(
@@ -1377,31 +1381,37 @@ globalThis['~errors'].batch.push({{
 
             if transformed_source_safe.contains("export default async function") {
                 transformed_source_safe = transformed_source_safe
-                    .replace("export default async function", "async function");
+                    .cow_replace("export default async function", "async function")
+                    .into_owned();
             } else if transformed_source_safe.contains("export default function") {
-                transformed_source_safe =
-                    transformed_source_safe.replace("export default function", "function");
+                transformed_source_safe = transformed_source_safe
+                    .cow_replace("export default function", "function")
+                    .into_owned();
             } else {
-                transformed_source_safe = transformed_source_safe.replace("export default ", "");
+                transformed_source_safe =
+                    transformed_source_safe.cow_replace("export default ", "").into_owned();
             }
 
             transformed_source_safe = transformed_source_safe
-                .replace(&format!("export const ~rari_main_export = {component_id};"), "")
-                .replace(
+                .cow_replace(&format!("export const ~rari_main_export = {component_id};"), "")
+                .cow_replace(
                     "export function ~rari_register() { /* Compatibility stub */ return true; }",
                     "",
                 )
-                .replace("export const metadata =", "const metadata =")
-                .replace("export const ", "const ")
-                .replace("export function ", "function ")
-                .replace("export async function ", "async function ")
-                .replace("export {", "// export {")
-                .replace("export *", "// export *");
+                .cow_replace("export const metadata =", "const metadata =")
+                .cow_replace("export const ", "const ")
+                .cow_replace("export function ", "function ")
+                .cow_replace("export async function ", "async function ")
+                .cow_replace("export {", "// export {")
+                .cow_replace("export *", "// export *")
+                .into_owned();
 
             transformed_source_safe.push_str(REGISTRY_PROXY_SETUP_SCRIPT);
 
-            transformed_source_safe =
-                transformed_source_safe.replace("\"use module\";", "").replace("'use module';", "");
+            transformed_source_safe = transformed_source_safe
+                .cow_replace("\"use module\";", "")
+                .cow_replace("'use module';", "")
+                .into_owned();
 
             let mut eval_safe_source = COMPONENT_EVAL_SETUP_SCRIPT.to_string();
 

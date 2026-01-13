@@ -1,9 +1,8 @@
 /* eslint-disable no-undef */
 globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   const PageComponent = globalThis[pageComponentId]
-  if (!PageComponent || typeof PageComponent !== 'function') {
+  if (!PageComponent || typeof PageComponent !== 'function')
     throw new TypeError(`Page component ${pageComponentId} not found`)
-  }
 
   const pageResult = PageComponent(pageProps)
   let currentElement = pageResult && typeof pageResult.then === 'function'
@@ -14,9 +13,8 @@ globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
     const layout = layouts[i]
     const LayoutComponent = globalThis[layout.componentId]
 
-    if (!LayoutComponent || typeof LayoutComponent !== 'function') {
+    if (!LayoutComponent || typeof LayoutComponent !== 'function')
       throw new TypeError(`Layout component ${layout.componentId} not found`)
-    }
 
     const layoutResult = LayoutComponent({ children: currentElement })
     currentElement = layoutResult && typeof layoutResult.then === 'function'

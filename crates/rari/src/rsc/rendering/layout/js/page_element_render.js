@@ -2,20 +2,17 @@
 (function () {
   const props = {page_props_json}
   const component = globalThis['{component_id}']
-  if (!component || typeof component !== 'function') {
+  if (!component || typeof component !== 'function')
     throw new Error('Component not found: {component_id}')
-  }
 
   const element = component(props)
 
   function serializeElement(el) {
-    if (!el || typeof el !== 'object') {
+    if (!el || typeof el !== 'object')
       return el
-    }
 
-    if (Array.isArray(el)) {
+    if (Array.isArray(el))
       return el.map(serializeElement)
-    }
 
     if (el.type !== undefined && el.props !== undefined) {
       const result = {

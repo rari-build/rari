@@ -1,4 +1,4 @@
-import type { LayoutProps } from 'rari/client'
+import type { LayoutProps } from 'rari'
 import Footer from '@/components/Footer'
 import Sidebar from '@/components/Sidebar'
 

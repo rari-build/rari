@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
 
 pub struct DistPathResolver {
@@ -10,10 +11,6 @@ impl DistPathResolver {
     pub fn new(project_root: PathBuf) -> Self {
         let dist_dir = project_root.join("dist");
         Self { project_root, dist_dir, server_dir: "server".to_string() }
-    }
-
-    pub fn with_custom_paths(project_root: PathBuf, dist_dir: PathBuf, server_dir: String) -> Self {
-        Self { project_root, dist_dir, server_dir }
     }
 
     pub fn get_dist_path(&self, component_id: &str) -> PathBuf {
@@ -36,12 +33,12 @@ impl DistPathResolver {
         let path_str = relative_path.to_string_lossy();
 
         path_str
-            .replace('\\', "/") // Normalize Windows paths
+            .cow_replace('\\', "/")
             .trim_end_matches(".tsx")
             .trim_end_matches(".ts")
             .trim_end_matches(".jsx")
             .trim_end_matches(".js")
-            .replace(|c: char| !c.is_alphanumeric() && c != '/' && c != '-', "_")
+            .cow_replace(|c: char| !c.is_alphanumeric() && c != '/' && c != '-', "_")
             .trim_start_matches("src/")
             .to_string()
     }
@@ -127,17 +124,5 @@ mod tests {
 
         let id = resolver.file_path_to_component_id(Path::new("/project/src/pages/about.tsx"));
         assert_eq!(id, "pages/about");
-    }
-
-    #[test]
-    fn test_custom_paths() {
-        let resolver = DistPathResolver::with_custom_paths(
-            PathBuf::from("/project"),
-            PathBuf::from("/project/build"),
-            "rsc".to_string(),
-        );
-
-        let path = resolver.get_dist_path("pages/home");
-        assert_eq!(path, PathBuf::from("/project/build/rsc/pages/home.js"));
     }
 }

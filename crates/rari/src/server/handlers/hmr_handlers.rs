@@ -1,51 +1,87 @@
+use crate::server::ServerState;
 use crate::server::config::Config;
 use crate::server::handlers::rsc_handlers::{
     immediate_component_reregistration, reload_component_from_dist,
 };
 use crate::server::utils::component_utils::extract_component_id;
-use crate::server::{
-    HmrRegisterRequest, ReloadComponentRequest, ReloadComponentResponse, ServerState,
-};
 use axum::{extract::State, http::StatusCode, response::Json};
-use serde::Deserialize;
+use cow_utils::CowUtils;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::error;
 
 #[derive(Debug, Deserialize)]
-pub struct HmrInvalidateRequest {
-    #[serde(rename = "componentId")]
-    component_id: String,
+#[serde(tag = "action", rename_all = "kebab-case")]
+pub enum HmrRequest {
+    Register {
+        #[serde(rename = "file_path")]
+        file_path: String,
+    },
+    Invalidate {
+        #[serde(rename = "componentId")]
+        component_id: String,
+        #[serde(rename = "filePath")]
+        file_path: Option<String>,
+    },
+    Reload {
+        #[serde(rename = "componentId")]
+        component_id: String,
+        #[serde(rename = "filePath")]
+        file_path: String,
+    },
+    InvalidateApiRoute {
+        #[serde(rename = "filePath")]
+        file_path: String,
+    },
+    ReloadComponent {
+        #[serde(rename = "component_id")]
+        component_id: String,
+        #[serde(rename = "bundle_path")]
+        bundle_path: String,
+    },
 }
 
-#[derive(Debug, Deserialize)]
-pub struct HmrInvalidateApiRouteRequest {
-    #[serde(rename = "filePath")]
-    file_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct HmrReloadRequest {
-    #[serde(rename = "componentId")]
-    component_id: String,
-    #[serde(rename = "filePath")]
-    file_path: String,
+#[derive(Debug, Serialize)]
+pub struct HmrResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(flatten)]
+    pub data: Option<Value>,
 }
 
 #[axum::debug_handler]
-pub async fn hmr_register_component(
+pub async fn handle_hmr_action(
     State(state): State<ServerState>,
-    Json(request): Json<HmrRegisterRequest>,
+    Json(request): Json<HmrRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    match request {
+        HmrRequest::Register { file_path } => handle_register(state, file_path).await,
+        HmrRequest::Invalidate { component_id, file_path } => {
+            handle_invalidate(state, component_id, file_path).await
+        }
+        HmrRequest::Reload { component_id, file_path } => {
+            handle_reload(state, component_id, file_path).await
+        }
+        HmrRequest::InvalidateApiRoute { file_path } => {
+            handle_invalidate_api_route(state, file_path).await
+        }
+        HmrRequest::ReloadComponent { component_id, bundle_path } => {
+            handle_reload_component(state, component_id, bundle_path).await
+        }
+    }
+}
+
+async fn handle_register(state: ServerState, file_path: String) -> Result<Json<Value>, StatusCode> {
     use crate::server::utils::path_validation::{
         normalize_component_path, validate_component_path,
     };
 
-    let file_path = normalize_component_path(&request.file_path);
+    let file_path = normalize_component_path(&file_path);
 
     if let Err(e) = validate_component_path(&file_path) {
         error!(
             file_path = %file_path,
-            original_path = %request.file_path,
             error = %e,
             "Component path validation failed"
         );
@@ -108,7 +144,7 @@ pub async fn hmr_register_component(
         #[allow(clippy::disallowed_methods)]
         return Ok(Json(serde_json::json!({
             "success": false,
-            "file_path": request.file_path,
+            "file_path": file_path,
             "component_id": component_id,
             "reloaded": false,
             "preserved_last_good": true,
@@ -144,7 +180,7 @@ pub async fn hmr_register_component(
     let response = if reloaded {
         serde_json::json!({
             "success": true,
-            "file_path": request.file_path,
+            "file_path": file_path,
             "component_id": component_id,
             "reloaded": true,
             "error": null
@@ -152,7 +188,7 @@ pub async fn hmr_register_component(
     } else if reload_error_details.is_some() || module_reload_error.is_some() {
         serde_json::json!({
             "success": true,
-            "file_path": request.file_path,
+            "file_path": file_path,
             "component_id": component_id,
             "reloaded": false,
             "preserved_last_good": true,
@@ -165,7 +201,7 @@ pub async fn hmr_register_component(
     } else {
         serde_json::json!({
             "success": true,
-            "file_path": request.file_path,
+            "file_path": file_path,
             "component_id": component_id,
             "reloaded": false,
             "error": null
@@ -175,23 +211,23 @@ pub async fn hmr_register_component(
     Ok(Json(response))
 }
 
-#[axum::debug_handler]
-pub async fn hmr_invalidate_component(
-    State(state): State<ServerState>,
-    Json(payload): Json<HmrInvalidateRequest>,
-) -> Json<Value> {
+async fn handle_invalidate(
+    state: ServerState,
+    component_id: String,
+    _file_path: Option<String>,
+) -> Result<Json<Value>, StatusCode> {
     let result = {
         let renderer = state.renderer.lock().await;
 
         {
             let mut registry = renderer.component_registry.lock();
-            registry.mark_module_stale(&payload.component_id);
+            registry.mark_module_stale(&component_id);
         }
 
-        renderer.clear_component_cache(&payload.component_id);
+        renderer.clear_component_cache(&component_id);
 
-        if let Err(e) = renderer.runtime.clear_module_loader_caches(&payload.component_id).await {
-            error!("Failed to clear module loader caches for {}: {}", payload.component_id, e);
+        if let Err(e) = renderer.runtime.clear_module_loader_caches(&component_id).await {
+            error!("Failed to clear module loader caches for {}: {}", component_id, e);
         }
 
         let clear_script = format!(
@@ -242,13 +278,13 @@ pub async fn hmr_invalidate_component(
                 }};
             }})()
             "#,
-            payload.component_id
+            component_id
         );
 
         renderer
             .runtime
             .execute_script(
-                format!("hmr_clear_cache_{}.js", payload.component_id.replace('/', "_")),
+                format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
                 clear_script,
             )
             .await
@@ -258,66 +294,39 @@ pub async fn hmr_invalidate_component(
         Ok(clear_result) =>
         {
             #[allow(clippy::disallowed_methods)]
-            Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": true,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "cleared": clear_result
-            }))
+            })))
         }
         Err(e) => {
-            error!("Failed to invalidate component cache for {}: {}", payload.component_id, e);
+            error!("Failed to invalidate component cache for {}: {}", component_id, e);
             #[allow(clippy::disallowed_methods)]
-            Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": false,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "error": e.to_string()
-            }))
+            })))
         }
     }
 }
 
-#[axum::debug_handler]
-pub async fn hmr_invalidate_api_route(
-    State(state): State<ServerState>,
-    Json(payload): Json<HmrInvalidateApiRouteRequest>,
-) -> Json<Value> {
-    let api_handler = match &state.api_route_handler {
-        Some(handler) => handler,
-        None => {
-            #[allow(clippy::disallowed_methods)]
-            return Json(serde_json::json!({
-                "success": false,
-                "filePath": payload.file_path,
-                "error": "API route handler not available"
-            }));
-        }
-    };
-
-    api_handler.invalidate_handler(&payload.file_path);
-
-    #[allow(clippy::disallowed_methods)]
-    Json(serde_json::json!({
-        "success": true,
-        "filePath": payload.file_path,
-        "message": "API route handler cache invalidated"
-    }))
-}
-
-#[axum::debug_handler]
-pub async fn hmr_reload_component(
-    State(state): State<ServerState>,
-    Json(payload): Json<HmrReloadRequest>,
-) -> Json<Value> {
+async fn handle_reload(
+    state: ServerState,
+    component_id: String,
+    file_path: String,
+) -> Result<Json<Value>, StatusCode> {
     let config = match Config::get() {
         Some(config) => config,
         None => {
             error!("Failed to get global configuration for HMR reload");
             #[allow(clippy::disallowed_methods)]
-            return Json(serde_json::json!({
+            return Ok(Json(serde_json::json!({
                 "success": false,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "error": "Configuration not available"
-            }));
+            })));
         }
     };
 
@@ -329,11 +338,8 @@ pub async fn hmr_reload_component(
         .unwrap_or_default()
         .as_millis();
 
-    let file_path = if payload.file_path.starts_with('/') {
-        payload.file_path.clone()
-    } else {
-        format!("/{}", payload.file_path)
-    };
+    let file_path =
+        if file_path.starts_with('/') { file_path.clone() } else { format!("/{}", file_path) };
 
     let vite_url = format!("{}{}?t={}", vite_base_url, file_path, timestamp);
 
@@ -342,11 +348,11 @@ pub async fn hmr_reload_component(
             if !response.status().is_success() {
                 error!("Vite returned error status: {}", response.status());
                 #[allow(clippy::disallowed_methods)]
-                return Json(serde_json::json!({
+                return Ok(Json(serde_json::json!({
                     "success": false,
-                    "componentId": payload.component_id,
+                    "componentId": component_id,
                     "error": format!("Vite returned status: {}", response.status())
-                }));
+                })));
             }
 
             match response.text().await {
@@ -354,77 +360,98 @@ pub async fn hmr_reload_component(
                 Err(e) => {
                     error!("Failed to read response from Vite: {}", e);
                     #[allow(clippy::disallowed_methods)]
-                    return Json(serde_json::json!({
+                    return Ok(Json(serde_json::json!({
                         "success": false,
-                        "componentId": payload.component_id,
+                        "componentId": component_id,
                         "error": format!("Failed to read response: {}", e)
-                    }));
+                    })));
                 }
             }
         }
         Err(e) => {
             error!("Failed to fetch from Vite dev server: {}", e);
             #[allow(clippy::disallowed_methods)]
-            return Json(serde_json::json!({
+            return Ok(Json(serde_json::json!({
                 "success": false,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "error": format!("Failed to fetch from Vite: {}", e)
-            }));
+            })));
         }
     };
 
-    let result = {
-        state
-            .renderer
-            .lock()
-            .await
-            .register_component(&payload.component_id, &transpiled_code)
-            .await
-    };
+    let result =
+        { state.renderer.lock().await.register_component(&component_id, &transpiled_code).await };
 
     match result {
         Ok(()) =>
         {
             #[allow(clippy::disallowed_methods)]
-            Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": true,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "codeSize": transpiled_code.len()
-            }))
+            })))
         }
         Err(e) => {
-            error!("Failed to reload component {}: {}", payload.component_id, e);
+            error!("Failed to reload component {}: {}", component_id, e);
             #[allow(clippy::disallowed_methods)]
-            Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": false,
-                "componentId": payload.component_id,
+                "componentId": component_id,
                 "error": e.to_string()
-            }))
+            })))
         }
     }
 }
 
-#[axum::debug_handler]
-pub async fn reload_component(
-    State(state): State<ServerState>,
-    Json(payload): Json<ReloadComponentRequest>,
-) -> Result<Json<ReloadComponentResponse>, StatusCode> {
+async fn handle_invalidate_api_route(
+    state: ServerState,
+    file_path: String,
+) -> Result<Json<Value>, StatusCode> {
+    let api_handler = match &state.api_route_handler {
+        Some(handler) => handler,
+        None => {
+            #[allow(clippy::disallowed_methods)]
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "filePath": file_path,
+                "error": "API route handler not available"
+            })));
+        }
+    };
+
+    api_handler.invalidate_handler(&file_path);
+
+    #[allow(clippy::disallowed_methods)]
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "filePath": file_path,
+        "message": "API route handler cache invalidated"
+    })))
+}
+
+async fn handle_reload_component(
+    state: ServerState,
+    component_id: String,
+    bundle_path: String,
+) -> Result<Json<Value>, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
-    let bundle_full_path = match validate_safe_path(&project_root, &payload.bundle_path) {
+    let bundle_full_path = match validate_safe_path(&project_root, &bundle_path) {
         Ok(path) => path,
         Err(e) => {
             error!(
-                bundle_path = %payload.bundle_path,
+                bundle_path = %bundle_path,
                 error = %e,
                 "Bundle path validation failed"
             );
-            return Ok(Json(ReloadComponentResponse {
-                success: false,
-                message: format!("Invalid bundle path: {}", e),
-            }));
+            #[allow(clippy::disallowed_methods)]
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": format!("Invalid bundle path: {}", e)
+            })));
         }
     };
 
@@ -432,10 +459,11 @@ pub async fn reload_component(
         Ok(code) => code,
         Err(e) => {
             error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
-            return Ok(Json(ReloadComponentResponse {
-                success: false,
-                message: format!("Failed to read bundle: {}", e),
-            }));
+            #[allow(clippy::disallowed_methods)]
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to read bundle: {}", e)
+            })));
         }
     };
 
@@ -443,43 +471,48 @@ pub async fn reload_component(
         let renderer = state.renderer.lock().await;
         let mut registry = renderer.component_registry.lock();
 
-        registry.remove_component(&payload.component_id);
+        registry.remove_component(&component_id);
 
         let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
         let _ = registry.register_component(
-            &payload.component_id,
+            &component_id,
             &bundle_code,
             bundle_code.clone(),
             dependencies.into_iter().collect(),
         );
 
-        registry.mark_component_loaded(&payload.component_id);
-        registry.mark_component_initially_loaded(&payload.component_id);
+        registry.mark_component_loaded(&component_id);
+        registry.mark_component_initially_loaded(&component_id);
     }
 
     if let Err(e) = {
         let renderer = state.renderer.lock().await;
-        renderer.runtime.invalidate_component(&payload.component_id).await
+        renderer.runtime.invalidate_component(&component_id).await
     } {
-        error!("Failed to invalidate component {}: {}", payload.component_id, e);
+        error!("Failed to invalidate component {}: {}", component_id, e);
     }
 
     let load_result = {
         let renderer = state.renderer.lock().await;
-        renderer.runtime.load_component(&payload.component_id, &bundle_full_path).await
+        renderer.runtime.load_component(&component_id, &bundle_full_path).await
     };
 
     match load_result {
-        Ok(()) => Ok(Json(ReloadComponentResponse {
-            success: true,
-            message: format!("Component {} reloaded successfully", payload.component_id),
-        })),
+        Ok(()) =>
+        {
+            #[allow(clippy::disallowed_methods)]
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "message": format!("Component {} reloaded successfully", component_id)
+            })))
+        }
         Err(e) => {
-            error!("Failed to reload component {}: {}", payload.component_id, e);
-            Ok(Json(ReloadComponentResponse {
-                success: false,
-                message: format!("Failed to reload component: {}", e),
-            }))
+            error!("Failed to reload component {}: {}", component_id, e);
+            #[allow(clippy::disallowed_methods)]
+            Ok(Json(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to reload component: {}", e)
+            })))
         }
     }
 }

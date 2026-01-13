@@ -4,9 +4,8 @@ if (!globalThis.renderToRsc) {
     if (!element)
       return null
 
-    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
       return element
-    }
 
     if (Array.isArray(element)) {
       const results = []
@@ -30,9 +29,8 @@ if (!globalThis.renderToRsc) {
             ...otherProps,
             children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined,
           }
-          if (rscProps.children === undefined) {
+          if (rscProps.children === undefined)
             delete rscProps.children
-          }
           return ['$', element.type, uniqueKey, rscProps]
         }
         else if (typeof element.type === 'function') {
@@ -85,9 +83,8 @@ if (!globalThis['~suspense']) {
       return null
 
     try {
-      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
         return element
-      }
 
       if (element && typeof element === 'object') {
         return {

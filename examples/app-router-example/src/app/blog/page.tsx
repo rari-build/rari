@@ -1,13 +1,7 @@
+import { getAllBlogPosts } from '@/data/blog-posts'
+
 export default async function BlogPage() {
-  const posts = [
-    { slug: 'hello-world', title: 'Hello World', date: '2025-10-15' },
-    { slug: 'app-router-guide', title: 'App Router Guide', date: '2025-10-20' },
-    {
-      slug: 'server-components',
-      title: 'Server Components Explained',
-      date: '2025-10-25',
-    },
-  ]
+  const posts = getAllBlogPosts()
 
   return (
     <div className="bg-white rounded-xl p-12 shadow-2xl">

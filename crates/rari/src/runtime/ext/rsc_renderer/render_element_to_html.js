@@ -84,13 +84,11 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
         }
       }
 
-      if (!element) {
+      if (!element)
         return ''
-      }
 
-      if (typeof element !== 'object') {
+      if (typeof element !== 'object')
         return String(element)
-      }
 
       if (element.$$typeof && element.type) {
         const type = element.type
@@ -108,9 +106,8 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
           }
 
           const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link']
-          if (selfClosingTags.includes(type)) {
+          if (selfClosingTags.includes(type))
             return `${html}/>`
-          }
 
           html += '>'
 
@@ -123,17 +120,14 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
               const isString = childType === 'string'
               const isElement = child !== null && typeof child === 'object'
 
-              if (lastChildWasString && isString && child.trim() === '') {
+              if (lastChildWasString && isString && child.trim() === '')
                 html += '\u00A0'
-              }
 
-              if (lastChildWasString && isElement) {
+              if (lastChildWasString && isElement)
                 html += ' '
-              }
 
-              if (lastWasElement && isString && child.startsWith(' ')) {
+              if (lastWasElement && isString && child.startsWith(' '))
                 html += ' '
-              }
 
               html += globalThis.renderElementToHtml(child)
 
@@ -160,17 +154,14 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
               const isString = childType === 'string'
               const isElement = child !== null && typeof child === 'object'
 
-              if (lastChildWasString && isString && child.trim() === '') {
+              if (lastChildWasString && isString && child.trim() === '')
                 html += '\u00A0'
-              }
 
-              if (lastChildWasString && isElement) {
+              if (lastChildWasString && isElement)
                 html += ' '
-              }
 
-              if (lastWasElement && isString && child.startsWith(' ')) {
+              if (lastWasElement && isString && child.startsWith(' '))
                 html += ' '
-              }
 
               html += globalThis.renderElementToHtml(child)
 
@@ -186,15 +177,13 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
         }
         else if (typeof type === 'function') {
           try {
-            if (globalThis['~promises']?.trackComponentRender && type.name) {
+            if (globalThis['~promises']?.trackComponentRender && type.name)
               globalThis['~promises'].trackComponentRender(type.name)
-            }
 
             const result = type(props)
 
-            if (result && typeof result.then === 'function') {
+            if (result && typeof result.then === 'function')
               return result
-            }
 
             return globalThis.renderElementToHtml(result)
           }
@@ -258,9 +247,8 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
       return `<pre>${safeStringify(element)}</pre>`
     }
     catch (error) {
-      if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+      if (error && error.$$typeof === Symbol.for('react.suspense.pending'))
         throw error
-      }
 
       return `<div class="render-error">Rendering error: ${error.message}</div>`
     }

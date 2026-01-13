@@ -1,7 +1,6 @@
 function escapeHtml(text) {
-  if (text === null || text === undefined) {
+  if (text === null || text === undefined)
     return ''
-  }
 
   const str = String(text)
   const map = {
@@ -16,9 +15,8 @@ function escapeHtml(text) {
 }
 
 function kebabCase(str) {
-  if (/^(?:Webkit|Moz|Ms|O)[A-Z]/.test(str)) {
+  if (/^(?:Webkit|Moz|Ms|O)[A-Z]/.test(str))
     return `-${str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}`
-  }
   return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
 }
 
@@ -48,14 +46,12 @@ async function renderHtmlElement(tagName, props, depth) {
   let html = `<${tagName}`
 
   for (const [key, value] of Object.entries(attributes)) {
-    if (key === 'key' || key === 'ref' || key === '__self' || key === '__source') {
+    if (key === 'key' || key === 'ref' || key === '__self' || key === '__source')
       continue
-    }
 
     if (key === 'className') {
-      if (value) {
+      if (value)
         html += ` class="${escapeHtml(value)}"`
-      }
       continue
     }
 
@@ -63,16 +59,14 @@ async function renderHtmlElement(tagName, props, depth) {
       const styleStr = Object.entries(value)
         .map(([k, v]) => `${kebabCase(k)}:${v}`)
         .join(';')
-      if (styleStr) {
+      if (styleStr)
         html += ` style="${escapeHtml(styleStr)}"`
-      }
       continue
     }
 
     if (typeof value === 'boolean') {
-      if (value) {
+      if (value)
         html += ` ${key}`
-      }
       continue
     }
 
@@ -105,9 +99,8 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     return '<div style="color:red">Error: Render depth limit exceeded</div>'
   }
 
-  if (element === null || element === undefined) {
+  if (element === null || element === undefined)
     return ''
-  }
 
   if (element && typeof element === 'object' && typeof element.then === 'function') {
     try {
@@ -120,13 +113,11 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     }
   }
 
-  if (typeof element === 'string' || typeof element === 'number') {
+  if (typeof element === 'string' || typeof element === 'number')
     return isRawContent ? String(element) : escapeHtml(String(element))
-  }
 
-  if (typeof element === 'boolean') {
+  if (typeof element === 'boolean')
     return ''
-  }
 
   if (Array.isArray(element)) {
     const results = []
@@ -140,21 +131,18 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
     const type = element.type
     const props = element.props || {}
 
-    if (typeof type === 'string') {
+    if (typeof type === 'string')
       return await renderHtmlElement(type, props, depth)
-    }
 
-    if (type === Symbol.for('react.fragment') || (type && type === globalThis.React?.Fragment)) {
+    if (type === Symbol.for('react.fragment') || (type && type === globalThis.React?.Fragment))
       return await renderToHtml(props.children, depth + 1, isRawContent)
-    }
 
     if (typeof type === 'function') {
       try {
         let rendered = type(props)
 
-        if (rendered && typeof rendered.then === 'function') {
+        if (rendered && typeof rendered.then === 'function')
           rendered = await rendered
-        }
 
         return await renderToHtml(rendered, depth + 1, isRawContent)
       }
@@ -164,9 +152,8 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
       }
     }
 
-    if (props.children !== undefined) {
+    if (props.children !== undefined)
       return await renderToHtml(props.children, depth + 1, isRawContent)
-    }
   }
 
   return ''

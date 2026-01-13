@@ -47,6 +47,14 @@
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
     },
+    "./image": {
+      "types": "./dist/image/index.d.mts",
+      "default": "./dist/image/index.mjs"
+    },
+    "./og": {
+      "types": "./dist/og/index.d.mts",
+      "default": "./dist/og/index.mjs"
+    },
     "./mdx": {
       "types": "./dist/mdx.d.mts",
       "default": "./dist/mdx.mjs"
@@ -92,13 +100,13 @@
     "rari-win32-x64": "0.6.1"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
-    "@types/react": "^19.2.7",
-    "@typescript/native-preview": "^7.0.0-dev.20260107.1",
+    "@types/node": "^25.0.6",
+    "@types/react": "^19.2.8",
+    "@typescript/native-preview": "^7.0.0-dev.20260112.1",
     "chokidar": "^5.0.0",
     "eslint": "^9.39.2",
-    "oxlint": "^1.38.0",
-    "rolldown-vite": "^7.3.0",
+    "oxlint": "^1.39.0",
+    "rolldown-vite": "^7.3.1",
     "tsdown": "^0.18.4"
   }
 }

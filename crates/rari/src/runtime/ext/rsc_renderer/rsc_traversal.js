@@ -10,9 +10,8 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
     )
     return null
   }
-  if (!element) {
+  if (!element)
     return null
-  }
 
   if (element && typeof element === 'object' && typeof element.then === 'function') {
     const isInSuspense = globalThis['~suspense']?.currentBoundaryId
@@ -20,13 +19,11 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
     if (isInSuspense) {
       const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
 
-      if (!globalThis['~suspense'].pendingPromises) {
+      if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
-      }
 
-      if (!globalThis['~suspense'].promises) {
+      if (!globalThis['~suspense'].promises)
         globalThis['~suspense'].promises = {}
-      }
 
       globalThis['~suspense'].promises[promiseId] = element
       globalThis['~suspense'].pendingPromises.push({
@@ -149,9 +146,8 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     if (isInSuspense) {
       const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
 
-      if (!globalThis['~suspense'].pendingPromises) {
+      if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
-      }
 
       globalThis['~suspense'].pendingPromises.push({
         id: promiseId,
@@ -246,9 +242,8 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     if (isAsync && isInSuspense) {
       const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
 
-      if (!globalThis['~suspense'].pendingPromises) {
+      if (!globalThis['~suspense'].pendingPromises)
         globalThis['~suspense'].pendingPromises = []
-      }
 
       globalThis['~suspense'].pendingPromises.push({
         id: promiseId,
@@ -308,9 +303,8 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
         if (typeof child.then === 'function') {
           const promiseId = `promise:${globalThis['~rsc'].keyCounter++}`
 
-          if (!globalThis['~suspense'].promises) {
+          if (!globalThis['~suspense'].promises)
             globalThis['~suspense'].promises = {}
-          }
 
           globalThis['~suspense'].promises[promiseId] = child
           globalThis['~suspense'].pendingPromises.push({
@@ -348,9 +342,8 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
           }
         }
 
-        if (child.props && child.props.children) {
+        if (child.props && child.props.children)
           detectAsyncComponents(child.props.children, depth + 1)
-        }
       }
     }
 
@@ -402,13 +395,11 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     try {
       let rendered = type(props)
 
-      if (rendered && typeof rendered.then === 'function') {
+      if (rendered && typeof rendered.then === 'function')
         rendered = await rendered
-      }
 
-      if (rendered === element) {
+      if (rendered === element)
         return null
-      }
       return await traverseToRsc(rendered, clientComponents, depth + 1)
     }
     catch (error) {
@@ -420,21 +411,17 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     }
   }
 
-  if (type === React.Fragment) {
+  if (type === React.Fragment)
     return await traverseToRsc(props.children, clientComponents, depth + 1)
-  }
 
-  if (type === Symbol.for('react.fragment')) {
+  if (type === Symbol.for('react.fragment'))
     return await traverseToRsc(props.children, clientComponents, depth + 1)
-  }
 
-  if (type && type.$$typeof === Symbol.for('react.provider')) {
+  if (type && type.$$typeof === Symbol.for('react.provider'))
     return await traverseToRsc(props.children, clientComponents, depth + 1)
-  }
 
-  if (type && type.$$typeof === Symbol.for('react.consumer')) {
+  if (type && type.$$typeof === Symbol.for('react.consumer'))
     return await traverseToRsc(props.children, clientComponents, depth + 1)
-  }
 
   return [
     '$',
@@ -471,9 +458,8 @@ async function createRSCHTMLElement(
       : undefined,
   }
 
-  if (rscProps.children === undefined || rscProps.children === null) {
+  if (rscProps.children === undefined || rscProps.children === null)
     delete rscProps.children
-  }
 
   const uniqueKey = key || `${tagName}:${globalThis['~rsc'].keyCounter++}`
   return ['$', tagName, uniqueKey, rscProps]
@@ -514,9 +500,8 @@ function isClientComponent(componentType, clientComponents) {
 
   if (clientComponents && typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
-    if (componentName && clientComponents[componentName]) {
+    if (componentName && clientComponents[componentName])
       return true
-    }
   }
 
   if (
@@ -527,9 +512,8 @@ function isClientComponent(componentType, clientComponents) {
     return true
   }
 
-  if (componentType && componentType['~isClientComponent']) {
+  if (componentType && componentType['~isClientComponent'])
     return true
-  }
 
   if (typeof componentType === 'string') {
     if (
@@ -544,9 +528,8 @@ function isClientComponent(componentType, clientComponents) {
 }
 
 function isServerComponent(componentType) {
-  if (componentType && componentType.__isServerComponent) {
+  if (componentType && componentType.__isServerComponent)
     return true
-  }
 
   if (
     typeof componentType === 'function'
@@ -563,17 +546,15 @@ function getClientComponentId(componentType, clientComponents) {
     const reactClientSymbol = Symbol.for('react.client.reference')
     if (componentType.$$typeof === reactClientSymbol) {
       const clientId = componentType.$$id
-      if (clientId) {
+      if (clientId)
         return clientId
-      }
     }
   }
 
   if (clientComponents && typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
-    if (componentName && clientComponents[componentName]) {
+    if (componentName && clientComponents[componentName])
       return clientComponents[componentName].id || componentName
-    }
   }
 
   if (
@@ -590,14 +571,12 @@ function getClientComponentId(componentType, clientComponents) {
     let componentName = componentType
     if (componentType.includes('tsx#default')) {
       const match = componentType.match(/\/([^/]+)\.tsx#/)
-      if (match) {
+      if (match)
         componentName = match[1]
-      }
     }
 
-    if (componentNames[componentName]) {
+    if (componentNames[componentName])
       return componentNames[componentName]
-    }
 
     for (const [name, id] of Object.entries(componentNames)) {
       if (
@@ -614,9 +593,8 @@ function getClientComponentId(componentType, clientComponents) {
   const componentName
     = componentType.name || componentType.displayName || 'UnknownClient'
 
-  if (componentName.startsWith('$L') || componentName.startsWith('client')) {
+  if (componentName.startsWith('$L') || componentName.startsWith('client'))
     return componentName
-  }
 
   return null
 }
@@ -676,13 +654,11 @@ function isSuspenseComponent(type) {
     return true
   }
 
-  if (type && type.$$typeof === Symbol.for('react.suspense')) {
+  if (type && type.$$typeof === Symbol.for('react.suspense'))
     return true
-  }
 
-  if (type === Symbol.for('react.suspense')) {
+  if (type === Symbol.for('react.suspense'))
     return true
-  }
 
   if (
     typeof type === 'function'
@@ -691,9 +667,8 @@ function isSuspenseComponent(type) {
     return true
   }
 
-  if (type === 'suspense') {
+  if (type === 'suspense')
     return true
-  }
 
   return false
 }

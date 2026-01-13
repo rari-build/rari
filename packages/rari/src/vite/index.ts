@@ -8,6 +8,14 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import * as acorn from 'acorn'
+import {
+  DEFAULT_DEVICE_SIZES,
+  DEFAULT_FORMATS,
+  DEFAULT_IMAGE_SIZES,
+  DEFAULT_MAX_CACHE_SIZE,
+  DEFAULT_MINIMUM_CACHE_TTL,
+  DEFAULT_QUALITY_LEVELS,
+} from '../image'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
@@ -24,6 +32,50 @@ interface RariOptions {
   serverHandler?: boolean
   proxy?: ProxyPluginOptions | false
   router?: RouterPluginOptions | false
+  images?: {
+    remotePatterns?: Array<{
+      protocol?: 'http' | 'https'
+      hostname: string
+      port?: string
+      pathname?: string
+      search?: string
+    }>
+    localPatterns?: Array<{
+      pathname: string
+      search?: string
+    }>
+    deviceSizes?: number[]
+    imageSizes?: number[]
+    formats?: ('avif' | 'webp')[]
+    quality?: number[]
+    minimumCacheTTL?: number
+    maxCacheSize?: number
+  }
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
+}
+
+const DEFAULT_IMAGE_CONFIG = {
+  remotePatterns: [],
+  localPatterns: [],
+  deviceSizes: DEFAULT_DEVICE_SIZES,
+  imageSizes: DEFAULT_IMAGE_SIZES,
+  formats: DEFAULT_FORMATS,
+  quality: DEFAULT_QUALITY_LEVELS,
+  minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
+  maxCacheSize: DEFAULT_MAX_CACHE_SIZE,
 }
 
 async function loadRuntimeFile(filename: string): Promise<string> {
@@ -409,7 +461,7 @@ if (import.meta.hot) {
     return lastSegment.replace(/\.[^.]*$/, '')
   }
 
-  let serverComponentBuilder: any = null
+  const serverComponentBuilder: any = null
 
   const mainPlugin: Plugin = {
     name: 'rari',
@@ -529,21 +581,14 @@ if (import.meta.hot) {
         changeOrigin: true,
         secure: false,
         rewrite: path => path.replace(/^\/api/, '/api'),
-        ws: false,
+        ws: true,
       }
 
-      config.server.proxy['/rsc'] = {
+      config.server.proxy['/_rari'] = {
         target: `http://localhost:${serverPort}`,
         changeOrigin: true,
         secure: false,
-        ws: false,
-      }
-
-      config.server.proxy['/_rsc_status'] = {
-        target: `http://localhost:${serverPort}`,
-        changeOrigin: true,
-        secure: false,
-        ws: false,
+        ws: true,
       }
 
       if (command === 'build') {
@@ -834,6 +879,19 @@ const ${componentName} = registerClientReference(
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
 
+      const imageConfig = {
+        ...DEFAULT_IMAGE_CONFIG,
+        ...options.images,
+      }
+      const distDir = path.join(projectRoot, 'dist')
+      const serverDir = path.join(distDir, 'server')
+      if (!fs.existsSync(serverDir))
+        fs.mkdirSync(serverDir, { recursive: true })
+      const configPath = path.join(serverDir, 'image.json')
+      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+
+      let serverComponentBuilder: any = null
+
       const discoverAndRegisterComponents = async () => {
         try {
           const { ServerComponentBuilder, scanDirectory } = await import(
@@ -843,8 +901,10 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server/server-manifest.json',
+            manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
+            csp: options.csp,
+            rateLimit: options.rateLimit,
           })
 
           serverComponentBuilder = builder
@@ -912,7 +972,7 @@ const ${componentName} = registerClientReference(
               }
 
               const registerResponse = await fetch(
-                `${baseUrl}/api/rsc/register`,
+                `${baseUrl}/_rari/register`,
                 {
                   method: 'POST',
                   headers: {
@@ -964,7 +1024,7 @@ const ${componentName} = registerClientReference(
               .replace(/\.[^.]+$/, '')
 
             try {
-              await fetch(`${baseUrl}/api/rsc/register-client`, {
+              await fetch(`${baseUrl}/_rari/register-client`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1081,7 +1141,7 @@ const ${componentName} = registerClientReference(
             let serverReady = false
             for (let i = 0; i < 10; i++) {
               try {
-                const healthResponse = await fetch(`${baseUrl}/api/rsc/health`)
+                const healthResponse = await fetch(`${baseUrl}/_rari/health`)
                 if (healthResponse.ok) {
                   serverReady = true
                   break
@@ -1118,8 +1178,10 @@ const ${componentName} = registerClientReference(
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
             serverDir: 'server',
-            manifestPath: 'server/server-manifest.json',
+            manifestPath: 'server/manifest.json',
             alias: resolvedAlias,
+            csp: options.csp,
+            rateLimit: options.rateLimit,
           })
 
           builder.addServerComponent(filePath)
@@ -1138,7 +1200,7 @@ const ${componentName} = registerClientReference(
           for (const component of components) {
             try {
               const registerResponse = await fetch(
-                `${baseUrl}/api/rsc/register`,
+                `${baseUrl}/_rari/register`,
                 {
                   method: 'POST',
                   headers: {
@@ -1368,6 +1430,10 @@ const ${componentName} = registerClientReference(
           ...scannedClientComponents,
         ])
 
+        const externalClientComponents = [
+          { path: 'rari/image', exports: ['Image'] },
+        ]
+
         const clientComponentsArray = Array.from(allClientComponents).filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
@@ -1392,6 +1458,19 @@ const ${componentName} = registerClientReference(
         const imports = clientComponentsArray.map((componentPath, index) => {
           const relativePath = path.relative(process.cwd(), componentPath)
           const componentName = `ClientComponent${index}`
+
+          try {
+            const code = fs.readFileSync(componentPath, 'utf-8')
+            const hasDefaultExport = /export\s+default\s+/.test(code)
+            const namedExportMatch = code.match(/export\s+(?:function|const|class)\s+(\w+)/)
+
+            if (!hasDefaultExport && namedExportMatch) {
+              const exportName = namedExportMatch[1]
+              return `import { ${exportName} as ${componentName} } from '/${relativePath}';`
+            }
+          }
+          catch {}
+
           return `import ${componentName} from '/${relativePath}';`
         }).join('\n')
 
@@ -1412,7 +1491,35 @@ globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponent
 globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
         }).join('\n')
 
-        return await loadEntryClient(imports, registrations)
+        const externalImports = externalClientComponents.map((ext, index) => {
+          const componentNames = ext.exports.map(exp => `${exp} as External${index}_${exp}`).join(', ')
+          return `import { ${componentNames} } from '${ext.path}';`
+        }).join('\n')
+
+        const externalRegistrations = externalClientComponents.flatMap((ext, index) => {
+          return ext.exports.map((exportName) => {
+            const componentName = `External${index}_${exportName}`
+            const fullId = `${ext.path}#${exportName}`
+            return `
+globalThis['~clientComponents'] = globalThis['~clientComponents'] || {};
+globalThis['~clientComponents']["${fullId}"] = {
+  id: "${exportName}",
+  path: "${ext.path}",
+  type: "client",
+  component: ${componentName},
+  registered: true
+};
+globalThis['~clientComponents']["${ext.path}"] = globalThis['~clientComponents']["${ext.path}"] || {};
+globalThis['~clientComponents']["${ext.path}"].component = ${componentName};
+globalThis['~clientComponentPaths'] = globalThis['~clientComponentPaths'] || {};
+globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
+          })
+        }).join('\n')
+
+        const allImports = [imports, externalImports].filter(Boolean).join('\n')
+        const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
+
+        return await loadEntryClient(allImports, allRegistrations)
       }
 
       if (id === 'react-server-dom-rari/server')
@@ -1538,9 +1645,7 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
       }
 
       if (componentType === 'client') {
-        if (hmrCoordinator)
-          await hmrCoordinator.handleClientComponentUpdate(file, server)
-        return undefined
+        return
       }
 
       if (componentType === 'server') {
@@ -1551,9 +1656,27 @@ globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
 
       return undefined
     },
+
+    writeBundle() {
+      const imageConfig = {
+        ...DEFAULT_IMAGE_CONFIG,
+        ...options.images,
+      }
+      const projectRoot = options.projectRoot || process.cwd()
+      const distDir = path.join(projectRoot, 'dist')
+      const serverDir = path.join(distDir, 'server')
+      if (!fs.existsSync(serverDir))
+        fs.mkdirSync(serverDir, { recursive: true })
+      const configPath = path.join(serverDir, 'image.json')
+      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+    },
   }
 
-  const serverBuildPlugin = createServerBuildPlugin(options.serverBuild)
+  const serverBuildPlugin = createServerBuildPlugin({
+    ...options.serverBuild,
+    csp: options.csp,
+    rateLimit: options.rateLimit,
+  })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
 

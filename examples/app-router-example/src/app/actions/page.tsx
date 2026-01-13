@@ -1,5 +1,4 @@
 import { getTodos } from '@/actions/todo-actions'
-import ProgressiveFormExample from '@/components/ProgressiveFormExample'
 import TodoAppWithActions from '@/components/TodoAppWithActions'
 
 export default async function ActionsPage() {
@@ -25,13 +24,6 @@ export default async function ActionsPage() {
           Interactive Todo Application
         </h2>
         <TodoAppWithActions initialTodos={initialTodos} />
-      </div>
-
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          Progressive Enhancement Form
-        </h2>
-        <ProgressiveFormExample />
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
@@ -77,11 +69,11 @@ export default async function ActionsPage() {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-600 text-xl">✓</span>
               <h3 className="text-green-900 font-semibold">
-                Progressive Enhancement
+                Optimistic Updates
               </h3>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">
-              Forms that work without JavaScript and enhance with it.
+              Instant UI feedback with server-side validation and rollback.
             </p>
           </div>
 
@@ -142,7 +134,7 @@ export default async function ActionsPage() {
               Server actions are called via
               {' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
-                POST /api/rsc/action
+                POST /_rari/action
               </code>
               {' '}
               with JSON payloads containing serialized arguments.
@@ -154,16 +146,21 @@ export default async function ActionsPage() {
               <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
                 <span className="text-indigo-600 font-bold">3</span>
               </div>
-              <h4 className="text-gray-900 font-semibold">Form Enhancement</h4>
+              <h4 className="text-gray-900 font-semibold">State Management</h4>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Forms can post to
+              Server actions integrate seamlessly with React hooks like
               {' '}
               <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
-                /api/rsc/form-action
+                useActionState
               </code>
               {' '}
-              for progressive enhancement, working without JavaScript.
+              and
+              {' '}
+              <code className="bg-gray-200 px-1.5 py-0.5 rounded font-mono text-xs">
+                useTransition
+              </code>
+              .
             </p>
           </div>
 

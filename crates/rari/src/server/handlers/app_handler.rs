@@ -18,6 +18,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::error;
@@ -33,29 +34,7 @@ fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>
             html_content
         }
     } else {
-        let title =
-            metadata.and_then(|m| m.title.as_ref()).map(|t| t.as_str()).unwrap_or("Rari App");
-
-        let base_shell = format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-<div id="root">{}</div>
-</body>
-</html>"#,
-            title, html_content
-        );
-
-        if let Some(metadata) = metadata {
-            inject_metadata(&base_shell, metadata)
-        } else {
-            base_shell
-        }
+        html_content
     }
 }
 
@@ -94,14 +73,20 @@ async fn collect_page_metadata(
         .layouts
         .iter()
         .filter_map(|layout| {
-            let js_filename = layout.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+            let js_filename =
+                layout.file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
             let dist_filename = convert_route_path_to_dist_path(&js_filename);
             let file_path = base_path.join("app").join(&dist_filename);
             if file_path.exists() { Some(format!("file://{}", file_path.display())) } else { None }
         })
         .collect();
 
-    let js_filename = route_match.route.file_path.replace(".tsx", ".js").replace(".ts", ".js");
+    let js_filename = route_match
+        .route
+        .file_path
+        .cow_replace(".tsx", ".js")
+        .cow_replace(".ts", ".js")
+        .into_owned();
     let dist_filename = convert_route_path_to_dist_path(&js_filename);
     let page_file_path = base_path.join("app").join(&dist_filename);
     let page_path = if page_file_path.exists() {
@@ -122,7 +107,11 @@ async fn collect_page_metadata(
         .await
     {
         Ok(metadata_value) => match serde_json::from_value::<PageMetadata>(metadata_value) {
-            Ok(metadata) => Some(metadata),
+            Ok(mut metadata) => {
+                inject_og_image_into_metadata(state, &route_match.pathname, &mut metadata, context)
+                    .await;
+                Some(metadata)
+            }
             Err(e) => {
                 error!("Failed to deserialize metadata: {}", e);
                 None
@@ -132,6 +121,80 @@ async fn collect_page_metadata(
             error!("Failed to collect metadata from runtime: {}", e);
             None
         }
+    }
+}
+
+async fn inject_og_image_into_metadata(
+    state: &ServerState,
+    route_path: &str,
+    metadata: &mut PageMetadata,
+    context: &LayoutRenderContext,
+) {
+    if let Some(og_generator) = &state.og_generator
+        && let Some(og_entry) = og_generator.find_og_image_for_route(route_path).await
+    {
+        let base_url = get_base_url_from_context(context, &state.config);
+        let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
+
+        use crate::rsc::rendering::layout::types::{
+            OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
+        };
+
+        let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
+            OpenGraphImage::Detailed(OpenGraphImageDescriptor {
+                url: og_image_url.clone(),
+                width: og_entry.width,
+                height: og_entry.height,
+                alt: None,
+            })
+        } else {
+            OpenGraphImage::Simple(og_image_url.clone())
+        };
+
+        if let Some(ref mut og) = metadata.open_graph {
+            if og.images.is_none() {
+                og.images = Some(vec![og_image]);
+            } else if let Some(ref mut images) = og.images {
+                images.insert(0, og_image);
+            }
+        } else {
+            metadata.open_graph = Some(OpenGraphMetadata {
+                title: None,
+                description: None,
+                url: None,
+                site_name: None,
+                images: Some(vec![og_image]),
+                og_type: None,
+            });
+        }
+
+        if let Some(ref mut twitter) = metadata.twitter {
+            if twitter.images.is_none() {
+                twitter.images = Some(vec![og_image_url]);
+            } else if let Some(ref mut images) = twitter.images {
+                images.insert(0, og_image_url);
+            }
+        }
+    }
+}
+
+fn get_base_url_from_context(
+    context: &LayoutRenderContext,
+    config: &crate::server::config::Config,
+) -> String {
+    if let Some(host) = context.headers.get("host") {
+        let protocol = context
+            .headers
+            .get("x-forwarded-proto")
+            .or_else(|| context.headers.get("x-forwarded-protocol"))
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| if config.is_production() { "https" } else { "http" });
+
+        format!("{}://{}", protocol, host)
+    } else if config.is_production() {
+        "https://localhost".to_string()
+    } else {
+        format!("http://localhost:{}", config.server.port)
     }
 }
 
@@ -282,12 +345,25 @@ pub async fn render_synchronous(
     {
         Ok(render_result) => match render_result {
             crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
+                let is_complete_before_wrap = html_content.trim_start().starts_with("<!DOCTYPE")
+                    || html_content.trim_start().starts_with("<html");
+
                 let html_with_metadata =
                     wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
-                        Ok(html) => html,
+                        Ok(html) => {
+                            if !is_complete_before_wrap {
+                                if let Some(metadata) = context.metadata.as_ref() {
+                                    inject_metadata(&html, metadata)
+                                } else {
+                                    html
+                                }
+                            } else {
+                                html
+                            }
+                        }
                         Err(e) => {
                             error!("Failed to inject assets into HTML: {}", e);
                             html_with_metadata
@@ -339,7 +415,7 @@ async fn render_streaming_response(
         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
     };
 
-    let csrf_token = state.csrf_manager.generate_token();
+    let csrf_token = state.csrf_manager.as_ref().map(|m| m.generate_token());
     let asset_tags = asset_links.as_deref().unwrap_or("");
 
     let title = context
@@ -349,8 +425,9 @@ async fn render_streaming_response(
         .map(|t| t.as_str())
         .unwrap_or("Rari App");
 
-    let base_shell = format!(
-        r#"<!DOCTYPE html>
+    let base_shell = if let Some(csrf_token) = &csrf_token {
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -371,8 +448,33 @@ async fn render_streaming_response(
 <body>
 <div id="root">
 "#,
-        title, csrf_token, asset_tags
-    );
+            title, csrf_token, asset_tags
+        )
+    } else {
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+    {}
+    <style>
+        .rari-loading {{
+            animation: rari-pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes rari-pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+    </style>
+</head>
+<body>
+<div id="root">
+"#,
+            title, asset_tags
+        )
+    };
 
     let base_shell = if let Some(ref metadata) = context.metadata {
         inject_metadata(&base_shell, metadata)
@@ -638,7 +740,7 @@ pub async fn handle_app_route(
 
         if path_without_leading_slash.contains('.') {
             const BLOCKED_FILES: &[&str] =
-                &["server/server-manifest.json", "server/app-routes.json", "server/"];
+                &["server/manifest.json", "server/routes.json", "server/"];
 
             for blocked in BLOCKED_FILES {
                 if path_without_leading_slash.starts_with(blocked)
@@ -679,7 +781,13 @@ pub async fn handle_app_route(
 
     let app_router = match &state.app_router {
         Some(router) => router,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => {
+            tracing::error!(
+                "App router not initialized - routes.json may be missing or invalid. Path: {}",
+                path
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
     };
 
     let mut route_match = match app_router.match_route(path) {
@@ -1037,8 +1145,8 @@ pub async fn handle_app_route(
                 CacheLoader::find_matching_cache_config(&page_configs, path)
             {
                 for (key, value) in page_cache_config {
-                    let header_name = key.to_lowercase();
-                    response_builder = response_builder.header(&header_name, value);
+                    let header_name = key.cow_to_lowercase();
+                    response_builder = response_builder.header(header_name.as_ref(), value);
 
                     if header_name == "cache-control" {
                         cache_control_value = Some(value.clone());

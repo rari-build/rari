@@ -7,14 +7,11 @@ use crate::server::config::Config;
 use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app_handler::handle_app_route;
 use crate::server::handlers::csrf_handler::get_csrf_token;
-use crate::server::handlers::hmr_handlers::{
-    hmr_invalidate_api_route, hmr_invalidate_component, hmr_register_component,
-    hmr_reload_component, reload_component,
-};
-use crate::server::handlers::revalidate_handlers::{revalidate_by_path, revalidate_by_tag};
+use crate::server::handlers::hmr_handlers::handle_hmr_action;
+use crate::server::handlers::revalidate_handlers::revalidate_by_path;
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
-    register_client_component, register_component, rsc_render_handler, stream_component,
+    health_check, register_client_component, register_component, stream_component,
 };
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -92,7 +89,7 @@ impl Server {
         let env_vars: rustc_hash::FxHashMap<String, String> = std::env::vars().collect();
         let js_runtime = Arc::new(crate::runtime::JsExecutionRuntime::new(Some(env_vars)));
         let mut renderer =
-            crate::rsc::RscRenderer::with_resource_limits(js_runtime, resource_limits);
+            crate::rsc::RscRenderer::with_resource_limits(js_runtime.clone(), resource_limits);
         renderer.initialize().await?;
 
         if config.is_production() {
@@ -103,16 +100,23 @@ impl Server {
         }
 
         let app_router = {
-            let manifest_path = "dist/server/app-routes.json";
+            let manifest_path = "dist/server/routes.json";
 
             match app_router::AppRouter::from_file(manifest_path).await {
                 Ok(router) => Some(Arc::new(router)),
-                Err(_) => None,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to load app router from {}: {}. All routes will return 404.",
+                        manifest_path,
+                        e
+                    );
+                    None
+                }
             }
         };
 
         let api_route_handler = {
-            let manifest_path = "dist/server/app-routes.json";
+            let manifest_path = "dist/server/routes.json";
 
             match api_routes::ApiRouteHandler::from_file(renderer.runtime.clone(), manifest_path)
                 .await
@@ -139,7 +143,7 @@ impl Server {
 
         let project_root =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let dist_path_resolver = Arc::new(DistPathResolver::new(project_root));
+        let dist_path_resolver = Arc::new(DistPathResolver::new(project_root.clone()));
         module_reload_manager.set_dist_path_resolver(dist_path_resolver);
 
         let module_reload_manager = Arc::new(module_reload_manager);
@@ -156,7 +160,27 @@ impl Server {
         let cache_config = response_cache::CacheConfig::from_env(config.is_production());
         let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
 
-        let csrf_manager = Arc::new(Self::initialize_csrf_manager());
+        let csrf_manager = Self::initialize_csrf_manager().map(Arc::new);
+
+        let og_generator = {
+            let runtime = js_runtime.clone();
+            let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity(
+                runtime,
+                project_root.clone(),
+                100,
+            ));
+
+            let manifest_path = "dist/server/routes.json";
+            if let Err(e) = generator.load_manifest(manifest_path).await {
+                tracing::error!("Failed to load OG image manifest: {}", e);
+            }
+
+            Some(generator)
+        };
+
+        let endpoint_rate_limiters =
+            crate::server::security::ip_rate_limiter::EndpointRateLimiters::new();
+        endpoint_rate_limiters.start_cleanup_tasks();
 
         let state = ServerState {
             renderer: renderer_arc,
@@ -172,11 +196,23 @@ impl Server {
             html_cache: Arc::new(dashmap::DashMap::new()),
             response_cache,
             csrf_manager,
+            og_generator,
+            project_root,
+            endpoint_rate_limiters,
         };
 
         if config.is_production() {
             CacheLoader::load_page_cache_configs(&state).await?;
             CacheLoader::load_vite_cache_config(&state).await?;
+        }
+
+        let mut config = config;
+        let config_path = "dist/server/image.json";
+
+        if let Ok(image_config_str) = std::fs::read_to_string(config_path)
+            && let Ok(image_config) = serde_json::from_str(&image_config_str)
+        {
+            config.images = image_config;
         }
 
         if let Err(e) = crate::server::middleware::proxy_middleware::initialize_proxy(&state).await
@@ -199,65 +235,74 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
-    fn initialize_csrf_manager() -> crate::server::security::csrf::CsrfTokenManager {
+    fn initialize_csrf_manager() -> Option<crate::server::security::csrf::CsrfTokenManager> {
         use crate::server::security::csrf::CsrfTokenManager;
 
         if let Ok(secret) = std::env::var("RARI_CSRF_SECRET") {
-            CsrfTokenManager::new(secret.into_bytes())
+            Some(CsrfTokenManager::new(secret.into_bytes()))
         } else {
-            CsrfTokenManager::new_with_random_secret()
+            None
         }
     }
 
     async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
-        let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
+
+        let image_optimizer = Arc::new(crate::server::image::ImageOptimizer::new(
+            config.images.clone(),
+            &state.project_root,
+        ));
+
+        let image_state = crate::server::image::ImageState {
+            optimizer: image_optimizer,
+            rate_limiters: state.endpoint_rate_limiters.clone(),
+        };
 
         let revalidation_router = Router::new()
-            .route("/api/revalidate/path", post(revalidate_by_path))
-            .route("/api/revalidate/tag", post(revalidate_by_tag))
+            .route("/_rari/revalidate", post(revalidate_by_path))
             .layer(small_body_limit)
             .layer(create_strict_rate_limit_layer(Some(
                 config.rate_limit.revalidate_requests_per_minute,
             )));
 
         let mut router = Router::new()
-            .route("/api/rsc/stream", post(stream_component))
-            .route("/api/rsc/stream", axum::routing::options(cors_preflight_ok))
+            .route("/_rari/stream", post(stream_component))
+            .route("/_rari/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
-            .route("/api/rsc/register", post(register_component))
-            .route("/api/rsc/register-client", post(register_client_component))
-            .route("/api/rsc/hmr-register", post(hmr_register_component))
-            .route("/api/rsc/hmr-register", axum::routing::options(cors_preflight_ok))
-            .layer(large_body_limit)
-            .route("/rsc/render/{component_id}", get(rsc_render_handler))
-            .route("/api/rsc/csrf-token", get(get_csrf_token))
-            .route("/api/rsc/route-info", post(get_route_info))
+            .route("/_rari/csrf-token", get(get_csrf_token))
+            .route("/_rari/route-info", post(get_route_info))
             .layer(small_body_limit)
-            .route("/api/rsc/action", post(handle_server_action))
-            .route("/api/rsc/form-action", post(handle_form_action))
+            .route("/_rari/action", post(handle_server_action))
+            .route("/_rari/form-action", post(handle_form_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);
 
+        let image_router = Router::new()
+            .route("/_rari/image", get(crate::server::image::handle_image_request))
+            .with_state(image_state);
+
+        router = router.merge(image_router);
+
+        let og_router = Router::new()
+            .route("/_rari/og/", get(crate::server::handlers::og_handler::og_image_handler_root))
+            .route("/_rari/og/{*path}", get(crate::server::handlers::og_handler::og_image_handler))
+            .with_state(state.clone());
+
+        router = router.merge(og_router);
+
         if config.is_development() {
-            let small_body_limit = DefaultBodyLimit::max(100 * 1024);
+            let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
-                .route("/api/rsc/hmr-invalidate", post(hmr_invalidate_component))
-                .route("/api/rsc/hmr-invalidate", axum::routing::options(cors_preflight_ok))
-                .route("/api/rsc/hmr-reload", post(hmr_reload_component))
-                .route("/api/rsc/hmr-reload", axum::routing::options(cors_preflight_ok))
-                .route("/api/rsc/hmr-invalidate-api-route", post(hmr_invalidate_api_route))
-                .route(
-                    "/api/rsc/hmr-invalidate-api-route",
-                    axum::routing::options(cors_preflight_ok),
-                )
-                .layer(small_body_limit)
-                .route("/api/rsc/reload-component", post(reload_component))
-                .route("/api/rsc/reload-component", axum::routing::options(cors_preflight_ok))
+                .route("/_rari/health", get(health_check))
+                .route("/_rari/register", post(register_component))
+                .route("/_rari/register-client", post(register_client_component))
                 .layer(large_body_limit)
+                .route("/_rari/hmr", post(handle_hmr_action))
+                .route("/_rari/hmr", axum::routing::options(cors_preflight_ok))
+                .layer(medium_body_limit)
                 .route("/vite-server/", get(vite_websocket_proxy))
                 .route("/vite-server/{*path}", any(vite_reverse_proxy))
                 .route("/src/{*path}", any(vite_src_proxy));
@@ -267,7 +312,7 @@ impl Server {
             }
         }
 
-        let has_app_router = std::path::Path::new("dist/server/app-routes.json").exists();
+        let has_app_router = state.app_router.is_some();
 
         if has_app_router {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);

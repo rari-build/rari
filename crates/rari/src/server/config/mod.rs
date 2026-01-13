@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -267,6 +268,8 @@ pub struct Config {
     pub csp: CspConfig,
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+    #[serde(default)]
+    pub images: crate::server::image::ImageConfig,
 }
 
 impl Config {
@@ -296,10 +299,10 @@ impl Config {
         let mut config = Self::default();
 
         if let Ok(mode_str) = std::env::var("RARI_MODE") {
-            config.mode = match mode_str.to_lowercase().as_str() {
+            config.mode = match mode_str.cow_to_lowercase().as_ref() {
                 "development" | "dev" => Mode::Development,
                 "production" | "prod" => Mode::Production,
-                _ => return Err(ConfigError::InvalidMode(mode_str)),
+                _ => return Err(ConfigError::Mode(mode_str)),
             };
         }
 
@@ -308,8 +311,7 @@ impl Config {
         }
 
         if let Ok(port_str) = std::env::var("RARI_PORT") {
-            config.server.port =
-                port_str.parse().map_err(|_| ConfigError::InvalidPort(port_str))?;
+            config.server.port = port_str.parse().map_err(|_| ConfigError::Port(port_str))?;
         }
 
         if let Ok(origin) = std::env::var("RARI_ORIGIN") {
@@ -322,7 +324,7 @@ impl Config {
 
         if let Ok(vite_port_str) = std::env::var("RARI_VITE_PORT") {
             config.vite.port =
-                vite_port_str.parse().map_err(|_| ConfigError::InvalidVitePort(vite_port_str))?;
+                vite_port_str.parse().map_err(|_| ConfigError::VitePort(vite_port_str))?;
         }
 
         if let Ok(public_dir) = std::env::var("RARI_PUBLIC_DIR") {
@@ -334,174 +336,174 @@ impl Config {
         }
 
         if let Ok(timeout_str) = std::env::var("RARI_SCRIPT_EXECUTION_TIMEOUT_MS") {
-            config.rsc.script_execution_timeout_ms = timeout_str
-                .parse()
-                .map_err(|_| ConfigError::InvalidTimeout(timeout_str.clone()))?;
+            config.rsc.script_execution_timeout_ms =
+                timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
         if let Ok(disable_hmr) = std::env::var("DISABLE_HMR_RELOAD") {
-            config.rsc.hmr_reload_enabled = disable_hmr.to_lowercase() != "true"
+            config.rsc.hmr_reload_enabled = disable_hmr.cow_to_lowercase() != "true"
                 && disable_hmr != "1"
-                && disable_hmr.to_lowercase() != "yes";
+                && disable_hmr.cow_to_lowercase() != "yes";
         }
 
         if let Ok(max_retry_str) = std::env::var("RARI_HMR_MAX_RETRY_ATTEMPTS") {
-            config.rsc.hmr_max_retry_attempts = max_retry_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string())
-            })?;
+            config.rsc.hmr_max_retry_attempts = max_retry_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_RETRY_ATTEMPTS".to_string()))?;
         }
 
         if let Ok(timeout_str) = std::env::var("RARI_HMR_RELOAD_TIMEOUT_MS") {
-            config.rsc.hmr_reload_timeout_ms = timeout_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_RELOAD_TIMEOUT_MS".to_string())
-            })?;
+            config.rsc.hmr_reload_timeout_ms = timeout_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_RELOAD_TIMEOUT_MS".to_string()))?;
         }
 
         if let Ok(parallel_str) = std::env::var("RARI_HMR_PARALLEL_RELOADS") {
-            config.rsc.hmr_parallel_reloads = parallel_str.to_lowercase() == "true"
+            config.rsc.hmr_parallel_reloads = parallel_str.cow_to_lowercase() == "true"
                 || parallel_str == "1"
-                || parallel_str.to_lowercase() == "yes";
+                || parallel_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(debounce_str) = std::env::var("RARI_HMR_DEBOUNCE_DELAY_MS") {
-            config.rsc.hmr_debounce_delay_ms = debounce_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_HMR_DEBOUNCE_DELAY_MS".to_string())
-            })?;
+            config.rsc.hmr_debounce_delay_ms = debounce_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_HMR_DEBOUNCE_DELAY_MS".to_string()))?;
         }
 
         if let Ok(history_size_str) = std::env::var("RARI_HMR_MAX_HISTORY_SIZE") {
             config.rsc.hmr_max_history_size = history_size_str
                 .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
+                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
         }
 
         if let Ok(memory_monitoring_str) = std::env::var("RARI_HMR_ENABLE_MEMORY_MONITORING") {
-            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.to_lowercase()
+            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.cow_to_lowercase()
                 == "true"
                 || memory_monitoring_str == "1"
-                || memory_monitoring_str.to_lowercase() == "yes";
+                || memory_monitoring_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
-            config.rsc_html.enabled = rsc_html_enabled_str.to_lowercase() == "true"
+            config.rsc_html.enabled = rsc_html_enabled_str.cow_to_lowercase() == "true"
                 || rsc_html_enabled_str == "1"
-                || rsc_html_enabled_str.to_lowercase() == "yes";
+                || rsc_html_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_timeout_str) = std::env::var("RARI_RSC_HTML_TIMEOUT_MS") {
             config.rsc_html.timeout_ms = rsc_html_timeout_str
                 .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
+                .map_err(|_| ConfigError::Config("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
         }
 
         if let Ok(rsc_html_cache_template_str) = std::env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
-            config.rsc_html.cache_template = rsc_html_cache_template_str.to_lowercase() == "true"
+            config.rsc_html.cache_template = rsc_html_cache_template_str.cow_to_lowercase()
+                == "true"
                 || rsc_html_cache_template_str == "1"
-                || rsc_html_cache_template_str.to_lowercase() == "yes";
+                || rsc_html_cache_template_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_pretty_print_str) = std::env::var("RARI_RSC_HTML_PRETTY_PRINT") {
-            config.rsc_html.pretty_print = rsc_html_pretty_print_str.to_lowercase() == "true"
+            config.rsc_html.pretty_print = rsc_html_pretty_print_str.cow_to_lowercase() == "true"
                 || rsc_html_pretty_print_str == "1"
-                || rsc_html_pretty_print_str.to_lowercase() == "yes";
+                || rsc_html_pretty_print_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(loading_enabled_str) = std::env::var("RARI_LOADING_ENABLED") {
-            config.loading.enabled = loading_enabled_str.to_lowercase() == "true"
+            config.loading.enabled = loading_enabled_str.cow_to_lowercase() == "true"
                 || loading_enabled_str == "1"
-                || loading_enabled_str.to_lowercase() == "yes";
+                || loading_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(min_display_time_str) = std::env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
-            config.loading.min_display_time_ms = min_display_time_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string())
-            })?;
+            config.loading.min_display_time_ms = min_display_time_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string()))?;
         }
 
         if let Ok(cache_loading_str) = std::env::var("RARI_LOADING_CACHE_COMPONENTS") {
-            config.loading.cache_loading_components = cache_loading_str.to_lowercase() == "true"
+            config.loading.cache_loading_components = cache_loading_str.cow_to_lowercase()
+                == "true"
                 || cache_loading_str == "1"
-                || cache_loading_str.to_lowercase() == "yes";
+                || cache_loading_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(streaming_enabled_str) = std::env::var("RARI_STREAMING_ENABLED") {
-            config.streaming.enabled = streaming_enabled_str.to_lowercase() == "true"
+            config.streaming.enabled = streaming_enabled_str.cow_to_lowercase() == "true"
                 || streaming_enabled_str == "1"
-                || streaming_enabled_str.to_lowercase() == "yes";
+                || streaming_enabled_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(buffer_size_str) = std::env::var("RARI_STREAMING_BUFFER_SIZE") {
-            config.streaming.buffer_size = buffer_size_str.parse().map_err(|_| {
-                ConfigError::InvalidConfig("RARI_STREAMING_BUFFER_SIZE".to_string())
-            })?;
+            config.streaming.buffer_size = buffer_size_str
+                .parse()
+                .map_err(|_| ConfigError::Config("RARI_STREAMING_BUFFER_SIZE".to_string()))?;
         }
 
         if let Ok(resolution_timeout_str) = std::env::var("RARI_STREAMING_RESOLUTION_TIMEOUT_MS") {
             config.streaming.resolution_timeout_ms =
                 resolution_timeout_str.parse().map_err(|_| {
-                    ConfigError::InvalidConfig("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
+                    ConfigError::Config("RARI_STREAMING_RESOLUTION_TIMEOUT_MS".to_string())
                 })?;
         }
 
-        if let Ok(script_src) = std::env::var("RARI_CSP_SCRIPT_SRC") {
-            config.csp.script_src = script_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
+        if let Ok(manifest_json) = std::fs::read_to_string("dist/server/manifest.json")
+            && let Ok(manifest_data) = serde_json::from_str::<serde_json::Value>(&manifest_json)
+        {
+            if let Some(csp_data) = manifest_data.get("csp") {
+                if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
+                    config.csp.script_src = script_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(style_src) = csp_data.get("styleSrc").and_then(|v| v.as_array()) {
+                    config.csp.style_src = style_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(img_src) = csp_data.get("imgSrc").and_then(|v| v.as_array()) {
+                    config.csp.img_src =
+                        img_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                }
+                if let Some(font_src) = csp_data.get("fontSrc").and_then(|v| v.as_array()) {
+                    config.csp.font_src =
+                        font_src.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                }
+                if let Some(connect_src) = csp_data.get("connectSrc").and_then(|v| v.as_array()) {
+                    config.csp.connect_src = connect_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                if let Some(default_src) = csp_data.get("defaultSrc").and_then(|v| v.as_array()) {
+                    config.csp.default_src = default_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
 
-        if let Ok(style_src) = std::env::var("RARI_CSP_STYLE_SRC") {
-            config.csp.style_src = style_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(img_src) = std::env::var("RARI_CSP_IMG_SRC") {
-            config.csp.img_src = img_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(font_src) = std::env::var("RARI_CSP_FONT_SRC") {
-            config.csp.font_src = font_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(connect_src) = std::env::var("RARI_CSP_CONNECT_SRC") {
-            config.csp.connect_src =
-                connect_src.split_whitespace().map(|s| s.to_string()).collect();
-        }
-
-        if let Ok(rate_limit_enabled) = std::env::var("RARI_RATE_LIMIT_ENABLED") {
-            config.rate_limit.enabled = rate_limit_enabled.to_lowercase() == "true"
-                || rate_limit_enabled == "1"
-                || rate_limit_enabled.to_lowercase() == "yes";
-        }
-
-        if let Ok(rate_limit_rps) = std::env::var("RARI_RATE_LIMIT_RPS") {
-            config.rate_limit.requests_per_second = rate_limit_rps
-                .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_RPS".to_string()))?;
-        }
-
-        if let Ok(rate_limit_burst) = std::env::var("RARI_RATE_LIMIT_BURST") {
-            config.rate_limit.burst_size = rate_limit_burst
-                .parse()
-                .map_err(|_| ConfigError::InvalidConfig("RARI_RATE_LIMIT_BURST".to_string()))?;
-        }
-
-        if let Ok(revalidate_rpm) = std::env::var("RARI_REVALIDATE_RATE_LIMIT_RPM") {
-            config.rate_limit.revalidate_requests_per_minute =
-                revalidate_rpm.parse().map_err(|_| {
-                    ConfigError::InvalidConfig("RARI_REVALIDATE_RATE_LIMIT_RPM".to_string())
-                })?;
+            if let Some(rate_limit_data) = manifest_data.get("rateLimit") {
+                if let Some(enabled) = rate_limit_data.get("enabled").and_then(|v| v.as_bool()) {
+                    config.rate_limit.enabled = enabled;
+                }
+                if let Some(rps) = rate_limit_data.get("requestsPerSecond").and_then(|v| v.as_u64())
+                {
+                    config.rate_limit.requests_per_second = rps as u32;
+                }
+                if let Some(burst) = rate_limit_data.get("burstSize").and_then(|v| v.as_u64()) {
+                    config.rate_limit.burst_size = burst as u32;
+                }
+                if let Some(revalidate_rpm) =
+                    rate_limit_data.get("revalidateRequestsPerMinute").and_then(|v| v.as_u64())
+                {
+                    config.rate_limit.revalidate_requests_per_minute = revalidate_rpm as u32;
+                }
+            }
         }
 
         Ok(config)
-    }
-
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ConfigError> {
-        let contents = std::fs::read_to_string(path).map_err(ConfigError::FileRead)?;
-
-        toml::from_str(&contents).map_err(ConfigError::TomlParse)
-    }
-
-    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), ConfigError> {
-        let contents = toml::to_string_pretty(self).map_err(ConfigError::TomlSerialize)?;
-
-        std::fs::write(path, contents).map_err(ConfigError::FileWrite)
     }
 
     pub fn get() -> Option<&'static Config> {
@@ -619,7 +621,7 @@ impl Config {
         }
 
         if pattern.contains('*') {
-            let regex_pattern = pattern.replace("*", ".*").replace("/", "\\/");
+            let regex_pattern = pattern.cow_replace("*", ".*").cow_replace("/", "\\/").into_owned();
             if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
                 return regex.is_match(path);
             }
@@ -681,31 +683,15 @@ impl Config {
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("Invalid mode: {0}")]
-    InvalidMode(String),
-
+    Mode(String),
     #[error("Invalid port: {0}")]
-    InvalidPort(String),
-
+    Port(String),
     #[error("Invalid Vite port: {0}")]
-    InvalidVitePort(String),
-
+    VitePort(String),
     #[error("Invalid timeout: {0}")]
-    InvalidTimeout(String),
-
+    Timeout(String),
     #[error("Invalid config value for {0}")]
-    InvalidConfig(String),
-
-    #[error("Failed to read config file: {0}")]
-    FileRead(std::io::Error),
-
-    #[error("Failed to write config file: {0}")]
-    FileWrite(std::io::Error),
-
-    #[error("Failed to parse TOML: {0}")]
-    TomlParse(toml::de::Error),
-
-    #[error("Failed to serialize TOML: {0}")]
-    TomlSerialize(toml::ser::Error),
+    Config(String),
 }
 
 #[cfg(test)]

@@ -2,16 +2,24 @@ use axum::{
     extract::{ConnectInfo, Request},
     http::StatusCode,
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
+use parking_lot::RwLock;
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SUSPICIOUS_REQUEST_THRESHOLD: u32 = 20;
 const TIME_WINDOW_SECS: u64 = 3600;
+
+#[derive(Debug, Clone)]
+pub enum BlockReason {
+    IpBlocked,
+    PathPattern(String),
+    UserAgent(String),
+}
 
 #[derive(Clone)]
 pub struct SpamBlocker {
@@ -82,21 +90,29 @@ impl SpamBlocker {
     }
 
     pub fn is_blocked(&self, path: &str, user_agent: &str, ip: &str) -> bool {
-        if self.blocked_ips.read().expect("Spam blocker: RwLock poisoned").contains(ip) {
-            return true;
+        self.check_blocked(path, user_agent, ip).is_some()
+    }
+
+    pub fn check_blocked(&self, path: &str, user_agent: &str, ip: &str) -> Option<BlockReason> {
+        if self.blocked_ips.read().contains(ip) {
+            return Some(BlockReason::IpBlocked);
         }
 
-        let is_blocked_path = self.blocked_patterns.iter().any(|pattern| pattern.is_match(path));
-
-        let is_blocked_ua =
-            self.blocked_user_agents.iter().any(|pattern| pattern.is_match(user_agent));
-
-        if is_blocked_path || is_blocked_ua {
-            self.track_suspicious_ip(ip, path);
-            return true;
+        for pattern in &self.blocked_patterns {
+            if pattern.is_match(path) {
+                self.track_suspicious_ip(ip, path);
+                return Some(BlockReason::PathPattern(pattern.to_string()));
+            }
         }
 
-        false
+        for pattern in &self.blocked_user_agents {
+            if pattern.is_match(user_agent) {
+                self.track_suspicious_ip(ip, path);
+                return Some(BlockReason::UserAgent(pattern.to_string()));
+            }
+        }
+
+        None
     }
 
     fn track_suspicious_ip(&self, ip: &str, _path: &str) {
@@ -105,7 +121,7 @@ impl SpamBlocker {
             .expect("System time before UNIX epoch")
             .as_secs();
 
-        let mut tracker = self.ip_tracker.write().expect("Spam blocker: RwLock poisoned");
+        let mut tracker = self.ip_tracker.write();
 
         let ip_data = tracker.entry(ip.to_string()).or_insert(IpData { count: 0, first_seen: now });
 
@@ -123,12 +139,12 @@ impl SpamBlocker {
     }
 
     pub fn block_ip(&self, ip: &str) {
-        self.blocked_ips.write().expect("Spam blocker: RwLock poisoned").insert(ip.to_string());
+        self.blocked_ips.write().insert(ip.to_string());
     }
 
     #[allow(dead_code)]
     pub fn unblock_ip(&self, ip: &str) {
-        self.blocked_ips.write().expect("Spam blocker: RwLock poisoned").remove(ip);
+        self.blocked_ips.write().remove(ip);
     }
 
     pub fn cleanup_old_records(&self) {
@@ -137,7 +153,7 @@ impl SpamBlocker {
             .expect("System time before UNIX epoch")
             .as_secs();
 
-        let mut tracker = self.ip_tracker.write().expect("Spam blocker: RwLock poisoned");
+        let mut tracker = self.ip_tracker.write();
         tracker.retain(|_, data| now - data.first_seen <= TIME_WINDOW_SECS);
     }
 
@@ -173,12 +189,24 @@ pub async fn spam_blocker_middleware(
     let user_agent = req.headers().get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("");
     let ip = addr.ip().to_string();
 
-    if spam_blocker.is_blocked(path, user_agent, &ip) {
+    if let Some(_reason) = spam_blocker.check_blocked(path, user_agent, &ip) {
+        #[cfg(debug_assertions)]
+        eprintln!("[spam_blocker] Blocked {} from {}: {:?}", path, ip, _reason);
+
         req.extensions_mut().insert(SpamRequest);
-        return Err(StatusCode::NOT_FOUND);
+
+        return Ok(SpamBlockedResponse.into_response());
     }
 
     Ok(next.run(req).await)
+}
+
+struct SpamBlockedResponse;
+
+impl IntoResponse for SpamBlockedResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::NOT_FOUND, "Not Found").into_response()
+    }
 }
 
 #[derive(Clone)]
@@ -304,5 +332,39 @@ mod tests {
         let blocker = SpamBlocker::new();
         blocker.block_ip("192.168.1.1");
         assert!(blocker.is_blocked("/", "Mozilla/5.0", "192.168.1.1"));
+    }
+
+    #[test]
+    fn test_check_blocked_returns_reason() {
+        let blocker = SpamBlocker::new();
+
+        blocker.block_ip("10.0.0.1");
+        let reason = blocker.check_blocked("/", "Mozilla/5.0", "10.0.0.1");
+        assert!(matches!(reason, Some(BlockReason::IpBlocked)));
+
+        let reason = blocker.check_blocked("/admin.php", "Mozilla/5.0", "127.0.0.1");
+        assert!(matches!(reason, Some(BlockReason::PathPattern(_))));
+
+        let reason = blocker.check_blocked("/", "sqlmap/1.0", "127.0.0.2");
+        assert!(matches!(reason, Some(BlockReason::UserAgent(_))));
+
+        let reason = blocker.check_blocked("/", "Mozilla/5.0", "127.0.0.3");
+        assert!(reason.is_none());
+    }
+
+    #[test]
+    fn test_legitimate_homepage_not_blocked() {
+        let blocker = SpamBlocker::new();
+        assert!(!blocker.is_blocked(
+            "/",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+            "192.168.1.100"
+        ));
+        assert!(!blocker.is_blocked(
+            "/",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0",
+            "10.0.0.50"
+        ));
+        assert!(blocker.check_blocked("/", "Mozilla/5.0", "8.8.8.8").is_none());
     }
 }

@@ -2,12 +2,10 @@
 if (typeof globalThis['~registryProxy'] === 'undefined') {
   globalThis['~registryProxy'] = new Proxy({}, {
     get(target, prop) {
-      if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions[prop] === 'function') {
+      if (globalThis['~rsc'].functions && typeof globalThis['~rsc'].functions[prop] === 'function')
         return globalThis['~rsc'].functions[prop]
-      }
-      if (typeof globalThis[prop] === 'function') {
+      if (typeof globalThis[prop] === 'function')
         return globalThis[prop]
-      }
       return undefined
     },
   })

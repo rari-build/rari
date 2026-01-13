@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 import ServerTime from '@/components/ServerTime'
 import Welcome from '@/components/Welcome'
 

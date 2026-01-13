@@ -4,6 +4,7 @@ use crate::runtime::bridge::RequestBridge;
 use crate::server::routing::types::RouteSegment;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, Response};
+use cow_utils::CowUtils;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -261,10 +262,13 @@ impl ApiRouteHandler {
             .trim_end_matches(".tsx")
             .trim_end_matches(".js")
             .trim_end_matches(".jsx")
-            .replace('/', "_");
+            .cow_replace('/', "_");
 
-        let compiled =
-            CompiledHandler { module_id: module_id.clone(), code: code.clone(), last_modified };
+        let compiled = CompiledHandler {
+            module_id: module_id.into_owned(),
+            code: code.clone(),
+            last_modified,
+        };
 
         self.handler_cache.insert(file_path.clone(), compiled.clone());
 
@@ -424,6 +428,8 @@ impl ApiRouteHandler {
         request: Request<Body>,
         is_development: bool,
     ) -> Result<Response<Body>, RariError> {
+        const MAX_API_BODY_SIZE: usize = 10 * 1024 * 1024;
+
         let handler = self.load_handler(&route_match.route, is_development).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
@@ -436,12 +442,12 @@ impl ApiRouteHandler {
 
         let (parts, body) = request.into_parts();
 
-        let body_bytes = axum::body::to_bytes(body, usize::MAX).await.map_err(|e| {
+        let body_bytes = axum::body::to_bytes(body, MAX_API_BODY_SIZE).await.map_err(|e| {
             error!(
                 route_path = %route_match.route.path,
                 method = %route_match.method,
                 error = %e,
-                "Failed to read request body"
+                "Failed to read request body (may exceed size limit)"
             );
             RariError::bad_request(format!("Failed to read request body: {e}"))
         })?;

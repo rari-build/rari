@@ -70,23 +70,6 @@ impl RuntimeConfig {
             ..Default::default()
         }
     }
-
-    #[cfg(test)]
-    pub fn test() -> Self {
-        Self {
-            cache_size_limit: 10,
-            batch_size_limit: 5,
-            batch_time_limit_ms: 50,
-            file_cache_duration_secs: 10,
-            cleanup_interval_secs: 5,
-            max_memory_per_component_mb: 10,
-            string_interner_max_size: 100,
-            operation_timeout_ms: 1000,
-            metrics_collection_interval_ms: 100,
-            enable_hot_reload: false,
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

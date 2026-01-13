@@ -1,15 +1,12 @@
 function renderElement(element, rendered, rowId) {
-  if (typeof element === 'string') {
+  if (typeof element === 'string')
     return escapeHtml(element)
-  }
 
-  if (typeof element === 'number' || typeof element === 'boolean') {
+  if (typeof element === 'number' || typeof element === 'boolean')
     return escapeHtml(String(element))
-  }
 
-  if (element === null || element === undefined) {
+  if (element === null || element === undefined)
     return ''
-  }
 
   if (Array.isArray(element) && element.length >= 4 && element[0] === '$') {
     const tag = element[1]
@@ -22,9 +19,8 @@ function renderElement(element, rendered, rowId) {
     return renderTag(tag, props || {}, rendered, rowId)
   }
 
-  if (element.Text !== undefined) {
+  if (element.Text !== undefined)
     return escapeHtml(String(element.Text))
-  }
 
   if (element.Reference) {
     const ref = element.Reference
@@ -40,9 +36,8 @@ function renderElement(element, rendered, rowId) {
 }
 
 function renderTag(tag, props, rendered, rowId) {
-  if (tag === 'react.suspense') {
+  if (tag === 'react.suspense')
     return renderSuspense(props, rendered)
-  }
 
   if (typeof tag === 'string' && tag.startsWith('$')) {
     const match = tag.match(/\$[@L]?(\d+)/)
@@ -50,16 +45,14 @@ function renderTag(tag, props, rendered, rowId) {
       const refId = Number.parseInt(match[1], 10)
       const referencedContent = rendered.get(refId)
 
-      if (referencedContent !== undefined && referencedContent !== '') {
+      if (referencedContent !== undefined && referencedContent !== '')
         return referencedContent
-      }
 
       return renderClientComponentPlaceholder(tag, props, rendered, rowId)
     }
 
-    if (tag.startsWith('$@')) {
+    if (tag.startsWith('$@'))
       return renderClientComponentPlaceholder(tag, props, rendered, rowId)
-    }
 
     return ''
   }
@@ -76,9 +69,8 @@ function renderTag(tag, props, rendered, rowId) {
   }
 
   const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']
-  if (selfClosingTags.includes(tag)) {
+  if (selfClosingTags.includes(tag))
     return `<${tag}${attributes} />`
-  }
 
   return `<${tag}${attributes}>${children}</${tag}>`
 }
@@ -92,17 +84,15 @@ function renderSuspense(props, rendered) {
       const refId = Number.parseInt(match[1], 10)
       const resolvedContent = rendered.get(refId)
 
-      if (resolvedContent !== undefined && resolvedContent !== '') {
+      if (resolvedContent !== undefined && resolvedContent !== '')
         return resolvedContent
-      }
     }
   }
 
   if (children !== undefined && children !== null && typeof children !== 'string') {
     const childrenHtml = renderElement(children, rendered, undefined)
-    if (childrenHtml) {
+    if (childrenHtml)
       return childrenHtml
-    }
   }
 
   return ''
@@ -116,9 +106,8 @@ function renderClientComponentPlaceholder(moduleRef, props, rendered) {
   if (props && Object.keys(props).length > 0) {
     const propsForSerialization = {}
     for (const [key, value] of Object.entries(props)) {
-      if (key !== 'children') {
+      if (key !== 'children')
         propsForSerialization[key] = value
-      }
     }
 
     if (Object.keys(propsForSerialization).length > 0) {
@@ -141,13 +130,11 @@ function renderAttributes(props) {
   const attributes = []
 
   for (const [key, value] of Object.entries(props)) {
-    if (key === 'children' || key === 'key' || key === 'ref') {
+    if (key === 'children' || key === 'key' || key === 'ref')
       continue
-    }
 
-    if (value === null || value === undefined) {
+    if (value === null || value === undefined)
       continue
-    }
 
     if (key.startsWith('data-')) {
       const attrValue = escapeHtml(String(value))
@@ -164,9 +151,8 @@ function renderAttributes(props) {
     }
 
     if (typeof value === 'boolean') {
-      if (value) {
+      if (value)
         attributes.push(attrName)
-      }
       continue
     }
 
@@ -189,26 +175,21 @@ function renderAttributes(props) {
 }
 
 function renderChildrenRaw(children) {
-  if (children === null || children === undefined) {
+  if (children === null || children === undefined)
     return ''
-  }
 
-  if (typeof children === 'string') {
+  if (typeof children === 'string')
     return children
-  }
 
-  if (typeof children === 'number' || typeof children === 'boolean') {
+  if (typeof children === 'number' || typeof children === 'boolean')
     return String(children)
-  }
 
   if (Array.isArray(children)) {
     return children.map((child) => {
-      if (typeof child === 'string') {
+      if (typeof child === 'string')
         return child
-      }
-      if (typeof child === 'number' || typeof child === 'boolean') {
+      if (typeof child === 'number' || typeof child === 'boolean')
         return String(child)
-      }
       return ''
     }).join('')
   }
@@ -217,9 +198,8 @@ function renderChildrenRaw(children) {
 }
 
 function renderChildren(children, rendered) {
-  if (children === null || children === undefined) {
+  if (children === null || children === undefined)
     return ''
-  }
 
   if (typeof children === 'string' && children.startsWith('$')) {
     const match = children.match(/\$[@L]?(\d+)/)
@@ -230,18 +210,16 @@ function renderChildren(children, rendered) {
   }
 
   if (Array.isArray(children)) {
-    if (children.length >= 4 && children[0] === '$') {
+    if (children.length >= 4 && children[0] === '$')
       return renderElement(children, rendered, undefined)
-    }
 
     const renderedChildren = []
     let hasMultipleTextNodes = false
     let textNodeCount = 0
 
     for (const child of children) {
-      if (typeof child === 'string' || typeof child === 'number') {
+      if (typeof child === 'string' || typeof child === 'number')
         textNodeCount++
-      }
     }
     hasMultipleTextNodes = textNodeCount > 1
 
@@ -251,9 +229,8 @@ function renderChildren(children, rendered) {
 
       if (isTextNode && hasMultipleTextNodes) {
         const renderedChild = renderElement(child, rendered, undefined)
-        if (renderedChild) {
+        if (renderedChild)
           renderedChildren.push(`<!-- -->${renderedChild}<!-- -->`)
-        }
       }
       else {
         renderedChildren.push(renderElement(child, rendered, undefined))
@@ -267,9 +244,8 @@ function renderChildren(children, rendered) {
 }
 
 function escapeHtml(text) {
-  if (typeof text !== 'string') {
+  if (typeof text !== 'string')
     text = String(text)
-  }
 
   const htmlEscapeMap = {
     '&': '&amp;',
@@ -286,9 +262,8 @@ globalThis.renderRscToHtml = function (rscRows) {
   const rendered = new Map()
 
   let lastRowId = -1
-  for (const row of rscRows) {
+  for (const row of rscRows)
     lastRowId = row.id
-  }
 
   for (const row of rscRows) {
     const html = renderElement(row.data, rendered, row.id)

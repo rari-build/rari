@@ -1,4 +1,4 @@
-import type { LayoutEntry } from './app-types'
+import type { LayoutEntry } from './types'
 
 export interface RouteInfo {
   path: string

@@ -57,6 +57,20 @@ interface ServerComponentManifest {
   }
   version: string
   buildTime: string
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
 }
 
 export interface ServerBuildOptions {
@@ -65,6 +79,20 @@ export interface ServerBuildOptions {
   manifestPath?: string
   minify?: boolean
   alias?: Record<string, string>
+  csp?: {
+    scriptSrc?: string[]
+    styleSrc?: string[]
+    imgSrc?: string[]
+    fontSrc?: string[]
+    connectSrc?: string[]
+    defaultSrc?: string[]
+  }
+  rateLimit?: {
+    enabled?: boolean
+    requestsPerSecond?: number
+    burstSize?: number
+    revalidateRequestsPerMinute?: number
+  }
 }
 
 export interface ComponentRebuildResult {
@@ -72,6 +100,11 @@ export interface ComponentRebuildResult {
   bundlePath: string
   success: boolean
   error?: string
+}
+
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit'>> & {
+  csp?: ServerBuildOptions['csp']
+  rateLimit?: ServerBuildOptions['rateLimit']
 }
 
 export class ServerComponentBuilder {
@@ -95,7 +128,7 @@ export class ServerComponentBuilder {
     }
   >()
 
-  private options: Required<ServerBuildOptions>
+  private options: ResolvedServerBuildOptions
   private projectRoot: string
 
   private buildCache = new Map<string, {
@@ -113,9 +146,11 @@ export class ServerComponentBuilder {
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
       serverDir: options.serverDir || 'server',
-      manifestPath: options.manifestPath || 'server/server-manifest.json',
+      manifestPath: options.manifestPath || 'server/manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
+      csp: options.csp,
+      rateLimit: options.rateLimit,
     }
   }
 
@@ -483,6 +518,9 @@ const ${importName} = (props) => {
                 if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
                   return { path: args.path, external: true }
 
+                if (args.path === 'rari/image' || args.path.startsWith('rari/image/'))
+                  return { path: args.path, external: true }
+
                 if (args.path === 'rari/client')
                   return null
 
@@ -599,6 +637,8 @@ const ${importName} = (props) => {
       },
       version: '1.0.0',
       buildTime: new Date().toISOString(),
+      csp: this.options.csp,
+      rateLimit: this.options.rateLimit,
     }
 
     for (const [filePath, component] of this.serverComponents) {
@@ -835,6 +875,9 @@ const ${importName} = (props) => {
                   return { path: args.path, external: true }
 
                 if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
+                  return { path: args.path, external: true }
+
+                if (args.path === 'rari/image' || args.path.startsWith('rari/image/'))
                   return { path: args.path, external: true }
 
                 if (args.path === 'rari/client')
@@ -1130,30 +1173,63 @@ if (!globalThis["${componentId}"]) {
     let transformedCode = code
 
     const importRegex
-      = /import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+      = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
     let match
 
     const replacements: Array<{ original: string, replacement: string }> = []
     let hasClientComponents = false
+
+    const externalClientComponents = ['rari/image']
 
     while (true) {
       match = importRegex.exec(code)
       if (match === null)
         break
 
-      const [fullMatch, defaultImport, importPath] = match
+      const [fullMatch, defaultImport, namedImports, importPath] = match
 
-      const resolvedPath = this.resolveImportPath(importPath, inputPath)
+      let isClientComponent = false
+      let componentId = importPath
 
-      if (this.isClientComponent(resolvedPath)) {
+      if (externalClientComponents.includes(importPath)) {
+        isClientComponent = true
+      }
+      else {
+        const resolvedPath = this.resolveImportPath(importPath, inputPath)
+        if (this.isClientComponent(resolvedPath)) {
+          isClientComponent = true
+          componentId = path.relative(this.projectRoot, resolvedPath)
+        }
+      }
+
+      if (isClientComponent) {
         hasClientComponents = true
-        const componentName = defaultImport || 'default'
 
-        const replacement = `const ${componentName} = registerClientReference(
+        let replacement = ''
+
+        if (defaultImport) {
+          replacement = `const ${defaultImport} = registerClientReference(
   null,
-  ${JSON.stringify(path.relative(this.projectRoot, resolvedPath))},
+  ${JSON.stringify(componentId)},
   "default"
 );`
+        }
+        else if (namedImports) {
+          const imports = namedImports.split(',').map(imp => imp.trim())
+          const registrations = imports.map((imp) => {
+            const [importName, alias] = imp.includes(' as ')
+              ? imp.split(' as ').map(s => s.trim())
+              : [imp, imp]
+
+            return `const ${alias} = registerClientReference(
+  null,
+  ${JSON.stringify(componentId)},
+  ${JSON.stringify(importName)}
+);`
+          }).join('\n')
+
+          replacement = registrations
+        }
 
         replacements.push({ original: fullMatch, replacement })
       }
@@ -1354,6 +1430,8 @@ function registerClientReference(clientReference, id, exportName) {
         },
         version: '1.0.0',
         buildTime: new Date().toISOString(),
+        csp: this.options.csp,
+        rateLimit: this.options.rateLimit,
       }
       this.manifestCache = manifest
     }
@@ -1511,6 +1589,25 @@ export function createServerBuildPlugin(
     buildStart() {
       if (!builder)
         return
+
+      const isProduction = process.env.NODE_ENV === 'production'
+      const cacheDirs = [
+        path.join(projectRoot, 'dist', 'cache', 'og'),
+        path.join(projectRoot, 'dist', 'cache', 'images'),
+      ]
+
+      if (isProduction)
+        cacheDirs.push('/tmp/rari-og-cache', '/tmp/rari-image-cache')
+
+      for (const dir of cacheDirs) {
+        try {
+          if (fs.existsSync(dir))
+            fs.rmSync(dir, { recursive: true, force: true })
+        }
+        catch (error) {
+          console.warn(`[rari] Failed to clear cache ${dir}:`, error)
+        }
+      }
 
       const srcDir = path.join(projectRoot, 'src')
       if (fs.existsSync(srcDir))

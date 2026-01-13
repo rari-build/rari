@@ -9,6 +9,7 @@ use crate::runtime::module_loader::{
     storage::OrderedStorage,
     transpiler::*,
 };
+use cow_utils::CowUtils;
 use dashmap::DashMap;
 use deno_core::{
     FastString, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader,
@@ -166,11 +167,6 @@ impl RariModuleLoader {
 
     pub fn flush_all_batches(&self) -> Result<(), RariError> {
         self.storage.flush_pending_batch()
-    }
-
-    #[cfg(test)]
-    pub fn with_test_config() -> Self {
-        Self::with_config(RuntimeConfig::test())
     }
 
     fn calculate_memory_savings(hits: usize, _misses: usize) -> usize {
@@ -376,13 +372,14 @@ export default {{}};
     }
 
     pub fn create_specifier(&self, name: &str, prefix: &str) -> String {
-        let clean_name = name.replace(".js", "").replace("/", "_");
+        let clean_name = name.cow_replace(".js", "").cow_replace("/", "_").into_owned();
         format!("file:///{prefix}/{clean_name}.js")
     }
 
     pub fn transform_to_esmodule(&self, code: &str, _original_path: &str) -> String {
-        code.replace("'use server'", "// 'use server' directive removed")
-            .replace("\"use server\"", "// \"use server\" directive removed")
+        code.cow_replace("'use server'", "// 'use server' directive removed")
+            .cow_replace("\"use server\"", "// \"use server\" directive removed")
+            .into_owned()
     }
 
     pub fn as_extension_transpiler(self: &Rc<Self>) -> Rc<ExtensionTranspilerFn> {
@@ -628,12 +625,12 @@ export default {{}};
                     .split(NODE_BUILTIN_PATH)
                     .nth(1)
                     .unwrap_or("unknown")
-                    .replace(".js", "")
+                    .cow_replace(".js", "")
             } else {
-                module_specifier.path().trim_start_matches('/').replace(".js", "")
+                module_specifier.path().trim_start_matches('/').cow_replace(".js", "")
             };
 
-            let stub_code = match module_name.as_str() {
+            let stub_code = match module_name.as_ref() {
                 PATH_MODULE => NODE_PATH_STUB.to_string(),
                 PROCESS_MODULE => NODE_PROCESS_STUB.to_string(),
                 FS_MODULE => NODE_FS_STUB.to_string(),
@@ -678,7 +675,7 @@ export const __esModule = true;
                 .split(RARI_INTERNAL_PATH)
                 .nth(1)
                 .unwrap_or("unknown")
-                .replace(".js", "");
+                .cow_replace(".js", "");
 
             if let Some(code) = self.storage.get_module_code(specifier_str) {
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
@@ -691,21 +688,21 @@ export const __esModule = true;
 
             if module_name.starts_with(LOADER_STUB_PREFIX) {
                 let component_id = module_name.trim_start_matches(LOADER_STUB_PREFIX);
-                let stub_code = LOADER_STUB_TEMPLATE.replace("{component_id}", component_id);
+                let stub_code = LOADER_STUB_TEMPLATE.cow_replace("{component_id}", component_id);
 
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
-                    ModuleSourceCode::String(stub_code.into()),
+                    ModuleSourceCode::String(stub_code.into_owned().into()),
                     module_specifier,
                     None,
                 ))));
             }
 
-            let fallback_code = FALLBACK_MODULE_TEMPLATE.replace("{module_name}", &module_name);
+            let fallback_code = FALLBACK_MODULE_TEMPLATE.cow_replace("{module_name}", &module_name);
 
             return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                 ModuleType::JavaScript,
-                ModuleSourceCode::String(fallback_code.into()),
+                ModuleSourceCode::String(fallback_code.into_owned().into()),
                 module_specifier,
                 None,
             ))));
@@ -811,7 +808,7 @@ export const __esModule = true;
                 .split(RARI_COMPONENT_PATH)
                 .nth(1)
                 .unwrap_or("unknown")
-                .replace(".js", "");
+                .cow_replace(".js", "");
 
             if let Some(code) = self.storage.get_module_code(specifier_str) {
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
@@ -825,7 +822,8 @@ export const __esModule = true;
             for entry in self.component_specifiers.iter() {
                 let component_id = entry.key();
                 let specifier = entry.value();
-                if (component_id == &component_name || specifier.contains(&component_name))
+                if (component_id == component_name.as_ref()
+                    || specifier.contains(component_name.as_ref()))
                     && let Some(code) = self.storage.get_module_code(specifier)
                 {
                     return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
@@ -1256,7 +1254,7 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if specifier.starts_with(NODE_PREFIX) {
-            let node_module_name = specifier.replace(NODE_PREFIX, "");
+            let node_module_name = specifier.cow_replace(NODE_PREFIX, "");
 
             let known_node_modules = [
                 "path",
@@ -1283,7 +1281,7 @@ impl ModuleLoader for RariModuleLoader {
                 "_http_common",
             ];
 
-            if known_node_modules.contains(&node_module_name.as_str()) {
+            if known_node_modules.contains(&node_module_name.as_ref()) {
                 let result = ModuleSpecifier::parse(&format!(
                     "file://{NODE_BUILTIN_PATH}{node_module_name}.js"
                 ))

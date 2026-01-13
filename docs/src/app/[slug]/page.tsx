@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'

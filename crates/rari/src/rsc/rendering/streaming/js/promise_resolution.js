@@ -47,9 +47,8 @@
           }
         }
       }
-      if (Object.keys(additionalProps).length > 0) {
+      if (Object.keys(additionalProps).length > 0)
         errorObj.additionalErrorProps = additionalProps
-      }
     }
     catch {
     }

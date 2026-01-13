@@ -4,7 +4,23 @@ import { rari } from 'rari/vite'
 import { defineConfig } from 'rolldown-vite'
 
 export default defineConfig({
-  plugins: [rari(), tailwindcss()],
+  plugins: [
+    rari({
+      images: {
+        remotePatterns: [
+          {
+            hostname: 'images.unsplash.com',
+          },
+        ],
+        localPatterns: [
+          {
+            pathname: '/images/**',
+          },
+        ],
+      },
+    }),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

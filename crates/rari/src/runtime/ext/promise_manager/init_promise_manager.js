@@ -1,67 +1,41 @@
 (function initializePromiseManager() {
   if (!globalThis['~promises'])
     globalThis['~promises'] = {}
-
-  if (!globalThis['~promises'].cache) {
+  if (!globalThis['~promises'].cache)
     globalThis['~promises'].cache = new WeakMap()
-  }
-
-  if (!globalThis['~promises'].componentCache) {
+  if (!globalThis['~promises'].componentCache)
     globalThis['~promises'].componentCache = new Map()
-  }
-
-  if (!globalThis['~promises'].resolved) {
+  if (!globalThis['~promises'].resolved)
     globalThis['~promises'].resolved = new Map()
-  }
-
-  if (!globalThis['~promises'].componentSpecific) {
+  if (!globalThis['~promises'].componentSpecific)
     globalThis['~promises'].componentSpecific = new Map()
-  }
-
-  if (!globalThis['~promises'].functionSignatures) {
+  if (!globalThis['~promises'].functionSignatures)
     globalThis['~promises'].functionSignatures = new Map()
-  }
-
-  if (!globalThis['~promises'].functionNameToValue) {
+  if (!globalThis['~promises'].functionNameToValue)
     globalThis['~promises'].functionNameToValue = new Map()
-  }
-
-  if (!globalThis['~promises'].resolvedFunctions) {
+  if (!globalThis['~promises'].resolvedFunctions)
     globalThis['~promises'].resolvedFunctions = new Map()
-  }
-
-  if (!globalThis['~promises'].pending) {
+  if (!globalThis['~promises'].pending)
     globalThis['~promises'].pending = []
-  }
-
-  if (!globalThis['~promises'].failed) {
+  if (!globalThis['~promises'].failed)
     globalThis['~promises'].failed = new Map()
-  }
-
-  if (!globalThis['~promises'].rejectionHandlers) {
+  if (!globalThis['~promises'].rejectionHandlers)
     globalThis['~promises'].rejectionHandlers = new Map()
-  }
 
   globalThis['~promises'].trackComponentRender = function (componentId) {
     if (!globalThis['~render'])
       globalThis['~render'] = {}
     globalThis['~render'].currentComponent = componentId
-
-    if (!globalThis['~promises'].componentSpecific.has(componentId)) {
+    if (!globalThis['~promises'].componentSpecific.has(componentId))
       globalThis['~promises'].componentSpecific.set(componentId, new Map())
-    }
-
-    if (!globalThis['~promises'].componentCache.has(componentId)) {
+    if (!globalThis['~promises'].componentCache.has(componentId))
       globalThis['~promises'].componentCache.set(componentId, new WeakMap())
-    }
-
     return componentId
   }
 
   globalThis['~promises'].wrapForIdentity = function (promise) {
-    if (promise['~rari_identity']) {
+    if (promise['~rari_identity'])
       return promise
-    }
 
     const identityKey = Symbol('promise_identity')
     promise['~rari_identity'] = identityKey
@@ -83,7 +57,6 @@
               return 'undefined'
             if (typeof arg !== 'object')
               return String(arg)
-
             try {
               return JSON.stringify(arg)
             }
@@ -179,13 +152,11 @@
 
     const cId
       = contextId || globalThis['~render']?.currentComponent || 'unknown'
-    if (globalThis['~promises'].componentSpecific.has(cId)) {
+    if (globalThis['~promises'].componentSpecific.has(cId))
       globalThis['~promises'].componentSpecific.get(cId).set(promise, result)
-    }
 
-    if (globalThis['~promises'].componentCache.has(cId)) {
+    if (globalThis['~promises'].componentCache.has(cId))
       globalThis['~promises'].componentCache.get(cId).set(wrappedPromise, result)
-    }
 
     return true
   }
@@ -217,9 +188,8 @@
         functionName,
         args,
       )
-      if (signature) {
+      if (signature)
         globalThis['~promises'].functionSignatures.set(signature, result)
-      }
     }
 
     return true
@@ -245,18 +215,15 @@
     ) {
       const componentCache
         = globalThis['~promises'].componentSpecific.get(componentId)
-      if (componentCache.has(promise)) {
+      if (componentCache.has(promise))
         return componentCache.get(promise)
-      }
     }
 
-    if (globalThis['~promises'].resolved.has(promise)) {
+    if (globalThis['~promises'].resolved.has(promise))
       return globalThis['~promises'].resolved.get(promise)
-    }
 
-    if (globalThis['~promises'].cache.has(promise)) {
+    if (globalThis['~promises'].cache.has(promise))
       return globalThis['~promises'].cache.get(promise)
-    }
 
     return undefined
   }
@@ -275,9 +242,8 @@
       }
     }
 
-    if (globalThis['~promises'].functionNameToValue.has(functionName)) {
+    if (globalThis['~promises'].functionNameToValue.has(functionName))
       return globalThis['~promises'].functionNameToValue.get(functionName)
-    }
 
     return undefined
   }
@@ -288,13 +254,11 @@
   }
 
   globalThis['~promises'].clearComponent = function (componentId) {
-    if (globalThis['~promises'].componentSpecific.has(componentId)) {
+    if (globalThis['~promises'].componentSpecific.has(componentId))
       globalThis['~promises'].componentSpecific.get(componentId).clear()
-    }
 
-    if (globalThis['~promises'].componentCache.has(componentId)) {
+    if (globalThis['~promises'].componentCache.has(componentId))
       globalThis['~promises'].componentCache.delete(componentId)
-    }
   }
 
   globalThis['~promises'].clearAll = function () {
@@ -307,12 +271,10 @@
     globalThis['~promises'].pending = []
   }
 
-  // Enhanced promise rejection handling
   globalThis['~promises'].handleRejection = function (promise, error, componentId) {
     const cId
       = componentId || globalThis['~render']?.currentComponent || 'unknown'
 
-    // Store the failed promise
     globalThis['~promises'].failed.set(promise, {
       error,
       componentId: cId,
@@ -320,27 +282,21 @@
       stack: error?.stack || 'No stack trace available',
     })
 
-    // Try to prevent the unhandled rejection from propagating
-    if (promise && typeof promise.catch === 'function') {
-      promise.catch(() => {
-        // Silent catch to prevent unhandled rejection
-      })
-    }
+    if (promise && typeof promise.catch === 'function')
+      promise.catch(() => {})
 
     return true
   }
 
   globalThis['~promises'].wrapWithErrorHandling = function (promise, componentId) {
-    if (!promise || typeof promise.then !== 'function') {
+    if (!promise || typeof promise.then !== 'function')
       return promise
-    }
 
     const cId
       = componentId || globalThis['~render']?.currentComponent || 'unknown'
 
     return promise.catch((error) => {
       globalThis['~promises'].handleRejection(promise, error, cId)
-      // Re-throw to maintain promise chain behavior
       throw error
     })
   }
@@ -348,9 +304,8 @@
   globalThis['~promises'].safeWrapper = function (promiseFactory, componentId) {
     try {
       const promise = promiseFactory()
-      if (promise && typeof promise.then === 'function') {
+      if (promise && typeof promise.then === 'function')
         return globalThis['~promises'].wrapWithErrorHandling(promise, componentId)
-      }
       return promise
     }
     catch (error) {
@@ -364,15 +319,12 @@
 
   globalThis['~promises'].clearFailed = function (componentId) {
     if (componentId) {
-      // Clear only promises for specific component
       for (const [promise, data] of globalThis['~promises'].failed.entries()) {
-        if (data.componentId === componentId) {
+        if (data.componentId === componentId)
           globalThis['~promises'].failed.delete(promise)
-        }
       }
     }
     else {
-      // Clear all failed promises
       globalThis['~promises'].failed.clear()
     }
   }

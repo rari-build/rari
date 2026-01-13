@@ -447,4 +447,60 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_match_root_route() {
+        let router = AppRouter::new(create_test_manifest());
+        let result = router.match_route("/");
+
+        assert!(result.is_ok(), "Root path '/' should match");
+        let matched = result.unwrap();
+        assert_eq!(matched.route.path, "/");
+        assert_eq!(matched.route.file_path, "page.tsx");
+        assert!(matched.params.is_empty());
+    }
+
+    #[test]
+    fn test_root_route_with_dynamic_sibling() {
+        let manifest = AppRouteManifest {
+            routes: vec![
+                AppRouteEntry {
+                    path: "/".to_string(),
+                    file_path: "page.tsx".to_string(),
+                    segments: vec![],
+                    params: vec![],
+                    is_dynamic: false,
+                },
+                AppRouteEntry {
+                    path: "/[slug]".to_string(),
+                    file_path: "[slug]/page.tsx".to_string(),
+                    segments: vec![RouteSegment {
+                        segment_type: RouteSegmentType::Dynamic,
+                        value: "[slug]".to_string(),
+                        param: Some("slug".to_string()),
+                    }],
+                    params: vec!["slug".to_string()],
+                    is_dynamic: true,
+                },
+            ],
+            layouts: vec![],
+            loading: vec![],
+            errors: vec![],
+            not_found: vec![],
+            generated: "2025-01-10T00:00:00.000Z".to_string(),
+        };
+
+        let router = AppRouter::new(manifest);
+
+        let result = router.match_route("/");
+        assert!(result.is_ok(), "Root path '/' should match");
+        let matched = result.unwrap();
+        assert_eq!(matched.route.path, "/", "Should match root route, not [slug]");
+
+        let result = router.match_route("/about");
+        assert!(result.is_ok());
+        let matched = result.unwrap();
+        assert_eq!(matched.route.path, "/[slug]");
+        assert_eq!(matched.params.get("slug"), Some(&"about".to_string()));
+    }
 }

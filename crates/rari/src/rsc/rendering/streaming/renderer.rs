@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
@@ -664,8 +665,9 @@ impl StreamingRenderer {
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
 
         let setup_script = COMPONENT_RENDER_SETUP_SCRIPT
-            .replace("{component_id}", component_id)
-            .replace("{props_json}", props.unwrap_or("{}"));
+            .cow_replace("{component_id}", component_id)
+            .cow_replace("{props_json}", props.unwrap_or("{}"))
+            .into_owned();
 
         self.runtime
             .execute_script(format!("<setup_render_{component_id}>"), setup_script)
@@ -918,8 +920,9 @@ impl StreamingRenderer {
                 ))
             })?;
 
-        let wrapped_script =
-            COMPOSITION_WRAPPER_SCRIPT.replace("{composition_script}", &composition_script);
+        let wrapped_script = COMPOSITION_WRAPPER_SCRIPT
+            .cow_replace("{composition_script}", &composition_script)
+            .into_owned();
 
         let result = self
             .runtime

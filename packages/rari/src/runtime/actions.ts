@@ -35,7 +35,7 @@ export function createServerReference(
         ? (window as any).fetchWithCsrf
         : fetch
 
-      const response = await fetchFn('/api/rsc/action', {
+      const response = await fetchFn('/_rari/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ export function createFormAction(
   enhance: (form: HTMLFormElement, options?: ServerActionOptions) => () => void
 } {
   return {
-    action: '/api/rsc/form-action',
+    action: '/_rari/form-action',
 
     enhance: (form: HTMLFormElement, options: ServerActionOptions = {}) => {
       const actionIdInput = document.createElement('input')
@@ -168,7 +168,7 @@ export function createFormAction(
         }
       }
 
-      form.action = '/api/rsc/form-action'
+      form.action = '/_rari/form-action'
       form.method = 'POST'
 
       return enhanceFormWithAction(form, action, options)

@@ -611,6 +611,14 @@ function processProps(props, modules, symbols) {
   return processed
 }
 
-renderApp().catch((err) => {
-  console.error('[Rari] Fatal error:', err)
-})
+if (import.meta.hot && import.meta.hot.data.hasRendered) {
+  // Skipping initial render during HMR
+}
+else {
+  renderApp().catch((err) => {
+    console.error('[Rari] Fatal error:', err)
+  })
+
+  if (import.meta.hot)
+    import.meta.hot.data.hasRendered = true
+}

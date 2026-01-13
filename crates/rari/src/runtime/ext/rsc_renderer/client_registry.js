@@ -34,9 +34,8 @@ function registerClientComponent(componentId, componentPath, component) {
   }
 
   const pathName = extractComponentNameFromPath(componentPath)
-  if (pathName) {
+  if (pathName)
     globalThis['~clientComponentNames'][pathName] = componentId
-  }
 }
 
 function isClientComponent(componentType, registry) {
@@ -45,30 +44,25 @@ function isClientComponent(componentType, registry) {
   if (typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
 
-    if (componentName && globalThis['~clientComponentNames'][componentName]) {
+    if (componentName && globalThis['~clientComponentNames'][componentName])
       return true
-    }
 
-    if (componentType['~isClientComponent']) {
+    if (componentType['~isClientComponent'])
       return true
-    }
   }
 
-  if (componentType && componentType.$$typeof === Symbol.for('react.client.reference')) {
+  if (componentType && componentType.$$typeof === Symbol.for('react.client.reference'))
     return true
-  }
 
-  if (typeof componentType === 'string' && clientRegistry[componentType]) {
+  if (typeof componentType === 'string' && clientRegistry[componentType])
     return true
-  }
 
   return false
 }
 
 function getClientComponentInfo(componentType) {
-  if (!componentType) {
+  if (!componentType)
     return null
-  }
 
   if (typeof componentType === 'function') {
     const componentName = componentType.name || componentType.displayName
@@ -79,9 +73,8 @@ function getClientComponentInfo(componentType) {
     }
   }
 
-  if (typeof componentType === 'string' && globalThis['~clientComponents'][componentType]) {
+  if (typeof componentType === 'string' && globalThis['~clientComponents'][componentType])
     return globalThis['~clientComponents'][componentType]
-  }
 
   if (componentType && componentType.$$typeof === Symbol.for('react.client.reference')) {
     const componentId = componentType.$$id || componentType.name || 'UnknownClient'
@@ -103,16 +96,14 @@ function getClientComponentId(componentType) {
 }
 
 function extractComponentNameFromPath(componentPath) {
-  if (!componentPath || typeof componentPath !== 'string') {
+  if (!componentPath || typeof componentPath !== 'string')
     return null
-  }
 
   const pathParts = componentPath.split(/[/\\]/)
   const fileName = pathParts[pathParts.length - 1]
 
-  if (!fileName) {
+  if (!fileName)
     return null
-  }
 
   const nameWithoutExt = fileName.replace(/\.(?:js|jsx|ts|tsx)$/, '')
 
@@ -139,9 +130,8 @@ function clearClientComponents() {
 }
 
 function registerClientComponentFromModule(componentPath, moduleExports) {
-  if (!componentPath || !moduleExports) {
+  if (!componentPath || !moduleExports)
     return
-  }
 
   if (moduleExports.default && typeof moduleExports.default === 'function') {
     const componentName = extractComponentNameFromPath(componentPath)
@@ -151,22 +141,19 @@ function registerClientComponentFromModule(componentPath, moduleExports) {
 
   Object.keys(moduleExports).forEach((exportName) => {
     const exportValue = moduleExports[exportName]
-    if (typeof exportValue === 'function' && exportName !== 'default') {
+    if (typeof exportValue === 'function' && exportName !== 'default')
       registerClientComponent(exportName, componentPath, exportValue)
-    }
   })
 }
 
 function markAsClientComponent(component, componentId) {
-  if (typeof component !== 'function') {
+  if (typeof component !== 'function')
     return
-  }
 
   component['~isClientComponent'] = true
 
-  if (componentId) {
+  if (componentId)
     component['~clientComponentId'] = componentId
-  }
 }
 
 function createClientReference(componentId, componentPath) {

@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari/client'
+import type { PageProps } from 'rari'
 
 export default async function HomePage({ params, searchParams }: PageProps) {
   return (
@@ -157,6 +157,62 @@ export default async function HomePage({ params, searchParams }: PageProps) {
             </div>
             <p className="text-sm text-gray-600 mb-3">
               Client components working seamlessly with React Server Components
+            </p>
+            <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+              View demo →
+            </span>
+          </a>
+
+          <a
+            href="/test-image"
+            className="group block bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-underline hover:shadow-md hover:border-gray-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">🖼️</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                Image Component
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              High-performance image optimization powered by Rust
+            </p>
+            <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+              View demo →
+            </span>
+          </a>
+
+          <a
+            href="/_rari/og/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-underline hover:shadow-md hover:border-gray-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">🎨</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                OG Image Generation
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              Dynamic Open Graph images for social media sharing
+            </p>
+            <span className="text-sm font-medium text-purple-600 group-hover:text-purple-700">
+              View OG image →
+            </span>
+          </a>
+
+          <a
+            href="/blog/hello-world"
+            className="group block bg-white rounded-lg shadow-sm border border-gray-200 p-6 no-underline hover:shadow-md hover:border-gray-300 transition-all"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">📝</span>
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                Blog Posts
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              Dynamic routes with custom OG images per post
             </p>
             <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
               View demo →

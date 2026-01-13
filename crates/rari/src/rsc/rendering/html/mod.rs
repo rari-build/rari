@@ -2,6 +2,7 @@ use crate::error::{RariError, StreamingError};
 use crate::rsc::rendering::streaming::{RscChunkType, RscStreamChunk};
 use crate::rsc::types::RscElement;
 use crate::runtime::JsExecutionRuntime;
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
@@ -348,7 +349,7 @@ impl RscHtmlRenderer {
                 .map_err(|e| RariError::internal(format!("Failed to render RSC to HTML: {}", e)))?;
 
             let is_complete_document = html_content.trim_start().starts_with("<!DOCTYPE")
-                || html_content.trim_start().to_lowercase().starts_with("<html");
+                || html_content.trim_start().cow_to_lowercase().starts_with("<html");
 
             if is_complete_document {
                 let script_tags = if !is_dev_mode {
@@ -543,16 +544,21 @@ impl RscHtmlRenderer {
     }
 
     fn escape_html_attribute(text: &str) -> String {
-        text.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
+        text.cow_replace('&', "&amp;")
+            .cow_replace('"', "&quot;")
+            .cow_replace('<', "&lt;")
+            .cow_replace('>', "&gt;")
+            .into_owned()
     }
 
     fn escape_js_string(text: &str) -> String {
-        text.replace('\\', "\\\\")
-            .replace('\'', "\\'")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t")
+        text.cow_replace('\\', "\\\\")
+            .cow_replace('\'', "\\'")
+            .cow_replace('"', "\\\"")
+            .cow_replace('\n', "\\n")
+            .cow_replace('\r', "\\r")
+            .cow_replace('\t', "\\t")
+            .into_owned()
     }
 
     pub fn generate_boundary_error_html(
@@ -585,6 +591,7 @@ pub struct RscToHtmlConverter {
     csrf_script: Option<String>,
     rsc_wire_format: Vec<String>,
     payload_embedding_disabled: bool,
+    root_div_closed: bool,
 }
 
 impl RscToHtmlConverter {
@@ -599,6 +606,7 @@ impl RscToHtmlConverter {
             csrf_script: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -613,6 +621,7 @@ impl RscToHtmlConverter {
             csrf_script: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -631,6 +640,7 @@ impl RscToHtmlConverter {
             csrf_script,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
+            root_div_closed: false,
         }
     }
 
@@ -657,8 +667,12 @@ impl RscToHtmlConverter {
                     return Ok(Vec::new());
                 }
 
-                let escaped_row =
-                    rsc_line.trim().replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n");
+                let escaped_row = rsc_line
+                    .trim()
+                    .cow_replace('\\', "\\\\")
+                    .cow_replace('\'', "\\'")
+                    .cow_replace('\n', "\\n")
+                    .into_owned();
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -694,11 +708,21 @@ impl RscToHtmlConverter {
             }
 
             RscChunkType::BoundaryUpdate => {
+                let mut html = Vec::new();
+
+                if !self.root_div_closed {
+                    self.root_div_closed = true;
+                    html.extend(b"</div>\n");
+                }
+
                 match self.generate_boundary_replacement(&chunk).await {
-                    Ok(html) => Ok(html),
+                    Ok(boundary_html) => {
+                        html.extend(boundary_html);
+                        Ok(html)
+                    }
                     Err(e) => {
                         error!("Error generating boundary replacement: {}", e);
-                        Ok(Vec::new())
+                        Ok(html)
                     }
                 }
             }
@@ -711,7 +735,17 @@ impl RscToHtmlConverter {
                 }
             },
 
-            RscChunkType::StreamComplete => Ok(self.generate_html_closing()),
+            RscChunkType::StreamComplete => {
+                let mut html = Vec::new();
+
+                if !self.root_div_closed {
+                    self.root_div_closed = true;
+                    html.extend(b"</div>\n");
+                }
+
+                html.extend(self.generate_html_closing());
+                Ok(html)
+            }
         };
 
         if let Err(ref e) = result {
@@ -772,7 +806,7 @@ impl RscToHtmlConverter {
 
         let rsc_payload = self.rsc_wire_format.join("\n");
 
-        let escaped_payload = rsc_payload.replace("</script>", "<\\/script>");
+        let escaped_payload = rsc_payload.cow_replace("</script>", "<\\/script>");
 
         let rsc_script = if !rsc_payload.is_empty() {
             format!(
@@ -785,8 +819,7 @@ impl RscToHtmlConverter {
         };
 
         format!(
-            r#"
-{}{}
+            r#"{}{}
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
@@ -796,7 +829,7 @@ if (typeof window !== 'undefined') {{
 </script>
 </body>
 </html>"#,
-            csrf_script, rsc_script
+            rsc_script, csrf_script
         )
         .as_bytes()
         .to_vec()
@@ -842,15 +875,20 @@ if (typeof window !== 'undefined') {{
     }
 
     fn escape_html(text: &str) -> String {
-        text.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
+        text.cow_replace('&', "&amp;")
+            .cow_replace('<', "&lt;")
+            .cow_replace('>', "&gt;")
+            .cow_replace('"', "&quot;")
+            .cow_replace('\'', "&#39;")
+            .into_owned()
     }
 
     fn escape_attribute(text: &str) -> String {
-        text.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
+        text.cow_replace('&', "&amp;")
+            .cow_replace('"', "&quot;")
+            .cow_replace('<', "&lt;")
+            .cow_replace('>', "&gt;")
+            .into_owned()
     }
 
     fn rsc_element_to_html<'a>(
@@ -1110,8 +1148,12 @@ if (typeof window !== 'undefined') {{
             Some(id) => id.clone(),
             None => {
                 error!("Boundary update chunk missing boundary_id");
-                let escaped_row =
-                    rsc_line.trim().replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n");
+                let escaped_row = rsc_line
+                    .trim()
+                    .cow_replace('\\', "\\\\")
+                    .cow_replace('\'', "\\'")
+                    .cow_replace('\n', "\\n")
+                    .into_owned();
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1130,8 +1172,12 @@ if (typeof window !== 'undefined') {{
         let row_id = chunk.row_id;
         let _content_json = parts[1];
 
-        let escaped_row =
-            rsc_line.trim().replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n");
+        let escaped_row = rsc_line
+            .trim()
+            .cow_replace('\\', "\\\\")
+            .cow_replace('\'', "\\'")
+            .cow_replace('\n', "\\n")
+            .into_owned();
 
         let script = format!(
             r#"<script data-boundary-id="{}" data-row-id="{}">

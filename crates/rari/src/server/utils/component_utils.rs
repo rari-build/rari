@@ -1,3 +1,5 @@
+use cow_utils::CowUtils;
+
 pub fn has_use_client_directive(code: &str) -> bool {
     for line in code.lines() {
         let trimmed = line.trim();
@@ -67,7 +69,7 @@ pub fn wrap_server_action_module(code: &str, module_id: &str) -> String {
         return code.to_string();
     }
 
-    let module_key = format!("__module_loaded_{}", module_id.replace(['/', '-'], "_"));
+    let module_key = format!("__module_loaded_{}", module_id.cow_replace(&['/', '-'][..], "_"));
 
     format!(
         r#"
@@ -110,9 +112,9 @@ pub fn extract_component_id(
         .trim_end_matches(".ts")
         .trim_end_matches(".jsx")
         .trim_end_matches(".js")
-        .replace('\\', "/");
+        .cow_replace('\\', "/");
 
-    Ok(component_id)
+    Ok(component_id.into_owned())
 }
 
 pub fn get_dist_path_for_component(

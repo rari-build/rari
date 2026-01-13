@@ -2,6 +2,7 @@ use crate::error::RariError;
 use crate::runtime::module_loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use crate::runtime::runtime_factory::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
+use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -44,7 +45,7 @@ pub fn create_deno_runtime(
     let mut runtime = JsRuntime::new(options);
 
     if let Some(env_vars) = env_vars {
-        let env_script = ENV_INJECTION_SCRIPT.replace(
+        let env_script = ENV_INJECTION_SCRIPT.cow_replace(
             "const envVars = {};",
             &format!(
                 "const envVars = {};",
@@ -52,7 +53,7 @@ pub fn create_deno_runtime(
             ),
         );
 
-        if let Err(err) = runtime.execute_script("env_vars.js", env_script) {
+        if let Err(err) = runtime.execute_script("env_vars.js", env_script.into_owned()) {
             eprintln!("[RARI_WARN] Failed to inject environment variables: {err}");
         }
     }

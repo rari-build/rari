@@ -6,8 +6,6 @@ export interface RuntimeClient {
     componentId: string,
     componentCode: string,
   ) => Promise<void>
-  renderToRscFormat: (componentId: string, props?: string) => Promise<string>
-  renderToString: (componentId: string, props?: string) => Promise<string>
   renderToStreamCallbacks: (
     componentId: string,
     props?: string,
@@ -30,14 +28,6 @@ interface RenderRequest {
   component_id: string
   props?: any
   ssr?: boolean
-}
-
-interface RenderResponse {
-  success: boolean
-  data?: string
-  error?: string
-  component_id: string
-  render_time_ms: number
 }
 
 interface RegisterRequest {
@@ -147,7 +137,7 @@ export class HttpRuntimeClient implements RuntimeClient {
 
   async initialize(): Promise<void> {
     try {
-      const health = await this.request<HealthResponse>('/api/rsc/health')
+      const health = await this.request<HealthResponse>('/_rari/health')
 
       if (health.status !== 'healthy')
         throw new Error(`Server is not healthy: ${health.status}`)
@@ -175,7 +165,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await this.request('/api/rsc/register', {
+      const response = await this.request('/_rari/register', {
         method: 'POST',
         body: request,
       })
@@ -191,69 +181,6 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
     catch (error) {
       throw new Error(`Failed to register component ${componentId}: ${error}`)
-    }
-  }
-
-  async renderToRscFormat(
-    componentId: string,
-    props?: string,
-  ): Promise<string> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
-
-    const request: RenderRequest = {
-      component_id: componentId,
-      props: props ? JSON.parse(props) : undefined,
-      ssr: false,
-    }
-
-    try {
-      const response = await this.request<RenderResponse>('/api/rsc/render', {
-        method: 'POST',
-        body: request,
-      })
-
-      if (!response.success)
-        throw new Error(response.error || 'Render failed')
-
-      return response.data || ''
-    }
-    catch (error) {
-      throw new Error(`Failed to render component ${componentId}: ${error}`)
-    }
-  }
-
-  async renderToString(componentId: string, props?: string): Promise<string> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
-
-    const request: RenderRequest = {
-      component_id: componentId,
-      props: props ? JSON.parse(props) : undefined,
-      ssr: true,
-    }
-
-    try {
-      const response = await this.request<RenderResponse>('/api/rsc/render', {
-        method: 'POST',
-        body: request,
-      })
-
-      if (!response.success)
-        throw new Error(response.error || 'Render failed')
-
-      return response.data || ''
-    }
-    catch (error) {
-      throw new Error(
-        `Failed to render component ${componentId} to string: ${error}`,
-      )
     }
   }
 
@@ -273,7 +200,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/rsc/stream`, {
+      const response = await fetch(`${this.baseUrl}/_rari/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -321,7 +248,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
 
     try {
-      const response = await this.request('/api/rsc/register-client', {
+      const response = await this.request('/_rari/register-client', {
         method: 'POST',
         body: request,
       })
@@ -363,27 +290,11 @@ export class HttpRuntimeClient implements RuntimeClient {
   }
 
   async getServerStatus(): Promise<StatusResponse> {
-    return await this.request<StatusResponse>('/api/rsc/status')
+    return await this.request<StatusResponse>('/_rari/status')
   }
 
   async checkHealth(): Promise<HealthResponse> {
-    return await this.request<HealthResponse>('/api/rsc/health')
-  }
-
-  async refreshComponentList(): Promise<string[]> {
-    try {
-      const response = await this.request<{
-        success: boolean
-        components: string[]
-      }>('/api/rsc/components')
-      if (response.success)
-        this.components = response.components
-      return this.components
-    }
-    catch (error) {
-      console.error('Failed to refresh component list:', error)
-      return this.components
-    }
+    return await this.request<HealthResponse>('/_rari/health')
   }
 
   isInitialized(): boolean {

@@ -2,17 +2,12 @@
   try {
     if (!globalThis['~components'])
       globalThis['~components'] = {}
-    if (!globalThis['~components'].resolvedPromises) {
+    if (!globalThis['~components'].resolvedPromises)
       globalThis['~components'].resolvedPromises = new Map()
-    }
-
-    if (!globalThis['~components'].modulePromises) {
+    if (!globalThis['~components'].modulePromises)
       globalThis['~components'].modulePromises = new Map()
-    }
-
-    if (!globalThis['~components'].resolvedValues) {
+    if (!globalThis['~components'].resolvedValues)
       globalThis['~components'].resolvedValues = new Map()
-    }
 
     globalThis['~components'].resolvedPromises.set('{component_id}', new Map())
 
@@ -21,9 +16,8 @@
       promise,
       result,
     ) {
-      if (!globalThis['~components'].resolvedPromises.has(component)) {
+      if (!globalThis['~components'].resolvedPromises.has(component))
         globalThis['~components'].resolvedPromises.set(component, new Map())
-      }
 
       const promiseMap
         = globalThis['~components'].resolvedPromises.get(component)
@@ -31,9 +25,8 @@
       promiseMap.set(String(promise), result)
 
       const fnMatch = String(promise).match(/(\w+)\s*\(/)
-      if (fnMatch && fnMatch[1]) {
+      if (fnMatch && fnMatch[1])
         promiseMap.set(fnMatch[1], result)
-      }
       return true
     }
 
@@ -60,9 +53,8 @@
     }
 
     globalThis['~components'].isolateData = function (componentId) {
-      if (!globalThis['~rsc'].componentData) {
+      if (!globalThis['~rsc'].componentData)
         globalThis['~rsc'].componentData = new Map()
-      }
 
       if (!globalThis['~rsc'].componentData.has(componentId)) {
         globalThis['~rsc'].componentData.set(componentId, {

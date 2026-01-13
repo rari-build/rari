@@ -6,6 +6,8 @@ export default defineConfig({
     'client': 'src/client.ts',
     'vite': 'src/vite.ts',
     'cli': 'src/cli.ts',
+    'image/index': 'src/image/index.ts',
+    'og/index': 'src/og/index.ts',
     'mdx': 'src/mdx.ts',
     'runtime/actions': 'src/runtime/actions.ts',
     'proxy/runtime-executor': 'src/proxy/runtime-executor.ts',

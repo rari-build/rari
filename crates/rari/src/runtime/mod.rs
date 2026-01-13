@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use cow_utils::CowUtils;
 use deno_error::JsErrorBox as JsError;
 use serde_json::Value;
 use std::sync::Arc;
@@ -115,10 +116,11 @@ impl JsExecutionRuntime {
             .map_err(|e| RariError::serialization(e.to_string()))?;
 
         let script = METADATA_COLLECTOR_TEMPLATE
-            .replace("LAYOUT_PATHS_PLACEHOLDER", &layout_paths_json)
-            .replace("'PAGE_PATH_PLACEHOLDER'", &page_path_json)
-            .replace("SEARCH_PARAMS_PLACEHOLDER", &search_params_json)
-            .replace("PARAMS_PLACEHOLDER", &params_json);
+            .cow_replace("LAYOUT_PATHS_PLACEHOLDER", &layout_paths_json)
+            .cow_replace("'PAGE_PATH_PLACEHOLDER'", &page_path_json)
+            .cow_replace("SEARCH_PARAMS_PLACEHOLDER", &search_params_json)
+            .cow_replace("PARAMS_PLACEHOLDER", &params_json)
+            .into_owned();
 
         self.execute_script("collect_metadata".to_string(), script).await
     }
@@ -304,10 +306,11 @@ impl JsExecutionRuntime {
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
         let escaped_component_id = component_id
-            .replace('\\', "\\\\")
-            .replace('"', r#"\""#)
-            .replace('\n', "\\n")
-            .replace('\r', "\\r");
+            .cow_replace('\\', "\\\\")
+            .cow_replace('"', r#"\""#)
+            .cow_replace('\n', "\\n")
+            .cow_replace('\r', "\\r")
+            .into_owned();
 
         let script = format!(
             r#"
@@ -356,7 +359,7 @@ impl JsExecutionRuntime {
         );
 
         match self
-            .execute_script(format!("invalidate_{}", component_id.replace('/', "_")), script)
+            .execute_script(format!("invalidate_{}", component_id.cow_replace('/', "_")), script)
             .await
         {
             Ok(_) => Ok(()),
@@ -387,7 +390,7 @@ impl JsExecutionRuntime {
             RariError::io(error_msg)
         })?;
 
-        let script_name = format!("load_component_{}", component_id.replace('/', "_"));
+        let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
         match self.execute_script(script_name, component_code).await {
             Ok(_) => Ok(()),
             Err(e) => {
