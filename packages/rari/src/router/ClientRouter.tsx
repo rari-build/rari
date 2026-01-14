@@ -354,8 +354,26 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         if (!response.ok)
           throw new Error(`Failed to fetch: ${response.status}`)
 
+        const finalUrl = new URL(response.url)
+        const finalPath = finalUrl.pathname
+        const actualTargetPath = finalPath !== targetPath ? finalPath : targetPath
+
+        if (finalPath !== targetPath) {
+          window.history.replaceState(
+            {
+              route: finalPath,
+              navigationId,
+              scrollPosition: { x: window.scrollX, y: window.scrollY },
+              timestamp: Date.now(),
+              key: options.historyKey || generateHistoryKey(),
+            },
+            '',
+            finalPath,
+          )
+        }
+
         if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
+          cleanupAbortedNavigation(actualTargetPath, navigationId)
           return
         }
 
@@ -386,7 +404,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
               if (abortController.signal.aborted) {
                 await reader.cancel()
-                cleanupAbortedNavigation(targetPath, navigationId)
+                cleanupAbortedNavigation(actualTargetPath, navigationId)
                 return
               }
 
@@ -413,7 +431,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
             window.dispatchEvent(new CustomEvent('rari:navigate', {
               detail: {
                 from: fromRoute,
-                to: targetPath,
+                to: actualTargetPath,
                 navigationId,
                 options,
                 routeInfo,
@@ -433,7 +451,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           window.dispatchEvent(new CustomEvent('rari:navigate', {
             detail: {
               from: fromRoute,
-              to: targetPath,
+              to: actualTargetPath,
               navigationId,
               options,
               routeInfo,
@@ -444,24 +462,24 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         }
 
         if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
+          cleanupAbortedNavigation(actualTargetPath, navigationId)
           return
         }
 
         if (isMountedRef.current) {
-          currentRouteRef.current = targetPath
+          currentRouteRef.current = actualTargetPath
 
           setNavigationState(prev => ({
             ...prev,
-            currentRoute: targetPath,
+            currentRoute: actualTargetPath,
             error: null,
           }))
 
-          errorHandlerRef.current.resetRetry(targetPath)
+          errorHandlerRef.current.resetRetry(actualTargetPath)
 
           if (options.historyKey) {
             requestAnimationFrame(() => {
-              statePreserverRef.current.restoreState(targetPath)
+              statePreserverRef.current.restoreState(actualTargetPath)
             })
           }
         }

@@ -44,17 +44,29 @@ export async function generateMetadata({ params }: PageProps) {
     const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
 
     if (titleMatch || descriptionMatch) {
+      const pageTitle = titleMatch ? `${titleMatch[1]} / Rari Docs` : DEFAULT_METADATA.title
+      const pageDescription = descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description
+
       return {
-        title: titleMatch ? `${titleMatch[1]} / Rari Docs` : DEFAULT_METADATA.title,
-        description: descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description,
+        title: pageTitle,
+        description: pageDescription,
+        openGraph: {
+          title: pageTitle,
+          description: pageDescription,
+        },
       }
     }
 
     const headingMatch = content.match(/^#\s+(\S.*)$/m)
     if (headingMatch) {
+      const pageTitle = `${headingMatch[1]} / Rari Docs`
       return {
-        title: `${headingMatch[1]} / Rari Docs`,
+        title: pageTitle,
         description: DEFAULT_METADATA.description,
+        openGraph: {
+          title: pageTitle,
+          description: DEFAULT_METADATA.description,
+        },
       }
     }
   }
