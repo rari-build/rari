@@ -9,13 +9,14 @@
     />
     <title>Runtime Accelerated Rendering Infrastructure (Rari)</title>
 
-    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
-    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
-
     <script type="module">
       import "/src/app/globals.css";
       import "virtual:rari-entry-client";
     </script>
+  </head>
+
+  <body class="min-h-screen bg-[#0d1117] text-gray-200">
+    <div id="root"></div>
 
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -25,22 +26,18 @@
       gtag("js", new Date());
       gtag("config", "G-6MR283BBWG");
 
-      if (document.readyState === 'complete') {
-        loadGTM();
-      } else {
-        window.addEventListener('load', loadGTM);
-      }
-
       function loadGTM() {
         const script = document.createElement('script');
         script.src = 'https://www.googletagmanager.com/gtag/js?id=G-6MR283BBWG';
         script.async = true;
         document.head.appendChild(script);
       }
-    </script>
-  </head>
 
-  <body class="min-h-screen bg-[#0d1117] text-gray-200">
-    <div id="root"></div>
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(loadGTM, { timeout: 2000 });
+      } else {
+        setTimeout(loadGTM, 1);
+      }
+    </script>
   </body>
 </html>

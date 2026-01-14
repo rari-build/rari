@@ -130,15 +130,30 @@ async fn inject_og_image_into_metadata(
     metadata: &mut PageMetadata,
     context: &LayoutRenderContext,
 ) {
+    let base_url = get_base_url_from_context(context, &state.config);
+    let current_url = format!("{}{}", base_url, route_path);
+
+    if let Some(ref mut og) = metadata.open_graph {
+        if og.url.is_none() {
+            og.url = Some(current_url.clone());
+        }
+    } else {
+        metadata.open_graph = Some(crate::rsc::rendering::layout::types::OpenGraphMetadata {
+            title: None,
+            description: None,
+            url: Some(current_url.clone()),
+            site_name: None,
+            images: None,
+            og_type: None,
+        });
+    }
+
     if let Some(og_generator) = &state.og_generator
         && let Some(og_entry) = og_generator.find_og_image_for_route(route_path).await
     {
-        let base_url = get_base_url_from_context(context, &state.config);
         let og_image_url = format!("{}/_rari/og{}", base_url, route_path);
 
-        use crate::rsc::rendering::layout::types::{
-            OpenGraphImage, OpenGraphImageDescriptor, OpenGraphMetadata,
-        };
+        use crate::rsc::rendering::layout::types::{OpenGraphImage, OpenGraphImageDescriptor};
 
         let og_image = if og_entry.width.is_some() || og_entry.height.is_some() {
             OpenGraphImage::Detailed(OpenGraphImageDescriptor {
@@ -157,23 +172,27 @@ async fn inject_og_image_into_metadata(
             } else if let Some(ref mut images) = og.images {
                 images.insert(0, og_image);
             }
-        } else {
-            metadata.open_graph = Some(OpenGraphMetadata {
-                title: None,
-                description: None,
-                url: None,
-                site_name: None,
-                images: Some(vec![og_image]),
-                og_type: None,
-            });
         }
 
         if let Some(ref mut twitter) = metadata.twitter {
+            if twitter.card.is_none() {
+                twitter.card = Some("summary_large_image".to_string());
+            }
             if twitter.images.is_none() {
                 twitter.images = Some(vec![og_image_url]);
             } else if let Some(ref mut images) = twitter.images {
                 images.insert(0, og_image_url);
             }
+        } else {
+            use crate::rsc::rendering::layout::types::TwitterMetadata;
+            metadata.twitter = Some(TwitterMetadata {
+                card: Some("summary_large_image".to_string()),
+                site: None,
+                creator: None,
+                title: None,
+                description: None,
+                images: Some(vec![og_image_url]),
+            });
         }
     }
 }
@@ -407,8 +426,10 @@ async fn render_streaming_response(
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     use crate::server::compression::{CompressionEncoding, compress_stream};
+    use crate::server::rendering::html_utils::extract_body_scripts_from_index_html;
 
     let asset_links = extract_asset_links_from_index_html().await;
+    let body_scripts = extract_body_scripts_from_index_html().await;
 
     let html_renderer = {
         let renderer = state.renderer.lock().await;
@@ -485,6 +506,7 @@ async fn render_streaming_response(
     let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
         None,
+        body_scripts,
         html_renderer,
     )));
 
@@ -1075,9 +1097,13 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let converter = Arc::new(tokio::sync::Mutex::new(
-                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
-                    ));
+                    let converter =
+                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+                            base_shell,
+                            None,
+                            None,
+                            html_renderer,
+                        )));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();

@@ -71,4 +71,7 @@ export const metadata = {
     description: 'A performance-first React framework powered by Rust',
     type: 'website',
   },
+  twitter: {
+    card: 'summary_large_image',
+  },
 }

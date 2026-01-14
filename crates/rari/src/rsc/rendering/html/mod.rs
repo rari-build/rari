@@ -589,6 +589,7 @@ pub struct RscToHtmlConverter {
     rari_to_react_boundary_map: parking_lot::Mutex<FxHashMap<String, String>>,
     custom_shell: Option<String>,
     csrf_script: Option<String>,
+    body_scripts: Option<String>,
     rsc_wire_format: Vec<String>,
     payload_embedding_disabled: bool,
     root_div_closed: bool,
@@ -604,6 +605,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             csrf_script: None,
+            body_scripts: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
@@ -619,6 +621,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: None,
             csrf_script: None,
+            body_scripts: None,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
@@ -628,6 +631,7 @@ impl RscToHtmlConverter {
     pub fn with_custom_shell(
         custom_shell: String,
         csrf_script: Option<String>,
+        body_scripts: Option<String>,
         _renderer: Arc<RscHtmlRenderer>,
     ) -> Self {
         Self {
@@ -638,6 +642,7 @@ impl RscToHtmlConverter {
             rari_to_react_boundary_map: parking_lot::Mutex::new(FxHashMap::default()),
             custom_shell: Some(custom_shell),
             csrf_script,
+            body_scripts,
             rsc_wire_format: Vec::new(),
             payload_embedding_disabled: false,
             root_div_closed: false,
@@ -803,6 +808,7 @@ impl RscToHtmlConverter {
 
     pub fn generate_html_closing(&self) -> Vec<u8> {
         let csrf_script = self.csrf_script.as_deref().unwrap_or("");
+        let body_scripts = self.body_scripts.as_deref().unwrap_or("");
 
         let rsc_payload = self.rsc_wire_format.join("\n");
 
@@ -820,6 +826,7 @@ impl RscToHtmlConverter {
 
         format!(
             r#"{}{}
+{}
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
@@ -829,7 +836,7 @@ if (typeof window !== 'undefined') {{
 </script>
 </body>
 </html>"#,
-            rsc_script, csrf_script
+            rsc_script, csrf_script, body_scripts
         )
         .as_bytes()
         .to_vec()
