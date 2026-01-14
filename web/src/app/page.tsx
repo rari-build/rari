@@ -24,7 +24,7 @@ export default async function HomePage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6 px-4">
           <a
-            href="/getting-started"
+            href="/docs/getting-started"
             className="w-full sm:w-auto bg-[#fd7e14] hover:bg-[#e8590c] text-white px-6 lg:px-8 py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center"
           >
             Get Started
@@ -57,7 +57,7 @@ export default async function HomePage() {
           Create a new Rari project in seconds with our zero-config generator.
         </p>
         <a
-          href="/getting-started"
+          href="/docs/getting-started"
           className="inline-flex items-center text-[#fd7e14] hover:text-[#e8590c] font-medium transition-colors duration-200"
         >
           Read the full guide →
@@ -68,7 +68,7 @@ export default async function HomePage() {
 }
 
 export const metadata = {
-  title: 'Rari | Runtime Accelerated Rendering Infrastructure',
+  title: 'Rari: Runtime Accelerated Rendering Infrastructure',
   description:
     'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
 }

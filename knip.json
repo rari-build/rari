@@ -33,19 +33,22 @@
         "src/**/*.ts"
       ]
     },
-    "docs": {
+    "examples/app-router-example": {
       "entry": [
         "src/app/**/*.{ts,tsx}"
       ],
       "project": [
         "src/**/*.{ts,tsx}"
       ],
+      "ignore": [
+        "src/proxy.ts"
+      ],
       "ignoreDependencies": [
         "@tailwindcss/vite",
         "tailwindcss"
       ]
     },
-    "examples/app-router-example": {
+    "web": {
       "entry": [
         "src/app/**/*.{ts,tsx}"
       ],
