@@ -1,3 +1,36 @@
+## [rari@0.7.3] - 2026-01-14
+
+### 💼 Other
+
+- Rari@0.7.3
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump binary version to 0.7.3
+## [0.7.3] - 2026-01-14
+
+### 🚀 Features
+
+- *(web)* Add dynamic opengraph image generation for blog and docs
+- *(rari)* Enhance open graph and twitter metadata handling
+- *(rari)* Add body scripts extraction and injection support
+
+### 🚜 Refactor
+
+- *(docs)* Restructure documentation and add blog section
+- *(web)* Rename docs directory to web
+- Rename docs directory to web and update references
+- *(web)* Rename DocsLoading to DocLoading component
+
+### ⚙️ Miscellaneous Tasks
+
+- *(web)* Update package description from docs to website
+- *(rari)* Bump binary version to 0.7.3
+## [create-rari-app@0.3.3] - 2026-01-13
+
+### 💼 Other
+
+- Create-rari-app@0.3.3
 ## [rari@0.7.2] - 2026-01-13
 
 ### 💼 Other
@@ -1013,7 +1046,7 @@
 ### 💼 Other
 
 - Rari@0.3.3
-## [0.3.3] - 2026-01-13
+## [0.3.3] - 2025-10-28
 
 ### 💼 Other
 
