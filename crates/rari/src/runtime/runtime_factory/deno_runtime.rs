@@ -502,7 +502,13 @@ impl JsRuntimeInterface for DenoRuntime {
             let script = format!(
                 r#"
                 (function() {{
-                    const argsJson = atob("{}");
+                    const argsBase64 = "{}";
+                    const argsBinary = atob(argsBase64);
+                    const argsBytes = new Uint8Array(argsBinary.length);
+                    for (let i = 0; i < argsBinary.length; i++) {{
+                        argsBytes[i] = argsBinary.charCodeAt(i);
+                    }}
+                    const argsJson = new TextDecoder('utf-8').decode(argsBytes);
                     const args = JSON.parse(argsJson);
 
                     if (typeof globalThis["{}"] !== 'function') {{

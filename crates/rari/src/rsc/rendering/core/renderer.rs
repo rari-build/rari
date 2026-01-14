@@ -1218,8 +1218,11 @@ globalThis['~errors'].batch.push({{
     }
 
     async fn ensure_component_available(&self, original_id: &str) -> Result<String, RariError> {
-        let candidates = self.generate_component_id_candidates(original_id);
+        if self.component_exists(original_id) {
+            return Ok(original_id.to_string());
+        }
 
+        let candidates = self.generate_component_id_candidates(original_id);
         for candidate in &candidates {
             if self.component_exists(candidate) {
                 return Ok(candidate.clone());

@@ -257,7 +257,7 @@ pub async fn render_rsc_navigation_streaming(
         ));
 
     let render_result = match layout_renderer
-        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
         .await
     {
         Ok(result) => result,
@@ -270,23 +270,55 @@ pub async fn render_rsc_navigation_streaming(
         }
     };
 
-    let rsc_stream = match render_result {
-        crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
-        crate::rsc::rendering::layout::RenderResult::Static(_) => {
-            error!("Expected streaming result for RSC navigation with Suspense");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    match render_result {
+        crate::rsc::rendering::layout::RenderResult::Streaming(rsc_stream) => {
+            render_rsc_streaming_response(
+                state,
+                route_match,
+                context,
+                rsc_stream,
+                is_not_found,
+                accept_encoding,
+            )
+            .await
         }
-    };
+        crate::rsc::rendering::layout::RenderResult::Static(_html) => {
+            match layout_renderer
+                .render_route_by_mode(
+                    &route_match,
+                    &context,
+                    crate::server::types::request::RenderMode::RscNavigation,
+                    Some(request_context),
+                )
+                .await
+            {
+                Ok(rsc_wire_format) => {
+                    let status_code =
+                        if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
-    render_rsc_streaming_response(
-        state,
-        route_match,
-        context,
-        rsc_stream,
-        is_not_found,
-        accept_encoding,
-    )
-    .await
+                    let mut response_builder = Response::builder()
+                        .status(status_code)
+                        .header("content-type", "text/x-component");
+
+                    if let Some(ref metadata) = context.metadata
+                        && let Ok(metadata_json) = serde_json::to_string(metadata)
+                    {
+                        let encoded_metadata = urlencoding::encode(&metadata_json);
+                        response_builder =
+                            response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+                    }
+
+                    Ok(response_builder
+                        .body(Body::from(rsc_wire_format))
+                        .expect("Valid RSC response"))
+                }
+                Err(e) => {
+                    error!("Failed to render RSC wire format: {}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+    }
 }
 
 async fn render_rsc_streaming_response(
@@ -839,8 +871,6 @@ pub async fn handle_app_route(
         route_match.pathname.clone(),
     );
 
-    context.metadata = collect_page_metadata(&state, &route_match, &context).await;
-
     let layout_renderer = LayoutRenderer::new(state.renderer.clone());
 
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
@@ -862,6 +892,8 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
+
                 return render_rsc_navigation_streaming(
                     Arc::new(state),
                     route_match,
@@ -899,6 +931,8 @@ pub async fn handle_app_route(
                     .body(Body::from(cached.body))
                     .expect("Valid cached RSC response"));
             }
+
+            context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
             match layout_renderer
                 .render_route_by_mode(
@@ -964,18 +998,6 @@ pub async fn handle_app_route(
             }
         }
         RenderMode::Ssr => {
-            let use_streaming = should_use_streaming(&route_match, &state.config);
-
-            if use_streaming {
-                return render_with_fallback(
-                    Arc::new(state),
-                    route_match,
-                    context,
-                    accept_encoding,
-                )
-                .await;
-            }
-
             let cache_key = response_cache::ResponseCache::generate_cache_key(
                 path,
                 if query_params_for_cache.is_empty() {
@@ -1021,6 +1043,83 @@ pub async fn handle_app_route(
                     .body(Body::from(cached.body))
                     .expect("Valid cached response"));
             }
+
+            context.metadata = collect_page_metadata(&state, &route_match, &context).await;
+
+            let use_streaming = should_use_streaming(&route_match, &state.config);
+
+            if use_streaming {
+                let response = render_with_fallback(
+                    Arc::new(state.clone()),
+                    route_match.clone(),
+                    context.clone(),
+                    accept_encoding,
+                )
+                .await?;
+
+                if (response.status() == StatusCode::OK
+                    || response.status() == StatusCode::NOT_FOUND)
+                    && let Some(render_mode) = response.headers().get("x-render-mode")
+                    && render_mode == "static"
+                {
+                    let (parts, body) = response.into_parts();
+                    let body_bytes = axum::body::to_bytes(body, usize::MAX)
+                        .await
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                    let cache_control_value =
+                        parts.headers.get("cache-control").and_then(|v| v.to_str().ok());
+
+                    let cache_policy = if let Some(cc) = cache_control_value {
+                        response_cache::RouteCachePolicy::from_cache_control(cc, path)
+                    } else {
+                        let mut policy = response_cache::RouteCachePolicy {
+                            ttl: state.response_cache.config.default_ttl,
+                            ..Default::default()
+                        };
+                        policy.tags.push(path.to_string());
+                        policy
+                    };
+
+                    if cache_policy.enabled && state.response_cache.config.enabled {
+                        let etag = response_cache::ResponseCache::generate_etag(&body_bytes);
+                        let mut response_headers = axum::http::HeaderMap::new();
+                        for (key, value) in parts.headers.iter() {
+                            response_headers.insert(key.clone(), value.clone());
+                        }
+
+                        let cached_response = response_cache::CachedResponse {
+                            body: body_bytes.clone(),
+                            headers: response_headers,
+                            metadata: response_cache::CacheMetadata {
+                                cached_at: std::time::Instant::now(),
+                                ttl: cache_policy.ttl,
+                                etag: Some(etag.clone()),
+                                tags: cache_policy.tags,
+                            },
+                        };
+
+                        state.response_cache.set(cache_key.clone(), cached_response).await;
+
+                        let mut response_builder = Response::builder().status(parts.status);
+
+                        for (key, value) in parts.headers.iter() {
+                            response_builder = response_builder.header(key, value);
+                        }
+
+                        return Ok(response_builder
+                            .header("etag", etag)
+                            .header("x-cache", "MISS")
+                            .body(Body::from(body_bytes))
+                            .expect("Valid response"));
+                    }
+
+                    return Ok(Response::from_parts(parts, Body::from(body_bytes)));
+                }
+
+                return Ok(response);
+            }
+
             let render_result = match layout_renderer
                 .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
                 .await

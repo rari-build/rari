@@ -334,9 +334,8 @@ impl LayoutRenderer {
         >,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
-        let is_not_found = route_match.not_found.is_some();
 
-        if is_not_found && let Some(cached_html) = self.html_cache.get(cache_key) {
+        if let Some(cached_html) = self.html_cache.get(cache_key) {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -426,6 +425,18 @@ impl LayoutRenderer {
             let serializer_for_task = Arc::clone(&renderer.serializer);
 
             drop(renderer);
+
+            if pending_promises.is_empty() {
+                let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(
+                    &runtime_for_task,
+                ));
+                let config =
+                    Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
+                let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+
+                self.html_cache.insert(cache_key, html.clone());
+                return Ok(RenderResult::Static(html));
+            }
 
             let wire_lines: Vec<String> = rsc_wire_format.lines().map(|s| s.to_string()).collect();
 

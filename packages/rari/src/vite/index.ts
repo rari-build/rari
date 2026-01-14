@@ -65,6 +65,9 @@ interface RariOptions {
     burstSize?: number
     revalidateRequestsPerMinute?: number
   }
+  spamBlocker?: {
+    enabled?: boolean
+  }
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -905,6 +908,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
+            spamBlocker: options.spamBlocker,
           })
 
           serverComponentBuilder = builder
@@ -1182,6 +1186,7 @@ const ${componentName} = registerClientReference(
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
+            spamBlocker: options.spamBlocker,
           })
 
           builder.addServerComponent(filePath)
@@ -1676,6 +1681,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
     ...options.serverBuild,
     csp: options.csp,
     rateLimit: options.rateLimit,
+    spamBlocker: options.spamBlocker,
   })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
