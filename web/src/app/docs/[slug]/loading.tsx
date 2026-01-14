@@ -1,4 +1,4 @@
-export default function DocsLoading() {
+export default function DocLoading() {
   return (
     <div className="prose prose-invert max-w-none overflow-hidden">
       <div className="mb-8">
