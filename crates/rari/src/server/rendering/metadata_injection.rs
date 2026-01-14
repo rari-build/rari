@@ -343,7 +343,7 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
             }
             if let Some(capable) = apple_web_app.capable {
                 meta_tags.push_str(&format!(
-                    r#"    <meta name="apple-mobile-web-app-capable" content="{}" />
+                    r#"    <meta name="mobile-web-app-capable" content="{}" />
 "#,
                     if capable { "yes" } else { "no" }
                 ));

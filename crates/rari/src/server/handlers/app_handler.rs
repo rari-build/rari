@@ -426,8 +426,10 @@ async fn render_streaming_response(
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     use crate::server::compression::{CompressionEncoding, compress_stream};
+    use crate::server::rendering::html_utils::extract_body_scripts_from_index_html;
 
     let asset_links = extract_asset_links_from_index_html().await;
+    let body_scripts = extract_body_scripts_from_index_html().await;
 
     let html_renderer = {
         let renderer = state.renderer.lock().await;
@@ -504,6 +506,7 @@ async fn render_streaming_response(
     let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
         None,
+        body_scripts,
         html_renderer,
     )));
 
@@ -1094,9 +1097,13 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let converter = Arc::new(tokio::sync::Mutex::new(
-                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
-                    ));
+                    let converter =
+                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
+                            base_shell,
+                            None,
+                            None,
+                            html_renderer,
+                        )));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();

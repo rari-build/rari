@@ -12,11 +12,24 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
         if let Ok(content) = fs::read_to_string(path).await {
             let mut asset_links = String::new();
             let mut in_inline_script = false;
+            let mut in_body = false;
             let mut script_base_indent = 0;
             let mut is_first_line = true;
 
             for line in content.lines() {
                 let trimmed = line.trim();
+
+                if trimmed.starts_with("<body") {
+                    in_body = true;
+                    continue;
+                } else if trimmed.starts_with("</body>") {
+                    in_body = false;
+                    continue;
+                }
+
+                if in_body && !in_inline_script {
+                    continue;
+                }
 
                 if (trimmed.starts_with("<script") && trimmed.contains("/assets/"))
                     || (trimmed.starts_with("<link") && trimmed.contains("/assets/"))
@@ -30,7 +43,7 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
                     continue;
                 }
 
-                if trimmed.starts_with("<script") && !trimmed.contains("src=") {
+                if trimmed.starts_with("<script") && !trimmed.contains("src=") && !in_body {
                     in_inline_script = true;
 
                     script_base_indent = line.len() - line.trim_start().len();
@@ -81,6 +94,81 @@ pub async fn extract_asset_links_from_index_html() -> Option<String> {
 
             if !asset_links.is_empty() {
                 return Some(asset_links);
+            }
+        }
+    }
+
+    None
+}
+
+pub async fn extract_body_scripts_from_index_html() -> Option<String> {
+    use tokio::fs;
+
+    let possible_paths = vec!["dist/index.html", "build/index.html"];
+
+    for path in possible_paths {
+        if let Ok(content) = fs::read_to_string(path).await {
+            let mut body_scripts = String::new();
+            let mut in_inline_script = false;
+            let mut in_body = false;
+            let mut script_base_indent = 0;
+            let mut is_first_line = true;
+
+            for line in content.lines() {
+                let trimmed = line.trim();
+
+                if trimmed.starts_with("<body") {
+                    in_body = true;
+                    continue;
+                } else if trimmed.starts_with("</body>") {
+                    in_body = false;
+                    continue;
+                }
+
+                if !in_body && !in_inline_script {
+                    continue;
+                }
+
+                if trimmed.starts_with("<script") && !trimmed.contains("src=") && in_body {
+                    in_inline_script = true;
+
+                    script_base_indent = line.len() - line.trim_start().len();
+                    if !is_first_line {
+                        body_scripts.push_str("    ");
+                    }
+                    body_scripts.push_str(trimmed);
+                    body_scripts.push('\n');
+                    is_first_line = false;
+
+                    if trimmed.contains("</script>") {
+                        in_inline_script = false;
+                    }
+                    continue;
+                }
+
+                if in_inline_script {
+                    let current_indent = line.len() - line.trim_start().len();
+                    if current_indent >= script_base_indent {
+                        let relative_indent = current_indent - script_base_indent;
+                        body_scripts.push_str("    ");
+                        body_scripts.push_str(&" ".repeat(relative_indent));
+                        body_scripts.push_str(trimmed);
+                    } else {
+                        body_scripts.push_str("    ");
+                        body_scripts.push_str(trimmed);
+                    }
+                    body_scripts.push('\n');
+                    is_first_line = false;
+
+                    if trimmed.contains("</script>") {
+                        in_inline_script = false;
+                    }
+                    continue;
+                }
+            }
+
+            if !body_scripts.is_empty() {
+                return Some(body_scripts);
             }
         }
     }
@@ -150,10 +238,24 @@ async fn inject_assets_into_complete_document(
     };
 
     let mut asset_tags = Vec::new();
-    let mut other_head_content = Vec::new();
+    let mut head_content = Vec::new();
+    let mut body_content = Vec::new();
+    let mut in_head = false;
+    let mut in_body = false;
 
     for line in template.lines() {
         let trimmed = line.trim();
+
+        if trimmed.starts_with("<head") {
+            in_head = true;
+        } else if trimmed.starts_with("</head>") {
+            in_head = false;
+        } else if trimmed.starts_with("<body") {
+            in_body = true;
+        } else if trimmed.starts_with("</body>") {
+            in_body = false;
+        }
+
         if (trimmed.contains("<link") && trimmed.contains("stylesheet") && trimmed.contains("href"))
             || (trimmed.contains("<script") && trimmed.contains("src"))
         {
@@ -166,24 +268,32 @@ async fn inject_assets_into_complete_document(
             && !trimmed.contains("type=\"module\"")
         {
             if !html.contains(trimmed) {
-                other_head_content.push(trimmed.to_string());
+                if in_body {
+                    body_content.push(trimmed.to_string());
+                } else if in_head {
+                    head_content.push(trimmed.to_string());
+                }
             }
         } else if ((trimmed.contains("<link") && !trimmed.contains("stylesheet"))
             || trimmed.contains("<meta") && trimmed.contains("name="))
             && !html.contains(trimmed)
         {
-            other_head_content.push(trimmed.to_string());
+            head_content.push(trimmed.to_string());
         }
     }
 
-    let inline_scripts = extract_inline_scripts(&template);
-    for script in inline_scripts {
+    let inline_scripts = extract_inline_scripts_with_location(&template);
+    for (script, is_in_body) in inline_scripts {
         if !html.contains(&script) {
-            other_head_content.push(script);
+            if is_in_body {
+                body_content.push(script);
+            } else {
+                head_content.push(script);
+            }
         }
     }
 
-    if asset_tags.is_empty() && other_head_content.is_empty() {
+    if asset_tags.is_empty() && head_content.is_empty() && body_content.is_empty() {
         if html.trim_start().starts_with("<!DOCTYPE") {
             return Ok(html.to_string());
         }
@@ -203,10 +313,10 @@ async fn inject_assets_into_complete_document(
 
     let mut final_html = html.to_string();
 
-    if !other_head_content.is_empty() {
-        let other_content_html = other_head_content.join("\n    ");
+    if !head_content.is_empty() {
+        let head_content_html = head_content.join("\n    ");
         if let Some(head_end) = final_html.find("</head>") {
-            final_html.insert_str(head_end, &format!("    {}\n  ", other_content_html));
+            final_html.insert_str(head_end, &format!("    {}\n  ", head_content_html));
         }
     }
 
@@ -221,6 +331,13 @@ async fn inject_assets_into_complete_document(
         let scripts_html = scripts.join("\n    ");
         if let Some(body_end) = final_html.rfind("</body>") {
             final_html.insert_str(body_end, &format!("\n    {}\n  ", scripts_html));
+        }
+    }
+
+    if !body_content.is_empty() {
+        let body_content_html = body_content.join("\n    ");
+        if let Some(body_end) = final_html.rfind("</body>") {
+            final_html.insert_str(body_end, &format!("\n    {}\n  ", body_content_html));
         }
     }
 
@@ -263,22 +380,34 @@ fn extract_asset_signature(asset_tag: &str) -> String {
     asset_tag.trim().to_string()
 }
 
-fn extract_inline_scripts(html: &str) -> Vec<String> {
+fn extract_inline_scripts_with_location(html: &str) -> Vec<(String, bool)> {
     let mut scripts = Vec::new();
     let mut in_script = false;
+    let mut in_body = false;
     let mut current_script = String::new();
+    let mut script_in_body = false;
 
     for line in html.lines() {
         let trimmed = line.trim();
 
-        if trimmed.starts_with("<script") && !trimmed.contains("src=") {
+        if trimmed.starts_with("<body") {
+            in_body = true;
+        } else if trimmed.starts_with("</body>") {
+            in_body = false;
+        }
+
+        if trimmed.starts_with("<script")
+            && !trimmed.contains("src=")
+            && !trimmed.contains("type=\"module\"")
+        {
             in_script = true;
+            script_in_body = in_body;
             current_script.clear();
             current_script.push_str(line);
             current_script.push('\n');
 
             if trimmed.contains("</script>") {
-                scripts.push(current_script.trim().to_string());
+                scripts.push((current_script.trim().to_string(), script_in_body));
                 in_script = false;
                 current_script.clear();
             }
@@ -287,7 +416,7 @@ fn extract_inline_scripts(html: &str) -> Vec<String> {
             current_script.push('\n');
 
             if trimmed.contains("</script>") {
-                scripts.push(current_script.trim().to_string());
+                scripts.push((current_script.trim().to_string(), script_in_body));
                 in_script = false;
                 current_script.clear();
             }
