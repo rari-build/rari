@@ -22,9 +22,7 @@ use crate::server::middleware::proxy_middleware::ProxyLayer;
 use crate::server::middleware::rate_limit::{
     create_rate_limit_layer, create_strict_rate_limit_layer, rate_limit_logger,
 };
-use crate::server::middleware::request_middleware::{
-    cors_middleware, request_logger, security_headers_middleware,
-};
+use crate::server::middleware::request_middleware::{cors_middleware, security_headers_middleware};
 use crate::server::middleware::spam_blocker::{SpamBlocker, spam_blocker_middleware};
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
@@ -42,7 +40,6 @@ use rustc_hash::FxHashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tracing::error;
@@ -344,10 +341,12 @@ impl Server {
         let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
         router = router.layer(compression_layer);
 
-        let spam_blocker = SpamBlocker::new();
-        spam_blocker.clone().start_cleanup_task();
-        router = router.layer(middleware::from_fn(spam_blocker_middleware));
-        router = router.layer(axum::Extension(spam_blocker));
+        if config.spam_blocker.enabled {
+            let spam_blocker = SpamBlocker::new();
+            spam_blocker.clone().start_cleanup_task();
+            router = router.layer(middleware::from_fn(spam_blocker_middleware));
+            router = router.layer(axum::Extension(spam_blocker));
+        }
 
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));
@@ -358,11 +357,6 @@ impl Server {
         if let Some(rate_limit_layer) = create_rate_limit_layer(config) {
             router = router.layer(rate_limit_layer).layer(middleware::from_fn(rate_limit_logger));
         }
-
-        let middleware_stack =
-            ServiceBuilder::new().layer(middleware::from_fn(request_logger)).into_inner();
-
-        router = router.layer(middleware_stack);
 
         let mut router = router.with_state(state.clone());
 

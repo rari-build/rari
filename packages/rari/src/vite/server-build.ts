@@ -71,6 +71,9 @@ interface ServerComponentManifest {
     burstSize?: number
     revalidateRequestsPerMinute?: number
   }
+  spamBlocker?: {
+    enabled?: boolean
+  }
 }
 
 export interface ServerBuildOptions {
@@ -93,6 +96,9 @@ export interface ServerBuildOptions {
     burstSize?: number
     revalidateRequestsPerMinute?: number
   }
+  spamBlocker?: {
+    enabled?: boolean
+  }
 }
 
 export interface ComponentRebuildResult {
@@ -102,9 +108,10 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker'>> & {
   csp?: ServerBuildOptions['csp']
   rateLimit?: ServerBuildOptions['rateLimit']
+  spamBlocker?: ServerBuildOptions['spamBlocker']
 }
 
 export class ServerComponentBuilder {
@@ -151,6 +158,7 @@ export class ServerComponentBuilder {
       alias: options.alias || {},
       csp: options.csp,
       rateLimit: options.rateLimit,
+      spamBlocker: options.spamBlocker,
     }
   }
 
@@ -639,6 +647,7 @@ const ${importName} = (props) => {
       buildTime: new Date().toISOString(),
       csp: this.options.csp,
       rateLimit: this.options.rateLimit,
+      spamBlocker: this.options.spamBlocker,
     }
 
     for (const [filePath, component] of this.serverComponents) {
@@ -1432,6 +1441,7 @@ function registerClientReference(clientReference, id, exportName) {
         buildTime: new Date().toISOString(),
         csp: this.options.csp,
         rateLimit: this.options.rateLimit,
+        spamBlocker: this.options.spamBlocker,
       }
       this.manifestCache = manifest
     }

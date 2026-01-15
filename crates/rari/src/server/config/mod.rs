@@ -117,6 +117,17 @@ impl Default for RateLimitConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpamBlockerConfig {
+    pub enabled: bool,
+}
+
+impl Default for SpamBlockerConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -268,6 +279,8 @@ pub struct Config {
     pub csp: CspConfig,
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+    #[serde(default)]
+    pub spam_blocker: SpamBlockerConfig,
     #[serde(default)]
     pub images: crate::server::image::ImageConfig,
 }
@@ -500,6 +513,12 @@ impl Config {
                 {
                     config.rate_limit.revalidate_requests_per_minute = revalidate_rpm as u32;
                 }
+            }
+
+            if let Some(spam_blocker_data) = manifest_data.get("spamBlocker")
+                && let Some(enabled) = spam_blocker_data.get("enabled").and_then(|v| v.as_bool())
+            {
+                config.spam_blocker.enabled = enabled;
             }
         }
 

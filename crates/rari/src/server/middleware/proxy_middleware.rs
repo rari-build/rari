@@ -34,8 +34,12 @@ struct RedirectInfo {
     permanent: bool,
 }
 
-async fn is_proxy_enabled() -> bool {
-    tokio::fs::metadata("dist/server/proxy.js").await.is_ok()
+use std::sync::OnceLock;
+
+static PROXY_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn is_proxy_enabled() -> bool {
+    *PROXY_ENABLED.get_or_init(|| std::fs::metadata("dist/server/proxy.js").is_ok())
 }
 
 async fn execute_proxy(
@@ -112,7 +116,7 @@ where
         let mut inner = std::mem::replace(&mut self.inner, inner);
 
         Box::pin(async move {
-            if !is_proxy_enabled().await {
+            if !is_proxy_enabled() {
                 return inner.call(request).await;
             }
 
@@ -214,7 +218,7 @@ where
 }
 
 pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::error::Error>> {
-    if !is_proxy_enabled().await {
+    if !is_proxy_enabled() {
         return Ok(());
     }
 

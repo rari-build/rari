@@ -1,10 +1,7 @@
 use axum::{
-    extract::MatchedPath,
     http::{HeaderValue, Request, Response},
     middleware::Next,
 };
-use tracing::Instrument;
-use uuid::Uuid;
 
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
@@ -35,43 +32,6 @@ const COOP_SAME_ORIGIN: &str = "same-origin";
 const CORP_SAME_ORIGIN: &str = "same-origin";
 const REFERRER_STRICT_ORIGIN: &str = "strict-origin-when-cross-origin";
 const PERMISSIONS_RESTRICTIVE: &str = "geolocation=(), microphone=(), camera=(), payment=()";
-
-pub async fn request_logger(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response<axum::body::Body> {
-    if request.extensions().get::<crate::server::middleware::spam_blocker::SpamRequest>().is_some()
-    {
-        return next.run(request).await;
-    }
-
-    let request_id = Uuid::new_v4();
-
-    let method = request.method().clone();
-    let uri = request.uri().clone();
-
-    let path = request
-        .extensions()
-        .get::<MatchedPath>()
-        .map(|matched_path| matched_path.as_str().to_owned())
-        .unwrap_or_else(|| uri.path().to_owned());
-
-    let span = tracing::info_span!(
-        "http_request",
-        method = %method,
-        path = %path,
-        request_id = %request_id,
-    );
-
-    async move { next.run(request).await }.instrument(span).await
-}
-
-pub async fn minimal_request_logger(
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Response<axum::body::Body> {
-    next.run(request).await
-}
 
 pub async fn cors_middleware(
     request: Request<axum::body::Body>,
