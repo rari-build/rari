@@ -1,4 +1,27 @@
-## [0.7.3] - 2026-01-14
+## [0.7.4] - 2026-01-15
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump binary version to 0.7.4
+## [0.7.4] - 2026-01-15
+
+### 🚀 Features
+
+- *(rari)* Optimize component resolution and rendering performance
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump binary version to 0.7.4
+## [create-rari-app@0.3.4] - 2026-01-14
+
+### 💼 Other
+
+- Create-rari-app@0.3.4
+## [rari@0.7.3] - 2026-01-14
+
+### 💼 Other
+
+- Rari@0.7.3
 
 ### ⚙️ Miscellaneous Tasks
 
