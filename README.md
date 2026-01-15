@@ -8,7 +8,7 @@
 
 **Rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 
-With proper app router support, true server-side rendering, and correct RSC semantics, Rari delivers 12x faster P99 latency and 10.5x higher throughput than Next.js.
+With proper app router support, true server-side rendering, and correct RSC semantics, Rari delivers 12x higher throughput and 2x faster response times than Next.js.
 
 ## Features
 
@@ -36,39 +36,27 @@ npm run dev
 
 That's it! Your app will be running at `http://localhost:5173`.
 
-## Installation
-
-### Option 1: Use create-rari-app (Recommended)
-```bash
-npm create rari-app@latest my-app
-# or
-pnpm create rari-app my-app
-# or
-yarn create rari-app my-app
-```
-
-### Option 2: Add to existing project
-```bash
-npm install rari
-# or
-pnpm add rari
-```
-
-The Rari binary is automatically downloaded and configured during installation. No additional setup required!
+Visit [rari.build/docs](https://rari.build/docs) for complete documentation, guides, and examples.
 
 ## Documentation
 
-- [Getting Started](web/public/content/docs/getting-started.mdx)
-- [Contributing](.github/CONTRIBUTING.md)
+**[Read the full documentation](https://rari.build/docs)** to learn more about:
+
+- Getting started with Rari
+- App Router and file-based routing
+- Server Components and Client Components
+- Server Actions and data mutations
+- Streaming SSR and Suspense
+- Deployment and production optimization
 
 ## Why Rari?
 
 ### Performance That Matters
-- **3.8x faster response times** - 0.69ms vs 2.58ms average response
-- **10.5x higher throughput** - 20,226 req/sec vs 1,934 req/sec under load
-- **12x faster P99 latency** - 4ms vs 48ms under concurrent load
-- **68% smaller bundles** - 27.6 KB vs 85.9 KB client JavaScript
-- **5.6x faster builds** - 1.64s vs 9.11s production builds
+- **2x faster response times** - 1.32ms vs 2.63ms average response
+- **12x higher throughput** - 21,263 req/sec vs 1,760 req/sec under load
+- **14x faster latency under load** - 1.94ms vs 27.89ms average latency
+- **66% smaller bundles** - 28.1 KB vs 82.0 KB client JavaScript
+- **2.6x faster builds** - 1.73s vs 4.43s production builds
 
 ### Developer Experience
 - **App Router** - File-based routing with automatic code splitting
@@ -84,242 +72,45 @@ Rari delivers exceptional performance that significantly outperforms traditional
 
 ### Head-to-Head Comparison vs Next.js
 
+> Benchmarks last updated: January 14, 2026
+
 **Response Time (Single Request):**
 | Metric | Rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Average** | **0.69ms** | 2.58ms | **3.8x faster** |
-| **P95** | 1.15ms | 3.37ms | **2.9x faster** |
-| **Bundle Size** | 27.6 KB | 85.9 KB | **68% smaller** |
+| **Average** | **1.32ms** | 2.63ms | **2.0x faster** |
+| **P95** | 3.36ms | 4.06ms | **1.2x faster** |
+| **Bundle Size** | 28.1 KB | 82.0 KB | **66% smaller** |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
 | Metric | Rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Requests/sec** | **20,226** | 1,934 | **10.5x higher** |
-| **Avg Latency** | **2.04ms** | 25.25ms | **12.4x faster** |
-| **P99 Latency** | **4ms** | 48ms | **12x faster** |
+| **Requests/sec** | **21,263** | 1,760 | **12.1x higher** |
+| **Avg Latency** | **1.94ms** | 27.89ms | **14.4x faster** |
+| **P99 Latency** | **<2ms** | 28ms | **14x faster** |
 | **Errors** | 0 | 0 | Stable |
 
 **Build Performance:**
 | Metric | Rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Build Time** | **1.64s** | 9.11s | **5.6x faster** |
-| **Bundle Size** | 273 KB | 742 KB | **63% smaller** |
+| **Build Time** | **1.73s** | 4.43s | **2.6x faster** |
+| **Bundle Size** | 433 KB | 543 KB | **20% smaller** |
 
 All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and scripts.
 
-## Project Structure
-
-```
-my-rari-app/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx        # Root layout (server component)
-│   │   ├── page.tsx          # Home page (server component)
-│   │   ├── about/
-│   │   │   └── page.tsx      # About page
-│   │   └── blog/
-│   │       ├── page.tsx      # Blog index
-│   │       └── [slug]/
-│   │           └── page.tsx  # Dynamic blog post route
-│   ├── components/
-│   │   └── Counter.tsx       # Client components ('use client')
-│   ├── actions/
-│   │   └── todo-actions.ts   # Server actions ('use server')
-│   └── app/
-│       └── globals.css       # Global styles
-├── vite.config.ts            # Vite + Rari configuration
-└── package.json
-```
-
-## Examples
-
-### App Router Layout
-```tsx
-// src/app/layout.tsx - Server component by default
-import type { LayoutProps } from 'rari'
-
-export default function RootLayout({ children }: LayoutProps) {
-  return (
-    <div className="min-h-screen">
-      <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-      </nav>
-      <main>{children}</main>
-    </div>
-  )
-}
-
-export const metadata = {
-  title: 'My Rari App',
-  description: 'Built with Rari',
-}
-```
-
-### Server Component (Default)
-```tsx
-// src/app/page.tsx - Runs on the server, no directive needed
-import type { PageProps } from 'rari'
-
-export default async function HomePage({ params, searchParams }: PageProps) {
-  const data = await fetch('https://api.example.com/data').then(r => r.json())
-
-  return (
-    <div>
-      <h1>{data.title}</h1>
-      <Counter initialValue={data.count} />
-    </div>
-  )
-}
-
-export const metadata = {
-  title: 'Home | My App',
-  description: 'Welcome to my app',
-}
-```
-
-### Dynamic Routes
-```tsx
-// src/app/blog/[slug]/page.tsx - Dynamic route with params
-import type { PageProps } from 'rari'
-
-export default function BlogPostPage({ params }: PageProps<{ slug: string }>) {
-  return (
-    <article>
-      <h1>
-        Blog Post:
-        {params.slug}
-      </h1>
-    </article>
-  )
-}
-
-export async function generateMetadata({ params }: PageProps<{ slug: string }>) {
-  return {
-    title: `${params.slug} | Blog`,
-    description: `Read about ${params.slug}`,
-  }
-}
-```
-
-### Client Component
-```tsx
-// src/components/Counter.tsx - Interactive component
-'use client'
-
-import { useState } from 'react'
-
-export default function Counter({ initialValue }: { initialValue: number }) {
-  const [count, setCount] = useState(initialValue)
-
-  return (
-    <button onClick={() => setCount(count + 1)}>
-      Count:
-      {' '}
-      {count}
-    </button>
-  )
-}
-```
-
-### Server Actions
-```tsx
-// src/actions/todo-actions.ts - Server functions for mutations
-'use server'
-
-export async function addTodo(formData: FormData) {
-  const title = formData.get('title') as string
-  await db.todos.create({ title })
-  return { success: true }
-}
-
-export async function deleteTodo(id: string) {
-  await db.todos.delete(id)
-  return { success: true }
-}
-```
-
-### Using Server Actions in Client Components
-```tsx
-// src/components/TodoForm.tsx
-'use client'
-
-import { useActionState } from 'react'
-import { addTodo } from '../actions/todo-actions'
-
-export default function TodoForm() {
-  const [state, formAction, isPending] = useActionState(addTodo, null)
-
-  return (
-    <form action={formAction}>
-      <input name="title" required />
-      <button disabled={isPending}>
-        {isPending ? 'Adding...' : 'Add Todo'}
-      </button>
-    </form>
-  )
-}
-```
-
-## Configuration
-
-Rari works with zero configuration, but you can customize it:
-
-```typescript
-// vite.config.ts
-import { rari } from 'rari/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    rari()
-  ]
-})
-```
-
-## Commands
-
-### Development
-```bash
-npm run dev
-```
-
-### Production
-```bash
-npm run build
-npm start
-```
-
-### Environment Variables
-- `PORT` - Server port (default: 3000)
-- `NODE_ENV` - Environment mode (development/production)
-- `RUST_LOG` - Rust logging level (default: info)
-
-## Development
-
-### Prerequisites
-- Node.js 20+
-- Rust (for core development)
-- pnpm (recommended)
-
-### Building from Source
-```bash
-git clone https://github.com/rari-build/rari.git
-cd rari
-pnpm install
-pnpm build
-```
-
-### Running Examples
-```bash
-cd examples/basic-vite-rsc
-pnpm install
-pnpm dev
-```
-
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](.github/CONTRIBUTING.md) for details.
+We welcome contributions! Here's how you can help:
+
+- **Report Bugs** - Found an issue? [Open a bug report](https://github.com/rari-build/rari/issues/new)
+- **Suggest Features** - Have ideas? [Share your suggestions](https://github.com/rari-build/rari/discussions)
+- **Improve Docs** - Help make our documentation better
+- **Submit PRs** - Check out our [Contributing Guide](.github/CONTRIBUTING.md)
+
+## Community
+
+- **Discord** - [Join our community](https://discord.gg/GSh2Ak3b8Q)
+- **GitHub** - [Star the repo](https://github.com/rari-build/rari)
+- **Documentation** - [rari.build/docs](https://rari.build/docs)
 
 ## License
 
