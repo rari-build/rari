@@ -1,4 +1,5 @@
 import Breadcrumbs from '@/components/Breadcrumbs'
+import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PageHeader from '@/components/PageHeader'
 
 export default async function ComponentsPage() {
@@ -53,9 +54,10 @@ export default async function ComponentsPage() {
                 href="https://github.com/rari-build/rari"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center text-[#fd7e14] hover:text-[#e8590c] font-medium transition-colors duration-200"
+                className="group inline-flex items-center gap-2 text-[#fd7e14] hover:text-[#e8590c] font-medium transition-colors duration-200"
               >
-                View on GitHub →
+                View on GitHub
+                <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
             </div>
           </div>

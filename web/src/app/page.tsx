@@ -1,5 +1,6 @@
 import FeatureCard from '@/components/FeatureCard'
 import HeroSection from '@/components/HeroSection'
+import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
 
 export default async function HomePage() {
@@ -36,12 +37,10 @@ export default async function HomePage() {
 
               <a
                 href="/docs/getting-started"
-                className="inline-flex items-center text-[#fd7e14] hover:text-[#e8590c] font-semibold text-lg transition-colors duration-200 group"
+                className="inline-flex items-center gap-2 text-[#fd7e14] hover:text-[#e8590c] font-semibold text-lg transition-colors duration-200 group"
               >
                 Read the full guide
-                <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
             </div>
           </div>

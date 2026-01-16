@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import ArrowNarrowRight from './icons/ArrowNarrowRight'
 import Terminal from './icons/Terminal'
 
 export default function HeroSection() {
@@ -92,9 +93,10 @@ export default function HeroSection() {
               href="https://github.com/rari-build/rari"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full sm:w-auto px-8 py-4 border-2 border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-[#161b22]/50 backdrop-blur-sm"
+              className="group w-full sm:w-auto px-8 py-4 border-2 border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-[#161b22]/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
             >
-              View on GitHub →
+              View on GitHub
+              <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
           </div>
         </div>
