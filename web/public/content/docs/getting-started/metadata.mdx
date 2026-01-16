@@ -1,0 +1,538 @@
+export const title = 'Metadata'
+export const description = 'Learn how to configure page metadata, SEO tags, Open Graph images, and social media cards in your Rari application.'
+
+<PageHeader title="Metadata" lastUpdated="January 16, 2026" />
+
+Rari provides a powerful metadata system for configuring page titles, descriptions, Open Graph tags, Twitter cards, and more. Metadata can be defined statically or generated dynamically based on route parameters.
+
+## Basic Metadata
+
+### Static Metadata
+
+Export a `metadata` object from any `page.tsx` or `layout.tsx` file:
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`export const metadata = {
+  title: 'Home | My App',
+  description: 'Welcome to my amazing application',
+}
+
+export default function HomePage() {
+  return <h1>Welcome</h1>
+}
+`}</CodeBlock>
+
+### Dynamic Metadata
+
+Use the `generateMetadata` function to create metadata based on route parameters:
+
+<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+
+export async function generateMetadata({ params }: PageProps<{ slug: string }>) {
+  const post = await fetchPost(params.slug)
+
+  return {
+    title: \`\${post.title} | Blog\`,
+    description: post.excerpt,
+    keywords: post.tags,
+  }
+}
+
+export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
+  const post = await fetchPost(params.slug)
+  return <article>{post.content}</article>
+}
+`}</CodeBlock>
+
+The `PageProps` type provides type-safe access to route parameters and search params.
+
+## Metadata Fields
+
+### Title
+
+The page title appears in browser tabs and search results.
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'About Us | My Company',
+}
+`}</CodeBlock>
+
+#### Title Templates
+
+Use title templates in layouts to automatically format child page titles:
+
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+  title: {
+    template: '%s | My App',
+    default: 'My App',
+  },
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`export const metadata = {
+  title: 'About Us', // Becomes "About Us | My App"
+}
+`}</CodeBlock>
+
+#### Absolute Titles
+
+Override the template with an absolute title:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: {
+    absolute: 'Special Page - No Template',
+  },
+}
+`}</CodeBlock>
+
+### Description
+
+The meta description for SEO and social sharing:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Products',
+  description: 'Browse our collection of high-quality products with fast shipping and great prices.',
+}
+`}</CodeBlock>
+
+### Keywords
+
+Keywords for SEO (though less important for modern search engines):
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'React Tutorial',
+  description: 'Learn React from scratch',
+  keywords: ['react', 'tutorial', 'javascript', 'web development'],
+}
+`}</CodeBlock>
+
+### Canonical URL
+
+Specify the canonical URL to avoid duplicate content issues:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Blog Post',
+  canonical: 'https://example.com/blog/my-post',
+}
+`}</CodeBlock>
+
+### Robots
+
+Control search engine crawling and indexing:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Admin Dashboard',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+}
+`}</CodeBlock>
+
+## Open Graph
+
+Open Graph tags control how your pages appear when shared on social media platforms like Facebook, LinkedIn, and Slack.
+
+### Basic Open Graph
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My Blog Post',
+  description: 'An interesting article about web development',
+  openGraph: {
+    title: 'My Blog Post',
+    description: 'An interesting article about web development',
+    url: 'https://example.com/blog/my-post',
+    siteName: 'My Blog',
+    type: 'article',
+  },
+}
+`}</CodeBlock>
+
+### Open Graph Images
+
+#### Simple Image URL
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Product Page',
+  openGraph: {
+    title: 'Amazing Product',
+    description: 'Check out this amazing product',
+    images: ['https://example.com/images/product.jpg'],
+  },
+}
+`}</CodeBlock>
+
+#### Detailed Image Configuration
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Product Page',
+  openGraph: {
+    title: 'Amazing Product',
+    description: 'Check out this amazing product',
+    images: [
+      {
+        url: 'https://example.com/images/product.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Product photo',
+      },
+    ],
+  },
+}
+`}</CodeBlock>
+
+#### Dynamic Open Graph Images
+
+Generate Open Graph images dynamically by creating an `opengraph-image.tsx` file:
+
+<CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+export default async function Image({ params }: PageProps<{ slug: string }>) {
+  const post = await fetchPost(params.slug)
+
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(to bottom right, #1e3a8a, #3b82f6)',
+        padding: '80px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 72,
+            fontWeight: 'bold',
+            color: 'white',
+            marginBottom: 20,
+          }}
+        >
+          {post.title}
+        </h1>
+        <p
+          style={{
+            fontSize: 32,
+            color: '#e0e7ff',
+          }}
+        >
+          {post.author} • {post.date}
+        </p>
+      </div>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+The image will be automatically injected into your page metadata and served at `/_rari/og/blog/[slug]`.
+
+## Twitter Cards
+
+Twitter cards control how your pages appear when shared on Twitter/X.
+
+### Summary Card
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My Article',
+  description: 'Read my latest article',
+  twitter: {
+    card: 'summary',
+    title: 'My Article',
+    description: 'Read my latest article',
+    site: '@mysite',
+    creator: '@myhandle',
+  },
+}
+`}</CodeBlock>
+
+### Summary Large Image Card
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My Article',
+  description: 'Read my latest article',
+  twitter: {
+    card: 'summary_large_image',
+    title: 'My Article',
+    description: 'Read my latest article',
+    site: '@mysite',
+    creator: '@myhandle',
+    images: ['https://example.com/images/article.jpg'],
+  },
+}
+`}</CodeBlock>
+
+## Icons and Favicons
+
+### Favicon
+
+Place a `favicon.ico` file in your `public/` directory, or specify it in metadata:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  icons: {
+    icon: '/favicon.ico',
+  },
+}
+`}</CodeBlock>
+
+### Multiple Icon Sizes
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  icons: {
+    icon: [
+      { url: '/icon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+}
+`}</CodeBlock>
+
+## Viewport
+
+Configure the viewport meta tag:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=5',
+}
+`}</CodeBlock>
+
+## Theme Color
+
+Set the theme color for mobile browsers. You can use a simple string or an array with media queries:
+
+### Simple Theme Color
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  themeColor: '#3b82f6',
+}
+`}</CodeBlock>
+
+### Theme Color with Media Queries
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  themeColor: [
+    { color: '#3b82f6', media: '(prefers-color-scheme: light)' },
+    { color: '#1e3a8a', media: '(prefers-color-scheme: dark)' },
+  ],
+}
+`}</CodeBlock>
+
+## Manifest
+
+Link to a web app manifest:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  manifest: '/manifest.json',
+}
+`}</CodeBlock>
+
+## Apple Web App
+
+Configure Apple-specific web app metadata:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'My App',
+  appleWebApp: {
+    title: 'My App',
+    statusBarStyle: 'black-translucent',
+    capable: true,
+  },
+}
+`}</CodeBlock>
+
+## Complete Example
+
+Here's a comprehensive example combining multiple metadata features:
+
+<CodeBlock filename="src/app/products/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+
+export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+  const product = await fetchProduct(params.id)
+
+  return {
+    title: \`\${product.name} | Products\`,
+    description: product.description,
+    keywords: product.tags,
+    openGraph: {
+      title: product.name,
+      description: product.description,
+      url: \`https://example.com/products/\${params.id}\`,
+      siteName: 'My Store',
+      type: 'website',
+      images: [
+        {
+          url: product.imageUrl,
+          width: 1200,
+          height: 630,
+          alt: product.name,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: product.name,
+      description: product.description,
+      images: [product.imageUrl],
+      site: '@mystore',
+      creator: '@mystore',
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    canonical: \`https://example.com/products/\${params.id}\`,
+  }
+}
+
+export default async function ProductPage({ params }: PageProps<{ id: string }>) {
+  const product = await fetchProduct(params.id)
+
+  return (
+    <div>
+      <h1>{product.name}</h1>
+      <img src={product.imageUrl} alt={product.name} />
+      <p>{product.description}</p>
+      <p>\${product.price}</p>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+## Metadata Inheritance
+
+Metadata is inherited from parent layouts and can be overridden by child pages:
+
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+  title: {
+    template: '%s | My App',
+    default: 'My App',
+  },
+  description: 'The best app ever',
+  openGraph: {
+    siteName: 'My App',
+  },
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/blog/layout.tsx" language="tsx">{`export const metadata = {
+  openGraph: {
+    type: 'article',
+  },
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`export async function generateMetadata({ params }) {
+  const post = await fetchPost(params.slug)
+
+  return {
+    title: post.title, // Becomes "Post Title | My App"
+    description: post.excerpt, // Overrides parent description
+    // openGraph.siteName and openGraph.type are inherited
+  }
+}
+`}</CodeBlock>
+
+## Best Practices
+
+### Always Provide Title and Description
+
+Every page should have a unique, descriptive title and description:
+
+<CodeBlock language="tsx">{`// Good
+export const metadata = {
+  title: 'Contact Us | Acme Corp',
+  description: 'Get in touch with our team. We respond within 24 hours.',
+}
+
+// Bad
+export const metadata = {
+  title: 'Page',
+}
+`}</CodeBlock>
+
+### Use Title Templates
+
+Define a title template in your root layout to maintain consistency:
+
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+  title: {
+    template: '%s | My Brand',
+    default: 'My Brand - Tagline',
+  },
+}
+`}</CodeBlock>
+
+### Optimize for Social Sharing
+
+Always include Open Graph and Twitter card metadata for pages you expect to be shared:
+
+<CodeBlock language="tsx">{`export const metadata = {
+  title: 'Amazing Article',
+  description: 'This article will blow your mind',
+  openGraph: {
+    title: 'Amazing Article',
+    description: 'This article will blow your mind',
+    images: ['/og-image.jpg'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Amazing Article',
+    description: 'This article will blow your mind',
+    images: ['/og-image.jpg'],
+  },
+}
+`}</CodeBlock>
+
+### Use Dynamic Metadata for Dynamic Routes
+
+For pages with dynamic content, always use `generateMetadata`:
+
+<CodeBlock language="tsx">{`// Good - Dynamic metadata
+export async function generateMetadata({ params }) {
+  const data = await fetchData(params.id)
+  return {
+    title: data.title,
+    description: data.description,
+  }
+}
+
+// Bad - Static metadata for dynamic route
+export const metadata = {
+  title: 'Item Page',
+}
+`}</CodeBlock>
+
+### Keep Descriptions Concise
+
+Meta descriptions should be 150-160 characters for optimal display in search results:
+
+<CodeBlock language="tsx">{`// Good - Concise and descriptive
+export const metadata = {
+  description: 'Learn React Server Components with Rari. Fast, modern, and built on Rust for maximum performance.',
+}
+
+// Bad - Too long, will be truncated
+export const metadata = {
+  description: 'This is a very long description that goes on and on about various features and benefits without getting to the point quickly enough for search engines to display it properly in search results.',
+}
+`}</CodeBlock>
+
+## Related
+
+- [Image Component](/docs/api-reference/components/image) - Optimize images for better performance
+- [Open Graph Images](/docs/api-reference/components/image-response) - Generate dynamic social media images
+- [App Router](/docs/getting-started#app-router) - Learn about the app router structure

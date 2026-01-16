@@ -3,6 +3,7 @@ use super::*;
 use crate::rsc::rendering::core::RscRenderer;
 use crate::runtime::JsExecutionRuntime;
 use crate::server::routing::app_router::AppRouteMatch;
+use crate::server::routing::types::ParamValue;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ fn test_get_component_id() {
 #[test]
 fn test_create_page_props() {
     let mut params = FxHashMap::default();
-    params.insert("id".to_string(), "123".to_string());
+    params.insert("id".to_string(), ParamValue::Single("123".to_string()));
 
     let mut search_params = FxHashMap::default();
     search_params.insert("q".to_string(), vec!["test".to_string()]);

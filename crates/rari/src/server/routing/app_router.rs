@@ -1,7 +1,7 @@
 use crate::error::RariError;
-use crate::server::routing::types::RouteSegment;
 #[cfg(test)]
 use crate::server::routing::types::RouteSegmentType;
+use crate::server::routing::types::{ParamValue, RouteSegment};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -63,7 +63,7 @@ pub struct AppRouteManifest {
 #[derive(Debug, Clone)]
 pub struct AppRouteMatch {
     pub route: AppRouteEntry,
-    pub params: FxHashMap<String, String>,
+    pub params: FxHashMap<String, ParamValue>,
     pub layouts: Vec<LayoutEntry>,
     pub loading: Option<LoadingEntry>,
     pub error: Option<ErrorEntry>,
@@ -149,7 +149,7 @@ impl AppRouter {
         &self,
         route: &AppRouteEntry,
         path: &str,
-    ) -> Option<FxHashMap<String, String>> {
+    ) -> Option<FxHashMap<String, ParamValue>> {
         let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
         let path_segments = path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
 
@@ -166,7 +166,7 @@ impl AppRouter {
                 if path_idx < path_segments.len() {
                     let remaining: Vec<String> =
                         path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
-                    params.insert(param_name.to_string(), remaining.join("/"));
+                    params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
                 }
 
                 return Some(params);
@@ -181,7 +181,7 @@ impl AppRouter {
 
                 let remaining: Vec<String> =
                     path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
-                params.insert(param_name.to_string(), remaining.join("/"));
+                params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
 
                 return Some(params);
             }
@@ -192,7 +192,10 @@ impl AppRouter {
                 }
 
                 let param_name = &route_seg[1..route_seg.len() - 1];
-                params.insert(param_name.to_string(), path_segments[path_idx].to_string());
+                params.insert(
+                    param_name.to_string(),
+                    ParamValue::Single(path_segments[path_idx].to_string()),
+                );
 
                 path_idx += 1;
                 route_idx += 1;
@@ -394,7 +397,10 @@ mod tests {
         assert!(result.is_ok());
         let matched = result.unwrap();
         assert_eq!(matched.route.path, "/blog/[slug]");
-        assert_eq!(matched.params.get("slug"), Some(&"hello-world".to_string()));
+        assert_eq!(
+            matched.params.get("slug").and_then(|p| p.as_string()),
+            Some(&"hello-world".to_string())
+        );
     }
 
     #[test]
@@ -405,7 +411,11 @@ mod tests {
         assert!(result.is_ok());
         let matched = result.unwrap();
         assert_eq!(matched.route.path, "/docs/[...slug]");
-        assert_eq!(matched.params.get("slug"), Some(&"getting-started/installation".to_string()));
+        let slug_vec = matched.params.get("slug").and_then(|p| p.as_vec());
+        assert_eq!(
+            slug_vec,
+            Some(&vec!["getting-started".to_string(), "installation".to_string()])
+        );
     }
 
     #[test]
@@ -501,6 +511,9 @@ mod tests {
         assert!(result.is_ok());
         let matched = result.unwrap();
         assert_eq!(matched.route.path, "/[slug]");
-        assert_eq!(matched.params.get("slug"), Some(&"about".to_string()));
+        assert_eq!(
+            matched.params.get("slug").and_then(|p| p.as_string()),
+            Some(&"about".to_string())
+        );
     }
 }

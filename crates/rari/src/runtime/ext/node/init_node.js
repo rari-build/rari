@@ -1,6 +1,4 @@
-/* eslint-disable node/prefer-global/buffer */
-/* eslint-disable unused-imports/no-unused-vars */
-/* eslint-disable node/prefer-global/process */
+/* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
 initializeDebugEnv('rari')
@@ -594,6 +592,29 @@ const nodeModules = new Map([
         if (cb)
           cb(new Error('Not supported'), '', '')
       },
+      execSync: (cmd, options = {}) => {
+        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const command = parts[0]
+        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+
+        const denoCmd = new Deno.Command(command, {
+          args,
+          cwd: options.cwd,
+          stdout: 'piped',
+          stderr: 'piped',
+        })
+
+        const { stdout, stderr, success } = denoCmd.outputSync()
+
+        if (!success && options.stdio !== 'ignore') {
+          const error = new Error(`Command failed: ${cmd}`)
+          error.stderr = new TextDecoder().decode(stderr)
+          throw error
+        }
+
+        const output = new TextDecoder().decode(stdout)
+        return options.encoding === 'utf-8' || options.encoding === 'utf8' ? output : Buffer.from(stdout)
+      },
     },
   ],
   [
@@ -607,6 +628,29 @@ const nodeModules = new Map([
         console.warn('child_process.exec is not supported')
         if (cb)
           cb(new Error('Not supported'), '', '')
+      },
+      execSync: (cmd, options = {}) => {
+        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const command = parts[0]
+        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+
+        const denoCmd = new Deno.Command(command, {
+          args,
+          cwd: options.cwd,
+          stdout: 'piped',
+          stderr: 'piped',
+        })
+
+        const { stdout, stderr, success } = denoCmd.outputSync()
+
+        if (!success && options.stdio !== 'ignore') {
+          const error = new Error(`Command failed: ${cmd}`)
+          error.stderr = new TextDecoder().decode(stderr)
+          throw error
+        }
+
+        const output = new TextDecoder().decode(stdout)
+        return options.encoding === 'utf-8' || options.encoding === 'utf8' ? output : Buffer.from(stdout)
       },
     },
   ],

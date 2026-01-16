@@ -1,0 +1,758 @@
+export const title = 'Image Component'
+export const description = 'Optimize and serve images with automatic format conversion, responsive sizing, and lazy loading using the Rari Image component.'
+
+<PageHeader title="Image Component" lastUpdated="January 16, 2026" />
+
+The `<Image>` component extends the HTML `<img>` element with automatic image optimization, responsive sizing, modern format conversion (WebP, AVIF), and lazy loading. Powered by high-performance Rust transformations on the backend, you get production-grade image processing with minimal configuration—just write JavaScript and let Rari handle the performance-critical work.
+
+## Import
+
+<CodeBlock language="tsx">{`import { Image } from 'rari/image'`}</CodeBlock>
+
+## Configuration
+
+Before using the Image component with remote images, configure allowed sources in your `vite.config.ts`:
+
+<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    rari({
+      images: {
+        // Allow remote images from specific domains
+        remotePatterns: [
+          {
+            hostname: 'images.unsplash.com',
+          },
+          {
+            protocol: 'https',
+            hostname: 'cdn.example.com',
+            pathname: '/images/**',
+          },
+        ],
+        // Define local image paths
+        localPatterns: [
+          {
+            pathname: '/images/**',
+          },
+        ],
+        // Optional: customize optimization settings
+        deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+        imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+        formats: ['avif', 'webp'], // Default is ['avif']
+        quality: [25, 50, 75, 100],
+      },
+    }),
+  ],
+})
+`}</CodeBlock>
+
+### Remote Patterns
+
+The `remotePatterns` array defines which external domains are allowed to serve images. This is a security feature that prevents your application from being used as an open proxy for arbitrary images.
+
+Each pattern can include:
+- `protocol` - Optional: `'http'` or `'https'`
+- `hostname` - Required: The domain name (e.g., `'images.unsplash.com'`)
+- `port` - Optional: Specific port number
+- `pathname` - Optional: Path pattern (e.g., `'/images/**'`)
+- `search` - Optional: Query string pattern
+
+### Local Patterns
+
+The `localPatterns` array defines which paths in your `public` directory should be optimized. Images outside these patterns will not be processed.
+
+### Optimization Settings
+
+- `deviceSizes` - Widths generated for fixed-size images (default: `[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`)
+- `imageSizes` - Widths generated for `fill` images (default: `[16, 32, 48, 64, 96, 128, 256, 384]`)
+- `formats` - Output formats to generate (default: `['avif', 'webp']`)
+- `quality` - Quality levels for optimization (default: `[25, 50, 75, 100]`)
+
+## Basic Usage
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function HomePage() {
+  return (
+    <div>
+      <Image
+        src="/hero.jpg"
+        alt="Hero image"
+        width={1200}
+        height={600}
+      />
+    </div>
+  )
+}
+`}</CodeBlock>
+
+## Props
+
+### Required Props
+
+#### src
+
+- **Type:** `string | StaticImageData`
+- **Required:** Yes
+
+The image source. Can be a URL string or a static image import.
+
+<CodeBlock language="tsx">{`// URL string
+<Image src="/images/photo.jpg" alt="Photo" width={800} height={600} />
+
+// Static import
+import heroImage from './hero.jpg'
+<Image src={heroImage} alt="Hero" />
+`}</CodeBlock>
+
+#### alt
+
+- **Type:** `string`
+- **Required:** Yes
+
+Alternative text for the image. Important for accessibility and SEO.
+
+<CodeBlock language="tsx">{`<Image
+  src="/profile.jpg"
+  alt="User profile photo"
+  width={200}
+  height={200}
+/>
+`}</CodeBlock>
+
+### Size Props
+
+#### width
+
+- **Type:** `number`
+- **Default:** `undefined`
+
+The intrinsic width of the image in pixels. Required unless using `fill` prop.
+
+#### height
+
+- **Type:** `number`
+- **Default:** `undefined`
+
+The intrinsic height of the image in pixels. Required unless using `fill` prop.
+
+#### fill
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Makes the image fill its parent container. The parent must have `position: relative`, `position: fixed`, or `position: absolute`.
+
+<CodeBlock language="tsx">{`<div style={{ position: 'relative', width: '100%', height: '400px' }}>
+  <Image
+    src="/banner.jpg"
+    alt="Banner"
+    fill
+    style={{ objectFit: 'cover' }}
+  />
+</div>
+`}</CodeBlock>
+
+#### sizes
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Defines which image size to load at different viewport widths. Uses standard responsive image syntax.
+
+<CodeBlock language="tsx">{`<Image
+  src="/responsive.jpg"
+  alt="Responsive image"
+  fill
+  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+/>
+`}</CodeBlock>
+
+### Optimization Props
+
+#### quality
+
+- **Type:** `number`
+- **Default:** `75`
+
+The quality of the optimized image, between 1 and 100. Higher values mean better quality but larger file sizes.
+
+<CodeBlock language="tsx">{`<Image
+  src="/high-quality.jpg"
+  alt="High quality image"
+  width={1920}
+  height={1080}
+  quality={90}
+/>
+`}</CodeBlock>
+
+#### unoptimized
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+When true, the image will be served as-is without optimization. Useful for images that are already optimized or for testing.
+
+<CodeBlock language="tsx">{`<Image
+  src="/already-optimized.jpg"
+  alt="Pre-optimized image"
+  width={800}
+  height={600}
+  unoptimized
+/>
+`}</CodeBlock>
+
+#### loader
+
+- **Type:** `(props: { src: string, width: number, quality: number }) => string`
+- **Default:** `undefined`
+
+Custom function to generate image URLs. Useful for custom CDN configurations.
+
+<CodeBlock language="tsx">{`const customLoader = ({ src, width, quality }) => {
+  return \`https://cdn.example.com/\${src}?w=\${width}&q=\${quality}\`
+}
+
+<Image
+  src="photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  loader={customLoader}
+/>
+`}</CodeBlock>
+
+### Loading Props
+
+#### loading
+
+- **Type:** `'lazy' | 'eager'`
+- **Default:** `'lazy'`
+
+The loading behavior of the image. Use `'eager'` for above-the-fold images and `'lazy'` for below-the-fold images.
+
+<CodeBlock language="tsx">{`// Above the fold - load immediately
+<Image
+  src="/hero.jpg"
+  alt="Hero"
+  width={1920}
+  height={1080}
+  loading="eager"
+/>
+
+// Below the fold - lazy load
+<Image
+  src="/gallery-1.jpg"
+  alt="Gallery image"
+  width={800}
+  height={600}
+  loading="lazy"
+/>
+`}</CodeBlock>
+
+#### preload
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+When true, adds a `<link rel="preload">` tag to the document head for high-priority images.
+
+<CodeBlock language="tsx">{`<Image
+  src="/hero.jpg"
+  alt="Hero image"
+  width={1920}
+  height={1080}
+  preload
+/>
+`}</CodeBlock>
+
+#### decoding
+
+- **Type:** `'async' | 'sync' | 'auto'`
+- **Default:** `'async'` (or `'sync'` when `preload` is true)
+
+Hint to the browser on how to decode the image. When `preload` is true, decoding defaults to `'sync'` for immediate rendering.
+
+<CodeBlock language="tsx">{`// Async decoding (default) - non-blocking
+<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  decoding="async"
+/>
+
+// Sync decoding - blocks rendering until decoded
+<Image
+  src="/hero.jpg"
+  alt="Hero"
+  width={1920}
+  height={1080}
+  preload
+  decoding="sync"
+/>
+`}</CodeBlock>
+
+### Placeholder Props
+
+#### placeholder
+
+- **Type:** `'blur' | 'empty'`
+- **Default:** `'empty'`
+
+The placeholder to show while the image is loading. Use `'blur'` with `blurDataURL` for a blurred preview.
+
+<CodeBlock language="tsx">{`<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  placeholder="blur"
+  blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+/>
+`}</CodeBlock>
+
+#### blurDataURL
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+A Data URL to use as a blur placeholder. Only used when `placeholder="blur"`.
+
+### Style Props
+
+#### style
+
+- **Type:** `React.CSSProperties`
+- **Default:** `undefined`
+
+Inline styles to apply to the image element.
+
+<CodeBlock language="tsx">{`<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  style={{ borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+/>
+`}</CodeBlock>
+
+#### className
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+CSS class name(s) to apply to the image element.
+
+<CodeBlock language="tsx">{`<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  className="rounded-lg shadow-md"
+/>
+`}</CodeBlock>
+
+#### onLoad
+
+- **Type:** `(event: React.SyntheticEvent<HTMLImageElement>) => void`
+- **Default:** `undefined`
+
+Callback function invoked when the image successfully loads.
+
+<CodeBlock language="tsx">{`<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  onLoad={(e) => console.log('Image loaded', e.currentTarget.src)}
+/>
+`}</CodeBlock>
+
+#### onError
+
+- **Type:** `(event: React.SyntheticEvent<HTMLImageElement>) => void`
+- **Default:** `undefined`
+
+Callback function invoked when the image fails to load.
+
+<CodeBlock language="tsx">{`<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  onError={(e) => console.error('Image failed to load')}
+/>
+`}</CodeBlock>
+
+### Advanced Props
+
+#### overrideSrc
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Override the source URL used for optimization. Useful when you need to display one image but optimize from a different source URL.
+
+<CodeBlock language="tsx">{`// Display a thumbnail but optimize from full-size source
+<Image
+  src="/thumbnails/photo-thumb.jpg"
+  overrideSrc="/originals/photo.jpg"
+  alt="Photo"
+  width={400}
+  height={300}
+/>
+`}</CodeBlock>
+
+## StaticImageData
+
+When importing images statically, they return a `StaticImageData` object:
+
+<CodeBlock language="tsx">{`interface StaticImageData {
+  src: string
+  height: number
+  width: number
+  blurDataURL?: string
+}
+`}</CodeBlock>
+
+## Common Patterns
+
+### Remote Images
+
+Use remote images from configured domains:
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function Page() {
+  return (
+    <Image
+      src="https://images.unsplash.com/photo-1576191919769-40424bb34367"
+      alt="Joshua Tree landscape"
+      width={1200}
+      height={600}
+      quality={75}
+      className="w-full h-auto"
+    />
+  )
+}
+`}</CodeBlock>
+
+### Priority Loading for Hero Images
+
+Use `preload` for above-the-fold images to ensure they load immediately:
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function Page() {
+  return (
+    <Image
+      src="https://images.unsplash.com/photo-1654652602865-53efa00c3e05"
+      alt="Beach with mountain background"
+      width={1200}
+      height={600}
+      preload
+      quality={75}
+      className="w-full h-auto"
+    />
+  )
+}
+`}</CodeBlock>
+
+### Responsive Images
+
+Use the `sizes` prop to serve different image sizes based on viewport width:
+
+<CodeBlock filename="src/components/ResponsiveImage.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function ResponsiveImage() {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '400px' }}>
+      <Image
+        src="/hero.jpg"
+        alt="Hero image"
+        fill
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+        style={{ objectFit: 'cover' }}
+      />
+    </div>
+  )
+}
+`}</CodeBlock>
+
+### Image Gallery
+
+<CodeBlock filename="src/components/Gallery.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+const images = [
+  { src: '/gallery-1.jpg', alt: 'Gallery image 1' },
+  { src: '/gallery-2.jpg', alt: 'Gallery image 2' },
+  { src: '/gallery-3.jpg', alt: 'Gallery image 3' },
+]
+
+export default function Gallery() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+      {images.map((img, i) => (
+        <Image
+          key={i}
+          src={img.src}
+          alt={img.alt}
+          width={400}
+          height={300}
+          style={{ width: '100%', height: 'auto' }}
+        />
+      ))}
+    </div>
+  )
+}
+`}</CodeBlock>
+
+### Background Image with Fill
+
+<CodeBlock filename="src/components/Hero.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function Hero() {
+  return (
+    <section style={{ position: 'relative', width: '100%', height: '600px' }}>
+      <Image
+        src="/hero-background.jpg"
+        alt="Hero background"
+        fill
+        style={{ objectFit: 'cover' }}
+        quality={90}
+        preload
+      />
+      <div style={{ position: 'relative', zIndex: 1, padding: '2rem' }}>
+        <h1>Welcome to Our Site</h1>
+        <p>Beautiful hero section with optimized background image</p>
+      </div>
+    </section>
+  )
+}
+`}</CodeBlock>
+
+### Avatar with Blur Placeholder
+
+<CodeBlock filename="src/components/Avatar.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+export default function Avatar() {
+  return (
+    <Image
+      src="/avatar.jpg"
+      alt="User avatar"
+      width={100}
+      height={100}
+      placeholder="blur"
+      blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD..."
+      style={{ borderRadius: '50%' }}
+    />
+  )
+}
+`}</CodeBlock>
+
+### Static Image Import
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import { Image } from 'rari/image'
+import heroImage from './hero.jpg'
+
+export default function HomePage() {
+  return (
+    <div>
+      <Image
+        src={heroImage}
+        alt="Hero"
+        placeholder="blur"
+      />
+    </div>
+  )
+}
+`}</CodeBlock>
+
+### Custom Loader for CDN
+
+<CodeBlock filename="src/components/CDNImage.tsx" language="tsx">{`import { Image } from 'rari/image'
+
+const cloudinaryLoader = ({ src, width, quality }) => {
+  const params = ['f_auto', 'c_limit', \`w_\${width}\`, \`q_\${quality || 'auto'}\`]
+  return \`https://res.cloudinary.com/demo/image/upload/\${params.join(',')}/\${src}\`
+}
+
+export default function CDNImage() {
+  return (
+    <Image
+      src="sample.jpg"
+      alt="Sample"
+      width={800}
+      height={600}
+      loader={cloudinaryLoader}
+    />
+  )
+}
+`}</CodeBlock>
+
+## Image Optimization
+
+The Image component automatically optimizes your images using high-performance Rust transformations:
+
+- **Converts to modern formats**: Serves WebP and AVIF when supported by the browser, reducing file sizes by up to 50%
+- **Generates responsive sizes**: Creates multiple image sizes for different devices automatically
+- **Lazy loads by default**: Only loads images when they enter the viewport, improving initial page load
+- **Optimizes quality**: Balances file size and visual quality with intelligent compression
+- **Prevents layout shift**: Reserves space for images before they load, improving Core Web Vitals
+- **Fast processing**: Rust-powered backend handles encoding, resizing, and format conversion at native speeds
+
+### Supported Formats
+
+The optimization endpoint supports:
+
+- **Input formats**: JPEG, PNG, WebP, AVIF, GIF, SVG
+- **Output formats**: JPEG, PNG, WebP, AVIF (with intelligent format selection based on browser support)
+
+Images are automatically transcoded to the most efficient format supported by the user's browser, with AVIF preferred for maximum compression efficiency.
+
+### Default Sizes
+
+The component generates images at these widths:
+
+- **Device sizes** (for fixed-width images): 640, 750, 828, 1080, 1200, 1920, 2048, 3840
+- **Image sizes** (for `fill` images): 16, 32, 48, 64, 96, 128, 256, 384
+
+When you use `width` and `height` props, the component uses device sizes. When you use `fill`, it uses image sizes. The browser automatically selects the appropriate size based on the viewport and the `sizes` attribute.
+
+You can customize these in your `vite.config.ts`:
+
+<CodeBlock language="typescript">{`export default defineConfig({
+  plugins: [
+    rari({
+      images: {
+        deviceSizes: [640, 750, 1080, 1920], // Custom device sizes
+        imageSizes: [16, 32, 64, 128],       // Custom image sizes
+      },
+    }),
+  ],
+})
+`}</CodeBlock>
+
+## Best Practices
+
+### Always Provide Width and Height
+
+This prevents layout shift and improves Core Web Vitals (CLS score):
+
+<CodeBlock language="tsx">{`// Good
+<Image src="/photo.jpg" alt="Photo" width={800} height={600} />
+
+// Bad - causes layout shift
+<Image src="/photo.jpg" alt="Photo" />
+`}</CodeBlock>
+
+### Use Appropriate Loading Strategy
+
+- Use `loading="eager"` or `preload` for above-the-fold images
+- Use `loading="lazy"` (default) for below-the-fold images
+
+<CodeBlock language="tsx">{`// Hero image - load immediately
+<Image src="/hero.jpg" alt="Hero" width={1920} height={1080} loading="eager" />
+
+// Gallery images - lazy load
+<Image src="/gallery-1.jpg" alt="Gallery" width={400} height={300} loading="lazy" />
+`}</CodeBlock>
+
+### Optimize Quality Based on Use Case
+
+- Use `quality={90-100}` for hero images and important visuals
+- Use `quality={75}` (default) for most images
+- Use `quality={50-60}` for thumbnails and backgrounds
+
+### Use Sizes for Responsive Images
+
+Define how much viewport width the image occupies at different breakpoints:
+
+<CodeBlock language="tsx">{`<Image
+  src="/responsive.jpg"
+  alt="Responsive"
+  fill
+  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 800px"
+/>
+`}</CodeBlock>
+
+### Provide Meaningful Alt Text
+
+Alt text is crucial for accessibility and SEO:
+
+<CodeBlock language="tsx">{`// Good
+<Image src="/product.jpg" alt="Blue cotton t-shirt with round neck" width={400} height={400} />
+
+// Bad
+<Image src="/product.jpg" alt="image" width={400} height={400} />
+`}</CodeBlock>
+
+## Troubleshooting
+
+### Remote Images Not Loading
+
+If remote images fail to load, check your `vite.config.ts`:
+
+<CodeBlock language="typescript">{`// Make sure the hostname is in remotePatterns
+export default defineConfig({
+  plugins: [
+    rari({
+      images: {
+        remotePatterns: [
+          {
+            hostname: 'images.unsplash.com', // Add your image domain here
+          },
+        ],
+      },
+    }),
+  ],
+})
+`}</CodeBlock>
+
+Remote images are blocked by default for security. You must explicitly allow each domain to prevent your application from being used as an open image proxy.
+
+### Image Not Loading
+
+Check that:
+- The image path is correct and accessible
+- The image file exists in the `public` directory or is a valid URL
+- For remote images, the domain is listed in `remotePatterns` in your `vite.config.ts`
+- For local images, the path matches a pattern in `localPatterns`
+- The Rari development server is running
+
+### Layout Shift Issues
+
+Always provide `width` and `height` props, or use `fill` with a sized parent container:
+
+<CodeBlock language="tsx">{`// Option 1: Fixed dimensions
+<Image src="/photo.jpg" alt="Photo" width={800} height={600} />
+
+// Option 2: Fill parent
+<div style={{ position: 'relative', width: '100%', height: '400px' }}>
+  <Image src="/photo.jpg" alt="Photo" fill />
+</div>
+`}</CodeBlock>
+
+### Slow Image Loading
+
+- Use `preload` for critical above-the-fold images
+- Use `loading="eager"` for hero images
+- Reduce `quality` for non-critical images
+- Ensure images are appropriately sized (don't serve 4K images for thumbnails)
+- Use `placeholder="blur"` with `blurDataURL` for better perceived performance
+- Check that `remotePatterns` is configured correctly to enable caching
+
+### CORS Errors with Remote Images
+
+Remote images are proxied through your Rari server to avoid CORS issues. If you see CORS errors:
+- Verify the domain is in `remotePatterns`
+- Check that the remote server allows your domain
+- Ensure you're not using `unoptimized` with remote images (which bypasses the proxy)
+
+## Related
+
+- [ImageResponse](/docs/api-reference/components/image-response) - Generate dynamic Open Graph images
+- [Metadata](/docs/getting-started/metadata) - Configure page metadata including Open Graph images

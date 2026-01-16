@@ -37,7 +37,7 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
 
   return (
     <div className="not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full">
-      <div className="flex items-center gap-1 bg-[#161b22] px-2 py-1.5 border-b border-[#30363d] overflow-x-auto">
+      <div className="flex items-center gap-1 bg-[#161b22] px-2 py-1.5 border-b border-[#30363d] overflow-x-auto" role="tablist" aria-label="Package manager selection">
         {(Object.keys(commands) as PackageManager[]).map((pm) => {
           const Icon = packageManagerIcons[pm]
           return (
@@ -49,10 +49,14 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
               transition-colors duration-200 shrink-0
               ${activeTab === pm
               ? 'bg-[#0d1117] text-white'
-              : 'text-gray-400 hover:text-gray-300 hover:bg-[#21262d]'
+              : 'text-gray-300 hover:text-gray-100 hover:bg-[#21262d]'
             }
             `}
               type="button"
+              role="tab"
+              aria-selected={activeTab === pm}
+              aria-controls={`${pm}-panel`}
+              id={`${pm}-tab`}
             >
               <Icon className="w-4 h-4" />
               <span className="truncate font-medium">{pm}</span>
@@ -61,16 +65,16 @@ export default function PackageManagerTabs({ commands }: PackageManagerTabsProps
         })}
       </div>
 
-      <div className="relative">
+      <div className="relative" role="tabpanel" id={`${activeTab}-panel`} aria-labelledby={`${activeTab}-tab`}>
         <button
           onClick={() => copyToClipboard(commands[activeTab])}
-          className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10"
+          className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10"
           type="button"
           aria-label="Copy code to clipboard"
         >
           {copied
             ? (
-                <Check className="w-4 h-4 text-green-600" />
+                <Check className="w-4 h-4 text-green-500" />
               )
             : (
                 <Copy className="w-4 h-4" />

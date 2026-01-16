@@ -1,9 +1,10 @@
 use crate::rsc::rendering::streaming::RscStream;
+use crate::server::routing::types::ParamValue;
 use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
 pub struct LayoutRenderContext {
-    pub params: FxHashMap<String, String>,
+    pub params: FxHashMap<String, ParamValue>,
     pub search_params: FxHashMap<String, Vec<String>>,
     pub headers: FxHashMap<String, String>,
     pub pathname: String,

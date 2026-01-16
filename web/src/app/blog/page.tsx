@@ -55,51 +55,53 @@ export default async function BlogIndexPage() {
   const posts = await getBlogPosts()
 
   return (
-    <div className="space-y-12">
-      <div className="space-y-4">
-        <h1 className="text-5xl font-bold text-[#f0f6fc] tracking-tight">
-          Rari Blog
-        </h1>
-        <p className="text-xl text-gray-400 max-w-2xl">
-          Latest news, updates, and insights from the Rari team.
-        </p>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+      <div className="space-y-12">
+        <div className="space-y-4">
+          <h1 className="text-5xl font-bold text-[#f0f6fc] tracking-tight">
+            Rari Blog
+          </h1>
+          <p className="text-xl text-gray-300 max-w-2xl">
+            Latest news, updates, and insights from the Rari team.
+          </p>
+        </div>
 
-      {posts.length > 0
-        ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {posts.map(post => (
-                <a
-                  key={post.slug}
-                  href={`/blog/${post.slug}`}
-                  className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
-                >
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-                    <time>{formatDate(post.date)}</time>
-                  </div>
-                  <h2 className="text-xl font-semibold text-[#f0f6fc] mb-3 group-hover:text-[#fd7e14] transition-colors">
-                    {post.title}
-                  </h2>
-                  <p className="text-gray-400 leading-relaxed">
-                    {post.description}
-                  </p>
-                </a>
-              ))}
-            </div>
-          )
-        : (
-            <div className="flex flex-col items-center justify-center py-16 px-4">
-              <div className="text-center space-y-4 max-w-md">
-                <div className="w-16 h-16 mx-auto bg-[#161b22] border border-[#30363d] rounded-lg flex items-center justify-center">
-                  <News className="w-8 h-8 text-gray-500" />
-                </div>
-                <h2 className="text-2xl font-semibold text-[#f0f6fc]">No posts yet</h2>
-                <p className="text-gray-400">
-                  Check back soon for updates, tutorials, and insights from the Rari team.
-                </p>
+        {posts.length > 0
+          ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {posts.map(post => (
+                  <a
+                    key={post.slug}
+                    href={`/blog/${post.slug}`}
+                    className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                      <time>{formatDate(post.date)}</time>
+                    </div>
+                    <h2 className="text-xl font-semibold text-[#f0f6fc] mb-3 group-hover:text-[#fd7e14] transition-colors">
+                      {post.title}
+                    </h2>
+                    <p className="text-gray-300 leading-relaxed">
+                      {post.description}
+                    </p>
+                  </a>
+                ))}
               </div>
-            </div>
-          )}
+            )
+          : (
+              <div className="flex flex-col items-center justify-center py-16 px-4">
+                <div className="text-center space-y-4 max-w-md">
+                  <div className="w-16 h-16 mx-auto bg-[#161b22] border border-[#30363d] rounded-lg flex items-center justify-center">
+                    <News className="w-8 h-8 text-gray-500" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-[#f0f6fc]">No posts yet</h2>
+                  <p className="text-gray-300">
+                    Check back soon for updates, tutorials, and insights from the Rari team.
+                  </p>
+                </div>
+              </div>
+            )}
+      </div>
     </div>
   )
 }

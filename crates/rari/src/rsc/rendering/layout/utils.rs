@@ -1,5 +1,6 @@
 use crate::error::RariError;
 use crate::server::routing::app_router::AppRouteMatch;
+use crate::server::routing::types::ParamValue;
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -31,12 +32,16 @@ pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderCon
 }
 
 pub fn create_component_id(file_path: &str) -> String {
-    let normalized = file_path
+    let path = file_path
         .cow_replace(".tsx", "")
         .cow_replace(".ts", "")
-        .cow_replace("[", "_")
-        .cow_replace("]", "_")
+        .cow_replace(".jsx", "")
+        .cow_replace(".js", "")
         .into_owned();
+    let normalized = path
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
     format!("app/{}", normalized)
 }
 
@@ -76,7 +81,7 @@ pub fn create_page_props(
 }
 
 pub fn create_layout_context(
-    params: FxHashMap<String, String>,
+    params: FxHashMap<String, ParamValue>,
     search_params: FxHashMap<String, Vec<String>>,
     headers: FxHashMap<String, String>,
     pathname: String,

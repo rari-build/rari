@@ -357,15 +357,30 @@ class AppRouteGenerator {
 
   private sortRoutes(routes: AppRouteEntry[]): AppRouteEntry[] {
     return routes.sort((a, b) => {
-      if (!a.isDynamic && b.isDynamic)
-        return -1
-      if (a.isDynamic && !b.isDynamic)
+      const getSpecificity = (route: AppRouteEntry): number => {
+        if (!route.isDynamic)
+          return 0
+
+        const hasCatchAll = route.segments.some(s => s.type === 'catch-all')
+        const hasOptionalCatchAll = route.segments.some(s => s.type === 'optional-catch-all')
+
+        if (hasOptionalCatchAll)
+          return 3
+        if (hasCatchAll)
+          return 2
         return 1
+      }
+
+      const aSpec = getSpecificity(a)
+      const bSpec = getSpecificity(b)
+
+      if (aSpec !== bSpec)
+        return aSpec - bSpec
 
       const aDepth = a.path.split('/').length
       const bDepth = b.path.split('/').length
       if (aDepth !== bDepth)
-        return aDepth - bDepth
+        return bDepth - aDepth
 
       return a.path.localeCompare(b.path)
     })

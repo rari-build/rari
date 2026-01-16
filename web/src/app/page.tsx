@@ -1,67 +1,103 @@
+import FeatureCard from '@/components/FeatureCard'
+import HeroSection from '@/components/HeroSection'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
 
 export default async function HomePage() {
   return (
-    <div className="space-y-8 lg:space-y-12 w-full overflow-x-hidden">
-      <div className="text-center py-8 lg:py-16 border-b border-[#30363d]">
-        <div className="flex flex-col lg:flex-row items-center justify-center lg:space-x-4 space-y-4 lg:space-y-0 mb-6 lg:mb-8">
-          <div className="w-16 h-16 lg:w-20 lg:h-20 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl flex items-center justify-center shadow-xl">
-            <span className="text-white font-bold text-2xl lg:text-3xl">R</span>
-          </div>
-          <div className="text-center lg:text-left">
-            <h1 className="text-4xl lg:text-6xl font-bold text-[#f0f6fc] font-mono">
-              rari
-            </h1>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <HeroSection />
 
-        <p className="text-lg lg:text-xl text-gray-400 mb-2 max-w-3xl mx-auto leading-relaxed font-light px-4">
-          Runtime Accelerated Rendering Infrastructure
-        </p>
-        <p className="text-xl lg:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto leading-relaxed px-4 min-h-10 lg:min-h-12">
-          Performance-first React framework powered by Rust
-        </p>
+      <div className="w-full py-16 lg:py-24">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="relative">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6 px-4">
-          <a
-            href="/docs/getting-started"
-            className="w-full sm:w-auto bg-[#fd7e14] hover:bg-[#e8590c] text-white px-6 lg:px-8 py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center"
-          >
-            Get Started
-          </a>
-          <a
-            href="https://github.com/rari-build/rari"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full sm:w-auto border border-[#30363d] text-gray-300 hover:text-white hover:border-[#fd7e14] px-6 lg:px-8 py-3 rounded-lg font-semibold transition-all duration-200 hover:bg-[#161b22] text-center"
-          >
-            View on GitHub
-          </a>
+            <div className="relative bg-[#161b22] border border-[#30363d] rounded-2xl p-8 lg:p-12">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-1 h-8 bg-gradient-to-b from-[#fd7e14] to-[#e8590c] rounded-full"></div>
+                <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc]">
+                  Quick Start
+                </h2>
+              </div>
+
+              <PackageManagerTabs
+                commands={{
+                  pnpm: 'pnpm create rari-app@latest my-rari-app',
+                  npm: 'npm create rari-app@latest my-rari-app',
+                  yarn: 'yarn create rari-app my-rari-app',
+                  bun: 'bun create rari-app my-rari-app',
+                  deno: 'deno run -A npm:create-rari-app@latest my-rari-app',
+                }}
+              />
+
+              <p className="text-lg text-gray-400 mb-6">
+                Create a new Rari project in seconds with our zero-config generator.
+              </p>
+
+              <a
+                href="/docs/getting-started"
+                className="inline-flex items-center text-[#fd7e14] hover:text-[#e8590c] font-semibold text-lg transition-colors duration-200 group"
+              >
+                Read the full guide
+                <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 lg:p-8 min-h-4 lg:min-h-56 w-full overflow-x-hidden">
-        <h2 className="text-xl lg:text-2xl font-bold text-[#f0f6fc] mb-4 lg:mb-6 font-mono">
-          Quick Start
-        </h2>
-        <PackageManagerTabs
-          commands={{
-            pnpm: 'pnpm create rari-app@latest my-rari-app',
-            npm: 'npm create rari-app@latest my-rari-app',
-            yarn: 'yarn create rari-app my-rari-app',
-            bun: 'bun create rari-app my-rari-app',
-            deno: 'deno run -A npm:create-rari-app@latest my-rari-app',
-          }}
-        />
-        <p className="text-gray-400 mb-4 min-h-6">
-          Create a new Rari project in seconds with our zero-config generator.
-        </p>
-        <a
-          href="/docs/getting-started"
-          className="inline-flex items-center text-[#fd7e14] hover:text-[#e8590c] font-medium transition-colors duration-200"
-        >
-          Read the full guide →
-        </a>
+      <div className="w-full py-16 lg:py-24">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
+              Built for
+              {' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#fd7e14] to-[#e8590c]">Speed</span>
+            </h2>
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              Leverage the power of Rust for unprecedented performance in your React applications
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                title: 'Rust-Powered Performance',
+                description: 'Native speed with Rust compilation for blazing-fast builds and runtime',
+                icon: '🚀',
+              },
+              {
+                title: 'Server Components',
+                description: 'Built-in support for React Server Components out of the box',
+                icon: '⚛️',
+              },
+              {
+                title: 'Zero Configuration',
+                description: 'Start building immediately with sensible defaults and conventions',
+                icon: '⚡',
+              },
+              {
+                title: 'Optimized Bundling',
+                description: 'Smart code splitting and tree shaking for minimal bundle sizes',
+                icon: '📦',
+              },
+              {
+                title: 'Type Safety',
+                description: 'Full TypeScript support with comprehensive type definitions',
+                icon: '🔒',
+              },
+              {
+                title: 'Developer Experience',
+                description: 'Fast refresh, detailed errors, and exceptional tooling',
+                icon: '✨',
+              },
+            ].map((feature, i) => (
+              <FeatureCard key={i} {...feature} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

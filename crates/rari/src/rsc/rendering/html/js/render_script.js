@@ -1,4 +1,4 @@
-function renderElement(element, rendered, rowId) {
+function renderElement(element, rendered, rowId, moduleMap) {
   if (typeof element === 'string')
     return escapeHtml(element)
 
@@ -11,12 +11,12 @@ function renderElement(element, rendered, rowId) {
   if (Array.isArray(element) && element.length >= 4 && element[0] === '$') {
     const tag = element[1]
     const props = element[3] || {}
-    return renderTag(tag, props, rendered, rowId)
+    return renderTag(tag, props, rendered, rowId, moduleMap)
   }
 
   if (element.Component) {
     const { tag, props } = element.Component
-    return renderTag(tag, props || {}, rendered, rowId)
+    return renderTag(tag, props || {}, rendered, rowId, moduleMap)
   }
 
   if (element.Text !== undefined)
@@ -35,9 +35,9 @@ function renderElement(element, rendered, rowId) {
   return ''
 }
 
-function renderTag(tag, props, rendered, rowId) {
+function renderTag(tag, props, rendered, rowId, moduleMap) {
   if (tag === 'react.suspense')
-    return renderSuspense(props, rendered)
+    return renderSuspense(props, rendered, moduleMap)
 
   if (typeof tag === 'string' && tag.startsWith('$')) {
     const match = tag.match(/\$[@L]?(\d+)/)
@@ -48,11 +48,11 @@ function renderTag(tag, props, rendered, rowId) {
       if (referencedContent !== undefined && referencedContent !== '')
         return referencedContent
 
-      return renderClientComponentPlaceholder(tag, props, rendered, rowId)
+      return renderClientComponentPlaceholder(tag, props, rendered, rowId, moduleMap)
     }
 
     if (tag.startsWith('$@'))
-      return renderClientComponentPlaceholder(tag, props, rendered, rowId)
+      return renderClientComponentPlaceholder(tag, props, rendered, rowId, moduleMap)
 
     return ''
   }
@@ -65,7 +65,7 @@ function renderTag(tag, props, rendered, rowId) {
     children = renderChildrenRaw(props.children, rendered)
   }
   else {
-    children = renderChildren(props.children, rendered)
+    children = renderChildren(props.children, rendered, moduleMap)
   }
 
   const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']
@@ -75,7 +75,7 @@ function renderTag(tag, props, rendered, rowId) {
   return `<${tag}${attributes}>${children}</${tag}>`
 }
 
-function renderSuspense(props, rendered) {
+function renderSuspense(props, rendered, moduleMap) {
   const children = props.children
 
   if (typeof children === 'string' && children.startsWith('$')) {
@@ -90,7 +90,7 @@ function renderSuspense(props, rendered) {
   }
 
   if (children !== undefined && children !== null && typeof children !== 'string') {
-    const childrenHtml = renderElement(children, rendered, undefined)
+    const childrenHtml = renderElement(children, rendered, undefined, moduleMap)
     if (childrenHtml)
       return childrenHtml
   }
@@ -98,10 +98,11 @@ function renderSuspense(props, rendered) {
   return ''
 }
 
-function renderClientComponentPlaceholder(moduleRef, props, rendered) {
+function renderClientComponentPlaceholder(moduleRef, props, rendered, rowId, moduleMap) {
   const attributes = []
 
-  attributes.push(`data-client-component="${escapeHtml(moduleRef)}"`)
+  const componentPath = moduleMap && moduleMap.get(moduleRef)
+  attributes.push(`data-client-component="${escapeHtml(componentPath || moduleRef)}"`)
 
   if (props && Object.keys(props).length > 0) {
     const propsForSerialization = {}
@@ -116,7 +117,9 @@ function renderClientComponentPlaceholder(moduleRef, props, rendered) {
     }
   }
 
-  const children = props && props.children ? renderChildren(props.children, rendered) : ''
+  attributes.push('style="display: contents;"')
+
+  const children = props && props.children ? renderChildren(props.children, rendered, moduleMap) : ''
 
   const attrString = attributes.length > 0 ? ` ${attributes.join(' ')}` : ''
   return `<div${attrString}>${children}</div>`
@@ -197,7 +200,7 @@ function renderChildrenRaw(children) {
   return ''
 }
 
-function renderChildren(children, rendered) {
+function renderChildren(children, rendered, moduleMap) {
   if (children === null || children === undefined)
     return ''
 
@@ -211,7 +214,7 @@ function renderChildren(children, rendered) {
 
   if (Array.isArray(children)) {
     if (children.length >= 4 && children[0] === '$')
-      return renderElement(children, rendered, undefined)
+      return renderElement(children, rendered, undefined, moduleMap)
 
     const renderedChildren = []
     let hasMultipleTextNodes = false
@@ -228,19 +231,19 @@ function renderChildren(children, rendered) {
       const isTextNode = typeof child === 'string' || typeof child === 'number'
 
       if (isTextNode && hasMultipleTextNodes) {
-        const renderedChild = renderElement(child, rendered, undefined)
+        const renderedChild = renderElement(child, rendered, undefined, moduleMap)
         if (renderedChild)
           renderedChildren.push(`<!-- -->${renderedChild}<!-- -->`)
       }
       else {
-        renderedChildren.push(renderElement(child, rendered, undefined))
+        renderedChildren.push(renderElement(child, rendered, undefined, moduleMap))
       }
     }
 
     return renderedChildren.join('')
   }
 
-  return renderElement(children, rendered, undefined)
+  return renderElement(children, rendered, undefined, moduleMap)
 }
 
 function escapeHtml(text) {
@@ -260,13 +263,36 @@ function escapeHtml(text) {
 
 globalThis.renderRscToHtml = function (rscRows) {
   const rendered = new Map()
+  const moduleMap = new Map()
 
   let lastRowId = -1
   for (const row of rscRows)
     lastRowId = row.id
 
   for (const row of rscRows) {
-    const html = renderElement(row.data, rendered, row.id)
+    if (row.data && row.data.Text) {
+      const text = row.data.Text
+      if (text.startsWith('I[')) {
+        try {
+          const importData = JSON.parse(text.substring(1))
+          if (Array.isArray(importData) && importData.length >= 3) {
+            const [filePath, , exportName] = importData
+            const componentPath = `${filePath}#${exportName}`
+            const moduleRef = `$L${row.id}`
+            moduleMap.set(moduleRef, componentPath)
+            rendered.set(row.id, '')
+          }
+        }
+        catch {}
+      }
+    }
+  }
+
+  for (const row of rscRows) {
+    if (rendered.has(row.id))
+      continue
+
+    const html = renderElement(row.data, rendered, row.id, moduleMap)
     rendered.set(row.id, html)
   }
 

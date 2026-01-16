@@ -38,14 +38,6 @@ export interface MetadataResult {
     index?: boolean
     follow?: boolean
     nocache?: boolean
-    googleBot?: {
-      'index'?: boolean
-      'follow'?: boolean
-      'noimageindex'?: boolean
-      'max-video-preview'?: number
-      'max-image-preview'?: 'none' | 'standard' | 'large'
-      'max-snippet'?: number
-    }
   }
   icons?: {
     icon?: Array<{
@@ -77,24 +69,8 @@ export interface MetadataResult {
     statusBarStyle?: 'default' | 'black' | 'black-translucent'
     capable?: boolean
   }
-  viewport?: {
-    width?: string | number
-    height?: string | number
-    initialScale?: number
-    maximumScale?: number
-    minimumScale?: number
-    userScalable?: boolean
-  }
-  verification?: {
-    google?: string
-    yandex?: string
-    yahoo?: string
-    other?: Record<string, string>
-  }
-  alternates?: {
-    canonical?: string
-    languages?: Record<string, string>
-  }
+  viewport?: string
+  canonical?: string
 }
 
 export type StaticParamsResult = Array<Record<string, string | string[]>>
@@ -226,12 +202,14 @@ export function mergeMetadata(
     merged.icons = { ...parentMetadata.icons, ...childMetadata.icons }
   if (childMetadata.manifest !== undefined)
     merged.manifest = childMetadata.manifest
+  if (childMetadata.themeColor !== undefined)
+    merged.themeColor = childMetadata.themeColor
+  if (childMetadata.appleWebApp !== undefined)
+    merged.appleWebApp = { ...parentMetadata.appleWebApp, ...childMetadata.appleWebApp }
   if (childMetadata.viewport !== undefined)
-    merged.viewport = { ...parentMetadata.viewport, ...childMetadata.viewport }
-  if (childMetadata.verification !== undefined)
-    merged.verification = { ...parentMetadata.verification, ...childMetadata.verification }
-  if (childMetadata.alternates !== undefined)
-    merged.alternates = { ...parentMetadata.alternates, ...childMetadata.alternates }
+    merged.viewport = childMetadata.viewport
+  if (childMetadata.canonical !== undefined)
+    merged.canonical = childMetadata.canonical
 
   return merged
 }

@@ -1212,8 +1212,32 @@ export function fork(modulePath, args = [], options = {}) {
 }
 
 export function execSync(command, options = {}) {
-  console.warn('child_process.execSync is not supported in this environment');
-  return '';
+  const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  const cmd = parts[0];
+  const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''));
+
+  try {
+    const denoCmd = new Deno.Command(cmd, {
+      args,
+      cwd: options.cwd,
+      stdout: 'piped',
+      stderr: 'piped',
+    });
+
+    const { stdout, stderr, success } = denoCmd.outputSync();
+
+    if (!success && options.stdio !== 'ignore') {
+      const error = new Error(`Command failed: ${command}`);
+      error.stderr = new TextDecoder().decode(stderr);
+      throw error;
+    }
+
+    const output = new TextDecoder().decode(stdout);
+    return options.encoding === 'utf-8' || options.encoding === 'utf8' ? output : stdout;
+  } catch (error) {
+    console.error('execSync error:', error);
+    throw error;
+  }
 }
 
 export function execFileSync(file, args = [], options = {}) {

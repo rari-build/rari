@@ -1,14 +1,14 @@
 import type { PageProps } from 'rari'
 import { readFile } from 'node:fs/promises'
 import { ImageResponse } from 'rari/og'
-import { getDocsFilePath, isValidSlug } from '@/lib/content-utils'
+import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
 
 export default async function Image({ params }: PageProps) {
   const slug = params?.slug
   let title = 'Rari Docs'
   let description = 'Complete documentation for Rari framework.'
 
-  if (isValidSlug(slug)) {
+  if (isValidSlugArray(slug)) {
     try {
       const content = await readFile(getDocsFilePath(slug), 'utf-8')
       const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
