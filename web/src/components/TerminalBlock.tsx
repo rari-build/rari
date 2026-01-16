@@ -4,7 +4,7 @@ import { highlightCommand } from '@/lib/highlight-command'
 import { useClipboard } from '@/lib/use-clipboard'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
-import Terminal from './icons/Terminal'
+import Terminal2 from './icons/Terminal2'
 
 interface TerminalBlockProps {
   command: string
@@ -18,7 +18,7 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
     <div className="not-prose my-6 relative group overflow-hidden rounded-md border border-[#30363d] bg-[#0d1117] max-w-full">
       {showHeader && (
         <div className="flex items-center gap-1.5 bg-[#161b22] px-4 py-2.5 border-b border-[#30363d]">
-          <Terminal className="w-4 h-4 text-gray-300 shrink-0" />
+          <Terminal2 className="w-4 h-4 text-gray-300 shrink-0" />
           <span className="text-sm text-gray-300 font-medium">Terminal</span>
         </div>
       )}

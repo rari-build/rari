@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Terminal from './icons/Terminal'
 
 export default function HeroSection() {
   const [orbDelays] = useState(() => [
@@ -80,7 +81,10 @@ export default function HeroSection() {
               href="/docs/getting-started"
               className="group relative w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-2xl hover:shadow-[#fd7e14]/50 transform hover:-translate-y-1"
             >
-              <span className="relative z-10">Get Started</span>
+              <span className="relative z-10 flex items-center justify-center">
+                <Terminal className="w-6 h-6" />
+                Get Started
+              </span>
               <div className="absolute inset-0 rounded-lg bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
             </a>
 
@@ -96,12 +100,20 @@ export default function HeroSection() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {['⚡ Lightning Fast', '🦀 Rust Powered', '⚛️ React Server Components', '🎯 Zero Config'].map((feature, i) => (
+          {[
+            { label: 'Blazing-fast', gradient: 'from-yellow-500/20 to-orange-500/20', border: 'border-yellow-500/30', glow: 'yellow-500/20' },
+            { label: 'Rust Powered', gradient: 'from-[#fd7e14]/20 to-[#e8590c]/20', border: 'border-[#fd7e14]/30', glow: '[#fd7e14]/20' },
+            { label: 'React Server Components', gradient: 'from-[#61dafb]/20 to-[#61dafb]/20', border: 'border-[#61dafb]/30', glow: '[#61dafb]/20' },
+            { label: 'Zero Config', gradient: 'from-purple-500/20 to-pink-500/20', border: 'border-purple-500/30', glow: 'purple-500/20' },
+          ].map((feature, i) => (
             <div
               key={i}
-              className="px-4 py-2 bg-[#161b22] border border-[#30363d] rounded-full text-sm text-gray-300 hover:border-[#fd7e14]/50 transition-colors"
+              className="group relative"
             >
-              {feature}
+              <div className={`absolute -inset-0.5 bg-gradient-to-r ${feature.gradient} rounded-full blur opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
+              <div className={`relative px-5 py-2.5 bg-gradient-to-br from-[#161b22] to-[#0d1117] border ${feature.border} rounded-full text-sm font-medium text-gray-200 hover:text-white transition-all duration-300 backdrop-blur-sm`}>
+                <span className="relative z-10">{feature.label}</span>
+              </div>
             </div>
           ))}
         </div>

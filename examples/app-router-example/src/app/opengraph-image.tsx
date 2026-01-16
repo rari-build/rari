@@ -66,7 +66,7 @@ export default function Image() {
             opacity: 0.85,
           }}
         >
-          Server-First • Type-Safe • Lightning Fast ⚡
+          Server-First • Type-Safe • Blazing-fast ⚡
         </div>
       </div>
     </div>,

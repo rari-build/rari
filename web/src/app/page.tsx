@@ -91,7 +91,7 @@ export default async function HomePage() {
               {
                 title: 'Developer Experience',
                 description: 'Fast refresh, detailed errors, and exceptional tooling',
-                icon: 'codeblock',
+                icon: 'code',
               },
             ].map((feature, i) => (
               <FeatureCard key={i} {...feature} />
