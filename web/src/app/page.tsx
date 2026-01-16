@@ -12,7 +12,7 @@ export default async function HomePage() {
           <div className="relative">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
 
-            <div className="relative bg-[#161b22] border border-[#30363d] rounded-2xl p-8 lg:p-12">
+            <div className="relative bg-gradient-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-1 h-8 bg-gradient-to-b from-[#fd7e14] to-[#e8590c] rounded-full"></div>
                 <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc]">
@@ -66,32 +66,32 @@ export default async function HomePage() {
               {
                 title: 'Rust-Powered Performance',
                 description: 'Native speed with Rust compilation for blazing-fast builds and runtime',
-                icon: '🚀',
+                icon: 'rust',
               },
               {
                 title: 'Server Components',
                 description: 'Built-in support for React Server Components out of the box',
-                icon: '⚛️',
+                icon: 'react',
               },
               {
                 title: 'Zero Configuration',
                 description: 'Start building immediately with sensible defaults and conventions',
-                icon: '⚡',
+                icon: 'vite',
               },
               {
                 title: 'Optimized Bundling',
                 description: 'Smart code splitting and tree shaking for minimal bundle sizes',
-                icon: '📦',
+                icon: 'rolldown',
               },
               {
                 title: 'Type Safety',
                 description: 'Full TypeScript support with comprehensive type definitions',
-                icon: '🔒',
+                icon: 'typescript',
               },
               {
                 title: 'Developer Experience',
                 description: 'Fast refresh, detailed errors, and exceptional tooling',
-                icon: '✨',
+                icon: 'codeblock',
               },
             ].map((feature, i) => (
               <FeatureCard key={i} {...feature} />
