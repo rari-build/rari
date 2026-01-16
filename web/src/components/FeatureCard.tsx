@@ -9,7 +9,7 @@ import TypeScript from '@/components/icons/TypeScript'
 import Vite from '@/components/icons/Vite'
 
 const iconMap: Record<string, ReactNode> = {
-  code: <Code className="w-10 h-10" />,
+  code: <Code className="w-10 h-10" gradientColors={{ start: '#ff9a3c', middle: '#fd7e14', end: '#d84a05' }} />,
   react: <ReactIcon className="w-10 h-10" />,
   rolldown: <Rolldown className="w-10 h-10" />,
   rust: <Rust className="w-10 h-10 [&_path]:fill-[#D34516]" />,

@@ -125,7 +125,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         <span className="sr-only">Open navigation menu</span>
       </label>
 
-      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#161b22] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">
+      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-gradient-to-br from-[#161b22] to-[#0d1117] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">
         <label
           htmlFor="mobile-menu-toggle"
           className="absolute top-4 right-4 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer z-10"
@@ -136,10 +136,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         </label>
 
         <div className="p-6">
-          <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]">
+          <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]/50 relative">
+            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <a
               href="/"
-              className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg hover:opacity-80 transition-opacity"
+              className="w-8 h-8 bg-gradient-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg hover:opacity-80 transition-opacity"
             >
               <span className="text-gray-900 font-bold text-lg">R</span>
             </a>
@@ -180,13 +181,16 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                       : (
                           <a
                             href={item.href}
-                            className={`flex-1 block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${isActive
-                              ? 'bg-[#21262d] text-white border-l-2 border-[#fd7e14]'
+                            className={`flex-1 block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
+                              ? 'bg-gradient-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
                               : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                             }`}
                             aria-current={isActive ? 'page' : undefined}
                           >
-                            {item.label}
+                            {!isActive && (
+                              <span className="absolute inset-0 bg-gradient-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                            )}
+                            <span className="relative z-10">{item.label}</span>
                           </a>
                         )}
                     {isDocs && (
@@ -223,12 +227,15 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                   ? (
                                       <a
                                         href={section.href}
-                                        className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${pathname === section.href
-                                          ? 'bg-[#21262d] text-white'
+                                        className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
+                                          ? 'bg-gradient-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
                                           : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
                                         }`}
                                       >
-                                        {section.label}
+                                        {pathname !== section.href && (
+                                          <span className="absolute inset-0 bg-gradient-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                                        )}
+                                        <span className="relative z-10">{section.label}</span>
                                       </a>
                                     )
                                   : (
@@ -270,13 +277,18 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                             ? (
                                                 <a
                                                   href={subItem.href}
-                                                  className={`flex-1 flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${pathname === subItem.href
-                                                    ? 'bg-[#21262d] text-white'
+                                                  className={`flex-1 flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
+                                                    ? 'bg-gradient-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
                                                     : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                                                   }`}
                                                 >
-                                                  {!hasSubItems && <span className="mr-2 text-gray-500">•</span>}
-                                                  {subItem.label}
+                                                  {pathname !== subItem.href && (
+                                                    <span className="absolute inset-0 bg-gradient-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                                                  )}
+                                                  <span className="relative z-10 flex items-center">
+                                                    {!hasSubItems && <span className="mr-2 text-gray-500">•</span>}
+                                                    {subItem.label}
+                                                  </span>
                                                 </a>
                                               )
                                             : (
@@ -309,13 +321,18 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                               <li key={subIdx}>
                                                 <a
                                                   href={nestedItem.href}
-                                                  className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${pathname === nestedItem.href
-                                                    ? 'bg-[#21262d] text-white'
+                                                  className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href
+                                                    ? 'bg-gradient-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
                                                     : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                                                   }`}
                                                 >
-                                                  <span className="mr-2 text-gray-500">•</span>
-                                                  {nestedItem.label}
+                                                  {pathname !== nestedItem.href && (
+                                                    <span className="absolute inset-0 bg-gradient-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                                                  )}
+                                                  <span className="relative z-10 flex items-center">
+                                                    <span className="mr-2 text-gray-500">•</span>
+                                                    {nestedItem.label}
+                                                  </span>
                                                 </a>
                                               </li>
                                             ))}
@@ -337,7 +354,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             })}
           </ul>
 
-          <div className="mt-8 pt-6 border-t border-[#30363d]">
+          <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">
               Resources
             </p>
@@ -347,10 +365,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   href="https://github.com/sponsors/skiniks"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
                 >
-                  <Heart className="w-4 h-4 mr-2 text-pink-400" />
-                  Become a Sponsor
+                  <span className="absolute inset-0 bg-gradient-to-r from-pink-500/10 to-pink-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />
+                  <span className="relative z-10">Become a Sponsor</span>
                 </a>
               </li>
               <li>
@@ -358,10 +377,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   href="https://github.com/rari-build/rari"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
                 >
-                  <Github className="w-4 h-4 mr-2" />
-                  GitHub
+                  <span className="absolute inset-0 bg-gradient-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <Github className="w-4 h-4 mr-2 relative z-10" />
+                  <span className="relative z-10">GitHub</span>
                 </a>
               </li>
               <li>
@@ -369,10 +389,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   href="https://discord.gg/GSh2Ak3b8Q"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
                 >
-                  <Discord className="w-4 h-4 mr-2" />
-                  Discord
+                  <span className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <Discord className="w-4 h-4 mr-2 relative z-10" />
+                  <span className="relative z-10">Discord</span>
                 </a>
               </li>
               <li>
@@ -380,10 +401,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   href="https://bsky.app/profile/rari.build"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-colors duration-200"
+                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
                 >
-                  <Bluesky className="w-4 h-4 mr-2" />
-                  Bluesky
+                  <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <Bluesky className="w-4 h-4 mr-2 relative z-10" />
+                  <span className="relative z-10">Bluesky</span>
                 </a>
               </li>
             </ul>
