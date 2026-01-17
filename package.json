@@ -9,9 +9,9 @@
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/",
     "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ --fix",
-    "changelog": "pnpm exec git-cliff --output CHANGELOG.md",
-    "changelog:preview": "pnpm exec git-cliff --unreleased",
-    "changelog:latest": "pnpm exec git-cliff --latest",
+    "changelog": "git-cliff --output CHANGELOG.md",
+    "changelog:preview": "git-cliff --unreleased",
+    "changelog:latest": "git-cliff --latest",
     "release": "cargo run --release --manifest-path tools/release/Cargo.toml --bin release",
     "release:dry": "cargo run --release --manifest-path tools/release/Cargo.toml --bin release -- --dry-run",
     "prepare-binaries": "cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries",
@@ -25,7 +25,6 @@
     "eslint-plugin-oxlint": "^1.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
-    "git-cliff": "^2.11.0",
     "oxlint": "^1.39.0",
     "typescript": "^5.9.3"
   }

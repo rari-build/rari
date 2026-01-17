@@ -22,8 +22,8 @@ pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result
 }
 
 pub async fn generate_changelog(tag: &str, project_root: &Path) -> Result<()> {
-    Command::new("pnpm")
-        .args(["exec", "git-cliff", "--tag", tag, "--output", "CHANGELOG.md"])
+    Command::new("git-cliff")
+        .args(["--tag", tag, "--output", "CHANGELOG.md"])
         .current_dir(project_root)
         .output()
         .await?;

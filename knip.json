@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "ignoreBinaries": ["git-cliff"],
   "workspaces": {
     ".": {
       "ignore": [
