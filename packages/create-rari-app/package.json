@@ -42,8 +42,8 @@
     "dev": "tsdown --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsgo",
-    "lint": "oxlint && eslint",
-    "lint:fix": "oxlint --fix && eslint --fix"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

@@ -80,8 +80,8 @@
     "build": "pnpm clean && pnpm typecheck && tsdown",
     "typecheck": "tsgo",
     "clean": "rm -rf dist",
-    "lint": "oxlint && eslint",
-    "lint:fix": "oxlint --fix && eslint --fix"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
   },
   "peerDependencies": {
     "react": "^19.0.0",
