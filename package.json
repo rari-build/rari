@@ -19,8 +19,8 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.0.1",
-    "@eslint-react/eslint-plugin": "^2.6.4",
-    "@types/node": "^25.0.8",
+    "@eslint-react/eslint-plugin": "^2.7.1",
+    "@types/node": "^25.0.9",
     "eslint": "^9.39.2",
     "eslint-plugin-oxlint": "^1.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
