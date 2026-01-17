@@ -1,5 +1,9 @@
 [workspace]
-members = [ "crates/rari" ]
+members = [
+  "crates/rari",
+  "tools/prepare-binaries",
+  "tools/release",
+]
 resolver = "2"
 
 [workspace.package]

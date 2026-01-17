@@ -2,11 +2,8 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/**/*.js"
-      ],
-      "project": [
-        "scripts/**/*.js"
+      "ignore": [
+        "crates/**/*"
       ]
     },
     "packages/rari": {

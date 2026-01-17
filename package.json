@@ -12,25 +12,21 @@
     "changelog": "pnpm exec git-cliff --output CHANGELOG.md",
     "changelog:preview": "pnpm exec git-cliff --unreleased",
     "changelog:latest": "pnpm exec git-cliff --latest",
-    "release": "node scripts/release.js",
-    "release:dry": "node scripts/release.js --skip-prompts",
-    "prepare-binaries": "node scripts/prepare-binaries.js",
+    "release": "cargo run --release --manifest-path tools/release/Cargo.toml --bin release",
+    "release:dry": "cargo run --release --manifest-path tools/release/Cargo.toml --bin release -- --dry-run",
+    "prepare-binaries": "cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries",
     "postinstall": "pnpm build"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.0.1",
-    "@clack/prompts": "^0.11.0",
     "@eslint-react/eslint-plugin": "^2.6.4",
     "@types/node": "^25.0.8",
     "eslint": "^9.39.2",
     "eslint-plugin-oxlint": "^1.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
-    "execa": "^9.6.1",
     "git-cliff": "^2.11.0",
     "oxlint": "^1.39.0",
-    "picocolors": "^1.1.1",
-    "semver": "^7.7.3",
     "typescript": "^5.9.3"
   }
 }
