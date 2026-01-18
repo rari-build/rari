@@ -29,7 +29,7 @@ export default function HeroSection() {
           </p>
 
           <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-            A React framework with a
+            The React framework with a
             {' '}
             <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] font-semibold">
               Rust-powered engine
