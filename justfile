@@ -14,6 +14,7 @@ setup:
     cargo install cargo-binstall
     cargo binstall cargo-insta -y
     cargo binstall cargo-nextest -y
+    cargo binstall cargo-machete -y
     # Node.js setup
     corepack enable
     pnpm install
@@ -94,13 +95,17 @@ test-filter filter:
 lint: lint-rust lint-node
 
 # Lint Rust code
-lint-rust: clippy
+lint-rust: clippy machete
     cargo fmt --all --check
     cargo check --workspace --all-features --all-targets --locked
 
 # Run clippy
 clippy:
     cargo clippy --workspace --all-targets -- --deny warnings
+
+# Check for unused Rust dependencies
+machete:
+    cargo machete
 
 # Lint Node.js code
 lint-node: _ensure-node-deps
