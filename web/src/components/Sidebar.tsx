@@ -18,6 +18,7 @@ interface SidebarProps {
 const navigation = [
   { href: '/docs', label: 'Docs', id: 'docs' },
   { href: '/blog', label: 'Blog', id: 'blog' },
+  { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
 
 function Chevron({ isOpen }: { isOpen: boolean }) {
@@ -161,6 +162,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
           <ul className="space-y-1">
             {navigation.map((item) => {
               const isDocs = item.id === 'docs'
+              const isSponsor = item.id === 'sponsor'
               const isActive = isDocs
                 ? pathname === '/docs'
                 : item.href === '/'
@@ -181,15 +183,17 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                       : (
                           <a
                             href={item.href}
-                            className={`flex-1 block px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
+                            {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                            className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
                               ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
                               : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
                             }`}
                             aria-current={isActive ? 'page' : undefined}
                           >
                             {!isActive && (
-                              <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                              <span className={`absolute inset-0 ${isSponsor ? 'bg-linear-to-r from-pink-500/10 to-pink-600/10' : 'bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10'} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></span>
                             )}
+                            {isSponsor && <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />}
                             <span className="relative z-10">{item.label}</span>
                           </a>
                         )}
@@ -357,18 +361,6 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
           <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
             <div className="absolute inset-x-0 top-0 h-px bg-linearto-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <ul className="space-y-3">
-              <li>
-                <a
-                  href="https://github.com/sponsors/skiniks"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
-                >
-                  <span className="absolute inset-0 bg-linear-to-r from-pink-500/10 to-pink-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                  <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />
-                  <span className="relative z-10">Become a Sponsor</span>
-                </a>
-              </li>
               <li className="flex items-center justify-center gap-3">
                 <a
                   href="https://github.com/rari-build/rari"
