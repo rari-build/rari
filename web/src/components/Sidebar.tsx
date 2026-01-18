@@ -359,7 +359,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
           </ul>
 
           <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
-            <div className="absolute inset-x-0 top-0 h-px bg-linearto-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <ul className="space-y-3">
               <li className="flex items-center justify-center gap-3">
                 <a
