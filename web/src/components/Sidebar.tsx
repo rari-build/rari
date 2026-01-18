@@ -356,10 +356,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
           <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
             <div className="absolute inset-x-0 top-0 h-px bg-linearto-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
-            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">
-              Resources
-            </p>
-            <ul className="space-y-1">
+            <ul className="space-y-3">
               <li>
                 <a
                   href="https://github.com/sponsors/skiniks"
@@ -372,40 +369,36 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   <span className="relative z-10">Become a Sponsor</span>
                 </a>
               </li>
-              <li>
+              <li className="flex items-center justify-center gap-3">
                 <a
                   href="https://github.com/rari-build/rari"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  aria-label="GitHub"
                 >
-                  <span className="absolute inset-0 bg-linearto-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                  <Github className="w-4 h-4 mr-2 relative z-10" />
-                  <span className="relative z-10">GitHub</span>
+                  <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  <Github className="w-5 h-5 relative z-10" />
                 </a>
-              </li>
-              <li>
                 <a
                   href="https://discord.gg/GSh2Ak3b8Q"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  aria-label="Discord"
                 >
                   <span className="absolute inset-0 bg-linear-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                  <Discord className="w-4 h-4 mr-2 relative z-10" />
-                  <span className="relative z-10">Discord</span>
+                  <Discord className="w-5 h-5 relative z-10" />
                 </a>
-              </li>
-              <li>
                 <a
                   href="https://bsky.app/profile/rari.build"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  className="p-2 text-gray-300 hover:text-gray-100 hover:bg-[#21262d] rounded-md transition-all duration-200 relative overflow-hidden group"
+                  aria-label="Bluesky"
                 >
                   <span className="absolute inset-0 bg-linear-to-r from-blue-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                  <Bluesky className="w-4 h-4 mr-2 relative z-10" />
-                  <span className="relative z-10">Bluesky</span>
+                  <Bluesky className="w-5 h-5 relative z-10" />
                 </a>
               </li>
             </ul>
