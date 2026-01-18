@@ -12,8 +12,5 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/rari-build/rari"
 
-[workspace.dependencies]
-num-bigint-dig = "0.8.6"
-
 [profile.dev.package.num-bigint-dig]
 opt-level = 3
