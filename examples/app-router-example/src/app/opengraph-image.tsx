@@ -52,7 +52,6 @@ export default function Image() {
           style={{
             fontSize: 56,
             color: 'white',
-            opacity: 0.95,
             marginBottom: '30px',
           }}
         >
@@ -63,10 +62,9 @@ export default function Image() {
           style={{
             fontSize: 40,
             color: 'white',
-            opacity: 0.85,
           }}
         >
-          Server-First • Type-Safe • Lightning Fast ⚡
+          Server-First • Type-Safe • Blazing-fast ⚡
         </div>
       </div>
     </div>,

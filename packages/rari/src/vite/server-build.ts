@@ -82,6 +82,7 @@ export interface ServerBuildOptions {
   manifestPath?: string
   minify?: boolean
   alias?: Record<string, string>
+  define?: Record<string, string>
   csp?: {
     scriptSrc?: string[]
     styleSrc?: string[]
@@ -108,10 +109,11 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'define'>> & {
   csp?: ServerBuildOptions['csp']
   rateLimit?: ServerBuildOptions['rateLimit']
   spamBlocker?: ServerBuildOptions['spamBlocker']
+  define?: ServerBuildOptions['define']
 }
 
 export class ServerComponentBuilder {
@@ -156,6 +158,7 @@ export class ServerComponentBuilder {
       manifestPath: options.manifestPath || 'server/manifest.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
+      define: options.define,
       csp: options.csp,
       rateLimit: options.rateLimit,
       spamBlocker: options.spamBlocker,
@@ -443,6 +446,7 @@ const ${importName} = (props) => {
         define: {
           'global': 'globalThis',
           'process.env.NODE_ENV': '"production"',
+          ...this.options.define,
         },
         loader: {
           '.ts': 'ts',
@@ -763,6 +767,7 @@ const ${importName} = (props) => {
         define: {
           'global': 'globalThis',
           'process.env.NODE_ENV': '"production"',
+          ...this.options.define,
         },
         loader: {
           '.ts': 'ts',

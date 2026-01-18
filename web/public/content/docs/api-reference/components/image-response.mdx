@@ -1,0 +1,661 @@
+export const title = 'ImageResponse'
+export const description = 'Generate dynamic Open Graph images using JSX and CSS with the ImageResponse API for social media sharing.'
+
+<PageHeader title="ImageResponse" lastUpdated="January 18, 2026" />
+
+The `ImageResponse` class enables you to generate dynamic Open Graph images using JSX and CSS. Perfect for creating social media preview images that adapt to your content, these images are automatically optimized, cached, and served at `/_rari/og/[route]`.
+
+## Import
+
+<CodeBlock language="tsx">{`import { ImageResponse } from 'rari/og'`}</CodeBlock>
+
+## Basic Usage
+
+Create an `opengraph-image.tsx` file in any route directory to generate an Open Graph image for that route:
+
+<CodeBlock filename="src/app/opengraph-image.tsx" language="tsx">{`import { ImageResponse } from 'rari/og'
+
+export default function Image() {
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(to right, #667eea, #764ba2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        fontSize: 64,
+        fontWeight: 'bold',
+      }}
+    >
+      Welcome to My Site
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+This generates an image accessible at `/_rari/og/` and automatically injects it into your page's Open Graph metadata.
+
+## File Convention
+
+Place `opengraph-image.tsx` files in your app directory structure:
+
+<CodeBlock language="bash">{`src/app/
+├── opengraph-image.tsx          # Image for homepage (/)
+├── about/
+│   └── opengraph-image.tsx      # Image for /about
+└── blog/
+    ├── opengraph-image.tsx      # Image for /blog
+    └── [slug]/
+        └── opengraph-image.tsx  # Dynamic image for /blog/[slug]
+`}</CodeBlock>
+
+## Constructor
+
+<CodeBlock language="typescript">{`new ImageResponse(
+  element: ReactElement,
+  options?: ImageResponseOptions
+)
+`}</CodeBlock>
+
+### Parameters
+
+#### element
+
+- **Type:** `ReactElement`
+- **Required:** Yes
+
+The JSX element to render as an image. Supports a subset of HTML and CSS.
+
+#### options
+
+- **Type:** `ImageResponseOptions`
+- **Required:** No
+
+Configuration options for the image generation.
+
+<CodeBlock language="typescript">{`interface ImageResponseOptions {
+  width?: number      // Default: 1200
+  height?: number     // Default: 630
+}
+`}</CodeBlock>
+
+Note: Custom fonts are not currently supported. The system uses built-in Noto Sans and Twemoji fonts.
+
+## Options
+
+### width
+
+- **Type:** `number`
+- **Default:** `1200`
+- **Maximum:** `2400`
+
+The width of the generated image in pixels. The recommended Open Graph image size is 1200×630.
+
+<CodeBlock language="tsx">{`export default function Image() {
+  return new ImageResponse(
+    <div style={{ /* ... */ }}>Content</div>,
+    { width: 1200 }
+  )
+}
+`}</CodeBlock>
+
+### height
+
+- **Type:** `number`
+- **Default:** `630`
+- **Maximum:** `1260`
+
+The height of the generated image in pixels.
+
+<CodeBlock language="tsx">{`export default function Image() {
+  return new ImageResponse(
+    <div style={{ /* ... */ }}>Content</div>,
+    { width: 1200, height: 630 }
+  )
+}
+`}</CodeBlock>
+
+## Export Configuration
+
+### size
+
+Export a `size` object to configure the image dimensions. This is an alternative to passing options to the constructor.
+
+<CodeBlock filename="src/app/opengraph-image.tsx" language="tsx">{`import { ImageResponse } from 'rari/og'
+
+export const size = {
+  width: 1200,
+  height: 630,
+}
+
+export default function Image() {
+  return new ImageResponse(
+    <div style={{ /* ... */ }}>Content</div>
+  )
+}
+`}</CodeBlock>
+
+## Dynamic Images
+
+### Route Parameters
+
+Access route parameters to generate dynamic images based on the URL:
+
+<CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+export default function Image({ params }: PageProps<{ slug: string }>) {
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: '#1e3a8a',
+        color: 'white',
+        padding: '80px',
+        fontSize: 64,
+        fontWeight: 'bold',
+      }}
+    >
+      {params.slug}
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+### Async Data Fetching
+
+Fetch data to create images with dynamic content:
+
+<CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+async function getPost(slug: string) {
+  const res = await fetch(\`https://api.example.com/posts/\${slug}\`)
+  return res.json()
+}
+
+export default async function Image({ params }: PageProps<{ slug: string }>) {
+  const post = await getPost(params.slug)
+
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        padding: '80px',
+      }}
+    >
+      <h1 style={{ fontSize: 72, marginBottom: 20 }}>
+        {post.title}
+      </h1>
+      <p style={{ fontSize: 32, color: '#666' }}>
+        {post.excerpt}
+      </p>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+## Supported CSS Properties
+
+ImageResponse supports a subset of CSS properties optimized for image generation. The layout engine uses Flexbox exclusively.
+
+### Layout
+
+- `display` - `flex` only (default, other values not supported)
+- `flexDirection` - `row`, `column`, `row-reverse`, `column-reverse`
+- `alignItems` - `flex-start`, `center`, `flex-end`, `stretch`, `baseline`
+- `justifyContent` - `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly`
+- `flex` - shorthand (e.g., `flex: 1` sets grow, shrink, and basis)
+- `gap` - length (also `rowGap`, `columnGap`)
+- `padding` - length (supports shorthand: `padding: "10px 20px"`)
+- `margin` - length (supports shorthand, including `auto`)
+- `width` - length or percentage
+- `height` - length or percentage
+
+### Typography
+
+- `color` - color value (inherited by children)
+- `fontSize` - length in pixels
+- `fontWeight` - `normal`, `bold`, or numeric (100-900)
+- `textAlign` - `left`, `center`, `right`, `justify`
+- `lineHeight` - number (multiplier), length (px, em), or percentage
+- `textDecoration` - `none`, `underline`, `line-through`
+
+### Visual
+
+- `background` - color value or `linear-gradient()`
+- `backgroundColor` - color value
+- `border` - shorthand (e.g., `border: "2px solid #000"`)
+- `borderRadius` - length (supports individual corners: `borderTopLeftRadius`, etc.)
+- `borderWidth` - length (supports individual sides: `borderTopWidth`, etc.)
+- `borderColor` - color value
+
+### Images
+
+- `objectFit` - `contain`, `cover`, `fill`, `none`, `scale-down` (for `<img>` elements)
+
+## Limitations
+
+### Not Supported
+
+The following CSS properties are **not supported**:
+
+- Grid layout (`display: grid`)
+- Absolute/fixed positioning (`position`, `top`, `left`, etc.)
+- Opacity and shadows (`opacity`, `boxShadow`, `textShadow`)
+- Advanced typography (`letterSpacing`, `textTransform`, `whiteSpace`, `wordBreak`, `textOverflow`)
+- Border styles other than solid (`borderStyle: dashed` won't work)
+- Radial gradients (only `linear-gradient` is supported)
+- Custom fonts (built-in Noto Sans and Twemoji only)
+- Transforms and animations
+- Webkit-specific properties (`-webkit-box`, `WebkitLineClamp`, etc.)
+
+### Layout Constraints
+
+- Only Flexbox layout is supported
+- No CSS Grid
+- No absolute or fixed positioning
+- Elements flow in document order with flex rules
+
+## Supported HTML Elements
+
+- `<div>` - Container element
+- `<span>` - Inline container
+- `<p>` - Paragraph
+- `<h1>`, `<h2>`, `<h3>`, `<h4>`, `<h5>`, `<h6>` - Headings
+- `<img>` - Images (requires absolute URLs or data URIs)
+- Text nodes - Plain text content
+
+Note: SVG elements are not currently supported.
+
+## Common Patterns
+
+### Hero Image with Gradient
+
+<CodeBlock filename="src/app/opengraph-image.tsx" language="tsx">{`import { ImageResponse } from 'rari/og'
+
+export const size = {
+  width: 1200,
+  height: 630,
+}
+
+export default function Image() {
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: 'white',
+        }}
+      >
+        <h1 style={{ fontSize: 96, fontWeight: 'bold', margin: 0 }}>
+          Rari
+        </h1>
+        <p style={{ fontSize: 48, margin: 0 }}>
+          The Fast React Framework
+        </p>
+      </div>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+### Blog Post Card
+
+<CodeBlock filename="src/app/blog/[slug]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+export const size = { width: 1200, height: 630 }
+
+export default async function Image({ params }: PageProps<{ slug: string }>) {
+  const post = await fetch(\`https://api.example.com/posts/\${params.slug}\`)
+    .then(res => res.json())
+
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: '#0d1117',
+        padding: '80px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
+          height: '100%',
+          border: '2px solid #30363d',
+          borderRadius: '24px',
+          padding: '60px',
+          background: '#161b22',
+        }}
+      >
+        <div style={{ fontSize: 48, color: '#8b949e', marginBottom: 40 }}>
+          Blog Post
+        </div>
+
+        <div
+          style={{
+            fontSize: 64,
+            fontWeight: 'bold',
+            color: '#f0f6fc',
+            marginBottom: 30,
+            lineHeight: 1.2,
+          }}
+        >
+          {post.title}
+        </div>
+
+        <div style={{ fontSize: 32, color: '#8b949e', lineHeight: 1.4 }}>
+          {post.excerpt}
+        </div>
+      </div>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+### Product Card with Image
+
+<CodeBlock filename="src/app/products/[id]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+export const size = { width: 1200, height: 630 }
+
+async function getProduct(id: string) {
+  const res = await fetch(\`https://api.example.com/products/\${id}\`)
+  return res.json()
+}
+
+export default async function Image({ params }: PageProps<{ id: string }>) {
+  const product = await getProduct(params.id)
+
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        padding: '40px',
+        gap: '40px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          width: '50%',
+          height: '100%',
+        }}
+      >
+        <img
+          src={product.imageUrl}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: '16px',
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '50%',
+          justifyContent: 'center',
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 72,
+            fontWeight: 'bold',
+            color: '#1a1a1a',
+            marginBottom: 20,
+          }}
+        >
+          {product.name}
+        </h1>
+        <p style={{ fontSize: 36, color: '#666', marginBottom: 30 }}>
+          {product.description}
+        </p>
+        <div style={{ fontSize: 56, fontWeight: 'bold', color: '#3b82f6' }}>
+          \${product.price}
+        </div>
+      </div>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+### Multi-line Text
+
+<CodeBlock filename="src/app/articles/[id]/opengraph-image.tsx" language="tsx">{`import type { PageProps } from 'rari'
+import { ImageResponse } from 'rari/og'
+
+async function getArticle(id: string) {
+  const res = await fetch(\`https://api.example.com/articles/\${id}\`)
+  return res.json()
+}
+
+export default async function Image({ params }: PageProps<{ id: string }>) {
+  const article = await getArticle(params.id)
+
+  return new ImageResponse(
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        background: 'white',
+        padding: '80px',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 64,
+          fontWeight: 'bold',
+          color: '#1a1a1a',
+          marginBottom: 30,
+          lineHeight: 1.2,
+        }}
+      >
+        {article.title}
+      </div>
+
+      <div
+        style={{
+          fontSize: 32,
+          color: '#666',
+          lineHeight: 1.4,
+        }}
+      >
+        {article.description}
+      </div>
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+Note: Text truncation properties like `textOverflow`, `whiteSpace`, and webkit-specific properties are not supported. Keep text concise or adjust layout dimensions.
+
+## Performance
+
+### Caching
+
+Generated images are automatically cached with the following strategy:
+
+- **In-memory cache**: Stores up to 20 recently generated images
+- **Disk cache**: Persists images to `.rari/cache/og/` for faster subsequent loads
+- **HTTP caching**: Serves images with `Cache-Control: public, max-age=31536000, immutable`
+- **Cache headers**: Includes `X-Cache: HIT` or `X-Cache: MISS` to indicate cache status
+
+### Optimization
+
+- **WebP encoding**: All images are encoded as WebP with 80% quality for optimal file size
+- **Rust-powered**: Image generation uses high-performance Rust libraries for layout and rendering
+- **Lazy generation**: Images are only generated when requested, not at build time
+- **Size limits**: Maximum dimensions are 2400×1260 to prevent excessive memory usage
+
+### Cache Invalidation
+
+The cache is automatically cleared when:
+- The development server restarts
+- The application is rebuilt
+- The route manifest changes
+
+## Best Practices
+
+### Use Standard Dimensions
+
+Stick to the recommended 1200×630 size for maximum compatibility:
+
+<CodeBlock language="tsx">{`// Good - standard Open Graph size
+export const size = {
+  width: 1200,
+  height: 630,
+}
+
+// Avoid - non-standard sizes may not display correctly
+export const size = {
+  width: 800,
+  height: 400,
+}
+`}</CodeBlock>
+
+### Keep Layouts Simple
+
+Use flexbox for layouts. Remember that only flex layout is supported:
+
+<CodeBlock language="tsx">{`// Good - simple flexbox layout
+<div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+  <h1>Title</h1>
+  <p>Description</p>
+</div>
+
+// Avoid - grid and positioning not supported
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+  <div style={{ position: 'absolute', top: 0 }}>
+    <h1>Title</h1>
+  </div>
+</div>
+`}</CodeBlock>
+
+### Use Absolute URLs for Images
+
+Remote images must use absolute URLs:
+
+<CodeBlock language="tsx">{`// Good - absolute URL
+<img src="https://example.com/image.jpg" />
+
+// Bad - relative URL won't work
+<img src="/image.jpg" />
+`}</CodeBlock>
+
+### Optimize Text Length
+
+Keep text concise to ensure it fits within the image:
+
+<CodeBlock language="tsx">{`// Good - concise text
+<div style={{ fontSize: 64 }}>
+  {title}
+</div>
+
+// Better - limit text length in your data
+const shortTitle = title.length > 50 ? title.substring(0, 47) + '...' : title
+
+<div style={{ fontSize: 64 }}>
+  {shortTitle}
+</div>
+`}</CodeBlock>
+
+Note: CSS text truncation properties (`textOverflow`, `whiteSpace`, webkit properties) are not supported. Truncate text in JavaScript before rendering.
+
+## Troubleshooting
+
+### Image Not Generating
+
+Check that:
+- The file is named `opengraph-image.tsx` (not `opengraph-image.ts`)
+- The file exports a default function
+- The function returns an `ImageResponse` instance
+- The development server is running
+
+### Styles Not Applied
+
+Ensure you're using supported CSS properties. Common issues:
+
+<CodeBlock language="tsx">{`// Supported
+<div style={{ display: 'flex', fontSize: 64, background: 'linear-gradient(to right, #000, #fff)' }}>
+
+// Not supported - these will be ignored
+<div style={{
+  display: 'grid',           // Only flex is supported
+  position: 'absolute',      // No positioning
+  opacity: 0.5,              // No opacity
+  boxShadow: '0 4px 6px',    // No shadows
+  letterSpacing: '2px',      // No letter spacing
+  borderStyle: 'dashed'      // Only solid borders
+}}>
+`}</CodeBlock>
+
+Refer to the "Supported CSS Properties" and "Limitations" sections for the complete list.
+
+### Images Not Loading
+
+For remote images in `<img>` tags:
+- Use absolute URLs (https://...)
+- Ensure the image server allows cross-origin requests
+- Check that the image URL is accessible
+
+### Text Overflowing
+
+Text truncation CSS properties are not supported. Truncate text in JavaScript before rendering:
+
+<CodeBlock language="tsx">{`// Truncate in JavaScript
+const truncateText = (text: string, maxLength: number) => {
+  return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text
+}
+
+export default function Image() {
+  const longText = "Very long text that needs to be truncated..."
+  const shortText = truncateText(longText, 50)
+
+  return new ImageResponse(
+    <div style={{ fontSize: 32 }}>
+      {shortText}
+    </div>,
+  )
+}
+`}</CodeBlock>
+
+## Related
+
+- [Image Component](/docs/api-reference/components/image) - Optimize images for better performance
+- [Metadata](/docs/getting-started/metadata) - Configure page metadata including Open Graph tags
+- [App Router](/docs/getting-started#app-router) - Learn about the app router structure

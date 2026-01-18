@@ -7,15 +7,21 @@
   --github-dark-card: #161b22;
   --github-dark-border: #30363d;
   --github-text: #f0f6fc;
+  --text-secondary: #b1bac4;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html {
-  background-color: #0d1117;
+  background-color: var(--github-dark-bg);
   overflow-x: hidden;
 }
 
 body {
-  background-color: #0d1117;
   overflow-x: hidden;
 }
 
@@ -36,12 +42,6 @@ code {
   line-height: 1.5;
   margin: 1rem 0;
   max-width: 100%;
-}
-
-code {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
-  font-weight: 500;
-  letter-spacing: -0.01em;
 }
 
 .prose {
@@ -90,6 +90,12 @@ code {
   margin-bottom: 1rem;
 }
 
+.prose .page-header h1 {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
 .prose h1 {
   font-size: 2rem;
   margin-top: 2rem;
@@ -115,6 +121,12 @@ code {
   padding-left: 1.5rem;
 }
 
+.not-prose ol, .not-prose ul {
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+
 .prose ul {
   list-style-type: disc;
 }
@@ -137,6 +149,11 @@ code {
 .prose a:hover {
   color: var(--rust-orange-dark);
   text-decoration: underline;
+}
+
+.not-prose a,
+.not-prose a:hover {
+  text-decoration: none;
 }
 
 .prose :not(pre) > code {
@@ -211,8 +228,8 @@ code {
   background: #484f58;
 }
 
-a:focus,
-button:focus {
+a:focus-visible,
+button:focus-visible {
   outline: 2px solid var(--rust-orange);
   outline-offset: 2px;
 }
@@ -222,11 +239,20 @@ button:focus {
   color: white;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-img, video, iframe {
+img,
+video,
+iframe {
   max-width: 100%;
   height: auto;
+}
+
+
+@keyframes border-trail {
+  to {
+    offset-distance: 100%;
+  }
+}
+
+.animate-border-trail {
+  animation: border-trail 3s linear infinite;
 }

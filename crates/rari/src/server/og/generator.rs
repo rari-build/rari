@@ -98,23 +98,48 @@ impl OgImageGenerator {
             let pattern_segments: Vec<&str> =
                 pattern.split('/').filter(|s| !s.is_empty()).collect();
 
-            if pattern_segments.len() != path_segments.len() {
-                continue;
-            }
+            let has_catch_all =
+                pattern_segments.iter().any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
 
-            let mut matches = true;
+            if has_catch_all {
+                let mut matches = true;
+                let mut path_idx = 0;
 
-            for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
-                if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
-                    continue;
-                } else if pattern_seg != path_seg {
-                    matches = false;
-                    break;
+                for pattern_seg in pattern_segments.iter() {
+                    if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
+                        break;
+                    } else if path_idx >= path_segments.len()
+                        || pattern_seg != &path_segments[path_idx]
+                    {
+                        matches = false;
+                        break;
+                    } else {
+                        path_idx += 1;
+                    }
                 }
-            }
 
-            if matches {
-                return Some(entry.clone());
+                if matches {
+                    return Some(entry.clone());
+                }
+            } else {
+                if pattern_segments.len() != path_segments.len() {
+                    continue;
+                }
+
+                let mut matches = true;
+
+                for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
+                    if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
+                        continue;
+                    } else if pattern_seg != path_seg {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if matches {
+                    return Some(entry.clone());
+                }
             }
         }
 
@@ -170,7 +195,10 @@ impl OgImageGenerator {
         &self,
         manifest: &'a FxHashMap<String, OgImageEntry>,
         route_path: &str,
-    ) -> Option<(&'a OgImageEntry, FxHashMap<String, String>)> {
+    ) -> Option<(&'a OgImageEntry, FxHashMap<String, crate::server::routing::types::ParamValue>)>
+    {
+        use crate::server::routing::types::ParamValue;
+
         if let Some(entry) = manifest.get(route_path) {
             return Some((entry, FxHashMap::default()));
         }
@@ -181,25 +209,58 @@ impl OgImageGenerator {
             let pattern_segments: Vec<&str> =
                 pattern.split('/').filter(|s| !s.is_empty()).collect();
 
-            if pattern_segments.len() != path_segments.len() {
-                continue;
-            }
+            let has_catch_all =
+                pattern_segments.iter().any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
 
-            let mut params = FxHashMap::default();
-            let mut matches = true;
+            if has_catch_all {
+                let mut params = FxHashMap::default();
+                let mut matches = true;
+                let mut path_idx = 0;
 
-            for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
-                if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
-                    let param_name = &pattern_seg[1..pattern_seg.len() - 1];
-                    params.insert(param_name.to_string(), path_seg.to_string());
-                } else if pattern_seg != path_seg {
-                    matches = false;
-                    break;
+                for pattern_seg in pattern_segments.iter() {
+                    if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
+                        let param_name = &pattern_seg[4..pattern_seg.len() - 1];
+                        let remaining: Vec<String> =
+                            path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
+                        params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
+                        break;
+                    } else if path_idx >= path_segments.len()
+                        || pattern_seg != &path_segments[path_idx]
+                    {
+                        matches = false;
+                        break;
+                    } else {
+                        path_idx += 1;
+                    }
                 }
-            }
 
-            if matches {
-                return Some((entry, params));
+                if matches {
+                    return Some((entry, params));
+                }
+            } else {
+                if pattern_segments.len() != path_segments.len() {
+                    continue;
+                }
+
+                let mut params = FxHashMap::default();
+                let mut matches = true;
+
+                for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
+                    if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
+                        let param_name = &pattern_seg[1..pattern_seg.len() - 1];
+                        params.insert(
+                            param_name.to_string(),
+                            ParamValue::Single(path_seg.to_string()),
+                        );
+                    } else if pattern_seg != path_seg {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if matches {
+                    return Some((entry, params));
+                }
             }
         }
 
@@ -210,7 +271,7 @@ impl OgImageGenerator {
         &self,
         entry: &OgImageEntry,
         route_path: &str,
-        params: &FxHashMap<String, String>,
+        params: &FxHashMap<String, crate::server::routing::types::ParamValue>,
     ) -> Result<JsxElement, OgImageError> {
         let component_id = {
             let path = entry.file_path.as_str();
@@ -218,8 +279,16 @@ impl OgImageGenerator {
             let path = path.cow_replace(".ts", "");
             let path = path.cow_replace(".jsx", "");
             let path = path.cow_replace(".js", "");
-            let path = path.cow_replace("[", "_");
-            let path = path.cow_replace("]", "_");
+            let path =
+                path.chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
             format!("app/{}", path)
         };
 
@@ -349,6 +418,7 @@ impl OgImageGenerator {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
 

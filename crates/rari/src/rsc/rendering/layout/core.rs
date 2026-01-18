@@ -50,16 +50,24 @@ impl LayoutRenderer {
         let page_props_json = serde_json::to_string(&page_props)?;
 
         fn convert_route_path_to_dist_path(path: &str) -> String {
-            use regex::Regex;
-            let re = Regex::new(r"\[+([^\]]+)\]+")
-                .expect("Invalid regex pattern for route path conversion");
-            re.replace_all(path, |caps: &regex::Captures| {
-                let param = &caps[1];
-                let bracket_count = caps[0].matches('[').count();
-                let underscores = "_".repeat(bracket_count);
-                format!("{}{}{}", underscores, param, underscores)
-            })
-            .to_string()
+            let (base, ext) = if let Some(pos) = path.rfind('.') {
+                (&path[..pos], &path[pos..])
+            } else {
+                (path, "")
+            };
+
+            let converted_base =
+                base.chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
+
+            format!("{}{}", converted_base, ext)
         }
 
         let dist_server_path = std::env::current_dir()

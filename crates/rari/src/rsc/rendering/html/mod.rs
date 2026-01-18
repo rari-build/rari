@@ -254,7 +254,7 @@ impl RscHtmlRenderer {
             .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
 
         if data_str.starts_with('I') {
-            return Ok(RscRow { id, data: RscElement::Text(String::new()) });
+            return Ok(RscRow { id, data: RscElement::Text(data_str.to_string()) });
         }
 
         let json_value: JsonValue = serde_json::from_str(data_str)
@@ -364,22 +364,14 @@ impl RscHtmlRenderer {
 
                 let mut final_html = html_content.clone();
 
-                if let Some(body_start) = final_html.find("<body")
-                    && let Some(body_content_start) = final_html[body_start..].find('>')
+                if !script_tags.is_empty()
+                    && let Some(body_end) = final_html.rfind("</body>")
                 {
-                    let body_content_start = body_start + body_content_start + 1;
-
-                    if let Some(body_end) = final_html.rfind("</body>") {
-                        let body_content = &final_html[body_content_start..body_end];
-
-                        let new_body_content =
-                            format!(r#"<div id="root">{}</div>{}"#, body_content, script_tags);
-
-                        final_html.replace_range(body_content_start..body_end, &new_body_content);
-                    }
+                    final_html.insert_str(body_end, &format!("\n{}\n", script_tags));
                 }
 
-                if !final_html.trim_start().starts_with("<!DOCTYPE") {
+                let trimmed_lower = final_html.trim_start().cow_to_lowercase();
+                if !trimmed_lower.starts_with("<!doctype") {
                     final_html = format!("<!DOCTYPE html>\n{}", final_html);
                 }
 

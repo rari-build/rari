@@ -7,11 +7,38 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import 'virtual:rsc-integration'
 
+function getClientComponent(id) {
+  if (globalThis['~clientComponents'][id]?.component)
+    return globalThis['~clientComponents'][id].component
+
+  if (id.includes('#')) {
+    const [path, exportName] = id.split('#')
+    const componentId = globalThis['~clientComponentPaths'][path]
+    if (componentId && globalThis['~clientComponents'][componentId]) {
+      const componentInfo = globalThis['~clientComponents'][componentId]
+      if (exportName === 'default' || !exportName)
+        return componentInfo.component
+    }
+
+    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
+    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
+    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
+      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
+  }
+
+  const componentId = globalThis['~clientComponentNames'][id]
+  if (componentId && globalThis['~clientComponents'][componentId])
+    return globalThis['~clientComponents'][componentId].component
+
+  return null
+}
+
 if (typeof globalThis['~rari'] === 'undefined') {
   globalThis['~rari'] = {}
 }
 globalThis['~rari'].AppRouterProvider = AppRouterProvider
 globalThis['~rari'].ClientRouter = ClientRouter
+globalThis['~rari'].getClientComponent = getClientComponent
 
 // CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
 
@@ -138,6 +165,34 @@ export async function renderApp() {
 
   setupPartialHydration()
 
+  if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
+    const clientComponentElements = document.querySelectorAll('[data-client-component]')
+    if (clientComponentElements.length > 0) {
+      clientComponentElements.forEach((element) => {
+        const componentId = element.getAttribute('data-client-component')
+        const propsJson = element.getAttribute('data-props')
+
+        if (!componentId)
+          return
+
+        try {
+          const Component = getClientComponent(componentId)
+          if (!Component)
+            return
+
+          const props = propsJson ? JSON.parse(propsJson) : {}
+          element.innerHTML = ''
+          const root = createRoot(element)
+          root.render(React.createElement(Component, props))
+        }
+        catch (error) {
+          console.error(`[Rari] Failed to hydrate client component ${componentId}:`, error)
+        }
+      })
+    }
+    return
+  }
+
   if (hasServerRenderedContent && hasBufferedRows && !payloadScript) {
     const hasBoundaries = document.querySelectorAll('[data-boundary-id]').length > 0
 
@@ -150,10 +205,6 @@ export async function renderApp() {
 
       return
     }
-  }
-
-  if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
-    return
   }
 
   try {

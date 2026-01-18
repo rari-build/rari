@@ -51,8 +51,13 @@
     "**/LICENSE*",
     "**/__snapshots__",
     "**/auto-import?(s).d.ts",
-    "**/components.d.ts"
+    "**/components.d.ts",
+    "**/packages/create-rari-app/templates/**"
   ],
+  "globals": {
+    "CSSStyleProperties": "readonly",
+    "Temporal": "readonly"
+  },
   "rules": {
     "accessor-pairs": [
       "error",

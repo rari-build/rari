@@ -63,7 +63,6 @@ export default function Image({ params }: PageProps<{ slug: string }>) {
             style={{
               fontSize: 28,
               lineHeight: 1.4,
-              opacity: 0.9,
             }}
           >
             {post.content}
@@ -75,7 +74,6 @@ export default function Image({ params }: PageProps<{ slug: string }>) {
             style={{
               fontSize: 24,
               textAlign: 'right',
-              opacity: 0.8,
             }}
           >
             {post.date}

@@ -22,6 +22,7 @@ export default function TodoListWithActions({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
     setTodos(initialTodos)
   }, [initialTodos])
 

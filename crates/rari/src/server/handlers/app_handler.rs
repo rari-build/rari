@@ -24,8 +24,9 @@ use std::sync::Arc;
 use tracing::error;
 
 fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>) -> String {
-    let is_complete = html_content.trim_start().starts_with("<!DOCTYPE")
-        || html_content.trim_start().starts_with("<html");
+    let trimmed = html_content.trim_start();
+    let trimmed_lower = trimmed.cow_to_lowercase();
+    let is_complete = trimmed_lower.starts_with("<!doctype") || trimmed_lower.starts_with("<html");
 
     if is_complete {
         if let Some(metadata) = metadata {
@@ -57,16 +58,15 @@ async fn collect_page_metadata(
     };
 
     fn convert_route_path_to_dist_path(path: &str) -> String {
-        use regex::Regex;
-        let re =
-            Regex::new(r"\[+([^\]]+)\]+").expect("Invalid regex pattern for route path conversion");
-        re.replace_all(path, |caps: &regex::Captures| {
-            let param = &caps[1];
-            let bracket_count = caps[0].matches('[').count();
-            let underscores = "_".repeat(bracket_count);
-            format!("{}{}{}", underscores, param, underscores)
-        })
-        .to_string()
+        let (base, ext) =
+            if let Some(pos) = path.rfind('.') { (&path[..pos], &path[pos..]) } else { (path, "") };
+
+        let converted_base = base
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '/' || c == '-' || c == '_' { c } else { '_' })
+            .collect::<String>();
+
+        format!("{}{}", converted_base, ext)
     }
 
     let layout_paths: Vec<String> = route_match
@@ -89,18 +89,19 @@ async fn collect_page_metadata(
         .into_owned();
     let dist_filename = convert_route_path_to_dist_path(&js_filename);
     let page_file_path = base_path.join("app").join(&dist_filename);
-    let page_path = if page_file_path.exists() {
-        format!("file://{}", page_file_path.display())
-    } else {
+
+    if !page_file_path.exists() {
         return None;
-    };
+    }
+
+    let page_path = format!("file://{}", page_file_path.display());
 
     let renderer = state.renderer.lock().await;
     match renderer
         .runtime
         .collect_metadata(
             layout_paths,
-            page_path,
+            page_path.clone(),
             context.params.clone(),
             context.search_params.clone(),
         )
@@ -396,21 +397,14 @@ pub async fn render_synchronous(
     {
         Ok(render_result) => match render_result {
             crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
-                let is_complete_before_wrap = html_content.trim_start().starts_with("<!DOCTYPE")
-                    || html_content.trim_start().starts_with("<html");
-
                 let html_with_metadata =
                     wrap_html_with_metadata(html_content, context.metadata.as_ref());
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
                         Ok(html) => {
-                            if !is_complete_before_wrap {
-                                if let Some(metadata) = context.metadata.as_ref() {
-                                    inject_metadata(&html, metadata)
-                                } else {
-                                    html
-                                }
+                            if let Some(metadata) = context.metadata.as_ref() {
+                                inject_metadata(&html, metadata)
                             } else {
                                 html
                             }

@@ -25,14 +25,12 @@ async function fetchRariVersion(): Promise<string> {
 export default async function RootLayout({ children, pathname }: LayoutProps) {
   const version = await fetchRariVersion()
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-200 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
       <div className="flex min-h-screen">
         <Sidebar version={version} pathname={pathname} />
-        <div className="flex-1 flex flex-col min-h-screen bg-[#0d1117] min-w-0">
-          <main className="flex-1 min-w-0">
-            <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
-              {children}
-            </div>
+        <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 pl-0.5 pr-0.5">
+          <main className="flex-1 min-w-0 bg-[#0d1117] rounded-b-md overflow-hidden">
+            {children}
           </main>
           <Footer />
         </div>

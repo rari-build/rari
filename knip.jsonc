@@ -2,11 +2,11 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/**/*.js"
+      "ignore": [
+        "crates/**/*"
       ],
-      "project": [
-        "scripts/**/*.js"
+      "ignoreDependencies": [
+        "@typescript/native-preview" // Used by TypeScript tooling
       ]
     },
     "packages/rari": {
@@ -16,6 +16,7 @@
       "project": [
         "src/**/*.{ts,tsx,js,jsx}"
       ],
+      // Runtime files that are dynamically loaded and result in false positives
       "ignore": [
         "src/runtime/AppRouterProvider.tsx",
         "src/runtime/entry-client.js",
@@ -41,8 +42,9 @@
         "src/**/*.{ts,tsx}"
       ],
       "ignore": [
-        "src/proxy.ts"
+        "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
+      // Tailwind dependencies used via Vite plugin
       "ignoreDependencies": [
         "@tailwindcss/vite",
         "tailwindcss"
@@ -56,8 +58,9 @@
         "src/**/*.{ts,tsx}"
       ],
       "ignore": [
-        "src/proxy.ts"
+        "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
+      // Tailwind dependencies used via Vite plugin
       "ignoreDependencies": [
         "@tailwindcss/vite",
         "tailwindcss"

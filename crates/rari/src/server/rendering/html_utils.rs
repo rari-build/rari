@@ -213,7 +213,9 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
 
 pub fn is_complete_html_document(html: &str) -> bool {
     let trimmed = html.trim_start();
-    let has_doctype_or_html = trimmed.starts_with("<!DOCTYPE") || trimmed.starts_with("<html");
+    let trimmed_lower = trimmed.cow_to_lowercase();
+    let has_doctype_or_html =
+        trimmed_lower.starts_with("<!doctype") || trimmed_lower.starts_with("<html");
     let has_body = html.contains("<body");
 
     has_doctype_or_html && has_body
@@ -230,7 +232,8 @@ async fn inject_assets_into_complete_document(
     let template = match tokio::fs::read_to_string(template_path).await {
         Ok(t) => t,
         Err(_) => {
-            if html.trim_start().starts_with("<!DOCTYPE") {
+            let trimmed_lower = html.trim_start().cow_to_lowercase();
+            if trimmed_lower.starts_with("<!doctype") {
                 return Ok(html.to_string());
             }
             return Ok(format!("<!DOCTYPE html>\n{}", html));
@@ -294,7 +297,8 @@ async fn inject_assets_into_complete_document(
     }
 
     if asset_tags.is_empty() && head_content.is_empty() && body_content.is_empty() {
-        if html.trim_start().starts_with("<!DOCTYPE") {
+        let trimmed_lower = html.trim_start().cow_to_lowercase();
+        if trimmed_lower.starts_with("<!doctype") {
             return Ok(html.to_string());
         }
         return Ok(format!("<!DOCTYPE html>\n{}", html));
@@ -341,7 +345,8 @@ async fn inject_assets_into_complete_document(
         }
     }
 
-    if !final_html.trim_start().starts_with("<!DOCTYPE") {
+    let trimmed_lower = final_html.trim_start().cow_to_lowercase();
+    if !trimmed_lower.starts_with("<!doctype") {
         final_html = format!("<!DOCTYPE html>\n{}", final_html);
     }
 
@@ -349,7 +354,8 @@ async fn inject_assets_into_complete_document(
     if has_root_before && !has_root_after {
         error!("Root element was lost during asset injection!");
 
-        if html.trim_start().starts_with("<!DOCTYPE") {
+        let trimmed_lower = html.trim_start().cow_to_lowercase();
+        if trimmed_lower.starts_with("<!doctype") {
             return Ok(html.to_string());
         }
         return Ok(format!("<!DOCTYPE html>\n{}", html));

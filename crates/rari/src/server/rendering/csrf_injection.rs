@@ -136,6 +136,7 @@ pub fn generate_csrf_helper_script() -> &'static str {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
 

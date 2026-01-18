@@ -53,6 +53,8 @@ pub async fn rate_limit_logger(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+#[allow(clippy::assertions_on_constants)]
 mod tests {
     use super::*;
     use crate::server::config::{Mode, RateLimitConfig};

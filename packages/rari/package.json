@@ -80,8 +80,8 @@
     "build": "pnpm clean && pnpm typecheck && tsdown",
     "typecheck": "tsgo",
     "clean": "rm -rf dist",
-    "lint": "oxlint && eslint",
-    "lint:fix": "oxlint --fix && eslint --fix"
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
   },
   "peerDependencies": {
     "react": "^19.0.0",
@@ -100,11 +100,10 @@
     "rari-win32-x64": "0.7.4"
   },
   "devDependencies": {
-    "@types/node": "^25.0.8",
+    "@types/node": "^25.0.9",
     "@types/react": "^19.2.8",
-    "@typescript/native-preview": "^7.0.0-dev.20260114.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
     "chokidar": "^5.0.0",
-    "eslint": "^9.39.2",
     "oxlint": "^1.39.0",
     "rolldown-vite": "^7.3.1",
     "tsdown": "^0.18.4"

@@ -1,7 +1,7 @@
 import type { PageProps } from 'rari'
 import { access, readFile } from 'node:fs/promises'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getDocsFilePath, isValidSlug } from '@/lib/content-utils'
+import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
 
 const DEFAULT_METADATA = {
   title: 'Rari Docs',
@@ -11,16 +11,23 @@ const DEFAULT_METADATA = {
 export default async function DocPage({ params }: PageProps) {
   const slug = params?.slug
 
-  if (!isValidSlug(slug))
-    return <div>Invalid documentation path.</div>
+  if (!isValidSlugArray(slug))
+    return <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">Invalid documentation path.</div>
 
-  return <MdxRenderer filePath={`docs/${slug}.mdx`} />
+  const slugPath = slug.join('/')
+  const pathname = `/docs/${slugPath}`
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+      <MdxRenderer filePath={`docs/${slugPath}.mdx`} pathname={pathname} />
+    </div>
+  )
 }
 
 export async function getData({ params }: PageProps) {
   const slug = params?.slug
 
-  if (!isValidSlug(slug))
+  if (!isValidSlugArray(slug))
     return { notFound: true }
 
   try {
@@ -35,7 +42,7 @@ export async function getData({ params }: PageProps) {
 export async function generateMetadata({ params }: PageProps) {
   const slug = params?.slug
 
-  if (!isValidSlug(slug))
+  if (!isValidSlugArray(slug))
     return DEFAULT_METADATA
 
   try {

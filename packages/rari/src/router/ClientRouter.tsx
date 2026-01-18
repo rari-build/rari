@@ -292,10 +292,19 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       return
     }
 
-    const targetPath = normalizePath(href)
+    const [pathWithoutHash, hash] = href.includes('#') ? href.split('#') : [href, '']
+    const targetPath = normalizePath(pathWithoutHash)
 
-    if (targetPath === currentRouteRef.current && !options.replace)
+    if (targetPath === currentRouteRef.current && !options.replace) {
+      if (hash) {
+        const element = document.getElementById(hash)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          window.history.pushState(window.history.state, '', `${targetPath}#${hash}`)
+        }
+      }
       return
+    }
 
     const existingPending = pendingNavigationsRef.current.get(targetPath)
     if (existingPending)
@@ -326,18 +335,20 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           key: historyKey,
         }
 
+        const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
+
         if (options.replace) {
           window.history.replaceState(
             historyState,
             '',
-            targetPath,
+            urlWithHash,
           )
         }
         else {
           window.history.pushState(
             historyState,
             '',
-            targetPath,
+            urlWithHash,
           )
         }
 
@@ -359,6 +370,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         const actualTargetPath = finalPath !== targetPath ? finalPath : targetPath
 
         if (finalPath !== targetPath) {
+          const finalUrlWithHash = hash ? `${finalPath}#${hash}` : finalPath
           window.history.replaceState(
             {
               route: finalPath,
@@ -368,7 +380,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
               key: options.historyKey || generateHistoryKey(),
             },
             '',
-            finalPath,
+            finalUrlWithHash,
           )
         }
 
@@ -482,6 +494,20 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
               statePreserverRef.current.restoreState(actualTargetPath)
             })
           }
+          else if (hash) {
+            requestAnimationFrame(() => {
+              const scrollToHash = (attempts = 0) => {
+                const element = document.getElementById(hash)
+                if (element) {
+                  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                else if (attempts < 10) {
+                  setTimeout(() => scrollToHash(attempts + 1), 50)
+                }
+              }
+              scrollToHash()
+            })
+          }
         }
 
         pendingNavigationsRef.current.delete(targetPath)
@@ -588,6 +614,17 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
     if (isExternalUrl(href))
       return
+
+    if (href.startsWith('#')) {
+      event.preventDefault()
+      const hash = href.slice(1)
+      const element = document.getElementById(hash)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        window.history.pushState(window.history.state, '', href)
+      }
+      return
+    }
 
     event.preventDefault()
 

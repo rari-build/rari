@@ -45,6 +45,12 @@ split_commits = false
 commit_preprocessors = []
 # Prevent commits that are breaking from being excluded by commit parsers.
 protect_breaking_commits = false
+# Exclude commits that only modify files in examples/, tools/ or web/ directories
+exclude_paths = [
+  "examples/",
+  "tools/",
+  "web/",
+]
 # An array of regex based parsers for extracting data from the commit message.
 # Assigns commits to groups.
 # Optionally sets the commit's scope and can decide to exclude commits from further processing.

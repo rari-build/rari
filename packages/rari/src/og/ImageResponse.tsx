@@ -3,12 +3,6 @@ import type { ReactElement } from 'react'
 export interface ImageResponseOptions {
   width?: number
   height?: number
-  fonts?: Array<{
-    name: string
-    data: ArrayBuffer
-    weight?: number
-    style?: 'normal' | 'italic'
-  }>
 }
 
 export interface ImageResponseSize {
@@ -25,7 +19,6 @@ export class ImageResponse {
     this.options = {
       width: options.width || 1200,
       height: options.height || 630,
-      fonts: options.fonts || [],
     }
   }
 

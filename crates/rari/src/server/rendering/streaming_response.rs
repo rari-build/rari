@@ -66,6 +66,7 @@ impl IntoResponse for StreamingHtmlResponse {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use async_stream::stream;

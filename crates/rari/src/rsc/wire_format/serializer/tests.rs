@@ -1,5 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
+#[allow(clippy::module_inception)]
 mod tests {
     use super::super::*;
     use crate::error::RariError;

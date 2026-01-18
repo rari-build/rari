@@ -5,6 +5,9 @@ import { evaluate } from '@mdx-js/mdx'
 import { createMDXClientReferences } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
 import NotFoundPage from '@/app/not-found'
+import Breadcrumbs from '@/components/Breadcrumbs'
+import Heading from '@/components/Heading'
+import PageHeader from '@/components/PageHeader'
 import { mdxComponentMetadata } from '@/lib/mdx-components'
 import { remarkCodeBlock } from '@/lib/remark-codeblock'
 import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
@@ -12,6 +15,7 @@ import { getHighlighter, SHIKI_THEME } from '@/lib/shiki'
 interface MdxRendererProps {
   filePath: string
   className?: string
+  pathname?: string
 }
 
 function findContentFile(filePath: string): string | null {
@@ -32,6 +36,7 @@ function findContentFile(filePath: string): string | null {
 export default async function MdxRenderer({
   filePath,
   className = '',
+  pathname,
 }: MdxRendererProps) {
   try {
     const content = findContentFile(filePath)
@@ -67,6 +72,16 @@ export default async function MdxRenderer({
       ),
     )
 
+    const allComponents = {
+      ...mdxComponents,
+      PageHeader,
+      h2: (props: any) => <Heading level={2} {...props} />,
+      h3: (props: any) => <Heading level={3} {...props} />,
+      h4: (props: any) => <Heading level={4} {...props} />,
+      h5: (props: any) => <Heading level={5} {...props} />,
+      h6: (props: any) => <Heading level={6} {...props} />,
+    }
+
     return (
       <div
         className={`prose prose-invert max-w-none overflow-hidden ${className}`}
@@ -75,7 +90,8 @@ export default async function MdxRenderer({
           overflowWrap: 'break-word',
         }}
       >
-        <MDXContent components={mdxComponents} />
+        {pathname && <Breadcrumbs pathname={pathname} />}
+        <MDXContent components={allComponents} />
       </div>
     )
   }

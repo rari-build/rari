@@ -95,7 +95,7 @@ impl JsExecutionRuntime {
         &self,
         layout_paths: Vec<String>,
         page_path: String,
-        params: rustc_hash::FxHashMap<String, String>,
+        params: rustc_hash::FxHashMap<String, crate::server::routing::types::ParamValue>,
         search_params: rustc_hash::FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
         const METADATA_COLLECTOR_TEMPLATE: &str = include_str!("js/metadata_collector.js");

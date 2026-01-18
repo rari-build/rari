@@ -15,6 +15,30 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
         );
     }
 
+    if let Some(description) = &metadata.description {
+        if let Some(desc_start) = result.find(r#"<meta name="description""#) {
+            if let Some(desc_end_rel) = result[desc_start..].find("/>") {
+                let desc_end_abs = desc_start + desc_end_rel + "/>".len();
+                result.replace_range(
+                    desc_start..desc_end_abs,
+                    &format!(
+                        r#"<meta name="description" content="{}" />"#,
+                        escape_html(description)
+                    ),
+                );
+            }
+        } else if let Some(head_end) = result.find("</head>") {
+            result.insert_str(
+                head_end,
+                &format!(
+                    r#"    <meta name="description" content="{}" />
+"#,
+                    escape_html(description)
+                ),
+            );
+        }
+    }
+
     if let Some(head_end) = result.find("</head>") {
         let mut meta_tags = String::new();
 
@@ -22,14 +46,6 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
             && !result.contains("<title>")
         {
             meta_tags.push_str(&format!("    <title>{}</title>\n", escape_html(title)));
-        }
-
-        if let Some(description) = &metadata.description {
-            meta_tags.push_str(&format!(
-                r#"    <meta name="description" content="{}" />
-"#,
-                escape_html(description)
-            ));
         }
 
         if let Some(keywords) = &metadata.keywords

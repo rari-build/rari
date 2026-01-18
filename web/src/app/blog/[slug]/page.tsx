@@ -12,9 +12,13 @@ export default async function BlogPage({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlug(slug))
-    return <div>Invalid blog post path.</div>
+    return <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">Invalid blog post path.</div>
 
-  return <MdxRenderer filePath={`blog/${slug}.mdx`} />
+  return (
+    <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
+      <MdxRenderer filePath={`blog/${slug}.mdx`} />
+    </div>
+  )
 }
 
 export async function getData({ params }: PageProps) {
