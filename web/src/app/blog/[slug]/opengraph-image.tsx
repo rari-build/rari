@@ -41,7 +41,7 @@ export default async function Image({ params }: PageProps) {
           border: '2px solid #30363d',
           borderRadius: '24px',
           padding: '60px',
-          background: '#161b22',
+          background: 'linear-gradient(to bottom right, #161b22, #0d1117)',
         }}
       >
         <div

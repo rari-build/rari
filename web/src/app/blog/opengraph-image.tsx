@@ -56,7 +56,6 @@ export default function Image() {
               fontSize: 120,
               fontWeight: 'bold',
               color: '#f0f6fc',
-              fontFamily: 'monospace',
             }}
           >
             rari
@@ -79,7 +78,6 @@ export default function Image() {
           style={{
             fontSize: 40,
             color: '#8b949e',
-            opacity: 0.9,
             textAlign: 'center',
           }}
         >
