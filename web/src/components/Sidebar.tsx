@@ -125,7 +125,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         <span className="sr-only">Open navigation menu</span>
       </label>
 
-      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-linear-to-br from-[#161b22] to-[#0d1117] border-r border-[#30363d] overflow-y-auto w-64 shrink-0">
+      <nav className="fixed lg:relative -translate-x-full peer-checked:translate-x-0 lg:translate-x-0 transition-transform duration-300 ease-in-out z-40 h-screen lg:h-auto bg-[#0d1117] overflow-y-auto w-64 shrink-0">
         <label
           htmlFor="mobile-menu-toggle"
           className="absolute top-4 right-4 lg:hidden bg-[#161b22] border border-[#30363d] rounded-md p-2 text-gray-300 hover:text-white hover:bg-[#21262d] transition-colors duration-200 cursor-pointer z-10"

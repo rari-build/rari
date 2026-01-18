@@ -25,7 +25,7 @@ export default async function Footer() {
   const stars = await fetchGitHubStars()
 
   return (
-    <footer className="w-full border-t border-[#30363d] bg-[#0d1117] mt-auto">
+    <footer className="w-full bg-[#0d1117] rounded-t-md">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-4 lg:flex lg:items-center lg:justify-between lg:gap-x-3">
         <div className="flex items-center justify-center lg:justify-start lg:flex-1 gap-x-1.5 mt-3 lg:mt-0 lg:order-1">
           <p className="text-gray-300 text-sm">

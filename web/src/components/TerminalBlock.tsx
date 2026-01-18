@@ -23,24 +23,32 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
         </div>
       )}
 
-      <button
-        onClick={() => copyToClipboard(command)}
-        className={`absolute ${showHeader ? 'top-12' : 'top-2'} right-2 p-1.5 text-gray-300 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10`}
-        type="button"
-        aria-label="Copy code to clipboard"
-      >
-        {copied
-          ? (
-              <Check className="w-4 h-4 text-green-600" />
-            )
-          : (
-              <Copy className="w-4 h-4" />
-            )}
-      </button>
+      <div className="relative">
+        <span className={`absolute ${showHeader ? 'top-2' : 'top-2'} right-2 text-xs text-gray-400 font-mono opacity-100 lg:group-hover:opacity-0 transition-opacity duration-200 z-10`}>
+          bash
+        </span>
+        <button
+          onClick={() => copyToClipboard(command)}
+          className={`absolute ${showHeader ? 'top-2' : 'top-2'} right-2 p-1.5 text-gray-300 hover:text-white bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded transition-all duration-200 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 z-10`}
+          type="button"
+          aria-label="Copy code to clipboard"
+        >
+          {copied
+            ? (
+                <Check className="w-4 h-4 text-green-600" />
+              )
+            : (
+                <Copy className="w-4 h-4" />
+              )}
+        </button>
 
-      <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
-        <code className="whitespace-pre wrap-break-word">{highlightCommand(command)}</code>
-      </pre>
+        <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
+          <code className="whitespace-pre wrap-break-word">
+            <span className="text-gray-500 select-none">$ </span>
+            {highlightCommand(command)}
+          </code>
+        </pre>
+      </div>
     </div>
   )
 }

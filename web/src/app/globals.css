@@ -151,6 +151,11 @@ code {
   text-decoration: underline;
 }
 
+.not-prose a,
+.not-prose a:hover {
+  text-decoration: none;
+}
+
 .prose :not(pre) > code {
   padding: 0.125rem 0.375rem;
   font-size: 0.875rem;
@@ -241,19 +246,6 @@ iframe {
   height: auto;
 }
 
-@keyframes gradient {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-gradient {
-  background-size: 200% auto;
-  animation: gradient 3s ease infinite;
-}
 
 @keyframes border-trail {
   to {

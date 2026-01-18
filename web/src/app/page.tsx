@@ -69,27 +69,27 @@ export default async function HomePage() {
               },
               {
                 title: 'Server Components',
-                description: 'Built-in support for React Server Components out of the box',
+                description: 'Built-in support for React Server Components—ship less JavaScript to the client',
                 icon: 'react',
               },
               {
                 title: 'Zero Configuration',
-                description: 'Start building immediately with sensible defaults and conventions',
+                description: 'Powered by Rolldown-Vite, the next-generation Rust-based bundler for lightning-fast builds',
                 icon: 'vite',
               },
               {
                 title: 'Optimized Bundling',
-                description: 'Smart code splitting and tree shaking for minimal bundle sizes',
+                description: 'Native-speed bundling with Rolldown and esbuild for maximum performance',
                 icon: 'rolldown',
               },
               {
                 title: 'Type Safety',
-                description: 'Full TypeScript support with comprehensive type definitions',
+                description: 'Full TypeScript support with comprehensive type definitions, powered by tsgo for 10x faster type checking',
                 icon: 'typescript',
               },
               {
                 title: 'Developer Experience',
-                description: 'Fast refresh, detailed errors, and exceptional tooling',
+                description: 'Instant HMR with Vite, detailed error messages, and native-speed tooling for a seamless workflow',
                 icon: 'code',
               },
             ].map((feature, i) => (
