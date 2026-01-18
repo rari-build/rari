@@ -19,9 +19,9 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.0.1",
-    "@eslint-react/eslint-plugin": "^2.7.1",
+    "@eslint-react/eslint-plugin": "^2.7.2",
     "@types/node": "^25.0.9",
-    "@typescript/native-preview": "^7.0.0-dev.20260116.1",
+    "@typescript/native-preview": "7.0.0-dev.20260117.1",
     "eslint": "^9.39.2",
     "eslint-plugin-oxlint": "^1.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",

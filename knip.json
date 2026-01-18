@@ -5,6 +5,9 @@
     ".": {
       "ignore": [
         "crates/**/*"
+      ],
+      "ignoreDependencies": [
+        "@typescript/native-preview"
       ]
     },
     "packages/rari": {
