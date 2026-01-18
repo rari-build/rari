@@ -2,6 +2,18 @@ use anyhow::Result;
 use std::path::Path;
 use tokio::process::Command;
 
+pub async fn check_npm_login() -> Result<()> {
+    let output = Command::new("npm").args(["whoami"]).output().await?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "You are not logged into npm. Please run 'npm login' before proceeding with the release."
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn build_package(package_path: &Path) -> Result<()> {
     Command::new("pnpm").args(["build"]).current_dir(package_path).output().await?;
 

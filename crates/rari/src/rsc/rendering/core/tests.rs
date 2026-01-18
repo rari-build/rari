@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::module_inception)]
     use smallvec::SmallVec;
     use std::sync::Arc;
 

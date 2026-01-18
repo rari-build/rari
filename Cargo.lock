@@ -6778,6 +6778,8 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
+ "crossterm",
+ "ratatui",
  "tokio",
 ]
 

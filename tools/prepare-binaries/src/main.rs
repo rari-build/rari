@@ -1,12 +1,29 @@
+mod build;
+mod state;
+mod target;
+mod ui;
+
 use anyhow::{Context, Result};
 use clap::Parser;
-use colored::Colorize;
-use std::fs;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
+use std::io;
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{Mutex, mpsc};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use build::{
+    build_binary, check_rust_installed, copy_binary_to_platform_package, install_target,
+    validate_binary,
+};
+use state::{AppState, BuildStatus, Phase};
+use target::{TARGETS, Target, get_current_platform_target};
+use ui::render_ui;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
@@ -14,233 +31,236 @@ use std::os::unix::fs::PermissionsExt;
 struct Args {
     #[arg(long)]
     all: bool,
+
+    #[arg(long)]
+    no_ui: bool,
 }
 
-#[derive(Debug, Clone)]
-struct Target {
-    target: &'static str,
-    platform: &'static str,
-    binary_name: &'static str,
-    package_dir: &'static str,
-}
-
-const TARGETS: &[Target] = &[
-    Target {
-        target: "x86_64-unknown-linux-gnu",
-        platform: "linux-x64",
-        binary_name: "rari",
-        package_dir: "packages/rari-linux-x64",
-    },
-    Target {
-        target: "aarch64-unknown-linux-gnu",
-        platform: "linux-arm64",
-        binary_name: "rari",
-        package_dir: "packages/rari-linux-arm64",
-    },
-    Target {
-        target: "x86_64-apple-darwin",
-        platform: "darwin-x64",
-        binary_name: "rari",
-        package_dir: "packages/rari-darwin-x64",
-    },
-    Target {
-        target: "aarch64-apple-darwin",
-        platform: "darwin-arm64",
-        binary_name: "rari",
-        package_dir: "packages/rari-darwin-arm64",
-    },
-    Target {
-        target: "x86_64-pc-windows-msvc",
-        platform: "win32-x64",
-        binary_name: "rari.exe",
-        package_dir: "packages/rari-win32-x64",
-    },
-];
-
-fn log(message: &str) {
-    println!("{} {}", "➜".cyan(), message);
-}
-
-fn log_success(message: &str) {
-    println!("{} {}", "✓".green(), message);
-}
-
-fn log_error(message: &str) {
-    eprintln!("{} {}", "✗".red(), message);
-}
-
-fn log_warning(message: &str) {
-    println!("{} {}", "⚠".yellow(), message);
-}
-
-fn get_current_platform_target() -> Option<&'static Target> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-
-    TARGETS.iter().find(|target| {
-        let parts: Vec<&str> = target.platform.split('-').collect();
-        if parts.len() != 2 {
-            return false;
-        }
-        let (target_os, target_arch) = (parts[0], parts[1]);
-
-        let os_match = match os {
-            "macos" => target_os == "darwin",
-            "linux" => target_os == "linux",
-            "windows" => target_os == "win32",
-            _ => false,
-        };
-
-        let arch_match = match arch {
-            "x86_64" => target_arch == "x64",
-            "aarch64" => target_arch == "arm64",
-            _ => false,
-        };
-
-        os_match && arch_match
-    })
-}
-
-async fn check_rust_installed() -> Result<()> {
-    let output = Command::new("cargo")
-        .arg("--version")
-        .output()
-        .await
-        .context("Failed to check cargo version")?;
-
-    if output.status.success() {
-        log_success("Rust/Cargo is installed");
-        Ok(())
-    } else {
-        log_error("Rust/Cargo is not installed");
-        log_error("Please install Rust: https://rustup.rs/");
-        anyhow::bail!("Rust not installed");
+async fn run_build_process(
+    state: Arc<Mutex<AppState>>,
+    project_root: &Path,
+    all: bool,
+    log_tx: mpsc::UnboundedSender<String>,
+    progress_tx: mpsc::UnboundedSender<(usize, usize, Option<usize>)>,
+) -> Result<()> {
+    {
+        let mut s = state.lock().await;
+        s.phase = Phase::CheckingRust;
+        check_rust_installed(&mut s).await?;
     }
-}
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-async fn install_target(target: &str) -> Result<()> {
-    log(&format!("Installing Rust target: {}", target));
-
-    let output = Command::new("rustup")
-        .args(["target", "add", target])
-        .output()
-        .await
-        .context("Failed to install target")?;
-
-    if output.status.success() {
-        log_success(&format!("Installed target: {}", target));
-        Ok(())
-    } else {
-        log_warning(&format!("Failed to install target {}", target));
-        log_warning("You may need to install additional system dependencies");
-        Ok(())
-    }
-}
-
-async fn build_binary(target: &str, project_root: &Path) -> Result<bool> {
-    log(&format!("Building binary for {}", target));
-
-    let mut cmd = Command::new("cargo");
-    cmd.args(["build", "--release", "--target", target, "--bin", "rari"]).current_dir(project_root);
-
-    if target == "aarch64-unknown-linux-gnu" {
-        cmd.env("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "aarch64-linux-gnu-gcc");
-    }
-
-    let output = cmd.output().await.context("Failed to execute cargo build")?;
-
-    if output.status.success() {
-        log_success(&format!("Built binary for {}", target));
-        Ok(true)
-    } else {
-        log_error(&format!("Failed to build binary for {}", target));
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log_error(&format!("Error: {}", stderr));
-        Ok(false)
-    }
-}
-
-fn copy_binary_to_platform_package(target_info: &Target, project_root: &Path) -> Result<bool> {
-    let source_path = project_root
-        .join("target")
-        .join(target_info.target)
-        .join("release")
-        .join(target_info.binary_name);
-
-    let dest_dir = project_root.join(target_info.package_dir).join("bin");
-    let dest_path = dest_dir.join(target_info.binary_name);
-
-    if !source_path.exists() {
-        log_error(&format!("Binary not found: {}", source_path.display()));
-        return Ok(false);
-    }
-
-    if !dest_dir.exists() {
-        fs::create_dir_all(&dest_dir).context("Failed to create destination directory")?;
-        log(&format!("Created directory: {}", dest_dir.display()));
-    }
-
-    fs::copy(&source_path, &dest_path).context("Failed to copy binary")?;
-
-    #[cfg(unix)]
-    if target_info.platform != "win32-x64" {
-        let mut perms = fs::metadata(&dest_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&dest_path, perms)?;
-    }
-
-    log_success(&format!("Copied binary to: {}", dest_path.display()));
-    Ok(true)
-}
-
-fn validate_binary(target_info: &Target, project_root: &Path) -> Result<bool> {
-    let binary_path =
-        project_root.join(target_info.package_dir).join("bin").join(target_info.binary_name);
-
-    if !binary_path.exists() {
-        log_error(&format!("Binary not found: {}", binary_path.display()));
-        return Ok(false);
-    }
-
-    #[cfg(unix)]
-    if target_info.platform != "win32-x64" {
-        let metadata = fs::metadata(&binary_path)?;
-        let permissions = metadata.permissions();
-        if permissions.mode() & 0o111 == 0 {
-            log_error(&format!("Binary is not executable: {}", binary_path.display()));
-            return Ok(false);
+    {
+        let mut s = state.lock().await;
+        s.phase = Phase::InstallingTargets;
+        let num_builds = s.builds.len();
+        for i in 0..num_builds {
+            s.builds[i].status = BuildStatus::Installing;
+            let target = s.builds[i].target.target;
+            install_target(target, &mut s).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
         }
     }
 
-    let metadata = fs::metadata(&binary_path)?;
-    let size_mb = metadata.len() as f64 / 1024.0 / 1024.0;
-
-    log_success(&format!("Binary validated: {} ({:.2} MB)", binary_path.display(), size_mb));
-    Ok(true)
-}
-
-async fn install_linux_cross_compiler() -> Result<()> {
-    if std::env::consts::OS != "linux" {
-        return Ok(());
+    {
+        let mut s = state.lock().await;
+        s.phase = Phase::Building;
     }
 
-    log("Installing Linux ARM64 cross-compiler...");
+    let builds_clone = state.lock().await.builds.clone();
+    for (idx, build) in builds_clone.iter().enumerate() {
+        {
+            let mut s = state.lock().await;
+            s.current_build_idx = Some(idx);
+            s.builds[idx].status = BuildStatus::Building;
+            s.builds[idx].compiled_crates = 0;
+            s.builds[idx].total_crates = None;
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let output = Command::new("sh")
-        .args(["-c", "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu"])
-        .output()
+        let (build_progress_tx, mut build_progress_rx) =
+            mpsc::unbounded_channel::<(usize, Option<usize>)>();
+
+        let state_clone = Arc::clone(&state);
+        let progress_tx_clone = progress_tx.clone();
+        tokio::spawn(async move {
+            while let Some((compiled, total)) = build_progress_rx.recv().await {
+                let mut s = state_clone.lock().await;
+                if let Some(build_state) = s.builds.get_mut(idx) {
+                    build_state.compiled_crates = compiled;
+                    if total.is_some() {
+                        build_state.total_crates = total;
+                    }
+                }
+                progress_tx_clone.send((idx, compiled, total)).ok();
+            }
+        });
+
+        let build_success =
+            build_binary(build.target.target, project_root, log_tx.clone(), build_progress_tx)
+                .await?;
+
+        if !build_success {
+            let mut s = state.lock().await;
+            s.builds[idx].status = BuildStatus::Failed("Build failed".to_string());
+            s.failure_count += 1;
+            if !all {
+                break;
+            }
+            continue;
+        }
+
+        {
+            let mut s = state.lock().await;
+            s.builds[idx].status = BuildStatus::Copying;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let copy_success = {
+            let mut s = state.lock().await;
+            copy_binary_to_platform_package(build.target, project_root, &mut s)?
+        };
+
+        if !copy_success {
+            let mut s = state.lock().await;
+            s.builds[idx].status = BuildStatus::Failed("Copy failed".to_string());
+            s.failure_count += 1;
+            if !all {
+                break;
+            }
+            continue;
+        }
+
+        {
+            let mut s = state.lock().await;
+            s.builds[idx].status = BuildStatus::Validating;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let size = {
+            let mut s = state.lock().await;
+            validate_binary(build.target, project_root, &mut s)?
+        };
+
+        let mut s = state.lock().await;
+        if let Some(size_mb) = size {
+            s.builds[idx].status = BuildStatus::Success;
+            s.builds[idx].size_mb = Some(size_mb);
+            s.success_count += 1;
+        } else {
+            s.builds[idx].status = BuildStatus::Failed("Validation failed".to_string());
+            s.failure_count += 1;
+            if !all {
+                break;
+            }
+        }
+
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+
+    let mut s = state.lock().await;
+    s.phase = Phase::Complete;
+    let success_count = s.success_count;
+    let failure_count = s.failure_count;
+    s.add_log(format!("Build complete! {} succeeded, {} failed", success_count, failure_count));
+
+    Ok(())
+}
+
+async fn run_with_ui(
+    targets: Vec<&'static Target>,
+    project_root: PathBuf,
+    all: bool,
+) -> Result<()> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let state = Arc::new(Mutex::new(AppState::new(targets)));
+    let (log_tx, mut log_rx) = mpsc::unbounded_channel();
+    let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+
+    let state_clone = Arc::clone(&state);
+    tokio::spawn(async move {
+        while let Some(log) = log_rx.recv().await {
+            let mut s = state_clone.lock().await;
+            s.add_log(log);
+        }
+    });
+
+    let _state_clone = Arc::clone(&state);
+    tokio::spawn(
+        async move { while let Some((_idx, _compiled, _total)) = progress_rx.recv().await {} },
+    );
+
+    let state_clone = Arc::clone(&state);
+    let project_root_clone = project_root.clone();
+    let log_tx_clone = log_tx.clone();
+    let progress_tx_clone = progress_tx.clone();
+    let build_handle = tokio::spawn(async move {
+        let _ = run_build_process(
+            state_clone,
+            &project_root_clone,
+            all,
+            log_tx_clone,
+            progress_tx_clone,
+        )
         .await;
+    });
 
-    match output {
-        Ok(output) if output.status.success() => {
-            log_success("Installed Linux ARM64 cross-compiler");
+    let mut should_exit = false;
+    loop {
+        let current_state = state.lock().await.clone();
+        terminal.draw(|f| render_ui(f, &current_state))?;
+
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    should_exit = true;
+                    break;
+                }
+                _ => {}
+            }
         }
-        _ => {
-            log_warning("Failed to install Linux ARM64 cross-compiler");
-            log_warning(
-                "You may need to install it manually: sudo apt-get install gcc-aarch64-linux-gnu",
-            );
+
+        if build_handle.is_finished() {
+            let final_state = state.lock().await.clone();
+            terminal.draw(|f| render_ui(f, &final_state))?;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            break;
         }
+    }
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    if should_exit {
+        println!("\nBuild cancelled by user");
+        std::process::exit(130);
+    }
+
+    let final_state = state.lock().await;
+
+    println!(
+        "\n{}",
+        if final_state.failure_count == 0 { "Success!" } else { "Completed with errors" }
+    );
+    println!("\nBuilt {} of {} binaries", final_state.success_count, final_state.builds.len());
+
+    for build in &final_state.builds {
+        if matches!(build.status, BuildStatus::Success) {
+            println!("  {} -> {}", build.target.platform, build.target.package_dir);
+        }
+    }
+
+    if final_state.failure_count > 0 && !all {
+        std::process::exit(1);
     }
 
     Ok(())
@@ -249,147 +269,44 @@ async fn install_linux_cross_compiler() -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-
-    println!("{}\n", "🔧 Preparing Rari binaries for platform packages".bold());
-
     let project_root = PathBuf::from(".");
 
     let targets_to_build: Vec<&Target> = if args.all {
-        log("Building for all platforms (cross-compilation mode)");
         TARGETS.iter().collect()
     } else {
-        let current_target = get_current_platform_target().context(
-            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64)",
-        )?;
-        log(&format!("Building for current platform only: {}", current_target.platform.cyan()));
-        println!(
-            "{}",
-            "Use --all flag to build for all platforms (requires cross-compilation tools)".dimmed()
-        );
+        let current_target =
+            get_current_platform_target().context("Unable to determine current platform target")?;
         vec![current_target]
     };
 
-    println!();
+    if args.no_ui {
+        println!("Preparing Rari binaries...\n");
+        let state = Arc::new(Mutex::new(AppState::new(targets_to_build.clone())));
+        let (log_tx, mut log_rx) = mpsc::unbounded_channel();
+        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
 
-    check_rust_installed().await?;
-
-    if args.all {
-        install_linux_cross_compiler().await?;
-    }
-
-    log("Installing Rust targets...");
-    for target_info in &targets_to_build {
-        install_target(target_info.target).await?;
-    }
-
-    println!();
-
-    log("Building binaries...");
-    let mut success_count = 0;
-    let mut failure_count = 0;
-
-    for target_info in &targets_to_build {
-        let success = build_binary(target_info.target, &project_root).await?;
-        if success {
-            success_count += 1;
-        } else {
-            failure_count += 1;
-            if !args.all {
-                log_error("Failed to build binary for current platform");
-                log_error("This may indicate a Rust compilation issue");
-                std::process::exit(1);
+        let state_clone = Arc::clone(&state);
+        tokio::spawn(async move {
+            while let Some(log) = log_rx.recv().await {
+                println!("{}", log);
+                let mut s = state_clone.lock().await;
+                s.add_log(log);
             }
-        }
-    }
+        });
 
-    println!();
+        tokio::spawn(async move {
+            while let Some((_idx, _compiled, _total)) = progress_rx.recv().await {}
+        });
 
-    log("Copying binaries to platform packages...");
-    for target_info in &targets_to_build {
-        let binary_path = project_root
-            .join("target")
-            .join(target_info.target)
-            .join("release")
-            .join(target_info.binary_name);
+        run_build_process(state.clone(), &project_root, args.all, log_tx, progress_tx).await?;
 
-        if binary_path.exists() {
-            let success = copy_binary_to_platform_package(target_info, &project_root)?;
-            if !success {
-                failure_count += 1;
-            }
-        }
-    }
-
-    println!();
-
-    log("Validating binaries...");
-    for target_info in &targets_to_build {
-        validate_binary(target_info, &project_root)?;
-    }
-
-    println!();
-
-    let total_attempted = targets_to_build.len();
-
-    if failure_count == 0 {
-        log_success(&format!("✨ Successfully prepared {} platform binaries!", success_count));
-        println!();
-        println!("{}", "Platform packages ready:".bold());
-        for target_info in &targets_to_build {
-            println!("  • {} → {}", target_info.platform.cyan(), target_info.package_dir);
-        }
-        println!();
-        println!("{}", "Next steps:".dimmed());
-        if !args.all {
-            println!("{}", "  1. Test the binary locally".dimmed());
-            println!("{}", "  2. Use GitHub Actions for full cross-platform builds".dimmed());
-            println!(
-                "{}",
-                "  3. Or run with --all flag (requires cross-compilation setup)".dimmed()
-            );
-        } else {
-            println!("{}", "  1. Test the binaries locally".dimmed());
-            println!("{}", "  2. Run the release script: pnpm run release".dimmed());
-            println!("{}", "  3. Or publish individual packages".dimmed());
-        }
+        let final_state = state.lock().await;
+        println!(
+            "\nComplete! {} succeeded, {} failed",
+            final_state.success_count, final_state.failure_count
+        );
     } else {
-        if success_count > 0 {
-            log_warning(&format!(
-                "Partial success: {}/{} binaries built",
-                success_count, total_attempted
-            ));
-            println!();
-            println!("{}", "Successfully built:".bold());
-            for target_info in &targets_to_build {
-                let binary_path = project_root
-                    .join("target")
-                    .join(target_info.target)
-                    .join("release")
-                    .join(target_info.binary_name);
-                if binary_path.exists() {
-                    println!("  • {}", target_info.platform.green());
-                }
-            }
-        } else {
-            log_error("Failed to prepare any platform binaries");
-        }
-
-        println!();
-        println!("{}", "Troubleshooting:".bold());
-        if args.all {
-            println!("  • Cross-compilation requires additional tools:");
-            println!("    - Linux: Install gcc-*-linux-gnu packages");
-            println!("    - Windows: Install mingw-w64 toolchain");
-            println!("    - Use GitHub Actions for reliable cross-platform builds");
-            println!("  • Or build for current platform only (remove --all flag)");
-        } else {
-            println!("  • Ensure Rust is installed: https://rustup.rs/");
-            println!("  • Check that all required dependencies are installed");
-        }
-
-        if !args.all && failure_count > 0 {
-            std::process::exit(1);
-        }
+        run_with_ui(targets_to_build, project_root, args.all).await?;
     }
 
     Ok(())

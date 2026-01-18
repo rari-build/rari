@@ -156,6 +156,7 @@ pub fn add_api_security_headers(headers: &mut axum::http::HeaderMap) {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
 

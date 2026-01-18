@@ -1,4 +1,8 @@
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+#[allow(clippy::module_inception)]
+#[allow(clippy::bool_assert_comparison)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use crate::server::actions::{
         ValidationConfig, is_dangerous_property, validate_and_sanitize_args,

@@ -13,7 +13,11 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::{env, io, time::Duration};
+use std::{
+    env,
+    io::{self, Write},
+    time::Duration,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "release")]
@@ -52,6 +56,32 @@ async fn main() -> Result<()> {
 
     if args.non_interactive || env_version.is_some() || env_type.is_some() {
         return run_non_interactive(only, args.dry_run, env_version, env_type).await;
+    }
+
+    if !args.dry_run {
+        use colored::Colorize;
+        println!("{}", "Rari Release Script".cyan().bold());
+        println!();
+        print!("{} Checking npm login status... ", "→".cyan());
+        io::stdout().flush()?;
+
+        match npm::check_npm_login().await {
+            Ok(_) => {
+                println!("{}", "✓".green());
+                println!();
+            }
+            Err(e) => {
+                println!("{}", "✗".red());
+                println!();
+                eprintln!("{} {}", "Error:".red().bold(), e);
+                eprintln!();
+                eprintln!(
+                    "{}",
+                    "Please run 'npm login' before proceeding with the release.".yellow()
+                );
+                std::process::exit(1);
+            }
+        }
     }
 
     enable_raw_mode()?;
@@ -106,6 +136,13 @@ async fn run_non_interactive(
         println!("{}", "[DRY RUN MODE]".yellow().bold());
     }
     println!();
+
+    if !dry_run {
+        println!("{} Checking npm login status...", "→".cyan());
+        crate::npm::check_npm_login().await?;
+        println!("{} npm login verified", "✓".green());
+        println!();
+    }
 
     let mut packages = vec![
         Package::load("rari", "packages/rari", true).await?,

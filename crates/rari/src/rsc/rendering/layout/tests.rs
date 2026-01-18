@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 #[cfg(test)]
 use super::*;
 use crate::rsc::rendering::core::RscRenderer;

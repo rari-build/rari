@@ -12,5 +12,83 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/rari-build/rari"
 
+[workspace.lints.clippy]
+# Restriction rules for better code quality
+allow_attributes = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+clone_on_ref_ptr = "deny"
+empty_drop = "deny"
+exit = "deny"
+filetype_is_file = "deny"
+get_unwrap = "deny"
+rc_buffer = "deny"
+rc_mutex = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+unnecessary_safety_comment = "deny"
+
+# Pedantic rules
+pedantic = { level = "warn", priority = -1 }
+
+# Pedantic overrides - allow rules that are too noisy or not valuable
+case_sensitive_file_extension_comparisons = "allow"
+module_inception = "allow"
+module_name_repetitions = "allow"
+similar_names = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+missing_const_for_fn = "allow"
+needless_for_each = "allow"
+new_without_default = "allow"
+missing_panics_doc = "allow"
+inconsistent_struct_constructor = "allow"
+single_match = "allow"
+single_match_else = "allow"
+map_unwrap_or = "allow"
+collapsible_if = "allow"
+
+# Nursery rules that are useful
+debug_assert_with_mut_call = "warn"
+iter_on_single_items = "warn"
+needless_pass_by_ref_mut = "warn"
+redundant_clone = "warn"
+redundant_pub_crate = "warn"
+significant_drop_in_scrutinee = "warn"
+unused_peekable = "warn"
+
+[workspace.dependencies]
+tokio = { version = "1.49.0", features = [
+  "full",
+  "process"
+] }
+anyhow = "1.0.100"
+clap = { version = "4.5.54", features = [ "derive" ] }
+colored = "3.1.1"
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+serde = { version = "1.0.228", features = [ "derive" ] }
+serde_json = "1.0.149"
+semver = "1.0.27"
+
+[profile.dev]
+# Minimal debug info to speed up local and CI builds
+debug = "line-tables-only"
+
 [profile.dev.package.num-bigint-dig]
 opt-level = 3
+
+[profile.test]
+# Minimal debug info to speed up test builds
+debug = "line-tables-only"
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = "fat"
+opt-level = 3
+strip = "symbols"
+
+[profile.release-debug]
+debug = true
+inherits = "release"
