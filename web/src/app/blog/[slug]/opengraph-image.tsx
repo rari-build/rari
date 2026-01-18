@@ -78,7 +78,6 @@ export default async function Image({ params }: PageProps) {
               fontSize: 48,
               fontWeight: 'bold',
               color: '#f0f6fc',
-              fontFamily: 'monospace',
             }}
           >
             rari
@@ -109,10 +108,6 @@ export default async function Image({ params }: PageProps) {
               color: '#f0f6fc',
               marginBottom: '30px',
               lineHeight: 1.2,
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
             }}
           >
             {title}
@@ -123,10 +118,6 @@ export default async function Image({ params }: PageProps) {
               fontSize: 32,
               color: '#8b949e',
               lineHeight: 1.4,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
             }}
           >
             {description}

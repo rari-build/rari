@@ -21,6 +21,7 @@ export const docsNavigation: NavItem[] = [
         href: '/docs/api-reference/components',
         items: [
           { label: 'Image', href: '/docs/api-reference/components/image' },
+          { label: 'ImageResponse', href: '/docs/api-reference/components/image-response' },
         ],
       },
     ],
