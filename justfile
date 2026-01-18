@@ -13,6 +13,7 @@ setup:
     # Rust setup
     cargo install cargo-binstall
     cargo binstall cargo-insta -y
+    cargo binstall cargo-nextest -y
     # Node.js setup
     corepack enable
     pnpm install
@@ -59,13 +60,33 @@ build-web: _ensure-node-deps
 # Run all tests (Rust + Node.js)
 test: test-rust test-node
 
-# Run Rust tests
+# Run Rust tests with nextest
 test-rust:
+    cargo nextest run --workspace
+
+# Run Rust tests with standard test runner
+test-rust-standard:
     cargo test --workspace
+
+# Run Rust doc tests
+test-rust-doc:
+    cargo test --workspace --doc
+
+# Run all Rust tests (nextest + doc tests)
+test-rust-all: test-rust test-rust-doc
 
 # Run Node.js tests
 test-node: _ensure-node-deps
     pnpm -r run test
+
+# Run tests with coverage
+test-coverage:
+    cargo nextest run --workspace --all-features
+    cargo test --workspace --doc
+
+# Run specific test with nextest
+test-filter filter:
+    cargo nextest run --workspace {{ filter }}
 
 # --- Lint commands ---
 
@@ -127,6 +148,10 @@ dev: _ensure-node-deps
 typecheck: _ensure-node-deps
     pnpm typecheck
 
+# Watch and run tests on file changes
+test-watch:
+    cargo watch -x "nextest run --workspace"
+
 # --- Release commands ---
 
 # Generate changelog
@@ -174,7 +199,7 @@ run-release *args:
 # --- Combined workflow commands ---
 
 # Run all checks (lint + test + typecheck)
-check: lint test typecheck
+check: lint test-rust-all test-node typecheck
 
 # Full CI workflow
 ci: check build
