@@ -32,7 +32,7 @@ export default async function RootLayout({ children, pathname }: LayoutProps) {
       <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
         <div className="flex min-h-screen">
           <Sidebar version={version} pathname={pathname} />
-          <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 pl-0.5 pr-0.5">
+          <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
             <main className="flex-1 min-w-0 bg-[#0d1117] rounded-b-md overflow-hidden">
               {children}
             </main>
