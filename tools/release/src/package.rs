@@ -36,8 +36,12 @@ impl Package {
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
         let pkg_json_path = self.path.join("package.json");
         let content = tokio::fs::read_to_string(&pkg_json_path).await?;
-        let mut pkg_json: PackageJson = serde_json::from_str(&content)?;
-        pkg_json.version = new_version.to_string();
+
+        let mut pkg_json: serde_json::Value = serde_json::from_str(&content)?;
+
+        if let Some(obj) = pkg_json.as_object_mut() {
+            obj.insert("version".to_string(), serde_json::Value::String(new_version.to_string()));
+        }
 
         let updated = serde_json::to_string_pretty(&pkg_json)?;
         tokio::fs::write(&pkg_json_path, format!("{}\n", updated)).await?;
