@@ -1,19 +1,29 @@
 {
   "name": "create-rari-app",
-  "type": "module",
-  "version": "0.3.4",
-  "description": "Create Runtime Accelerated Rendering Infrastructure (Rari) applications with no build configuration",
+  "version": "0.3.5",
   "author": "Ryan Skinner",
-  "license": "MIT",
-  "homepage": "https://github.com/rari-build/rari#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rari-build/rari.git",
-    "directory": "packages/create-rari-app"
+  "bin": {
+    "create-rari-app": "dist/index.mjs"
   },
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
   },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "picocolors": "^1.1.1"
+  },
+  "description": "Create Runtime Accelerated Rendering Infrastructure (Rari) applications with no build configuration",
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
+    "oxlint": "^1.39.0",
+    "tsdown": "^0.18.4"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
   "keywords": [
     "rari",
     "react",
@@ -30,29 +40,19 @@
     "starter",
     "project-template"
   ],
-  "bin": {
-    "create-rari-app": "dist/index.mjs"
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/create-rari-app",
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git"
   },
-  "files": [
-    "dist",
-    "templates"
-  ],
   "scripts": {
     "build": "pnpm clean && pnpm typecheck && tsdown",
-    "dev": "tsdown --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsgo",
+    "dev": "tsdown --watch",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "typecheck": "tsgo"
   },
-  "dependencies": {
-    "@clack/prompts": "^0.11.0",
-    "picocolors": "^1.1.1"
-  },
-  "devDependencies": {
-    "@types/node": "^25.0.9",
-    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
-    "oxlint": "^1.39.0",
-    "tsdown": "^0.18.4"
-  }
+  "type": "module"
 }
