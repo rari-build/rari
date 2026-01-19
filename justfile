@@ -172,6 +172,8 @@ changelog-latest:
     git-cliff --latest
 
 # Run release process
+# Usage: just release
+# With OTP: NPM_OTP=123456 just release
 release:
     cargo run --release --manifest-path tools/release/Cargo.toml --bin release
 
