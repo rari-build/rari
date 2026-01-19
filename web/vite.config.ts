@@ -7,8 +7,8 @@ export default defineConfig({
   plugins: [
     rari({
       csp: {
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://www.googletagmanager.com'],
-        connectSrc: ['\'self\'', 'ws:', 'wss:', 'https://www.google-analytics.com', 'https://www.googletagmanager.com'],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://us-assets.i.posthog.com'],
+        connectSrc: ['\'self\'', 'ws:', 'wss:', 'https://us.i.posthog.com', 'https://us-assets.i.posthog.com'],
       },
     }),
     tailwindcss(),
