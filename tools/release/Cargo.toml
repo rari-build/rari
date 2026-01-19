@@ -19,3 +19,4 @@ semver = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
+regex = { workspace = true }
