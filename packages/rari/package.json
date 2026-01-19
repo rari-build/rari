@@ -1,19 +1,69 @@
 {
   "name": "rari",
-  "type": "module",
-  "version": "0.7.4",
-  "description": "Runtime Accelerated Rendering Infrastructure (Rari)",
+  "version": "0.7.5",
   "author": "Ryan Skinner",
-  "license": "MIT",
-  "homepage": "https://github.com/rari-build/rari#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rari-build/rari.git",
-    "directory": "packages/rari"
+  "bin": {
+    "rari": "./dist/cli.mjs"
   },
   "bugs": {
     "url": "https://github.com/rari-build/rari/issues"
   },
+  "dependencies": {
+    "acorn": "^8.15.0",
+    "esbuild": "^0.27.2",
+    "picocolors": "^1.1.1"
+  },
+  "description": "Runtime Accelerated Rendering Infrastructure (Rari)",
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@types/react": "^19.2.8",
+    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
+    "chokidar": "^5.0.0",
+    "oxlint": "^1.39.0",
+    "rolldown-vite": "^7.3.1",
+    "tsdown": "^0.18.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    ".": {
+      "browser": "./dist/client.mjs",
+      "default": "./dist/vite.mjs",
+      "node": "./dist/vite.mjs",
+      "types": "./dist/vite.d.mts"
+    },
+    "./client": {
+      "default": "./dist/client.mjs",
+      "types": "./dist/client.d.mts"
+    },
+    "./image": {
+      "default": "./dist/image/index.mjs",
+      "types": "./dist/image/index.d.mts"
+    },
+    "./mdx": {
+      "default": "./dist/mdx.mjs",
+      "types": "./dist/mdx.d.mts"
+    },
+    "./og": {
+      "default": "./dist/og/index.mjs",
+      "types": "./dist/og/index.d.mts"
+    },
+    "./package.json": "./package.json",
+    "./runtime/actions": {
+      "default": "./dist/runtime/actions.mjs",
+      "types": "./dist/runtime/actions.d.mts"
+    },
+    "./vite": {
+      "default": "./dist/vite.mjs",
+      "types": "./dist/vite.d.mts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "homepage": "https://github.com/rari-build/rari#readme",
   "keywords": [
     "react",
     "server-components",
@@ -32,66 +82,7 @@
     "full-stack",
     "web-framework"
   ],
-  "exports": {
-    ".": {
-      "types": "./dist/vite.d.mts",
-      "browser": "./dist/client.mjs",
-      "node": "./dist/vite.mjs",
-      "default": "./dist/vite.mjs"
-    },
-    "./client": {
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
-    },
-    "./vite": {
-      "types": "./dist/vite.d.mts",
-      "default": "./dist/vite.mjs"
-    },
-    "./image": {
-      "types": "./dist/image/index.d.mts",
-      "default": "./dist/image/index.mjs"
-    },
-    "./og": {
-      "types": "./dist/og/index.d.mts",
-      "default": "./dist/og/index.mjs"
-    },
-    "./mdx": {
-      "types": "./dist/mdx.d.mts",
-      "default": "./dist/mdx.mjs"
-    },
-    "./runtime/actions": {
-      "types": "./dist/runtime/actions.d.mts",
-      "default": "./dist/runtime/actions.mjs"
-    },
-    "./package.json": "./package.json"
-  },
-  "types": "dist/index.d.mts",
-  "bin": {
-    "rari": "./dist/cli.mjs"
-  },
-  "files": [
-    "dist",
-    "src"
-  ],
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "scripts": {
-    "build": "pnpm clean && pnpm typecheck && tsdown",
-    "typecheck": "tsgo",
-    "clean": "rm -rf dist",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "dependencies": {
-    "acorn": "^8.15.0",
-    "esbuild": "^0.27.2",
-    "picocolors": "^1.1.1"
-  },
+  "license": "MIT",
   "optionalDependencies": {
     "rari-darwin-arm64": "0.7.5",
     "rari-darwin-x64": "0.7.5",
@@ -99,13 +90,22 @@
     "rari-linux-x64": "0.7.5",
     "rari-win32-x64": "0.7.5"
   },
-  "devDependencies": {
-    "@types/node": "^25.0.9",
-    "@types/react": "^19.2.8",
-    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
-    "chokidar": "^5.0.0",
-    "oxlint": "^1.39.0",
-    "rolldown-vite": "^7.3.1",
-    "tsdown": "^0.18.4"
-  }
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "repository": {
+    "directory": "packages/rari",
+    "type": "git",
+    "url": "https://github.com/rari-build/rari.git"
+  },
+  "scripts": {
+    "build": "pnpm clean && pnpm typecheck && tsdown",
+    "clean": "rm -rf dist",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "typecheck": "tsgo"
+  },
+  "type": "module",
+  "types": "dist/index.d.mts"
 }
