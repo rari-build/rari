@@ -1,6 +1,5 @@
-'use client'
-
 import ArrowNarrowRight from './icons/ArrowNarrowRight'
+import Rari from './icons/Rari'
 import Terminal from './icons/Terminal'
 
 export default function HeroSection() {
@@ -11,17 +10,9 @@ export default function HeroSection() {
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
         <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-4 mb-8 group">
-            <div className="relative z-10">
-              <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl blur-md opacity-30 group-hover:opacity-50 transition-opacity"></div>
-              <div className="relative w-20 h-20 lg:w-24 lg:h-24 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform">
-                <span className="text-gray-900 font-bold text-3xl lg:text-4xl">R</span>
-              </div>
-            </div>
-
-            <h1 className="text-5xl lg:text-7xl font-bold text-[#f0f6fc] tracking-tight">
-              rari
-            </h1>
+          <div className="flex items-center justify-center mb-8">
+            <Rari className="w-64 h-20 lg:w-80 lg:h-24 transition-transform hover:scale-105" aria-hidden="true" />
+            <h1 className="sr-only">Rari</h1>
           </div>
 
           <p className="text-2xl lg:text-3xl font-semibold text-white mb-4 max-w-3xl mx-auto leading-tight">

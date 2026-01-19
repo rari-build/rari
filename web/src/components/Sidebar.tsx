@@ -9,6 +9,7 @@ import Discord from './icons/Discord'
 import Github from './icons/Github'
 import Heart from './icons/Heart'
 import Menu from './icons/Menu'
+import Rari from './icons/Rari'
 
 interface SidebarProps {
   version: string
@@ -137,25 +138,18 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         </label>
 
         <div className="p-6">
-          <div className="flex items-center space-x-3 mb-8 pb-4 border-b border-[#30363d]/50 relative">
+          <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative">
             <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <a
               href="/"
-              className="w-8 h-8 bg-linear-to-br from-[#fd7e14] to-[#e8590c] rounded-lg flex items-center justify-center shadow-lg hover:opacity-80 transition-opacity"
+              className="hover:opacity-80 transition-opacity"
+              aria-label="Rari home"
             >
-              <span className="text-gray-900 font-bold text-lg">R</span>
+              <Rari className="w-14 h-8" aria-hidden="true" />
             </a>
-            <div>
-              <a
-                href="/"
-                className="text-xl font-semibold text-[#f0f6fc] font-mono hover:opacity-80 transition-opacity"
-              >
-                rari
-              </a>
-              <div className="text-xs text-gray-300 font-mono">
-                v
-                {version}
-              </div>
+            <div className="px-2 py-1 bg-[#161b22] border border-[#30363d] rounded-md text-xs text-[#fd7e14] font-mono font-medium">
+              v
+              {version}
             </div>
           </div>
 
