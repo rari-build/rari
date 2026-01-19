@@ -15,7 +15,13 @@ pub async fn check_npm_login() -> Result<()> {
 }
 
 pub async fn build_package(package_path: &Path) -> Result<()> {
-    Command::new("pnpm").args(["build"]).current_dir(package_path).output().await?;
+    let output = Command::new("pnpm").args(["build"]).current_dir(package_path).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to build package:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
 
     Ok(())
 }
@@ -28,17 +34,29 @@ pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result
         args.push("next");
     }
 
-    Command::new("npm").args(&args).current_dir(package_path).output().await?;
+    let output = Command::new("npm").args(&args).current_dir(package_path).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to publish package:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
 
     Ok(())
 }
 
 pub async fn generate_changelog(tag: &str, project_root: &Path) -> Result<()> {
-    Command::new("git-cliff")
+    let output = Command::new("git-cliff")
         .args(["--tag", tag, "--output", "CHANGELOG.md"])
         .current_dir(project_root)
         .output()
         .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to generate changelog:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
 
     Ok(())
 }
