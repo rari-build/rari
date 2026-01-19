@@ -47,9 +47,15 @@ pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         if stderr.contains("EOTP") {
-            anyhow::bail!(
-                "npm publish requires a one-time password.\nPlease run: NPM_OTP=<code> just release"
-            );
+            if otp.is_some() {
+                anyhow::bail!(
+                    "npm publish failed: OTP code is invalid or expired.\nPlease restart with a fresh OTP code: NPM_OTP=<code> just release"
+                );
+            } else {
+                anyhow::bail!(
+                    "npm publish requires a one-time password.\nPlease run: NPM_OTP=<code> just release"
+                );
+            }
         }
 
         anyhow::bail!("Failed to publish package:\nstdout: {}\nstderr: {}", stdout, stderr);
