@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or issue with Rari
+description: Report a bug or issue with rari
 title: '[Bug]: '
 labels: [bug, needs-triage]
 assignees: []
@@ -89,8 +89,8 @@ body:
   - type: input
     id: rari-version
     attributes:
-      label: Rari Version
-      description: Which version of Rari are you using?
+      label: rari Version
+      description: Which version of rari are you using?
       placeholder: 0.9.0
     validations:
       required: true
@@ -99,7 +99,7 @@ body:
     id: install-method
     attributes:
       label: Installation Method
-      description: How did you install Rari?
+      description: How did you install rari?
       options:
         - npm create rari-app
         - npm install rari

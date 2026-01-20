@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a performance issue! Performance is a core focus of Rari, and we take these reports seriously. Please provide detailed information to help us investigate and optimize.
+        Thanks for reporting a performance issue! Performance is a core focus of rari, and we take these reports seriously. Please provide detailed information to help us investigate and optimize.
 
   - type: checkboxes
     id: terms
@@ -60,7 +60,7 @@ body:
       label: Steps to Reproduce
       description: Detailed steps to reproduce the performance issue
       placeholder: |
-        1. Create a new Rari app with `npm create rari-app my-app`
+        1. Create a new rari app with `npm create rari-app my-app`
         2. Add specific components or configuration
         3. Run `npm run dev` or `npm run build`
         4. Observe performance issue...
@@ -136,8 +136,8 @@ body:
   - type: input
     id: rari-version
     attributes:
-      label: Rari Version
-      description: Which version of Rari are you using?
+      label: rari Version
+      description: Which version of rari are you using?
       placeholder: 0.9.0
     validations:
       required: true

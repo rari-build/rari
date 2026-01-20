@@ -1,5 +1,5 @@
 name: Question / Help
-description: Ask a question or get help with using Rari
+description: Ask a question or get help with using rari
 title: '[Question]: '
 labels: [question, help-wanted]
 assignees: []
@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reaching out! We're here to help you get the most out of Rari. Please provide details about your question so we can give you the best possible answer.
+        Thanks for reaching out! We're here to help you get the most out of rari. Please provide details about your question so we can give you the best possible answer.
 
   - type: checkboxes
     id: terms
@@ -56,8 +56,8 @@ body:
 
         For example:
         - How do I handle authentication in Server Components?
-        - What's the best way to fetch data in Rari?
-        - How do I deploy a Rari app to production?
+        - What's the best way to fetch data in rari?
+        - How do I deploy a rari app to production?
     validations:
       required: true
 
@@ -117,20 +117,20 @@ body:
   - type: input
     id: rari-version
     attributes:
-      label: Rari Version
-      description: Which version of Rari are you using?
+      label: rari Version
+      description: Which version of rari are you using?
       placeholder: 0.9.0
 
   - type: dropdown
     id: experience-level
     attributes:
       label: Experience Level
-      description: How would you describe your experience with Rari and React?
+      description: How would you describe your experience with rari and React?
       options:
-        - 'New to Rari, experienced with React'
-        - New to both Rari and React
-        - 'Familiar with Rari, experienced with React'
-        - Experienced with both Rari and React
+        - 'New to rari, experienced with React'
+        - New to both rari and React
+        - 'Familiar with rari, experienced with React'
+        - Experienced with both rari and React
         - Expert level
     validations:
       required: true
@@ -139,7 +139,7 @@ body:
     id: related-technologies
     attributes:
       label: Related Technologies
-      description: What other technologies are you using with Rari?
+      description: What other technologies are you using with rari?
       options:
         - label: TypeScript
         - label: Tailwind CSS

@@ -1,8 +1,8 @@
-# Contributing to Rari
+# Contributing to rari
 
-Thank you for your interest in contributing to Rari! We welcome contributions from the community and are excited to work with you.
+Thank you for your interest in contributing to rari! We welcome contributions from the community and are excited to work with you.
 
-Rari is a React framework powered by a Rust runtime, designed for performance, scalability, and developer experience. This guide will help you get started with contributing to the project.
+rari is a React framework powered by a Rust runtime, designed for performance, scalability, and developer experience. This guide will help you get started with contributing to the project.
 
 ## Code of Conduct
 
@@ -10,7 +10,7 @@ Please read and follow our [Code of Conduct](./CODE_OF_CONDUCT.md) to ensure a w
 
 ## Project Overview
 
-Rari is a monorepo that consists of:
+rari is a monorepo that consists of:
 
 - **Rust Core** (`crates/`) - The high-performance runtime engine
 - **TypeScript/JavaScript Packages** (`packages/`) - Framework tooling and APIs
@@ -371,4 +371,4 @@ Contributors are recognized in:
 - **CHANGELOG.md** - Credit for specific changes
 - **GitHub releases** - Acknowledgment in release notes
 
-Thank you for contributing to Rari! Your efforts help make Rari faster and more accessible for everyone.
+Thank you for contributing to rari! Your efforts help make rari faster and more accessible for everyone.

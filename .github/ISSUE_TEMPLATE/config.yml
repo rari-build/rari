@@ -17,4 +17,4 @@ contact_links:
     about: Discuss new features and improvements with the community
   - name: 🆘 Quick Start
     url: https://github.com/rari-build/rari/blob/main/README.md#quick-start
-    about: Get started with Rari in seconds using create-rari-app
+    about: Get started with rari in seconds using create-rari-app

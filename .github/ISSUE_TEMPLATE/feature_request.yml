@@ -1,5 +1,5 @@
 name: Feature Request
-description: Request a new feature or enhancement for Rari
+description: Request a new feature or enhancement for rari
 title: '[Feature]: '
 labels: [enhancement, needs-triage]
 assignees: []
@@ -20,7 +20,7 @@ body:
           required: true
         - label: I have read the [Contributing Guide](https://github.com/rari-build/rari/blob/main/.github/CONTRIBUTING.md)
           required: true
-        - label: I have considered whether this feature aligns with Rari's goals and philosophy
+        - label: I have considered whether this feature aligns with rari's goals and philosophy
           required: true
 
   - type: textarea
@@ -84,7 +84,7 @@ body:
     id: feature-area
     attributes:
       label: Feature Area
-      description: Which area of Rari would this feature primarily affect?
+      description: Which area of rari would this feature primarily affect?
       options:
         - React Server Components
         - Rust Runtime
@@ -153,7 +153,7 @@ body:
       description: Would this feature require any breaking changes?
       placeholder: |
         Would this change any existing APIs?
-        Could it impact existing Rari applications?
+        Could it impact existing rari applications?
         How could migration be handled?
 
   - type: textarea
