@@ -17,7 +17,7 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
         .split(area);
 
     let title_text =
-        if app.dry_run { "Rari Release Manager [DRY RUN MODE]" } else { "Rari Release Manager" };
+        if app.dry_run { "rari Release Manager [DRY RUN MODE]" } else { "rari Release Manager" };
     let title = Paragraph::new(title_text)
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)

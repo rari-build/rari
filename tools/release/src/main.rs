@@ -21,7 +21,7 @@ use std::{
 
 #[derive(Parser, Debug)]
 #[command(name = "release")]
-#[command(about = "Rari Release Manager", long_about = None)]
+#[command(about = "rari Release Manager", long_about = None)]
 struct Args {
     #[arg(long, value_delimiter = ',')]
     only: Option<Vec<String>>,
@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
 
     if !args.dry_run {
         use colored::Colorize;
-        println!("{}", "Rari Release Script".cyan().bold());
+        println!("{}", "rari Release Script".cyan().bold());
         println!();
         print!("{} Checking npm login status... ", "→".cyan());
         io::stdout().flush()?;
@@ -131,7 +131,7 @@ async fn run_non_interactive(
     use crate::package::{Package, ReleaseType};
     use colored::Colorize;
 
-    println!("{}", "Rari Release Script".cyan().bold());
+    println!("{}", "rari Release Script".cyan().bold());
     if dry_run {
         println!("{}", "[DRY RUN MODE]".yellow().bold());
     }

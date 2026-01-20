@@ -20,7 +20,7 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
         ])
         .split(frame.area());
 
-    let title = Paragraph::new("Rari Binary Builder")
+    let title = Paragraph::new("rari Binary Builder")
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(

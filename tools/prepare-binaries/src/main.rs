@@ -27,7 +27,7 @@ use ui::render_ui;
 
 #[derive(Parser, Debug)]
 #[command(name = "prepare-binaries")]
-#[command(about = "Prepare Rari binaries for platform packages", long_about = None)]
+#[command(about = "Prepare rari binaries for platform packages", long_about = None)]
 struct Args {
     #[arg(long)]
     all: bool,
@@ -280,7 +280,7 @@ async fn main() -> Result<()> {
     };
 
     if args.no_ui {
-        println!("Preparing Rari binaries...\n");
+        println!("Preparing rari binaries...\n");
         let state = Arc::new(Mutex::new(AppState::new(targets_to_build.clone())));
         let (log_tx, mut log_rx) = mpsc::unbounded_channel();
         let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
