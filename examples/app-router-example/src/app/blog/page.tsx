@@ -29,6 +29,6 @@ export default async function BlogPage() {
 }
 
 export const metadata = {
-  title: 'Blog | Rari App Router',
+  title: 'Blog | rari App Router',
   description: 'Read our latest blog posts',
 }

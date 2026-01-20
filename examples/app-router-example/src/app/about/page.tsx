@@ -6,7 +6,7 @@ export default function AboutPage() {
           About This Example
         </h1>
         <p className="text-lg text-gray-600 leading-relaxed max-w-3xl">
-          This example demonstrates the Rari app router, a server-first routing
+          This example demonstrates the rari app router, a server-first routing
           system inspired by Next.js App Router. It showcases modern React
           patterns including Server Components, Server Actions, and streaming.
         </p>
@@ -226,6 +226,6 @@ export default function AboutPage() {
 }
 
 export const metadata = {
-  title: 'About | Rari App Router',
-  description: 'Learn about the Rari app router implementation',
+  title: 'About | rari App Router',
+  description: 'Learn about the rari app router implementation',
 }

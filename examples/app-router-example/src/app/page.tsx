@@ -6,14 +6,14 @@ export default async function HomePage({ params, searchParams }: PageProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 md:p-12">
         <div className="flex items-center gap-3 mb-4">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
-            Welcome to Rari App Router
+            Welcome to rari App Router
           </h1>
           <span className="text-3xl">🚀</span>
         </div>
 
         <p className="text-lg text-gray-600 mb-6 max-w-3xl leading-relaxed">
           A demonstration of the Next.js-style app router implementation in
-          Rari. Explore server-side rendering, React Server Components, and
+          rari. Explore server-side rendering, React Server Components, and
           modern routing patterns.
         </p>
 
@@ -236,6 +236,6 @@ export default async function HomePage({ params, searchParams }: PageProps) {
 }
 
 export const metadata = {
-  title: 'Home | Rari App Router',
-  description: 'Welcome to the Rari app router example',
+  title: 'Home | rari App Router',
+  description: 'Welcome to the rari app router example',
 }

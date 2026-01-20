@@ -40,6 +40,6 @@ export default async function InteractivePage() {
 }
 
 export const metadata = {
-  title: 'Interactive Components | Rari App Router',
+  title: 'Interactive Components | rari App Router',
   description: 'Testing client components with RSC',
 }

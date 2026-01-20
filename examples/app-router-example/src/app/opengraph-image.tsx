@@ -36,7 +36,7 @@ export default function Image() {
               color: 'white',
             }}
           >
-            Rari
+            rari
           </div>
           <div
             style={{

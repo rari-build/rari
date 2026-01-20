@@ -10,7 +10,7 @@ export interface Todo {
 let todos: Todo[] = [
   { id: '1', text: 'Learn React Server Components', completed: true, createdAt: new Date().toISOString() },
   { id: '2', text: 'Implement Server Actions', completed: false, createdAt: new Date().toISOString() },
-  { id: '3', text: 'Build with Rari', completed: false, createdAt: new Date().toISOString() },
+  { id: '3', text: 'Build with rari', completed: false, createdAt: new Date().toISOString() },
 ]
 
 export async function getTodos() {

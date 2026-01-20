@@ -277,6 +277,6 @@ export default function TestImagePage() {
 }
 
 export const metadata = {
-  title: 'Image Optimization | Rari App Router',
+  title: 'Image Optimization | rari App Router',
   description: 'High-performance image optimization powered by Rust',
 }

@@ -40,7 +40,7 @@ export default function Image({ params }: PageProps<{ slug: string }>) {
             textDecoration: 'underline',
           }}
         >
-          Rari Blog
+          rari Blog
         </div>
 
         <div

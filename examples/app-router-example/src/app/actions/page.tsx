@@ -14,7 +14,7 @@ export default async function ActionsPage() {
           <span className="text-3xl">⚡</span>
         </div>
         <p className="text-lg text-gray-600 max-w-3xl leading-relaxed">
-          This page demonstrates React Server Actions working with Rari. All
+          This page demonstrates React Server Actions working with rari. All
           patterns follow React's official server function specifications.
         </p>
       </div>
@@ -183,6 +183,6 @@ export default async function ActionsPage() {
 }
 
 export const metadata = {
-  title: 'Server Actions Demo | Rari App Router',
-  description: 'Demonstration of React Server Actions with Rari framework',
+  title: 'Server Actions Demo | rari App Router',
+  description: 'Demonstration of React Server Actions with rari framework',
 }

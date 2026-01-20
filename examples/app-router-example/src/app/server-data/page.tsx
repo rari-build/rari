@@ -87,6 +87,6 @@ export default async function ServerDataPage() {
 }
 
 export const metadata = {
-  title: 'Server Data | Rari App Router',
+  title: 'Server Data | rari App Router',
   description: 'Async server component data fetching',
 }
