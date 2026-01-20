@@ -1,4 +1,10 @@
-# Rari
+<a href="https://rari.build" target="_blank">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/rari-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/rari-light.svg">
+    <img alt="Rari" src=".github/assets/rari-light.svg" width="400">
+  </picture>
+</a>
 
 > Runtime Accelerated Rendering Infrastructure
 
