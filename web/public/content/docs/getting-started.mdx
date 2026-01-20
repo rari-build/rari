@@ -1,9 +1,9 @@
 export const title = 'Getting Started'
-export const description = 'Learn how to create your first Rari application with React Server Components and Rust-powered performance.'
+export const description = 'Learn how to create your first rari application with React Server Components and Rust-powered performance.'
 
-<PageHeader title="Getting Started with Rari" lastUpdated="January 16, 2026" />
+<PageHeader title="Getting Started with rari" lastUpdated="January 16, 2026" />
 
-This guide will walk you through creating your first Rari application from scratch. You'll learn the basics of React Server Components with Rari's high-performance Rust runtime.
+This guide will walk you through creating your first rari application from scratch. You'll learn the basics of React Server Components with rari's high-performance Rust runtime.
 
 ## Prerequisites
 
@@ -92,8 +92,8 @@ export default function RootLayout({ children }: LayoutProps) {
 }
 
 export const metadata = {
-  title: 'My Rari App',
-  description: 'Built with Rari',
+  title: 'My rari App',
+  description: 'Built with rari',
 }
 `}</CodeBlock>
 
@@ -110,7 +110,7 @@ export default async function HomePage({ params, searchParams }: PageProps) {
 
   return (
     <div>
-      <h1>Welcome to Rari</h1>
+      <h1>Welcome to rari</h1>
 
       {/* Server-rendered content */}
       <div>
@@ -128,8 +128,8 @@ export default async function HomePage({ params, searchParams }: PageProps) {
 }
 
 export const metadata = {
-  title: 'Home | My Rari App',
-  description: 'Welcome to my Rari application',
+  title: 'Home | My rari App',
+  description: 'Welcome to my rari application',
 }
 `}</CodeBlock>
 
@@ -155,7 +155,7 @@ export default function Counter() {
 
 ## Using NPM Packages
 
-One of Rari's superpowers is seamless NPM package integration. Let's add markdown support:
+One of rari's superpowers is seamless NPM package integration. Let's add markdown support:
 
 <PackageManagerTabs
   commands={{
@@ -198,7 +198,7 @@ Use it in a page:
 <CodeBlock filename="src/app/blog/page.tsx" language="tsx">{`import MarkdownPost from '@/components/MarkdownPost'
 
 const blogPost = \`
-# Welcome to Rari!
+# Welcome to rari!
 
 This markdown is processed **on the server** using the \\\`marked\\\` package.
 
@@ -216,7 +216,7 @@ export default function BlogPage() {
 }
 
 export const metadata = {
-  title: 'Blog | My Rari App',
+  title: 'Blog | My rari App',
   description: 'Read our latest posts',
 }
 `}</CodeBlock>
@@ -274,7 +274,7 @@ Runs your optimized app in production mode.
 
 ## Project Structure
 
-A typical Rari project (created with `create-rari-app`) looks like this:
+A typical rari project (created with `create-rari-app`) looks like this:
 
 <CodeBlock language="bash">{`my-rari-app/
 ├── src/
@@ -305,7 +305,7 @@ A typical Rari project (created with `create-rari-app`) looks like this:
 
 ## App Router
 
-Rari uses the app router pattern where your file structure in `src/app/` automatically determines your application routes. This makes organizing your application intuitive and scalable.
+rari uses the app router pattern where your file structure in `src/app/` automatically determines your application routes. This makes organizing your application intuitive and scalable.
 
 ### Basic Routes
 
@@ -380,7 +380,7 @@ export default function RootLayout({ children }: LayoutProps) {
 
 export const metadata = {
   title: 'My App',
-  description: 'Built with Rari',
+  description: 'Built with rari',
 }
 `}</CodeBlock>
 

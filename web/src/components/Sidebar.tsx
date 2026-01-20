@@ -143,7 +143,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             <a
               href="/"
               className="hover:opacity-80 transition-opacity"
-              aria-label="Rari home"
+              aria-label="rari home"
             >
               <Rari className="w-14 h-8" aria-hidden="true" />
             </a>

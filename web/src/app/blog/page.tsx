@@ -59,10 +59,10 @@ export default async function BlogIndexPage() {
       <div className="space-y-12">
         <div className="space-y-4">
           <h1 className="text-5xl font-bold text-[#f0f6fc] tracking-tight">
-            Rari Blog
+            rari Blog
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl">
-            Latest news, updates, and insights from the Rari team.
+            Latest news, updates, and insights from the rari team.
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export default async function BlogIndexPage() {
                   </div>
                   <h2 className="text-2xl font-semibold text-[#f0f6fc]">No posts yet</h2>
                   <p className="text-gray-300">
-                    Check back soon for updates, tutorials, and insights from the Rari team.
+                    Check back soon for updates, tutorials, and insights from the rari team.
                   </p>
                 </div>
               </div>
@@ -107,6 +107,6 @@ export default async function BlogIndexPage() {
 }
 
 export const metadata = {
-  title: 'Rari Blog',
-  description: 'Latest news and updates from the Rari team.',
+  title: 'rari Blog',
+  description: 'Latest news and updates from the rari team.',
 }

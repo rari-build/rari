@@ -5,8 +5,8 @@ import { getBlogFilePath, isValidSlug } from '@/lib/content-utils'
 
 export default async function Image({ params }: PageProps) {
   const slug = params?.slug
-  let title = 'Rari Blog'
-  let description = 'Latest news and updates from the Rari team.'
+  let title = 'rari Blog'
+  let description = 'Latest news and updates from the rari team.'
 
   if (isValidSlug(slug)) {
     try {

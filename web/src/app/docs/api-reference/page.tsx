@@ -8,7 +8,7 @@ export default async function ApiReferencePage() {
         <Breadcrumbs pathname="/docs/api-reference" />
         <PageHeader title="API Reference" lastUpdated="January 16, 2026" />
         <p className="text-lg text-gray-300 leading-relaxed">
-          Complete API documentation for Rari framework components, functions, and utilities.
+          Complete API documentation for rari framework components, functions, and utilities.
         </p>
 
         <div className="not-prose space-y-8">
@@ -79,6 +79,6 @@ export default async function ApiReferencePage() {
 }
 
 export const metadata = {
-  title: 'API Reference / Rari Docs',
-  description: 'Complete API documentation for Rari framework components, functions, and utilities.',
+  title: 'API Reference / rari Docs',
+  description: 'Complete API documentation for rari framework components, functions, and utilities.',
 }

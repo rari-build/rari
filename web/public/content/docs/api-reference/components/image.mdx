@@ -1,9 +1,9 @@
 export const title = 'Image Component'
-export const description = 'Optimize and serve images with automatic format conversion, responsive sizing, and lazy loading using the Rari Image component.'
+export const description = 'Optimize and serve images with automatic format conversion, responsive sizing, and lazy loading using the rari Image component.'
 
 <PageHeader title="Image Component" lastUpdated="January 16, 2026" />
 
-The `<Image>` component extends the HTML `<img>` element with automatic image optimization, responsive sizing, modern format conversion (WebP, AVIF), and lazy loading. Powered by high-performance Rust transformations on the backend, you get production-grade image processing with minimal configuration—just write JavaScript and let Rari handle the performance-critical work.
+The `<Image>` component extends the HTML `<img>` element with automatic image optimization, responsive sizing, modern format conversion (WebP, AVIF), and lazy loading. Powered by high-performance Rust transformations on the backend, you get production-grade image processing with minimal configuration—just write JavaScript and let rari handle the performance-critical work.
 
 ## Import
 
@@ -721,7 +721,7 @@ Check that:
 - The image file exists in the `public` directory or is a valid URL
 - For remote images, the domain is listed in `remotePatterns` in your `vite.config.ts`
 - For local images, the path matches a pattern in `localPatterns`
-- The Rari development server is running
+- The rari development server is running
 
 ### Layout Shift Issues
 
@@ -747,7 +747,7 @@ Always provide `width` and `height` props, or use `fill` with a sized parent con
 
 ### CORS Errors with Remote Images
 
-Remote images are proxied through your Rari server to avoid CORS issues. If you see CORS errors:
+Remote images are proxied through your rari server to avoid CORS issues. If you see CORS errors:
 - Verify the domain is in `remotePatterns`
 - Check that the remote server allows your domain
 - Ensure you're not using `unoptimized` with remote images (which bypasses the proxy)

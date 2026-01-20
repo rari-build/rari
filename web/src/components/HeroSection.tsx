@@ -12,7 +12,7 @@ export default function HeroSection() {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center mb-8">
             <Rari className="w-64 h-20 lg:w-80 lg:h-24 transition-transform hover:scale-105" aria-hidden="true" />
-            <h1 className="sr-only">Rari</h1>
+            <h1 className="sr-only">rari</h1>
           </div>
 
           <p className="text-2xl lg:text-3xl font-semibold text-white mb-4 max-w-3xl mx-auto leading-tight">

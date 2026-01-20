@@ -4,8 +4,8 @@ import MdxRenderer from '@/components/MdxRenderer'
 import { getBlogFilePath, isValidSlug } from '@/lib/content-utils'
 
 const DEFAULT_METADATA = {
-  title: 'Rari Blog',
-  description: 'Latest news and updates from the Rari team.',
+  title: 'rari Blog',
+  description: 'Latest news and updates from the rari team.',
 }
 
 export default async function BlogPage({ params }: PageProps) {
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: PageProps) {
 
     if (titleMatch || descriptionMatch) {
       return {
-        title: titleMatch ? `${titleMatch[1]} / Rari Blog` : DEFAULT_METADATA.title,
+        title: titleMatch ? `${titleMatch[1]} / rari Blog` : DEFAULT_METADATA.title,
         description: descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description,
       }
     }
@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: PageProps) {
     const headingMatch = content.match(/^#\s+(\S.*)$/m)
     if (headingMatch) {
       return {
-        title: `${headingMatch[1]} / Rari Blog`,
+        title: `${headingMatch[1]} / rari Blog`,
         description: DEFAULT_METADATA.description,
       }
     }

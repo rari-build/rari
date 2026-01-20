@@ -4,8 +4,8 @@ import MdxRenderer from '@/components/MdxRenderer'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
 
 const DEFAULT_METADATA = {
-  title: 'Rari Docs',
-  description: 'Complete documentation for Rari framework.',
+  title: 'rari Docs',
+  description: 'Complete documentation for rari framework.',
 }
 
 export default async function DocPage({ params }: PageProps) {
@@ -51,7 +51,7 @@ export async function generateMetadata({ params }: PageProps) {
     const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
 
     if (titleMatch || descriptionMatch) {
-      const pageTitle = titleMatch ? `${titleMatch[1]} / Rari Docs` : DEFAULT_METADATA.title
+      const pageTitle = titleMatch ? `${titleMatch[1]} / rari Docs` : DEFAULT_METADATA.title
       const pageDescription = descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description
 
       return {
@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: PageProps) {
 
     const headingMatch = content.match(/^#\s+(\S.*)$/m)
     if (headingMatch) {
-      const pageTitle = `${headingMatch[1]} / Rari Docs`
+      const pageTitle = `${headingMatch[1]} / rari Docs`
       return {
         title: pageTitle,
         description: DEFAULT_METADATA.description,

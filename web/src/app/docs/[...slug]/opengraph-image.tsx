@@ -5,8 +5,8 @@ import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
 
 export default async function Image({ params }: PageProps) {
   const slug = params?.slug
-  let title = 'Rari Docs'
-  let description = 'Complete documentation for Rari framework.'
+  let title = 'rari Docs'
+  let description = 'Complete documentation for rari framework.'
 
   if (isValidSlugArray(slug)) {
     try {

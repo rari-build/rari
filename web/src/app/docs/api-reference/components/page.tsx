@@ -103,6 +103,6 @@ export default async function ComponentsPage() {
 }
 
 export const metadata = {
-  title: 'Components / API Reference / Rari Docs',
+  title: 'Components / API Reference / rari Docs',
   description: 'Built-in React components for optimized images, dynamic metadata, and more.',
 }

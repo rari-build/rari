@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/rari-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset=".github/assets/rari-light.svg">
-    <img alt="Rari" src=".github/assets/rari-light.svg" width="200">
+    <img alt="rari" src=".github/assets/rari-light.svg" width="200">
   </picture>
 </a>
 
@@ -12,9 +12,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord)](https://discord.gg/GSh2Ak3b8Q)
 
-**Rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
+**rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 
-With proper app router support, true server-side rendering, and correct RSC semantics, Rari delivers 12x higher throughput and 2x faster response times than Next.js.
+With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 12x higher throughput and 2x faster response times than Next.js.
 
 ## Features
 
@@ -32,7 +32,7 @@ With proper app router support, true server-side rendering, and correct RSC sema
 
 ## Quick Start
 
-Create a new Rari application in seconds:
+Create a new rari application in seconds:
 
 ```bash
 npm create rari-app@latest my-app
@@ -48,14 +48,14 @@ Visit [rari.build/docs](https://rari.build/docs) for complete documentation, gui
 
 **[Read the full documentation](https://rari.build/docs)** to learn more about:
 
-- Getting started with Rari
+- Getting started with rari
 - App Router and file-based routing
 - Server Components and Client Components
 - Server Actions and data mutations
 - Streaming SSR and Suspense
 - Deployment and production optimization
 
-## Why Rari?
+## Why rari?
 
 ### Performance That Matters
 - **2x faster response times** - 1.32ms vs 2.63ms average response
@@ -74,21 +74,21 @@ Visit [rari.build/docs](https://rari.build/docs) for complete documentation, gui
 
 ## Performance
 
-Rari delivers exceptional performance that significantly outperforms traditional React frameworks:
+rari delivers exceptional performance that significantly outperforms traditional React frameworks:
 
 ### Head-to-Head Comparison vs Next.js
 
 > Benchmarks last updated: January 14, 2026
 
 **Response Time (Single Request):**
-| Metric | Rari | Next.js | Improvement |
+| Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
 | **Average** | **1.32ms** | 2.63ms | **2.0x faster** |
 | **P95** | 3.36ms | 4.06ms | **1.2x faster** |
 | **Bundle Size** | 28.1 KB | 82.0 KB | **66% smaller** |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
-| Metric | Rari | Next.js | Improvement |
+| Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
 | **Requests/sec** | **21,263** | 1,760 | **12.1x higher** |
 | **Avg Latency** | **1.94ms** | 27.89ms | **14.4x faster** |
@@ -96,7 +96,7 @@ Rari delivers exceptional performance that significantly outperforms traditional
 | **Errors** | 0 | 0 | Stable |
 
 **Build Performance:**
-| Metric | Rari | Next.js | Improvement |
+| Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
 | **Build Time** | **1.73s** | 4.43s | **2.6x faster** |
 | **Bundle Size** | 433 KB | 543 KB | **20% smaller** |

@@ -32,7 +32,7 @@ export default async function HomePage() {
               />
 
               <p className="text-lg text-gray-400 mb-6">
-                Create a new Rari project in seconds with our zero-config generator.
+                Create a new rari project in seconds with our zero-config generator.
               </p>
 
               <a
@@ -103,7 +103,7 @@ export default async function HomePage() {
 }
 
 export const metadata = {
-  title: 'Rari: Runtime Accelerated Rendering Infrastructure',
+  title: 'rari: Runtime Accelerated Rendering Infrastructure',
   description:
-    'Rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
+    'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
 }
