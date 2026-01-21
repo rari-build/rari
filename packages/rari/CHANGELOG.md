@@ -1,10 +1,47 @@
-## [0.7.5] - 2026-01-19
+## [0.7.6] - 2026-01-21
+
+### 🚀 Features
+
+- *(web)* Migrate from GA to PostHog for analytics
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Update eslint and oxlint rules in page render script
+
+### 💼 Other
+
+- Rari@0.7.5
+
+### 🚜 Refactor
+
+- *(prepare-binaries)* Simplify CLI tool
+- *(exports)* Reorganize proxy and image module exports
+
+### 📚 Documentation
+
+- *(assets)* Add rari logo assets and update README branding
+- *(readme)* Reduce logo width
+- Standardize rari branding to lowercase throughout
+- Standardize rari branding to lowercase in github templates
+- *(rari)* Standardize rari branding to lowercase in package description
+- *(contributing)* Update development setup and project structure
+- *(contributing)* Align project structure formatting
+
+### 🎨 Styling
+
+- Standardize rari branding to lowercase in console messages
+- Standardize rari branding to lowercase in error messages
+- Standardize rari branding to lowercase in runtime logs
+- Standardize rari branding in log messages and error outputs
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump optional dependencies to 0.7.5
 - *(release)* Simplify npm OTP handling
-## [0.7.5] - 2026-01-19
+- *(release)* Bump create-rari-app to 0.3.5
+- *(release)* Fix package.json and improve version handling
+- *(release)* Bump version to 0.7.6
+## [0.7.5] - 2026-01-18
 
 ### 🚀 Features
 
