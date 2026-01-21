@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+/// <reference types="rolldown-vite/client" />
 
 interface ImportMetaEnv {
   readonly VITE_POSTHOG_KEY?: string
