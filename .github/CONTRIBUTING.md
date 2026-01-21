@@ -15,7 +15,8 @@ rari is a monorepo that consists of:
 - **Rust Core** (`crates/`) - The high-performance runtime engine
 - **TypeScript/JavaScript Packages** (`packages/`) - Framework tooling and APIs
 - **Examples** (`examples/`) - Sample applications and demonstrations
-- **Documentation** (`docs/`) - Project documentation
+- **Web** (`web/`) - Documentation website and landing page
+- **Tools** (`tools/`) - Build and release automation tools
 
 ## Development Setup
 
@@ -24,6 +25,7 @@ rari is a monorepo that consists of:
 - **Node.js** 18+ (we recommend using the latest LTS version)
 - **Rust** (latest stable version)
 - **pnpm** (package manager - required for monorepo workspace management)
+- **just** (command runner - optional but recommended for easier development)
 
 ### Installation
 
@@ -33,18 +35,30 @@ rari is a monorepo that consists of:
    cd rari
    ```
 
-2. **Install dependencies:**
+2. **Run setup (recommended):**
    ```bash
-   pnpm install
+   just setup
    ```
 
-3. **Build the project:**
+   This will:
+   - Check prerequisites
+   - Install Rust tools (cargo-nextest, cargo-machete, cargo-insta)
+   - Enable corepack and install pnpm dependencies
+   - Build all packages
+
+   **Or manually:**
    ```bash
+   # Install dependencies
+   pnpm install
+
+   # Build the project
    pnpm run build
    ```
 
-4. **Verify installation:**
+3. **Verify installation:**
    ```bash
+   just check
+   # Or manually:
    pnpm run typecheck
    pnpm run lint
    ```
@@ -56,13 +70,17 @@ rari/
 ├── .github/           # GitHub workflows and templates
 ├── crates/            # Rust crates
 │   └── rari/         # Main Rust runtime
-├── docs/              # Documentation
 ├── examples/          # Example applications
-│   └── basic-vite-rsc/
+│   └── app-router-example/
 ├── packages/          # TypeScript/JavaScript packages
 │   ├── create-rari-app/  # CLI tool for creating new apps
-│   └── rari/            # Main framework package
-├── scripts/           # Build and release scripts
+│   ├── rari/            # Main framework package
+│   └── rari-{platform}/ # Platform-specific binary packages
+├── tools/             # Build and release automation
+│   ├── prepare-binaries/ # Binary preparation tool
+│   └── release/         # Release automation tool
+├── web/               # Documentation website
+├── justfile           # Command runner recipes
 ├── Cargo.toml         # Rust workspace configuration
 ├── pnpm-workspace.yaml # pnpm workspace configuration
 └── package.json       # Root package.json
@@ -74,8 +92,28 @@ rari/
 
 This project uses **pnpm workspaces** for dependency management. All commands should be run from the root directory unless otherwise specified.
 
+We use **just** as a command runner to simplify common tasks. Run `just` to see all available commands.
+
 ### Building the Project
 
+**Using just (recommended):**
+```bash
+# Build everything (Rust + Node.js)
+just build
+
+# Build only Rust crates
+just build-rust
+
+# Build only Node.js packages
+just build-node
+
+# Build specific packages
+just build-rari
+just build-create-rari-app
+just build-web
+```
+
+**Or manually:**
 ```bash
 # Build all packages and crates
 pnpm run build
@@ -91,7 +129,7 @@ cargo build --release
 
 ```bash
 # Navigate to an example
-cd examples/basic-vite-rsc
+cd examples/app-router-example
 
 # Install dependencies (if not already done from root)
 pnpm install
@@ -100,18 +138,29 @@ pnpm install
 pnpm run dev
 ```
 
+### Running the Web Documentation Site
+
+```bash
+# Start the web dev server
+just dev
+
+# Or manually:
+pnpm --filter @rari/web dev
+```
+
 ### Testing Changes
 
 To test your changes:
 
 1. **Build the project:**
    ```bash
-   pnpm run build
+   just build
+   # Or: pnpm run build
    ```
 
 2. **Run an example app:**
    ```bash
-   cd examples/basic-vite-rsc
+   cd examples/app-router-example
    pnpm run dev
    ```
 
@@ -123,10 +172,39 @@ To test your changes:
    pnpm run dev
    ```
 
+4. **Run the rari CLI directly:**
+   ```bash
+   just run --help
+   # Or in release mode:
+   just run-release --help
+   ```
+
 ### Rust Development
 
 The Rust runtime is located in `crates/rari/`. Key commands:
 
+**Using just (recommended):**
+```bash
+# Lint Rust code
+just lint-rust
+
+# Fix Rust formatting and linting
+just fix-rust
+
+# Run Rust tests with nextest
+just test-rust
+
+# Run all Rust tests (including doc tests)
+just test-rust-all
+
+# Check for unused dependencies
+just machete
+
+# Build release version
+just build-rust-release
+```
+
+**Or manually:**
 ```bash
 # Format Rust code
 cargo fmt
@@ -143,8 +221,24 @@ cargo build --release
 
 ### TypeScript Development
 
-TypeScript packages are in `packages/`. Key commands:
+TypeScript packages are in `packages/` and `web/`. Key commands:
 
+**Using just (recommended):**
+```bash
+# Type check all packages
+just typecheck
+
+# Lint all packages
+just lint-node
+
+# Fix linting issues
+just fix-node
+
+# Check for unused dependencies and exports
+just knip
+```
+
+**Or manually:**
 ```bash
 # Type check all packages
 pnpm run typecheck
@@ -154,6 +248,9 @@ pnpm run lint
 
 # Fix linting issues
 pnpm run lint:fix
+
+# Check for unused dependencies
+pnpm knip
 ```
 
 ## Code Quality
@@ -163,10 +260,32 @@ pnpm run lint:fix
 We use multiple tools to maintain code quality:
 
 - **ESLint** + **oxlint** for JavaScript/TypeScript linting & code formatting
-- **Clippy** for Rust code
+- **Clippy** for Rust linting
+- **rustfmt** for Rust code formatting
+- **cargo-machete** for detecting unused Rust dependencies
+- **knip** for detecting unused TypeScript dependencies and exports
 
 Run these commands before submitting:
 
+**Using just (recommended):**
+```bash
+# Lint all code (Rust + Node.js)
+just lint
+
+# Fix auto-fixable issues
+just fix
+
+# Type check
+just typecheck
+
+# Run all checks (lint + test + typecheck)
+just check
+
+# Quick development check (faster)
+just quick-check
+```
+
+**Or manually:**
 ```bash
 # Lint all code
 pnpm run lint
@@ -198,6 +317,31 @@ pnpm run typecheck
 
 ### Running Tests
 
+**Using just (recommended):**
+```bash
+# Run all tests (Rust + Node.js)
+just test
+
+# Run only Rust tests with nextest
+just test-rust
+
+# Run all Rust tests (including doc tests)
+just test-rust-all
+
+# Run only Node.js tests
+just test-node
+
+# Run specific test by filter
+just test-filter "test_name"
+
+# Watch tests (re-run on file changes)
+just test-watch
+
+# Run tests with coverage
+just test-coverage
+```
+
+**Or manually:**
 ```bash
 # Run all tests
 pnpm test
@@ -205,7 +349,7 @@ pnpm test
 # Run Rust tests
 cargo test
 
-# Run TypeScript tests (if available)
+# Run TypeScript tests
 pnpm -r run test
 ```
 
@@ -260,14 +404,33 @@ chore(deps): update dependencies
 
 ## Release Process
 
-Releases are managed by maintainers using our automated release script:
+Releases are managed by maintainers using our automated release tools:
 
+**Using just (recommended):**
 ```bash
 # Dry run (preview changes)
-pnpm run release:dry
+just release-dry
 
 # Create actual release
-pnpm run release
+just release
+
+# Prepare binaries for release
+just prepare-binaries
+
+# Generate changelog
+just changelog
+
+# Preview unreleased changes
+just changelog-preview
+```
+
+**Or manually:**
+```bash
+# Run release tool
+cargo run --release --manifest-path tools/release/Cargo.toml --bin release
+
+# Dry run
+cargo run --release --manifest-path tools/release/Cargo.toml --bin release -- --dry-run
 ```
 
 The release process:
@@ -284,6 +447,8 @@ The release process:
 1. **Test your changes** thoroughly
 2. **Run all quality checks:**
    ```bash
+   just check
+   # Or manually:
    pnpm run lint
    pnpm run typecheck
    pnpm run build
@@ -313,8 +478,9 @@ The release process:
 ### Documentation
 
 - [README](../README.md) - Project overview and quick start
-- [Architecture docs](../docs/) - Detailed technical documentation
+- [Website](https://rari.build/docs) - Full documentation and guides
 - [Examples](../examples/) - Sample applications
+- [justfile](../justfile) - All available commands
 
 ### Communication
 
@@ -344,12 +510,26 @@ For new features:
 
 ## Development Tips
 
+### Using just
+
+The `justfile` provides convenient commands for all common tasks. Run `just` or `just --list` to see all available commands.
+
+Key commands:
+- `just setup` - One-time setup for new contributors
+- `just build` - Build everything
+- `just test` - Run all tests
+- `just lint` - Lint all code
+- `just fix` - Auto-fix linting issues
+- `just check` - Run all checks (CI workflow)
+- `just dev` - Start web dev server
+
 ### Working with Rust and TypeScript
 
 - **Build order matters** - Rust crates need to be built before TypeScript packages
 - **Use development mode** - The project automatically uses `cargo run` in development
 - **Binary management** - Pre-built binaries are used in production
 - **Cross-platform testing** - Test on different operating systems when possible
+- **Use just commands** - They handle dependencies and build order automatically
 
 ### Performance Considerations
 
