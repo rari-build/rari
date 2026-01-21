@@ -47,7 +47,7 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
     }
     catch (error) {
       if (!error.message || !error.message.includes('Promise not found'))
-        console.error('[RARI] Error resolving lazy promise:', error)
+        console.error('[rari] Error resolving lazy promise:', error)
       return {
         success: false,
         error: error.message || String(error),

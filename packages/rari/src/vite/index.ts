@@ -938,7 +938,7 @@ const ${componentName} = registerClientReference(
                     }
                   }
                   catch (error) {
-                    console.error(`[RARI] Error checking ${fullPath}:`, error)
+                    console.error(`[rari] Error checking ${fullPath}:`, error)
                   }
                 }
               }

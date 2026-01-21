@@ -214,7 +214,7 @@ export function registerClientComponent(componentFunction, id, exportName) {
         export_name: exportName,
       }),
     }).catch((error) => {
-      console.error('[RARI] Failed to register client component with server:', error)
+      console.error('[rari] Failed to register client component with server:', error)
     })
   }
 }
