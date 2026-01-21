@@ -22,7 +22,7 @@ export class ProxyExecutor {
       this.initialized = true
     }
     catch (error) {
-      console.error('[rari:proxy] Failed to load proxy:', error)
+      console.error('[rari] Proxy: Failed to load proxy:', error)
       throw error
     }
   }
@@ -62,7 +62,7 @@ export class ProxyExecutor {
 
       if (waitUntilPromises.length > 0) {
         Promise.allSettled(waitUntilPromises).catch((error) => {
-          console.error('[rari:proxy] waitUntil promise failed:', error)
+          console.error('[rari] Proxy: waitUntil promise failed:', error)
         })
       }
 
@@ -72,7 +72,7 @@ export class ProxyExecutor {
       return this.convertResponse(result)
     }
     catch (error) {
-      console.error('[rari:proxy] Proxy execution failed:', error)
+      console.error('[rari] Proxy: Proxy execution failed:', error)
       return { continue: true }
     }
   }
@@ -166,7 +166,7 @@ export async function initializeProxyFromManifest(
     return executor
   }
   catch (error) {
-    console.error('[rari:proxy] Failed to initialize from manifest:', error)
+    console.error('[rari] Proxy: Failed to initialize from manifest:', error)
     return null
   }
 }

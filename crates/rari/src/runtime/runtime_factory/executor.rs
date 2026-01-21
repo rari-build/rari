@@ -118,7 +118,7 @@ async fn execute_as_module(
         }
         Err(eval_err) => {
             if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
-                println!("[RARI_HMR] Module '{script_name}' already evaluated, continuing");
+                println!("[rari] Module '{script_name}' already evaluated, continuing");
             } else {
                 return Err(RariError::js_execution(format!(
                     "Failed to evaluate module '{script_name}': {eval_err}"
@@ -177,7 +177,7 @@ async fn handle_component_registration(
         && !success
         && let Some(JsonValue::String(error)) = result_obj.get("error")
     {
-        println!("[RARI_ERROR] Registration failed: {error}");
+        println!("[rari] Registration failed: {error}");
         return Err(RariError::js_execution(format!(
             "Failed to register component '{script_name}': {error}"
         )));

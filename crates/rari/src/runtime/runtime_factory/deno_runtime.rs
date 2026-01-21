@@ -252,7 +252,7 @@ impl DenoRuntime {
                                 };
 
                                 if let Err(e) = result {
-                                    eprintln!("[RARI_ERROR] Error processing request: {e}");
+                                    eprintln!("[rari] Error processing request: {e}");
                                     break;
                                 }
 
@@ -260,7 +260,7 @@ impl DenoRuntime {
                                     .run_event_loop(PollEventLoopOptions::default())
                                     .await
                                 {
-                                    eprintln!("[RARI_WARN] Event loop error: {e}. Restarting runtime.");
+                                    eprintln!("[rari] Event loop error: {e}. Restarting runtime.");
                                 }
                             }
                             None => {
@@ -269,7 +269,7 @@ impl DenoRuntime {
                         }
                     }
 
-                    println!("[RARI_RUNTIME] Restarting JS runtime due to error or forced restart");
+                    println!("[rari] Restarting JS runtime due to error or forced restart");
                     tokio::time::sleep(std::time::Duration::from_millis(
                         RUNTIME_QUICK_RESTART_DELAY_MS,
                     ))
@@ -324,13 +324,13 @@ async fn handle_load_es_module(
                 let err_msg = format!(
                     "Invalid module specifier string '{specifier_str}' for component '{component_id}': {e}"
                 );
-                eprintln!("[RARI_ERROR] {err_msg}");
+                eprintln!("[rari] {err_msg}");
                 let _ = result_tx.send(Err(RariError::js_execution(err_msg)));
             }
         }
     } else {
         let err_msg = format!("Component specifier not found for LoadEsModule: {component_id}");
-        eprintln!("[RARI_ERROR] {err_msg}");
+        eprintln!("[rari] {err_msg}");
         let _ = result_tx.send(Err(RariError::js_execution(err_msg)));
     }
     Ok::<(), RariError>(())
@@ -376,7 +376,7 @@ async fn handle_evaluate_module(
     if let Err(e) = &result
         && is_critical_error(e)
     {
-        println!("[RARI_RUNTIME] Critical error detected in module evaluation: {e}");
+        println!("[rari] Critical error detected in module evaluation: {e}");
         *continue_processing = false;
     }
 

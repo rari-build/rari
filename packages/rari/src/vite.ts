@@ -6,7 +6,8 @@ export type {
 
 export { ApiResponse } from './api-routes'
 
-export { RariRequest, RariResponse } from './proxy'
+export { RariRequest } from './proxy/RariRequest'
+export { RariResponse } from './proxy/RariResponse'
 
 export type Request = globalThis.Request
 export type Response = globalThis.Response

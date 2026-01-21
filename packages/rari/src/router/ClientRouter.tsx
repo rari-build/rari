@@ -236,7 +236,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       timeout: 10000,
       maxRetries: 3,
       onError: (error) => {
-        console.error('[ClientRouter] Navigation error:', error)
+        console.error('[rari] Router: Navigation error:', error)
       },
       onRetry: () => {},
     }),
@@ -288,7 +288,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
   const navigate = async (href: string, options: NavigationOptions = {}) => {
     if (!href || typeof href !== 'string') {
-      console.error('[ClientRouter] Invalid navigation target:', href)
+      console.error('[rari] Router: Invalid navigation target:', href)
       return
     }
 
@@ -453,7 +453,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
             }))
           }
           catch (streamError) {
-            console.error('[ClientRouter] Streaming error:', streamError)
+            console.error('[rari] Router: Streaming error:', streamError)
             throw streamError
           }
         }

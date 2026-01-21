@@ -2,10 +2,10 @@ export default function Welcome() {
   return (
     <div className="bg-white rounded-xl p-8 shadow-sm">
       <h2 className="text-2xl font-semibold mb-4 text-gray-900">
-        🎉 Welcome to Rari!
+        🎉 Welcome to rari!
       </h2>
       <p className="text-gray-600 mb-4">
-        You've successfully created a new Rari application. This is a client component
+        You've successfully created a new rari application. This is a client component
         that renders on both server and client.
       </p>
       <div className="space-y-2 text-sm text-gray-500">

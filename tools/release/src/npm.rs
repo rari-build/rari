@@ -26,7 +26,11 @@ pub async fn build_package(package_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result<()> {
+pub async fn publish_package(
+    package_path: &Path,
+    is_prerelease: bool,
+    otp: Option<&str>,
+) -> Result<()> {
     let mut args = vec!["publish", "--access", "public"];
 
     if is_prerelease {
@@ -34,10 +38,12 @@ pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result
         args.push("next");
     }
 
-    let otp = std::env::var("NPM_OTP").ok();
-    if let Some(ref otp_value) = otp {
+    let env_otp = std::env::var("NPM_OTP").ok();
+    let otp_value = otp.or(env_otp.as_deref());
+
+    if let Some(otp_code) = otp_value {
         args.push("--otp");
-        args.push(otp_value);
+        args.push(otp_code);
     }
 
     let output = Command::new("npm").args(&args).current_dir(package_path).output().await?;
@@ -47,13 +53,13 @@ pub async fn publish_package(package_path: &Path, is_prerelease: bool) -> Result
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         if stderr.contains("EOTP") {
-            if otp.is_some() {
+            if otp_value.is_some() {
                 anyhow::bail!(
-                    "npm publish failed: OTP code is invalid or expired.\nPlease restart with a fresh OTP code: NPM_OTP=<code> just release"
+                    "npm publish failed: OTP code is invalid or expired.\nPlease restart with a fresh OTP code."
                 );
             } else {
                 anyhow::bail!(
-                    "npm publish requires a one-time password.\nPlease run: NPM_OTP=<code> just release"
+                    "npm publish requires a one-time password.\nPlease provide an OTP code."
                 );
             }
         }

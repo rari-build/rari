@@ -148,7 +148,7 @@ tmp/
   const renderReadmeSection = `
 ## 🎨 Deploy to Render
 
-This Rari application is configured for Render deployment.
+This rari application is configured for Render deployment.
 
 ### Quick Deploy
 
@@ -201,9 +201,9 @@ Optional variables you can add in Render dashboard:
     }
   }
   else {
-    const defaultReadme = `# My Rari App
+    const defaultReadme = `# My rari App
 
-A high-performance React Server Components application powered by Rari.
+A high-performance React Server Components application powered by rari.
 ${renderReadmeSection}
 ## Getting Started
 
@@ -227,12 +227,12 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
   console.warn(`  3. ${colors.cyan('git push origin main')}`)
   console.warn(`  4. Go to ${colors.cyan('https://render.com')} and create a Web Service`)
   console.warn('')
-  logInfo('Your Rari app will automatically:')
+  logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Render environment')
   console.warn('  ✅ Bind to 0.0.0.0 (Render requirement)')
   console.warn('  ✅ Use Render\'s PORT environment variable')
   console.warn('  ✅ Run in production mode')
-  console.warn('  ✅ Download platform-specific Rari binary')
+  console.warn('  ✅ Download platform-specific rari binary')
   console.warn('')
   logSuccess('Ready for deployment! 🚀')
 }

@@ -13,5 +13,5 @@ export default function HomePage(_params: PageProps) {
 
 export const metadata = {
   title: 'Home | {{PROJECT_NAME}}',
-  description: 'Welcome to your new Rari application',
+  description: 'Welcome to your new rari application',
 }

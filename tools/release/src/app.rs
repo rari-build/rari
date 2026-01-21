@@ -13,7 +13,8 @@ pub enum Screen {
     PackageSelection,
     VersionSelection { package_idx: usize },
     CustomVersion { package_idx: usize, input: String },
-    Publishing { package_idx: usize, version: String },
+    OtpInput { package_idx: usize, version: String, input: String },
+    Publishing { package_idx: usize, version: String, otp: Option<String> },
     Complete { released: Vec<String> },
 }
 
@@ -40,6 +41,7 @@ pub struct App {
     pub released_packages: Vec<String>,
     pub error_message: Option<String>,
     pub dry_run: bool,
+    pub needs_otp: bool,
 }
 
 impl App {
@@ -56,6 +58,8 @@ impl App {
             }
         }
 
+        let needs_otp = std::env::var("NPM_OTP").is_err();
+
         Ok(Self {
             screen: Screen::PackageSelection,
             packages,
@@ -69,6 +73,7 @@ impl App {
             released_packages: vec![],
             error_message: None,
             dry_run,
+            needs_otp,
         })
     }
 
@@ -118,11 +123,22 @@ impl App {
                     } else if let Some(new_version) =
                         release_type.to_version(&package.current_version)
                     {
-                        self.screen =
-                            Screen::Publishing { package_idx: *package_idx, version: new_version };
-                        self.publish_step = PublishStep::Building;
-                        self.publish_progress = 0.0;
-                        self.status_messages.clear();
+                        if self.needs_otp {
+                            self.screen = Screen::OtpInput {
+                                package_idx: *package_idx,
+                                version: new_version,
+                                input: String::new(),
+                            };
+                        } else {
+                            self.screen = Screen::Publishing {
+                                package_idx: *package_idx,
+                                version: new_version,
+                                otp: None,
+                            };
+                            self.publish_step = PublishStep::Building;
+                            self.publish_progress = 0.0;
+                            self.status_messages.clear();
+                        }
                     }
                 }
                 KeyCode::Esc => {
@@ -149,19 +165,68 @@ impl App {
                         let current = semver::Version::parse(&package.current_version)
                             .expect("current version should be valid semver");
                         if version > current {
-                            self.screen = Screen::Publishing {
-                                package_idx: *package_idx,
-                                version: version.to_string(),
-                            };
-                            self.publish_step = PublishStep::Building;
-                            self.publish_progress = 0.0;
-                            self.status_messages.clear();
+                            if self.needs_otp {
+                                self.screen = Screen::OtpInput {
+                                    package_idx: *package_idx,
+                                    version: version.to_string(),
+                                    input: String::new(),
+                                };
+                            } else {
+                                self.screen = Screen::Publishing {
+                                    package_idx: *package_idx,
+                                    version: version.to_string(),
+                                    otp: None,
+                                };
+                                self.publish_step = PublishStep::Building;
+                                self.publish_progress = 0.0;
+                                self.status_messages.clear();
+                            }
                         } else {
                             self.error_message =
                                 Some("Version must be greater than current".to_string());
                         }
                     } else {
                         self.error_message = Some("Invalid semantic version".to_string());
+                    }
+                }
+                KeyCode::Esc => {
+                    self.screen = Screen::VersionSelection { package_idx: *package_idx };
+                    self.error_message = None;
+                }
+                _ => {}
+            },
+            Screen::OtpInput { package_idx, version, input } => match key {
+                KeyCode::Char(c) if c.is_ascii_digit() => {
+                    let mut new_input = input.clone();
+                    new_input.push(c);
+                    self.screen = Screen::OtpInput {
+                        package_idx: *package_idx,
+                        version: version.clone(),
+                        input: new_input,
+                    };
+                }
+                KeyCode::Backspace => {
+                    let mut new_input = input.clone();
+                    new_input.pop();
+                    self.screen = Screen::OtpInput {
+                        package_idx: *package_idx,
+                        version: version.clone(),
+                        input: new_input,
+                    };
+                }
+                KeyCode::Enter => {
+                    if input.len() == 6 {
+                        self.screen = Screen::Publishing {
+                            package_idx: *package_idx,
+                            version: version.clone(),
+                            otp: Some(input.clone()),
+                        };
+                        self.publish_step = PublishStep::Building;
+                        self.publish_progress = 0.0;
+                        self.status_messages.clear();
+                        self.error_message = None;
+                    } else {
+                        self.error_message = Some("OTP must be 6 digits".to_string());
                     }
                 }
                 KeyCode::Esc => {
@@ -187,7 +252,7 @@ impl App {
     }
 
     pub async fn update(&mut self) -> Result<()> {
-        if let Screen::Publishing { package_idx, version } = &self.screen.clone() {
+        if let Screen::Publishing { package_idx, version, otp } = &self.screen.clone() {
             let package = &self.packages[*package_idx];
             match self.publish_step {
                 PublishStep::Building => {
@@ -261,7 +326,7 @@ impl App {
                         ));
                     } else {
                         self.status_messages.push("Publishing to npm...".to_string());
-                        npm::publish_package(&package.path, is_prerelease).await?;
+                        npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await?;
                     }
                     self.status_messages.push(format!("* Published {}@{}", package.name, version));
                     self.publish_step = PublishStep::Done;
@@ -295,7 +360,11 @@ impl App {
                 let package = &self.packages[*package_idx];
                 ui::render_custom_version(frame, self, package, input);
             }
-            Screen::Publishing { package_idx, version } => {
+            Screen::OtpInput { package_idx, input, .. } => {
+                let package = &self.packages[*package_idx];
+                ui::render_otp_input(frame, self, package, input);
+            }
+            Screen::Publishing { package_idx, version, .. } => {
                 let package = &self.packages[*package_idx];
                 ui::render_publishing(frame, self, package, version);
             }

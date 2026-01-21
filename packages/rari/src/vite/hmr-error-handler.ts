@@ -54,7 +54,7 @@ export class HMRErrorHandler {
 
   private handleMaxErrorsReached(): void {
     console.error(
-      `[HMR] Maximum error count (${this.maxErrors}) reached. `
+      `[rari] HMR: Maximum error count (${this.maxErrors}) reached. `
       + 'Consider restarting the dev server if issues persist.',
     )
   }

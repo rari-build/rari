@@ -156,6 +156,68 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, package: &Package, in
     }
 }
 
+pub fn render_otp_input(frame: &mut Frame, app: &App, package: &Package, input: &str) {
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(5),
+            Constraint::Length(5),
+            Constraint::Length(3),
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+    let info = Paragraph::new(vec![
+        Line::from(vec![
+            Span::raw("Package: "),
+            Span::styled(
+                &package.name,
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("Current Version: "),
+            Span::styled(&package.current_version, Style::default().fg(Color::Yellow)),
+        ]),
+    ])
+    .block(Block::default().borders(Borders::ALL).title("Package Info"));
+    frame.render_widget(info, chunks[0]);
+
+    let otp_info = Paragraph::new(vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "npm requires a one-time password (OTP) for publishing.",
+            Style::default().fg(Color::Yellow),
+        )),
+        Line::from("Please enter the 6-digit code from your authenticator app."),
+    ])
+    .block(Block::default().borders(Borders::ALL).title("OTP Required"));
+    frame.render_widget(otp_info, chunks[1]);
+
+    let masked = "*".repeat(input.len());
+    let display = format!("{}{}", masked, "_".repeat(6 - input.len()));
+    let input_widget = Paragraph::new(display)
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL).title("Enter OTP (6 digits)"));
+    frame.render_widget(input_widget, chunks[2]);
+
+    if let Some(error) = &app.error_message {
+        let error_widget = Paragraph::new(error.as_str())
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL).title("Error"));
+        frame.render_widget(error_widget, chunks[3]);
+    } else {
+        let help = Paragraph::new("Enter 6 digits  Enter: Confirm  Esc: Back")
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(help, chunks[3]);
+    }
+}
+
 pub fn render_publishing(frame: &mut Frame, app: &App, package: &Package, version: &str) {
     let area = frame.area();
     let chunks = Layout::default()

@@ -13,7 +13,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let matches = Command::new("rari")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Rari HTTP Server")
+        .about("rari HTTP Server")
         .arg(
             Arg::new("mode")
                 .short('m')

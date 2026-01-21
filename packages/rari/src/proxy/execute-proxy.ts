@@ -54,7 +54,7 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
 
     if (waitUntilPromises.length > 0) {
       Promise.allSettled(waitUntilPromises).catch((error) => {
-        console.error('[rari:proxy] waitUntil promise failed:', error)
+        console.error('[rari] Proxy: waitUntil promise failed:', error)
       })
     }
 
@@ -137,7 +137,7 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
     return { continue: true }
   }
   catch (error) {
-    console.error('[rari:proxy] executeProxy failed:', error)
+    console.error('[rari] Proxy: executeProxy failed:', error)
     return { continue: true }
   }
 }

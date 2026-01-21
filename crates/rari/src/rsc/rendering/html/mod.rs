@@ -172,7 +172,7 @@ impl RscHtmlRenderer {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rari App</title>
+    <title>rari App</title>
     <script type="module" src="/@vite/client"></script>
     <script type="module" src="/src/main.tsx"></script>
 </head>
@@ -778,7 +778,7 @@ impl RscToHtmlConverter {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rari App</title>
+    <title>rari App</title>
     {}
     <style>
         .rari-loading {{

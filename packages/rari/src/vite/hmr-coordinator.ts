@@ -238,7 +238,7 @@ export class HMRCoordinator {
       }
     }
     catch (error) {
-      console.error(`[HMR] Failed to notify Rust server:`, error)
+      console.error(`[rari] HMR: Failed to notify Rust server:`, error)
       throw error
     }
   }
@@ -308,7 +308,7 @@ export class HMRCoordinator {
   }
 
   private outputLog(type: 'info' | 'success' | 'warning' | 'error', message: string): void {
-    const prefix = '[HMR]'
+    const prefix = '[rari] HMR:'
 
     switch (type) {
       case 'success':

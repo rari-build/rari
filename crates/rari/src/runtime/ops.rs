@@ -212,7 +212,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
 
 #[deno_core::op2(fast)]
 pub fn op_internal_log(#[string] message: &str) {
-    error!("[RARI_INTERNAL_LOG] {message}");
+    error!("[rari] {message}");
 }
 
 #[derive(Default)]

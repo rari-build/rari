@@ -12,7 +12,7 @@ export default async function ServerTime() {
         ⚡ Server Component
       </h2>
       <p className="text-gray-600 mb-4">
-        This component renders on the server with Rari's high-performance Rust runtime.
+        This component renders on the server with rari's high-performance Rust runtime.
       </p>
       <div className="bg-white rounded-lg p-4 border">
         <p className="text-sm text-gray-500 mb-1">Server timestamp:</p>

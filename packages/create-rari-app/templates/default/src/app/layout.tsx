@@ -38,5 +38,5 @@ export default function RootLayout({ children }: LayoutProps) {
 
 export const metadata = {
   title: '{{PROJECT_NAME}}',
-  description: 'A Rari application',
+  description: 'A rari application',
 }

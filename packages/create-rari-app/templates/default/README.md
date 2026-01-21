@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}}
 
-A high-performance React Server Components application powered by [Rari](https://rari.dev).
+A high-performance React Server Components application powered by [rari](https://rari.dev).
 
 ## 🚀 Getting Started
 
@@ -16,7 +16,7 @@ Visit [http://localhost:5173](http://localhost:5173) to see your app.
 
 ## 🚀 Deploy to the Cloud
 
-This Rari application is pre-configured for cloud deployment.
+This rari application is pre-configured for cloud deployment.
 
 ### 🚂 Railway
 
@@ -112,11 +112,11 @@ Optional variables you can set:
 
 ## 📚 Learn More
 
-- [Rari Documentation](https://rari.dev)
+- [rari Documentation](https://rari.dev)
 - [Railway Documentation](https://docs.railway.app)
 - [Render Documentation](https://render.com/docs)
 - [React Server Components](https://react.dev/reference/react/use-server)
 
 ---
 
-Built with ❤️ using [Rari](https://rari.dev)
+Built with ❤️ using [rari](https://rari.dev)

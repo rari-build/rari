@@ -122,7 +122,7 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
     return Object.keys(metadata).length > 0 ? metadata : null
   }
   catch (error) {
-    console.error('Failed to extract metadata:', error)
+    console.error('[rari] Router: Failed to extract metadata:', error)
     return null
   }
 }
@@ -160,16 +160,16 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
     })
 
     if (!response.ok) {
-      console.error(`Failed to invalidate API route cache: ${response.statusText}`)
+      console.error(`[rari] Router: Failed to invalidate API route cache: ${response.statusText}`)
       return
     }
 
     const result = await response.json()
     if (!result.success)
-      console.error(`[HMR] Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
+      console.error(`[rari] HMR: Failed to invalidate API route cache: ${result.error || 'Unknown error'}`)
   }
   catch (error) {
-    console.error('Failed to notify API route invalidation:', error)
+    console.error('[rari] Router: Failed to notify API route invalidation:', error)
   }
 }
 
@@ -257,7 +257,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       return manifestContent
     }
     catch (error) {
-      console.error('Failed to generate app routes:', error)
+      console.error('[rari] Router: Failed to generate app routes:', error)
       return null
     }
   }
@@ -294,7 +294,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           }
         }
         catch (error) {
-          console.error('Failed to regenerate app routes:', error)
+          console.error('[rari] Router: Failed to regenerate app routes:', error)
         }
       }
     })
@@ -353,7 +353,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
                 allRoutes = manifest.routes.map((r: any) => r.path)
               }
               catch (error) {
-                console.error('Failed to parse manifest for affected routes:', error)
+                console.error('[rari] Router: Failed to parse manifest for affected routes:', error)
               }
             }
 
@@ -374,7 +374,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
                 }
               }
               catch (error) {
-                console.error('Failed to extract metadata:', error)
+                console.error('[rari] Router: Failed to extract metadata:', error)
               }
             }
 
@@ -386,7 +386,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
                 await notifyApiRouteInvalidation(path.relative(appDir, file))
               }
               catch (error) {
-                console.error('Failed to detect HTTP methods:', error)
+                console.error('[rari] Router: Failed to detect HTTP methods:', error)
               }
             }
 

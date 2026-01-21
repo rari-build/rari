@@ -163,7 +163,7 @@ function processRow(id, tag, data, modules, chunks, symbols) {
       }
 
       case TAG_ERROR: {
-        console.error('[RSC] Error chunk:', data)
+        console.error('[rari] RSC: Error chunk:', data)
         const errorData = JSON.parse(data)
         chunks.set(idStr, { error: errorData })
         break
@@ -200,7 +200,7 @@ function processRow(id, tag, data, modules, chunks, symbols) {
     }
   }
   catch (e) {
-    console.error('[RSC] Failed to parse row:', { id: idStr, tag, data }, e)
+    console.error('[rari] RSC: Failed to parse row:', { id: idStr, tag, data }, e)
   }
 }
 

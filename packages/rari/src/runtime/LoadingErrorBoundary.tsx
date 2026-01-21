@@ -8,8 +8,8 @@ interface LoadingErrorBoundaryProps {
 
 export class LoadingErrorBoundary extends React.Component<LoadingErrorBoundaryProps> {
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[LoadingErrorBoundary] Loading component failed to render:', error)
-    console.error('[LoadingErrorBoundary] Error info:', errorInfo)
+    console.error('[rari] Loading: Loading component failed to render:', error)
+    console.error('[rari] Loading: Error info:', errorInfo)
   }
 
   render() {

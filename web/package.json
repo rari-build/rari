@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.28.1",
-  "description": "Runtime Accelerated Rendering Infrastructure (Rari) Website",
+  "description": "Runtime Accelerated Rendering Infrastructure (rari) Website",
   "author": "Ryan Skinner",
   "license": "MIT",
   "engines": {
@@ -26,7 +26,7 @@
     "@shikijs/engine-oniguruma": "^3.21.0",
     "@shikijs/langs": "^3.21.0",
     "@shikijs/themes": "^3.21.0",
-    "posthog-js": "^1.332.0",
+    "posthog-js": "^1.333.0",
     "rari": "^0.7.5",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

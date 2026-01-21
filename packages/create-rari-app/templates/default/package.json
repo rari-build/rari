@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "A Runtime Accelerated Rendering Infrastructure (Rari) application",
+  "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -25,9 +25,9 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.0.9",
-    "@types/react": "^19.2.8",
+    "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260120.1",
     "rolldown-vite": "^7.3.1",
     "tailwindcss": "^4.1.18"
   }

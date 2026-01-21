@@ -30,7 +30,7 @@ export function rariProxy(options: ProxyPluginOptions = {}): Plugin {
 
   const log = (message: string) => {
     if (verbose)
-      console.warn(`[rari:proxy] ${message}`)
+      console.warn(`[rari] Proxy: ${message}`)
   }
 
   async function findProxyFile(): Promise<ProxyFileInfo | null> {

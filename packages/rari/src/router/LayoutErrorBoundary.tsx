@@ -36,7 +36,7 @@ export class LayoutErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error(
-      `[LayoutErrorBoundary] Error in layout "${this.props.layoutPath}":`,
+      `[rari] Layout: Error in layout "${this.props.layoutPath}":`,
       error,
       errorInfo,
     )

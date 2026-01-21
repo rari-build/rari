@@ -1,5 +1,5 @@
-/* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing, antfu/no-top-level-await */
-// oxlint-disable vars-on-top, no-var, block-scoped-var
+/* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing */
+// oxlint-disable vars-on-top, no-var, block-scoped-var, no-redeclare
 const startPage = performance.now()
 const PageComponent = globalThis['{page_component_id}']
 if (!PageComponent || typeof PageComponent !== 'function')
@@ -49,7 +49,7 @@ else {
       )
     }
     else {
-      const pageResult = await PageComponent(pageProps)
+      const pageResult = (async () => await PageComponent(pageProps))()
 
       const loadingFallback = LoadingComponent()
       var pageElement = React.createElement(

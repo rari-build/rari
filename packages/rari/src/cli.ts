@@ -94,7 +94,7 @@ async function startRustServer(): Promise<void> {
     binaryPath = getBinaryPath()
   }
   catch {
-    logError('Failed to obtain Rari binary')
+    logError('Failed to obtain rari binary')
     logError(getInstallationInstructions())
     process.exit(1)
   }
@@ -104,7 +104,7 @@ async function startRustServer(): Promise<void> {
   if (isPlatformEnvironment()) {
     const platformName = getPlatformName()
     logInfo(`${platformName} environment detected`)
-    logInfo(`Starting Rari server for ${platformName} deployment...`)
+    logInfo(`Starting rari server for ${platformName} deployment...`)
     logInfo(`Mode: ${mode}, Host: ${host}, Port: ${port}`)
     logInfo(`using binary: ${binaryPath}`)
   }
@@ -129,9 +129,9 @@ async function startRustServer(): Promise<void> {
   process.on('SIGTERM', shutdown)
 
   rustServer.on('error', (error: Error) => {
-    logError(`Failed to start Rari server: ${error.message}`)
+    logError(`Failed to start rari server: ${error.message}`)
     if (error.message.includes('ENOENT'))
-      logError('Binary not found. Please ensure Rari is properly installed.')
+      logError('Binary not found. Please ensure rari is properly installed.')
     process.exit(1)
   })
 
@@ -181,10 +181,10 @@ async function main() {
     case 'help':
     case '--help':
     case '-h':
-      console.warn(`${colors.bold('Rari CLI')}
+      console.warn(`${colors.bold('rari CLI')}
 
 ${colors.bold('Usage:')}
-  ${colors.cyan('rari start')}              Start the Rari server
+  ${colors.cyan('rari start')}              Start the rari server
   ${colors.cyan('rari deploy railway')}     Setup Railway deployment
   ${colors.cyan('rari deploy render')}      Setup Render deployment
   ${colors.cyan('rari help')}               Show this help message

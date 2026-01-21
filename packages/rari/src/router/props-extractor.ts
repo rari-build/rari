@@ -136,7 +136,7 @@ export async function extractServerProps(
     }
   }
   catch (error) {
-    console.error(`Failed to extract server props from ${componentPath}:`, error)
+    console.error(`[rari] Router: Failed to extract server props from ${componentPath}:`, error)
     return {
       props: {},
     }
@@ -163,7 +163,7 @@ export async function extractMetadata(
     return {}
   }
   catch (error) {
-    console.error(`Failed to extract metadata from ${componentPath}:`, error)
+    console.error(`[rari] Router: Failed to extract metadata from ${componentPath}:`, error)
     return {}
   }
 }
@@ -229,7 +229,7 @@ export async function extractStaticParams(
     return []
   }
   catch (error) {
-    console.error(`Failed to extract static params from ${componentPath}:`, error)
+    console.error(`[rari] Router: Failed to extract static params from ${componentPath}:`, error)
     return []
   }
 }

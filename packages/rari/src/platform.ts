@@ -34,7 +34,7 @@ function getPlatformInfo(): PlatformInfo {
       break
     default:
       throw new Error(
-        `Unsupported platform: ${platform}. Rari supports Linux, macOS, and Windows.`,
+        `Unsupported platform: ${platform}. rari supports Linux, macOS, and Windows.`,
       )
   }
 
@@ -48,7 +48,7 @@ function getPlatformInfo(): PlatformInfo {
       break
     default:
       throw new Error(
-        `Unsupported architecture: ${arch}. Rari supports x64 and ARM64.`,
+        `Unsupported architecture: ${arch}. rari supports x64 and ARM64.`,
       )
   }
 
@@ -112,7 +112,7 @@ export function getBinaryPath(): string {
   }
   catch {
     throw new Error(
-      `Failed to locate Rari binary for ${packageName}. `
+      `Failed to locate rari binary for ${packageName}. `
       + `Please ensure the platform package is installed: npm install ${packageName}`,
     )
   }
@@ -122,7 +122,7 @@ export function getInstallationInstructions(): string {
   const { packageName } = getPlatformInfo()
 
   return `
-To install Rari for your platform, run:
+To install rari for your platform, run:
 
   npm install ${packageName}
 

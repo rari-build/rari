@@ -470,7 +470,7 @@ async fn render_streaming_response(
         .as_ref()
         .and_then(|m| m.title.as_ref())
         .map(|t| t.as_str())
-        .unwrap_or("Rari App");
+        .unwrap_or("rari App");
 
     let base_shell = if let Some(csrf_token) = &csrf_token {
         format!(
@@ -713,7 +713,7 @@ pub async fn render_fallback_html(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rari App Router</title>
+  <title>rari App Router</title>
 </head>
 <body>
   <div id="root"></div>
@@ -1158,7 +1158,7 @@ pub async fn handle_app_route(
                         .as_ref()
                         .and_then(|m| m.title.as_ref())
                         .map(|t| t.as_str())
-                        .unwrap_or("Rari App");
+                        .unwrap_or("rari App");
 
                     let asset_tags = asset_links.as_deref().unwrap_or("");
                     let base_shell = format!(

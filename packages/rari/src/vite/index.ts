@@ -8,14 +8,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import * as acorn from 'acorn'
-import {
-  DEFAULT_DEVICE_SIZES,
-  DEFAULT_FORMATS,
-  DEFAULT_IMAGE_SIZES,
-  DEFAULT_MAX_CACHE_SIZE,
-  DEFAULT_MINIMUM_CACHE_TTL,
-  DEFAULT_QUALITY_LEVELS,
-} from '../image'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
@@ -938,7 +931,7 @@ const ${componentName} = registerClientReference(
                     }
                   }
                   catch (error) {
-                    console.error(`[RARI] Error checking ${fullPath}:`, error)
+                    console.error(`[rari] Error checking ${fullPath}:`, error)
                   }
                 }
               }
@@ -998,7 +991,7 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                `Failed to register component ${component.id}:`,
+                `[rari] Runtime: Failed to register component ${component.id}:`,
                 error instanceof Error ? error.message : String(error),
               )
             }
@@ -1006,7 +999,7 @@ const ${componentName} = registerClientReference(
         }
         catch (error) {
           console.error(
-            'Component discovery failed:',
+            '[rari] Runtime: Component discovery failed:',
             error instanceof Error ? error.message : String(error),
           )
         }
@@ -1042,14 +1035,14 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                `Failed to pre-register client component ${componentName}:`,
+                `[rari] Runtime: Failed to pre-register client component ${componentName}:`,
                 error,
               )
             }
           }
         }
         catch (error) {
-          console.error('Failed to pre-register client components:', error)
+          console.error('[rari] Runtime: Failed to pre-register client components:', error)
         }
       }
 
@@ -1066,7 +1059,7 @@ const ${componentName} = registerClientReference(
           binaryPath = getBinaryPath()
         }
         catch (error) {
-          console.error('Rari binary not found')
+          console.error('rari binary not found')
           console.error(`   ${(error as Error).message}`)
           console.error(getInstallationInstructions())
           return
@@ -1114,10 +1107,10 @@ const ${componentName} = registerClientReference(
         })
 
         rustServerProcess.on('error', (error: Error) => {
-          console.error('Failed to start Rari server:', error.message)
+          console.error('Failed to start rari server:', error.message)
           if (error.message.includes('ENOENT')) {
             console.error(
-              '   Binary not found. Please ensure Rari is properly installed.',
+              '   Binary not found. Please ensure rari is properly installed.',
             )
           }
         })
@@ -1125,13 +1118,13 @@ const ${componentName} = registerClientReference(
         rustServerProcess.on('exit', (code: number, signal: string) => {
           rustServerProcess = null
           if (signal) {
-            console.error(`Rari server stopped by signal ${signal}`)
+            console.error(`rari server stopped by signal ${signal}`)
           }
           else if (code === 0) {
-            console.error('Rari server stopped successfully')
+            console.error('rari server stopped successfully')
           }
           else if (code) {
-            console.error(`Rari server exited with code ${code}`)
+            console.error(`rari server exited with code ${code}`)
           }
         })
 
@@ -1227,7 +1220,7 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                '[RARI HMR] Failed to register component',
+                '[rari] Failed to register component',
                 `${component.id}:`,
                 error instanceof Error ? error.message : String(error),
               )
@@ -1236,7 +1229,7 @@ const ${componentName} = registerClientReference(
         }
         catch (error) {
           console.error(
-            '[RARI HMR] Targeted HMR failed for',
+            '[rari] Targeted HMR failed for',
             `${filePath}:`,
             error instanceof Error ? error.message : String(error),
           )
@@ -1291,7 +1284,7 @@ const ${componentName} = registerClientReference(
                 res.end()
               }
               catch (streamError) {
-                console.error('[Rari] Stream error:', streamError)
+                console.error('[rari] Stream error:', streamError)
                 if (!res.headersSent)
                   res.statusCode = 500
                 res.end()
@@ -1303,7 +1296,7 @@ const ${componentName} = registerClientReference(
             return
           }
           catch (error) {
-            console.error('[Rari] Failed to proxy RSC request:', error)
+            console.error('[rari] Failed to proxy RSC request:', error)
             if (!res.headersSent) {
               res.statusCode = 500
               res.end('Internal Server Error')
@@ -1636,7 +1629,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
             await (serverComponentBuilder as any).rebuildComponent(file)
           }
           catch (error) {
-            console.error(`[HMR] Failed to rebuild ${file}:`, error)
+            console.error(`[rari] HMR: Failed to rebuild ${file}:`, error)
           }
         }
 
@@ -1706,6 +1699,7 @@ export function defineRariConfig(
   }
 }
 
-export { RariRequest, RariResponse } from '../proxy/index'
-export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/index'
+export { RariRequest } from '../proxy/RariRequest'
+export { RariResponse } from '../proxy/RariResponse'
+export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/types'
 export { rariProxy } from '../proxy/vite-plugin'
