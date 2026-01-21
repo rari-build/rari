@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "A Runtime Accelerated Rendering Infrastructure (Rari) application",
+  "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
     "node": ">=20.0.0"
   },

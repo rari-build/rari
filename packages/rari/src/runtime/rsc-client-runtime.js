@@ -33,7 +33,7 @@ if (typeof window !== 'undefined') {
     try {
       const colonIndex = rscRow.indexOf(':')
       if (colonIndex === -1) {
-        console.warn('[Rari] Invalid RSC row format (no colon):', rscRow)
+        console.warn('[rari] Invalid RSC row format (no colon):', rscRow)
         return
       }
 
@@ -54,7 +54,7 @@ if (typeof window !== 'undefined') {
           }
         }
         catch (e) {
-          console.error('[Rari] Failed to parse import row:', contentStr, e)
+          console.error('[rari] Failed to parse import row:', contentStr, e)
         }
         return
       }
@@ -64,7 +64,7 @@ if (typeof window !== 'undefined') {
         content = JSON.parse(contentStr)
       }
       catch (parseError) {
-        console.error('[Rari] Failed to parse RSC content:', contentStr, parseError)
+        console.error('[rari] Failed to parse RSC content:', contentStr, parseError)
         return
       }
 
@@ -147,7 +147,7 @@ if (typeof window !== 'undefined') {
       }
     }
     catch (e) {
-      console.error('[Rari] Error processing boundary update:', e)
+      console.error('[rari] Error processing boundary update:', e)
     }
 
     window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {

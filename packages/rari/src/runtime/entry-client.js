@@ -130,8 +130,8 @@ function setupPartialHydration() {
       }
     }
     catch (error) {
-      console.error('[Rari] Failed to hydrate client components:', error)
-      console.error('[Rari] Error stack:', error.stack)
+      console.error('[rari] Failed to hydrate client components:', error)
+      console.error('[rari] Error stack:', error.stack)
     }
   }
 }
@@ -155,7 +155,7 @@ setupPartialHydration()
 export async function renderApp() {
   const rootElement = document.getElementById('root')
   if (!rootElement) {
-    console.error('[Rari] Root element not found')
+    console.error('[rari] Root element not found')
     return
   }
 
@@ -186,7 +186,7 @@ export async function renderApp() {
           root.render(React.createElement(Component, props))
         }
         catch (error) {
-          console.error(`[Rari] Failed to hydrate client component ${componentId}:`, error)
+          console.error(`[rari] Failed to hydrate client component ${componentId}:`, error)
         }
       })
     }
@@ -250,7 +250,7 @@ export async function renderApp() {
                     return module[exportName] || module.default
                   }
                   catch (error) {
-                    console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                    console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
                     return null
                   }
                 },
@@ -262,7 +262,7 @@ export async function renderApp() {
         element = await createFromReadableStream(stream, ssrManifest)
       }
       catch (e) {
-        console.error('[Rari] Failed to fetch initial RSC data:', e)
+        console.error('[rari] Failed to fetch initial RSC data:', e)
         element = null
       }
     }
@@ -327,7 +327,7 @@ export async function renderApp() {
                       return module[exportName] || module.default
                     }
                     catch (error) {
-                      console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                      console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
                       return null
                     }
                   },
@@ -369,7 +369,7 @@ export async function renderApp() {
                       return module[exportName] || module.default
                     }
                     catch (error) {
-                      console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                      console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
                       return null
                     }
                   },
@@ -382,7 +382,7 @@ export async function renderApp() {
         }
       }
       catch (e) {
-        console.error('[Rari] Failed to parse embedded RSC payload:', e)
+        console.error('[rari] Failed to parse embedded RSC payload:', e)
         element = null
       }
     }
@@ -439,7 +439,7 @@ export async function renderApp() {
                     return module[exportName] || module.default
                   }
                   catch (error) {
-                    console.error(`[Rari] Failed to load ${moduleId}#${exportName}:`, error)
+                    console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
                     return null
                   }
                 },
@@ -451,7 +451,7 @@ export async function renderApp() {
         element = await createFromReadableStream(stream, ssrManifest)
       }
       catch (e) {
-        console.error('[Rari] Failed to process streaming RSC payload:', e)
+        console.error('[rari] Failed to process streaming RSC payload:', e)
         element = null
       }
     }
@@ -470,7 +470,7 @@ export async function renderApp() {
         contentToRender = bodyContent
       }
       else {
-        console.error('[Rari] Could not extract body content, falling back to full element')
+        console.error('[rari] Could not extract body content, falling back to full element')
         contentToRender = element
       }
     }
@@ -496,7 +496,7 @@ export async function renderApp() {
     root.render(wrappedContent)
   }
   catch (error) {
-    console.error('[Rari] Error rendering app:', error)
+    console.error('[rari] Error rendering app:', error)
     rootElement.innerHTML = `
       <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
         <h2>Error Loading App</h2>
@@ -668,7 +668,7 @@ if (import.meta.hot && import.meta.hot.data.hasRendered) {
 }
 else {
   renderApp().catch((err) => {
-    console.error('[Rari] Fatal error:', err)
+    console.error('[rari] Fatal error:', err)
   })
 
   if (import.meta.hot)

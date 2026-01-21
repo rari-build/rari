@@ -1066,7 +1066,7 @@ const ${componentName} = registerClientReference(
           binaryPath = getBinaryPath()
         }
         catch (error) {
-          console.error('Rari binary not found')
+          console.error('rari binary not found')
           console.error(`   ${(error as Error).message}`)
           console.error(getInstallationInstructions())
           return
@@ -1114,10 +1114,10 @@ const ${componentName} = registerClientReference(
         })
 
         rustServerProcess.on('error', (error: Error) => {
-          console.error('Failed to start Rari server:', error.message)
+          console.error('Failed to start rari server:', error.message)
           if (error.message.includes('ENOENT')) {
             console.error(
-              '   Binary not found. Please ensure Rari is properly installed.',
+              '   Binary not found. Please ensure rari is properly installed.',
             )
           }
         })
@@ -1125,13 +1125,13 @@ const ${componentName} = registerClientReference(
         rustServerProcess.on('exit', (code: number, signal: string) => {
           rustServerProcess = null
           if (signal) {
-            console.error(`Rari server stopped by signal ${signal}`)
+            console.error(`rari server stopped by signal ${signal}`)
           }
           else if (code === 0) {
-            console.error('Rari server stopped successfully')
+            console.error('rari server stopped successfully')
           }
           else if (code) {
-            console.error(`Rari server exited with code ${code}`)
+            console.error(`rari server exited with code ${code}`)
           }
         })
 
@@ -1291,7 +1291,7 @@ const ${componentName} = registerClientReference(
                 res.end()
               }
               catch (streamError) {
-                console.error('[Rari] Stream error:', streamError)
+                console.error('[rari] Stream error:', streamError)
                 if (!res.headersSent)
                   res.statusCode = 500
                 res.end()
@@ -1303,7 +1303,7 @@ const ${componentName} = registerClientReference(
             return
           }
           catch (error) {
-            console.error('[Rari] Failed to proxy RSC request:', error)
+            console.error('[rari] Failed to proxy RSC request:', error)
             if (!res.headersSent) {
               res.statusCode = 500
               res.end('Internal Server Error')

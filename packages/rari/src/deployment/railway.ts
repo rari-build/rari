@@ -154,7 +154,7 @@ tmp/
   const railwayReadmeSection = `
 ## 🚂 Deploy to Railway
 
-This Rari application is configured for Railway deployment.
+This rari application is configured for Railway deployment.
 
 ### Quick Deploy
 
@@ -206,9 +206,9 @@ Optional variables you can set:
     }
   }
   else {
-    const defaultReadme = `# My Rari App
+    const defaultReadme = `# My rari App
 
-A high-performance React Server Components application powered by Rari.
+A high-performance React Server Components application powered by rari.
 ${railwayReadmeSection}
 ## Getting Started
 
@@ -232,12 +232,12 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
   console.warn(`  3. ${colors.cyan('git push origin main')}`)
   console.warn(`  4. Go to ${colors.cyan('https://railway.app')} and deploy from GitHub`)
   console.warn('')
-  logInfo('Your Rari app will automatically:')
+  logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Railway environment')
   console.warn('  ✅ Bind to 0.0.0.0 (Railway requirement)')
   console.warn('  ✅ Use Railway\'s PORT environment variable')
   console.warn('  ✅ Run in production mode')
-  console.warn('  ✅ Download platform-specific Rari binary')
+  console.warn('  ✅ Download platform-specific rari binary')
   console.warn('')
   logSuccess('Ready for deployment! 🚀')
 }

@@ -6,10 +6,10 @@ export default function AboutPage(_params: PageProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">About</h1>
         <p className="text-lg text-gray-600 mb-4">
-          This is a Rari application using the app router.
+          This is a rari application using the app router.
         </p>
         <p className="text-gray-600">
-          Rari is a performance-first React framework powered by Rust, featuring:
+          rari is a performance-first React framework powered by Rust, featuring:
         </p>
         <ul className="list-disc list-inside text-gray-600 mt-4 space-y-2">
           <li>React Server Components</li>
@@ -25,5 +25,5 @@ export default function AboutPage(_params: PageProps) {
 
 export const metadata = {
   title: 'About | {{PROJECT_NAME}}',
-  description: 'Learn more about this Rari application',
+  description: 'Learn more about this rari application',
 }

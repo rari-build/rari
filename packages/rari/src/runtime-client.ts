@@ -128,7 +128,7 @@ export class HttpRuntimeClient implements RuntimeClient {
           throw new Error(`Request timeout after ${this.timeout}ms`)
         if (error.message.includes('ECONNREFUSED')) {
           throw new Error(
-            `Failed to connect to Rari server at ${this.baseUrl}. Make sure the server is running.`,
+            `Failed to connect to rari server at ${this.baseUrl}. Make sure the server is running.`,
           )
         }
       }
