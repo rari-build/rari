@@ -179,7 +179,7 @@ export class NavigationErrorHandler {
 
     this.options.onError(navError)
 
-    console.error('[NavigationErrorHandler]', navError.type, navError.message, {
+    console.error('[rari] Navigation:', navError.type, navError.message, {
       url: navError.url,
       statusCode: navError.statusCode,
       retryable: navError.retryable,

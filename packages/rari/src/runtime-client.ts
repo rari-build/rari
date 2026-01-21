@@ -237,7 +237,7 @@ export class HttpRuntimeClient implements RuntimeClient {
   ): Promise<void> {
     if (!this.initialized) {
       console.error(
-        'Runtime client not initialized. Client component registration will be delayed.',
+        '[rari] Runtime: Client not initialized. Client component registration will be delayed.',
       )
       return
     }
@@ -262,7 +262,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     }
     catch (error) {
       console.error(
-        `Failed to register client component ${componentId}:`,
+        `[rari] Runtime: Failed to register client component ${componentId}:`,
         error,
       )
     }
@@ -286,7 +286,7 @@ export class HttpRuntimeClient implements RuntimeClient {
       this.components = []
     }
     catch (error) {
-      console.error('Error during shutdown:', error)
+      console.error('[rari] Runtime: Error during shutdown:', error)
     }
   }
 

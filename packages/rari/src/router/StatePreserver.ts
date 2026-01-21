@@ -194,7 +194,7 @@ export class StatePreserver {
       })
     }
     catch (error) {
-      console.error('Failed to restore scroll positions:', error)
+      console.error('[rari] Router: Failed to restore scroll positions:', error)
       allSucceeded = false
     }
 
@@ -252,7 +252,7 @@ export class StatePreserver {
       })
     }
     catch (error) {
-      console.error('Failed to restore form data:', error)
+      console.error('[rari] Router: Failed to restore form data:', error)
       allSucceeded = false
     }
 

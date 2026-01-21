@@ -608,7 +608,7 @@ const ${importName} = (props) => {
       }
 
       if (result.errors.length > 0) {
-        console.error('ESBuild errors:', result.errors)
+        console.error('[rari] Build: ESBuild errors:', result.errors)
         throw new Error(
           `ESBuild compilation failed with ${result.errors.length} errors`,
         )
@@ -617,7 +617,7 @@ const ${importName} = (props) => {
       throw new Error('No output generated from ESBuild')
     }
     catch (error) {
-      console.error(`ESBuild failed for ${inputPath}:`, error)
+      console.error(`[rari] Build: ESBuild failed for ${inputPath}:`, error)
       throw error
     }
   }
@@ -999,18 +999,18 @@ const ${importName} = (props) => {
       }
 
       if (result.errors.length > 0) {
-        console.error('ESBuild errors:', result.errors)
+        console.error('[rari] Build: ESBuild errors:', result.errors)
         throw new Error(
           `ESBuild compilation failed with ${result.errors.length} errors`,
         )
       }
 
       if (result.warnings.length > 0) {
-        console.warn('ESBuild warnings:', result.warnings)
+        console.warn('[rari] Build: ESBuild warnings:', result.warnings)
       }
     }
     catch (error) {
-      console.error(`ESBuild failed for ${inputPath}:`, error)
+      console.error(`[rari] Build: ESBuild failed for ${inputPath}:`, error)
       throw error
     }
   }
@@ -1176,7 +1176,7 @@ if (!globalThis["${componentId}"]) {
                 }
             }
         } catch (error) {
-            console.error('Error in self-registration for ${componentId}:', error);
+            console.error('[rari] Build: Error in self-registration for ${componentId}:', error);
         }
 }`
 
@@ -1277,7 +1277,7 @@ function registerClientReference(clientReference, id, exportName) {
       globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
     }
   } catch (error) {
-    console.error('Failed to register client reference with Rust bridge:', error);
+    console.error('[rari] Build: Failed to register client reference with Rust bridge:', error);
   }
 
   return clientProxy;
@@ -1663,7 +1663,7 @@ export function createServerBuildPlugin(
         await builder.buildServerComponents()
       }
       catch (error) {
-        console.error(`[server-build] Error rebuilding ${relativePath}:`, error)
+        console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)
       }
     },
   }

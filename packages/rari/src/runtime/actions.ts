@@ -49,7 +49,7 @@ export function createServerReference(
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText)
-        console.error(`[ServerAction] HTTP ${response.status} error:`, errorText)
+        console.error(`[rari] ServerAction: HTTP ${response.status} error:`, errorText)
         throw new Error(
           `Server action "${exportName}" failed with status ${response.status}: ${errorText}`,
         )
@@ -65,14 +65,14 @@ export function createServerReference(
 
       if (!result.success) {
         const errorMsg = result.error || 'Server action failed without error message'
-        console.error(`[ServerAction] Action "${exportName}" failed:`, errorMsg)
+        console.error(`[rari] ServerAction: Action "${exportName}" failed:`, errorMsg)
         throw new Error(errorMsg)
       }
 
       return result.result
     }
     catch (error) {
-      console.error(`[ServerAction] Error executing "${exportName}":`, {
+      console.error(`[rari] ServerAction: Error executing "${exportName}":`, {
         moduleId,
         exportName,
         error: error instanceof Error ? error.message : String(error),

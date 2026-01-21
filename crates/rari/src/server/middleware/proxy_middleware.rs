@@ -253,7 +253,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
                 const success = await initializeProxyExecutor("{}");
                 return {{ success }};
             }} catch (error) {{
-                console.error("[rari:proxy] Failed to initialize:", error);
+                console.error("[rari] Proxy: Failed to initialize:", error);
                 return {{ success: false, error: error.message }};
             }}
         }})()"#,

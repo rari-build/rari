@@ -862,7 +862,7 @@ impl RscSerializer {
                     result.insert(key.clone(), validated_value);
                 }
                 Err(_) => {
-                    error!("[RSC] Prop validation error for '{key}': {validation_errors:?}");
+                    error!("[rari] RSC: Prop validation error for '{key}': {validation_errors:?}");
                     result.insert(key.clone(), Value::Null);
                 }
             }
@@ -870,9 +870,12 @@ impl RscSerializer {
         }
 
         if !validation_errors.is_empty() {
-            error!("[RSC] Props validation completed with {} errors", validation_errors.len());
+            error!(
+                "[rari] RSC: Props validation completed with {} errors",
+                validation_errors.len()
+            );
             for error in &validation_errors {
-                error!("[RSC] Validation error: {} - {}", error.field_path, error.message);
+                error!("[rari] RSC: Validation error: {} - {}", error.field_path, error.message);
             }
         }
 

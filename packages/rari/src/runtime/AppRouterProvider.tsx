@@ -132,7 +132,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (failureHistoryRef.current.length > 10)
       failureHistoryRef.current.shift()
 
-    console.error('[HMR Failure]', {
+    console.error('[rari] HMR: Failure detected', {
       type,
       details,
       filePath,
@@ -202,7 +202,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 resolvedType = 'Suspense'
               }
               else {
-                console.warn('[AppRouterProvider] Unknown symbol:', symbolName)
+                console.warn('[rari] AppRouter: Unknown symbol:', symbolName)
               }
             }
           }
@@ -240,7 +240,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         if (!resolvedType || (typeof resolvedType !== 'string' && typeof resolvedType !== 'function')) {
-          console.error('[AppRouterProvider] Invalid component type:', {
+          console.error('[rari] AppRouter: Invalid component type:', {
             type: resolvedType,
             typeOf: typeof resolvedType,
             serverKey,
@@ -433,7 +433,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
         }
         catch (e) {
-          console.error('[AppRouterProvider] Failed to parse RSC line:', line, e)
+          console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
         }
       }
 
@@ -462,7 +462,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
     catch (error) {
-      console.error('[AppRouterProvider] Failed to parse RSC wire format:', error)
+      console.error('[rari] AppRouter: Failed to parse RSC wire format:', error)
       throw error
     }
   }
@@ -546,7 +546,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           )
         }
 
-        console.error('[AppRouterProvider] Error fetching RSC payload:', error)
+        console.error('[rari] AppRouter: Error fetching RSC payload:', error)
         throw error
       }
       finally {
@@ -606,7 +606,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (error instanceof Error && error.name === 'AbortError')
             return
 
-          console.error('[AppRouterProvider] Navigation failed:', error)
+          console.error('[rari] AppRouter: Navigation failed:', error)
 
           window.dispatchEvent(new CustomEvent('rari:navigate-error', {
             detail: {
@@ -648,7 +648,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[AppRouterProvider] HMR update failed:', error)
+        console.error('[rari] AppRouter: HMR update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
@@ -670,7 +670,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[AppRouterProvider] RSC invalidation failed:', error)
+        console.error('[rari] AppRouter: RSC invalidation failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
@@ -683,7 +683,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[AppRouterProvider] Manifest update failed:', error)
+        console.error('[rari] AppRouter: Manifest update failed:', error)
 
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
@@ -719,7 +719,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
       }
       catch (error) {
-        console.error('[AppRouterProvider] Failed to parse streaming RSC row:', error)
+        console.error('[rari] AppRouter: Failed to parse streaming RSC row:', error)
       }
     }
 
@@ -772,7 +772,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
-    console.error('[AppRouterProvider] Invalid content to render:', contentToRender)
+    console.error('[rari] AppRouter: Invalid content to render:', contentToRender)
     contentToRender = children
   }
 

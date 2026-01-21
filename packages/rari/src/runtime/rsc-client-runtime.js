@@ -1127,7 +1127,7 @@ if (import.meta.hot) {
       await handleAppRouterUpdate(data)
     }
     catch (error) {
-      console.error('[HMR] App router update failed:', error)
+      console.error('[rari] HMR: App router update failed:', error)
     }
   })
 
@@ -1177,12 +1177,12 @@ if (import.meta.hot) {
       })
 
       if (!reloadResponse.ok)
-        console.error('[HMR] Component reload failed:', reloadResponse.status)
+        console.error('[rari] HMR: Component reload failed:', reloadResponse.status)
 
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     catch (error) {
-      console.error('[HMR] Failed to reload component:', error)
+      console.error('[rari] HMR: Failed to reload component:', error)
     }
 
     let routes = [routePath]
@@ -1278,10 +1278,10 @@ if (import.meta.hot) {
         })
 
         if (!invalidateResponse.ok)
-          console.error('[HMR] Server cache invalidation failed:', invalidateResponse.status)
+          console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status)
       }
       catch (error) {
-        console.error('[HMR] Failed to call server invalidation endpoint:', error)
+        console.error('[rari] HMR: Failed to call server invalidation endpoint:', error)
       }
     }
 
@@ -1309,10 +1309,10 @@ if (import.meta.hot) {
           })
 
           if (!response.ok)
-            console.error('[HMR] Failed to re-fetch route:', response.status)
+            console.error('[rari] HMR: Failed to re-fetch route:', response.status)
         }
         catch (error) {
-          console.error('[HMR] Failed to re-fetch route:', error)
+          console.error('[rari] HMR: Failed to re-fetch route:', error)
         }
       }
     }
@@ -1339,7 +1339,7 @@ if (import.meta.hot) {
       window.dispatchEvent(event)
     }
     catch (error) {
-      console.error('[HMR] Failed to trigger re-render:', error)
+      console.error('[rari] HMR: Failed to trigger re-render:', error)
       throw error
     }
   }
@@ -1438,13 +1438,13 @@ if (import.meta.hot) {
     const errorCount = data.count || data.errorCount
     const maxErrors = data.max || data.maxErrors
 
-    console.error('[HMR] Build error:', message)
+    console.error('[rari] HMR: Build error:', message)
 
     if (filePath)
-      console.error('[HMR] File:', filePath)
+      console.error('[rari] HMR: File:', filePath)
 
     if (data.stack)
-      console.error('[HMR] Stack:', data.stack)
+      console.error('[rari] HMR: Stack:', data.stack)
 
     overlay.show({
       message,
@@ -1455,10 +1455,10 @@ if (import.meta.hot) {
 
     if (errorCount && maxErrors) {
       if (errorCount >= maxErrors) {
-        console.error(`[HMR] Maximum error count (${maxErrors}) reached. Consider restarting the dev server if issues persist.`)
+        console.error(`[rari] HMR: Maximum error count (${maxErrors}) reached. Consider restarting the dev server if issues persist.`)
       }
       else if (errorCount >= maxErrors - 2) {
-        console.warn(`[HMR] Error count: ${errorCount}/${maxErrors}. Approaching maximum error threshold.`)
+        console.warn(`[rari] HMR: Error count: ${errorCount}/${maxErrors}. Approaching maximum error threshold.`)
       }
     }
   })

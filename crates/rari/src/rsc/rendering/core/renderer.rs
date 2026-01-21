@@ -277,7 +277,7 @@ globalThis['~errors'].batch.push({{
             let dep_owned = dep.clone();
             if let Err(e) = self.register_dependency_if_needed(dep_owned).await {
                 error!(
-                    "[RSC] Warning: Failed to register dependency '{dep}' for component '{component_id}': {e}"
+                    "[rari] RSC: Failed to register dependency '{dep}' for component '{component_id}': {e}"
                 );
             }
         }

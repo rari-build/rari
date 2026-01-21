@@ -998,7 +998,7 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                `Failed to register component ${component.id}:`,
+                `[rari] Runtime: Failed to register component ${component.id}:`,
                 error instanceof Error ? error.message : String(error),
               )
             }
@@ -1006,7 +1006,7 @@ const ${componentName} = registerClientReference(
         }
         catch (error) {
           console.error(
-            'Component discovery failed:',
+            '[rari] Runtime: Component discovery failed:',
             error instanceof Error ? error.message : String(error),
           )
         }
@@ -1042,14 +1042,14 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                `Failed to pre-register client component ${componentName}:`,
+                `[rari] Runtime: Failed to pre-register client component ${componentName}:`,
                 error,
               )
             }
           }
         }
         catch (error) {
-          console.error('Failed to pre-register client components:', error)
+          console.error('[rari] Runtime: Failed to pre-register client components:', error)
         }
       }
 
@@ -1636,7 +1636,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
             await (serverComponentBuilder as any).rebuildComponent(file)
           }
           catch (error) {
-            console.error(`[HMR] Failed to rebuild ${file}:`, error)
+            console.error(`[rari] HMR: Failed to rebuild ${file}:`, error)
           }
         }
 

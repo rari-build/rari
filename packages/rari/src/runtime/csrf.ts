@@ -12,7 +12,7 @@ export async function refreshCsrfToken(): Promise<boolean> {
   try {
     const response = await fetch('/_rari/csrf-token')
     if (!response.ok) {
-      console.error('Failed to refresh CSRF token:', response.status)
+      console.error('[rari] CSRF: Failed to refresh CSRF token:', response.status)
       return false
     }
     const data = await response.json()
@@ -29,7 +29,7 @@ export async function refreshCsrfToken(): Promise<boolean> {
     return false
   }
   catch (error) {
-    console.error('Error refreshing CSRF token:', error)
+    console.error('[rari] CSRF: Error refreshing CSRF token:', error)
     return false
   }
 }

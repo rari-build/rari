@@ -29,7 +29,7 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
     const proxyModule = await import(proxyModulePath)
 
     if (!proxyModule || !proxyModule.proxy) {
-      console.error('[rari:proxy] proxy function not found in module')
+      console.error('[rari] Proxy: proxy function not found in module')
       return false
     }
 
@@ -53,7 +53,7 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
 
         if (waitUntilPromises.length > 0) {
           Promise.allSettled(waitUntilPromises).catch((error) => {
-            console.error('[rari:proxy] waitUntil promise failed:', error)
+            console.error('[rari] Proxy: waitUntil promise failed:', error)
           })
         }
 
@@ -137,7 +137,7 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
         return { continue: true }
       }
       catch (error) {
-        console.error('[rari:proxy] Proxy execution error:', error)
+        console.error('[rari] Proxy: Proxy execution error:', error)
         return { continue: true }
       }
     }
@@ -145,7 +145,7 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
     return true
   }
   catch (error) {
-    console.error('[rari:proxy] Failed to initialize proxy executor:', error)
+    console.error('[rari] Proxy: Failed to initialize proxy executor:', error)
     return false
   }
 }

@@ -55,7 +55,7 @@ class AppRouteGenerator {
 
   async generateManifest(): Promise<AppRouteManifest> {
     if (this.verbose)
-      console.warn(`[AppRouter] Scanning app directory: ${this.appDir}`)
+      console.warn(`[rari] Router: Scanning app directory: ${this.appDir}`)
 
     const routes: AppRouteEntry[] = []
     const layouts: LayoutEntry[] = []
@@ -68,12 +68,12 @@ class AppRouteGenerator {
     await this.scanDirectory('', routes, layouts, loading, errors, notFound, apiRoutes, ogImages)
 
     if (this.verbose) {
-      console.warn(`[AppRouter] Found ${routes.length} routes`)
-      console.warn(`[AppRouter] Found ${layouts.length} layouts`)
-      console.warn(`[AppRouter] Found ${loading.length} loading components`)
-      console.warn(`[AppRouter] Found ${errors.length} error boundaries`)
-      console.warn(`[AppRouter] Found ${apiRoutes.length} API routes`)
-      console.warn(`[AppRouter] Found ${ogImages.length} OG images`)
+      console.warn(`[rari] Router: Found ${routes.length} routes`)
+      console.warn(`[rari] Router: Found ${layouts.length} layouts`)
+      console.warn(`[rari] Router: Found ${loading.length} loading components`)
+      console.warn(`[rari] Router: Found ${errors.length} error boundaries`)
+      console.warn(`[rari] Router: Found ${apiRoutes.length} API routes`)
+      console.warn(`[rari] Router: Found ${ogImages.length} OG images`)
     }
 
     return {

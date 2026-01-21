@@ -633,7 +633,7 @@ function rscToReact(rsc, modules, symbols) {
         return React.createElement(type, key ? { ...processedProps, key } : processedProps)
       }
       catch (error) {
-        console.error('[RSC ERROR] Failed to create element:', { type, key, props, error })
+        console.error('[rari] RSC: Failed to create element:', { type, key, props, error })
         throw error
       }
     }
