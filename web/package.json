@@ -26,7 +26,7 @@
     "@shikijs/engine-oniguruma": "^3.21.0",
     "@shikijs/langs": "^3.21.0",
     "@shikijs/themes": "^3.21.0",
-    "posthog-js": "^1.332.0",
+    "posthog-js": "^1.333.0",
     "rari": "^0.7.5",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
