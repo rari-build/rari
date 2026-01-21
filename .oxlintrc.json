@@ -54,10 +54,6 @@
     "**/components.d.ts",
     "**/packages/create-rari-app/templates/**"
   ],
-  "globals": {
-    "CSSStyleProperties": "readonly",
-    "Temporal": "readonly"
-  },
   "rules": {
     "accessor-pairs": [
       "error",
