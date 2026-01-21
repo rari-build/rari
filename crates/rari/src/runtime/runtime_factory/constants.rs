@@ -138,7 +138,7 @@ pub fn create_registration_script(specifier_str: &str, script_name: &str) -> Str
                     return {{ success: false, error: 'No {RARI_REGISTER_FUNCTION} function found' }};
                 }}
             }} catch (e) {{
-                console.error("[RARI_ERROR] Failed to call {RARI_REGISTER_FUNCTION} for '{script_name}': " + e.message);
+                console.error("[rari] Failed to call {RARI_REGISTER_FUNCTION} for '{script_name}': " + e.message);
                 return {{ success: false, error: e.message }};
             }}
         }})()

@@ -1227,7 +1227,7 @@ const ${componentName} = registerClientReference(
             }
             catch (error) {
               console.error(
-                '[RARI HMR] Failed to register component',
+                '[rari] Failed to register component',
                 `${component.id}:`,
                 error instanceof Error ? error.message : String(error),
               )
@@ -1236,7 +1236,7 @@ const ${componentName} = registerClientReference(
         }
         catch (error) {
           console.error(
-            '[RARI HMR] Targeted HMR failed for',
+            '[rari] Targeted HMR failed for',
             `${filePath}:`,
             error instanceof Error ? error.message : String(error),
           )
