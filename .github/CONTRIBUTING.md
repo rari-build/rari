@@ -67,23 +67,23 @@ rari is a monorepo that consists of:
 
 ```
 rari/
-├── .github/           # GitHub workflows and templates
-├── crates/            # Rust crates
-│   └── rari/         # Main Rust runtime
-├── examples/          # Example applications
+├── .github/              # GitHub workflows and templates
+├── crates/               # Rust crates
+│   └── rari/             # Main Rust runtime
+├── examples/             # Example applications
 │   └── app-router-example/
-├── packages/          # TypeScript/JavaScript packages
+├── packages/             # TypeScript/JavaScript packages
 │   ├── create-rari-app/  # CLI tool for creating new apps
-│   ├── rari/            # Main framework package
-│   └── rari-{platform}/ # Platform-specific binary packages
-├── tools/             # Build and release automation
+│   ├── rari/             # Main framework package
+│   └── rari-{platform}/  # Platform-specific binary packages
+├── tools/                # Build and release automation
 │   ├── prepare-binaries/ # Binary preparation tool
-│   └── release/         # Release automation tool
-├── web/               # Documentation website
-├── justfile           # Command runner recipes
-├── Cargo.toml         # Rust workspace configuration
-├── pnpm-workspace.yaml # pnpm workspace configuration
-└── package.json       # Root package.json
+│   └── release/          # Release automation tool
+├── web/                  # Documentation website
+├── justfile              # Command runner recipes
+├── Cargo.toml            # Rust workspace configuration
+├── pnpm-workspace.yaml   # pnpm workspace configuration
+└── package.json          # Root package.json
 ```
 
 ## Development Workflow
