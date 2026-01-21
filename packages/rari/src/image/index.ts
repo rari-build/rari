@@ -1,3 +1,4 @@
+export type { ImageFormat } from './constants'
 export {
   DEFAULT_DEVICE_SIZES,
   DEFAULT_FORMATS,

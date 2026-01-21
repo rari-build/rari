@@ -8,14 +8,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import * as acorn from 'acorn'
-import {
-  DEFAULT_DEVICE_SIZES,
-  DEFAULT_FORMATS,
-  DEFAULT_IMAGE_SIZES,
-  DEFAULT_MAX_CACHE_SIZE,
-  DEFAULT_MINIMUM_CACHE_TTL,
-  DEFAULT_QUALITY_LEVELS,
-} from '../image'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
@@ -1706,6 +1699,7 @@ export function defineRariConfig(
   }
 }
 
-export { RariRequest, RariResponse } from '../proxy/index'
-export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/index'
+export { RariRequest } from '../proxy/RariRequest'
+export { RariResponse } from '../proxy/RariResponse'
+export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/types'
 export { rariProxy } from '../proxy/vite-plugin'
