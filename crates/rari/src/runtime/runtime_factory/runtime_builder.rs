@@ -54,14 +54,14 @@ pub fn create_deno_runtime(
         );
 
         if let Err(err) = runtime.execute_script("env_vars.js", env_script.into_owned()) {
-            eprintln!("[RARI_WARN] Failed to inject environment variables: {err}");
+            eprintln!("[rari] Failed to inject environment variables: {err}");
         }
     }
 
     if let Err(err) =
         runtime.execute_script("module_registration_check.js", MODULE_CHECK_SCRIPT.to_string())
     {
-        eprintln!("[RARI_WARN] Failed to check module registration extension: {err}");
+        eprintln!("[rari] Failed to check module registration extension: {err}");
     }
 
     Ok((runtime, module_loader))
