@@ -74,7 +74,7 @@ if (typeof globalThis.jsxs === 'undefined') {
 if (typeof globalThis.React !== 'undefined' && typeof globalThis.React.use !== 'function') {
   globalThis.React.use = function use(resource) {
     if (resource && resource.$$typeof === Symbol.for('react.context')) {
-      console.warn('[Rari] React.use() with Context is not fully supported on server')
+      console.warn('[rari] React.use() with Context is not fully supported on server')
       return null
     }
 

@@ -11,7 +11,7 @@ export function proxy(request: RariRequest) {
   if (pathname.startsWith('/api/')) {
     const response = RariResponse.next()
     response.headers.set('X-API-Version', '1.0')
-    response.headers.set('X-Custom-Header', 'Rari')
+    response.headers.set('X-Custom-Header', 'rari')
     return response
   }
 

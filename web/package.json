@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.28.1",
-  "description": "Runtime Accelerated Rendering Infrastructure (Rari) Website",
+  "description": "Runtime Accelerated Rendering Infrastructure (rari) Website",
   "author": "Ryan Skinner",
   "license": "MIT",
   "engines": {
