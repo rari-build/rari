@@ -1,3 +1,95 @@
+## [rari@0.7.6] - 2026-01-21
+
+### 💼 Other
+
+- Rari@0.7.6
+## [0.7.6] - 2026-01-21
+
+### 🚀 Features
+
+- *(web)* Migrate from GA to PostHog for analytics
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Update eslint and oxlint rules in page render script
+
+### 💼 Other
+
+- Rari@0.7.5
+
+### 🚜 Refactor
+
+- *(prepare-binaries)* Simplify CLI tool
+- *(exports)* Reorganize proxy and image module exports
+
+### 📚 Documentation
+
+- *(assets)* Add rari logo assets and update README branding
+- *(readme)* Reduce logo width
+- Standardize rari branding to lowercase throughout
+- Standardize rari branding to lowercase in github templates
+- *(rari)* Standardize rari branding to lowercase in package description
+- *(contributing)* Update development setup and project structure
+- *(contributing)* Align project structure formatting
+
+### 🎨 Styling
+
+- Standardize rari branding to lowercase in console messages
+- Standardize rari branding to lowercase in error messages
+- Standardize rari branding to lowercase in runtime logs
+- Standardize rari branding in log messages and error outputs
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.7.5
+- *(release)* Simplify npm OTP handling
+- *(release)* Bump create-rari-app to 0.3.5
+- *(release)* Fix package.json and improve version handling
+- *(release)* Bump version to 0.7.6
+## [0.7.5] - 2026-01-18
+
+### 🚀 Features
+
+- *(rari)* Refactor routing and rendering architecture with improved component resolution
+- *(rari,web)* Add custom define option and integrate sponsor link into navigation
+- *(og)* Add ImageResponse documentation
+
+### 📚 Documentation
+
+- Update README with revised performance metrics and streamlined content
+
+### ⚙️ Miscellaneous Tasks
+
+- *(tooling)* Migrate release and binary preparation scripts to Rust
+- *(tooling)* Migrate git-cliff from npm to system binary
+- *(changelog)* Exclude non-core directories from git-cliff
+- *(lint)* Consolidate eslint configuration and update tooling
+- *(build)* Consolidate workspace dependencies and enhance clippy linting
+- *(justfile)* Enhance testing infrastructure with nextest
+- *(release)* Bump rari binaries version to 0.7.5
+## [rari@0.7.4] - 2026-01-15
+
+### 💼 Other
+
+- Rari@0.7.4
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump binary version to 0.7.4
+## [0.7.4] - 2026-01-15
+
+### 🚀 Features
+
+- *(rari)* Optimize component resolution and rendering performance
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump binary version to 0.7.4
+## [create-rari-app@0.3.4] - 2026-01-14
+
+### 💼 Other
+
+- Create-rari-app@0.3.4
 ## [rari@0.7.3] - 2026-01-14
 
 ### 💼 Other
@@ -11,7 +103,6 @@
 
 ### 🚀 Features
 
-- *(web)* Add dynamic opengraph image generation for blog and docs
 - *(rari)* Enhance open graph and twitter metadata handling
 - *(rari)* Add body scripts extraction and injection support
 
@@ -20,11 +111,9 @@
 - *(docs)* Restructure documentation and add blog section
 - *(web)* Rename docs directory to web
 - Rename docs directory to web and update references
-- *(web)* Rename DocsLoading to DocLoading component
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(web)* Update package description from docs to website
 - *(rari)* Bump binary version to 0.7.3
 ## [create-rari-app@0.3.3] - 2026-01-13
 
@@ -108,14 +197,12 @@
 
 ### 🚜 Refactor
 
-- *(examples)* Simplify app router proxy matcher pattern
 - *(error)* Simplify error enum and clippy configuration
 - *(hmr)* Consolidate HMR handlers into unified action endpoint
 - *(server)* Move register endpoints to development-only routes
 - *(rsc)* Stream RSC responses directly without buffering
 - *(sync)* Replace std::sync with parking_lot for better performance
 - *(vite)* Fix client component HMR handling
-- *(todo-actions)* Improve immutability and form handling
 - *(image)* Rename priority to preload and add custom loader support
 - *(api)* Consolidate internal routes under /_rari namespace
 - *(path)* Remove unused custom paths constructor and test
@@ -123,7 +210,6 @@
 - *(spam_blocker)* Add block reason tracking and improve response handling
 - *(server)* Improve app router error handling and validation
 - *(cache)* Remove production environment check from caching logic
-- *(examples)* Simplify server actions demo and remove progressive enhancement
 - *(rendering)* Improve HTML structure handling and asset extraction
 - *(config)* Migrate CSP and rate limit config from environment variables to manifest
 - *(config)* Remove TOML file support and simplify configuration loading
@@ -134,7 +220,6 @@
 
 ### 🎨 Styling
 
-- *(examples)* Remove unnecessary braces from single-statement conditionals
 - *(rsc)* Remove unnecessary braces from single-statement conditionals
 - *(node)* Fix formatting in promisify callback handler
 
@@ -339,12 +424,7 @@
 
 ### 🚜 Refactor
 
-- *(examples)* Simplify todo actions and remove verbose error handling
 - *(module-loader)* Improve dynamic import path resolution logic
-
-### 🎨 Styling
-
-- *(examples)* Remove unnecessary blank line
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -1176,7 +1256,6 @@
 - *(rsc)* Fix hydration logic in renderApp
 - *(server)* Enhance static file handling and security configuration
 - *(server)* Enhance Content Security Policy configuration
-- *(example)* Enhance blog and interactive pages with improved styling
 - *(rsc)* Enhance layout renderer test cases with not_found support
 
 ### 📚 Documentation
@@ -1187,7 +1266,6 @@
 
 ### 🎨 Styling
 
-- *(not-found)* Update 404 page styling and color scheme
 - *(tailwind)* Replace deprecated flex-shrink-0 with shrink-0 utility class
 - *(not-found)* Update 404 page link styling and hover states
 
