@@ -1,3 +1,39 @@
+## [rari@0.7.7] - 2026-01-23
+
+### 🚀 Features
+
+- *(deployment)* Migrate Railway configuration from JSON to TOML format
+- *(create-rari-app)* Add Rari logo component to welcome template
+
+### 💼 Other
+
+- Rari@0.7.7
+## [0.7.7] - 2026-01-23
+
+### 🚀 Features
+
+- *(rendering)* Fix support for dangerouslySetInnerHTML and object-style props
+- *(build)* Add debug mode for faster binary preparation
+- *(cli)* Add dev command and support scoped package names
+- *(cli)* Add build command and unify package scripts
+
+### 🐛 Bug Fixes
+
+- Suspense boundary support with streaming
+- *(create-rari-app)* Support project name as CLI argument
+
+### 🚜 Refactor
+
+- *(og-cache)* Defer cache directory creation until first use
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.7.7
+## [create-rari-app@0.3.6] - 2026-01-21
+
+### 💼 Other
+
+- Create-rari-app@0.3.6
 ## [rari@0.7.6] - 2026-01-21
 
 ### 💼 Other
