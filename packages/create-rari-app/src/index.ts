@@ -41,22 +41,39 @@ const packageManagers = {
 async function main() {
   intro(pc.bgCyan(pc.black(' create-rari-app ')))
 
-  const projectName = await text({
-    message: 'What is your project named?',
-    placeholder: 'my-rari-app',
-    validate: (value) => {
-      if (!value)
-        return 'Please enter a project name.'
-      if (value.includes(' '))
-        return 'Project name cannot contain spaces.'
-      if (!/^[\w-]+$/.test(value))
-        return 'Project name can only contain letters, numbers, hyphens, and underscores.'
-    },
-  })
+  const args = process.argv.slice(2)
+  let projectName = args[0]
 
-  if (isCancel(projectName)) {
-    cancel('Operation cancelled.')
-    process.exit(0)
+  if (projectName) {
+    if (projectName.includes(' ')) {
+      console.error(pc.red('Error: Project name cannot contain spaces.'))
+      process.exit(1)
+    }
+    if (!/^[\w-]+$/.test(projectName)) {
+      console.error(pc.red('Error: Project name can only contain letters, numbers, hyphens, and underscores.'))
+      process.exit(1)
+    }
+  }
+  else {
+    const promptedName = await text({
+      message: 'What is your project named?',
+      placeholder: 'my-rari-app',
+      validate: (value) => {
+        if (!value)
+          return 'Please enter a project name.'
+        if (value.includes(' '))
+          return 'Project name cannot contain spaces.'
+        if (!/^[\w-]+$/.test(value))
+          return 'Project name can only contain letters, numbers, hyphens, and underscores.'
+      },
+    })
+
+    if (isCancel(promptedName)) {
+      cancel('Operation cancelled.')
+      process.exit(0)
+    }
+
+    projectName = promptedName
   }
 
   const template = await select({
