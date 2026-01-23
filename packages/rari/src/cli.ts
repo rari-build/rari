@@ -87,6 +87,61 @@ function getDeploymentConfig() {
   return { port, mode, host }
 }
 
+async function runViteBuild() {
+  const { existsSync, rmSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const { spawn } = await import('node:child_process')
+
+  const distPath = resolve(process.cwd(), 'dist')
+
+  if (existsSync(distPath)) {
+    logInfo('Cleaning dist folder...')
+    rmSync(distPath, { recursive: true, force: true })
+  }
+
+  logInfo('Type checking...')
+  const typecheckProcess = spawn('npx', ['tsgo'], {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    shell: true,
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    typecheckProcess.on('exit', (code) => {
+      if (code === 0) {
+        logSuccess('Type check passed')
+        resolve()
+      }
+      else {
+        logError(`Type check failed with code ${code}`)
+        reject(new Error(`Type check failed with code ${code}`))
+      }
+    })
+    typecheckProcess.on('error', reject)
+  })
+
+  logInfo('Building for production...')
+  const buildProcess = spawn('npx', ['vite', 'build'], {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    shell: true,
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    buildProcess.on('exit', (code) => {
+      if (code === 0) {
+        logSuccess('Build complete')
+        resolve()
+      }
+      else {
+        logError(`Build failed with code ${code}`)
+        reject(new Error(`Build failed with code ${code}`))
+      }
+    })
+    buildProcess.on('error', reject)
+  })
+}
+
 async function runViteDev() {
   const { existsSync } = await import('node:fs')
   const { resolve } = await import('node:path')
@@ -246,6 +301,7 @@ async function main() {
 
 ${colors.bold('Usage:')}
   ${colors.cyan('rari dev')}                 Start the development server with Vite
+  ${colors.cyan('rari build')}               Build for production
   ${colors.cyan('rari start')}               Start the rari server (defaults to production)
   ${colors.cyan('rari deploy railway')}      Setup Railway deployment
   ${colors.cyan('rari deploy render')}       Setup Render deployment
@@ -260,6 +316,9 @@ ${colors.bold('Environment Variables:')}
 ${colors.bold('Examples:')}
   ${colors.gray('# Start development server with Vite')}
   ${colors.cyan('rari dev')}
+
+  ${colors.gray('# Build for production')}
+  ${colors.cyan('rari build')}
 
   ${colors.gray('# Start production server (default)')}
   ${colors.cyan('rari start')}
@@ -296,6 +355,7 @@ ${colors.bold('Binary Resolution:')}
 ${colors.bold('Notes:')}
   - 'rari start' defaults to production mode unless NODE_ENV is set
   - 'rari dev' runs in development mode with Vite hot reload
+  - 'rari build' cleans, type checks, and builds for production
   - Platform binary is automatically detected and used
   - Platform deployment is automatically detected and configured
   - Use Ctrl+C to stop the server gracefully
@@ -305,6 +365,10 @@ ${colors.bold('Notes:')}
 
     case 'dev':
       await runViteDev()
+      break
+
+    case 'build':
+      await runViteBuild()
       break
 
     case 'start':

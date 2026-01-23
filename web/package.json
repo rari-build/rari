@@ -11,10 +11,10 @@
     "node": "24"
   },
   "scripts": {
-    "build": "pnpm clean && pnpm typecheck && vite build",
-    "dev": "NODE_OPTIONS='--max-http-header-size=1048576' vite",
-    "start": "NODE_ENV=production rari start",
-    "clean": "rm -rf .rari && rm -rf dist",
+    "build": "rari build",
+    "dev": "rari dev",
+    "start": "rari start",
+    "clean": "rm -rf dist",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "tsgo"

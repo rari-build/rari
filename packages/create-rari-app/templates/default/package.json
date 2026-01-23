@@ -8,7 +8,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "{{PACKAGE_MANAGER}} run clean && {{PACKAGE_MANAGER}} run typecheck && vite build",
+    "build": "rari build",
     "dev": "rari dev",
     "start": "rari start",
     "deploy:railway": "rari deploy railway",

@@ -4,10 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "start": "NODE_ENV=production rari start",
-    "preview": "vite preview",
+    "dev": "rari dev",
+    "build": "rari build",
+    "start": "rari start",
     "typecheck": "tsgo"
   },
   "dependencies": {
