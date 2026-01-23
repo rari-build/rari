@@ -63,37 +63,26 @@ export async function createRailwayDeployment() {
     process.exit(1)
   }
 
-  const railwayConfig = {
-    $schema: 'https://railway.app/railway.schema.json',
-    build: {
-      builder: 'RAILPACK',
-    },
-    deploy: {
-      startCommand: 'npm start',
-      healthcheckPath: '/',
-      healthcheckTimeout: 300,
-      restartPolicyType: 'ALWAYS',
-    },
-    environments: {
-      production: {
-        variables: {
-          NODE_ENV: 'production',
-          RUST_LOG: 'info',
-          RAILPACK_DEPLOY_APT_PACKAGES: 'libfontconfig1',
-        },
-      },
-    },
+  const railwayConfig = `[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+`
+
+  const railwayTomlPath = join(cwd, 'railway.toml')
+  if (existsSync(railwayTomlPath)) {
+    logWarning('railway.toml already exists, backing up to railway.toml.backup')
+    const existingConfig = readFileSync(railwayTomlPath, 'utf-8')
+    writeFileSync(join(cwd, 'railway.toml.backup'), existingConfig)
   }
 
-  const railwayJsonPath = join(cwd, 'railway.json')
-  if (existsSync(railwayJsonPath)) {
-    logWarning('railway.json already exists, backing up to railway.json.backup')
-    const existingConfig = readFileSync(railwayJsonPath, 'utf-8')
-    writeFileSync(join(cwd, 'railway.json.backup'), existingConfig)
-  }
-
-  writeFileSync(railwayJsonPath, `${JSON.stringify(railwayConfig, null, 2)}\n`)
-  logSuccess('Created railway.json configuration')
+  writeFileSync(railwayTomlPath, railwayConfig)
+  logSuccess('Created railway.toml configuration')
 
   const gitignorePath = join(cwd, '.gitignore')
   const railwayGitignoreEntries = [

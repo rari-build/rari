@@ -175,8 +175,6 @@ async function copyTemplate(
     'tsconfig.json',
     'index.html',
     'README.md',
-    'railway.toml',
-    'render.yaml',
     'src/app/globals.css',
     'src/app/layout.tsx',
     'src/app/page.tsx',
