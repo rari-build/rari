@@ -102,7 +102,7 @@
   "devDependencies": {
     "@types/node": "^25.0.10",
     "@types/react": "^19.2.9",
-    "@typescript/native-preview": "^7.0.0-dev.20260122.4",
+    "@typescript/native-preview": "^7.0.0-dev.20260123.3",
     "chokidar": "^5.0.0",
     "oxlint": "^1.41.0",
     "rolldown-vite": "^7.3.1",
