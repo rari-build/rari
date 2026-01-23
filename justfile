@@ -185,6 +185,10 @@ release-dry:
 prepare-binaries:
     cargo run --release --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries
 
+# Prepare binaries for development (fast debug build)
+prepare-binaries-dev:
+    cargo run --manifest-path tools/prepare-binaries/Cargo.toml --bin prepare-binaries -- --dev
+
 # --- Utility commands ---
 
 # Ensure pnpm dependencies are installed

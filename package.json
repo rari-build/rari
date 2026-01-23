@@ -9,14 +9,13 @@
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint && oxlint crates/ && eslint .",
     "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint . --fix",
-    "lint:knip": "knip",
-    "postinstall": "pnpm build"
+    "lint:knip": "knip"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.2.0",
     "@eslint-react/eslint-plugin": "^2.7.2",
-    "@types/node": "^25.0.9",
-    "@typescript/native-preview": "7.0.0-dev.20260120.1",
+    "@types/node": "^25.0.10",
+    "@typescript/native-preview": "7.0.0-dev.20260123.3",
     "eslint": "^9.39.2",
     "eslint-plugin-oxlint": "^1.41.0",
     "eslint-plugin-react-hooks": "^7.0.1",

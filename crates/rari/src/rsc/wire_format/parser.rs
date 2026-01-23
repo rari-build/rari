@@ -169,9 +169,31 @@ impl RscWireFormatParser {
         key: Option<String>,
         props: FxHashMap<String, JsonValue>,
     ) -> Result<RscElement, RariError> {
-        let fallback_ref = props.get("fallback").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let fallback_ref = if let Some(fallback_value) = props.get("fallback") {
+            match fallback_value {
+                JsonValue::String(s) => s.clone(),
+                JsonValue::Array(_) | JsonValue::Object(_) => {
+                    serde_json::to_string(fallback_value).unwrap_or_default()
+                }
+                JsonValue::Null => String::new(),
+                _ => fallback_value.to_string(),
+            }
+        } else {
+            String::new()
+        };
 
-        let children_ref = props.get("children").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let children_ref = if let Some(children_value) = props.get("children") {
+            match children_value {
+                JsonValue::String(s) => s.clone(),
+                JsonValue::Null => String::new(),
+                JsonValue::Array(_) | JsonValue::Object(_) => {
+                    serde_json::to_string(children_value).unwrap_or_default()
+                }
+                _ => children_value.to_string(),
+            }
+        } else {
+            String::new()
+        };
 
         let boundary_id = props
             .get("~boundaryId")

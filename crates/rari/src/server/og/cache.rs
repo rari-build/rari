@@ -15,10 +15,6 @@ impl OgImageCache {
 
         let cache_dir = Self::resolve_cache_dir(project_path);
 
-        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-            tracing::error!("Failed to create OG cache directory: {}", e);
-        }
-
         Self { memory_cache: RwLock::new(LruCache::new(capacity)), cache_dir }
     }
 
@@ -29,6 +25,12 @@ impl OgImageCache {
             PathBuf::from("/tmp/rari-og-cache")
         } else {
             project_path.join("dist").join("cache").join("og")
+        }
+    }
+
+    fn ensure_cache_dir(&self) {
+        if let Err(e) = std::fs::create_dir_all(&self.cache_dir) {
+            tracing::error!("Failed to create OG cache directory: {}", e);
         }
     }
 
@@ -58,6 +60,8 @@ impl OgImageCache {
     }
 
     pub fn insert(&self, key: String, value: Vec<u8>) {
+        self.ensure_cache_dir();
+
         let path = self.cache_filename(&key);
         if let Err(e) = std::fs::write(&path, &value) {
             tracing::error!("Failed to write OG image to disk cache: {}", e);

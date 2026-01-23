@@ -112,15 +112,28 @@ if (typeof window !== 'undefined') {
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
             const [, tag, , props] = element
-            const children = props && props.children ? rscToHtml(props.children) : ''
+            let innerHTML = null
+            let children = ''
 
             let attrs = ''
             if (props) {
               for (const [key, value] of Object.entries(props)) {
-                if (key !== 'children' && key !== '~boundaryId') {
+                if (key === 'dangerouslySetInnerHTML' && value && typeof value === 'object' && '__html' in value) {
+                  innerHTML = value.__html
+                }
+                else if (key !== 'children' && key !== '~boundaryId') {
                   const attrName = key === 'className' ? 'class' : key
 
-                  if (typeof value === 'string') {
+                  if (key === 'style' && typeof value === 'object') {
+                    const styleStr = Object.entries(value)
+                      .map(([k, v]) => {
+                        const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+                        return `${kebabKey}:${v}`
+                      })
+                      .join(';')
+                    attrs += ` style="${styleStr}"`
+                  }
+                  else if (typeof value === 'string') {
                     attrs += ` ${attrName}="${value.replace(/"/g, '&quot;')}"`
                   }
                   else if (typeof value === 'boolean' && value) {
@@ -128,9 +141,12 @@ if (typeof window !== 'undefined') {
                   }
                 }
               }
+
+              if (innerHTML === null && props.children)
+                children = rscToHtml(props.children)
             }
 
-            return `<${tag}${attrs}>${children}</${tag}>`
+            return `<${tag}${attrs}>${innerHTML !== null ? innerHTML : children}</${tag}>`
           }
 
           return element.map(rscToHtml).join('')

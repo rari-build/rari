@@ -81,10 +81,126 @@ function getPlatformName(): string {
 
 function getDeploymentConfig() {
   const port = process.env.PORT || process.env.RSC_PORT || '3000'
-  const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
+  const mode = process.env.NODE_ENV || 'production'
   const host = isPlatformEnvironment() ? '0.0.0.0' : '127.0.0.1'
 
   return { port, mode, host }
+}
+
+async function runViteBuild() {
+  const { existsSync, rmSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const { spawn } = await import('node:child_process')
+
+  const distPath = resolve(process.cwd(), 'dist')
+
+  if (existsSync(distPath)) {
+    logInfo('Cleaning dist folder...')
+    rmSync(distPath, { recursive: true, force: true })
+  }
+
+  logInfo('Type checking...')
+  const typecheckProcess = spawn('npx', ['tsgo'], {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    shell: true,
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    typecheckProcess.on('exit', (code) => {
+      if (code === 0) {
+        logSuccess('Type check passed')
+        resolve()
+      }
+      else {
+        logError(`Type check failed with code ${code}`)
+        reject(new Error(`Type check failed with code ${code}`))
+      }
+    })
+    typecheckProcess.on('error', reject)
+  })
+
+  logInfo('Building for production...')
+  const buildProcess = spawn('npx', ['vite', 'build'], {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    shell: true,
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    buildProcess.on('exit', (code) => {
+      if (code === 0) {
+        logSuccess('Build complete')
+        resolve()
+      }
+      else {
+        logError(`Build failed with code ${code}`)
+        reject(new Error(`Build failed with code ${code}`))
+      }
+    })
+    buildProcess.on('error', reject)
+  })
+}
+
+async function runViteDev() {
+  const { existsSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const { spawn } = await import('node:child_process')
+
+  const distPath = resolve(process.cwd(), 'dist')
+
+  if (!existsSync(distPath)) {
+    logInfo('First run detected - building project...')
+
+    const buildProcess = spawn('npx', ['vite', 'build', '--mode', 'development'], {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      shell: true,
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      buildProcess.on('exit', (code) => {
+        if (code === 0) {
+          logSuccess('Initial build complete')
+          resolve()
+        }
+        else {
+          logError(`Build failed with code ${code}`)
+          reject(new Error(`Build failed with code ${code}`))
+        }
+      })
+      buildProcess.on('error', reject)
+    })
+  }
+
+  logInfo('Starting Vite dev server...')
+  const viteProcess = spawn('npx', ['vite'], {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    shell: true,
+  })
+
+  const shutdown = () => {
+    logInfo('Shutting down dev server...')
+    viteProcess.kill('SIGTERM')
+  }
+
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+
+  viteProcess.on('error', (error: Error) => {
+    logError(`Failed to start Vite: ${error.message}`)
+    process.exit(1)
+  })
+
+  viteProcess.on('exit', (code: number) => {
+    if (code !== 0 && code !== null) {
+      logError(`Vite exited with code ${code}`)
+      process.exit(code)
+    }
+  })
+
+  return new Promise(() => { })
 }
 
 async function startRustServer(): Promise<void> {
@@ -184,23 +300,34 @@ async function main() {
       console.warn(`${colors.bold('rari CLI')}
 
 ${colors.bold('Usage:')}
-  ${colors.cyan('rari start')}              Start the rari server
-  ${colors.cyan('rari deploy railway')}     Setup Railway deployment
-  ${colors.cyan('rari deploy render')}      Setup Render deployment
-  ${colors.cyan('rari help')}               Show this help message
+  ${colors.cyan('rari dev')}                 Start the development server with Vite
+  ${colors.cyan('rari build')}               Build for production
+  ${colors.cyan('rari start')}               Start the rari server (defaults to production)
+  ${colors.cyan('rari deploy railway')}      Setup Railway deployment
+  ${colors.cyan('rari deploy render')}       Setup Render deployment
+  ${colors.cyan('rari help')}                Show this help message
 
 ${colors.bold('Environment Variables:')}
-  ${colors.yellow('PORT')}                    Server port (default: 3000)
-  ${colors.yellow('RSC_PORT')}               Alternative server port
-  ${colors.yellow('NODE_ENV')}               Environment (development/production)
-  ${colors.yellow('RUST_LOG')}               Rust logging level (default: info)
+  ${colors.yellow('PORT')}                     Server port (default: 3000)
+  ${colors.yellow('RSC_PORT')}                 Alternative server port
+  ${colors.yellow('NODE_ENV')}                 Environment (default: production for start, development for dev)
+  ${colors.yellow('RUST_LOG')}                 Rust logging level (default: info)
 
 ${colors.bold('Examples:')}
-  ${colors.gray('# Start development server on port 3000')}
+  ${colors.gray('# Start development server with Vite')}
+  ${colors.cyan('rari dev')}
+
+  ${colors.gray('# Build for production')}
+  ${colors.cyan('rari build')}
+
+  ${colors.gray('# Start production server (default)')}
   ${colors.cyan('rari start')}
 
+  ${colors.gray('# Start in development mode')}
+  ${colors.cyan('NODE_ENV=development rari start')}
+
   ${colors.gray('# Start production server on port 8080')}
-  ${colors.cyan('PORT=8080 NODE_ENV=production rari start')}
+  ${colors.cyan('PORT=8080 rari start')}
 
   ${colors.gray('# Setup Railway deployment')}
   ${colors.cyan('rari deploy railway')}
@@ -226,11 +353,22 @@ ${colors.bold('Binary Resolution:')}
   3. Install from source with Cargo
 
 ${colors.bold('Notes:')}
+  - 'rari start' defaults to production mode unless NODE_ENV is set
+  - 'rari dev' runs in development mode with Vite hot reload
+  - 'rari build' cleans, type checks, and builds for production
   - Platform binary is automatically detected and used
   - Platform deployment is automatically detected and configured
   - Use Ctrl+C to stop the server gracefully
 
 `)
+      break
+
+    case 'dev':
+      await runViteDev()
+      break
+
+    case 'build':
+      await runViteBuild()
       break
 
     case 'start':
