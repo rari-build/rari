@@ -181,6 +181,7 @@ async function copyTemplate(
     'src/app/about/page.tsx',
     'src/components/Welcome.tsx',
     'src/components/ServerTime.tsx',
+    'src/components/Rari.tsx',
     'gitignore',
   ]
 

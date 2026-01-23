@@ -1,6 +1,11 @@
+import Rari from './Rari'
+
 export default function Welcome() {
   return (
     <div className="bg-white rounded-xl p-8 shadow-sm">
+      <div className="flex items-center gap-4 mb-6">
+        <Rari className="w-32 h-auto text-gray-900" />
+      </div>
       <h2 className="text-2xl font-semibold mb-4 text-gray-900">
         🎉 Welcome to rari!
       </h2>
