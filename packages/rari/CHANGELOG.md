@@ -1,9 +1,24 @@
-## [0.7.7] - 2026-01-23
+## [0.7.8] - 2026-01-23
+
+### ⚙️ Miscellaneous Tasks
+
+- *(license)* Update copyright year to indicate ongoing development
+- *(release)* Bump version to 0.7.8
+## [create-rari-app@0.3.7] - 2026-01-23
+
+### 💼 Other
+
+- Create-rari-app@0.3.7
+## [rari@0.7.7] - 2026-01-23
 
 ### 🚀 Features
 
 - *(deployment)* Migrate Railway configuration from JSON to TOML format
 - *(create-rari-app)* Add Rari logo component to welcome template
+
+### 💼 Other
+
+- Rari@0.7.7
 ## [0.7.7] - 2026-01-23
 
 ### 🚀 Features
