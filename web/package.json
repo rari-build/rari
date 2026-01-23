@@ -26,18 +26,18 @@
     "@shikijs/engine-oniguruma": "^3.21.0",
     "@shikijs/langs": "^3.21.0",
     "@shikijs/themes": "^3.21.0",
-    "posthog-js": "^1.333.0",
+    "posthog-js": "^1.334.1",
     "rari": "^0.7.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.0.10",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260120.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260122.4",
     "oxlint": "^1.41.0",
     "rolldown-vite": "^7.3.1",
     "tailwindcss": "^4.1.18"
