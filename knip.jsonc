@@ -46,6 +46,7 @@
       ],
       // Tailwind dependencies used via Vite plugin
       "ignoreDependencies": [
+        "rolldown-vite",
         "@tailwindcss/vite",
         "tailwindcss"
       ]
