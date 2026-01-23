@@ -27,7 +27,7 @@
     "@shikijs/langs": "^3.21.0",
     "@shikijs/themes": "^3.21.0",
     "posthog-js": "^1.335.2",
-    "rari": "^0.7.7",
+    "rari": "^0.7.8",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "unist-util-visit": "^5.1.0"
