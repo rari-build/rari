@@ -49,8 +49,8 @@ async function main() {
       console.error(pc.red('Error: Project name cannot contain spaces.'))
       process.exit(1)
     }
-    if (!/^[\w-]+$/.test(projectName)) {
-      console.error(pc.red('Error: Project name can only contain letters, numbers, hyphens, and underscores.'))
+    if (!/^[@\w/-]+$/.test(projectName)) {
+      console.error(pc.red('Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
       process.exit(1)
     }
   }
@@ -63,8 +63,8 @@ async function main() {
           return 'Please enter a project name.'
         if (value.includes(' '))
           return 'Project name cannot contain spaces.'
-        if (!/^[\w-]+$/.test(value))
-          return 'Project name can only contain letters, numbers, hyphens, and underscores.'
+        if (!/^[@\w/-]+$/.test(value))
+          return 'Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'
       },
     })
 

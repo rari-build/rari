@@ -9,8 +9,7 @@
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint && oxlint crates/ && eslint .",
     "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint . --fix",
-    "lint:knip": "knip",
-    "postinstall": "pnpm build"
+    "lint:knip": "knip"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.2.0",

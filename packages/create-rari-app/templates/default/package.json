@@ -9,9 +9,8 @@
   },
   "scripts": {
     "build": "{{PACKAGE_MANAGER}} run clean && {{PACKAGE_MANAGER}} run typecheck && vite build",
-    "dev": "vite",
-    "predev": "{{PACKAGE_MANAGER}} run build",
-    "start": "NODE_ENV=production rari start",
+    "dev": "rari dev",
+    "start": "rari start",
     "deploy:railway": "rari deploy railway",
     "deploy:render": "rari deploy render",
     "clean": "rm -rf dist",
