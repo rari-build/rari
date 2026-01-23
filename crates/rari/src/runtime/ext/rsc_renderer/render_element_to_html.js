@@ -97,11 +97,26 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
 
         if (typeof type === 'string') {
           let html = `<${type}`
+          let dangerousHtml = null
 
           for (const [key, value] of Object.entries(props)) {
-            if (key !== 'children' && value !== undefined) {
+            if (key === 'dangerouslySetInnerHTML' && value && typeof value === 'object' && '__html' in value) {
+              dangerousHtml = value.__html
+            }
+            else if (key !== 'children' && value !== undefined) {
               const attr = key === 'className' ? 'class' : key
-              html += ` ${attr}="${String(value)}"`
+              if (key === 'style' && typeof value === 'object') {
+                const styleStr = Object.entries(value)
+                  .map(([k, v]) => {
+                    const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+                    return `${kebabKey}:${v}`
+                  })
+                  .join(';')
+                html += ` style="${styleStr}"`
+              }
+              else {
+                html += ` ${attr}="${String(value)}"`
+              }
             }
           }
 
@@ -111,7 +126,10 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
 
           html += '>'
 
-          if (Array.isArray(children)) {
+          if (dangerousHtml !== null) {
+            html += dangerousHtml
+          }
+          else if (Array.isArray(children)) {
             let lastChildWasString = false
             let lastWasElement = false
 

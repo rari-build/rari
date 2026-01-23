@@ -242,6 +242,15 @@ function renderAttributes(attributes, _isStatic) {
         key = 'class'
       if (key === 'htmlFor')
         key = 'for'
+      if (key === 'style' && typeof value === 'object') {
+        const styleStr = Object.entries(value)
+          .map(([k, v]) => {
+            const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+            return `${kebabKey}:${v}`
+          })
+          .join(';')
+        return ` style="${styleStr}"`
+      }
       return ` ${key}="${escapeHtml(String(value))}"`
     })
     .join('')

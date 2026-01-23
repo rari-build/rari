@@ -41,7 +41,7 @@ function isSelfClosing(tagName) {
 }
 
 async function renderHtmlElement(tagName, props, depth) {
-  const { children, ...attributes } = props
+  const { children, dangerouslySetInnerHTML, ...attributes } = props
 
   let html = `<${tagName}`
 
@@ -83,7 +83,10 @@ async function renderHtmlElement(tagName, props, depth) {
 
   html += '>'
 
-  if (children !== undefined && children !== null) {
+  if (dangerouslySetInnerHTML && typeof dangerouslySetInnerHTML === 'object' && '__html' in dangerouslySetInnerHTML) {
+    html += dangerouslySetInnerHTML.__html
+  }
+  else if (children !== undefined && children !== null) {
     const isRawContentTag = tagName === 'style' || tagName === 'script'
     html += await renderToHtml(children, depth + 1, isRawContentTag)
   }
