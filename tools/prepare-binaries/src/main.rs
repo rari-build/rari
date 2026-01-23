@@ -14,6 +14,9 @@ use std::os::unix::fs::PermissionsExt;
 struct Args {
     #[arg(long)]
     all: bool,
+
+    #[arg(long, help = "Build in debug mode (faster, for development)")]
+    dev: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -137,11 +140,18 @@ async fn install_target(target: &str) -> Result<()> {
     }
 }
 
-async fn build_binary(target: &str, project_root: &Path) -> Result<bool> {
-    log(&format!("Building binary for {}", target));
+async fn build_binary(target: &str, project_root: &Path, dev_mode: bool) -> Result<bool> {
+    let build_type = if dev_mode { "debug" } else { "release" };
+    log(&format!("Building binary for {} ({})", target, build_type));
 
     let mut cmd = Command::new("cargo");
-    cmd.args(["build", "--release", "--target", target, "--bin", "rari"]).current_dir(project_root);
+    cmd.arg("build");
+
+    if !dev_mode {
+        cmd.arg("--release");
+    }
+
+    cmd.args(["--target", target, "--bin", "rari"]).current_dir(project_root);
 
     if target == "aarch64-unknown-linux-gnu" {
         cmd.env("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "aarch64-linux-gnu-gcc");
@@ -160,11 +170,16 @@ async fn build_binary(target: &str, project_root: &Path) -> Result<bool> {
     }
 }
 
-fn copy_binary_to_platform_package(target_info: &Target, project_root: &Path) -> Result<bool> {
+fn copy_binary_to_platform_package(
+    target_info: &Target,
+    project_root: &Path,
+    dev_mode: bool,
+) -> Result<bool> {
+    let build_type = if dev_mode { "debug" } else { "release" };
     let source_path = project_root
         .join("target")
         .join(target_info.target)
-        .join("release")
+        .join(build_type)
         .join(target_info.binary_name);
 
     let dest_dir = project_root.join(target_info.package_dir).join("bin");
@@ -193,7 +208,7 @@ fn copy_binary_to_platform_package(target_info: &Target, project_root: &Path) ->
     Ok(true)
 }
 
-fn validate_binary(target_info: &Target, project_root: &Path) -> Result<bool> {
+fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) -> Result<bool> {
     let binary_path =
         project_root.join(target_info.package_dir).join("bin").join(target_info.binary_name);
 
@@ -214,8 +229,14 @@ fn validate_binary(target_info: &Target, project_root: &Path) -> Result<bool> {
 
     let metadata = fs::metadata(&binary_path)?;
     let size_mb = metadata.len() as f64 / 1024.0 / 1024.0;
+    let build_type = if dev_mode { "debug" } else { "release" };
 
-    log_success(&format!("Binary validated: {} ({:.2} MB)", binary_path.display(), size_mb));
+    log_success(&format!(
+        "Binary validated: {} ({:.2} MB, {})",
+        binary_path.display(),
+        size_mb,
+        build_type
+    ));
     Ok(true)
 }
 
@@ -269,6 +290,11 @@ async fn main() -> Result<()> {
         vec![current_target]
     };
 
+    if args.dev {
+        log_warning("Building in debug mode (faster, but larger binaries)");
+        println!("{}", "Use release mode for production builds".dimmed());
+    }
+
     println!();
 
     check_rust_installed().await?;
@@ -289,7 +315,7 @@ async fn main() -> Result<()> {
     let mut failure_count = 0;
 
     for target_info in &targets_to_build {
-        let success = build_binary(target_info.target, &project_root).await?;
+        let success = build_binary(target_info.target, &project_root, args.dev).await?;
         if success {
             success_count += 1;
         } else {
@@ -306,14 +332,15 @@ async fn main() -> Result<()> {
 
     log("Copying binaries to platform packages...");
     for target_info in &targets_to_build {
+        let build_type = if args.dev { "debug" } else { "release" };
         let binary_path = project_root
             .join("target")
             .join(target_info.target)
-            .join("release")
+            .join(build_type)
             .join(target_info.binary_name);
 
         if binary_path.exists() {
-            let success = copy_binary_to_platform_package(target_info, &project_root)?;
+            let success = copy_binary_to_platform_package(target_info, &project_root, args.dev)?;
             if !success {
                 failure_count += 1;
             }
@@ -324,7 +351,7 @@ async fn main() -> Result<()> {
 
     log("Validating binaries...");
     for target_info in &targets_to_build {
-        validate_binary(target_info, &project_root)?;
+        validate_binary(target_info, &project_root, args.dev)?;
     }
 
     println!();
@@ -361,10 +388,11 @@ async fn main() -> Result<()> {
             println!();
             println!("{}", "Successfully built:".bold());
             for target_info in &targets_to_build {
+                let build_type = if args.dev { "debug" } else { "release" };
                 let binary_path = project_root
                     .join("target")
                     .join(target_info.target)
-                    .join("release")
+                    .join(build_type)
                     .join(target_info.binary_name);
                 if binary_path.exists() {
                     println!("  • {}", target_info.platform.green());
