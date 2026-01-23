@@ -24,6 +24,10 @@ function renderElement(element, rendered, rowId, moduleMap) {
 
   if (element.Reference) {
     const ref = element.Reference
+
+    if (ref.startsWith('$S'))
+      return ''
+
     const match = ref.match(/\$[@L]?(\d+)/)
     if (match) {
       const refId = Number.parseInt(match[1], 10)
@@ -32,11 +36,77 @@ function renderElement(element, rendered, rowId, moduleMap) {
     return ''
   }
 
+  if (element.Suspense) {
+    const { fallback_ref, children_ref, boundary_id } = element.Suspense
+
+    let fallback = null
+    if (fallback_ref) {
+      const match = fallback_ref.match(/\$[@L]?(\d+)/)
+      if (match) {
+        const refId = Number.parseInt(match[1], 10)
+        fallback = rendered.get(refId)
+      }
+      else {
+        try {
+          const fallbackData = JSON.parse(fallback_ref)
+          fallback = renderElement(fallbackData, rendered, undefined, moduleMap)
+        }
+        catch {
+          fallback = fallback_ref
+        }
+      }
+    }
+
+    let children = null
+    if (children_ref) {
+      const match = children_ref.match(/\$[@L]?(\d+)/)
+      if (match) {
+        const refId = Number.parseInt(match[1], 10)
+        children = rendered.get(refId)
+      }
+      else {
+        try {
+          const childrenData = JSON.parse(children_ref)
+          if (childrenData && typeof childrenData === 'object') {
+            if (childrenData.__rari_lazy === true) {
+              children = null
+            }
+            else if (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true) {
+              children = null
+            }
+            else {
+              children = renderElement(childrenData, rendered, undefined, moduleMap)
+            }
+          }
+          else {
+            children = renderElement(childrenData, rendered, undefined, moduleMap)
+          }
+        }
+        catch {
+          if (children_ref !== 'null' && children_ref !== '')
+            children = children_ref
+        }
+      }
+    }
+
+    if (children !== null && children !== undefined && children !== '')
+      return children
+
+    if (fallback !== null && fallback !== undefined && fallback !== '') {
+      if (boundary_id)
+        return `<div data-boundary-id="${escapeHtml(boundary_id)}" class="rari-suspense-boundary">${fallback}</div>`
+
+      return fallback
+    }
+
+    return ''
+  }
+
   return ''
 }
 
 function renderTag(tag, props, rendered, rowId, moduleMap) {
-  if (tag === 'react.suspense')
+  if (tag === 'react.suspense' || tag === '$0')
     return renderSuspense(props, rendered, moduleMap)
 
   if (typeof tag === 'string' && tag.startsWith('$')) {
@@ -85,6 +155,8 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
 
 function renderSuspense(props, rendered, moduleMap) {
   const children = props.children
+  const fallback = props.fallback
+  const boundaryId = props['~boundaryId']
 
   if (typeof children === 'string' && children.startsWith('$')) {
     const match = children.match(/\$[@L]?(\d+)/)
@@ -101,6 +173,17 @@ function renderSuspense(props, rendered, moduleMap) {
     const childrenHtml = renderElement(children, rendered, undefined, moduleMap)
     if (childrenHtml)
       return childrenHtml
+  }
+
+  if (children === null || children === undefined || children === '') {
+    if (fallback !== undefined && fallback !== null) {
+      const fallbackHtml = renderElement(fallback, rendered, undefined, moduleMap)
+
+      if (boundaryId)
+        return `<div data-boundary-id="${escapeHtml(boundaryId)}" class="rari-suspense-boundary">${fallbackHtml}</div>`
+
+      return fallbackHtml
+    }
   }
 
   return ''
