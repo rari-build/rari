@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import * as acorn from 'acorn'
+import { transformSync } from 'esbuild'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
@@ -190,41 +190,40 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
   function parseExportedNames(code: string): string[] {
     try {
-      const ast = acorn.parse(code, {
-        ecmaVersion: 2024,
-        sourceType: 'module',
-      }) as any
+      const result = transformSync(code, {
+        loader: 'tsx',
+        format: 'esm',
+        target: 'esnext',
+        logLevel: 'silent',
+      })
+
+      const exportMatch = result.code.match(/export\s*\{([^}]+)\}/)
+      if (!exportMatch) {
+        const reExportMatch = code.match(/export\s*\{([^}]+)\}/)
+        if (reExportMatch) {
+          const exportedNames: string[] = []
+          const exports = reExportMatch[1].split(',')
+          for (const exp of exports) {
+            const trimmed = exp.trim()
+            const parts = trimmed.split(/\s+as\s+/)
+            const exportedName = parts[parts.length - 1].trim()
+            if (exportedName)
+              exportedNames.push(exportedName)
+          }
+          return exportedNames
+        }
+        return []
+      }
 
       const exportedNames: string[] = []
+      const exports = exportMatch[1].split(',')
 
-      for (const node of ast.body) {
-        switch (node.type) {
-          case 'ExportDefaultDeclaration':
-            exportedNames.push('default')
-            break
-          case 'ExportNamedDeclaration':
-            if (node.declaration) {
-              if (node.declaration.type === 'VariableDeclaration') {
-                for (const declarator of node.declaration.declarations) {
-                  if (declarator.id.type === 'Identifier')
-                    exportedNames.push(declarator.id.name)
-                }
-              }
-              else if (node.declaration.id) {
-                exportedNames.push(node.declaration.id.name)
-              }
-            }
-            if (node.specifiers) {
-              for (const specifier of node.specifiers) {
-                exportedNames.push(specifier.exported.name)
-              }
-            }
-            break
-          case 'ExportAllDeclaration':
-            if (node.exported && node.exported.type === 'Identifier')
-              exportedNames.push(node.exported.name)
-            break
-        }
+      for (const exp of exports) {
+        const trimmed = exp.trim()
+        const parts = trimmed.split(/\s+as\s+/)
+        const exportedName = parts[parts.length - 1].trim()
+        if (exportedName)
+          exportedNames.push(exportedName)
       }
 
       return exportedNames
@@ -239,19 +238,19 @@ export function rari(options: RariOptions = {}): Plugin[] {
     directive: 'use client' | 'use server',
   ): boolean {
     try {
-      const ast = acorn.parse(code, {
-        ecmaVersion: 2024,
-        sourceType: 'module',
-        locations: false,
-      }) as any
+      const result = transformSync(code, {
+        loader: 'tsx',
+        format: 'esm',
+        target: 'esnext',
+        logLevel: 'silent',
+      })
 
-      for (const node of ast.body) {
-        if (node.type !== 'ExpressionStatement' || !node.directive)
-          break
-        if (node.directive === directive)
-          return true
-      }
-      return false
+      const trimmed = result.code.trimStart()
+      const directivePattern = new RegExp(
+        `^(['"\`])${directive.replace(/\s/g, '\\s+')}\\1\\s*;?`,
+      )
+
+      return directivePattern.test(trimmed)
     }
     catch {
       return false
