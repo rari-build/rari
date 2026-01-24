@@ -1,3 +1,14 @@
+## [rari@0.7.10] - 2026-01-24
+
+### 💼 Other
+
+- *(tsdown)* Enable minification for build output
+- Rari@0.7.10
+## [create-rari-app@0.3.8] - 2026-01-24
+
+### 💼 Other
+
+- Create-rari-app@0.3.8
 ## [rari@0.7.9] - 2026-01-24
 
 ### 💼 Other
