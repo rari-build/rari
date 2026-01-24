@@ -15,7 +15,7 @@ import {
   spinner,
   text,
 } from '@clack/prompts'
-import pc from 'picocolors'
+import colors from './utils/colors'
 
 interface ProjectOptions {
   name: string
@@ -39,18 +39,18 @@ const packageManagers = {
 } as const
 
 async function main() {
-  intro(pc.bgCyan(pc.black(' create-rari-app ')))
+  intro(colors.bgCyan(colors.black(' create-rari-app ')))
 
   const args = process.argv.slice(2)
   let projectName = args[0]
 
   if (projectName) {
     if (projectName.includes(' ')) {
-      console.error(pc.red('Error: Project name cannot contain spaces.'))
+      console.error(colors.red('Error: Project name cannot contain spaces.'))
       process.exit(1)
     }
     if (!/^[@\w/-]+$/.test(projectName)) {
-      console.error(pc.red('Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
+      console.error(colors.red('Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
       process.exit(1)
     }
   }
@@ -122,16 +122,16 @@ async function main() {
 
   await createProject(options)
 
-  outro(pc.green('🎉 Project created successfully!'))
+  outro(colors.green('🎉 Project created successfully!'))
 
   console.warn()
-  console.warn(pc.cyan('Next steps:'))
-  console.warn(pc.gray(`  cd ${options.name}`))
+  console.warn(colors.cyan('Next steps:'))
+  console.warn(colors.gray(`  cd ${options.name}`))
 
   if (!options.installDeps)
-    console.warn(pc.gray(`  ${options.packageManager} install`))
+    console.warn(colors.gray(`  ${options.packageManager} install`))
 
-  console.warn(pc.gray(`  ${options.packageManager} run dev`))
+  console.warn(colors.gray(`  ${options.packageManager} run dev`))
   console.warn()
 }
 
@@ -233,6 +233,6 @@ async function installDependencies(
 }
 
 main().catch((error) => {
-  console.error(pc.red('Error:'), error.message)
+  console.error(colors.red('Error:'), error.message)
   process.exit(1)
 })

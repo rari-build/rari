@@ -88,9 +88,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "acorn": "^8.15.0",
-    "esbuild": "^0.27.2",
-    "picocolors": "^1.1.1"
+    "esbuild": "^0.27.2"
   },
   "optionalDependencies": {
     "rari-darwin-arm64": "0.7.8",

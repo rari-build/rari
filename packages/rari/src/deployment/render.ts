@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import colors from 'picocolors'
+import colors from '../utils/colors'
 
 function logInfo(message: string) {
   console.warn(`${colors.blue('info')} ${message}`)
