@@ -46,8 +46,7 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
-    "picocolors": "^1.1.1"
+    "@clack/prompts": "^0.11.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
