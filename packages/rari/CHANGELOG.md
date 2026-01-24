@@ -1,3 +1,15 @@
+## [0.7.9] - 2026-01-24
+
+### 🚜 Refactor
+
+- *(vite)* Replace acorn with esbuild
+- *(rari)* Replace picocolors with internal colors util
+- *(create-rari-app)* Replace picocolors with internal colors util
+## [rari@0.7.8] - 2026-01-23
+
+### 💼 Other
+
+- Rari@0.7.8
 ## [0.7.8] - 2026-01-23
 
 ### ⚙️ Miscellaneous Tasks
