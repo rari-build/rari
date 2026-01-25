@@ -10,11 +10,11 @@ export default antfu(
       '**/packages/create-rari-app/templates/**',
     ],
   },
-  ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
   {
     files: ['examples/**/src/app/**', 'web/src/app/**'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },
   },
+  ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
 )
