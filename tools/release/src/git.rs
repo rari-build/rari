@@ -62,3 +62,23 @@ pub async fn create_tag(tag: &str) -> Result<()> {
 
     Ok(())
 }
+
+pub async fn push_changes() -> Result<()> {
+    let output = Command::new("git").args(["push"]).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to push commits:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    let output = Command::new("git").args(["push", "--tags"]).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to push tags:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    Ok(())
+}

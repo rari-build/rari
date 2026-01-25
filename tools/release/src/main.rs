@@ -31,6 +31,9 @@ struct Args {
 
     #[arg(long)]
     non_interactive: bool,
+
+    #[arg(long)]
+    no_push: bool,
 }
 
 #[tokio::main]
@@ -55,7 +58,7 @@ async fn main() -> Result<()> {
     let env_type = env::var("RELEASE_TYPE").ok();
 
     if args.non_interactive || env_version.is_some() || env_type.is_some() {
-        return run_non_interactive(only, args.dry_run, env_version, env_type).await;
+        return run_non_interactive(only, args.dry_run, args.no_push, env_version, env_type).await;
     }
 
     if !args.dry_run {
@@ -125,6 +128,7 @@ async fn run_app(
 async fn run_non_interactive(
     only: Option<Vec<String>>,
     dry_run: bool,
+    no_push: bool,
     env_version: Option<String>,
     env_type: Option<String>,
 ) -> Result<()> {
@@ -275,6 +279,18 @@ async fn run_non_interactive(
         println!("  {} Released {}@{}", "✅".green(), package.name, new_version);
         println!();
     }
+
+    if no_push {
+        println!("{}", "⚠️  Skipping git push (--no-push flag set)".yellow());
+        println!("{}", "   Run 'git push && git push --tags' manually when ready".yellow());
+    } else if dry_run {
+        println!("{} Would push commits and tags to remote", "[DRY RUN]".yellow());
+    } else {
+        println!("{} Pushing commits and tags to remote...", "→".cyan());
+        crate::git::push_changes().await?;
+        println!("{} Pushed to remote", "✓".green());
+    }
+    println!();
 
     println!("{}", "✨ All packages released successfully!".green().bold());
 
