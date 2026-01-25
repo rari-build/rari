@@ -18,6 +18,14 @@ pub struct Package {
     pub needs_build: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ReleasedPackage {
+    pub name: String,
+    pub version: String,
+    pub tag: String,
+    pub commits: Vec<String>,
+}
+
 impl Package {
     pub async fn load(name: &str, path: &str, needs_build: bool) -> Result<Self> {
         let pkg_path = PathBuf::from(path);

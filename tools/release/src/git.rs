@@ -82,3 +82,26 @@ pub async fn push_changes() -> Result<()> {
 
     Ok(())
 }
+
+pub async fn get_repo_info() -> Result<(String, String)> {
+    let output =
+        Command::new("git").args(["config", "--get", "remote.origin.url"]).output().await?;
+
+    if !output.status.success() {
+        anyhow::bail!("Failed to get git remote URL");
+    }
+
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    let parts: Vec<&str> = if url.starts_with("git@") {
+        url.trim_start_matches("git@github.com:").trim_end_matches(".git").split('/').collect()
+    } else {
+        url.trim_start_matches("https://github.com/").trim_end_matches(".git").split('/').collect()
+    };
+
+    if parts.len() >= 2 {
+        Ok((parts[0].to_string(), parts[1].to_string()))
+    } else {
+        anyhow::bail!("Could not parse GitHub repository from URL: {}", url);
+    }
+}

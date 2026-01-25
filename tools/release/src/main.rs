@@ -12,6 +12,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use package::ReleasedPackage;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     env,
@@ -132,7 +133,7 @@ async fn run_non_interactive(
     env_version: Option<String>,
     env_type: Option<String>,
 ) -> Result<()> {
-    use crate::package::{Package, ReleaseType};
+    use crate::package::{Package, ReleaseType, ReleasedPackage};
     use colored::Colorize;
 
     println!("{}", "rari Release Script".cyan().bold());
@@ -159,6 +160,8 @@ async fn run_non_interactive(
             anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
         }
     }
+
+    let mut released_packages: Vec<ReleasedPackage> = Vec::new();
 
     for package in packages {
         println!("{} {}", "📦 Releasing".bold(), package.name.cyan().bold());
@@ -278,6 +281,13 @@ async fn run_non_interactive(
         println!();
         println!("  {} Released {}@{}", "✅".green(), package.name, new_version);
         println!();
+
+        released_packages.push(ReleasedPackage {
+            name: package.name.clone(),
+            version: new_version.clone(),
+            tag: tag.clone(),
+            commits: commits.clone(),
+        });
     }
 
     if no_push {
@@ -294,5 +304,79 @@ async fn run_non_interactive(
 
     println!("{}", "✨ All packages released successfully!".green().bold());
 
+    if !dry_run && !released_packages.is_empty() {
+        println!();
+        println!("{}", "📝 Create GitHub Releases?".cyan().bold());
+
+        match crate::git::get_repo_info().await {
+            Ok((owner, repo)) => {
+                for pkg in &released_packages {
+                    let release_url = create_github_release_url(&owner, &repo, pkg);
+                    println!();
+                    println!("  {} {}@{}", "→".cyan(), pkg.name, pkg.version);
+                    println!("    {}", release_url.dimmed());
+                }
+
+                println!();
+                print!("{} Open GitHub release pages in browser? [y/N]: ", "?".cyan());
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+
+                if input.trim().eq_ignore_ascii_case("y")
+                    || input.trim().eq_ignore_ascii_case("yes")
+                {
+                    for pkg in &released_packages {
+                        let release_url = create_github_release_url(&owner, &repo, pkg);
+                        println!("  {} Opening {}@{}...", "→".cyan(), pkg.name, pkg.version);
+                        if let Err(e) = open::that(&release_url) {
+                            println!("  {} Failed to open browser: {}", "✗".red(), e);
+                            println!("  {} URL: {}", "ℹ".blue(), release_url);
+                        }
+                    }
+                    println!(
+                        "  {} Opened {} release page(s)",
+                        "✓".green(),
+                        released_packages.len()
+                    );
+                } else {
+                    println!("  {} Skipped", "ℹ".blue());
+                }
+            }
+            Err(e) => {
+                println!("  {} Could not determine GitHub repository: {}", "⚠".yellow(), e);
+            }
+        }
+    }
+
     Ok(())
+}
+
+fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> String {
+    let title_text = format!("{}@{}", pkg.name, pkg.version);
+    let title = urlencoding::encode(&title_text);
+    let tag = urlencoding::encode(&pkg.tag);
+
+    let mut body = "## What's Changed\n\n".to_string();
+
+    if !pkg.commits.is_empty() {
+        for commit in &pkg.commits {
+            body.push_str(&format!("- {}\n", commit));
+        }
+    } else {
+        body.push_str("See CHANGELOG.md for details.\n");
+    }
+
+    body.push_str(&format!(
+        "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+        owner, repo, pkg.tag, pkg.tag
+    ));
+
+    let body_encoded = urlencoding::encode(&body);
+
+    format!(
+        "https://github.com/{}/{}/releases/new?tag={}&title={}&body={}",
+        owner, repo, tag, title, body_encoded
+    )
 }
