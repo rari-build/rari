@@ -37,7 +37,7 @@
     "@types/node": "^25.0.10",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260123.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260124.1",
     "oxlint": "^1.41.0",
     "rolldown-vite": "^7.3.1",
     "tailwindcss": "^4.1.18"

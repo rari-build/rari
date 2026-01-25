@@ -1,7 +1,13 @@
 shellEmulator: true
 trustPolicy: no-downgrade
+trustPolicyExclude:
+  - semver@6.3.1
 
 packages:
   - examples/*
   - packages/*
   - web
+onlyBuiltDependencies:
+  - esbuild
+  - oxlint
+  - '@shikijs/engine-oniguruma'
