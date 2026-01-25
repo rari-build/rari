@@ -17,4 +17,18 @@ export default defineConfig({
   fixedExtension: true,
   format: 'esm',
   minify: true,
+  inputOptions(options) {
+    return {
+      ...options,
+      onwarn(warning, warn) {
+        if (
+          warning.code === 'MISSING_EXPORT'
+          && (warning.id?.includes('postcss') || warning.id?.includes('lightningcss'))
+        ) {
+          return
+        }
+        warn(warning)
+      },
+    }
+  },
 })
