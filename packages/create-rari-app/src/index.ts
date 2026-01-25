@@ -178,6 +178,7 @@ async function copyTemplate(
     'src/app/globals.css',
     'src/app/layout.tsx',
     'src/app/page.tsx',
+    'src/app/robots.ts',
     'src/app/about/page.tsx',
     'src/components/Welcome.tsx',
     'src/components/ServerTime.tsx',
