@@ -11,15 +11,15 @@
   },
   "dependencies": {
     "rari": "workspace:*",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react": "catalog:react",
+    "react-dom": "catalog:react"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.18",
-    "@types/react": "^19.2.9",
-    "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260124.1",
-    "rolldown-vite": "^7.3.1",
-    "tailwindcss": "^4.1.18"
+    "@tailwindcss/vite": "catalog:tailwind",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "@typescript/native-preview": "catalog:",
+    "rolldown-vite": "catalog:build",
+    "tailwindcss": "catalog:tailwind"
   }
 }
