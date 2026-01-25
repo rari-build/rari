@@ -218,6 +218,11 @@ async fn run_non_interactive(
             println!("  {} Updating version...", "→".cyan());
             package.update_version(&new_version).await?;
             println!("  {} Updated version", "✓".green());
+
+            println!("  {} Updating lockfile...", "→".cyan());
+            let project_root = std::path::PathBuf::from(".");
+            crate::npm::install_dependencies(&project_root).await?;
+            println!("  {} Updated lockfile", "✓".green());
         }
 
         if dry_run {
