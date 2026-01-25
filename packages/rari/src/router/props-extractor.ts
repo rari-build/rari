@@ -5,6 +5,12 @@ export interface ServerPropsResult {
   redirect?: string
 }
 
+// Helper to prevent Vite from analyzing dynamic imports
+// Using Function constructor to bypass Vite's static analysis
+// See: https://github.com/vitejs/rolldown-vite/issues/426
+// eslint-disable no-new-func
+const dynamicImport = new Function('path', 'return import(path)') as (path: string) => Promise<any>
+
 export interface MetadataResult {
   title?: string | {
     default?: string
@@ -81,7 +87,7 @@ export async function extractServerProps(
   searchParams: Record<string, string>,
 ): Promise<ServerPropsResult> {
   try {
-    const module = await import(/* @vite-ignore */ componentPath)
+    const module = await dynamicImport(componentPath)
 
     let props: Record<string, any> = {}
     let revalidate: number | undefined
@@ -149,7 +155,7 @@ export async function extractMetadata(
   searchParams: Record<string, string>,
 ): Promise<MetadataResult> {
   try {
-    const module = await import(/* @vite-ignore */ componentPath)
+    const module = await dynamicImport(componentPath)
 
     if (typeof module.generateMetadata === 'function') {
       const metadata = await module.generateMetadata({ params, searchParams })
@@ -218,7 +224,7 @@ export async function extractStaticParams(
   componentPath: string,
 ): Promise<StaticParamsResult> {
   try {
-    const module = await import(/* @vite-ignore */ componentPath)
+    const module = await dynamicImport(componentPath)
 
     if (typeof module.generateStaticParams === 'function') {
       const params = await module.generateStaticParams()
@@ -238,7 +244,7 @@ export async function hasServerSideDataFetching(
   componentPath: string,
 ): Promise<boolean> {
   try {
-    const module = await import(/* @vite-ignore */ componentPath)
+    const module = await dynamicImport(componentPath)
 
     return !!(
       module.getData
