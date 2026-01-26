@@ -191,6 +191,10 @@ prepare-binaries-dev:
 
 # --- Utility commands ---
 
+# Update Node.js dependencies interactively
+taze: _ensure-node-deps
+    pnpx taze -r -w
+
 # Ensure pnpm dependencies are installed
 _ensure-node-deps:
     #!/usr/bin/env bash
