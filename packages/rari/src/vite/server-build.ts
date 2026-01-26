@@ -377,7 +377,7 @@ export class ServerComponentBuilder {
   }
 
   private transformComponentImportsToGlobal(code: string): string {
-    const componentImportRegex = /import\s+(\w+)\s+from\s+['"]\.\.\/components\/(\w+)(?:\.tsx?|\.jsx?)?['"]/g
+    const componentImportRegex = /import\s+(\w+)\s+from\s+['"](?:\.\.\/components\/|@\/components\/)(\w+)(?:\.tsx?|\.jsx?)?['"]/g
     return code.replace(componentImportRegex, (match, importName, componentName) => {
       return `// Component reference: ${componentName}
 const ${importName} = (props) => {
