@@ -1,5 +1,6 @@
 [build]
 builder = "RAILPACK"
+buildCommand = "pnpm --filter @rari/web build"
 
 [deploy]
 startCommand = "cd web && pnpm start"
