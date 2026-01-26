@@ -1,6 +1,6 @@
 use crate::{
     git, npm,
-    package::{Package, ReleaseType},
+    package::{Package, ReleaseType, ReleasedPackage},
     ui,
 };
 use anyhow::Result;
@@ -15,7 +15,17 @@ pub enum Screen {
     CustomVersion { package_idx: usize, input: String },
     OtpInput { package_idx: usize, version: String, input: String },
     Publishing { package_idx: usize, version: String, otp: Option<String> },
-    Complete { released: Vec<String> },
+    PostRelease { released: Vec<ReleasedPackage>, step: PostReleaseStep },
+    Complete,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PostReleaseStep {
+    Pushing,
+    PushComplete,
+    PromptGitHub,
+    OpeningGitHub,
+    Done,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,10 +48,11 @@ pub struct App {
     pub publish_step: PublishStep,
     pub publish_progress: f64,
     pub status_messages: Vec<String>,
-    pub released_packages: Vec<String>,
+    pub released_packages: Vec<ReleasedPackage>,
     pub error_message: Option<String>,
     pub dry_run: bool,
     pub needs_otp: bool,
+    pub post_release_messages: Vec<String>,
 }
 
 impl App {
@@ -74,6 +85,7 @@ impl App {
             error_message: None,
             dry_run,
             needs_otp,
+            post_release_messages: vec![],
         })
     }
 
@@ -243,7 +255,35 @@ impl App {
                 }
                 _ => {}
             },
-            Screen::Complete { .. } => match key {
+            Screen::PostRelease { step, .. } => match key {
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    if *step == PostReleaseStep::PromptGitHub
+                        && let Screen::PostRelease { released, .. } = &self.screen.clone()
+                    {
+                        self.screen = Screen::PostRelease {
+                            released: released.clone(),
+                            step: PostReleaseStep::OpeningGitHub,
+                        };
+                    }
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') => {
+                    if *step == PostReleaseStep::PromptGitHub {
+                        self.screen = Screen::Complete;
+                    }
+                }
+                KeyCode::Enter => {
+                    if *step == PostReleaseStep::PromptGitHub || *step == PostReleaseStep::Done {
+                        self.screen = Screen::Complete;
+                    }
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    if *step == PostReleaseStep::Done {
+                        self.screen = Screen::Complete;
+                    }
+                }
+                _ => {}
+            },
+            Screen::Complete => match key {
                 KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => return Ok(true),
                 _ => {}
             },
@@ -332,16 +372,79 @@ impl App {
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 
-                    self.released_packages.push(format!("{}@{}", package.name, version));
+                    let tag = format!("{}@{}", package.name, version);
+                    self.released_packages.push(ReleasedPackage {
+                        name: package.name.clone(),
+                        version: version.clone(),
+                        tag: tag.clone(),
+                        commits: self.recent_commits.clone(),
+                    });
 
                     if self.selected_package_idx < self.packages.len() - 1 {
                         self.selected_package_idx += 1;
                         self.screen = Screen::PackageSelection;
                     } else {
-                        self.screen = Screen::Complete { released: self.released_packages.clone() };
+                        self.screen = Screen::PostRelease {
+                            released: self.released_packages.clone(),
+                            step: PostReleaseStep::Pushing,
+                        };
+                        self.post_release_messages.clear();
                     }
                 }
                 PublishStep::Done => {}
+            }
+        } else if let Screen::PostRelease { released, step } = &self.screen.clone() {
+            match step {
+                PostReleaseStep::Pushing => {
+                    if self.dry_run {
+                        self.post_release_messages
+                            .push("[DRY RUN] Would push commits and tags to remote".to_string());
+                    } else {
+                        self.post_release_messages
+                            .push("Pushing commits and tags to remote...".to_string());
+                        git::push_changes().await?;
+                        self.post_release_messages.push("✓ Pushed to remote".to_string());
+                    }
+                    self.screen = Screen::PostRelease {
+                        released: released.clone(),
+                        step: PostReleaseStep::PushComplete,
+                    };
+                }
+                PostReleaseStep::PushComplete => {
+                    self.screen = Screen::PostRelease {
+                        released: released.clone(),
+                        step: PostReleaseStep::PromptGitHub,
+                    };
+                }
+                PostReleaseStep::OpeningGitHub => {
+                    match git::get_repo_info().await {
+                        Ok((owner, repo)) => {
+                            for pkg in released {
+                                let release_url = create_github_release_url(&owner, &repo, pkg);
+                                self.post_release_messages
+                                    .push(format!("Opening {}@{}...", pkg.name, pkg.version));
+                                if let Err(e) = open::that(&release_url) {
+                                    self.post_release_messages
+                                        .push(format!("✗ Failed to open browser: {}", e));
+                                    self.post_release_messages
+                                        .push(format!("  URL: {}", release_url));
+                                } else {
+                                    self.post_release_messages
+                                        .push("✓ Opened in browser".to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.post_release_messages
+                                .push(format!("⚠ Could not determine GitHub repository: {}", e));
+                        }
+                    }
+                    self.screen = Screen::PostRelease {
+                        released: released.clone(),
+                        step: PostReleaseStep::Done,
+                    };
+                }
+                PostReleaseStep::PromptGitHub | PostReleaseStep::Done => {}
             }
         }
         Ok(())
@@ -368,9 +471,40 @@ impl App {
                 let package = &self.packages[*package_idx];
                 ui::render_publishing(frame, self, package, version);
             }
-            Screen::Complete { released } => {
-                ui::render_complete(frame, released, self.dry_run);
+            Screen::PostRelease { released, step } => {
+                ui::render_post_release(frame, self, released, step);
+            }
+            Screen::Complete => {
+                ui::render_complete(frame, &self.released_packages, self.dry_run);
             }
         }
     }
+}
+
+fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> String {
+    let title_text = format!("{}@{}", pkg.name, pkg.version);
+    let title = urlencoding::encode(&title_text);
+    let tag = urlencoding::encode(&pkg.tag);
+
+    let mut body = "## What's Changed\n\n".to_string();
+
+    if !pkg.commits.is_empty() {
+        for commit in &pkg.commits {
+            body.push_str(&format!("- {}\n", commit));
+        }
+    } else {
+        body.push_str("See CHANGELOG.md for details.\n");
+    }
+
+    body.push_str(&format!(
+        "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+        owner, repo, pkg.tag, pkg.tag
+    ));
+
+    let body_encoded = urlencoding::encode(&body);
+
+    format!(
+        "https://github.com/{}/{}/releases/new?tag={}&title={}&body={}",
+        owner, repo, tag, title, body_encoded
+    )
 }

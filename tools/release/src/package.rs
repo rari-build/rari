@@ -18,7 +18,7 @@ pub struct Package {
     pub needs_build: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReleasedPackage {
     pub name: String,
     pub version: String,

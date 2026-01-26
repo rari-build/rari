@@ -260,7 +260,109 @@ pub fn render_publishing(frame: &mut Frame, app: &App, package: &Package, versio
     frame.render_widget(help, chunks[3]);
 }
 
-pub fn render_complete(frame: &mut Frame, released: &[String], dry_run: bool) {
+pub fn render_post_release(
+    frame: &mut Frame,
+    app: &App,
+    released: &[crate::package::ReleasedPackage],
+    step: &crate::app::PostReleaseStep,
+) {
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(5), Constraint::Min(5), Constraint::Length(3)])
+        .split(area);
+
+    let title_text =
+        if app.dry_run { "[DRY RUN] Post-Release Actions" } else { "Post-Release Actions" };
+    let title = Paragraph::new(title_text)
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL).title("Release Complete"));
+    frame.render_widget(title, chunks[0]);
+
+    match step {
+        crate::app::PostReleaseStep::Pushing | crate::app::PostReleaseStep::PushComplete => {
+            let mut lines: Vec<Line> = vec![Line::from("")];
+            for msg in &app.post_release_messages {
+                lines.push(Line::from(msg.as_str()));
+            }
+            if *step == crate::app::PostReleaseStep::Pushing {
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    "Please wait...",
+                    Style::default().fg(Color::Yellow),
+                )));
+            }
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("Pushing to Git"));
+            frame.render_widget(message, chunks[1]);
+        }
+        crate::app::PostReleaseStep::PromptGitHub => {
+            let mut lines = vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Create GitHub Releases?",
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                )),
+                Line::from(""),
+            ];
+
+            for pkg in released {
+                lines.push(Line::from(format!("  * {}@{}", pkg.name, pkg.version)));
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "Open GitHub release pages in browser?",
+                Style::default().fg(Color::Yellow),
+            )));
+
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("GitHub Releases"));
+            frame.render_widget(message, chunks[1]);
+
+            let help = Paragraph::new("Y: Open in browser  N/Enter: Skip")
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
+            frame.render_widget(help, chunks[2]);
+        }
+        crate::app::PostReleaseStep::OpeningGitHub | crate::app::PostReleaseStep::Done => {
+            let mut lines: Vec<Line> = vec![Line::from("")];
+            for msg in &app.post_release_messages {
+                lines.push(Line::from(msg.as_str()));
+            }
+            let message = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).title("GitHub Releases"));
+            frame.render_widget(message, chunks[1]);
+
+            let help = if *step == crate::app::PostReleaseStep::Done {
+                Paragraph::new("Press Enter to continue")
+            } else {
+                Paragraph::new("Please wait...")
+            }
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL));
+            frame.render_widget(help, chunks[2]);
+        }
+    }
+
+    if *step != crate::app::PostReleaseStep::PromptGitHub {
+        let help = Paragraph::new("")
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(help, chunks[2]);
+    }
+}
+
+pub fn render_complete(
+    frame: &mut Frame,
+    released: &[crate::package::ReleasedPackage],
+    dry_run: bool,
+) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -271,7 +373,7 @@ pub fn render_complete(frame: &mut Frame, released: &[String], dry_run: bool) {
     let success_text = if dry_run {
         "[DRY RUN] Would have released these packages:"
     } else {
-        "All packages released successfully!"
+        "✨ All packages released successfully! ✨"
     };
 
     let mut lines = vec![
@@ -284,7 +386,7 @@ pub fn render_complete(frame: &mut Frame, released: &[String], dry_run: bool) {
     ];
 
     for pkg in released {
-        lines.push(Line::from(format!("  * {}", pkg)));
+        lines.push(Line::from(format!("  * {}@{}", pkg.name, pkg.version)));
     }
 
     let message = Paragraph::new(lines)
