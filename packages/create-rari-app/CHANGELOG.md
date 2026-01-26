@@ -1,3 +1,30 @@
+## [rari@0.7.11] - 2026-01-26
+
+### 🚀 Features
+
+- *(create-rari-app)* Add robots.ts template
+- *(create-rari-app)* Add robots.ts to template files
+- *(rari)* Add platform entry point to tsdown
+- *(rari)* Add input options to suppress postcss export warnings
+- *(release)* Add GitHub release creation with browser integration
+
+### 💼 Other
+
+- Rari@0.7.11
+
+### 🚜 Refactor
+
+- *(router)* Replace chokidar with vite dev server watcher
+- *(router)* Replace dynamic import function with vite-ignore comments
+
+### 🎨 Styling
+
+- *(eslint)* Reorder config spreads for consistency
+## [create-rari-app@0.3.9] - 2026-01-24
+
+### 💼 Other
+
+- Create-rari-app@0.3.9
 ## [rari@0.7.10] - 2026-01-24
 
 ### 💼 Other
