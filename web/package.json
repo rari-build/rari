@@ -20,26 +20,26 @@
     "typecheck": "tsgo"
   },
   "dependencies": {
-    "@mdx-js/mdx": "3.1.1",
-    "@posthog/react": "^1.7.0",
-    "@shikijs/core": "^3.21.0",
-    "@shikijs/engine-oniguruma": "^3.21.0",
-    "@shikijs/langs": "^3.21.0",
-    "@shikijs/themes": "^3.21.0",
-    "posthog-js": "^1.335.2",
-    "rari": "^0.7.10",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "unist-util-visit": "^5.1.0"
+    "@mdx-js/mdx": "catalog:mdx",
+    "@posthog/react": "catalog:analytics",
+    "@shikijs/core": "catalog:mdx",
+    "@shikijs/engine-oniguruma": "catalog:mdx",
+    "@shikijs/langs": "catalog:mdx",
+    "@shikijs/themes": "catalog:mdx",
+    "posthog-js": "catalog:analytics",
+    "rari": "catalog:",
+    "react": "catalog:react",
+    "react-dom": "catalog:react",
+    "unist-util-visit": "catalog:utils"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.18",
-    "@types/node": "^25.0.10",
-    "@types/react": "^19.2.9",
-    "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260123.3",
-    "oxlint": "^1.41.0",
-    "rolldown-vite": "^7.3.1",
-    "tailwindcss": "^4.1.18"
+    "@tailwindcss/vite": "catalog:tailwind",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "@typescript/native-preview": "catalog:",
+    "oxlint": "catalog:",
+    "rolldown-vite": "catalog:build",
+    "tailwindcss": "catalog:tailwind"
   }
 }

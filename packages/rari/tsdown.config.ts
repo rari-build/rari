@@ -6,6 +6,7 @@ export default defineConfig({
     'client': 'src/client.ts',
     'vite': 'src/vite.ts',
     'cli': 'src/cli.ts',
+    'platform': 'src/platform.ts',
     'image/index': 'src/image/index.ts',
     'og/index': 'src/og/index.ts',
     'mdx': 'src/mdx.ts',
@@ -16,4 +17,18 @@ export default defineConfig({
   fixedExtension: true,
   format: 'esm',
   minify: true,
+  inputOptions(options) {
+    return {
+      ...options,
+      onwarn(warning, warn) {
+        if (
+          warning.code === 'MISSING_EXPORT'
+          && (warning.id?.includes('postcss') || warning.id?.includes('lightningcss'))
+        ) {
+          return
+        }
+        warn(warning)
+      },
+    }
+  },
 })

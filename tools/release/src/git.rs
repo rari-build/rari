@@ -62,3 +62,46 @@ pub async fn create_tag(tag: &str) -> Result<()> {
 
     Ok(())
 }
+
+pub async fn push_changes() -> Result<()> {
+    let output = Command::new("git").args(["push"]).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to push commits:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    let output = Command::new("git").args(["push", "--tags"]).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!("Failed to push tags:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    Ok(())
+}
+
+pub async fn get_repo_info() -> Result<(String, String)> {
+    let output =
+        Command::new("git").args(["config", "--get", "remote.origin.url"]).output().await?;
+
+    if !output.status.success() {
+        anyhow::bail!("Failed to get git remote URL");
+    }
+
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    let parts: Vec<&str> = if url.starts_with("git@") {
+        url.trim_start_matches("git@github.com:").trim_end_matches(".git").split('/').collect()
+    } else {
+        url.trim_start_matches("https://github.com/").trim_end_matches(".git").split('/').collect()
+    };
+
+    if parts.len() >= 2 {
+        Ok((parts[0].to_string(), parts[1].to_string()))
+    } else {
+        anyhow::bail!("Could not parse GitHub repository from URL: {}", url);
+    }
+}

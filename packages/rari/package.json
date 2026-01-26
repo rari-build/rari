@@ -88,7 +88,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "esbuild": "^0.27.2"
+    "esbuild": "catalog:build"
   },
   "optionalDependencies": {
     "rari-darwin-arm64": "0.7.8",
@@ -98,12 +98,11 @@
     "rari-win32-x64": "0.7.8"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
-    "@types/react": "^19.2.9",
-    "@typescript/native-preview": "^7.0.0-dev.20260123.3",
-    "chokidar": "^5.0.0",
-    "oxlint": "^1.41.0",
-    "rolldown-vite": "^7.3.1",
-    "tsdown": "^0.18.4"
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react",
+    "@typescript/native-preview": "catalog:",
+    "oxlint": "catalog:",
+    "rolldown-vite": "catalog:build",
+    "tsdown": "catalog:build"
   }
 }

@@ -1,9 +1,7 @@
-import type { FSWatcher } from 'chokidar'
 import type { Plugin, ViteDevServer } from 'rolldown-vite'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { watch } from 'chokidar'
 
 interface RariRouterPluginOptions {
   appDir?: string
@@ -176,8 +174,6 @@ async function notifyApiRouteInvalidation(filePath: string): Promise<void> {
 export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
-  let server: ViteDevServer | undefined
-  let watcher: FSWatcher | undefined
   let cachedManifestContent: string | null = null
 
   const pendingHMRUpdates = new Map<string, NodeJS.Timeout>()
@@ -262,19 +258,13 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     }
   }
 
-  const setupWatcher = (root: string): void => {
-    if (watcher)
-      watcher.close()
+  const setupWatcher = (devServer: ViteDevServer): void => {
+    const appDir = path.resolve(devServer.config.root, opts.appDir)
 
-    const watchPaths = [path.resolve(root, opts.appDir)]
+    devServer.watcher.on('all', async (event: string, filePath: string) => {
+      if (!filePath.startsWith(appDir))
+        return
 
-    watcher = watch(watchPaths, {
-      ignored: /node_modules/,
-      persistent: true,
-      ignoreInitial: true,
-    })
-
-    watcher.on('all', async (event: string, filePath: string) => {
       if (opts.extensions.some(ext => filePath.endsWith(ext))) {
         try {
           const fileType = getAppRouterFileType(filePath)
@@ -283,10 +273,10 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
           const isNewRouteFile = isRouteFile && !routeFiles.has(filePath)
 
           if (isAddOrUnlink || isNewRouteFile) {
-            await generateAppRoutes(root, true)
+            await generateAppRoutes(devServer.config.root, true)
 
-            if (server && filePath.includes(opts.appDir)) {
-              server.ws.send({
+            if (filePath.includes(opts.appDir)) {
+              devServer.ws.send({
                 type: 'full-reload',
                 path: '*',
               })
@@ -307,6 +297,17 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
     configResolved(config) {
       viteRoot = config.root
+
+      // Suppress Vite warnings about dynamic imports in our runtime-client
+      // These are intentional and use @vite-ignore comments that get stripped by minification
+      // See: https://github.com/vitejs/rolldown-vite/issues/426
+      const originalWarn = config.logger.warn
+      config.logger.warn = (msg, options) => {
+        if (typeof msg === 'string' && msg.includes('runtime-client') && msg.includes('The above dynamic import cannot be analyzed'))
+          return
+
+        originalWarn(msg, options)
+      }
     },
 
     async writeBundle() {
@@ -315,9 +316,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     },
 
     configureServer(devServer: ViteDevServer) {
-      server = devServer
-
-      setupWatcher(devServer.config.root)
+      setupWatcher(devServer)
     },
 
     async handleHotUpdate(ctx: any) {
@@ -424,9 +423,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         clearTimeout(timer)
       }
       pendingHMRUpdates.clear()
-
-      if (watcher)
-        await watcher.close()
     },
   }
 }

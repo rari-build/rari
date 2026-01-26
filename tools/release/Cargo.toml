@@ -20,3 +20,5 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
 regex = { workspace = true }
+urlencoding = "2.1.3"
+open = "5.3.3"

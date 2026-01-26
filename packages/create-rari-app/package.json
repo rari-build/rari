@@ -46,12 +46,12 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0"
+    "@clack/prompts": "catalog:cli"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
-    "@typescript/native-preview": "^7.0.0-dev.20260123.3",
-    "oxlint": "^1.41.0",
-    "tsdown": "^0.18.4"
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "oxlint": "catalog:",
+    "tsdown": "catalog:build"
   }
 }
