@@ -289,6 +289,7 @@ mod tests {
             max_array_length: 3,
             max_object_keys: 3,
             allow_special_numbers: false,
+            max_total_elements: 100_000,
         };
 
         let valid = vec![json!({
@@ -718,5 +719,90 @@ mod tests {
         assert!(!is_reserved_export_name("catchError"));
         assert!(!is_reserved_export_name("finallyDone"));
         assert!(!is_reserved_export_name("myThen"));
+    }
+
+    #[test]
+    fn test_cve_2025_55182_wide_array_dos_attack() {
+        let config = ValidationConfig {
+            max_depth: 10,
+            max_total_elements: 10_000,
+            max_array_length: 1_000,
+            ..Default::default()
+        };
+
+        let mut outer_array = Vec::new();
+        for _ in 0..20 {
+            outer_array.push(json!(vec![1; 600]));
+        }
+        let wide_nested = json!({ "data": outer_array });
+
+        let result = validate_and_sanitize_args(&[wide_nested], &config);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Maximum array nesting exceeded") || err_msg.contains("12000 > 10000"),
+            "Expected array nesting error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_cve_2025_55182_string_accumulation_dos() {
+        let config = ValidationConfig {
+            max_depth: 10,
+            max_total_elements: 50_000,
+            max_string_length: 10_000,
+            ..Default::default()
+        };
+
+        let strings: Vec<_> = (0..10).map(|_| json!("A".repeat(6_000))).collect();
+        let many_strings = json!({ "strings": strings });
+
+        let result = validate_and_sanitize_args(&[many_strings], &config);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Maximum array nesting exceeded"),
+            "Expected cumulative limit error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_cve_2025_55182_fork_detection() {
+        let config = ValidationConfig {
+            max_depth: 5,
+            max_total_elements: 1_000,
+            max_array_length: 500,
+            ..Default::default()
+        };
+
+        let single_child = json!({ "data": [vec![1; 500]] });
+        assert!(validate_and_sanitize_args(&[single_child], &config).is_ok());
+
+        let forked = json!({ "data": [vec![1; 500], vec![2; 500]] });
+        let result = validate_and_sanitize_args(&[forked], &config);
+
+        assert!(result.is_err(), "Expected fork with >1000 elements to fail");
+    }
+
+    #[test]
+    fn test_cve_2025_55182_production_limits() {
+        let prod_config = ValidationConfig::production();
+
+        assert_eq!(prod_config.max_total_elements, 1_000_000);
+        assert_eq!(prod_config.max_depth, 10);
+        assert_eq!(prod_config.max_array_length, 1_000);
+        assert_eq!(prod_config.max_string_length, 10_000);
+    }
+
+    #[test]
+    fn test_cve_2025_55182_development_limits() {
+        let dev_config = ValidationConfig::development();
+
+        assert_eq!(dev_config.max_total_elements, 5_000_000);
+        assert_eq!(dev_config.max_depth, 20);
+        assert_eq!(dev_config.max_array_length, 5_000);
+        assert_eq!(dev_config.max_string_length, 50_000);
     }
 }
