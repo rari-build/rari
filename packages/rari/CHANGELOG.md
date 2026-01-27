@@ -1,8 +1,44 @@
-## [0.7.14] - 2026-01-27
+## [0.8.0] - 2026-01-27
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Update optional dependencies to 0.8.0
+## [0.8.0] - 2026-01-27
+
+### 🚀 Features
+
+- *(csp)* Add worker-src directive support
+- *(vite)* Add HTML import detection and build optimization
+- *(sitemap)* Add dynamic sitemap generation support
+- *(sentry)* Implement dynamic import and optimize bundle splitting
+
+### 🐛 Bug Fixes
+
+- *(router)* Simplify server URL resolution in ClientRouter
+- *(rsc)* Unwrap React.Fragment layout components correctly
+
+### 🚜 Refactor
+
+- *(colors)* Extract colors utility into standalone package
+
+### 📚 Documentation
+
+- *(create-rari-app)* Remove redundant meta tags and title from HTML head
+
+### ⚙️ Miscellaneous Tasks
+
+- *(colors)* Add package metadata
+- *(knip)* Add ignoreDependencies for bundled packages
+- *(release)* Bump rari version to 0.8.0
+## [rari@0.7.14] - 2026-01-27
 
 ### 🐛 Bug Fixes
 
 - *(vite)* Correct client reference property names
+
+### 💼 Other
+
+- Rari@0.7.14
 ## [rari@0.7.13] - 2026-01-27
 
 ### 🚀 Features
