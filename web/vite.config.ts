@@ -14,6 +14,13 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  optimizeDeps: {
+    include: [
+      'posthog-js',
+      '@posthog/react',
+      '@sentry/react',
+    ],
+  },
   build: {
     rolldownOptions: {
       output: {
