@@ -1,3 +1,22 @@
+## [0.7.13] - 2026-01-27
+
+### 🚀 Features
+
+- *(vite)* Improve server build module resolution and client component handling
+
+### 🚜 Refactor
+
+- *(vite)* Rename server build plugin for clarity
+## [create-rari-app@0.3.11] - 2026-01-27
+
+### 💼 Other
+
+- Create-rari-app@0.3.11
+## [rari@0.7.12] - 2026-01-27
+
+### 💼 Other
+
+- Rari@0.7.12
 ## [0.7.9] - 2026-01-27
 
 ### 🚀 Features
