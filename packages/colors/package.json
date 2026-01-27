@@ -1,0 +1,15 @@
+{
+  "name": "@rari/colors",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:default",
+    "tsdown": "catalog:build"
+  }
+}

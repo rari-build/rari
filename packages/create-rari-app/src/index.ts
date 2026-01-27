@@ -15,7 +15,7 @@ import {
   spinner,
   text,
 } from '@clack/prompts'
-import colors from './utils/colors'
+import colors from '@rari/colors'
 
 interface ProjectOptions {
   name: string

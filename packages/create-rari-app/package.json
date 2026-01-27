@@ -46,7 +46,8 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@clack/prompts": "catalog:cli"
+    "@clack/prompts": "catalog:cli",
+    "@rari/colors": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
