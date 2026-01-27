@@ -1,3 +1,39 @@
+## [rari@0.7.12] - 2026-01-27
+
+### 💼 Other
+
+- Rari@0.7.12
+## [0.7.9] - 2026-01-27
+
+### 🚀 Features
+
+- *(vite)* Enhance client component scanning and import resolution
+- *(vite)* Enhance server-side component and action reference handling
+
+### 🐛 Bug Fixes
+
+- *(vite)* Update component import regex to support alias paths
+
+### 💼 Other
+
+- Add DoS mitigations to server action validation
+
+### 📚 Documentation
+
+- *(readme)* Update performance benchmarks with latest test results
+
+### ⚙️ Miscellaneous Tasks
+
+- *(railway)* Fix start command
+- *(railway)* Add railpack configuration file
+- *(railway)* Specify node version and add build command
+- *(justfile)* Add taze command for interactive dependency updates
+- *(oxlint)* Update import style preference and add component export rules
+## [create-rari-app@0.3.10] - 2026-01-26
+
+### 💼 Other
+
+- Create-rari-app@0.3.10
 ## [rari@0.7.11] - 2026-01-26
 
 ### 🚀 Features
