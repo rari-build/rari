@@ -145,7 +145,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         </label>
 
         <div className="p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative gap-3">
+          <div className="flex flex-row items-center lg:justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative gap-3">
             <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <a
               href="/"
