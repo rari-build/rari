@@ -177,7 +177,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (fs.existsSync(indexHtmlPath)) {
       try {
         const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-        const importRegex = /import\s+["']([^"']+)["']/g
+        const importRegex = /import\s*(?:\(\s*)?["']([^"']+)["']\)?/g
 
         for (const match of htmlContent.matchAll(importRegex)) {
           const importPath = match[1]

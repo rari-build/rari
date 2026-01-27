@@ -22,8 +22,15 @@ export default defineConfig({
             {
               name: (moduleId) => {
                 if (moduleId.includes('node_modules')) {
-                  if (moduleId.includes('react') || moduleId.includes('react-dom'))
-                    return 'vendor'
+                  if (moduleId.includes('posthog'))
+                    return 'posthog'
+                  if (moduleId.includes('@sentry'))
+                    return 'sentry'
+                  if (moduleId.includes('react-dom'))
+                    return 'react-dom'
+                  if (moduleId.includes('react'))
+                    return 'react'
+                  return 'vendor'
                 }
                 return null
               },
