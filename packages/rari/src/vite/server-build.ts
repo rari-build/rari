@@ -2026,6 +2026,18 @@ export function createServerBuildPlugin(
         catch (error) {
           console.warn('[rari] Failed to generate robots.txt:', error)
         }
+
+        try {
+          const { generateSitemapFiles } = await import('../router/sitemap-generator')
+          await generateSitemapFiles({
+            appDir: path.join(projectRoot, 'src', 'app'),
+            outDir: path.join(projectRoot, 'dist'),
+            extensions: ['.ts', '.tsx', '.js', '.jsx'],
+          })
+        }
+        catch (error) {
+          console.warn('[rari] Failed to generate sitemap:', error)
+        }
       }
     },
 
