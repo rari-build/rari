@@ -28,7 +28,7 @@
     "@shikijs/langs": "catalog:mdx",
     "@shikijs/themes": "catalog:mdx",
     "posthog-js": "catalog:analytics",
-    "rari": "workspace:*",
+    "rari": "catalog:",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "unist-util-visit": "catalog:utils"
