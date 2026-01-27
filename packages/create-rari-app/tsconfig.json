@@ -5,9 +5,11 @@
       "ES2023"
     ],
     "moduleDetection": "force",
-    "rootDir": "src",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@rari/colors": ["../colors/src/index.ts"]
+    },
     "allowImportingTsExtensions": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,

@@ -1,2 +1,2 @@
-export type { Robots, RobotsRule } from './types/metadata-route'
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
 export * from './vite'

@@ -27,6 +27,9 @@ catalogs:
       specifier: ^0.11.0
       version: 0.11.0
   default:
+    '@sentry/react':
+      specifier: ^10.37.0
+      version: 10.37.0
     '@types/node':
       specifier: ^25.0.10
       version: 25.0.10
@@ -36,9 +39,6 @@ catalogs:
     oxlint:
       specifier: ^1.42.0
       version: 1.42.0
-    rari:
-      specifier: ^0.7.14
-      version: 0.7.14
   eslint:
     '@antfu/eslint-config':
       specifier: ^7.2.0
@@ -168,11 +168,23 @@ importers:
         specifier: catalog:tailwind
         version: 4.1.18
 
+  packages/colors:
+    devDependencies:
+      '@types/node':
+        specifier: catalog:default
+        version: 25.0.10
+      tsdown:
+        specifier: catalog:build
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260126.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+
   packages/create-rari-app:
     dependencies:
       '@clack/prompts':
         specifier: catalog:cli
         version: 0.11.0
+      '@rari/colors':
+        specifier: workspace:*
+        version: link:../colors
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -189,6 +201,9 @@ importers:
 
   packages/rari:
     dependencies:
+      '@rari/colors':
+        specifier: workspace:*
+        version: link:../colors
       esbuild:
         specifier: catalog:build
         version: 0.27.2
@@ -252,6 +267,9 @@ importers:
       '@posthog/react':
         specifier: catalog:analytics
         version: 1.7.0(@types/react@19.2.9)(posthog-js@1.335.3)(react@19.2.4)
+      '@sentry/react':
+        specifier: 'catalog:'
+        version: 10.37.0(react@19.2.4)
       '@shikijs/core':
         specifier: catalog:mdx
         version: 3.21.0
@@ -268,8 +286,8 @@ importers:
         specifier: catalog:analytics
         version: 1.335.3
       rari:
-        specifier: 'catalog:'
-        version: 0.7.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: workspace:*
+        version: link:../packages/rari
       react:
         specifier: catalog:react
         version: 19.2.4
@@ -1542,6 +1560,36 @@ packages:
     resolution: {integrity: sha512-H8AE9Ur/t0+1VXujj90w0HrSOuv0Nq9r1vSZF2t5km20NTfosQsGGUXDaKdQZzwuLts7IyL1fYT4hM95TI9c4g==}
     cpu: [x64]
     os: [win32]
+
+  '@sentry-internal/browser-utils@10.37.0':
+    resolution: {integrity: sha512-rqdESYaVio9Ktz55lhUhtBsBUCF3wvvJuWia5YqoHDd+egyIfwWxITTAa0TSEyZl7283A4WNHNl0hyeEMblmfA==}
+    engines: {node: '>=18'}
+
+  '@sentry-internal/feedback@10.37.0':
+    resolution: {integrity: sha512-P0PVlfrDvfvCYg2KPIS7YUG/4i6ZPf8z1MicXx09C9Cz9W9UhSBh/nii13eBdDtLav2BFMKhvaFMcghXHX03Hw==}
+    engines: {node: '>=18'}
+
+  '@sentry-internal/replay-canvas@10.37.0':
+    resolution: {integrity: sha512-PyIYSbjLs+L5essYV0MyIsh4n5xfv2eV7l0nhUoPJv9Bak3kattQY3tholOj0EP3SgKgb+8HSZnmazgF++Hbog==}
+    engines: {node: '>=18'}
+
+  '@sentry-internal/replay@10.37.0':
+    resolution: {integrity: sha512-snuk12ZaDerxesSnetNIwKoth/51R0y/h3eXD/bGtXp+hnSkeXN5HanI/RJl297llRjn4zJYRShW9Nx86Ay0Dw==}
+    engines: {node: '>=18'}
+
+  '@sentry/browser@10.37.0':
+    resolution: {integrity: sha512-kheqJNqGZP5TSBCPv4Vienv1sfZwXKHQDYR+xrdHHYdZqwWuZMJJW/cLO9XjYAe+B9NnJ4UwJOoY4fPvU+HQ1Q==}
+    engines: {node: '>=18'}
+
+  '@sentry/core@10.37.0':
+    resolution: {integrity: sha512-hkRz7S4gkKLgPf+p3XgVjVm7tAfvcEPZxeACCC6jmoeKhGkzN44nXwLiqqshJ25RMcSrhfFvJa/FlBg6zupz7g==}
+    engines: {node: '>=18'}
+
+  '@sentry/react@10.37.0':
+    resolution: {integrity: sha512-XLnXJOHgsCeVAVBbO+9AuGlZWnCxLQHLOmKxpIr8wjE3g7dHibtug6cv8JLx78O4dd7aoCqv2TTyyKY9FLJ2EQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: ^16.14.0 || 17.x || 18.x || 19.x
 
   '@shikijs/core@3.21.0':
     resolution: {integrity: sha512-AXSQu/2n1UIQekY8euBJlvFYZIw0PHY63jUzGbrOma4wPxzznJXTXkri+QcHeBNaFxiiOljKxxJkVSoB3PjbyA==}
@@ -3130,14 +3178,6 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.7.14:
-    resolution: {integrity: sha512-Q26+wCKnBWsv7YMk2L94xviZsbRysSZh1nnwvP+erH8Yj43bWS37QJnVGA4A/iEc+d44Mlj3I9+rczXieDBVfg==}
-    engines: {node: '>=20.0.0'}
-    hasBin: true
-    peerDependencies:
-      react: ^19.0.0
-      react-dom: ^19.0.0
-
   react-dom@19.2.1:
     resolution: {integrity: sha512-ibrK8llX2a4eOskq1mXKu/TGZj9qzomO+sNfO98M6d9zIPOEhlBkMkBUBLd1vgS0gQsLDBzA+8jJBVXDnfHmJg==}
     peerDependencies:
@@ -4601,6 +4641,40 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.56.0':
     optional: true
+
+  '@sentry-internal/browser-utils@10.37.0':
+    dependencies:
+      '@sentry/core': 10.37.0
+
+  '@sentry-internal/feedback@10.37.0':
+    dependencies:
+      '@sentry/core': 10.37.0
+
+  '@sentry-internal/replay-canvas@10.37.0':
+    dependencies:
+      '@sentry-internal/replay': 10.37.0
+      '@sentry/core': 10.37.0
+
+  '@sentry-internal/replay@10.37.0':
+    dependencies:
+      '@sentry-internal/browser-utils': 10.37.0
+      '@sentry/core': 10.37.0
+
+  '@sentry/browser@10.37.0':
+    dependencies:
+      '@sentry-internal/browser-utils': 10.37.0
+      '@sentry-internal/feedback': 10.37.0
+      '@sentry-internal/replay': 10.37.0
+      '@sentry-internal/replay-canvas': 10.37.0
+      '@sentry/core': 10.37.0
+
+  '@sentry/core@10.37.0': {}
+
+  '@sentry/react@10.37.0(react@19.2.4)':
+    dependencies:
+      '@sentry/browser': 10.37.0
+      '@sentry/core': 10.37.0
+      react: 19.2.4
 
   '@shikijs/core@3.21.0':
     dependencies:
@@ -6639,18 +6713,6 @@ snapshots:
 
   rari-win32-x64@0.7.9:
     optional: true
-
-  rari@0.7.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
-    dependencies:
-      esbuild: 0.27.2
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
-    optionalDependencies:
-      rari-darwin-arm64: 0.7.9
-      rari-darwin-x64: 0.7.9
-      rari-linux-arm64: 0.7.9
-      rari-linux-x64: 0.7.9
-      rari-win32-x64: 0.7.9
 
   react-dom@19.2.1(react@19.2.1):
     dependencies:

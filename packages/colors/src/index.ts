@@ -35,13 +35,15 @@ const f = isColorSupported ? formatter : () => String
 
 const colors = {
   isColorSupported,
-  bold: f('\x1B[1m', '\x1B[22m', '\x1B[22m\x1B[1m'),
+  black: f('\x1B[30m', '\x1B[39m'),
   red: f('\x1B[31m', '\x1B[39m'),
   green: f('\x1B[32m', '\x1B[39m'),
   yellow: f('\x1B[33m', '\x1B[39m'),
   blue: f('\x1B[34m', '\x1B[39m'),
   cyan: f('\x1B[36m', '\x1B[39m'),
   gray: f('\x1B[90m', '\x1B[39m'),
+  bold: f('\x1B[1m', '\x1B[22m', '\x1B[22m\x1B[1m'),
+  bgCyan: f('\x1B[46m', '\x1B[49m'),
 }
 
 export default colors

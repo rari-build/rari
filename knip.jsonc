@@ -24,6 +24,9 @@
         "src/runtime/react-server-dom-rari-client.js",
         "src/runtime/react-server-dom-shim.js",
         "src/runtime/rsc-client-runtime.js"
+      ],
+      "ignoreDependencies": [
+        "@rari/colors" // Bundled via noExternal in tsdown config
       ]
     },
     "packages/create-rari-app": {
@@ -32,6 +35,9 @@
       ],
       "project": [
         "src/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "@rari/colors" // Bundled via noExternal in tsdown config
       ]
     },
     "examples/app-router-example": {
@@ -53,7 +59,8 @@
     },
     "web": {
       "entry": [
-        "src/app/**/*.{ts,tsx}"
+        "src/app/**/*.{ts,tsx}",
+        "src/lib/sentry-init.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}"

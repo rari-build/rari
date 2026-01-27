@@ -22,12 +22,13 @@
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
     "@posthog/react": "catalog:analytics",
+    "@sentry/react": "catalog:",
     "@shikijs/core": "catalog:mdx",
     "@shikijs/engine-oniguruma": "catalog:mdx",
     "@shikijs/langs": "catalog:mdx",
     "@shikijs/themes": "catalog:mdx",
     "posthog-js": "catalog:analytics",
-    "rari": "catalog:",
+    "rari": "workspace:*",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "unist-util-visit": "catalog:utils"

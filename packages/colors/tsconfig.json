@@ -1,12 +1,8 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "paths": {
-      "@rari/colors": ["../colors/src/index.ts"]
-    },
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true

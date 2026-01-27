@@ -72,6 +72,6 @@ export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
 
-export type { Robots, RobotsRule } from './types/metadata-route'
+export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
 
 export { defineRariConfig, defineRariOptions, rari } from './vite/index'
