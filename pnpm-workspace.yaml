@@ -19,6 +19,7 @@ catalogs:
   cli:
     '@clack/prompts': ^0.11.0
   default:
+    '@sentry/react': ^10.37.0
     '@types/node': ^25.0.10
     '@typescript/native-preview': ^7.0.0-dev.20260126.1
     oxlint: ^1.42.0

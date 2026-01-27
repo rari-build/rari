@@ -77,6 +77,7 @@ pub struct CspConfig {
     pub font_src: Vec<String>,
     pub connect_src: Vec<String>,
     pub default_src: Vec<String>,
+    pub worker_src: Vec<String>,
 }
 
 impl Default for CspConfig {
@@ -88,6 +89,7 @@ impl Default for CspConfig {
             img_src: vec!["'self'".to_string(), "data:".to_string(), "https:".to_string()],
             font_src: vec!["'self'".to_string(), "data:".to_string()],
             connect_src: vec!["'self'".to_string(), "ws:".to_string(), "wss:".to_string()],
+            worker_src: vec!["'self'".to_string()],
         }
     }
 }
@@ -495,6 +497,12 @@ impl Config {
                         .filter_map(|v| v.as_str().map(|s| s.to_string()))
                         .collect();
                 }
+                if let Some(worker_src) = csp_data.get("workerSrc").and_then(|v| v.as_array()) {
+                    config.csp.worker_src = worker_src
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
             }
 
             if let Some(rate_limit_data) = manifest_data.get("rateLimit") {
@@ -693,6 +701,10 @@ impl Config {
 
         if !config.connect_src.is_empty() {
             directives.push(format!("connect-src {}", config.connect_src.join(" ")));
+        }
+
+        if !config.worker_src.is_empty() {
+            directives.push(format!("worker-src {}", config.worker_src.join(" ")));
         }
 
         directives.join("; ")

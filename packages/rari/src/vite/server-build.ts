@@ -64,6 +64,7 @@ interface ServerComponentManifest {
     fontSrc?: string[]
     connectSrc?: string[]
     defaultSrc?: string[]
+    workerSrc?: string[]
   }
   rateLimit?: {
     enabled?: boolean
@@ -90,6 +91,7 @@ export interface ServerBuildOptions {
     fontSrc?: string[]
     connectSrc?: string[]
     defaultSrc?: string[]
+    workerSrc?: string[]
   }
   rateLimit?: {
     enabled?: boolean

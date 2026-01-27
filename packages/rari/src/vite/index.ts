@@ -51,6 +51,7 @@ interface RariOptions {
     fontSrc?: string[]
     connectSrc?: string[]
     defaultSrc?: string[]
+    workerSrc?: string[]
   }
   rateLimit?: {
     enabled?: boolean

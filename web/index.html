@@ -10,6 +10,30 @@
     <title>Runtime Accelerated Rendering Infrastructure (rari)</title>
 
     <script type="module">
+      import * as Sentry from '@sentry/react';
+
+      const dsn = import.meta.env.VITE_SENTRY_DSN;
+
+      if (dsn) {
+        Sentry.init({
+          dsn,
+          sendDefaultPii: true,
+          tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          environment: import.meta.env.DEV ? 'development' : 'production',
+          integrations: [
+            Sentry.browserTracingIntegration(),
+            Sentry.replayIntegration({
+              maskAllText: false,
+              blockAllMedia: false,
+            }),
+          ],
+          replaysSessionSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          replaysOnErrorSampleRate: 1.0,
+        });
+      }
+    </script>
+
+    <script type="module">
       import "/src/app/globals.css";
       import "virtual:rari-entry-client";
     </script>
