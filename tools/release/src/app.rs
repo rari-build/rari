@@ -15,6 +15,7 @@ pub enum Screen {
     CustomVersion { package_idx: usize, input: String },
     OtpInput { package_idx: usize, version: String, input: String },
     Publishing { package_idx: usize, version: String, otp: Option<String> },
+    PostPublish { has_more_packages: bool },
     PostRelease { released: Vec<ReleasedPackage>, step: PostReleaseStep },
     Complete,
 }
@@ -255,6 +256,23 @@ impl App {
                 }
                 _ => {}
             },
+            Screen::PostPublish { has_more_packages } => match key {
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    if *has_more_packages {
+                        self.selected_package_idx += 1;
+                        self.screen = Screen::PackageSelection;
+                    }
+                }
+                KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::Enter => {
+                    self.screen = Screen::PostRelease {
+                        released: self.released_packages.clone(),
+                        step: PostReleaseStep::Pushing,
+                    };
+                    self.post_release_messages.clear();
+                }
+                KeyCode::Esc | KeyCode::Char('q') => return Ok(true),
+                _ => {}
+            },
             Screen::PostRelease { step, .. } => match key {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     if *step == PostReleaseStep::PromptGitHub
@@ -380,16 +398,8 @@ impl App {
                         commits: self.recent_commits.clone(),
                     });
 
-                    if self.selected_package_idx < self.packages.len() - 1 {
-                        self.selected_package_idx += 1;
-                        self.screen = Screen::PackageSelection;
-                    } else {
-                        self.screen = Screen::PostRelease {
-                            released: self.released_packages.clone(),
-                            step: PostReleaseStep::Pushing,
-                        };
-                        self.post_release_messages.clear();
-                    }
+                    let has_more_packages = self.selected_package_idx < self.packages.len() - 1;
+                    self.screen = Screen::PostPublish { has_more_packages };
                 }
                 PublishStep::Done => {}
             }
@@ -470,6 +480,9 @@ impl App {
             Screen::Publishing { package_idx, version, .. } => {
                 let package = &self.packages[*package_idx];
                 ui::render_publishing(frame, self, package, version);
+            }
+            Screen::PostPublish { has_more_packages } => {
+                ui::render_post_publish(frame, self, *has_more_packages);
             }
             Screen::PostRelease { released, step } => {
                 ui::render_post_release(frame, self, released, step);

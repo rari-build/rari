@@ -260,6 +260,68 @@ pub fn render_publishing(frame: &mut Frame, app: &App, package: &Package, versio
     frame.render_widget(help, chunks[3]);
 }
 
+pub fn render_post_publish(frame: &mut Frame, app: &App, has_more_packages: bool) {
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(5), Constraint::Min(5), Constraint::Length(3)])
+        .split(area);
+
+    let title = Paragraph::new("Package Released Successfully!")
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(title, chunks[0]);
+
+    let mut lines = vec![Line::from("")];
+
+    for pkg in &app.released_packages {
+        lines.push(Line::from(vec![
+            Span::styled("  ✓ ", Style::default().fg(Color::Green)),
+            Span::styled(&pkg.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("@"),
+            Span::styled(&pkg.version, Style::default().fg(Color::Yellow)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "What would you like to do next?",
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+
+    if has_more_packages {
+        lines.push(Line::from(vec![
+            Span::styled("  C", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(": Continue releasing more packages"),
+        ]));
+    }
+
+    lines.push(Line::from(vec![
+        Span::styled("  F", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::raw(": Finish - Push tags and open GitHub releases"),
+    ]));
+
+    let message = Paragraph::new(lines)
+        .alignment(Alignment::Left)
+        .block(Block::default().borders(Borders::ALL).title("Next Steps"));
+    frame.render_widget(message, chunks[1]);
+
+    let help_text = if has_more_packages {
+        "C: Continue  F/Enter: Finish  Esc/q: Quit"
+    } else {
+        "F/Enter: Finish  Esc/q: Quit"
+    };
+
+    let help = Paragraph::new(help_text)
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(help, chunks[2]);
+}
+
 pub fn render_post_release(
     frame: &mut Frame,
     app: &App,

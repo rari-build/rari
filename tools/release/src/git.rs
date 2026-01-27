@@ -21,21 +21,19 @@ pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec
 }
 
 pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> Result<Vec<String>> {
-    let tag_output =
-        Command::new("git").args(["tag", "-l", &format!("{}@*", package_name)]).output().await?;
+    let tag_output = Command::new("git")
+        .args(["tag", "-l", &format!("{}@*", package_name), "--sort=-version:refname"])
+        .output()
+        .await?;
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
-    let latest_tag = tags.lines().last();
+    let latest_tag = tags.lines().next();
 
     if let Some(tag) = latest_tag {
-        let sha_output = Command::new("git").args(["rev-list", "-n", "1", tag]).output().await?;
-
-        let sha = String::from_utf8_lossy(&sha_output.stdout).trim().to_string();
-
         let output = Command::new("git")
             .args([
                 "log",
-                &format!("{}..HEAD", sha),
+                &format!("{}..HEAD", tag),
                 "--oneline",
                 "--",
                 &package_path.display().to_string(),
