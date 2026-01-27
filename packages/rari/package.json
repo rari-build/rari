@@ -88,7 +88,6 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "@rari/colors": "workspace:*",
     "esbuild": "catalog:build"
   },
   "optionalDependencies": {
