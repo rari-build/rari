@@ -625,8 +625,24 @@ if (import.meta.hot) {
 
       config.optimizeDeps = config.optimizeDeps || {}
       config.optimizeDeps.include = config.optimizeDeps.include || []
-      if (!config.optimizeDeps.include.includes('react-dom/server'))
-        config.optimizeDeps.include.push('react-dom/server')
+
+      const coreOptimizeDeps = [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react-dom/server',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ]
+
+      for (const dep of coreOptimizeDeps) {
+        if (!config.optimizeDeps.include.includes(dep))
+          config.optimizeDeps.include.push(dep)
+      }
+
+      config.optimizeDeps.exclude = config.optimizeDeps.exclude || []
+      if (!config.optimizeDeps.exclude.includes('rari'))
+        config.optimizeDeps.exclude.push('rari')
 
       if (command === 'build') {
         for (const envName of ['rsc', 'ssr', 'client']) {
