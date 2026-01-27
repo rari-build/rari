@@ -964,6 +964,9 @@ const ${importName} = (props) => {
                   return null
                 }
 
+                if (args.resolveDir.includes('node_modules') || args.resolveDir.includes('/packages/rari/dist'))
+                  return null
+
                 let resolvedPath: string | null = null
 
                 const aliases = this.options.alias || {}
@@ -984,6 +987,13 @@ const ${importName} = (props) => {
                   for (const ext of possibleExtensions) {
                     const pathWithExt = resolvedPath + ext
                     if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      if (this.isClientComponent(pathWithExt)) {
+                        return {
+                          path: pathWithExt,
+                          namespace: 'client-component-reference',
+                        }
+                      }
+
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
                         const lines = content.split('\n')
@@ -995,7 +1005,7 @@ const ${importName} = (props) => {
                           if (trimmed === '\'use server\'' || trimmed === '"use server"'
                             || trimmed === '\'use server\';' || trimmed === '"use server";') {
                             return {
-                              path: args.path,
+                              path: pathWithExt,
                               namespace: 'server-action-reference',
                             }
                           }
@@ -1012,27 +1022,52 @@ const ${importName} = (props) => {
               })
 
               build.onLoad({ filter: /.*/, namespace: 'server-action-reference' }, (args) => {
-                const aliases = this.options.alias || {}
-                let resolvedPath = args.path
-
-                for (const [alias, replacement] of Object.entries(aliases)) {
-                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
-                    const relativePath = args.path.slice(alias.length)
-                    const fullPath = path.isAbsolute(replacement)
-                      ? path.join(replacement, relativePath)
-                      : path.resolve(this.projectRoot, replacement, relativePath)
-
-                    resolvedPath = path.relative(this.projectRoot, fullPath)
-                    break
-                  }
-                }
-
-                const contents = `export * from "./${resolvedPath}";`
+                const componentId = path.relative(this.projectRoot, args.path)
+                const contents = `export * from "./${componentId}";`
 
                 return {
                   contents,
                   loader: 'js',
                   resolveDir: this.projectRoot,
+                }
+              })
+
+              build.onLoad({ filter: /.*/, namespace: 'client-component-reference' }, (args) => {
+                const componentId = path.relative(this.projectRoot, args.path)
+
+                const contents = `
+function registerClientReference(clientReference, id, exportName) {
+  const key = id + '#' + exportName;
+  const clientProxy = {};
+  Object.defineProperty(clientProxy, '$typeof', {
+    value: Symbol.for('react.client.reference'),
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$id', {
+    value: key,
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$async', {
+    value: false,
+    enumerable: false
+  });
+  try {
+    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
+        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
+      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
+    }
+  } catch (error) {
+    console.error('[rari] Build: Failed to register client reference:', error);
+  }
+  return clientProxy;
+}
+
+export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
+`
+
+                return {
+                  contents,
+                  loader: 'js',
                 }
               })
             },
