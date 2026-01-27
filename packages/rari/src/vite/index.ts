@@ -171,6 +171,26 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
       return false
 
+    const projectRoot = options.projectRoot || process.cwd()
+    const indexHtmlPath = path.join(projectRoot, 'index.html')
+
+    if (fs.existsSync(indexHtmlPath)) {
+      try {
+        const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
+        const importRegex = /import\s+["']([^"']+)["']/g
+
+        for (const match of htmlContent.matchAll(importRegex)) {
+          const importPath = match[1]
+          if (importPath.startsWith('/src/')) {
+            const absolutePath = path.join(projectRoot, importPath.slice(1))
+            if (absolutePath === filePath)
+              return false
+          }
+        }
+      }
+      catch {}
+    }
+
     let pathForFsOperations = filePath
     try {
       pathForFsOperations = fs.realpathSync(filePath)
@@ -471,6 +491,49 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      if (command === 'build') {
+        const projectRoot = options.projectRoot || process.cwd()
+        const indexHtmlPath = path.join(projectRoot, 'index.html')
+
+        if (fs.existsSync(indexHtmlPath)) {
+          try {
+            const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
+            const importRegex = /import\s+["']([^"']+)["']/g
+            const htmlImports: Array<{ path: string, name: string }> = []
+
+            for (const match of htmlContent.matchAll(importRegex)) {
+              const importPath = match[1]
+              if (importPath.startsWith('/src/') && /\.(?:tsx?|jsx?)$/.test(importPath)) {
+                const relativePath = importPath.slice(1)
+                const filename = path.basename(relativePath, path.extname(relativePath))
+                htmlImports.push({ path: relativePath, name: filename })
+              }
+            }
+
+            if (htmlImports.length > 0) {
+              config.build = config.build || {}
+              config.build.rolldownOptions = config.build.rolldownOptions || {}
+
+              const existingInput = config.build.rolldownOptions.input || { main: './index.html' }
+              const inputObj: Record<string, string> = typeof existingInput === 'string'
+                ? { main: existingInput }
+                : Array.isArray(existingInput)
+                  ? { main: existingInput[0] || './index.html' }
+                  : { ...existingInput }
+
+              htmlImports.forEach(({ path: importPath, name }) => {
+                inputObj[name] = `./${importPath}`
+              })
+
+              config.build.rolldownOptions.input = inputObj
+            }
+          }
+          catch (error) {
+            console.warn('[rari] Error parsing index.html for build inputs:', error)
+          }
+        }
+      }
+
       config.resolve = config.resolve || {}
       const existingDedupe = Array.isArray((config.resolve as any).dedupe)
         ? ((config.resolve as any).dedupe as string[])
@@ -1661,6 +1724,34 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       }
 
       return undefined
+    },
+
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html) {
+        const importRegex = /import\s+["']([^"']+)["']/g
+        const imports: string[] = []
+
+        for (const match of html.matchAll(importRegex)) {
+          const importPath = match[1]
+          if (importPath.startsWith('/src/'))
+            imports.push(importPath)
+        }
+
+        if (imports.length > 0) {
+          const tags = imports.map(importPath => ({
+            tag: 'script',
+            attrs: {
+              type: 'module',
+              src: importPath,
+            },
+            injectTo: 'head-prepend' as const,
+          }))
+          return { html, tags }
+        }
+
+        return html
+      },
     },
 
     writeBundle() {

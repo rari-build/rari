@@ -148,6 +148,8 @@ export class ServerComponentBuilder {
     dependencies: string[]
   }>()
 
+  private htmlOnlyImports = new Set<string>()
+
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
   }
@@ -165,10 +167,40 @@ export class ServerComponentBuilder {
       rateLimit: options.rateLimit,
       spamBlocker: options.spamBlocker,
     }
+
+    this.parseHtmlImports()
+  }
+
+  private parseHtmlImports() {
+    const indexHtmlPath = path.join(this.projectRoot, 'index.html')
+    if (!fs.existsSync(indexHtmlPath))
+      return
+
+    try {
+      const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
+      const importRegex = /import\s+["']([^"']+)["']/g
+      for (const match of htmlContent.matchAll(importRegex)) {
+        const importPath = match[1]
+        if (importPath.startsWith('/src/')) {
+          const absolutePath = path.join(this.projectRoot, importPath.slice(1))
+          this.htmlOnlyImports.add(absolutePath)
+        }
+      }
+    }
+    catch (error) {
+      console.warn('[server-build] Error parsing index.html:', error)
+    }
+  }
+
+  private isHtmlOnlyImport(filePath: string): boolean {
+    return this.htmlOnlyImports.has(filePath)
   }
 
   isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules'))
+      return false
+
+    if (this.isHtmlOnlyImport(filePath))
       return false
 
     try {
