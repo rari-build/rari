@@ -22,7 +22,7 @@ catalogs:
     '@types/node': ^25.0.10
     '@typescript/native-preview': ^7.0.0-dev.20260126.1
     oxlint: ^1.42.0
-    rari: ^0.7.13
+    rari: ^0.7.14
   eslint:
     '@antfu/eslint-config': ^7.2.0
     '@eslint-react/eslint-plugin': ^2.7.4
