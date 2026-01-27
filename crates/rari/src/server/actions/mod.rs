@@ -14,6 +14,9 @@ use tracing::error;
 #[cfg(test)]
 mod tests;
 
+const MAX_BOUND_ARGS: usize = 1000;
+const MAX_BIGINT_DIGITS: usize = 300;
+
 #[derive(Debug, Clone)]
 pub struct ValidationConfig {
     pub max_depth: usize,
@@ -21,6 +24,7 @@ pub struct ValidationConfig {
     pub max_array_length: usize,
     pub max_object_keys: usize,
     pub allow_special_numbers: bool,
+    pub max_total_elements: usize,
 }
 
 impl Default for ValidationConfig {
@@ -31,6 +35,7 @@ impl Default for ValidationConfig {
             max_array_length: 1_000,
             max_object_keys: 100,
             allow_special_numbers: false,
+            max_total_elements: 1_000_000,
         }
     }
 }
@@ -43,11 +48,36 @@ impl ValidationConfig {
             max_array_length: 5_000,
             max_object_keys: 500,
             allow_special_numbers: false,
+            max_total_elements: 5_000_000,
         }
     }
 
     pub fn production() -> Self {
         Self::default()
+    }
+}
+
+#[derive(Debug)]
+struct ValidationContext {
+    total_elements: usize,
+    has_fork: bool,
+}
+
+impl ValidationContext {
+    fn new() -> Self {
+        Self { total_elements: 0, has_fork: false }
+    }
+
+    fn bump_count(&mut self, count: usize, config: &ValidationConfig) -> Result<(), RariError> {
+        self.total_elements = self.total_elements.saturating_add(count);
+
+        if self.total_elements > config.max_total_elements && self.has_fork {
+            return Err(RariError::bad_request(format!(
+                "Maximum array nesting exceeded: {} > {}. Large nested arrays can be dangerous. Try adding intermediate objects.",
+                self.total_elements, config.max_total_elements
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -122,6 +152,29 @@ pub async fn handle_server_action(
             return Ok(response);
         }
     };
+
+    if request.args.len() > MAX_BOUND_ARGS {
+        error!("Too many server function arguments: {} > {}", request.args.len(), MAX_BOUND_ARGS);
+        let mut response = Json(ServerActionResponse {
+            success: false,
+            result: None,
+            error: Some(format!(
+                "Server Function has too many bound arguments. Received {} but the limit is {}.",
+                request.args.len(),
+                MAX_BOUND_ARGS
+            )),
+            redirect: None,
+        })
+        .into_response();
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, private"
+                .parse()
+                .expect("Valid cache-control header"),
+        );
+        *response.status_mut() = StatusCode::BAD_REQUEST;
+        return Ok(response);
+    }
 
     if is_reserved_export_name(&request.export_name) {
         error!("Attempted to call reserved export name: {}", request.export_name);
@@ -444,13 +497,15 @@ pub(crate) fn validate_and_sanitize_args(
     args: &[JsonValue],
     config: &ValidationConfig,
 ) -> Result<Vec<JsonValue>, RariError> {
-    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0)).collect()
+    let mut context = ValidationContext::new();
+    args.iter().map(|arg| validate_and_sanitize_value(arg, config, 0, &mut context)).collect()
 }
 
 fn validate_and_sanitize_value(
     value: &JsonValue,
     config: &ValidationConfig,
     depth: usize,
+    context: &mut ValidationContext,
 ) -> Result<JsonValue, RariError> {
     if depth > config.max_depth {
         return Err(RariError::bad_request(format!(
@@ -468,6 +523,9 @@ fn validate_and_sanitize_value(
                     config.max_string_length
                 )));
             }
+
+            context.bump_count(s.len(), config)?;
+
             Ok(value.clone())
         }
         JsonValue::Number(n) => {
@@ -479,6 +537,22 @@ fn validate_and_sanitize_value(
                     "Invalid number: Infinity or NaN not allowed".to_string(),
                 ));
             }
+
+            if let Some(f) = n.as_f64() {
+                let abs_f = f.abs();
+                if abs_f > 1e100 {
+                    let estimated_digits =
+                        if abs_f == 0.0 { 1 } else { (abs_f.log10().floor() as usize) + 1 };
+
+                    if estimated_digits > MAX_BIGINT_DIGITS {
+                        return Err(RariError::bad_request(format!(
+                            "Number too large. Estimated {} digits but the limit is {}.",
+                            estimated_digits, MAX_BIGINT_DIGITS
+                        )));
+                    }
+                }
+            }
+
             Ok(value.clone())
         }
         JsonValue::Array(arr) => {
@@ -490,8 +564,16 @@ fn validate_and_sanitize_value(
                 )));
             }
 
-            let validated: Result<Vec<_>, _> =
-                arr.iter().map(|v| validate_and_sanitize_value(v, config, depth + 1)).collect();
+            if arr.len() > 1 {
+                context.has_fork = true;
+            }
+
+            context.bump_count(arr.len() + 1, config)?;
+
+            let validated: Result<Vec<_>, _> = arr
+                .iter()
+                .map(|v| validate_and_sanitize_value(v, config, depth + 1, context))
+                .collect();
 
             Ok(JsonValue::Array(validated?))
         }
@@ -510,7 +592,7 @@ fn validate_and_sanitize_value(
                     continue;
                 }
 
-                let validated_val = validate_and_sanitize_value(val, config, depth + 1)?;
+                let validated_val = validate_and_sanitize_value(val, config, depth + 1, context)?;
                 sanitized.insert(key.clone(), validated_val);
             }
 

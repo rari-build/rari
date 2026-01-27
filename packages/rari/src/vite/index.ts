@@ -109,7 +109,7 @@ async function loadReactServerDomShim(): Promise<string> {
   return loadRuntimeFile('react-server-dom-shim.js')
 }
 
-function scanForClientComponents(srcDir: string): Set<string> {
+function scanForClientComponents(srcDir: string, additionalDirs: string[] = []): Set<string> {
   const clientComponents = new Set<string>()
 
   function scanDirectory(dir: string) {
@@ -122,6 +122,8 @@ function scanForClientComponents(srcDir: string): Set<string> {
       const fullPath = path.join(dir, entry.name)
 
       if (entry.isDirectory()) {
+        if (entry.name === 'node_modules')
+          continue
         scanDirectory(fullPath)
       }
       else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
@@ -140,6 +142,12 @@ function scanForClientComponents(srcDir: string): Set<string> {
   }
 
   scanDirectory(srcDir)
+
+  for (const dir of additionalDirs) {
+    if (fs.existsSync(dir))
+      scanDirectory(dir)
+  }
+
   return clientComponents
 }
 
@@ -1011,7 +1019,7 @@ const ${componentName} = registerClientReference(
             : Number(process.env.PORT || process.env.RSC_PORT || 3000)
           const baseUrl = `http://localhost:${serverPort}`
 
-          const clientComponentFiles = scanForClientComponents(srcDir)
+          const clientComponentFiles = scanForClientComponents(srcDir, Object.values(resolvedAlias))
 
           for (const componentPath of clientComponentFiles) {
             const relativePath = path.relative(process.cwd(), componentPath)
@@ -1420,7 +1428,7 @@ const ${componentName} = registerClientReference(
     async load(id) {
       if (id === 'virtual:rari-entry-client') {
         const srcDir = path.join(process.cwd(), 'src')
-        const scannedClientComponents = scanForClientComponents(srcDir)
+        const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
 
         const allClientComponents = new Set([
           ...clientComponents,

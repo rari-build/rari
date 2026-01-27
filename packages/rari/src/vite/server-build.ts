@@ -377,19 +377,145 @@ export class ServerComponentBuilder {
   }
 
   private transformComponentImportsToGlobal(code: string): string {
-    const componentImportRegex = /import\s+(\w+)\s+from\s+['"]\.\.\/components\/(\w+)(?:\.tsx?|\.jsx?)?['"]/g
-    return code.replace(componentImportRegex, (match, importName, componentName) => {
-      return `// Component reference: ${componentName}
+    const importRegex = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
+    const replacements: Array<{ original: string, replacement: string }> = []
+
+    for (const match of code.matchAll(importRegex)) {
+      const [fullMatch, importName, importPath] = match
+
+      if (!importPath.startsWith('.') && !importPath.startsWith('@') && !importPath.startsWith('~') && !importPath.startsWith('#'))
+        continue
+
+      let resolvedPath: string | null = null
+
+      if (importPath.startsWith('.')) {
+        if (importPath.includes('/components/')) {
+          const componentMatch = importPath.match(/\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/)
+          if (componentMatch) {
+            const componentName = componentMatch[1]
+
+            const possiblePaths = [
+              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.tsx`),
+              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.ts`),
+              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.jsx`),
+              path.resolve(this.projectRoot, 'src', 'components', `${componentName}.js`),
+            ]
+
+            let isClient = false
+            for (const possiblePath of possiblePaths) {
+              if (fs.existsSync(possiblePath) && this.isClientComponent(possiblePath)) {
+                isClient = true
+                break
+              }
+            }
+
+            if (!isClient)
+              continue
+
+            const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
-  const Component = globalThis['~rsc']?.components?.['components/${componentName}']
+  let Component = globalThis['~rsc']?.components?.['components/${componentName}']
     || globalThis['~rsc']?.modules?.['components/${componentName}']?.default
     || globalThis['components/${componentName}'];
+
+  if (Component && typeof Component === 'object' && Component.default) {
+    Component = Component.default;
+  }
+
   if (!Component) {
     throw new Error('Component components/${componentName} not loaded');
   }
+
+  if (typeof Component !== 'function') {
+    throw new Error('Component components/${componentName} is not a function, got: ' + typeof Component);
+  }
+
   return Component(props);
 }`
-    })
+            replacements.push({ original: fullMatch, replacement })
+          }
+        }
+        continue
+      }
+
+      const aliases = this.options.alias || {}
+      for (const [alias, replacement] of Object.entries(aliases)) {
+        if (importPath.startsWith(`${alias}/`) || importPath === alias) {
+          const relativePath = importPath.slice(alias.length)
+          resolvedPath = path.join(replacement, relativePath)
+          break
+        }
+      }
+
+      if (resolvedPath) {
+        const componentMatch = resolvedPath.match(/[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/)
+        if (componentMatch) {
+          const componentName = componentMatch[1]
+
+          const absolutePath = path.isAbsolute(resolvedPath)
+            ? resolvedPath
+            : path.resolve(this.projectRoot, resolvedPath)
+
+          const possiblePaths = [
+            absolutePath,
+            `${absolutePath}.tsx`,
+            `${absolutePath}.ts`,
+            `${absolutePath}.jsx`,
+            `${absolutePath}.js`,
+          ]
+
+          let isClient = false
+          let actualPath = absolutePath
+          for (const possiblePath of possiblePaths) {
+            if (fs.existsSync(possiblePath)) {
+              actualPath = possiblePath
+              if (this.isClientComponent(possiblePath))
+                isClient = true
+              break
+            }
+          }
+
+          if (!isClient)
+            continue
+
+          const relativeFromRoot = path.relative(this.projectRoot, actualPath)
+          const componentId = relativeFromRoot
+            .replace(/\\/g, '/')
+            .replace(/\.(tsx?|\.jsx?)$/, '')
+            .replace(/[^\w/-]/g, '_')
+            .replace(/^src\//, '')
+
+          const replacement = `// Component reference: ${componentName}
+const ${importName} = (props) => {
+  let Component = globalThis['~rsc']?.components?.['${componentId}']
+    || globalThis['~rsc']?.modules?.['${componentId}']?.default
+    || globalThis['${componentId}'];
+
+  if (Component && typeof Component === 'object' && Component.default) {
+    Component = Component.default;
+  }
+
+  if (!Component) {
+    throw new Error('Component ${componentId} not loaded');
+  }
+
+  if (typeof Component !== 'function') {
+    throw new Error('Component ${componentId} is not a function, got: ' + typeof Component);
+  }
+
+  return Component(props);
+}`
+          replacements.push({ original: fullMatch, replacement })
+        }
+      }
+    }
+
+    let transformedCode = code
+    for (const { original, replacement } of replacements) {
+      transformedCode = transformedCode.replace(original, replacement)
+    }
+
+    return transformedCode
   }
 
   private isPageComponent(inputPath: string): boolean {
@@ -466,6 +592,7 @@ const ${importName} = (props) => {
           {
             name: 'resolve-aliases',
             setup: (build) => {
+              const self = this
               const aliases = this.options.alias || {}
               for (const [alias, replacement] of Object.entries(aliases)) {
                 const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -479,7 +606,7 @@ const ${importName} = (props) => {
                   for (const ext of possibleExtensions) {
                     const pathWithExt = resolvedPath + ext
                     if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (this.isClientComponent(pathWithExt)) {
+                      if (self.isClientComponent(pathWithExt)) {
                         return { path: args.path, external: true }
                       }
 
@@ -518,10 +645,20 @@ const ${importName} = (props) => {
           },
           {
             name: 'hmr-auto-external',
-            setup(build) {
+            setup: (build) => {
+              const self = this
               build.onResolve({ filter: /.*/ }, async (args) => {
                 if (args.path.includes('../components/') || args.path.includes('./components/')) {
-                  return { path: args.path, namespace: 'component-stub' }
+                  const resolvedPath = path.resolve(args.resolveDir, args.path)
+                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+
+                  for (const ext of possibleExtensions) {
+                    const pathWithExt = resolvedPath + ext
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      if (self.isClientComponent(pathWithExt))
+                        return { path: args.path, namespace: 'component-stub' }
+                    }
+                  }
                 }
 
                 if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime')
@@ -655,6 +792,36 @@ const ${importName} = (props) => {
     }
 
     for (const [filePath, component] of this.serverComponents) {
+      if (this.isPageComponent(filePath))
+        continue
+
+      const relativePath = path.relative(this.projectRoot, filePath)
+      const componentId = this.getComponentId(relativePath)
+      const bundlePath = path.join(this.options.serverDir, `${componentId}.js`)
+      const fullBundlePath = path.join(this.options.outDir, bundlePath)
+
+      const bundleDir = path.dirname(fullBundlePath)
+      await fs.promises.mkdir(bundleDir, { recursive: true })
+
+      await this.buildSingleComponent(filePath, fullBundlePath, component)
+
+      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+
+      manifest.components[componentId] = {
+        id: componentId,
+        filePath,
+        relativePath,
+        bundlePath,
+        moduleSpecifier,
+        dependencies: component.dependencies,
+        hasNodeImports: component.hasNodeImports,
+      }
+    }
+
+    for (const [filePath, component] of this.serverComponents) {
+      if (!this.isPageComponent(filePath))
+        continue
+
       const relativePath = path.relative(this.projectRoot, filePath)
       const componentId = this.getComponentId(relativePath)
       const bundlePath = path.join(this.options.serverDir, `${componentId}.js`)
@@ -827,7 +994,10 @@ const ${importName} = (props) => {
                             continue
                           if (trimmed === '\'use server\'' || trimmed === '"use server"'
                             || trimmed === '\'use server\';' || trimmed === '"use server";') {
-                            return { path: args.path, external: true }
+                            return {
+                              path: args.path,
+                              namespace: 'server-action-reference',
+                            }
                           }
                           if (trimmed)
                             break
@@ -840,11 +1010,116 @@ const ${importName} = (props) => {
                 }
                 return null
               })
+
+              build.onLoad({ filter: /.*/, namespace: 'server-action-reference' }, (args) => {
+                const aliases = this.options.alias || {}
+                let resolvedPath = args.path
+
+                for (const [alias, replacement] of Object.entries(aliases)) {
+                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
+                    const relativePath = args.path.slice(alias.length)
+                    const fullPath = path.isAbsolute(replacement)
+                      ? path.join(replacement, relativePath)
+                      : path.resolve(this.projectRoot, replacement, relativePath)
+
+                    resolvedPath = path.relative(this.projectRoot, fullPath)
+                    break
+                  }
+                }
+
+                const contents = `export * from "./${resolvedPath}";`
+
+                return {
+                  contents,
+                  loader: 'js',
+                  resolveDir: this.projectRoot,
+                }
+              })
+            },
+          },
+          {
+            name: 'use-transformed-server-components',
+            setup: (build) => {
+              if (!isPage)
+                return
+
+              const self = this
+              const aliases = self.options.alias || {}
+
+              build.onResolve({ filter: /^file:\/\// }, (args) => {
+                const filePath = args.path.replace(/^file:\/\//, '')
+                if (fs.existsSync(filePath)) {
+                  return {
+                    path: filePath,
+                    namespace: 'transformed-server-component',
+                  }
+                }
+                return null
+              })
+
+              build.onResolve({ filter: /.*/ }, (args) => {
+                let resolvedPath: string | null = null
+
+                for (const [alias, replacement] of Object.entries(aliases)) {
+                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
+                    const relativePath = args.path.slice(alias.length)
+                    const newPath = path.join(replacement, relativePath)
+                    resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
+                    break
+                  }
+                }
+
+                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../')))
+                  resolvedPath = path.resolve(args.resolveDir, args.path)
+
+                if (!resolvedPath)
+                  return null
+
+                if (args.resolveDir.includes('node_modules'))
+                  return null
+
+                const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+                for (const ext of possibleExtensions) {
+                  const pathWithExt = resolvedPath + ext
+                  if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                    if (self.isClientComponent(pathWithExt))
+                      return null
+
+                    const srcDir = path.join(self.projectRoot, 'src')
+                    if (!pathWithExt.startsWith(srcDir))
+                      return null
+
+                    const relativePath = path.relative(srcDir, pathWithExt)
+                    const distPath = path.join(self.projectRoot, 'dist', 'server', relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
+
+                    if (fs.existsSync(distPath)) {
+                      return {
+                        path: distPath,
+                        namespace: 'transformed-server-component',
+                      }
+                    }
+
+                    break
+                  }
+                }
+
+                return null
+              })
+
+              build.onLoad({ filter: /.*/, namespace: 'transformed-server-component' }, (args) => {
+                const contents = fs.readFileSync(args.path, 'utf-8')
+                return {
+                  contents,
+                  loader: 'js',
+                  resolveDir: path.dirname(args.path),
+                }
+              })
             },
           },
           {
             name: 'resolve-aliases',
             setup: (build) => {
+              const self = this
               const aliases = this.options.alias || {}
               for (const [alias, replacement] of Object.entries(aliases)) {
                 const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -857,13 +1132,81 @@ const ${importName} = (props) => {
                   const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
                   for (const ext of possibleExtensions) {
                     const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
+                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                      if (self.isClientComponent(pathWithExt)) {
+                        return {
+                          path: args.path,
+                          namespace: 'client-component-reference',
+                        }
+                      }
+
+                      try {
+                        const content = fs.readFileSync(pathWithExt, 'utf-8')
+                        const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
+                        if (hasUseServer) {
+                          return { path: args.path, external: true }
+                        }
+                      }
+                      catch {}
+
                       return { path: pathWithExt }
+                    }
                   }
 
                   return { path: resolvedPath }
                 })
               }
+
+              build.onLoad({ filter: /.*/, namespace: 'client-component-reference' }, (args) => {
+                let componentId = args.path
+
+                for (const [alias, replacement] of Object.entries(aliases)) {
+                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
+                    const relativePath = args.path.slice(alias.length)
+                    const resolvedPath = path.isAbsolute(replacement)
+                      ? path.join(replacement, relativePath)
+                      : path.resolve(self.projectRoot, replacement, relativePath)
+
+                    componentId = path.relative(self.projectRoot, resolvedPath)
+                    break
+                  }
+                }
+
+                const contents = `
+function registerClientReference(clientReference, id, exportName) {
+  const key = id + '#' + exportName;
+  const clientProxy = {};
+  Object.defineProperty(clientProxy, '$$typeof', {
+    value: Symbol.for('react.client.reference'),
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$$id', {
+    value: key,
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$$async', {
+    value: false,
+    enumerable: false
+  });
+  try {
+    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
+        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
+      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
+    }
+  } catch (error) {
+    console.error('[rari] Build: Failed to register client reference:', error);
+  }
+  return clientProxy;
+}
+
+export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
+`
+
+                return {
+                  contents,
+                  loader: 'js',
+                }
+              })
             },
           },
           {
@@ -957,37 +1300,7 @@ const ${importName} = (props) => {
 
         code = code.replace(
           /import\s*(\{[^}]+\}|\w+)\s*from\s*["']([^"']+)["'];?/g,
-          (match, imports, importPath) => {
-            if (importPath.startsWith('file://') || importPath.startsWith('npm:'))
-              return match
-
-            if (importPath.startsWith('node:') || isNodeBuiltin(importPath)
-              || importPath === 'react' || importPath === 'react-dom'
-              || importPath === 'react/jsx-runtime' || importPath === 'react/jsx-dev-runtime') {
-              return match
-            }
-
-            let resolvedPath: string | null = null
-
-            const aliases = this.options.alias || {}
-            for (const [alias, replacement] of Object.entries(aliases)) {
-              if (importPath.startsWith(`${alias}/`) || importPath === alias) {
-                const relativePath = importPath.slice(alias.length)
-                const newPath = path.join(replacement, relativePath)
-                resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(this.projectRoot, newPath)
-                break
-              }
-            }
-
-            if (resolvedPath) {
-              const relativeToProject = path.relative(this.projectRoot, resolvedPath)
-              const componentId = this.getComponentId(relativeToProject)
-              const bundlePath = path.join(this.options.outDir, this.options.serverDir, `${componentId}.js`)
-              const fileUrl = `file://${path.resolve(this.projectRoot, bundlePath)}`
-
-              return `import ${imports} from "${fileUrl}";`
-            }
-
+          (match) => {
             return match
           },
         )

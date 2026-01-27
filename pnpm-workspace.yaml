@@ -11,7 +11,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.7.0
-    posthog-js: ^1.335.2
+    posthog-js: ^1.335.3
   build:
     esbuild: ^0.27.2
     rolldown-vite: ^7.3.1
@@ -20,14 +20,14 @@ catalogs:
     '@clack/prompts': ^0.11.0
   default:
     '@types/node': ^25.0.10
-    '@typescript/native-preview': ^7.0.0-dev.20260124.1
-    oxlint: ^1.41.0
+    '@typescript/native-preview': ^7.0.0-dev.20260126.1
+    oxlint: ^1.42.0
     rari: ^0.7.11
   eslint:
     '@antfu/eslint-config': ^7.2.0
     '@eslint-react/eslint-plugin': ^2.7.4
     eslint: ^9.39.2
-    eslint-plugin-oxlint: ^1.41.0
+    eslint-plugin-oxlint: ^1.42.0
     eslint-plugin-react-hooks: ^7.0.1
     eslint-plugin-react-refresh: ^0.4.26
     knip: ^5.82.1
@@ -40,8 +40,8 @@ catalogs:
   react:
     '@types/react': ^19.2.9
     '@types/react-dom': ^19.2.3
-    react: ^19.2.3
-    react-dom: ^19.2.3
+    react: ^19.2.4
+    react-dom: ^19.2.4
   tailwind:
     '@tailwindcss/vite': ^4.1.18
     tailwindcss: ^4.1.18
