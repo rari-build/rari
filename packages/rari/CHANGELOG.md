@@ -1,8 +1,17 @@
-## [0.7.13] - 2026-01-27
+## [0.7.14] - 2026-01-27
+
+### 🐛 Bug Fixes
+
+- *(vite)* Correct client reference property names
+## [rari@0.7.13] - 2026-01-27
 
 ### 🚀 Features
 
 - *(vite)* Improve server build module resolution and client component handling
+
+### 💼 Other
+
+- Rari@0.7.13
 
 ### 🚜 Refactor
 
