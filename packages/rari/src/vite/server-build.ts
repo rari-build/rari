@@ -952,7 +952,7 @@ const ${importName} = (props) => {
         write: false,
         plugins: [
           {
-            name: 'external-server-actions',
+            name: 'resolve-client-server-boundaries',
             setup: (build) => {
               build.onResolve({ filter: /.*/ }, async (args) => {
                 if (args.namespace !== 'file' && args.namespace !== '')
