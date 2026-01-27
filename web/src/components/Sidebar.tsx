@@ -138,7 +138,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         </label>
 
         <div className="p-6">
-          <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative gap-3">
             <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
             <a
               href="/"
@@ -147,7 +147,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             >
               <Rari className="w-14 h-8" aria-hidden="true" />
             </a>
-            <div className="px-2 py-1 bg-[#161b22] border border-[#30363d] rounded-md text-xs text-[#fd7e14] font-mono font-medium">
+            <div className="px-2 py-1 bg-[#161b22] border border-[#30363d] rounded-md text-xs text-[#fd7e14] font-mono font-medium w-fit">
               v
               {version}
             </div>
