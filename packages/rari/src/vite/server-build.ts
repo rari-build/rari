@@ -1039,15 +1039,15 @@ const ${importName} = (props) => {
 function registerClientReference(clientReference, id, exportName) {
   const key = id + '#' + exportName;
   const clientProxy = {};
-  Object.defineProperty(clientProxy, '$typeof', {
+  Object.defineProperty(clientProxy, '$$typeof', {
     value: Symbol.for('react.client.reference'),
     enumerable: false
   });
-  Object.defineProperty(clientProxy, '$id', {
+  Object.defineProperty(clientProxy, '$$id', {
     value: key,
     enumerable: false
   });
-  Object.defineProperty(clientProxy, '$async', {
+  Object.defineProperty(clientProxy, '$$async', {
     value: false,
     enumerable: false
   });
