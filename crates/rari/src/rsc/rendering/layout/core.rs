@@ -850,7 +850,10 @@ impl LayoutRenderer {
                     throw new Error('Layout component {} not found');
                 }}
 
-                const {} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
+                const layoutResult{} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
+                const {} = (layoutResult{} && layoutResult{}.type === React.Fragment && layoutResult{}.props?.children !== undefined)
+                    ? layoutResult{}.props.children
+                    : layoutResult{};
                 timings.layout{} = performance.now() - startLayout{};
                 "#,
                 i,
@@ -859,10 +862,16 @@ impl LayoutRenderer {
                 i,
                 i,
                 layout_component_id,
-                layout_var,
+                i,
                 i,
                 current_element,
                 serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
+                layout_var,
+                i,
+                i,
+                i,
+                i,
+                i,
                 i,
                 i
             ));
