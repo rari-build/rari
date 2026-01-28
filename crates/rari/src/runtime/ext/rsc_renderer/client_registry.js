@@ -105,7 +105,7 @@ function extractComponentNameFromPath(componentPath) {
   const nameWithoutExt = fileName.replace(/\.(?:js|jsx|ts|tsx)$/, '')
 
   if (nameWithoutExt.toLowerCase() === 'index') {
-    const parentDir = pathParts[pathParts.length - 2]
+    const parentDir = pathParts.at(-2)
     return parentDir || null
   }
 

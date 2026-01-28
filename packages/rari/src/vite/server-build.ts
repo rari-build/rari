@@ -126,11 +126,12 @@ export class ServerComponentBuilder {
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
     this.projectRoot = projectRoot
+    const rscDir = options.rscDir || 'server'
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
-      rscDir: options.rscDir || 'server',
-      manifestPath: options.manifestPath || 'server/manifest.json',
-      serverConfigPath: options.serverConfigPath || 'server/config.json',
+      rscDir,
+      manifestPath: options.manifestPath || path.join(rscDir, 'manifest.json'),
+      serverConfigPath: options.serverConfigPath || path.join(rscDir, 'config.json'),
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
       define: options.define,

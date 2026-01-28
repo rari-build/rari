@@ -102,16 +102,8 @@ export interface ProxyRule {
   permanent?: boolean
   headers?: Record<string, string>
   conditions?: {
-    has?: Array<{
-      type: 'header' | 'cookie' | 'query' | 'host'
-      key: string
-      value?: string
-    }>
-    missing?: Array<{
-      type: 'header' | 'cookie' | 'query'
-      key: string
-      value?: string
-    }>
+    has?: Array<ProxyCondition & { type: 'header' | 'cookie' | 'query' | 'host' }>
+    missing?: Array<ProxyCondition>
   }
 }
 

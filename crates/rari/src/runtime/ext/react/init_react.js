@@ -1,4 +1,6 @@
-/* eslint-disable react/no-unnecessary-use-prefix */
+/* eslint-disable e18e/prefer-object-has-own, react/no-unnecessary-use-prefix */
+const hasOwn = Object.hasOwn || ((obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop))
+
 globalThis.ReactDOMServer = {
   renderToString(element) {
     try {
@@ -43,7 +45,7 @@ if (typeof globalThis.React === 'undefined') {
         = children && children.length > 0
           ? children
           : props
-            && Object.hasOwn(props || {}, 'children')
+            && hasOwn(props || {}, 'children')
             ? props.children
             : undefined
       return {
@@ -53,7 +55,7 @@ if (typeof globalThis.React === 'undefined') {
           ? { ...props, children: normalizedChildren }
           : { children: normalizedChildren },
         key:
-          props && Object.hasOwn(props, 'key')
+          props && hasOwn(props, 'key')
             ? props.key
             : null,
       }

@@ -35,7 +35,8 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        let processing_semaphore = Arc::new(Semaphore::new(4));
+        let concurrency = config.optimization_concurrency.unwrap_or(4);
+        let processing_semaphore = Arc::new(Semaphore::new(concurrency));
 
         Self {
             cache,
@@ -519,7 +520,11 @@ impl ImageOptimizer {
     }
 
     fn determine_format(&self, params: &OptimizeParams) -> ImageFormat {
-        match params.f.as_deref() {
+        Self::determine_format_from_param(params.f.as_deref())
+    }
+
+    fn determine_format_from_param(format_str: Option<&str>) -> ImageFormat {
+        match format_str {
             Some("avif") => ImageFormat::Avif,
             Some("webp") => ImageFormat::WebP,
             Some("jpeg") | Some("jpg") => ImageFormat::Jpeg,
@@ -563,14 +568,7 @@ impl ImageOptimizer {
             img
         };
 
-        let format = match params.f.as_deref() {
-            Some("avif") => ImageFormat::Avif,
-            Some("webp") => ImageFormat::WebP,
-            Some("jpeg") | Some("jpg") => ImageFormat::Jpeg,
-            Some("png") => ImageFormat::Png,
-            Some("gif") => ImageFormat::Gif,
-            _ => ImageFormat::Avif,
-        };
+        let format = Self::determine_format_from_param(params.f.as_deref());
 
         let data = match format {
             ImageFormat::Avif => Self::encode_avif(&processed, params.q)?,

@@ -223,7 +223,7 @@ export function Image({
 
   const mainSrc = loader
     ? loader({ src: finalSrc, width: defaultWidth, quality })
-    : buildImageUrl(finalSrc, defaultWidth, quality, DEFAULT_FORMATS[0])
+    : buildImageUrl(finalSrc, defaultWidth, quality)
 
   const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
 

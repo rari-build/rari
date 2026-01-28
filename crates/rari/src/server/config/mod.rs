@@ -461,9 +461,17 @@ impl Config {
                 })?;
         }
 
-        if let Ok(server_config_json) = std::fs::read_to_string("dist/server/config.json")
-            && let Ok(config_data) = serde_json::from_str::<serde_json::Value>(&server_config_json)
-        {
+        if let Ok(server_config_json) = std::fs::read_to_string("dist/server/config.json") {
+            let config_data = match serde_json::from_str::<serde_json::Value>(&server_config_json) {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to parse dist/server/config.json: {}. Using defaults.",
+                        e
+                    );
+                    return Ok(config);
+                }
+            };
             if let Some(csp_data) = config_data.get("csp") {
                 if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
                     config.csp.script_src = script_src
@@ -528,6 +536,8 @@ impl Config {
             {
                 config.spam_blocker.enabled = enabled;
             }
+        } else {
+            tracing::debug!("No dist/server/config.json found, using defaults");
         }
 
         Ok(config)

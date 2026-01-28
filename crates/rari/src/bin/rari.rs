@@ -70,6 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(("optimize-images", sub_matches)) = matches.subcommand() {
         init_logging_for_subcommand(sub_matches)?;
+        CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
+            .map_err(|_| "Failed to install rustls crypto provider")?;
         return run_optimize_images().await;
     }
 
