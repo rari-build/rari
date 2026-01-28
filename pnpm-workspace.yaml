@@ -10,7 +10,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.7.0
-    posthog-js: ^1.336.0
+    posthog-js: ^1.336.1
   build:
     esbuild: ^0.27.2
     rolldown-vite: ^7.3.1
