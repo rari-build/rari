@@ -13,9 +13,13 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
     if (key && host && !posthog.__loaded) {
       posthog.init(key, {
         api_host: host,
-        person_profiles: 'identified_only',
+        person_profiles: 'always',
         capture_pageview: false,
         capture_pageleave: true,
+        session_recording: {
+          maskAllInputs: true,
+          maskTextSelector: '*',
+        },
       })
     }
   }, [])
