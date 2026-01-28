@@ -87,9 +87,12 @@ export interface RouteMetadata {
   }
 }
 
+export type RouteParams = Record<string, string | string[]>
+export type SearchParams = Record<string, string | string[] | undefined>
+
 export interface PageProps<
-  TParams extends Record<string, string | string[]> = Record<string, string | string[]>,
-  TSearchParams extends Record<string, string | string[] | undefined> = Record<string, string | string[] | undefined>,
+  TParams extends RouteParams = RouteParams,
+  TSearchParams extends SearchParams = SearchParams,
 > {
   params: TParams
   searchParams: TSearchParams

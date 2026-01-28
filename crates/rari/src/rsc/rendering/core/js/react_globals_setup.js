@@ -1,6 +1,6 @@
-/* eslint-disable no-undef, react/no-unnecessary-use-prefix  */
+/* eslint-disable react/no-unnecessary-use-prefix  */
 if (typeof globalThis.React === 'undefined') {
-  React = {
+  globalThis.React = {
     createElement(type, props, ...children) {
       return { $$typeof: Symbol.for('react.transitional.element'), type, props: props || {}, children }
     },

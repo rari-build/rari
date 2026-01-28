@@ -65,7 +65,7 @@ export default function CodeBlock({ children, filename, className, language = 't
           )
         : (
             <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
-              <code className={`whitespace-pre wrap-break-word ${language ? `language-${language}` : ''}`}>{children.trim()}</code>
+              <code className={language ? `whitespace-pre wrap-break-word language-${language}` : 'whitespace-pre wrap-break-word'}>{children.trim()}</code>
             </pre>
           )}
     </div>

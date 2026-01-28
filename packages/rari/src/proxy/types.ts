@@ -60,19 +60,17 @@ export type ProxyFunction = (
   event?: RariFetchEvent,
 ) => Promise<any> | any
 
+export type ProxyCondition = {
+  type: 'header' | 'query' | 'cookie'
+  key: string
+  value?: string
+}
+
 export interface ProxyMatcher {
   source: string
   locale?: boolean
-  has?: Array<{
-    type: 'header' | 'query' | 'cookie'
-    key: string
-    value?: string
-  }>
-  missing?: Array<{
-    type: 'header' | 'query' | 'cookie'
-    key: string
-    value?: string
-  }>
+  has?: Array<ProxyCondition>
+  missing?: Array<ProxyCondition>
 }
 
 export interface ProxyConfig {

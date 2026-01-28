@@ -1003,9 +1003,7 @@ function ServerComponentWrapper({
       return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
       )
     }
-    else if (data) {
-      return data
-    }
+    return data
   }
 
   return createElement(RscErrorComponent, {
