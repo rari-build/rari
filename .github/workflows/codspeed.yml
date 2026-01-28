@@ -46,15 +46,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-build-
+            ${{ runner.os }}-cargo-bench-
 
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed --version 4.3.0
 
       - name: Build benchmarks
-        run: cargo codspeed build
+        run: cargo codspeed build -p rari
+        working-directory: .
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
