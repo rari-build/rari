@@ -519,15 +519,27 @@ impl Config {
                 }
                 if let Some(rps) = rate_limit_data.get("requestsPerSecond").and_then(|v| v.as_u64())
                 {
-                    config.rate_limit.requests_per_second = rps as u32;
+                    config.rate_limit.requests_per_second = rps.try_into().unwrap_or_else(|_| {
+                        tracing::warn!(
+                            "requestsPerSecond value {} exceeds u32::MAX, using default",
+                            rps
+                        );
+                        100
+                    });
                 }
                 if let Some(burst) = rate_limit_data.get("burstSize").and_then(|v| v.as_u64()) {
-                    config.rate_limit.burst_size = burst as u32;
+                    config.rate_limit.burst_size = burst.try_into().unwrap_or_else(|_| {
+                        tracing::warn!("burstSize value {} exceeds u32::MAX, using default", burst);
+                        200
+                    });
                 }
                 if let Some(revalidate_rpm) =
                     rate_limit_data.get("revalidateRequestsPerMinute").and_then(|v| v.as_u64())
                 {
-                    config.rate_limit.revalidate_requests_per_minute = revalidate_rpm as u32;
+                    config.rate_limit.revalidate_requests_per_minute = revalidate_rpm.try_into().unwrap_or_else(|_| {
+                        tracing::warn!("revalidateRequestsPerMinute value {} exceeds u32::MAX, using default", revalidate_rpm);
+                        60
+                    });
                 }
             }
 

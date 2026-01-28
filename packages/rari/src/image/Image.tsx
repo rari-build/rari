@@ -121,7 +121,7 @@ export function Image({
       link.as = 'image'
       link.href = loader
         ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
-        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality, DEFAULT_FORMATS[0]))
+        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality))
       if (sizes)
         link.setAttribute('imagesizes', sizes)
       document.head.appendChild(link)

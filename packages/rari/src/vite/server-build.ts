@@ -1148,7 +1148,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                       return null
 
                     const relativePath = path.relative(srcDir, pathWithExt)
-                    const distPath = path.join(self.projectRoot, 'dist', 'server', relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
+                    const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
 
                     if (fs.existsSync(distPath)) {
                       return {

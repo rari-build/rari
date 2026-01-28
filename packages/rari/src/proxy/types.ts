@@ -66,11 +66,15 @@ export type ProxyCondition = {
   value?: string
 }
 
+export type ProxyRuleCondition
+  = | ProxyCondition
+    | { type: 'host', key: string, value?: string }
+
 export interface ProxyMatcher {
   source: string
   locale?: boolean
-  has?: Array<ProxyCondition>
-  missing?: Array<ProxyCondition>
+  has?: Array<ProxyRuleCondition>
+  missing?: Array<ProxyRuleCondition>
 }
 
 export interface ProxyConfig {
@@ -102,7 +106,7 @@ export interface ProxyRule {
   permanent?: boolean
   headers?: Record<string, string>
   conditions?: {
-    has?: Array<ProxyCondition & { type: 'header' | 'cookie' | 'query' | 'host' }>
+    has?: Array<ProxyRuleCondition>
     missing?: Array<ProxyCondition>
   }
 }

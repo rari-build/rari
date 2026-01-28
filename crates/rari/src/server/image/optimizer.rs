@@ -49,7 +49,19 @@ impl ImageOptimizer {
     }
 
     pub async fn preoptimize_local_images(&self) -> Result<usize, ImageError> {
-        tracing::info!("Starting local image pre-optimization...");
+        self.preoptimize_local_images_internal(false).await
+    }
+
+    pub async fn preoptimize_local_images_preview(&self) -> Result<usize, ImageError> {
+        self.preoptimize_local_images_internal(true).await
+    }
+
+    async fn preoptimize_local_images_internal(&self, dry_run: bool) -> Result<usize, ImageError> {
+        if dry_run {
+            tracing::info!("Starting local image pre-optimization preview (dry-run)...");
+        } else {
+            tracing::info!("Starting local image pre-optimization...");
+        }
 
         let public_dir = self.project_path.join("public");
         if !public_dir.exists() {
@@ -117,12 +129,21 @@ impl ImageOptimizer {
         for path in &image_paths {
             tracing::debug!("  - {}", path);
         }
-        tracing::info!("Pre-optimizing {} local images...", image_paths.len());
 
-        self.optimize_image_urls(image_paths).await
+        if dry_run {
+            tracing::info!("[DRY RUN] Would pre-optimize {} local images...", image_paths.len());
+        } else {
+            tracing::info!("Pre-optimizing {} local images...", image_paths.len());
+        }
+
+        self.optimize_image_urls_internal(image_paths, dry_run).await
     }
 
-    async fn optimize_image_urls(&self, urls: Vec<String>) -> Result<usize, ImageError> {
+    async fn optimize_image_urls_internal(
+        &self,
+        urls: Vec<String>,
+        dry_run: bool,
+    ) -> Result<usize, ImageError> {
         let mut sizes = self.config.device_sizes.clone();
         sizes.extend(self.config.image_sizes.clone());
 
@@ -151,6 +172,14 @@ impl ImageOptimizer {
         }
 
         tracing::debug!("Generated {} optimization tasks", tasks.len());
+
+        if dry_run {
+            tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
+            for (url, width, format) in &tasks {
+                tracing::info!("  - {} ({}x{}, {:?})", url, width, format.extension(), format);
+            }
+            return Ok(tasks.len());
+        }
 
         let optimized_count = Arc::new(AtomicUsize::new(0));
 

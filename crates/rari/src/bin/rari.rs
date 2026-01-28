@@ -18,13 +18,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .subcommand_required(false)
         .arg_required_else_help(false)
         .subcommand(
-            Command::new("optimize-images").about("Pre-optimize local images for production").arg(
-                Arg::new("verbose")
-                    .short('v')
-                    .long("verbose")
-                    .help("Enable verbose logging")
-                    .action(clap::ArgAction::SetTrue),
-            ),
+            Command::new("optimize-images")
+                .about("Pre-optimize local images for production")
+                .arg(
+                    Arg::new("verbose")
+                        .short('v')
+                        .long("verbose")
+                        .help("Enable verbose logging")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .help("Preview images that would be optimized without performing writes")
+                        .action(clap::ArgAction::SetTrue),
+                ),
         )
         .arg(
             Arg::new("mode")
@@ -72,7 +80,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         init_logging_for_subcommand(sub_matches)?;
         CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
             .map_err(|_| "Failed to install rustls crypto provider")?;
-        return run_optimize_images().await;
+        let dry_run = sub_matches.get_flag("dry-run");
+        return run_optimize_images(dry_run).await;
     }
 
     init_logging(&matches)?;
@@ -105,10 +114,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn run_optimize_images() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn run_optimize_images(
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let project_path = std::env::current_dir()?;
 
-    tracing::info!("Pre-optimizing local images...");
+    if dry_run {
+        tracing::info!("Running in dry-run mode (preview only, no writes)...");
+    } else {
+        tracing::info!("Pre-optimizing local images...");
+    }
 
     let image_config_path = project_path.join("dist").join("server").join("image.json");
 
@@ -122,14 +137,27 @@ async fn run_optimize_images() -> Result<(), Box<dyn std::error::Error + Send + 
 
     let optimizer = ImageOptimizer::new(image_config, &project_path);
 
-    match optimizer.preoptimize_local_images().await {
-        Ok(count) => {
-            tracing::info!("Successfully pre-optimized {} image variants", count);
-            Ok(())
+    if dry_run {
+        match optimizer.preoptimize_local_images_preview().await {
+            Ok(count) => {
+                tracing::info!("[DRY RUN] Would pre-optimize {} image variants", count);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to preview images: {}", e);
+                Err(e.into())
+            }
         }
-        Err(e) => {
-            tracing::error!("Failed to pre-optimize images: {}", e);
-            Err(e.into())
+    } else {
+        match optimizer.preoptimize_local_images().await {
+            Ok(count) => {
+                tracing::info!("Successfully pre-optimized {} image variants", count);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to pre-optimize images: {}", e);
+                Err(e.into())
+            }
         }
     }
 }
