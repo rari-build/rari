@@ -32,7 +32,7 @@
       success: true,
       registered: registeredCount,
       component: currentComponent,
-      functions: Array.from(globalThis['~serverFunctions'].registered),
+      functions: [...globalThis['~serverFunctions'].registered],
     }
   }
 

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { antfu } from '@antfu/eslint-config'
+import e18e from '@e18e/eslint-plugin'
 import oxlint from 'eslint-plugin-oxlint'
 
 export default antfu(
@@ -16,5 +17,6 @@ export default antfu(
       'react-refresh/only-export-components': 'off',
     },
   },
+  e18e.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
 )

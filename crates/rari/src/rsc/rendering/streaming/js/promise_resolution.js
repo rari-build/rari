@@ -35,7 +35,7 @@
     try {
       const additionalProps = {}
       for (const key in error) {
-        if (Object.prototype.hasOwnProperty.call(error, key) && key !== 'name' && key !== 'message' && key !== 'stack') {
+        if (Object.hasOwn(error, key) && key !== 'name' && key !== 'message' && key !== 'stack') {
           try {
             const value = error[key]
             if (value !== undefined && value !== null

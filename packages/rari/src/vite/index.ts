@@ -235,7 +235,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
           for (const exp of exports) {
             const trimmed = exp.trim()
             const parts = trimmed.split(/\s+as\s+/)
-            const exportedName = parts[parts.length - 1].trim()
+            const exportedName = parts.at(-1)?.trim()
             if (exportedName)
               exportedNames.push(exportedName)
           }
@@ -250,7 +250,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       for (const exp of exports) {
         const trimmed = exp.trim()
         const parts = trimmed.split(/\s+as\s+/)
-        const exportedName = parts[parts.length - 1].trim()
+        const exportedName = parts.at(-1)?.trim()
         if (exportedName)
           exportedNames.push(exportedName)
       }
@@ -539,9 +539,7 @@ if (import.meta.hot) {
         ? ((config.resolve as any).dedupe as string[])
         : []
       const toAdd = ['react', 'react-dom'];
-      (config.resolve as any).dedupe = Array.from(
-        new Set([...(existingDedupe || []), ...toAdd]),
-      )
+      (config.resolve as any).dedupe = [...new Set([...(existingDedupe || []), ...toAdd])]
 
       let existingAlias: Array<{
         find: string | RegExp
@@ -1520,7 +1518,7 @@ const ${componentName} = registerClientReference(
           { path: 'rari/image', exports: ['Image'] },
         ]
 
-        const clientComponentsArray = Array.from(allClientComponents).filter((componentPath) => {
+        const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
             const lines = code.split('\n')

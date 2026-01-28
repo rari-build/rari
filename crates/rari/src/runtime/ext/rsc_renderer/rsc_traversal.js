@@ -97,7 +97,7 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
     }
 
     if (element.type && (typeof element.type === 'string' || typeof element.type === 'function' || typeof element.type === 'object')) {
-      const hasPropsChildren = element.props && Object.prototype.hasOwnProperty.call(element.props || {}, 'children')
+      const hasPropsChildren = element.props && Object.hasOwn(element.props || {}, 'children')
       const mergedProps = {
         ...(element.props || {}),
         children: hasPropsChildren ? element.props.children : element.children,
@@ -112,10 +112,10 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       return await traverseReactElement(fakeElement, clientComponents, depth + 1)
     }
 
-    if (!element.type && element.props && Object.prototype.hasOwnProperty.call(element.props, 'fallback')) {
+    if (!element.type && element.props && Object.hasOwn(element.props, 'fallback')) {
       const mergedProps = {
         ...element.props,
-        children: Object.prototype.hasOwnProperty.call(element.props, 'children')
+        children: Object.hasOwn(element.props, 'children')
           ? element.props.children
           : element.children,
       }

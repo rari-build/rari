@@ -83,7 +83,7 @@ export class HMRCoordinator {
       clearTimeout(this.batchTimer)
 
     this.batchTimer = setTimeout(async () => {
-      const filesToProcess = Array.from(this.pendingFiles)
+      const filesToProcess = [...this.pendingFiles]
       this.pendingFiles.clear()
       this.batchTimer = null
 

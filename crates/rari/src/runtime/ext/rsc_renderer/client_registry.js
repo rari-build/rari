@@ -100,7 +100,7 @@ function extractComponentNameFromPath(componentPath) {
     return null
 
   const pathParts = componentPath.split(/[/\\]/)
-  const fileName = pathParts[pathParts.length - 1]
+  const fileName = pathParts.at(-1)
 
   if (!fileName)
     return null

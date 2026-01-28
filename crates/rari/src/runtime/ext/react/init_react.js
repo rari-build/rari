@@ -44,7 +44,7 @@ if (typeof globalThis.React === 'undefined') {
         = children && children.length > 0
           ? children
           : props
-            && Object.prototype.hasOwnProperty.call(props || {}, 'children')
+            && Object.hasOwn(props || {}, 'children')
             ? props.children
             : undefined
       return {
@@ -54,7 +54,7 @@ if (typeof globalThis.React === 'undefined') {
           ? { ...props, children: normalizedChildren }
           : { children: normalizedChildren },
         key:
-          props && Object.prototype.hasOwnProperty.call(props, 'key')
+          props && Object.hasOwn(props, 'key')
             ? props.key
             : null,
       }

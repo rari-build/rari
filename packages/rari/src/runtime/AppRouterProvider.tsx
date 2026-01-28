@@ -313,7 +313,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const processed: any = {}
     for (const key in props) {
-      if (Object.prototype.hasOwnProperty.call(props, key)) {
+      if (Object.hasOwn(props, key)) {
         if (key === 'children') {
           const children = props.children
 

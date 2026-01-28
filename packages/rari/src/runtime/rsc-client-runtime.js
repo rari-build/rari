@@ -473,7 +473,7 @@ class RscClient {
               }
             }
             else {
-              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, '~boundaryId')) {
+              if (processedProps && Object.hasOwn(processedProps, '~boundaryId')) {
                 const { '~boundaryId': tildeBoundaryId, ...rest } = processedProps
                 processedProps = rest
               }
@@ -520,7 +520,7 @@ class RscClient {
 
           const lines = buffered.split(newlineChar)
           const completeLines = lines.slice(0, -1)
-          buffered = lines[lines.length - 1]
+          buffered = lines.at(-1)
 
           for (const line of completeLines) {
             if (!line.trim())
@@ -570,7 +570,7 @@ class RscClient {
                   if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && boundaryId) {
                     boundaryRowMap.set(`$L${rowId}`, boundaryId)
                   }
-                  if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
+                  if (marker === '$' && props && Object.hasOwn(props, 'children')) {
                     if (typeof selector === 'string' && selector.startsWith('$L')) {
                       const target = boundaryRowMap.get(selector) || null
                       if (target) {
@@ -790,7 +790,7 @@ class RscClient {
 
     let rootElement = null
 
-    const elementKeys = Array.from(elements.keys()).sort((a, b) => Number.parseInt(a) - Number.parseInt(b))
+    const elementKeys = elements.keys().toSorted((a, b) => Number.parseInt(a) - Number.parseInt(b))
     for (const key of elementKeys) {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {

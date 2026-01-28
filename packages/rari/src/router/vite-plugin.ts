@@ -183,7 +183,7 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
   const routeFiles = new Set<string>()
 
   const computeRouteStructureHash = (files: Set<string>): string => {
-    const sortedFiles = Array.from(files).sort()
+    const sortedFiles = [...files].toSorted()
     return sortedFiles.join('|')
   }
 

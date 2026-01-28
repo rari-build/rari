@@ -302,7 +302,7 @@ export class ServerComponentBuilder {
       }
     }
 
-    return Array.from(new Set(dependencies))
+    return [...new Set(dependencies)]
   }
 
   private isNodeBuiltin(moduleName: string): boolean {
@@ -2030,7 +2030,7 @@ export function createServerBuildPlugin(
         return
 
       const relativePath = path.relative(projectRoot, file)
-      if (!relativePath.startsWith('src/') || !relativePath.match(/\.(tsx?|jsx?)$/))
+      if (!relativePath.startsWith('src/') || !/\.(?:tsx?|jsx?)$/.test(relativePath))
         return
 
       try {

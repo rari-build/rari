@@ -499,7 +499,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
                   element.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
                 else if (attempts < 10) {
-                  setTimeout(() => scrollToHash(attempts + 1), 50)
+                  setTimeout(scrollToHash, 50, attempts + 1)
                 }
               }
               scrollToHash()
@@ -555,7 +555,9 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     if (navigationQueueRef.current.length === 0)
       return
 
-    const lastNavigation = navigationQueueRef.current[navigationQueueRef.current.length - 1]
+    const lastNavigation = navigationQueueRef.current.at(-1)
+    if (!lastNavigation)
+      return
 
     navigationQueueRef.current = []
 

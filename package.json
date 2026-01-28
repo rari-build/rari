@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",
+    "@e18e/eslint-plugin": "catalog:",
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",

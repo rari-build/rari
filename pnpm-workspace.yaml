@@ -3,7 +3,6 @@ shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - semver@6.3.1
-
 packages:
   - examples/*
   - packages/*
@@ -19,6 +18,7 @@ catalogs:
   cli:
     '@clack/prompts': ^0.11.0
   default:
+    '@e18e/eslint-plugin': ^0.1.4
     '@sentry/react': ^10.37.0
     '@types/node': ^25.0.10
     '@typescript/native-preview': ^7.0.0-dev.20260127.1

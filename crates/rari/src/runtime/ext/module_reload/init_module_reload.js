@@ -1,7 +1,7 @@
 function invalidateModuleCache(moduleSpecifier) {
   try {
     let specifier = moduleSpecifier
-    if (moduleSpecifier.startsWith('/') || moduleSpecifier.match(/^[A-Z]:\\/i)) {
+    if (moduleSpecifier.startsWith('/') || /^[A-Z]:\\/i.test(moduleSpecifier)) {
       if (!moduleSpecifier.startsWith('file://'))
         specifier = `file://${moduleSpecifier}`
     }
