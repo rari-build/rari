@@ -11,6 +11,7 @@
 [![npm version](https://img.shields.io/npm/v/rari.svg)](https://www.npmjs.com/package/rari)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord)](https://discord.gg/GSh2Ak3b8Q)
+[![CodSpeed](https://img.shields.io/badge/CodSpeed-performance-blue)](https://codspeed.io/rari-build/rari?utm_source=badge)
 
 **rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 

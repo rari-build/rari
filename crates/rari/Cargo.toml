@@ -35,6 +35,10 @@ doctest = false
 name = "rari"
 path = "src/bin/rari.rs"
 
+[[bench]]
+name = "rari_benchmarks"
+harness = false
+
 [dependencies]
 # === Core Runtime Dependencies ===
 deno_core = "0.380.1"
@@ -206,3 +210,4 @@ rand = "0.9.2"
 [dev-dependencies]
 tracing-test = "0.2.5"
 tempfile = "3.24.0"
+divan = { package = "codspeed-divan-compat", version = "4.3.0" }
