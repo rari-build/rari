@@ -47,6 +47,10 @@ function logSuccess(message: string) {
   console.warn(`${colors.green('✓')} ${message}`)
 }
 
+function logWarn(message: string) {
+  console.warn(`${colors.yellow('⚠')} ${message}`)
+}
+
 function logError(message: string) {
   console.error(`${colors.red('✗')} ${message}`)
 }
@@ -140,6 +144,53 @@ async function runViteBuild() {
     })
     buildProcess.on('error', reject)
   })
+
+  await preOptimizeImages()
+}
+
+async function preOptimizeImages() {
+  const { spawn } = await import('node:child_process')
+  const { resolve } = await import('node:path')
+  const { existsSync } = await import('node:fs')
+
+  const imageConfigPath = resolve(process.cwd(), 'dist', 'server', 'image.json')
+
+  if (!existsSync(imageConfigPath))
+    return
+
+  const publicPath = resolve(process.cwd(), 'public')
+
+  if (!existsSync(publicPath))
+    return
+
+  try {
+    const binaryPath = await getBinaryPath()
+
+    const optimizeProcess = spawn(binaryPath, ['optimize-images'], {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      shell: false,
+    })
+
+    await new Promise<void>((resolve) => {
+      optimizeProcess.on('exit', (code) => {
+        if (code === 0) {
+          resolve()
+        }
+        else {
+          logWarn(`Image pre-optimization exited with code ${code}`)
+          resolve()
+        }
+      })
+      optimizeProcess.on('error', (err) => {
+        logWarn(`Image pre-optimization error: ${err.message}`)
+        resolve()
+      })
+    })
+  }
+  catch (error) {
+    logWarn(`Could not pre-optimize images: ${error}`)
+  }
 }
 
 async function runViteDev() {

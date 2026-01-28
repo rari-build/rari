@@ -68,7 +68,7 @@ fn default_image_sizes() -> Vec<u32> {
 }
 
 fn default_formats() -> Vec<ImageFormat> {
-    vec![ImageFormat::WebP]
+    vec![ImageFormat::Avif]
 }
 
 fn default_quality_allowlist() -> Vec<u8> {

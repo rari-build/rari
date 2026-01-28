@@ -4,10 +4,12 @@ use super::{
     config::{ImageConfig, LocalPattern, RemotePattern},
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
+use cow_utils::CowUtils;
 use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use url::Url;
 
 const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
@@ -19,6 +21,7 @@ pub struct ImageOptimizer {
     config: ImageConfig,
     http_client: Client,
     project_path: PathBuf,
+    processing_semaphore: Arc<Semaphore>,
 }
 
 impl ImageOptimizer {
@@ -29,7 +32,150 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { cache, config, http_client, project_path: project_path.to_path_buf() }
+        let processing_semaphore = Arc::new(Semaphore::new(4));
+
+        Self {
+            cache,
+            config,
+            http_client,
+            project_path: project_path.to_path_buf(),
+            processing_semaphore,
+        }
+    }
+
+    pub async fn preoptimize_local_images(&self) -> Result<usize, ImageError> {
+        tracing::info!("Starting local image pre-optimization...");
+
+        let public_dir = self.project_path.join("public");
+        if !public_dir.exists() {
+            tracing::warn!(
+                "Public directory does not exist at {:?}, skipping local image pre-optimization",
+                public_dir
+            );
+            return Ok(0);
+        }
+
+        tracing::debug!("Scanning public directory: {:?}", public_dir);
+
+        let mut image_paths = Vec::new();
+        let mut dirs_to_scan = vec![public_dir.clone()];
+
+        while let Some(current_dir) = dirs_to_scan.pop() {
+            let entries = std::fs::read_dir(&current_dir).map_err(|e| {
+                ImageError::ProcessingError(format!(
+                    "Failed to read directory {:?}: {}",
+                    current_dir, e
+                ))
+            })?;
+
+            for entry in entries {
+                let entry = entry.map_err(|e| {
+                    ImageError::ProcessingError(format!("Failed to read directory entry: {}", e))
+                })?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    dirs_to_scan.push(path);
+                } else if path.is_file() {
+                    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+                    if !matches!(
+                        extension.cow_to_lowercase().as_ref(),
+                        "jpg" | "jpeg" | "png" | "webp" | "avif"
+                    ) {
+                        continue;
+                    }
+
+                    if let Ok(relative) = path.strip_prefix(&public_dir) {
+                        let url_path =
+                            format!("/{}", relative.to_string_lossy().cow_replace('\\', "/"));
+
+                        if self.matches_local_patterns(&url_path) {
+                            image_paths.push(url_path);
+                        }
+                    }
+                }
+            }
+        }
+
+        if image_paths.is_empty() {
+            tracing::warn!("No local images found for pre-optimization");
+            return Ok(0);
+        }
+
+        tracing::info!("Found {} local images to pre-optimize", image_paths.len());
+        for path in &image_paths {
+            tracing::debug!("  - {}", path);
+        }
+        tracing::info!("Pre-optimizing {} local images...", image_paths.len());
+
+        self.optimize_image_urls(image_paths).await
+    }
+
+    async fn optimize_image_urls(&self, urls: Vec<String>) -> Result<usize, ImageError> {
+        let mut optimized_count = 0;
+
+        let mut sizes = self.config.device_sizes.clone();
+        sizes.extend(self.config.image_sizes.clone());
+
+        if sizes.is_empty() {
+            sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
+        }
+
+        sizes.sort_unstable();
+        sizes.dedup();
+
+        let formats = if self.config.formats.is_empty() {
+            vec![ImageFormat::Avif]
+        } else {
+            self.config.formats.clone()
+        };
+
+        tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
+
+        for url in &urls {
+            for &width in &sizes {
+                for &format in &formats {
+                    let params = OptimizeParams {
+                        url: url.clone(),
+                        w: Some(width),
+                        q: 75,
+                        f: Some(format.extension().to_string()),
+                    };
+
+                    let cache_key = self.generate_cache_key(&params);
+                    if self.cache.get(&cache_key).is_some() {
+                        continue;
+                    }
+
+                    match self.optimize(params).await {
+                        Ok(_) => {
+                            optimized_count += 1;
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to pre-optimize {}: {}", url, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        tracing::info!("Pre-optimized {} image variants", optimized_count);
+        Ok(optimized_count)
+    }
+
+    fn matches_local_patterns(&self, path: &str) -> bool {
+        if self.config.local_patterns.is_empty() {
+            return true;
+        }
+
+        for pattern in &self.config.local_patterns {
+            if self.matches_local_pattern(path, pattern) {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub async fn optimize(
@@ -57,17 +203,32 @@ impl ImageOptimizer {
         let cache_key = self.generate_cache_key(&params);
 
         if let Some(cached) = self.cache.get(&cache_key) {
-            let img = image::load_from_memory(&cached)
-                .map_err(|e| ImageError::ProcessingError(e.to_string()))?;
-
             let format = self.determine_format(&params);
 
             return Ok((
                 OptimizedImage {
                     data: (*cached).clone(),
                     format,
-                    width: img.width(),
-                    height: img.height(),
+                    width: params.w.unwrap_or(1920),
+                    height: 0,
+                },
+                true,
+            ));
+        }
+
+        let _permit = self.processing_semaphore.acquire().await.map_err(|e| {
+            ImageError::ProcessingError(format!("Failed to acquire processing permit: {}", e))
+        })?;
+
+        if let Some(cached) = self.cache.get(&cache_key) {
+            let format = self.determine_format(&params);
+
+            return Ok((
+                OptimizedImage {
+                    data: (*cached).clone(),
+                    format,
+                    width: params.w.unwrap_or(1920),
+                    height: 0,
                 },
                 true,
             ));
@@ -76,7 +237,16 @@ impl ImageOptimizer {
         self.validate_url(&params.url)?;
 
         let source = self.fetch_image(&params.url).await?;
-        let optimized = self.process_image(source, &params)?;
+
+        let params_clone = params.clone();
+        let config_clone = self.config.clone();
+        let optimized = tokio::task::spawn_blocking(move || {
+            Self::process_image_blocking(source, &params_clone, &config_clone)
+        })
+        .await
+        .map_err(|e| {
+            ImageError::ProcessingError(format!("Image processing task failed: {}", e))
+        })??;
 
         self.cache.put(cache_key, optimized.data.clone());
 
@@ -319,10 +489,10 @@ impl ImageOptimizer {
         }
     }
 
-    fn process_image(
-        &self,
+    fn process_image_blocking(
         source: Vec<u8>,
         params: &OptimizeParams,
+        _config: &ImageConfig,
     ) -> Result<OptimizedImage, ImageError> {
         let img = image::load_from_memory(&source)
             .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {}", e)))?;
@@ -353,12 +523,20 @@ impl ImageOptimizer {
             img
         };
 
-        let format = self.determine_format(params);
+        let format = match params.f.as_deref() {
+            Some("avif") => ImageFormat::Avif,
+            Some("webp") => ImageFormat::WebP,
+            Some("jpeg") | Some("jpg") => ImageFormat::Jpeg,
+            Some("png") => ImageFormat::Png,
+            Some("gif") => ImageFormat::Gif,
+            _ => ImageFormat::Avif,
+        };
+
         let data = match format {
-            ImageFormat::Avif => self.encode_avif(&processed, params.q)?,
-            ImageFormat::WebP => self.encode_webp(&processed, params.q)?,
-            ImageFormat::Jpeg => self.encode_jpeg(&processed, params.q)?,
-            ImageFormat::Png => self.encode_png(&processed)?,
+            ImageFormat::Avif => Self::encode_avif(&processed, params.q)?,
+            ImageFormat::WebP => Self::encode_webp(&processed, params.q)?,
+            ImageFormat::Jpeg => Self::encode_jpeg(&processed, params.q)?,
+            ImageFormat::Png => Self::encode_png(&processed)?,
             ImageFormat::Gif => {
                 return Err(ImageError::ProcessingError("GIF encoding not supported".to_string()));
             }
@@ -367,21 +545,21 @@ impl ImageOptimizer {
         Ok(OptimizedImage { data, format, width: processed.width(), height: processed.height() })
     }
 
-    fn encode_avif(&self, img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
+    fn encode_avif(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
         use image::codecs::avif::AvifEncoder;
         use std::io::Cursor;
 
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
 
-        let encoder = AvifEncoder::new_with_speed_quality(&mut cursor, 8, quality);
+        let encoder = AvifEncoder::new_with_speed_quality(&mut cursor, 10, quality);
         img.write_with_encoder(encoder)
             .map_err(|e| ImageError::ProcessingError(format!("AVIF encoding failed: {}", e)))?;
 
         Ok(buffer)
     }
 
-    fn encode_webp(&self, img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
+    fn encode_webp(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
         let mut buffer = Vec::new();
         let encoder = webp::Encoder::from_image(img)
             .map_err(|e| ImageError::ProcessingError(format!("WebP encoding failed: {}", e)))?;
@@ -392,7 +570,7 @@ impl ImageOptimizer {
         Ok(buffer)
     }
 
-    fn encode_jpeg(&self, img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
+    fn encode_jpeg(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
         use image::codecs::jpeg::JpegEncoder;
         use std::io::Cursor;
 
@@ -406,7 +584,7 @@ impl ImageOptimizer {
         Ok(buffer)
     }
 
-    fn encode_png(&self, img: &DynamicImage) -> Result<Vec<u8>, ImageError> {
+    fn encode_png(img: &DynamicImage) -> Result<Vec<u8>, ImageError> {
         use image::codecs::png::PngEncoder;
         use std::io::Cursor;
 

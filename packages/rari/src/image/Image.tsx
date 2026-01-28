@@ -121,7 +121,7 @@ export function Image({
       link.as = 'image'
       link.href = loader
         ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
-        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality))
+        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality, DEFAULT_FORMATS[0]))
       if (sizes)
         link.setAttribute('imagesizes', sizes)
       document.head.appendChild(link)
@@ -204,10 +204,17 @@ export function Image({
     )
   }
 
-  const sizesArray = fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES
   const defaultWidth = imgWidth || 1920
+  const sizesArray = imgWidth ? [imgWidth] : (fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES)
 
   const buildSrcSet = (format?: ImageFormat) => {
+    if (sizesArray.length === 1) {
+      const w = sizesArray[0]
+      if (loader)
+        return `${loader({ src: finalSrc, width: w, quality })} ${w}w`
+      return `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`
+    }
+
     if (loader)
       return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
 
@@ -216,14 +223,16 @@ export function Image({
 
   const mainSrc = loader
     ? loader({ src: finalSrc, width: defaultWidth, quality })
-    : buildImageUrl(finalSrc, defaultWidth, quality)
+    : buildImageUrl(finalSrc, defaultWidth, quality, DEFAULT_FORMATS[0])
+
+  const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
 
   const imgElement = (
     <img
       ref={imgRef}
       src={mainSrc}
-      srcSet={buildSrcSet()}
-      sizes={sizes}
+      srcSet={shouldUseSrcSet ? buildSrcSet() : undefined}
+      sizes={shouldUseSrcSet ? sizes : undefined}
       alt={showAltText ? alt : ''}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
@@ -236,6 +245,9 @@ export function Image({
       className={className}
     />
   )
+
+  if (!shouldUseSrcSet || sizesArray.length === 1)
+    return imgElement
 
   return (
     <picture ref={pictureRef}>

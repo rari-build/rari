@@ -3,6 +3,7 @@ use rari::error::RariError;
 use rari::server::{
     Server,
     config::{Config, Mode},
+    image::ImageOptimizer,
 };
 
 use rustls::crypto::CryptoProvider;
@@ -14,6 +15,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let matches = Command::new("rari")
         .version(env!("CARGO_PKG_VERSION"))
         .about("rari HTTP Server")
+        .subcommand_required(false)
+        .arg_required_else_help(false)
+        .subcommand(
+            Command::new("optimize-images").about("Pre-optimize local images for production").arg(
+                Arg::new("verbose")
+                    .short('v')
+                    .long("verbose")
+                    .help("Enable verbose logging")
+                    .action(clap::ArgAction::SetTrue),
+            ),
+        )
         .arg(
             Arg::new("mode")
                 .short('m')
@@ -56,6 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         )
         .get_matches();
 
+    if let Some(("optimize-images", sub_matches)) = matches.subcommand() {
+        init_logging_for_subcommand(sub_matches)?;
+        return run_optimize_images().await;
+    }
+
     init_logging(&matches)?;
 
     CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
@@ -82,6 +99,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         _ = shutdown_signal => {}
     }
+
+    Ok(())
+}
+
+async fn run_optimize_images() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let project_path = std::env::current_dir()?;
+
+    tracing::info!("Pre-optimizing local images...");
+
+    let image_config_path = project_path.join("dist").join("server").join("image.json");
+
+    let image_config = if image_config_path.exists() {
+        let config_content = std::fs::read_to_string(&image_config_path)?;
+        serde_json::from_str(&config_content)?
+    } else {
+        tracing::warn!("No image.json found, using default configuration");
+        rari::server::image::ImageConfig::default()
+    };
+
+    let optimizer = ImageOptimizer::new(image_config, &project_path);
+
+    match optimizer.preoptimize_local_images().await {
+        Ok(count) => {
+            tracing::info!("Successfully pre-optimized {} image variants", count);
+            Ok(())
+        }
+        Err(e) => {
+            tracing::error!("Failed to pre-optimize images: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+#[allow(clippy::result_large_err)]
+fn init_logging_for_subcommand(matches: &clap::ArgMatches) -> Result<(), RariError> {
+    let verbose = matches.get_flag("verbose");
+
+    let default_level = if verbose { "debug" } else { "info" };
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(format!("rari={default_level}")))
+        .map_err(|e| RariError::configuration(format!("Failed to create log filter: {e}")))?;
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(
+            fmt::layer()
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_thread_names(false)
+                .with_file(false)
+                .with_line_number(false)
+                .compact(),
+        )
+        .init();
 
     Ok(())
 }
