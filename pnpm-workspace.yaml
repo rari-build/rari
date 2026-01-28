@@ -10,7 +10,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.7.0
-    posthog-js: ^1.335.5
+    posthog-js: ^1.336.0
   build:
     esbuild: ^0.27.2
     rolldown-vite: ^7.3.1
@@ -20,8 +20,8 @@ catalogs:
   default:
     '@e18e/eslint-plugin': ^0.1.4
     '@sentry/react': ^10.37.0
-    '@types/node': ^25.0.10
-    '@typescript/native-preview': ^7.0.0-dev.20260127.1
+    '@types/node': ^25.1.0
+    '@typescript/native-preview': ^7.0.0-dev.20260128.1
     oxlint: ^1.42.0
     rari: ^0.8.0
   eslint:
