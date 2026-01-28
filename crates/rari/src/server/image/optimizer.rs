@@ -18,6 +18,7 @@ const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 const MAX_OUTPUT_WIDTH: u32 = 3840;
 const MAX_OUTPUT_HEIGHT: u32 = 2160;
 const AVIF_ENCODING_SPEED: u8 = 6;
+const DEFAULT_CONCURRENCY: usize = 4;
 
 pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
@@ -35,7 +36,7 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        let concurrency = config.optimization_concurrency.unwrap_or(4);
+        let concurrency = config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY);
         let processing_semaphore = Arc::new(Semaphore::new(concurrency));
 
         Self {
@@ -190,7 +191,7 @@ impl ImageOptimizer {
                     }
                 }
             })
-            .buffer_unordered(4)
+            .buffer_unordered(self.config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY))
             .collect()
             .await;
 

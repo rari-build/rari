@@ -22,6 +22,8 @@ const navigation = [
   { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
 
+const EMPTY_TOGGLES: Record<string, boolean> = {}
+
 function Chevron({ isOpen }: { isOpen: boolean }) {
   return (
     <ChevronRight
@@ -35,13 +37,13 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const [manualTogglesWithPath, setManualTogglesWithPath] = useState<{
     pathname: string
     toggles: Record<string, boolean>
-  }>({ pathname, toggles: {} })
+  }>({ pathname, toggles: EMPTY_TOGGLES })
   const [manualDocsToggleWithPath, setManualDocsToggleWithPath] = useState<{
     pathname: string
     toggle: boolean | undefined
   }>({ pathname, toggle: undefined })
 
-  const manualToggles = pathname === manualTogglesWithPath.pathname ? manualTogglesWithPath.toggles : {}
+  const manualToggles = pathname === manualTogglesWithPath.pathname ? manualTogglesWithPath.toggles : EMPTY_TOGGLES
   const manualDocsToggle = pathname === manualDocsToggleWithPath.pathname ? manualDocsToggleWithPath.toggle : undefined
 
   const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage

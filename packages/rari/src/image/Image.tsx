@@ -246,7 +246,7 @@ export function Image({
     />
   )
 
-  if (!shouldUseSrcSet || sizesArray.length === 1)
+  if (!shouldUseSrcSet)
     return imgElement
 
   return (
