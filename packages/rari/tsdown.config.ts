@@ -28,6 +28,7 @@ export default defineConfig({
         ) {
           return
         }
+
         warn(warning)
       },
     }

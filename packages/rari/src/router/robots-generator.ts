@@ -24,21 +24,18 @@ export function generateRobotsTxt(robots: Robots): string {
 
       if (rule.allow) {
         const allows = Array.isArray(rule.allow) ? rule.allow : [rule.allow]
-        for (const allow of allows) {
+        for (const allow of allows)
           lines.push(`Allow: ${allow}`)
-        }
       }
 
       if (rule.disallow) {
         const disallows = Array.isArray(rule.disallow) ? rule.disallow : [rule.disallow]
-        for (const disallow of disallows) {
+        for (const disallow of disallows)
           lines.push(`Disallow: ${disallow}`)
-        }
       }
 
-      if (rule.crawlDelay !== undefined) {
+      if (rule.crawlDelay !== undefined)
         lines.push(`Crawl-delay: ${rule.crawlDelay}`)
-      }
 
       lines.push('')
     }
@@ -51,9 +48,8 @@ export function generateRobotsTxt(robots: Robots): string {
 
   if (robots.sitemap) {
     const sitemaps = Array.isArray(robots.sitemap) ? robots.sitemap : [robots.sitemap]
-    for (const sitemap of sitemaps) {
+    for (const sitemap of sitemaps)
       lines.push(`Sitemap: ${sitemap}`)
-    }
   }
 
   return lines.join('\n')
@@ -86,9 +82,8 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
   const { appDir, outDir, extensions } = options
   const robotsFile = await findRobotsFile(appDir, extensions)
 
-  if (!robotsFile) {
+  if (!robotsFile)
     return false
-  }
 
   const outputPath = path.join(outDir, 'robots.txt')
 

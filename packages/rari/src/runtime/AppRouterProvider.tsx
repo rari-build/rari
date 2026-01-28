@@ -106,12 +106,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       savedData.forEach((value, key) => {
         const input = form.elements.namedItem(key) as HTMLInputElement | null
         if (input) {
-          if (input.type === 'checkbox' || input.type === 'radio') {
+          if (input.type === 'checkbox' || input.type === 'radio')
             input.checked = value === 'on'
-          }
-          else {
+          else
             input.value = value as string
-          }
         }
       })
     })
@@ -198,12 +196,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (/^\d+$/.test(symbolId)) {
             const symbolName = symbols.get(type)
             if (symbolName) {
-              if (symbolName === '$Sreact.suspense' || symbolName === 'react.suspense') {
+              if (symbolName === '$Sreact.suspense' || symbolName === 'react.suspense')
                 resolvedType = 'Suspense'
-              }
-              else {
+              else
                 console.warn('[rari] AppRouter: Unknown symbol:', symbolName)
-              }
             }
           }
         }
@@ -623,9 +619,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         finally {
           if (!detail.options?.historyKey) {
             requestAnimationFrame(() => {
-              if (detail.options?.scroll !== false) {
+              if (detail.options?.scroll !== false)
                 window.scrollTo(0, 0)
-              }
             })
           }
         }

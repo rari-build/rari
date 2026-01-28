@@ -112,12 +112,10 @@
 
       let rscData
       try {
-        if (globalThis.renderToRsc) {
+        if (globalThis.renderToRsc)
           rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~rsc']?.clientComponents || {})
-        }
-        else {
+        else
           rscData = resolvedElement
-        }
       }
       catch (rscError) {
         return safeSerializeError(rscError, 'rsc_conversion')

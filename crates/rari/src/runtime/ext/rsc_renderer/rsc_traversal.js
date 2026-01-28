@@ -1,7 +1,6 @@
 /* eslint-disable no-undef */
-if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined') {
+if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined')
   globalThis['~rsc'].keyCounter = 0
-}
 
 if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
   globalThis['~suspense'] = {
@@ -68,9 +67,9 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
 
   if (Array.isArray(element)) {
     const results = []
-    for (const child of element) {
+    for (const child of element)
       results.push(await traverseToRsc(child, clientComponents, depth + 1))
-    }
+
     return results
   }
 
@@ -92,9 +91,8 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
   }
 
   if (element && typeof element === 'object' && !element.$$typeof) {
-    if (element['~preSerializedSuspense'] && element.rscArray) {
+    if (element['~preSerializedSuspense'] && element.rscArray)
       return element.rscArray
-    }
 
     if (element.type && (typeof element.type === 'string' || typeof element.type === 'function' || typeof element.type === 'object')) {
       const hasPropsChildren = element.props && Object.hasOwn(element.props || {}, 'children')
@@ -376,12 +374,10 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
       const processedProps = {}
       if (props) {
         for (const [key, value] of Object.entries(props)) {
-          if (key === 'children') {
+          if (key === 'children')
             processedProps[key] = await traverseToRsc(value, clientComponents, depth + 1)
-          }
-          else {
+          else
             processedProps[key] = value
-          }
         }
       }
       return ['$', componentId, uniqueKey, processedProps]
@@ -546,9 +542,8 @@ async function renderServerComponent(element) {
     }
     else {
       result = Component(props)
-      if (result && typeof result.then === 'function') {
+      if (result && typeof result.then === 'function')
         result = await result
-      }
     }
     return result
   }

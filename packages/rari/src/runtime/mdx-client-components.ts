@@ -50,9 +50,8 @@ export function createMDXClientReferences(
 ): Record<string, any> {
   const references: Record<string, any> = {}
 
-  for (const [name, { component, id, exportName = 'default' }] of Object.entries(components)) {
+  for (const [name, { component, id, exportName = 'default' }] of Object.entries(components))
     references[name] = createMDXClientReference(component, id, exportName)
-  }
 
   return references
 }

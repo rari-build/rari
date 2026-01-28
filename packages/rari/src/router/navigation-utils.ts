@@ -103,9 +103,8 @@ export function normalizePath(path: string): string {
     return '/'
 
   let normalized = path
-  while (normalized.endsWith('/') && normalized.length > 1) {
+  while (normalized.endsWith('/') && normalized.length > 1)
     normalized = normalized.slice(0, -1)
-  }
 
   if (!normalized.startsWith('/'))
     normalized = `/${normalized}`

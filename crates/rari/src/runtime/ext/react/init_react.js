@@ -28,9 +28,8 @@ globalThis.ReactDOMServer = {
       return renderElementToString(element, true)
     }
     catch (error) {
-      if (error && error.$$typeof === Symbol.for('react.suspense.pending')) {
+      if (error && error.$$typeof === Symbol.for('react.suspense.pending'))
         return ''
-      }
 
       throw error
     }
@@ -116,9 +115,8 @@ function renderElementToString(element, isStatic = false) {
     return ''
   }
 
-  if (typeof element === 'string' || typeof element === 'number') {
+  if (typeof element === 'string' || typeof element === 'number')
     return escapeHtml(String(element))
-  }
 
   if (Array.isArray(element)) {
     return element
@@ -267,9 +265,9 @@ function escapeHtml(text) {
 
 if (!globalThis['~promises'])
   globalThis['~promises'] = {}
-if (typeof globalThis['~promises'].resolved === 'undefined') {
+if (typeof globalThis['~promises'].resolved === 'undefined')
   globalThis['~promises'].resolved = new Map()
-}
+
 if (!globalThis['~suspense'])
   globalThis['~suspense'] = {}
 globalThis['~suspense'].depth = 0

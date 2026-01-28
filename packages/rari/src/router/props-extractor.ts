@@ -176,12 +176,10 @@ export function mergeMetadata(
 
   if (childMetadata.title !== undefined) {
     if (typeof childMetadata.title === 'string') {
-      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template) {
+      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template)
         merged.title = parentMetadata.title.template.replace('%s', childMetadata.title)
-      }
-      else {
+      else
         merged.title = childMetadata.title
-      }
     }
     else {
       merged.title = childMetadata.title

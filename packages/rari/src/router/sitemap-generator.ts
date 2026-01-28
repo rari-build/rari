@@ -93,9 +93,8 @@ function generateVideoXml(videos: SitemapVideo[]): string {
     if (video.live !== undefined)
       lines.push(`      <video:live>${video.live ? 'yes' : 'no'}</video:live>`)
     if (video.tag) {
-      for (const tag of video.tag) {
+      for (const tag of video.tag)
         lines.push(`      <video:tag>${escapeXml(tag)}</video:tag>`)
-      }
     }
 
     lines.push('    </video:video>')
@@ -136,9 +135,8 @@ export function generateSitemapXml(sitemap: Sitemap): string {
       lines.push(`    <priority>${entry.priority}</priority>`)
 
     if (entry.alternates?.languages) {
-      for (const [lang, url] of Object.entries(entry.alternates.languages)) {
+      for (const [lang, url] of Object.entries(entry.alternates.languages))
         lines.push(`    <xhtml:link rel="alternate" hreflang="${escapeXml(lang)}" href="${escapeXml(url)}" />`)
-      }
     }
 
     if (entry.images && entry.images.length > 0)

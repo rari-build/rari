@@ -41,12 +41,12 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
   if (pathname !== lastPathname) {
     setLastPathname(pathname)
-    if (Object.keys(manualToggles).length > 0) {
+
+    if (Object.keys(manualToggles).length > 0)
       setManualToggles({})
-    }
-    if (manualDocsToggle !== undefined) {
+
+    if (manualDocsToggle !== undefined)
       setManualDocsToggle(undefined)
-    }
   }
 
   const isDocsExpanded = currentManualDocsToggle !== undefined ? currentManualDocsToggle : isDocsPage
@@ -69,9 +69,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
           const hasActiveChild = section.items.some(item =>
             item.href && pathname?.startsWith(item.href),
           )
-          if (hasActiveChild) {
+          if (hasActiveChild)
             shouldExpand = true
-          }
         }
         sections[sectionKey] = shouldExpand
       }
@@ -92,9 +91,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
               const hasActiveNestedChild = item.items.some(nested =>
                 nested.href && pathname === nested.href,
               )
-              if (hasActiveNestedChild) {
+              if (hasActiveNestedChild)
                 shouldExpand = true
-              }
             }
             sections[itemKey] = shouldExpand
           }
@@ -111,9 +109,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
 
   useEffect(() => {
     const checkbox = document.getElementById('mobile-menu-toggle') as HTMLInputElement
-    if (checkbox) {
+    if (checkbox)
       checkbox.checked = false
-    }
   }, [pathname])
 
   return (

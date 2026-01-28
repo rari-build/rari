@@ -221,12 +221,10 @@ async function installDependencies(
     })
 
     child.on('close', (code) => {
-      if (code === 0) {
+      if (code === 0)
         resolve()
-      }
-      else {
+      else
         reject(new Error(`${packageManager} install failed with code ${code}`))
-      }
     })
 
     child.on('error', reject)

@@ -41,9 +41,8 @@
       { pattern: /\\\{"id":.*?\\\}/g, replacement: '' },
     ]
 
-    for (const { pattern, replacement } of jsonCleanupPatterns) {
+    for (const { pattern, replacement } of jsonCleanupPatterns)
       html = html.replace(pattern, replacement)
-    }
 
     return html
   }

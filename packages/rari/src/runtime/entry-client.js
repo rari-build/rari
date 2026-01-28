@@ -33,21 +33,20 @@ function getClientComponent(id) {
   return null
 }
 
-if (typeof globalThis['~rari'] === 'undefined') {
+if (typeof globalThis['~rari'] === 'undefined')
   globalThis['~rari'] = {}
-}
+
 globalThis['~rari'].AppRouterProvider = AppRouterProvider
 globalThis['~rari'].ClientRouter = ClientRouter
 globalThis['~rari'].getClientComponent = getClientComponent
 
 // CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
 
-if (typeof globalThis['~clientComponents'] === 'undefined') {
+if (typeof globalThis['~clientComponents'] === 'undefined')
   globalThis['~clientComponents'] = {}
-}
-if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+
+if (typeof globalThis['~clientComponentPaths'] === 'undefined')
   globalThis['~clientComponentPaths'] = {}
-}
 
 // CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
 
@@ -62,9 +61,8 @@ function setupPartialHydration() {
       if (!element)
         return null
 
-      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') {
+      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
         return element
-      }
 
       if (Array.isArray(element)) {
         if (element.length >= 4 && element[0] === '$') {
@@ -85,19 +83,15 @@ function setupPartialHydration() {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
                 let clientComponent = null
 
-                if (globalThis['~clientComponents'][clientKey]) {
+                if (globalThis['~clientComponents'][clientKey])
                   clientComponent = globalThis['~clientComponents'][clientKey].component
-                }
-                else if (globalThis['~clientComponents'][mod.id]) {
+                else if (globalThis['~clientComponents'][mod.id])
                   clientComponent = globalThis['~clientComponents'][mod.id].component
-                }
 
-                if (clientComponent) {
+                if (clientComponent)
                   return React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
-                }
-                else {
+                else
                   return processedProps.children || null
-                }
               }
               return processedProps.children || null
             }
@@ -142,9 +136,8 @@ function processPendingBoundaryHydrations() {
     return
 
   for (const [boundaryId, data] of pending.entries()) {
-    if (globalThis['~rari'].hydrateClientComponents) {
+    if (globalThis['~rari'].hydrateClientComponents)
       globalThis['~rari'].hydrateClientComponents(boundaryId, data.content, data.element)
-    }
   }
 
   pending.clear()
@@ -279,9 +272,9 @@ export async function renderApp() {
               controller.enqueue(new TextEncoder().encode(payloadJson))
 
               if (window['~rari']?.bufferedRows) {
-                for (const row of window['~rari'].bufferedRows) {
+                for (const row of window['~rari'].bufferedRows)
                   controller.enqueue(new TextEncoder().encode(`\n${row}`))
-                }
+
                 window['~rari'].bufferedRows = []
               }
 
@@ -391,9 +384,9 @@ export async function renderApp() {
         const stream = new ReadableStream({
           start(controller) {
             if (window['~rari']?.bufferedRows) {
-              for (const row of window['~rari'].bufferedRows) {
+              for (const row of window['~rari'].bufferedRows)
                 controller.enqueue(new TextEncoder().encode(`${row}\n`))
-              }
+
               window['~rari'].bufferedRows = []
             }
 
@@ -516,18 +509,15 @@ function extractBodyContent(element, skipHeadInjection = false) {
     let bodyElement = null
 
     for (const child of children) {
-      if (child && child.type === 'head') {
+      if (child && child.type === 'head')
         headElement = child
-      }
-      else if (child && child.type === 'body') {
+      else if (child && child.type === 'body')
         bodyElement = child
-      }
     }
 
     if (bodyElement) {
-      if (!skipHeadInjection && headElement && headElement.props && headElement.props.children) {
+      if (!skipHeadInjection && headElement && headElement.props && headElement.props.children)
         injectHeadContent(headElement)
-      }
 
       const bodyChildren = bodyElement.props?.children
 
@@ -568,9 +558,8 @@ function injectHeadContent(headElement) {
     else if (child.type === 'meta' && child.props) {
       const metaElement = document.createElement('meta')
       Object.keys(child.props).forEach((key) => {
-        if (key !== 'children') {
+        if (key !== 'children')
           metaElement.setAttribute(key, child.props[key])
-        }
       })
       document.head.appendChild(metaElement)
     }
@@ -652,12 +641,10 @@ function processProps(props, modules, symbols) {
     if (Object.hasOwn(props, key)) {
       if (key.startsWith('$') || key === 'ref')
         continue
-      if (key === 'children') {
+      if (key === 'children')
         processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
-      }
-      else {
+      else
         processed[key] = props[key]
-      }
     }
   }
   return processed

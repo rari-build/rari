@@ -166,9 +166,8 @@
     result,
     componentId,
   ) {
-    if (!promise || typeof promise.then !== 'function') {
+    if (!promise || typeof promise.then !== 'function')
       return false
-    }
 
     return globalThis['~promises'].storeWithComponent(
       promise,

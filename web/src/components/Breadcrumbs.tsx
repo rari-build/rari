@@ -8,9 +8,8 @@ interface BreadcrumbsProps {
 export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
   const breadcrumbs = getBreadcrumbs(pathname)
 
-  if (breadcrumbs.length <= 1) {
+  if (breadcrumbs.length <= 1)
     return null
-  }
 
   const isGettingStarted = pathname === '/docs/getting-started'
 

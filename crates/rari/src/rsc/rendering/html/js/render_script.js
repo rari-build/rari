@@ -68,15 +68,12 @@ function renderElement(element, rendered, rowId, moduleMap) {
         try {
           const childrenData = JSON.parse(children_ref)
           if (childrenData && typeof childrenData === 'object') {
-            if (childrenData.__rari_lazy === true) {
+            if (childrenData.__rari_lazy === true)
               children = null
-            }
-            else if (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true) {
+            else if (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true)
               children = null
-            }
-            else {
+            else
               children = renderElement(childrenData, rendered, undefined, moduleMap)
-            }
           }
           else {
             children = renderElement(childrenData, rendered, undefined, moduleMap)
@@ -139,12 +136,10 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
 
   const rawContentTags = ['style', 'script']
   let children
-  if (rawContentTags.includes(tag)) {
+  if (rawContentTags.includes(tag))
     children = renderChildrenRaw(props.children, rendered)
-  }
-  else {
+  else
     children = renderChildren(props.children, rendered, moduleMap)
-  }
 
   const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']
   if (selfClosingTags.includes(tag))
@@ -217,9 +212,8 @@ function renderClientComponentPlaceholder(moduleRef, props, rendered, rowId, mod
 }
 
 function renderAttributes(props) {
-  if (!props || typeof props !== 'object') {
+  if (!props || typeof props !== 'object')
     return ''
-  }
 
   const attributes = []
 
@@ -237,12 +231,10 @@ function renderAttributes(props) {
     }
 
     let attrName = key
-    if (key === 'className') {
+    if (key === 'className')
       attrName = 'class'
-    }
-    else if (key === 'htmlFor') {
+    else if (key === 'htmlFor')
       attrName = 'for'
-    }
 
     if (typeof value === 'boolean') {
       if (value)

@@ -143,9 +143,8 @@ export function extractParams(
   if (!match)
     return null
 
-  for (let i = 0; i < paramNames.length; i++) {
+  for (let i = 0; i < paramNames.length; i++)
     params[paramNames[i]] = match[i + 1]
-  }
 
   return params
 }

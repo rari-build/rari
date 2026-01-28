@@ -80,6 +80,7 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
           ) {
             throw reactError
           }
+
           console.warn('renderElementToHtml: ReactDOMServer failed, falling back to custom renderer:', reactError.message)
         }
       }
@@ -232,24 +233,20 @@ if (typeof globalThis.renderElementToHtml === 'undefined') {
 
           if (lastWasString && isString) {
             const stringValue = String(item)
-            if (stringValue.startsWith(' ') || stringValue.endsWith(' ')) {
+            if (stringValue.startsWith(' ') || stringValue.endsWith(' '))
               html += globalThis.renderElementToHtml(item)
-            }
-            else {
+            else
               html += ` ${globalThis.renderElementToHtml(item)}`
-            }
           }
           else if (lastWasString && isElement) {
             html += ` ${globalThis.renderElementToHtml(item)}`
           }
           else if (lastWasElement && isString) {
             const stringValue = String(item)
-            if (stringValue.startsWith(' ')) {
+            if (stringValue.startsWith(' '))
               html += ` ${globalThis.renderElementToHtml(item)}`
-            }
-            else {
+            else
               html += globalThis.renderElementToHtml(item)
-            }
           }
           else {
             html += globalThis.renderElementToHtml(item)

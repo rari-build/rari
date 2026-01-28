@@ -57,9 +57,8 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
           })
         }
 
-        if (!result) {
+        if (!result)
           return { continue: true }
-        }
 
         const continueHeader = result.headers?.get?.('x-rari-proxy-continue')
         const rewriteHeader = result.headers?.get?.('x-rari-proxy-rewrite')
@@ -115,12 +114,10 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
 
           let body: string | undefined
           try {
-            if (result.text && typeof result.text === 'function') {
+            if (result.text && typeof result.text === 'function')
               body = await result.text()
-            }
-            else if (result.body) {
+            else if (result.body)
               body = String(result.body)
-            }
           }
           catch {}
 

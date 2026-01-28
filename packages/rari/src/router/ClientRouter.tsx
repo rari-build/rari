@@ -49,9 +49,9 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
     let element = document.querySelector(selector) as HTMLMetaElement | null
     if (!element) {
       element = document.createElement('meta')
-      for (const [key, value] of Object.entries(attributes)) {
+      for (const [key, value] of Object.entries(attributes))
         element.setAttribute(key, value)
-      }
+
       document.head.appendChild(element)
     }
     else {
@@ -264,9 +264,9 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   }
 
   const cancelAllPendingNavigations = () => {
-    for (const [, pending] of pendingNavigationsRef.current.entries()) {
+    for (const [, pending] of pendingNavigationsRef.current.entries())
       pending.abortController.abort()
-    }
+
     pendingNavigationsRef.current.clear()
   }
 
@@ -495,12 +495,10 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
             requestAnimationFrame(() => {
               const scrollToHash = (attempts = 0) => {
                 const element = document.getElementById(hash)
-                if (element) {
+                if (element)
                   element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                else if (attempts < 10) {
+                else if (attempts < 10)
                   setTimeout(scrollToHash, 50, attempts + 1)
-                }
               }
               scrollToHash()
             })
@@ -592,9 +590,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       return
 
     let target = event.target as HTMLElement | null
-    while (target && target.tagName !== 'A') {
+    while (target && target.tagName !== 'A')
       target = target.parentElement
-    }
 
     if (!target || target.tagName !== 'A')
       return

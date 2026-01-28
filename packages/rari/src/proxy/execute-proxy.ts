@@ -115,12 +115,10 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
 
       let body: string | undefined
       try {
-        if (result.text && typeof result.text === 'function') {
+        if (result.text && typeof result.text === 'function')
           body = await result.text()
-        }
-        else if (result.body) {
+        else if (result.body)
           body = String(result.body)
-        }
       }
       catch {}
 

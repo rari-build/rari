@@ -25,15 +25,12 @@ globalThis.renderRoute = async function (pageComponentId, pageProps, layouts) {
   const clientComponents = globalThis['~rsc'].clientComponents || {}
   let rscResult
 
-  if (typeof globalThis.renderToRsc === 'function') {
+  if (typeof globalThis.renderToRsc === 'function')
     rscResult = globalThis.renderToRsc(currentElement, clientComponents)
-  }
-  else if (typeof globalThis.traverseToRsc === 'function') {
+  else if (typeof globalThis.traverseToRsc === 'function')
     rscResult = globalThis.traverseToRsc(currentElement, clientComponents)
-  }
-  else {
+  else
     throw new TypeError('No RSC renderer available (renderToRsc or traverseToRsc)')
-  }
 
   return {
     rsc: rscResult,
@@ -115,12 +112,10 @@ globalThis.renderRouteToHtml = async function (pageComponentId, pageProps, layou
     try {
       const clientComponents = globalThis['~rsc']?.clientComponents || {}
 
-      if (typeof globalThis.renderToRsc === 'function') {
+      if (typeof globalThis.renderToRsc === 'function')
         rscData = await globalThis.renderToRsc(currentElement, clientComponents)
-      }
-      else if (typeof globalThis.traverseToRsc === 'function') {
+      else if (typeof globalThis.traverseToRsc === 'function')
         rscData = await globalThis.traverseToRsc(currentElement, clientComponents)
-      }
     }
     catch (rscError) {
       console.error('[renderRouteToHtml] Failed to generate RSC payload:', rscError)

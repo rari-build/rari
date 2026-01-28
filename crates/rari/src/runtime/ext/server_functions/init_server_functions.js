@@ -53,12 +53,10 @@
     }
 
     let serverFunction
-    if (globalThis.RscModuleManager?.getFunction) {
+    if (globalThis.RscModuleManager?.getFunction)
       serverFunction = globalThis.RscModuleManager.getFunction(functionName)
-    }
-    else {
+    else
       serverFunction = globalThis.getServerFunction?.(functionName)
-    }
 
     if (!serverFunction)
       throw new Error(`Server function '${functionName}' not found`)
@@ -101,12 +99,10 @@
     globalThis['~serverFunctions'].registered.clear()
 
     if (globalThis.PromiseManager) {
-      if (componentId && globalThis.PromiseManager.clear) {
+      if (componentId && globalThis.PromiseManager.clear)
         globalThis.PromiseManager.clear(componentId)
-      }
-      else if (globalThis.PromiseManager.clearAll) {
+      else if (globalThis.PromiseManager.clearAll)
         globalThis.PromiseManager.clearAll()
-      }
     }
   }
 

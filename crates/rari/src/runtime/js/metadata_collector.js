@@ -13,12 +13,10 @@
 
     if (child.title !== undefined) {
       if (typeof child.title === 'string') {
-        if (typeof parent.title === 'object' && parent.title?.template) {
+        if (typeof parent.title === 'object' && parent.title?.template)
           merged.title = parent.title.template.replace('%s', child.title)
-        }
-        else {
+        else
           merged.title = child.title
-        }
       }
       else {
         merged.title = child.title
@@ -100,12 +98,10 @@
   metadata = mergeMetadata(metadata, pageMetadata)
 
   if (metadata.title && typeof metadata.title === 'object') {
-    if (metadata.title.absolute) {
+    if (metadata.title.absolute)
       metadata.title = metadata.title.absolute
-    }
-    else if (metadata.title.default) {
+    else if (metadata.title.default)
       metadata.title = metadata.title.default
-    }
   }
 
   return metadata

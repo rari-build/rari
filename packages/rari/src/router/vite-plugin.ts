@@ -228,9 +228,8 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
       const currentRouteFiles = await scanRouteFiles(appDir)
       const currentHash = computeRouteStructureHash(currentRouteFiles)
 
-      if (!forceRegenerate && routeStructureHash === currentHash && cachedManifestContent) {
+      if (!forceRegenerate && routeStructureHash === currentHash && cachedManifestContent)
         return cachedManifestContent
-      }
 
       const { generateAppRouteManifest } = await import('./routes')
 
@@ -419,9 +418,9 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
     },
 
     async closeBundle() {
-      for (const timer of pendingHMRUpdates.values()) {
+      for (const timer of pendingHMRUpdates.values())
         clearTimeout(timer)
-      }
+
       pendingHMRUpdates.clear()
     },
   }

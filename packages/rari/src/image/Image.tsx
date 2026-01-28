@@ -143,9 +143,8 @@ export function Image({
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
+          if (entry.isIntersecting)
             observer.unobserve(img)
-          }
         })
       },
       {
@@ -209,9 +208,9 @@ export function Image({
   const defaultWidth = imgWidth || 1920
 
   const buildSrcSet = (format?: ImageFormat) => {
-    if (loader) {
+    if (loader)
       return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
-    }
+
     return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
   }
 

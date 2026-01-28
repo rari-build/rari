@@ -175,9 +175,9 @@ export class ServerComponentBuilder {
       return false
 
     try {
-      if (!fs.existsSync(filePath)) {
+      if (!fs.existsSync(filePath))
         return false
-      }
+
       const code = fs.readFileSync(filePath, 'utf-8')
 
       const lines = code.split('\n')
@@ -274,6 +274,7 @@ export class ServerComponentBuilder {
         || trimmed === '\'use server\';' || trimmed === '"use server";') {
         return true
       }
+
       if (trimmed)
         break
     }
@@ -516,9 +517,8 @@ const ${importName} = (props) => {
     }
 
     let transformedCode = code
-    for (const { original, replacement } of replacements) {
+    for (const { original, replacement } of replacements)
       transformedCode = transformedCode.replace(original, replacement)
-    }
 
     return transformedCode
   }
@@ -544,18 +544,14 @@ const ${importName} = (props) => {
 
     const ext = path.extname(inputPath)
     let loader: string
-    if (ext === '.tsx') {
+    if (ext === '.tsx')
       loader = 'tsx'
-    }
-    else if (ext === '.ts') {
+    else if (ext === '.ts')
       loader = 'ts'
-    }
-    else if (ext === '.jsx') {
+    else if (ext === '.jsx')
       loader = 'jsx'
-    }
-    else {
+    else
       loader = 'js'
-    }
 
     try {
       const result = await build({
@@ -611,16 +607,14 @@ const ${importName} = (props) => {
                   for (const ext of possibleExtensions) {
                     const pathWithExt = resolvedPath + ext
                     if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (self.isClientComponent(pathWithExt)) {
+                      if (self.isClientComponent(pathWithExt))
                         return { path: args.path, external: true }
-                      }
 
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
                         const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
-                        if (hasUseServer) {
+                        if (hasUseServer)
                           return { path: args.path, external: true }
-                        }
                       }
                       catch {}
 
@@ -922,18 +916,14 @@ const ${importName} = (props) => {
 
     const ext = path.extname(inputPath)
     let loader: string
-    if (ext === '.tsx') {
+    if (ext === '.tsx')
       loader = 'tsx'
-    }
-    else if (ext === '.ts') {
+    else if (ext === '.ts')
       loader = 'ts'
-    }
-    else if (ext === '.jsx') {
+    else if (ext === '.jsx')
       loader = 'jsx'
-    }
-    else {
+    else
       loader = 'js'
-    }
 
     try {
       const result = await build({
@@ -1200,9 +1190,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
                         const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
-                        if (hasUseServer) {
+                        if (hasUseServer)
                           return { path: args.path, external: true }
-                        }
                       }
                       catch {}
 
@@ -1375,9 +1364,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         )
       }
 
-      if (result.warnings.length > 0) {
+      if (result.warnings.length > 0)
         console.warn('[rari] Build: ESBuild warnings:', result.warnings)
-      }
     }
     catch (error) {
       console.error(`[rari] Build: ESBuild failed for ${inputPath}:`, error)
@@ -1389,9 +1377,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     code: string,
     componentId: string,
   ): string {
-    if (code.includes('Self-registering Production Component')) {
+    if (code.includes('Self-registering Production Component'))
       return code
-    }
 
     let transformedCode = code
 
@@ -1443,9 +1430,9 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           }
           else if (exp === 'default') {
             const possibleDefault = `${componentId}_default`
-            if (transformedCode.includes(`var ${possibleDefault}`)) {
+            if (transformedCode.includes(`var ${possibleDefault}`))
               defaultExportName = possibleDefault
-            }
+
             exportNames.push('default')
           }
           else {
@@ -1657,9 +1644,8 @@ function registerClientReference(clientReference, id, exportName) {
       transformedCode = functionDefinition + transformedCode
     }
 
-    for (const { original, replacement } of replacements) {
+    for (const { original, replacement } of replacements)
       transformedCode = transformedCode.replace(original, replacement)
-    }
 
     return transformedCode
   }
@@ -1722,12 +1708,10 @@ function registerClientReference(clientReference, id, exportName) {
       hasNodeImports,
     }
 
-    if (this.isServerAction(code)) {
+    if (this.isServerAction(code))
       this.serverActions.set(filePath, componentData)
-    }
-    else {
+    else
       this.serverComponents.set(filePath, componentData)
-    }
 
     const relativeBundlePath = path.join(
       this.options.rscDir,

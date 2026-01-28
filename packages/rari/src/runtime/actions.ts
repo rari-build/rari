@@ -114,12 +114,10 @@ export function enhanceFormWithAction(
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
-      if (options.onError) {
+      if (options.onError)
         options.onError(errorMessage)
-      }
-      else {
+      else
         console.error('Server action error:', errorMessage)
-      }
     }
   }
 
@@ -203,10 +201,8 @@ export function bindServerActions(): void {
 }
 
 if (typeof window !== 'undefined') {
-  if (document.readyState === 'loading') {
+  if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', bindServerActions)
-  }
-  else {
+  else
     bindServerActions()
-  }
 }

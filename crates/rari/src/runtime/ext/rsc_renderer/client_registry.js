@@ -1,14 +1,11 @@
-if (typeof globalThis['~clientComponents'] === 'undefined') {
+if (typeof globalThis['~clientComponents'] === 'undefined')
   globalThis['~clientComponents'] = {}
-}
 
-if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+if (typeof globalThis['~clientComponentNames'] === 'undefined')
   globalThis['~clientComponentNames'] = {}
-}
 
-if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+if (typeof globalThis['~clientComponentPaths'] === 'undefined')
   globalThis['~clientComponentPaths'] = {}
-}
 
 function registerClientComponent(componentId, componentPath, component) {
   if (!componentId || !componentPath) {

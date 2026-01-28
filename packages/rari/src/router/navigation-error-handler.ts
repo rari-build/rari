@@ -197,9 +197,8 @@ export class NavigationErrorHandler {
   }
 
   canRetry(error: NavigationError, url: string): boolean {
-    if (!error.retryable) {
+    if (!error.retryable)
       return false
-    }
 
     const currentRetries = this.retryCount.get(url) ?? 0
     return currentRetries < this.options.maxRetries
