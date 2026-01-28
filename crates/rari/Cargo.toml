@@ -164,7 +164,7 @@ hyper-util = { version = "0.1.19", features = [
   "tokio",
   "client-legacy",
 ] }
-libc = "0.2.178"
+libc = "0.2.180"
 nix = { version = "=0.27.1", features = [ "term" ] }
 sys_traits = "=0.1.22"
 sysinfo = "0.37.2"
