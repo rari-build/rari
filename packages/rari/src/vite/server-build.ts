@@ -1715,7 +1715,7 @@ function registerClientReference(clientReference, id, exportName) {
       .replace(/\.(tsx?|jsx?)$/, '')
       .replace(/[^\w/-]/g, '_')
       .replace(/^src\//, '')
-      .replace(/^components\//, 'components/')
+      .replace(/^components\//, '')
   }
 
   async rebuildComponent(filePath: string): Promise<ComponentRebuildResult> {
