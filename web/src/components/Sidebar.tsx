@@ -58,9 +58,10 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         sections[sectionKey] = manualToggles[sectionKey]
       }
       else {
-        const shouldExpand = (section.href && pathname?.startsWith(section.href))
+        const shouldExpand = !!(
+          (section.href && pathname?.startsWith(section.href))
           || (section.items?.some(item => item.href && pathname?.startsWith(item.href)))
-          || false
+        )
         sections[sectionKey] = shouldExpand
       }
 
@@ -72,9 +73,10 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             sections[itemKey] = manualToggles[itemKey]
           }
           else {
-            const shouldExpand = (item.href && pathname?.startsWith(item.href))
+            const shouldExpand = !!(
+              (item.href && pathname?.startsWith(item.href))
               || (item.items?.some(nested => nested.href && pathname === nested.href))
-              || false
+            )
             sections[itemKey] = shouldExpand
           }
         })

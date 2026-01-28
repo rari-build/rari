@@ -208,7 +208,7 @@ impl ImageOptimizer {
                         }
                         Err(e) => {
                             tracing::warn!(
-                                "Failed to pre-optimize {} ({}x{}, {:?}): {}",
+                                "Failed to pre-optimize {} (width={}, ext={}, format={:?}): {}",
                                 url,
                                 width,
                                 format.extension(),
