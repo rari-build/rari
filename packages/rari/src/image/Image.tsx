@@ -2,7 +2,7 @@
 
 import type { ImageFormat } from './constants'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES } from './constants'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS } from './constants'
 
 export interface ImageProps {
   src: string | StaticImageData
@@ -205,7 +205,7 @@ export function Image({
   }
 
   const defaultWidth = imgWidth || 1920
-  const sizesArray = imgWidth ? [imgWidth] : (fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES)
+  const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
 
   const buildSrcSet = (format?: ImageFormat) => {
     if (sizesArray.length === 1) {

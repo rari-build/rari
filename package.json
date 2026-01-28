@@ -16,6 +16,7 @@
     "@e18e/eslint-plugin": "catalog:",
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@types/node": "catalog:",
+    "@typescript-eslint/utils": "catalog:",
     "@typescript/native-preview": "catalog:",
     "eslint": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:",

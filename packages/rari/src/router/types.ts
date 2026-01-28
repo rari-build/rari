@@ -136,9 +136,9 @@ export interface PageProps<
   searchParams: TSearchParams
 }
 
-export interface LayoutProps {
+export interface LayoutProps<TParams extends RouteParams = RouteParams> {
   children: ReactNode
-  params?: Record<string, string | string[]>
+  params?: TParams
   pathname?: string
 }
 
@@ -149,19 +149,22 @@ export interface ErrorProps {
 
 export interface AppRouteMatch {
   route: AppRouteEntry
-  params: Record<string, string | string[]>
-  searchParams: Record<string, string | string[] | undefined>
+  params: RouteParams
+  searchParams: SearchParams
   layouts: LayoutEntry[]
   loading?: LoadingEntry
   error?: ErrorEntry
   pathname: string
 }
 
-export type GenerateMetadata<TParams extends Record<string, string | string[]> = Record<string, string | string[]>> = (props: {
+export type GenerateMetadata<
+  TParams extends RouteParams = RouteParams,
+  TSearchParams extends SearchParams = SearchParams,
+> = (props: {
   params: TParams
-  searchParams: Record<string, string | string[] | undefined>
+  searchParams: TSearchParams
 }) => RouteMetadata | Promise<RouteMetadata>
 
-export type GenerateStaticParams<TParams extends Record<string, string | string[]> = Record<string, string | string[]>> = () =>
+export type GenerateStaticParams<TParams extends RouteParams = RouteParams> = () =>
   | TParams[]
   | Promise<TParams[]>

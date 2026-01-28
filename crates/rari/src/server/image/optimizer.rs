@@ -5,16 +5,19 @@ use super::{
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
 use cow_utils::CowUtils;
+use futures::stream::{self, StreamExt};
 use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 use url::Url;
 
 const MAX_SOURCE_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 const MAX_OUTPUT_WIDTH: u32 = 3840;
 const MAX_OUTPUT_HEIGHT: u32 = 2160;
+const AVIF_ENCODING_SPEED: u8 = 6;
 
 pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
@@ -61,22 +64,27 @@ impl ImageOptimizer {
         let mut dirs_to_scan = vec![public_dir.clone()];
 
         while let Some(current_dir) = dirs_to_scan.pop() {
-            let entries = std::fs::read_dir(&current_dir).map_err(|e| {
+            let mut entries = tokio::fs::read_dir(&current_dir).await.map_err(|e| {
                 ImageError::ProcessingError(format!(
                     "Failed to read directory {:?}: {}",
                     current_dir, e
                 ))
             })?;
 
-            for entry in entries {
-                let entry = entry.map_err(|e| {
-                    ImageError::ProcessingError(format!("Failed to read directory entry: {}", e))
-                })?;
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                ImageError::ProcessingError(format!("Failed to read directory entry: {}", e))
+            })? {
                 let path = entry.path();
+                let metadata = entry.metadata().await.map_err(|e| {
+                    ImageError::ProcessingError(format!(
+                        "Failed to read metadata for {:?}: {}",
+                        path, e
+                    ))
+                })?;
 
-                if path.is_dir() {
+                if metadata.is_dir() {
                     dirs_to_scan.push(path);
-                } else if path.is_file() {
+                } else if metadata.is_file() {
                     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
                     if !matches!(
@@ -113,8 +121,6 @@ impl ImageOptimizer {
     }
 
     async fn optimize_image_urls(&self, urls: Vec<String>) -> Result<usize, ImageError> {
-        let mut optimized_count = 0;
-
         let mut sizes = self.config.device_sizes.clone();
         sizes.extend(self.config.image_sizes.clone());
 
@@ -133,9 +139,24 @@ impl ImageOptimizer {
 
         tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
 
+        let mut tasks = Vec::new();
         for url in &urls {
             for &width in &sizes {
                 for &format in &formats {
+                    tasks.push((url.clone(), width, format));
+                }
+            }
+        }
+
+        tracing::debug!("Generated {} optimization tasks", tasks.len());
+
+        let optimized_count = Arc::new(AtomicUsize::new(0));
+
+        let results: Vec<_> = stream::iter(tasks)
+            .map(|(url, width, format)| {
+                let optimized_count = Arc::clone(&optimized_count);
+
+                async move {
                     let params = OptimizeParams {
                         url: url.clone(),
                         w: Some(width),
@@ -144,24 +165,43 @@ impl ImageOptimizer {
                     };
 
                     let cache_key = self.generate_cache_key(&params);
+
                     if self.cache.get(&cache_key).is_some() {
-                        continue;
+                        return Ok::<_, ImageError>(false);
                     }
 
                     match self.optimize(params).await {
                         Ok(_) => {
-                            optimized_count += 1;
+                            optimized_count.fetch_add(1, Ordering::Relaxed);
+                            Ok(true)
                         }
                         Err(e) => {
-                            tracing::warn!("Failed to pre-optimize {}: {}", url, e);
+                            tracing::warn!(
+                                "Failed to pre-optimize {} ({}x{}, {:?}): {}",
+                                url,
+                                width,
+                                format.extension(),
+                                format,
+                                e
+                            );
+                            Err(e)
                         }
                     }
                 }
-            }
+            })
+            .buffer_unordered(4)
+            .collect()
+            .await;
+
+        let final_count = optimized_count.load(Ordering::Relaxed);
+        let errors = results.iter().filter(|r| r.is_err()).count();
+
+        if errors > 0 {
+            tracing::warn!("Pre-optimization completed with {} errors", errors);
         }
 
-        tracing::info!("Pre-optimized {} image variants", optimized_count);
-        Ok(optimized_count)
+        tracing::info!("Pre-optimized {} image variants", final_count);
+        Ok(final_count)
     }
 
     fn matches_local_patterns(&self, path: &str) -> bool {
@@ -552,7 +592,8 @@ impl ImageOptimizer {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
 
-        let encoder = AvifEncoder::new_with_speed_quality(&mut cursor, 10, quality);
+        let encoder =
+            AvifEncoder::new_with_speed_quality(&mut cursor, AVIF_ENCODING_SPEED, quality);
         img.write_with_encoder(encoder)
             .map_err(|e| ImageError::ProcessingError(format!("AVIF encoding failed: {}", e)))?;
 

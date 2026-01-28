@@ -21,6 +21,7 @@ catalogs:
     '@e18e/eslint-plugin': ^0.1.4
     '@sentry/react': ^10.37.0
     '@types/node': ^25.1.0
+    '@typescript-eslint/utils': ^8.54.0
     '@typescript/native-preview': ^7.0.0-dev.20260128.1
     eslint-plugin-de-morgan: ^2.0.0
     oxlint: ^1.42.0

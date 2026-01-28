@@ -32,24 +32,19 @@ function Chevron({ isOpen }: { isOpen: boolean }) {
 
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const isDocsPage = pathname?.startsWith('/docs')
-  const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
-  const [manualDocsToggle, setManualDocsToggle] = useState<boolean | undefined>(undefined)
-  const [lastPathname, setLastPathname] = useState(pathname)
+  const [manualTogglesWithPath, setManualTogglesWithPath] = useState<{
+    pathname: string
+    toggles: Record<string, boolean>
+  }>({ pathname, toggles: {} })
+  const [manualDocsToggleWithPath, setManualDocsToggleWithPath] = useState<{
+    pathname: string
+    toggle: boolean | undefined
+  }>({ pathname, toggle: undefined })
 
-  const currentManualToggles = pathname !== lastPathname ? {} : manualToggles
-  const currentManualDocsToggle = pathname !== lastPathname ? undefined : manualDocsToggle
+  const manualToggles = pathname === manualTogglesWithPath.pathname ? manualTogglesWithPath.toggles : {}
+  const manualDocsToggle = pathname === manualDocsToggleWithPath.pathname ? manualDocsToggleWithPath.toggle : undefined
 
-  if (pathname !== lastPathname) {
-    setLastPathname(pathname)
-
-    if (Object.keys(manualToggles).length > 0)
-      setManualToggles({})
-
-    if (manualDocsToggle !== undefined)
-      setManualDocsToggle(undefined)
-  }
-
-  const isDocsExpanded = currentManualDocsToggle !== undefined ? currentManualDocsToggle : isDocsPage
+  const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
@@ -57,8 +52,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     docsNavigation.forEach((section, idx) => {
       const sectionKey = `section-${idx}`
 
-      if (currentManualToggles[sectionKey] !== undefined) {
-        sections[sectionKey] = currentManualToggles[sectionKey]
+      if (manualToggles[sectionKey] !== undefined) {
+        sections[sectionKey] = manualToggles[sectionKey]
       }
       else {
         const shouldExpand = (section.href && pathname?.startsWith(section.href))
@@ -71,8 +66,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         section.items.forEach((item, itemIdx) => {
           const itemKey = `${sectionKey}-item-${itemIdx}`
 
-          if (currentManualToggles[itemKey] !== undefined) {
-            sections[itemKey] = currentManualToggles[itemKey]
+          if (manualToggles[itemKey] !== undefined) {
+            sections[itemKey] = manualToggles[itemKey]
           }
           else {
             const shouldExpand = (item.href && pathname?.startsWith(item.href))
@@ -85,10 +80,13 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     })
 
     return sections
-  }, [pathname, currentManualToggles])
+  }, [pathname, manualToggles])
 
   const toggleSection = (key: string) => {
-    setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))
+    setManualTogglesWithPath({
+      pathname,
+      toggles: { ...manualToggles, [key]: !expandedSections[key] },
+    })
   }
 
   useEffect(() => {
@@ -182,7 +180,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                     {isDocs && (
                       <button
                         type="button"
-                        onClick={() => setManualDocsToggle(!isDocsExpanded)}
+                        onClick={() => setManualDocsToggleWithPath({ pathname, toggle: !isDocsExpanded })}
                         className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
                         aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
                         aria-expanded={isDocsExpanded}

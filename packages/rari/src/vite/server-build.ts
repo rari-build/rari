@@ -883,11 +883,21 @@ const ${importName} = (props) => {
     if (this.options.spamBlocker)
       serverConfig.spamBlocker = this.options.spamBlocker
 
-    if (Object.keys(serverConfig).length > 0) {
-      const serverConfigPath = path.join(
-        this.options.outDir,
-        this.options.serverConfigPath,
-      )
+    const serverConfigPath = path.join(
+      this.options.outDir,
+      this.options.serverConfigPath,
+    )
+
+    if (Object.keys(serverConfig).length === 0) {
+      try {
+        await fs.promises.unlink(serverConfigPath)
+      }
+      catch (error: any) {
+        if (error.code !== 'ENOENT')
+          console.warn(`Failed to remove server config file: ${error.message}`)
+      }
+    }
+    else {
       await fs.promises.writeFile(
         serverConfigPath,
         JSON.stringify(serverConfig, null, 2),
@@ -2013,7 +2023,7 @@ export function createServerBuildPlugin(
       if (!builder || !isDev)
         return
 
-      const relativePath = path.relative(projectRoot, file)
+      const relativePath = path.relative(projectRoot, file).replace(/\\/g, '/')
       if (!relativePath.startsWith('src/') || !/\.(?:tsx?|jsx?)$/.test(relativePath))
         return
 

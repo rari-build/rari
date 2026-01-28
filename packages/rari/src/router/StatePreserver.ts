@@ -82,7 +82,7 @@ export class StatePreserver {
 
         const formData = new FormData(form)
 
-        if ([...formData.entries()].length > 0)
+        if (!formData.entries().next().done)
           formDataMap.set(formId, formData)
       })
     }

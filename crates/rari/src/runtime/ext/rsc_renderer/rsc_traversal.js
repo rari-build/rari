@@ -1,6 +1,9 @@
 /* eslint-disable no-undef */
-if (typeof globalThis !== 'undefined' && typeof globalThis['~rsc'].keyCounter === 'undefined')
-  globalThis['~rsc'].keyCounter = 0
+if (typeof globalThis !== 'undefined') {
+  globalThis['~rsc'] = globalThis['~rsc'] || {}
+  if (typeof globalThis['~rsc'].keyCounter === 'undefined')
+    globalThis['~rsc'].keyCounter = 0
+}
 
 if (typeof globalThis !== 'undefined' && !globalThis['~suspense']) {
   globalThis['~suspense'] = {
