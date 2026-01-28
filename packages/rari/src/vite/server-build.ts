@@ -1,4 +1,5 @@
 import type { Plugin } from 'rolldown-vite'
+import type { ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -57,51 +58,19 @@ interface ServerComponentManifest {
   }
   version: string
   buildTime: string
-  csp?: {
-    scriptSrc?: string[]
-    styleSrc?: string[]
-    imgSrc?: string[]
-    fontSrc?: string[]
-    connectSrc?: string[]
-    defaultSrc?: string[]
-    workerSrc?: string[]
-  }
-  rateLimit?: {
-    enabled?: boolean
-    requestsPerSecond?: number
-    burstSize?: number
-    revalidateRequestsPerMinute?: number
-  }
-  spamBlocker?: {
-    enabled?: boolean
-  }
 }
 
 export interface ServerBuildOptions {
   outDir?: string
-  serverDir?: string
+  rscDir?: string
   manifestPath?: string
+  serverConfigPath?: string
   minify?: boolean
   alias?: Record<string, string>
   define?: Record<string, string>
-  csp?: {
-    scriptSrc?: string[]
-    styleSrc?: string[]
-    imgSrc?: string[]
-    fontSrc?: string[]
-    connectSrc?: string[]
-    defaultSrc?: string[]
-    workerSrc?: string[]
-  }
-  rateLimit?: {
-    enabled?: boolean
-    requestsPerSecond?: number
-    burstSize?: number
-    revalidateRequestsPerMinute?: number
-  }
-  spamBlocker?: {
-    enabled?: boolean
-  }
+  csp?: ServerCSPConfig
+  rateLimit?: ServerRateLimitConfig
+  spamBlocker?: ServerSpamBlockerConfig
 }
 
 export interface ComponentRebuildResult {
@@ -111,7 +80,8 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'define'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'define' | 'serverConfigPath'>> & {
+  serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   rateLimit?: ServerBuildOptions['rateLimit']
   spamBlocker?: ServerBuildOptions['spamBlocker']
@@ -158,8 +128,9 @@ export class ServerComponentBuilder {
     this.projectRoot = projectRoot
     this.options = {
       outDir: options.outDir || path.join(projectRoot, 'dist'),
-      serverDir: options.serverDir || 'server',
+      rscDir: options.rscDir || 'server',
       manifestPath: options.manifestPath || 'server/manifest.json',
+      serverConfigPath: options.serverConfigPath || 'server/config.json',
       minify: options.minify ?? process.env.NODE_ENV === 'production',
       alias: options.alias || {},
       define: options.define,
@@ -794,7 +765,7 @@ const ${importName} = (props) => {
   }
 
   async buildServerComponents(): Promise<ServerComponentManifest> {
-    const serverOutDir = path.join(this.options.outDir, this.options.serverDir)
+    const serverOutDir = path.join(this.options.outDir, this.options.rscDir)
 
     await fs.promises.mkdir(serverOutDir, { recursive: true })
 
@@ -820,9 +791,6 @@ const ${importName} = (props) => {
       },
       version: '1.0.0',
       buildTime: new Date().toISOString(),
-      csp: this.options.csp,
-      rateLimit: this.options.rateLimit,
-      spamBlocker: this.options.spamBlocker,
     }
 
     for (const [filePath, component] of this.serverComponents) {
@@ -831,7 +799,7 @@ const ${importName} = (props) => {
 
       const relativePath = path.relative(this.projectRoot, filePath)
       const componentId = this.getComponentId(relativePath)
-      const bundlePath = path.join(this.options.serverDir, `${componentId}.js`)
+      const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
@@ -858,7 +826,7 @@ const ${importName} = (props) => {
 
       const relativePath = path.relative(this.projectRoot, filePath)
       const componentId = this.getComponentId(relativePath)
-      const bundlePath = path.join(this.options.serverDir, `${componentId}.js`)
+      const bundlePath = path.join(this.options.rscDir, `${componentId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
@@ -882,7 +850,7 @@ const ${importName} = (props) => {
     for (const [filePath, action] of this.serverActions) {
       const relativePath = path.relative(this.projectRoot, filePath)
       const actionId = this.getComponentId(relativePath)
-      const bundlePath = path.join(this.options.serverDir, `${actionId}.js`)
+      const bundlePath = path.join(this.options.rscDir, `${actionId}.js`)
       const fullBundlePath = path.join(this.options.outDir, bundlePath)
 
       const bundleDir = path.dirname(fullBundlePath)
@@ -912,6 +880,26 @@ const ${importName} = (props) => {
       JSON.stringify(manifest, null, 2),
       'utf-8',
     )
+
+    const serverConfig: ServerConfig = {}
+    if (this.options.csp)
+      serverConfig.csp = this.options.csp
+    if (this.options.rateLimit)
+      serverConfig.rateLimit = this.options.rateLimit
+    if (this.options.spamBlocker)
+      serverConfig.spamBlocker = this.options.spamBlocker
+
+    if (Object.keys(serverConfig).length > 0) {
+      const serverConfigPath = path.join(
+        this.options.outDir,
+        this.options.serverConfigPath,
+      )
+      await fs.promises.writeFile(
+        serverConfigPath,
+        JSON.stringify(serverConfig, null, 2),
+        'utf-8',
+      )
+    }
 
     return manifest
   }
@@ -1742,7 +1730,7 @@ function registerClientReference(clientReference, id, exportName) {
     }
 
     const relativeBundlePath = path.join(
-      this.options.serverDir,
+      this.options.rscDir,
       `${componentId}.js`,
     )
     const fullBundlePath = path.join(this.options.outDir, relativeBundlePath)
@@ -1791,7 +1779,6 @@ function registerClientReference(clientReference, id, exportName) {
   }
 
   private manifestCache: ServerComponentManifest | null = null
-  private manifestDirty = false
 
   async updateManifestForComponent(
     componentId: string,
@@ -1826,9 +1813,6 @@ function registerClientReference(clientReference, id, exportName) {
         },
         version: '1.0.0',
         buildTime: new Date().toISOString(),
-        csp: this.options.csp,
-        rateLimit: this.options.rateLimit,
-        spamBlocker: this.options.spamBlocker,
       }
       this.manifestCache = manifest
     }

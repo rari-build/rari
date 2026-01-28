@@ -41,7 +41,7 @@ export {
 
 export type {
   MetadataResult,
-  ServerPropsResult,
+  ServerSidePropsResult,
   StaticParamsResult,
 } from './router/props-extractor'
 
@@ -73,5 +73,12 @@ export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'
 export type { RuntimeClient } from './runtime-client'
 
 export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVideo } from './types/metadata-route'
+
+export type {
+  ServerConfig,
+  ServerCSPConfig,
+  ServerRateLimitConfig,
+  ServerSpamBlockerConfig,
+} from './types/server-config'
 
 export { defineRariConfig, defineRariOptions, rari } from './vite/index'

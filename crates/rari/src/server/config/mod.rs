@@ -461,10 +461,10 @@ impl Config {
                 })?;
         }
 
-        if let Ok(manifest_json) = std::fs::read_to_string("dist/server/manifest.json")
-            && let Ok(manifest_data) = serde_json::from_str::<serde_json::Value>(&manifest_json)
+        if let Ok(server_config_json) = std::fs::read_to_string("dist/server/config.json")
+            && let Ok(config_data) = serde_json::from_str::<serde_json::Value>(&server_config_json)
         {
-            if let Some(csp_data) = manifest_data.get("csp") {
+            if let Some(csp_data) = config_data.get("csp") {
                 if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
                     config.csp.script_src = script_src
                         .iter()
@@ -505,7 +505,7 @@ impl Config {
                 }
             }
 
-            if let Some(rate_limit_data) = manifest_data.get("rateLimit") {
+            if let Some(rate_limit_data) = config_data.get("rateLimit") {
                 if let Some(enabled) = rate_limit_data.get("enabled").and_then(|v| v.as_bool()) {
                     config.rate_limit.enabled = enabled;
                 }
@@ -523,7 +523,7 @@ impl Config {
                 }
             }
 
-            if let Some(spam_blocker_data) = manifest_data.get("spamBlocker")
+            if let Some(spam_blocker_data) = config_data.get("spamBlocker")
                 && let Some(enabled) = spam_blocker_data.get("enabled").and_then(|v| v.as_bool())
             {
                 config.spam_blocker.enabled = enabled;

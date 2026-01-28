@@ -982,8 +982,9 @@ const ${componentName} = registerClientReference(
 
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
-            serverDir: 'server',
+            rscDir: 'server',
             manifestPath: 'server/manifest.json',
+            serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
@@ -1260,8 +1261,9 @@ const ${componentName} = registerClientReference(
           const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
-            serverDir: 'server',
+            rscDir: 'server',
             manifestPath: 'server/manifest.json',
+            serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
