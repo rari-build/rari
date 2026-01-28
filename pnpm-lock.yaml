@@ -39,6 +39,9 @@ catalogs:
     '@typescript/native-preview':
       specifier: ^7.0.0-dev.20260128.1
       version: 7.0.0-dev.20260128.1
+    eslint-plugin-de-morgan:
+      specifier: ^2.0.0
+      version: 2.0.0
     oxlint:
       specifier: ^1.42.0
       version: 1.42.0
@@ -130,6 +133,9 @@ importers:
       eslint:
         specifier: catalog:eslint
         version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-de-morgan:
+        specifier: 'catalog:'
+        version: 2.0.0(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-oxlint:
         specifier: catalog:eslint
         version: 1.42.0
@@ -2210,6 +2216,12 @@ packages:
     resolution: {integrity: sha512-EW4eg/a7TKEhG0s5IEti72kh3YOTlnhfFNuctq5WnB1fst37/IHTd5OkD+vnlRf3opTvUcSRihAateP6bT5ZcA==}
     peerDependencies:
       eslint: '*'
+
+  eslint-plugin-de-morgan@2.0.0:
+    resolution: {integrity: sha512-oGkawlmwOp7p3yYG/abEkQRw6IfQ677E5ejQulUZdXdXpSHv/jNNaHPokA7mo1SaxcQWRn5vojaBLrwJ7wy5MQ==}
+    engines: {node: ^20.0.0 || >=22.0.0}
+    peerDependencies:
+      eslint: '>=8.0.0'
 
   eslint-plugin-depend@1.4.0:
     resolution: {integrity: sha512-MQs+m4nHSfgAO9bJDsBzqw0ofK/AOA0vfeY/6ahofqcUMLeM6/D1sTYs21fOhc17kNU/gn58YCtj20XaAssh2A==}
@@ -5321,6 +5333,10 @@ snapshots:
   eslint-plugin-command@3.4.0(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       '@es-joy/jsdoccomment': 0.78.0
+      eslint: 9.39.2(jiti@2.6.1)
+
+  eslint-plugin-de-morgan@2.0.0(eslint@9.39.2(jiti@2.6.1)):
+    dependencies:
       eslint: 9.39.2(jiti@2.6.1)
 
   eslint-plugin-depend@1.4.0:

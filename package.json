@@ -18,6 +18,7 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "eslint": "catalog:eslint",
+    "eslint-plugin-de-morgan": "catalog:",
     "eslint-plugin-oxlint": "catalog:eslint",
     "eslint-plugin-react-hooks": "catalog:eslint",
     "eslint-plugin-react-refresh": "catalog:eslint",
