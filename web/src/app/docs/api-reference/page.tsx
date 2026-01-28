@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import PageHeader from '@/components/PageHeader'
 
@@ -78,7 +79,7 @@ export default async function ApiReferencePage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'API Reference / rari Docs',
   description: 'Complete API documentation for rari framework components, functions, and utilities.',
 }

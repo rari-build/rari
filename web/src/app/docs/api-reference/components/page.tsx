@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PageHeader from '@/components/PageHeader'
@@ -102,7 +103,7 @@ export default async function ComponentsPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Components / API Reference / rari Docs',
   description: 'Built-in React components for optimized images, dynamic metadata, and more.',
 }

@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import { getAllBlogPosts } from '@/data/blog-posts'
 
 export default async function BlogPage() {
@@ -28,7 +29,7 @@ export default async function BlogPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Blog | rari App Router',
   description: 'Read our latest blog posts',
 }

@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari'
+import type { Metadata, PageProps } from 'rari'
 
 export default async function HomePage({ params, searchParams }: PageProps) {
   return (
@@ -235,7 +235,7 @@ export default async function HomePage({ params, searchParams }: PageProps) {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Home | rari App Router',
   description: 'Welcome to the rari app router example',
 }

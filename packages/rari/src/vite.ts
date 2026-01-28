@@ -66,6 +66,8 @@ export type {
   RouteSegmentType,
 } from './router/types'
 
+export type { Metadata } from './router/types'
+
 export { rariRouter } from './router/vite-plugin'
 
 export { createHttpRuntimeClient, HttpRuntimeClient } from './runtime-client'

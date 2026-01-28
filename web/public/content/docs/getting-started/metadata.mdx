@@ -11,7 +11,9 @@ rari provides a powerful metadata system for configuring page titles, descriptio
 
 Export a `metadata` object from any `page.tsx` or `layout.tsx` file:
 
-<CodeBlock filename="src/app/page.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Home | My App',
   description: 'Welcome to my amazing application',
 }
@@ -21,13 +23,15 @@ export default function HomePage() {
 }
 `}</CodeBlock>
 
+The `Metadata` type provides full type safety and autocomplete for all metadata fields.
+
 ### Dynamic Metadata
 
 Use the `generateMetadata` function to create metadata based on route parameters:
 
-<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps, Metadata } from 'rari'
 
-export async function generateMetadata({ params }: PageProps<{ slug: string }>) {
+export async function generateMetadata({ params }: PageProps<{ slug: string }>): Promise<Metadata> {
   const post = await fetchPost(params.slug)
 
   return {
@@ -43,7 +47,7 @@ export default async function BlogPost({ params }: PageProps<{ slug: string }>) 
 }
 `}</CodeBlock>
 
-The `PageProps` type provides type-safe access to route parameters and search params.
+The `PageProps` type provides type-safe access to route parameters and search params, while the `Metadata` return type ensures your metadata object is correctly structured.
 
 ## Metadata Fields
 
@@ -51,7 +55,9 @@ The `PageProps` type provides type-safe access to route parameters and search pa
 
 The page title appears in browser tabs and search results.
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'About Us | My Company',
 }
 `}</CodeBlock>
@@ -60,7 +66,9 @@ The page title appears in browser tabs and search results.
 
 Use title templates in layouts to automatically format child page titles:
 
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: {
     template: '%s | My App',
     default: 'My App',
@@ -68,7 +76,9 @@ Use title templates in layouts to automatically format child page titles:
 }
 `}</CodeBlock>
 
-<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'About Us', // Becomes "About Us | My App"
 }
 `}</CodeBlock>
@@ -77,7 +87,9 @@ Use title templates in layouts to automatically format child page titles:
 
 Override the template with an absolute title:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: {
     absolute: 'Special Page - No Template',
   },
@@ -88,7 +100,9 @@ Override the template with an absolute title:
 
 The meta description for SEO and social sharing:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Products',
   description: 'Browse our collection of high-quality products with fast shipping and great prices.',
 }
@@ -98,7 +112,9 @@ The meta description for SEO and social sharing:
 
 Keywords for SEO (though less important for modern search engines):
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'React Tutorial',
   description: 'Learn React from scratch',
   keywords: ['react', 'tutorial', 'javascript', 'web development'],
@@ -109,7 +125,9 @@ Keywords for SEO (though less important for modern search engines):
 
 Specify the canonical URL to avoid duplicate content issues:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Blog Post',
   canonical: 'https://example.com/blog/my-post',
 }
@@ -119,7 +137,9 @@ Specify the canonical URL to avoid duplicate content issues:
 
 Control search engine crawling and indexing:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Admin Dashboard',
   robots: {
     index: false,
@@ -135,7 +155,9 @@ Open Graph tags control how your pages appear when shared on social media platfo
 
 ### Basic Open Graph
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My Blog Post',
   description: 'An interesting article about web development',
   openGraph: {
@@ -152,7 +174,9 @@ Open Graph tags control how your pages appear when shared on social media platfo
 
 #### Simple Image URL
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Product Page',
   openGraph: {
     title: 'Amazing Product',
@@ -164,7 +188,9 @@ Open Graph tags control how your pages appear when shared on social media platfo
 
 #### Detailed Image Configuration
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Product Page',
   openGraph: {
     title: 'Amazing Product',
@@ -240,7 +266,9 @@ Twitter cards control how your pages appear when shared on Twitter/X.
 
 ### Summary Card
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My Article',
   description: 'Read my latest article',
   twitter: {
@@ -255,7 +283,9 @@ Twitter cards control how your pages appear when shared on Twitter/X.
 
 ### Summary Large Image Card
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My Article',
   description: 'Read my latest article',
   twitter: {
@@ -275,7 +305,9 @@ Twitter cards control how your pages appear when shared on Twitter/X.
 
 Place a `favicon.ico` file in your `public/` directory, or specify it in metadata:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   icons: {
     icon: '/favicon.ico',
@@ -285,7 +317,9 @@ Place a `favicon.ico` file in your `public/` directory, or specify it in metadat
 
 ### Multiple Icon Sizes
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   icons: {
     icon: [
@@ -301,7 +335,9 @@ Place a `favicon.ico` file in your `public/` directory, or specify it in metadat
 
 Configure the viewport meta tag:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=5',
 }
@@ -313,7 +349,9 @@ Set the theme color for mobile browsers. You can use a simple string or an array
 
 ### Simple Theme Color
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   themeColor: '#3b82f6',
 }
@@ -321,7 +359,9 @@ Set the theme color for mobile browsers. You can use a simple string or an array
 
 ### Theme Color with Media Queries
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   themeColor: [
     { color: '#3b82f6', media: '(prefers-color-scheme: light)' },
@@ -334,7 +374,9 @@ Set the theme color for mobile browsers. You can use a simple string or an array
 
 Link to a web app manifest:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   manifest: '/manifest.json',
 }
@@ -344,7 +386,9 @@ Link to a web app manifest:
 
 Configure Apple-specific web app metadata:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'My App',
   appleWebApp: {
     title: 'My App',
@@ -358,9 +402,9 @@ Configure Apple-specific web app metadata:
 
 Here's a comprehensive example combining multiple metadata features:
 
-<CodeBlock filename="src/app/products/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+<CodeBlock filename="src/app/products/[id]/page.tsx" language="tsx">{`import type { PageProps, Metadata } from 'rari'
 
-export async function generateMetadata({ params }: PageProps<{ id: string }>) {
+export async function generateMetadata({ params }: PageProps<{ id: string }>): Promise<Metadata> {
   const product = await fetchProduct(params.id)
 
   return {
@@ -416,7 +460,9 @@ export default async function ProductPage({ params }: PageProps<{ id: string }>)
 
 Metadata is inherited from parent layouts and can be overridden by child pages:
 
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: {
     template: '%s | My App',
     default: 'My App',
@@ -428,14 +474,18 @@ Metadata is inherited from parent layouts and can be overridden by child pages:
 }
 `}</CodeBlock>
 
-<CodeBlock filename="src/app/blog/layout.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/blog/layout.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   openGraph: {
     type: 'article',
   },
 }
 `}</CodeBlock>
 
-<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`export async function generateMetadata({ params }) {
+<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export async function generateMetadata({ params }): Promise<Metadata> {
   const post = await fetchPost(params.slug)
 
   return {
@@ -452,14 +502,16 @@ Metadata is inherited from parent layouts and can be overridden by child pages:
 
 Every page should have a unique, descriptive title and description:
 
-<CodeBlock language="tsx">{`// Good
-export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+// Good
+export const metadata: Metadata = {
   title: 'Contact Us | Acme Corp',
   description: 'Get in touch with our team. We respond within 24 hours.',
 }
 
 // Bad
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Page',
 }
 `}</CodeBlock>
@@ -468,7 +520,9 @@ export const metadata = {
 
 Define a title template in your root layout to maintain consistency:
 
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`export const metadata = {
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: {
     template: '%s | My Brand',
     default: 'My Brand - Tagline',
@@ -480,7 +534,9 @@ Define a title template in your root layout to maintain consistency:
 
 Always include Open Graph and Twitter card metadata for pages you expect to be shared:
 
-<CodeBlock language="tsx">{`export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+export const metadata: Metadata = {
   title: 'Amazing Article',
   description: 'This article will blow your mind',
   openGraph: {
@@ -501,8 +557,10 @@ Always include Open Graph and Twitter card metadata for pages you expect to be s
 
 For pages with dynamic content, always use `generateMetadata`:
 
-<CodeBlock language="tsx">{`// Good - Dynamic metadata
-export async function generateMetadata({ params }) {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+// Good - Dynamic metadata
+export async function generateMetadata({ params }): Promise<Metadata> {
   const data = await fetchData(params.id)
   return {
     title: data.title,
@@ -511,7 +569,7 @@ export async function generateMetadata({ params }) {
 }
 
 // Bad - Static metadata for dynamic route
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Item Page',
 }
 `}</CodeBlock>
@@ -520,13 +578,15 @@ export const metadata = {
 
 Meta descriptions should be 150-160 characters for optimal display in search results:
 
-<CodeBlock language="tsx">{`// Good - Concise and descriptive
-export const metadata = {
+<CodeBlock language="tsx">{`import type { Metadata } from 'rari'
+
+// Good - Concise and descriptive
+export const metadata: Metadata = {
   description: 'Learn React Server Components with rari. Fast, modern, and built on Rust for maximum performance.',
 }
 
 // Bad - Too long, will be truncated
-export const metadata = {
+export const metadata: Metadata = {
   description: 'This is a very long description that goes on and on about various features and benefits without getting to the point quickly enough for search engines to display it properly in search results.',
 }
 `}</CodeBlock>

@@ -1,4 +1,4 @@
-import type { LayoutProps } from 'rari'
+import type { LayoutProps, Metadata } from 'rari'
 import Footer from '@/components/Footer'
 import { PostHogPageView } from '@/components/PostHogPageView'
 import Sidebar from '@/components/Sidebar'
@@ -44,7 +44,7 @@ export default async function RootLayout({ children, pathname }: LayoutProps) {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Runtime Accelerated Rendering Infrastructure (rari)',
   description:
     'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',

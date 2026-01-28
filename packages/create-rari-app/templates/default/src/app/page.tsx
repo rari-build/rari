@@ -1,4 +1,4 @@
-import type { PageProps } from 'rari'
+import type { PageProps, Metadata } from 'rari'
 import ServerTime from '@/components/ServerTime'
 import Welcome from '@/components/Welcome'
 
@@ -11,7 +11,7 @@ export default function HomePage(_params: PageProps) {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Home | {{PROJECT_NAME}}',
   description: 'Welcome to your new rari application',
 }

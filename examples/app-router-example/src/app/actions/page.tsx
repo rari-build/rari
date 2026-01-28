@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import { getTodos } from '@/actions/todo-actions'
 import TodoAppWithActions from '@/components/TodoAppWithActions'
 
@@ -182,7 +183,7 @@ export default async function ActionsPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Server Actions Demo | rari App Router',
   description: 'Demonstration of React Server Actions with rari framework',
 }

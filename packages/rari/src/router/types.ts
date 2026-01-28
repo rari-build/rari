@@ -72,20 +72,58 @@ export interface AppRouteManifest {
 }
 
 export interface RouteMetadata {
-  title?: string
+  title?: string | { default?: string, template?: string, absolute?: string }
   description?: string
+  keywords?: string | string[]
   openGraph?: {
     title?: string
     description?: string
-    images?: string[]
+    images?: string[] | Array<{ url: string, width?: number, height?: number, alt?: string }>
+    url?: string
+    siteName?: string
+    locale?: string
+    type?: string
   }
   twitter?: {
-    card?: string
+    card?: 'summary' | 'summary_large_image' | 'app' | 'player'
     title?: string
     description?: string
-    images?: string[]
+    images?: string[] | Array<{ url: string, alt?: string }>
+    site?: string
+    creator?: string
   }
+  robots?: {
+    index?: boolean
+    follow?: boolean
+    noarchive?: boolean
+    nosnippet?: boolean
+    noimageindex?: boolean
+    nocache?: boolean
+  } | string
+  icons?: {
+    icon?: string | Array<{ url: string, type?: string, sizes?: string }>
+    shortcut?: string
+    apple?: string | Array<{ url: string, sizes?: string, type?: string }>
+  }
+  manifest?: string
+  themeColor?: string | Array<{ media?: string, color: string }>
+  viewport?: string | {
+    width?: string | number
+    height?: string | number
+    initialScale?: number
+    minimumScale?: number
+    maximumScale?: number
+    userScalable?: boolean
+  }
+  appleWebApp?: {
+    capable?: boolean
+    title?: string
+    statusBarStyle?: 'default' | 'black' | 'black-translucent'
+  }
+  canonical?: string
 }
+
+export type Metadata = RouteMetadata
 
 export type RouteParams = Record<string, string | string[]>
 export type SearchParams = Record<string, string | string[] | undefined>
