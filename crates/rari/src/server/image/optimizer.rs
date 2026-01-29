@@ -515,7 +515,7 @@ impl ImageOptimizer {
             let public_path = self.project_path.join("public");
             let file_path = public_path.join(url.trim_start_matches('/'));
 
-            let bytes = std::fs::read(&file_path).map_err(|e| {
+            let bytes = tokio::fs::read(&file_path).await.map_err(|e| {
                 ImageError::FetchError(format!(
                     "Failed to read local file {}: {}",
                     file_path.display(),
@@ -556,7 +556,6 @@ impl ImageOptimizer {
 
         let mut bytes = Vec::new();
         let mut stream = response.bytes_stream();
-        use futures::StreamExt;
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
