@@ -185,7 +185,13 @@ impl ImageOptimizer {
         if dry_run {
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
             for (url, width, format) in &tasks {
-                tracing::info!("  - {} ({}x{}, {:?})", url, width, format.extension(), format);
+                tracing::info!(
+                    "  - {} (width={}, ext={}, format={:?})",
+                    url,
+                    width,
+                    format.extension(),
+                    format
+                );
             }
             return Ok(tasks.len());
         }
