@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
-import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarning } from './utils'
+import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRailwayDeployment() {
   const cwd = process.cwd()
@@ -21,8 +21,8 @@ export async function createRailwayDeployment() {
     packageJson.scripts = packageJson.scripts || {}
 
     if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarning(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarning('Backing up to start:original and replacing with "rari start"')
+      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
+      logWarn('Backing up to start:original and replacing with "rari start"')
       packageJson.scripts['start:original'] = packageJson.scripts.start
     }
 
@@ -33,8 +33,8 @@ export async function createRailwayDeployment() {
     packageJson.engines = packageJson.engines || {}
     if (packageJson.engines.node) {
       if (!isNodeVersionSufficient(packageJson.engines.node)) {
-        logWarning(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
-        logWarning('Updating to >=20.6.0 for Railway deployment compatibility')
+        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
+        logWarn('Updating to >=20.6.0 for Railway deployment compatibility')
         packageJson.engines.node = '>=20.6.0'
       }
     }
@@ -69,7 +69,7 @@ restartPolicyMaxRetries = 3
 
   const railwayTomlPath = join(cwd, 'railway.toml')
   if (existsSync(railwayTomlPath)) {
-    logWarning('railway.toml already exists, backing up to railway.toml.backup')
+    logWarn('railway.toml already exists, backing up to railway.toml.backup')
     const existingConfig = readFileSync(railwayTomlPath, 'utf-8')
     writeFileSync(join(cwd, 'railway.toml.backup'), existingConfig)
   }

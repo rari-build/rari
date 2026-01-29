@@ -15,7 +15,3 @@ export function logError(message: string) {
 export function logWarn(message: string) {
   console.warn(`${colors.yellow('⚠')} ${message}`)
 }
-
-export function logWarning(message: string) {
-  console.warn(`${colors.yellow('⚠')} ${message}`)
-}

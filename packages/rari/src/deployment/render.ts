@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
-import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarning } from './utils'
+import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRenderDeployment() {
   const cwd = process.cwd()
@@ -21,8 +21,8 @@ export async function createRenderDeployment() {
     packageJson.scripts = packageJson.scripts || {}
 
     if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarning(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarning('Backing up to start:original and replacing with "rari start"')
+      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
+      logWarn('Backing up to start:original and replacing with "rari start"')
       packageJson.scripts['start:original'] = packageJson.scripts.start
     }
 
@@ -33,8 +33,8 @@ export async function createRenderDeployment() {
     packageJson.engines = packageJson.engines || {}
     if (packageJson.engines.node) {
       if (!isNodeVersionSufficient(packageJson.engines.node)) {
-        logWarning(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
-        logWarning('Updating to >=20.6.0 for Render deployment compatibility')
+        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
+        logWarn('Updating to >=20.6.0 for Render deployment compatibility')
         packageJson.engines.node = '>=20.6.0'
       }
     }
@@ -74,7 +74,7 @@ export async function createRenderDeployment() {
 
   const renderYamlPath = join(cwd, 'render.yaml')
   if (existsSync(renderYamlPath)) {
-    logWarning('render.yaml already exists, backing up to render.yaml.backup')
+    logWarn('render.yaml already exists, backing up to render.yaml.backup')
     const existingConfig = readFileSync(renderYamlPath, 'utf-8')
     writeFileSync(join(cwd, 'render.yaml.backup'), existingConfig)
   }

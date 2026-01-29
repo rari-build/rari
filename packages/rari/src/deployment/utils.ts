@@ -1,4 +1,4 @@
-export { logError, logInfo, logSuccess, logWarn, logWarning } from '../logger'
+export { logError, logInfo, logSuccess, logWarn } from '../logger'
 
 export function isNodeVersionSufficient(versionRange: string): boolean {
   const match = versionRange.match(/(\d+)\.(\d+)\.(\d+)/)
