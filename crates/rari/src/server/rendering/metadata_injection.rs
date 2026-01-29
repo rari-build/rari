@@ -1,7 +1,13 @@
 use crate::rsc::rendering::layout::types::PageMetadata;
+use crate::server::image::ImageOptimizer;
 use cow_utils::CowUtils;
+use std::sync::Arc;
 
-pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
+pub fn inject_metadata(
+    html: &str,
+    metadata: &PageMetadata,
+    image_optimizer: Option<&Arc<ImageOptimizer>>,
+) -> String {
     let mut result = html.to_string();
 
     if let Some(title) = &metadata.title
@@ -371,6 +377,21 @@ pub fn inject_metadata(html: &str, metadata: &PageMetadata) -> String {
         }
     }
 
+    if let Some(optimizer) = image_optimizer {
+        if let Some(head_end) = result.find("</head>") {
+            let preload_links = optimizer.get_preload_links();
+            if !preload_links.is_empty() {
+                let mut preload_html = String::new();
+                for link in preload_links {
+                    preload_html.push_str("    ");
+                    preload_html.push_str(&link);
+                    preload_html.push('\n');
+                }
+                result.insert_str(head_end, &preload_html);
+            }
+        }
+    }
+
     result
 }
 
@@ -416,7 +437,7 @@ mod tests {
             apple_web_app: None,
         };
 
-        let result = inject_metadata(html, &metadata);
+        let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains("<title>Test Page</title>"));
         assert!(result.contains(r#"<meta name="description" content="Test description" />"#));
@@ -465,7 +486,7 @@ mod tests {
             apple_web_app: None,
         };
 
-        let result = inject_metadata(html, &metadata);
+        let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains(r#"<meta property="og:title" content="OG Title" />"#));
         assert!(result.contains(r#"<meta property="og:description" content="OG Description" />"#));
@@ -519,7 +540,7 @@ mod tests {
             apple_web_app: None,
         };
 
-        let result = inject_metadata(html, &metadata);
+        let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains(r#"<meta name="twitter:card" content="summary_large_image" />"#));
         assert!(result.contains(r#"<meta name="twitter:site" content="@example" />"#));
@@ -562,7 +583,7 @@ mod tests {
             apple_web_app: None,
         };
 
-        let result = inject_metadata(html, &metadata);
+        let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains(r#"<meta name="robots" content="noindex, follow, nocache" />"#));
     }
@@ -592,7 +613,7 @@ mod tests {
             apple_web_app: None,
         };
 
-        let result = inject_metadata(html, &metadata);
+        let result = inject_metadata(html, &metadata, None);
 
         assert!(result.contains("Test &amp; &lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"));
         assert!(

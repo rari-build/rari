@@ -111,6 +111,25 @@ async function loadReactServerDomShim(): Promise<string> {
   return loadRuntimeFile('react-server-dom-shim.js')
 }
 
+function writeImageConfig(projectRoot: string, options: RariOptions): void {
+  const srcDir = path.join(projectRoot, 'src')
+  const imageManifest = scanForImageUsage(srcDir)
+
+  const imageConfig = {
+    ...DEFAULT_IMAGE_CONFIG,
+    ...options.images,
+    preoptimizeManifest: imageManifest.images,
+  }
+
+  const distDir = path.join(projectRoot, 'dist')
+  const serverDir = path.join(distDir, 'server')
+  if (!fs.existsSync(serverDir))
+    fs.mkdirSync(serverDir, { recursive: true })
+
+  const configPath = path.join(serverDir, 'image.json')
+  fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+}
+
 function scanForClientComponents(srcDir: string, additionalDirs: string[] = []): Set<string> {
   const clientComponents = new Set<string>()
 
@@ -954,19 +973,7 @@ const ${componentName} = registerClientReference(
     configureServer(server) {
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
-      const imageManifest = scanForImageUsage(srcDir)
-
-      const imageConfig = {
-        ...DEFAULT_IMAGE_CONFIG,
-        ...options.images,
-        preoptimizeManifest: imageManifest.images,
-      }
-      const distDir = path.join(projectRoot, 'dist')
-      const serverDir = path.join(distDir, 'server')
-      if (!fs.existsSync(serverDir))
-        fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image.json')
-      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+      writeImageConfig(projectRoot, options)
 
       let serverComponentBuilder: any = null
 
@@ -1745,20 +1752,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
     writeBundle() {
       const projectRoot = options.projectRoot || process.cwd()
-      const srcDir = path.join(projectRoot, 'src')
-      const imageManifest = scanForImageUsage(srcDir)
-
-      const imageConfig = {
-        ...DEFAULT_IMAGE_CONFIG,
-        ...options.images,
-        preoptimizeManifest: imageManifest.images,
-      }
-      const distDir = path.join(projectRoot, 'dist')
-      const serverDir = path.join(distDir, 'server')
-      if (!fs.existsSync(serverDir))
-        fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image.json')
-      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+      writeImageConfig(projectRoot, options)
     },
   }
 

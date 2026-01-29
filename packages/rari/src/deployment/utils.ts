@@ -16,13 +16,10 @@ export function isNodeVersionSufficient(versionRange: string): boolean {
   if (!match)
     return false
 
-  const [, major, minor] = match
+  const [, major] = match
   const majorNum = Number.parseInt(major, 10)
-  const minorNum = minor ? Number.parseInt(minor, 10) : 0
 
-  if (majorNum > 22)
-    return true
-  if (majorNum === 22 && minorNum >= 0)
+  if (majorNum >= 22)
     return true
 
   return false

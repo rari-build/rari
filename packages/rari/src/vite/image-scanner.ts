@@ -39,7 +39,9 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
 
           extractImageUsages(content, fullPath, images)
         }
-        catch {}
+        catch (error) {
+          console.warn(`Failed to read or process file ${fullPath}:`, error)
+        }
       }
     }
   }
@@ -58,8 +60,19 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
 
 function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
   try {
+    let loader: 'tsx' | 'jsx' | 'ts'
+    if (filePath.endsWith('.tsx')) {
+      loader = 'tsx'
+    }
+    else if (filePath.endsWith('.jsx')) {
+      loader = 'jsx'
+    }
+    else {
+      loader = 'ts'
+    }
+
     const result = transformSync(content, {
-      loader: filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? 'tsx' : 'ts',
+      loader,
       format: 'esm',
       target: 'esnext',
       logLevel: 'silent',

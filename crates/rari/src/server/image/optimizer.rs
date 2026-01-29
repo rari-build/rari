@@ -10,6 +10,7 @@ use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 use url::Url;
@@ -20,6 +21,14 @@ const MAX_OUTPUT_HEIGHT: u32 = 2160;
 const AVIF_ENCODING_SPEED: u8 = 6;
 const DEFAULT_CONCURRENCY: usize = 4;
 
+#[derive(Debug, Clone)]
+pub struct PreloadImage {
+    pub url: String,
+    pub width: u32,
+    pub quality: u8,
+    pub format: ImageFormat,
+}
+
 pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
     config: ImageConfig,
@@ -27,6 +36,7 @@ pub struct ImageOptimizer {
     project_path: PathBuf,
     processing_semaphore: Arc<Semaphore>,
     concurrency: usize,
+    preload_images: Arc<RwLock<Vec<PreloadImage>>>,
 }
 
 impl ImageOptimizer {
@@ -51,7 +61,37 @@ impl ImageOptimizer {
             project_path: project_path.to_path_buf(),
             processing_semaphore,
             concurrency,
+            preload_images: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    fn default_quality(&self) -> u8 {
+        if self.config.quality_allowlist.is_empty() || self.config.quality_allowlist.contains(&75) {
+            75
+        } else {
+            *self.config.quality_allowlist.first().unwrap_or(&75)
+        }
+    }
+
+    pub fn get_preload_links(&self) -> Vec<String> {
+        let preload_images = self.preload_images.read().unwrap();
+        preload_images
+            .iter()
+            .map(|img| {
+                format!(
+                    r#"<link rel="preload" as="image" href="/_image?url={}&w={}&q={}&f={}" />"#,
+                    urlencoding::encode(&img.url),
+                    img.width,
+                    img.quality,
+                    img.format.extension()
+                )
+            })
+            .collect()
+    }
+
+    pub fn clear_preload_images(&self) {
+        let mut preload_images = self.preload_images.write().unwrap();
+        preload_images.clear();
     }
 
     pub async fn preoptimize_local_images(&self) -> Result<usize, ImageError> {
@@ -181,15 +221,10 @@ impl ImageOptimizer {
             self.config.formats.clone()
         };
 
-        let default_quality = if self.config.quality_allowlist.is_empty()
-            || self.config.quality_allowlist.contains(&75)
-        {
-            75
-        } else {
-            *self.config.quality_allowlist.first().unwrap_or(&75)
-        };
+        let default_quality = self.default_quality();
 
         let mut tasks = Vec::new();
+        let mut preload_list = Vec::new();
 
         for variant in &self.config.preoptimize_manifest {
             if let Err(e) = self.validate_url(&variant.src) {
@@ -198,6 +233,7 @@ impl ImageOptimizer {
             }
 
             let quality = variant.quality.unwrap_or(default_quality);
+            let should_preload = variant.preload.unwrap_or(false);
 
             let widths: Vec<u32> = if let Some(width) = variant.width {
                 vec![width]
@@ -216,8 +252,23 @@ impl ImageOptimizer {
             for &width in &widths {
                 for &format in &formats {
                     tasks.push((variant.src.clone(), width, format, quality));
+
+                    if should_preload && format == formats[0] {
+                        preload_list.push(PreloadImage {
+                            url: variant.src.clone(),
+                            width,
+                            quality,
+                            format,
+                        });
+                    }
                 }
             }
+        }
+
+        if !preload_list.is_empty() {
+            let mut preload_images = self.preload_images.write().unwrap();
+            preload_images.extend(preload_list);
+            tracing::info!("Registered {} images for preloading", preload_images.len());
         }
 
         if tasks.is_empty() {
@@ -318,13 +369,7 @@ impl ImageOptimizer {
             self.config.formats.clone()
         };
 
-        let quality = if self.config.quality_allowlist.is_empty()
-            || self.config.quality_allowlist.contains(&75)
-        {
-            75
-        } else {
-            *self.config.quality_allowlist.first().unwrap_or(&75)
-        };
+        let quality = self.default_quality();
 
         tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
         tracing::info!("Pre-optimizing with quality: {}", quality);

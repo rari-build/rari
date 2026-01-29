@@ -34,6 +34,7 @@ pub struct ImageVariant {
     pub src: String,
     pub width: Option<u32>,
     pub quality: Option<u8>,
+    #[serde(default)]
     pub preload: Option<bool>,
 }
 
