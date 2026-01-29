@@ -40,7 +40,7 @@ interface RariOptions {
     deviceSizes?: number[]
     imageSizes?: number[]
     formats?: ('avif' | 'webp')[]
-    quality?: number[]
+    qualityAllowlist?: number[]
     minimumCacheTTL?: number
     maxCacheSize?: number
   }
@@ -70,7 +70,7 @@ const DEFAULT_IMAGE_CONFIG = {
   deviceSizes: DEFAULT_DEVICE_SIZES,
   imageSizes: DEFAULT_IMAGE_SIZES,
   formats: DEFAULT_FORMATS,
-  quality: DEFAULT_QUALITY_LEVELS,
+  qualityAllowlist: DEFAULT_QUALITY_LEVELS,
   minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
   maxCacheSize: DEFAULT_MAX_CACHE_SIZE,
 }

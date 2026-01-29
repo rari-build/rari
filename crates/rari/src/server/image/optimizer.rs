@@ -185,13 +185,20 @@ impl ImageOptimizer {
             self.config.formats.clone()
         };
 
+        let quality = if self.config.quality_allowlist.is_empty() {
+            75
+        } else {
+            *self.config.quality_allowlist.first().unwrap_or(&75)
+        };
+
         tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
+        tracing::info!("Pre-optimizing with quality: {}", quality);
 
         let mut tasks = Vec::new();
         for url in &urls {
             for &width in &sizes {
                 for &format in &formats {
-                    tasks.push((url.clone(), width, format));
+                    tasks.push((url.clone(), width, format, quality));
                 }
             }
         }
@@ -200,11 +207,12 @@ impl ImageOptimizer {
 
         if dry_run {
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
-            for (url, width, format) in &tasks {
+            for (url, width, format, q) in &tasks {
                 tracing::info!(
-                    "  - {} (width={}, ext={}, format={:?})",
+                    "  - {} (width={}, quality={}, ext={}, format={:?})",
                     url,
                     width,
+                    q,
                     format.extension(),
                     format
                 );
@@ -215,14 +223,14 @@ impl ImageOptimizer {
         let optimized_count = Arc::new(AtomicUsize::new(0));
 
         let results: Vec<_> = stream::iter(tasks)
-            .map(|(url, width, format)| {
+            .map(|(url, width, format, q)| {
                 let optimized_count = Arc::clone(&optimized_count);
 
                 async move {
                     let params = OptimizeParams {
                         url: url.clone(),
                         w: Some(width),
-                        q: 75,
+                        q,
                         f: Some(format.extension().to_string()),
                     };
 
@@ -239,9 +247,10 @@ impl ImageOptimizer {
                         }
                         Err(e) => {
                             tracing::warn!(
-                                "Failed to pre-optimize {} (width={}, ext={}, format={:?}): {}",
+                                "Failed to pre-optimize {} (width={}, quality={}, ext={}, format={:?}): {}",
                                 url,
                                 width,
+                                q,
                                 format.extension(),
                                 format,
                                 e
@@ -268,7 +277,7 @@ impl ImageOptimizer {
 
     fn matches_local_patterns(&self, path: &str) -> bool {
         if self.config.local_patterns.is_empty() {
-            return true;
+            return false;
         }
 
         for pattern in &self.config.local_patterns {
@@ -377,20 +386,25 @@ impl ImageOptimizer {
 
     fn validate_url(&self, url_str: &str) -> Result<(), ImageError> {
         if url_str.starts_with('/') {
-            if !self.config.local_patterns.is_empty() {
-                let mut allowed = false;
-                for pattern in &self.config.local_patterns {
-                    if self.matches_local_pattern(url_str, pattern) {
-                        allowed = true;
-                        break;
-                    }
+            if self.config.local_patterns.is_empty() {
+                return Err(ImageError::UnauthorizedDomain(format!(
+                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
+                    url_str
+                )));
+            }
+
+            let mut allowed = false;
+            for pattern in &self.config.local_patterns {
+                if self.matches_local_pattern(url_str, pattern) {
+                    allowed = true;
+                    break;
                 }
-                if !allowed {
-                    return Err(ImageError::UnauthorizedDomain(format!(
-                        "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
-                        url_str
-                    )));
-                }
+            }
+            if !allowed {
+                return Err(ImageError::UnauthorizedDomain(format!(
+                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
+                    url_str
+                )));
             }
             return Ok(());
         }
