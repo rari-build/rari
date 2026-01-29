@@ -41,7 +41,7 @@ export default defineConfig({
         deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
         imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
         formats: ['avif', 'webp'], // Default is ['avif']
-        quality: [25, 50, 75, 100],
+        qualityAllowlist: [25, 50, 75, 100],
       },
     }),
   ],
@@ -68,7 +68,7 @@ The `localPatterns` array defines which paths in your `public` directory should 
 - `deviceSizes` - Widths generated for fixed-size images (default: `[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`)
 - `imageSizes` - Widths generated for `fill` images (default: `[16, 32, 48, 64, 96, 128, 256, 384]`)
 - `formats` - Output formats to generate (default: `['avif', 'webp']`)
-- `quality` - Quality levels for optimization (default: `[25, 50, 75, 100]`)
+- `qualityAllowlist` - Allowed quality values that can be requested (default: `[25, 50, 75, 100]`). The first value is used for preprocessing.
 
 ## Basic Usage
 
@@ -178,6 +178,8 @@ Defines which image size to load at different viewport widths. Uses standard res
 - **Default:** `75`
 
 The quality of the optimized image, between 1 and 100. Higher values mean better quality but larger file sizes.
+
+**Note:** The quality value must be in the `qualityAllowlist` configured in your `vite.config.ts`. By default, allowed values are `[25, 50, 75, 100]`.
 
 <CodeBlock language="tsx">{`<Image
   src="/high-quality.jpg"

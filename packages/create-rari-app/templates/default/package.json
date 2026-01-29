@@ -5,7 +5,7 @@
   "private": true,
   "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
-    "node": ">=20.6.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build": "rari build",
