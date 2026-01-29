@@ -893,9 +893,10 @@ const ${importName} = (props) => {
       try {
         await fs.promises.unlink(serverConfigPath)
       }
-      catch (error: any) {
-        if (error.code !== 'ENOENT')
-          console.warn(`Failed to remove server config file: ${error.message}`)
+      catch (error: unknown) {
+        const e = error as NodeJS.ErrnoException
+        if (e.code !== 'ENOENT')
+          console.warn(`Failed to remove server config file:`, error)
       }
     }
     else {

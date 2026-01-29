@@ -208,13 +208,6 @@ export function Image({
   const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
 
   const buildSrcSet = (format?: ImageFormat) => {
-    if (sizesArray.length === 1) {
-      const w = sizesArray[0]
-      if (loader)
-        return `${loader({ src: finalSrc, width: w, quality })} ${w}w`
-      return `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`
-    }
-
     if (loader)
       return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
 

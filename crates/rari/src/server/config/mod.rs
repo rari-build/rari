@@ -537,8 +537,9 @@ impl Config {
                     rate_limit_data.get("revalidateRequestsPerMinute").and_then(|v| v.as_u64())
                 {
                     config.rate_limit.revalidate_requests_per_minute = revalidate_rpm.try_into().unwrap_or_else(|_| {
-                        tracing::warn!("revalidateRequestsPerMinute value {} exceeds u32::MAX, using default", revalidate_rpm);
-                        60
+                        let default_value = default_revalidate_rpm();
+                        tracing::warn!("revalidateRequestsPerMinute value {} exceeds u32::MAX, using default {}", revalidate_rpm, default_value);
+                        default_value
                     });
                 }
             }

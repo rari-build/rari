@@ -107,7 +107,7 @@ export interface ProxyRule {
   headers?: Record<string, string>
   conditions?: {
     has?: Array<ProxyRuleCondition>
-    missing?: Array<ProxyCondition>
+    missing?: Array<ProxyRuleCondition>
   }
 }
 

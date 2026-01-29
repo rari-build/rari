@@ -127,8 +127,8 @@ async fn run_optimize_images(
 
     let image_config_path = project_path.join("dist").join("server").join("image.json");
 
-    let image_config = if image_config_path.exists() {
-        let config_content = std::fs::read_to_string(&image_config_path)?;
+    let image_config = if tokio::fs::try_exists(&image_config_path).await? {
+        let config_content = tokio::fs::read_to_string(&image_config_path).await?;
         serde_json::from_str(&config_content)?
     } else {
         tracing::warn!("No image.json found, using default configuration");

@@ -87,9 +87,13 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   }, [pathname, manualToggles])
 
   const toggleSection = (key: string) => {
-    setManualTogglesWithPath({
-      pathname,
-      toggles: { ...manualToggles, [key]: !expandedSections[key] },
+    setManualTogglesWithPath((prev) => {
+      const currentToggles = pathname === prev.pathname ? prev.toggles : EMPTY_TOGGLES
+      const currentExpanded = currentToggles[key] ?? expandedSections[key]
+      return {
+        pathname,
+        toggles: { ...currentToggles, [key]: !currentExpanded },
+      }
     })
   }
 
@@ -184,7 +188,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                     {isDocs && (
                       <button
                         type="button"
-                        onClick={() => setManualDocsToggleWithPath({ pathname, toggle: !isDocsExpanded })}
+                        onClick={() => setManualDocsToggleWithPath((prev) => {
+                          const currentToggle = pathname === prev.pathname ? prev.toggle : undefined
+                          const currentExpanded = currentToggle !== undefined ? currentToggle : isDocsPage
+                          return { pathname, toggle: !currentExpanded }
+                        })}
                         className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
                         aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
                         aria-expanded={isDocsExpanded}

@@ -1,11 +1,23 @@
 use lru::LruCache;
 use parking_lot::Mutex;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::types::ImageFormat;
+
+#[derive(Debug, Clone, Archive, RkyvDeserialize, RkyvSerialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
+pub struct CachedImage {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub format: ImageFormat,
+}
+
 pub struct ImageCache {
-    memory_cache: Mutex<LruCache<String, Arc<Vec<u8>>>>,
+    memory_cache: Mutex<LruCache<String, Arc<CachedImage>>>,
     cache_dir: PathBuf,
     max_memory_size: usize,
     current_memory_size: Mutex<usize>,
@@ -48,61 +60,64 @@ impl ImageCache {
         key.hash(&mut hasher);
         let hash = hasher.finish();
 
-        let ext = if key.contains("webp") {
-            "webp"
-        } else if key.contains("avif") {
-            "avif"
-        } else if key.contains("png") {
-            "png"
-        } else {
-            "img"
-        };
-
-        self.cache_dir.join(format!("{:x}.{}", hash, ext))
+        self.cache_dir.join(format!("{:x}.cache", hash))
     }
 
-    pub fn get(&self, key: &str) -> Option<Arc<Vec<u8>>> {
-        if let Some(data) = self.memory_cache.lock().get(key).cloned() {
-            return Some(data);
+    pub fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
+        if let Some(cached) = self.memory_cache.lock().get(key).cloned() {
+            return Some(cached);
         }
 
         let path = self.cache_filename(key);
         if let Ok(data) = std::fs::read(&path) {
-            let data = Arc::new(data);
+            match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&data) {
+                Ok(cached) => {
+                    let cached = Arc::new(cached);
 
-            let data_size = data.len();
-            if *self.current_memory_size.lock() + data_size <= self.max_memory_size {
-                self.memory_cache.lock().put(key.to_string(), data.clone());
-                *self.current_memory_size.lock() += data_size;
+                    let data_size = cached.data.len();
+                    if *self.current_memory_size.lock() + data_size <= self.max_memory_size {
+                        self.memory_cache.lock().put(key.to_string(), cached.clone());
+                        *self.current_memory_size.lock() += data_size;
+                    }
+
+                    return Some(cached);
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to deserialize cached image: {}", e);
+                }
             }
-
-            return Some(data);
         }
 
         None
     }
 
-    pub fn put(&self, key: String, data: Vec<u8>) {
-        let data_size = data.len();
+    pub fn put(&self, key: String, cached: CachedImage) {
+        let data_size = cached.data.len();
 
-        let path = self.cache_filename(&key);
-        if let Err(e) = std::fs::write(&path, &data) {
-            tracing::error!("Failed to write image to disk cache: {}", e);
+        let serialized = rkyv::to_bytes::<rkyv::rancor::Error>(&cached)
+            .map_err(|e| tracing::error!("Failed to serialize cached image: {}", e))
+            .ok();
+
+        if let Some(serialized) = serialized {
+            let path = self.cache_filename(&key);
+            if let Err(e) = std::fs::write(&path, serialized.as_ref()) {
+                tracing::error!("Failed to write image to disk cache: {}", e);
+            }
         }
 
-        let data = Arc::new(data);
+        let cached = Arc::new(cached);
 
         while *self.current_memory_size.lock() + data_size > self.max_memory_size {
             let mut cache = self.memory_cache.lock();
             if let Some((_, evicted)) = cache.pop_lru() {
                 let mut size = self.current_memory_size.lock();
-                *size = size.saturating_sub(evicted.len());
+                *size = size.saturating_sub(evicted.data.len());
             } else {
                 break;
             }
         }
 
-        self.memory_cache.lock().put(key, data);
+        self.memory_cache.lock().put(key, cached);
         *self.current_memory_size.lock() += data_size;
     }
 }

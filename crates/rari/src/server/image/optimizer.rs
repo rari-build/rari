@@ -1,6 +1,6 @@
 use super::{
     ImageError,
-    cache::ImageCache,
+    cache::{self, ImageCache},
     config::{ImageConfig, LocalPattern, RemotePattern},
     types::{ImageFormat, OptimizeParams, OptimizedImage},
 };
@@ -36,7 +36,11 @@ impl ImageOptimizer {
             .build()
             .expect("Failed to create HTTP client");
 
-        let concurrency = config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY);
+        let mut concurrency = config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY);
+        if concurrency == 0 {
+            tracing::warn!("optimization_concurrency is 0, clamping to 1");
+            concurrency = 1;
+        }
         let processing_semaphore = Arc::new(Semaphore::new(concurrency));
 
         Self {
@@ -220,7 +224,9 @@ impl ImageOptimizer {
                     }
                 }
             })
-            .buffer_unordered(self.config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY))
+            .buffer_unordered(
+                self.config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY).max(1),
+            )
             .collect()
             .await;
 
@@ -274,14 +280,12 @@ impl ImageOptimizer {
         let cache_key = self.generate_cache_key(&params);
 
         if let Some(cached) = self.cache.get(&cache_key) {
-            let format = self.determine_format(&params);
-
             return Ok((
                 OptimizedImage {
-                    data: (*cached).clone(),
-                    format,
-                    width: params.w.unwrap_or(1920),
-                    height: 0,
+                    data: cached.data.clone(),
+                    format: cached.format,
+                    width: cached.width,
+                    height: cached.height,
                 },
                 true,
             ));
@@ -292,14 +296,12 @@ impl ImageOptimizer {
         })?;
 
         if let Some(cached) = self.cache.get(&cache_key) {
-            let format = self.determine_format(&params);
-
             return Ok((
                 OptimizedImage {
-                    data: (*cached).clone(),
-                    format,
-                    width: params.w.unwrap_or(1920),
-                    height: 0,
+                    data: cached.data.clone(),
+                    format: cached.format,
+                    width: cached.width,
+                    height: cached.height,
                 },
                 true,
             ));
@@ -319,7 +321,15 @@ impl ImageOptimizer {
             ImageError::ProcessingError(format!("Image processing task failed: {}", e))
         })??;
 
-        self.cache.put(cache_key, optimized.data.clone());
+        self.cache.put(
+            cache_key,
+            cache::CachedImage {
+                data: optimized.data.clone(),
+                width: optimized.width,
+                height: optimized.height,
+                format: optimized.format,
+            },
+        );
 
         Ok((optimized, false))
     }
@@ -547,10 +557,6 @@ impl ImageOptimizer {
         }
 
         Ok(bytes)
-    }
-
-    fn determine_format(&self, params: &OptimizeParams) -> ImageFormat {
-        Self::determine_format_from_param(params.f.as_deref())
     }
 
     fn determine_format_from_param(format_str: Option<&str>) -> ImageFormat {
