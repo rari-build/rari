@@ -93,16 +93,21 @@ impl ImageOptimizer {
                 ImageError::ProcessingError(format!("Failed to read directory entry: {}", e))
             })? {
                 let path = entry.path();
-                let metadata = entry.metadata().await.map_err(|e| {
+
+                let file_type = entry.file_type().await.map_err(|e| {
                     ImageError::ProcessingError(format!(
-                        "Failed to read metadata for {:?}: {}",
+                        "Failed to read file type for {:?}: {}",
                         path, e
                     ))
                 })?;
 
-                if metadata.is_dir() {
+                if file_type.is_symlink() {
+                    continue;
+                }
+
+                if file_type.is_dir() {
                     dirs_to_scan.push(path);
-                } else if metadata.is_file() {
+                } else if file_type.is_file() {
                     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
                     if !matches!(
@@ -321,15 +326,17 @@ impl ImageOptimizer {
             ImageError::ProcessingError(format!("Image processing task failed: {}", e))
         })??;
 
-        self.cache.put(
-            cache_key,
-            cache::CachedImage {
-                data: optimized.data.clone(),
-                width: optimized.width,
-                height: optimized.height,
-                format: optimized.format,
-            },
-        );
+        self.cache
+            .put(
+                cache_key,
+                cache::CachedImage {
+                    data: optimized.data.clone(),
+                    width: optimized.width,
+                    height: optimized.height,
+                    format: optimized.format,
+                },
+            )
+            .await;
 
         Ok((optimized, false))
     }

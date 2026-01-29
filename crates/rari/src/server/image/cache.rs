@@ -73,11 +73,12 @@ impl ImageCache {
             match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&data) {
                 Ok(cached) => {
                     let cached = Arc::new(cached);
-
                     let data_size = cached.data.len();
-                    if *self.current_memory_size.lock() + data_size <= self.max_memory_size {
+
+                    let mut size = self.current_memory_size.lock();
+                    if *size + data_size <= self.max_memory_size {
                         self.memory_cache.lock().put(key.to_string(), cached.clone());
-                        *self.current_memory_size.lock() += data_size;
+                        *size += data_size;
                     }
 
                     return Some(cached);
@@ -91,7 +92,7 @@ impl ImageCache {
         None
     }
 
-    pub fn put(&self, key: String, cached: CachedImage) {
+    pub async fn put(&self, key: String, cached: CachedImage) {
         let data_size = cached.data.len();
 
         let serialized = rkyv::to_bytes::<rkyv::rancor::Error>(&cached)
@@ -100,24 +101,36 @@ impl ImageCache {
 
         if let Some(serialized) = serialized {
             let path = self.cache_filename(&key);
-            if let Err(e) = std::fs::write(&path, serialized.as_ref()) {
-                tracing::error!("Failed to write image to disk cache: {}", e);
+            let data = serialized.into_vec();
+
+            let write_result =
+                tokio::task::spawn_blocking(move || std::fs::write(&path, &data)).await;
+
+            match write_result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    tracing::error!("Failed to write image to disk cache: {}", e);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to spawn disk write task: {}", e);
+                }
             }
         }
 
         let cached = Arc::new(cached);
 
-        while *self.current_memory_size.lock() + data_size > self.max_memory_size {
-            let mut cache = self.memory_cache.lock();
+        let mut cache = self.memory_cache.lock();
+        let mut size = self.current_memory_size.lock();
+
+        while *size + data_size > self.max_memory_size {
             if let Some((_, evicted)) = cache.pop_lru() {
-                let mut size = self.current_memory_size.lock();
                 *size = size.saturating_sub(evicted.data.len());
             } else {
                 break;
             }
         }
 
-        self.memory_cache.lock().put(key, cached);
-        *self.current_memory_size.lock() += data_size;
+        cache.put(key, cached);
+        *size += data_size;
     }
 }

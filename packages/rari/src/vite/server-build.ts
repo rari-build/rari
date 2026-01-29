@@ -613,8 +613,7 @@ const ${importName} = (props) => {
 
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
-                        if (hasUseServer)
+                        if (self.isServerAction(content))
                           return { path: args.path, external: true }
                       }
                       catch {}
@@ -1201,8 +1200,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
                       try {
                         const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        const hasUseServer = content.includes('\'use server\'') || content.includes('"use server"')
-                        if (hasUseServer)
+                        if (self.isServerAction(content))
                           return { path: args.path, external: true }
                       }
                       catch {}
