@@ -74,7 +74,8 @@ impl ImageOptimizer {
     }
 
     pub fn get_preload_links(&self) -> Vec<String> {
-        let preload_images = self.preload_images.read().unwrap();
+        let preload_images =
+            self.preload_images.read().unwrap_or_else(|poison| poison.into_inner());
         preload_images
             .iter()
             .map(|img| {
@@ -90,7 +91,8 @@ impl ImageOptimizer {
     }
 
     pub fn clear_preload_images(&self) {
-        let mut preload_images = self.preload_images.write().unwrap();
+        let mut preload_images =
+            self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
         preload_images.clear();
     }
 
@@ -266,7 +268,8 @@ impl ImageOptimizer {
         }
 
         if !preload_list.is_empty() {
-            let mut preload_images = self.preload_images.write().unwrap();
+            let mut preload_images =
+                self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
             preload_images.extend(preload_list);
             tracing::info!("Registered {} images for preloading", preload_images.len());
         }

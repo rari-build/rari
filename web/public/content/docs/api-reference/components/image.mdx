@@ -179,15 +179,28 @@ Defines which image size to load at different viewport widths. Uses standard res
 
 The quality of the optimized image, between 1 and 100. Higher values mean better quality but larger file sizes.
 
-**Note:** The quality value must be in the `qualityAllowlist` configured in your `vite.config.ts`. By default, allowed values are `[25, 50, 75, 100]`.
+**Important:** The quality value must be in the `qualityAllowlist` configured in your `vite.config.ts`. By default, only `[25, 50, 75, 100]` are allowed. Requests with other quality values will be rejected.
 
-<CodeBlock language="tsx">{`<Image
+<CodeBlock language="tsx">{`// Valid - 100 is in the default allowlist
+<Image
   src="/high-quality.jpg"
   alt="High quality image"
   width={1920}
   height={1080}
   quality={100}
 />
+
+// Invalid - 90 is NOT in the default allowlist
+<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  quality={90}  // ❌ This will fail!
+/>
+
+// To use quality={90}, add it to your vite.config.ts:
+// qualityAllowlist: [25, 50, 75, 90, 100]
 `}</CodeBlock>
 
 #### unoptimized
@@ -524,7 +537,7 @@ export default function Hero() {
         alt="Hero background"
         fill
         style={{ objectFit: 'cover' }}
-        quality={90}
+        quality={75}
         preload
       />
       <div style={{ position: 'relative', zIndex: 1, padding: '2rem' }}>
@@ -665,9 +678,14 @@ This prevents layout shift and improves Core Web Vitals (CLS score):
 
 ### Optimize Quality Based on Use Case
 
-- Use `quality={90-100}` for hero images and important visuals
-- Use `quality={75}` (default) for most images
-- Use `quality={50-60}` for thumbnails and backgrounds
+Choose quality values from your configured `qualityAllowlist` (default: `[25, 50, 75, 100]`):
+
+- Use `quality={100}` for hero images and important visuals where maximum quality is critical
+- Use `quality={75}` (default) for most images - provides excellent quality with good compression
+- Use `quality={50}` for thumbnails and less critical images
+- Use `quality={25}` for backgrounds and decorative images where file size is more important than quality
+
+**Note:** Only values in your `qualityAllowlist` are accepted. Requests with other quality values will be rejected with an error.
 
 ### Use Sizes for Responsive Images
 

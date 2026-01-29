@@ -406,13 +406,7 @@ pub async fn render_synchronous(
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
-                        Ok(html) => {
-                            if let Some(metadata) = context.metadata.as_ref() {
-                                inject_metadata(&html, metadata, state.image_optimizer.as_ref())
-                            } else {
-                                html
-                            }
-                        }
+                        Ok(html) => html,
                         Err(e) => {
                             error!("Failed to inject assets into HTML: {}", e);
                             html_with_metadata

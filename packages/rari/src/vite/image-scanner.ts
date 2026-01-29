@@ -82,38 +82,55 @@ function extractImageUsages(content: string, filePath: string, images: Map<strin
 
     const transformedCode = result.code
 
-    const createElementRegex = /React\.createElement\(\s*Image\s*,\s*\{([^}]+)\}/g
+    const imageIdentifiers = new Set<string>(['Image'])
 
-    for (const match of transformedCode.matchAll(createElementRegex)) {
-      const propsString = match[1]
+    const defaultImportRegex = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
+    for (const match of transformedCode.matchAll(defaultImportRegex))
+      imageIdentifiers.add(match[1])
 
-      const srcMatch = propsString.match(/src:\s*["']([^"']+)["']/)
-      if (!srcMatch)
-        continue
+    const namedImportRegex = /import\s+\{[^}]*\b(?:Image\s+as\s+(\w+)|Image)\b[^}]*\}\s+from\s+['"]rari\/image['"]/g
+    for (const match of transformedCode.matchAll(namedImportRegex)) {
+      if (match[1])
+        imageIdentifiers.add(match[1])
+      else
+        imageIdentifiers.add('Image')
+    }
 
-      const src = srcMatch[1]
+    for (const identifier of imageIdentifiers) {
+      const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const createElementRegex = new RegExp(`React\\.createElement\\(\\s*${escapedIdentifier}\\s*,\\s*\\{([^}]+)\\}`, 'g')
 
-      if (!src.startsWith('/') && !src.startsWith('http'))
-        continue
+      for (const match of transformedCode.matchAll(createElementRegex)) {
+        const propsString = match[1]
 
-      const widthMatch = propsString.match(/width:\s*(\d+)/)
-      const width = widthMatch ? Number.parseInt(widthMatch[1], 10) : undefined
+        const srcMatch = propsString.match(/src:\s*["']([^"']+)["']/)
+        if (!srcMatch)
+          continue
 
-      const qualityMatch = propsString.match(/quality:\s*(\d+)/)
-      const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
+        const src = srcMatch[1]
 
-      const preloadMatch = propsString.match(/preload:\s*(true|!0)/)
-      const preload = !!preloadMatch
+        if (!src.startsWith('/') && !src.startsWith('http'))
+          continue
 
-      const key = `${src}:${width || 'auto'}:${quality || 75}`
+        const widthMatch = propsString.match(/width:\s*(\d+)/)
+        const width = widthMatch ? Number.parseInt(widthMatch[1], 10) : undefined
 
-      if (!images.has(key) || preload) {
-        images.set(key, {
-          src,
-          width,
-          quality,
-          preload,
-        })
+        const qualityMatch = propsString.match(/quality:\s*(\d+)/)
+        const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
+
+        const preloadMatch = propsString.match(/preload:\s*(true|!0)/)
+        const preload = !!preloadMatch
+
+        const key = `${src}:${width || 'auto'}:${quality || 75}`
+
+        if (!images.has(key) || preload) {
+          images.set(key, {
+            src,
+            width,
+            quality,
+            preload,
+          })
+        }
       }
     }
   }
