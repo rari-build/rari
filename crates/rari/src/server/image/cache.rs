@@ -63,33 +63,34 @@ impl ImageCache {
         self.cache_dir.join(format!("{:x}.cache", hash))
     }
 
-    pub fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
+    pub async fn get(&self, key: &str) -> Option<Arc<CachedImage>> {
         if let Some(cached) = self.memory_cache.lock().get(key).cloned() {
             return Some(cached);
         }
 
         let path = self.cache_filename(key);
-        if let Ok(data) = std::fs::read(&path) {
-            match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&data) {
-                Ok(cached) => {
-                    let cached = Arc::new(cached);
-                    let data_size = cached.data.len();
+        let data = tokio::task::spawn_blocking(move || std::fs::read(&path)).await.ok()?.ok()?;
 
-                    let mut size = self.current_memory_size.lock();
-                    if *size + data_size <= self.max_memory_size {
-                        self.memory_cache.lock().put(key.to_string(), cached.clone());
-                        *size += data_size;
-                    }
+        match rkyv::from_bytes::<CachedImage, rkyv::rancor::Error>(&data) {
+            Ok(cached) => {
+                let cached = Arc::new(cached);
+                let data_size = cached.data.len();
 
-                    return Some(cached);
+                let mut cache = self.memory_cache.lock();
+                let mut size = self.current_memory_size.lock();
+
+                if *size + data_size <= self.max_memory_size {
+                    cache.put(key.to_string(), cached.clone());
+                    *size += data_size;
                 }
-                Err(e) => {
-                    tracing::debug!("Failed to deserialize cached image: {}", e);
-                }
+
+                Some(cached)
+            }
+            Err(e) => {
+                tracing::debug!("Failed to deserialize cached image: {}", e);
+                None
             }
         }
-
-        None
     }
 
     pub async fn put(&self, key: String, cached: CachedImage) {

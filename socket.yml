@@ -8,6 +8,6 @@ githubApp:
   projectReportsEnabled: true
 
 projectIgnorePaths:
-  - '.github/'
-  - 'examples/'
-  - 'web/'
+  - .github/
+  - examples/
+  - web/

@@ -206,7 +206,7 @@ impl ImageOptimizer {
 
                     let cache_key = self.generate_cache_key(&params);
 
-                    if self.cache.get(&cache_key).is_some() {
+                    if self.cache.get(&cache_key).await.is_some() {
                         return Ok::<_, ImageError>(false);
                     }
 
@@ -284,7 +284,7 @@ impl ImageOptimizer {
 
         let cache_key = self.generate_cache_key(&params);
 
-        if let Some(cached) = self.cache.get(&cache_key) {
+        if let Some(cached) = self.cache.get(&cache_key).await {
             return Ok((
                 OptimizedImage {
                     data: cached.data.clone(),
@@ -300,7 +300,7 @@ impl ImageOptimizer {
             ImageError::ProcessingError(format!("Failed to acquire processing permit: {}", e))
         })?;
 
-        if let Some(cached) = self.cache.get(&cache_key) {
+        if let Some(cached) = self.cache.get(&cache_key).await {
             return Ok((
                 OptimizedImage {
                     data: cached.data.clone(),
