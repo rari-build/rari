@@ -1,13 +1,24 @@
 export { logError, logInfo, logSuccess, logWarn } from '../logger'
 
 export function isNodeVersionSufficient(versionRange: string): boolean {
-  const match = versionRange.match(/(\d+)\.(\d+)\.(\d+)/)
+  const cleaned = versionRange.trim()
+
+  let match = cleaned.match(/^>=?\s*(\d+)\.(\d+)\.(\d+)/)
   if (!match)
-    return true
+    match = cleaned.match(/^[~^]\s*(\d+)\.(\d+)\.(\d+)/)
+  if (!match)
+    match = cleaned.match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!match)
+    match = cleaned.match(/^(\d+)\.(\d+)\.x/)
+  if (!match)
+    match = cleaned.match(/^(\d+)\.x/)
+
+  if (!match)
+    return false
 
   const [, major, minor] = match
   const majorNum = Number.parseInt(major, 10)
-  const minorNum = Number.parseInt(minor, 10)
+  const minorNum = minor ? Number.parseInt(minor, 10) : 0
 
   if (majorNum > 20)
     return true
