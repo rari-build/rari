@@ -285,13 +285,6 @@ impl ImageOptimizer {
             }
         }
 
-        if !preload_list.is_empty() {
-            let mut preload_images =
-                self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
-            preload_images.extend(preload_list);
-            tracing::info!("Registered {} images for preloading", preload_images.len());
-        }
-
         if tasks.is_empty() {
             tracing::warn!("No images to pre-optimize from manifest");
             return Ok(0);
@@ -311,7 +304,20 @@ impl ImageOptimizer {
                     format
                 );
             }
+            if !preload_list.is_empty() {
+                tracing::info!(
+                    "[DRY RUN] Would register {} images for preloading",
+                    preload_list.len()
+                );
+            }
             return Ok(tasks.len());
+        }
+
+        if !preload_list.is_empty() {
+            let mut preload_images =
+                self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
+            preload_images.extend(preload_list);
+            tracing::info!("Registered {} images for preloading", preload_images.len());
         }
 
         let optimized_count = Arc::new(AtomicUsize::new(0));
