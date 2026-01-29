@@ -47,7 +47,7 @@ export async function createRailwayDeployment() {
 
     packageJson.engines = packageJson.engines || {}
     if (!packageJson.engines.node)
-      packageJson.engines.node = '>=20.0.0'
+      packageJson.engines.node = '>=20.6.0'
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')

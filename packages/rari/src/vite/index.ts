@@ -1325,8 +1325,10 @@ const ${componentName} = registerClientReference(
           try {
             const headers: Record<string, string> = {}
             for (const [key, value] of Object.entries(req.headers)) {
-              if (value && typeof value === 'string')
+              if (typeof value === 'string')
                 headers[key] = value
+              else if (Array.isArray(value))
+                headers[key] = value.join(',')
             }
             headers.host = `localhost:${serverPort}`
             headers['accept-encoding'] = 'identity'
@@ -1506,19 +1508,7 @@ const ${componentName} = registerClientReference(
         const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            const lines = code.split('\n')
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
-                continue
-              if (trimmed === '\'use client\'' || trimmed === '"use client"'
-                || trimmed === '\'use client\';' || trimmed === '"use client";') {
-                return true
-              }
-
-              break
-            }
-            return false
+            return hasTopLevelDirective(code, 'use client')
           }
           catch {
             return false

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import type { SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -39,13 +40,26 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
-function crossPlatformSpawn(command: string, args: string[], options: any) {
+function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
   const isWindows = process.platform === 'win32'
 
   if (isWindows && command === 'npx')
     return spawn('npx.cmd', args, options)
 
   return spawn(command, args, options)
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error)
+    return error.message
+  if (typeof error === 'string')
+    return error
+  try {
+    return JSON.stringify(error)
+  }
+  catch {
+    return String(error)
+  }
 }
 
 function logInfo(message: string) {
@@ -189,13 +203,13 @@ async function preOptimizeImages() {
         }
       })
       optimizeProcess.on('error', (err) => {
-        logWarn(`Image pre-optimization error: ${err.message}`)
+        logWarn(`Image pre-optimization error: ${normalizeError(err)}`)
         resolve()
       })
     })
   }
   catch (error) {
-    logWarn(`Could not pre-optimize images: ${error}`)
+    logWarn(`Could not pre-optimize images: ${normalizeError(error)}`)
   }
 }
 
