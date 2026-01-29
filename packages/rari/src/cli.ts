@@ -42,28 +42,47 @@ loadEnvFile()
 const [, , command, ...args] = process.argv
 
 function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
-  if (existsSync(resolve(process.cwd(), 'pnpm-lock.yaml')))
-    return 'pnpm'
+  let currentDir = process.cwd()
+  const root = resolve('/')
+  let iterations = 0
+  const maxIterations = 20
 
-  if (existsSync(resolve(process.cwd(), 'yarn.lock')))
-    return 'yarn'
+  while (currentDir !== root && iterations < maxIterations) {
+    iterations++
 
-  if (existsSync(resolve(process.cwd(), 'bun.lockb')))
-    return 'bun'
+    if (existsSync(resolve(currentDir, 'pnpm-lock.yaml')))
+      return 'pnpm'
 
-  try {
-    const pkgPath = resolve(process.cwd(), 'package.json')
-    if (existsSync(pkgPath)) {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-      if (pkg.packageManager?.startsWith('pnpm'))
-        return 'pnpm'
-      if (pkg.packageManager?.startsWith('yarn'))
-        return 'yarn'
-      if (pkg.packageManager?.startsWith('bun'))
-        return 'bun'
+    if (existsSync(resolve(currentDir, 'yarn.lock')))
+      return 'yarn'
+
+    if (existsSync(resolve(currentDir, 'bun.lockb')))
+      return 'bun'
+
+    if (existsSync(resolve(currentDir, 'package-lock.json')))
+      return 'npm'
+
+    try {
+      const pkgPath = resolve(currentDir, 'package.json')
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+        if (pkg.packageManager?.startsWith('pnpm'))
+          return 'pnpm'
+        if (pkg.packageManager?.startsWith('yarn'))
+          return 'yarn'
+        if (pkg.packageManager?.startsWith('bun'))
+          return 'bun'
+        if (pkg.packageManager?.startsWith('npm'))
+          return 'npm'
+      }
     }
+    catch {}
+
+    const parentDir = resolve(currentDir, '..')
+    if (parentDir === currentDir)
+      break
+    currentDir = parentDir
   }
-  catch {}
 
   return 'npm'
 }
@@ -87,14 +106,17 @@ function getPackageExecutor(): string {
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
   if (command === 'npx') {
     const executor = getPackageExecutor()
-    if (executor.includes('pnpm'))
-      return spawn(executor, ['exec', ...args], options)
-
-    if (executor.includes('yarn'))
-      return spawn(executor, ['dlx', ...args], options)
-
-    if (executor.includes('bun'))
+    if (executor.includes('bun')) {
       return spawn(executor, ['x', ...args], options)
+    }
+
+    if (executor.includes('pnpm')) {
+      return spawn(executor, ['exec', ...args], options)
+    }
+
+    if (executor.includes('yarn')) {
+      return spawn(executor, ['dlx', ...args], options)
+    }
   }
 
   const isWindows = process.platform === 'win32'
