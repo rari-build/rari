@@ -1,3 +1,74 @@
+## [rari@0.8.1] - 2026-01-29
+
+### 🚀 Features
+
+- *(cli)* Add automatic package manager detection and cross-platform execution
+- *(cli)* Improve package manager detection with monorepo support
+
+### 💼 Other
+
+- Rari@0.8.1
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.8.1
+## [0.8.1] - 2026-01-29
+
+### 🚀 Features
+
+- *(vite)* Expand optimizeDeps configuration for React core modules
+- *(eslint)* Add de-morgan plugin for boolean logic optimization
+- *(image)* Add CLI subcommand for pre-optimizing local images
+- *(rari)* Export Metadata type and add type annotations to metadata exports
+- *(image)* Add dry-run mode to image optimization CLI and improve type safety
+- *(image)* Add rkyv serialization for image cache and improve async file operations
+
+### 🚜 Refactor
+
+- *(rari)* Improve path normalization and proxy configuration
+- *(rari)* Separate server config from manifest and rename types
+- Improve code quality and type safety across codebase
+- Improve async handling and optimize image processing pipeline
+- Modernize code patterns and improve image optimization configuration
+- Optimize image processing and improve code constants
+- Improve code clarity and boolean logic in image optimizer and sidebar
+- *(image)* Optimize cache operations and improve async file handling
+- *(image)* Make cache get method async and improve file I/O handling
+- *(image)* Improve dry-run logging format
+- *(image)* Convert local file read to async operation
+- *(image)* Improve public directory existence check with async operation
+- Migrate to ES modules and improve cross-platform compatibility
+- *(image)* Add path traversal protection for local file access
+- *(deployment)* Extract shared utilities and improve Node version validation
+- *(logger)* Extract logging utilities into dedicated module
+- *(logger)* Remove deprecated logWarning function in favor of logWarn
+- *(deployment)* Improve Node version parsing with multiple format support
+
+### 📚 Documentation
+
+- Add security policy and vulnerability reporting guidelines
+
+### 🎨 Styling
+
+- Normalize HTML formatting across project
+- Modernize JavaScript and TypeScript code patterns
+- Remove unnecessary braces from single-statement conditionals
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Remove unused lazy promise resolution script
+- Add CodeQL analysis workflow and configuration
+- Remove CodeQL analysis workflow
+- Simplify CodeQL workflow configuration
+- *(config)* Add Socket.yml configuration for dependency security
+- *(tsconfig)* Upgrade TypeScript target to ES2023
+- Upgrade Node.js minimum version to 20.6.0
+- *(release)* Bump version to 0.8.1
+## [create-rari-app@0.4.0] - 2026-01-27
+
+### 💼 Other
+
+- Create-rari-app@0.4.0
 ## [rari@0.8.0] - 2026-01-27
 
 ### 💼 Other
@@ -1306,7 +1377,7 @@
 ### 💼 Other
 
 - Rari@0.4.0
-## [0.4.0] - 2026-01-27
+## [0.4.0] - 2025-10-30
 
 ### 🚀 Features
 
