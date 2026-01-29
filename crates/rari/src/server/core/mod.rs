@@ -196,6 +196,7 @@ impl Server {
             og_generator,
             project_root,
             endpoint_rate_limiters,
+            image_optimizer: None,
         };
 
         if config.is_production() {
@@ -243,7 +244,7 @@ impl Server {
         }
     }
 
-    async fn build_router(config: &Config, state: ServerState) -> Result<Router, RariError> {
+    async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
@@ -251,6 +252,8 @@ impl Server {
             config.images.clone(),
             &state.project_root,
         ));
+
+        state.image_optimizer = Some(Arc::clone(&image_optimizer));
 
         let image_state = crate::server::image::ImageState {
             optimizer: image_optimizer,

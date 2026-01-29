@@ -23,14 +23,18 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::error;
 
-fn wrap_html_with_metadata(html_content: String, metadata: Option<&PageMetadata>) -> String {
+fn wrap_html_with_metadata(
+    html_content: String,
+    metadata: Option<&PageMetadata>,
+    state: &ServerState,
+) -> String {
     let trimmed = html_content.trim_start();
     let trimmed_lower = trimmed.cow_to_lowercase();
     let is_complete = trimmed_lower.starts_with("<!doctype") || trimmed_lower.starts_with("<html");
 
     if is_complete {
         if let Some(metadata) = metadata {
-            inject_metadata(&html_content, metadata)
+            inject_metadata(&html_content, metadata, state.image_optimizer.as_deref())
         } else {
             html_content
         }
@@ -398,17 +402,11 @@ pub async fn render_synchronous(
         Ok(render_result) => match render_result {
             crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
                 let html_with_metadata =
-                    wrap_html_with_metadata(html_content, context.metadata.as_ref());
+                    wrap_html_with_metadata(html_content, context.metadata.as_ref(), &state);
 
                 let final_html =
                     match inject_assets_into_html(&html_with_metadata, &state.config).await {
-                        Ok(html) => {
-                            if let Some(metadata) = context.metadata.as_ref() {
-                                inject_metadata(&html, metadata)
-                            } else {
-                                html
-                            }
-                        }
+                        Ok(html) => html,
                         Err(e) => {
                             error!("Failed to inject assets into HTML: {}", e);
                             html_with_metadata
@@ -524,7 +522,7 @@ async fn render_streaming_response(
     };
 
     let base_shell = if let Some(ref metadata) = context.metadata {
-        inject_metadata(&base_shell, metadata)
+        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
     } else {
         base_shell
     };
@@ -627,7 +625,8 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            let html_with_metadata = wrap_html_with_metadata(html, context.metadata.as_ref());
+            let html_with_metadata =
+                wrap_html_with_metadata(html, context.metadata.as_ref(), &state);
 
             let final_html = match inject_assets_into_html(&html_with_metadata, &state.config).await
             {
@@ -1129,7 +1128,7 @@ pub async fn handle_app_route(
             let (html_with_assets, etag) = match render_result {
                 crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
                     let html_with_metadata =
-                        wrap_html_with_metadata(html_content, context.metadata.as_ref());
+                        wrap_html_with_metadata(html_content, context.metadata.as_ref(), &state);
 
                     let html_with_assets =
                         match inject_assets_into_html(&html_with_metadata, &state.config).await {
@@ -1185,7 +1184,7 @@ pub async fn handle_app_route(
                     );
 
                     let base_shell = if let Some(ref metadata) = context.metadata {
-                        inject_metadata(&base_shell, metadata)
+                        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
                     } else {
                         base_shell
                     };

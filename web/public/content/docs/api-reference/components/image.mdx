@@ -40,8 +40,8 @@ export default defineConfig({
         // Optional: customize optimization settings
         deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
         imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-        formats: ['avif', 'webp'], // Default is ['avif']
-        quality: [25, 50, 75, 100],
+        formats: ['avif', 'webp'],
+        qualityAllowlist: [25, 50, 75, 100],
       },
     }),
   ],
@@ -68,7 +68,7 @@ The `localPatterns` array defines which paths in your `public` directory should 
 - `deviceSizes` - Widths generated for fixed-size images (default: `[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`)
 - `imageSizes` - Widths generated for `fill` images (default: `[16, 32, 48, 64, 96, 128, 256, 384]`)
 - `formats` - Output formats to generate (default: `['avif', 'webp']`)
-- `quality` - Quality levels for optimization (default: `[25, 50, 75, 100]`)
+- `qualityAllowlist` - Allowed quality values that can be requested (default: `[25, 50, 75, 100]`). Build-time preprocessing uses quality 75 when present in the allowlist, otherwise the first value. Runtime requests default to quality 75 unless specified. For example, with `qualityAllowlist: [25, 50, 75, 100]`, both build-time preprocessing and runtime default to quality 75.
 
 ## Basic Usage
 
@@ -179,13 +179,28 @@ Defines which image size to load at different viewport widths. Uses standard res
 
 The quality of the optimized image, between 1 and 100. Higher values mean better quality but larger file sizes.
 
-<CodeBlock language="tsx">{`<Image
+**Important:** The quality value must be in the `qualityAllowlist` configured in your `vite.config.ts`. By default, only `[25, 50, 75, 100]` are allowed. Requests with other quality values will be rejected.
+
+<CodeBlock language="tsx">{`// Valid - 100 is in the default allowlist
+<Image
   src="/high-quality.jpg"
   alt="High quality image"
   width={1920}
   height={1080}
-  quality={90}
+  quality={100}
 />
+
+// Invalid - 90 is NOT in the default allowlist
+<Image
+  src="/photo.jpg"
+  alt="Photo"
+  width={800}
+  height={600}
+  quality={90}  // ❌ This will fail!
+/>
+
+// To use quality={90}, add it to your vite.config.ts:
+// qualityAllowlist: [25, 50, 75, 90, 100]
 `}</CodeBlock>
 
 #### unoptimized
@@ -522,7 +537,7 @@ export default function Hero() {
         alt="Hero background"
         fill
         style={{ objectFit: 'cover' }}
-        quality={90}
+        quality={75}
         preload
       />
       <div style={{ position: 'relative', zIndex: 1, padding: '2rem' }}>
@@ -663,9 +678,14 @@ This prevents layout shift and improves Core Web Vitals (CLS score):
 
 ### Optimize Quality Based on Use Case
 
-- Use `quality={90-100}` for hero images and important visuals
-- Use `quality={75}` (default) for most images
-- Use `quality={50-60}` for thumbnails and backgrounds
+Choose quality values from your configured `qualityAllowlist` (default: `[25, 50, 75, 100]`):
+
+- Use `quality={100}` for hero images and important visuals where maximum quality is critical
+- Use `quality={75}` (default) for most images - provides excellent quality with good compression
+- Use `quality={50}` for thumbnails and less critical images
+- Use `quality={25}` for backgrounds and decorative images where file size is more important than quality
+
+**Note:** Only values in your `qualityAllowlist` are accepted. Requests with other quality values will be rejected with an error.
 
 ### Use Sizes for Responsive Images
 

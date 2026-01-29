@@ -24,6 +24,18 @@ pub struct ImageConfig {
     pub minimum_cache_ttl: u64,
     #[serde(default)]
     pub optimization_concurrency: Option<usize>,
+    #[serde(default)]
+    pub preoptimize_manifest: Vec<ImageVariant>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageVariant {
+    pub src: String,
+    pub width: Option<u32>,
+    pub quality: Option<u8>,
+    #[serde(default)]
+    pub preload: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +66,7 @@ impl Default for ImageConfig {
             max_redirects: default_max_redirects(),
             minimum_cache_ttl: default_minimum_cache_ttl(),
             optimization_concurrency: None,
+            preoptimize_manifest: Vec::new(),
         }
     }
 }

@@ -10,6 +10,7 @@ use image::{DynamicImage, imageops::FilterType};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 use url::Url;
@@ -20,6 +21,14 @@ const MAX_OUTPUT_HEIGHT: u32 = 2160;
 const AVIF_ENCODING_SPEED: u8 = 6;
 const DEFAULT_CONCURRENCY: usize = 4;
 
+#[derive(Debug, Clone)]
+pub struct PreloadImage {
+    pub url: String,
+    pub width: u32,
+    pub quality: u8,
+    pub format: ImageFormat,
+}
+
 pub struct ImageOptimizer {
     cache: Arc<ImageCache>,
     config: ImageConfig,
@@ -27,6 +36,7 @@ pub struct ImageOptimizer {
     project_path: PathBuf,
     processing_semaphore: Arc<Semaphore>,
     concurrency: usize,
+    preload_images: Arc<RwLock<Vec<PreloadImage>>>,
 }
 
 impl ImageOptimizer {
@@ -51,7 +61,39 @@ impl ImageOptimizer {
             project_path: project_path.to_path_buf(),
             processing_semaphore,
             concurrency,
+            preload_images: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    fn default_quality(&self) -> u8 {
+        if self.config.quality_allowlist.is_empty() || self.config.quality_allowlist.contains(&75) {
+            75
+        } else {
+            *self.config.quality_allowlist.first().unwrap_or(&75)
+        }
+    }
+
+    pub fn get_preload_links(&self) -> Vec<String> {
+        let preload_images =
+            self.preload_images.read().unwrap_or_else(|poison| poison.into_inner());
+        preload_images
+            .iter()
+            .map(|img| {
+                format!(
+                    r#"<link rel="preload" as="image" href="/_image?url={}&w={}&q={}&f={}" />"#,
+                    urlencoding::encode(&img.url),
+                    img.width,
+                    img.quality,
+                    img.format.extension()
+                )
+            })
+            .collect()
+    }
+
+    pub fn clear_preload_images(&self) {
+        let mut preload_images =
+            self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
+        preload_images.clear();
     }
 
     pub async fn preoptimize_local_images(&self) -> Result<usize, ImageError> {
@@ -68,6 +110,21 @@ impl ImageOptimizer {
         } else {
             tracing::info!("Starting local image pre-optimization...");
         }
+
+        if !self.config.preoptimize_manifest.is_empty() {
+            tracing::info!(
+                "Using preoptimize manifest with {} image variants",
+                self.config.preoptimize_manifest.len()
+            );
+            return self.preoptimize_from_manifest(dry_run).await;
+        }
+
+        if self.config.local_patterns.is_empty() {
+            tracing::info!("No local_patterns configured, skipping local scan");
+            return Ok(0);
+        }
+
+        tracing::info!("No manifest found, scanning public directory...");
 
         let public_dir = self.project_path.join("public");
         match tokio::fs::try_exists(&public_dir).await {
@@ -164,6 +221,160 @@ impl ImageOptimizer {
         self.optimize_image_urls_internal(image_paths, dry_run).await
     }
 
+    async fn preoptimize_from_manifest(&self, dry_run: bool) -> Result<usize, ImageError> {
+        let formats = if self.config.formats.is_empty() {
+            vec![ImageFormat::Avif]
+        } else {
+            self.config.formats.clone()
+        };
+
+        let default_quality = self.default_quality();
+
+        let mut tasks = Vec::new();
+        let mut preload_list = Vec::new();
+
+        for variant in &self.config.preoptimize_manifest {
+            if let Err(e) = self.validate_url(&variant.src) {
+                tracing::debug!("Skipping {} - validation failed: {}", variant.src, e);
+                continue;
+            }
+
+            let quality = variant.quality.unwrap_or(default_quality);
+
+            if !self.config.quality_allowlist.is_empty()
+                && !self.config.quality_allowlist.contains(&quality)
+            {
+                tracing::debug!(
+                    "Skipping {} - quality {} not in allowlist {:?}",
+                    variant.src,
+                    quality,
+                    self.config.quality_allowlist
+                );
+                continue;
+            }
+
+            let should_preload = variant.preload.unwrap_or(false);
+
+            let widths: Vec<u32> = if let Some(width) = variant.width {
+                vec![width]
+            } else {
+                let mut sizes = self.config.device_sizes.clone();
+                sizes.extend(self.config.image_sizes.clone());
+                if sizes.is_empty() {
+                    vec![384, 640, 750, 828, 1080, 1200, 1920]
+                } else {
+                    sizes.sort_unstable();
+                    sizes.dedup();
+                    sizes
+                }
+            };
+
+            for &width in &widths {
+                for &format in &formats {
+                    tasks.push((variant.src.clone(), width, format, quality));
+
+                    if should_preload && format == formats[0] {
+                        preload_list.push(PreloadImage {
+                            url: variant.src.clone(),
+                            width,
+                            quality,
+                            format,
+                        });
+                    }
+                }
+            }
+        }
+
+        if tasks.is_empty() {
+            tracing::warn!("No images to pre-optimize from manifest");
+            return Ok(0);
+        }
+
+        tracing::info!("Pre-optimizing {} image variants from manifest", tasks.len());
+
+        if dry_run {
+            tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
+            for (url, width, format, q) in &tasks {
+                tracing::info!(
+                    "  - {} (width={}, quality={}, ext={}, format={:?})",
+                    url,
+                    width,
+                    q,
+                    format.extension(),
+                    format
+                );
+            }
+            if !preload_list.is_empty() {
+                tracing::info!(
+                    "[DRY RUN] Would register {} images for preloading",
+                    preload_list.len()
+                );
+            }
+            return Ok(tasks.len());
+        }
+
+        if !preload_list.is_empty() {
+            let mut preload_images =
+                self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
+            preload_images.extend(preload_list);
+            tracing::info!("Registered {} images for preloading", preload_images.len());
+        }
+
+        let optimized_count = Arc::new(AtomicUsize::new(0));
+
+        let results: Vec<_> = stream::iter(tasks)
+            .map(|(url, width, format, q)| {
+                let optimized_count = Arc::clone(&optimized_count);
+
+                async move {
+                    let params = OptimizeParams {
+                        url: url.clone(),
+                        w: Some(width),
+                        q,
+                        f: Some(format.extension().to_string()),
+                    };
+
+                    let cache_key = self.generate_cache_key(&params);
+
+                    if self.cache.get(&cache_key).await.is_some() {
+                        return Ok::<_, ImageError>(false);
+                    }
+
+                    match self.optimize(params).await {
+                        Ok(_) => {
+                            optimized_count.fetch_add(1, Ordering::Relaxed);
+                            Ok(true)
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to pre-optimize {} (width={}, quality={}, ext={}, format={:?}): {}",
+                                url,
+                                width,
+                                q,
+                                format.extension(),
+                                format,
+                                e
+                            );
+                            Err(e)
+                        }
+                    }
+                }
+            })
+            .buffer_unordered(self.concurrency)
+            .collect()
+            .await;
+
+        let final_count = optimized_count.load(Ordering::Relaxed);
+        let errors = results.iter().filter(|r| r.is_err()).count();
+
+        if errors > 0 {
+            tracing::warn!("Pre-optimization completed with {} errors", errors);
+        }
+
+        tracing::info!("Pre-optimized {} image variants from manifest", final_count);
+        Ok(final_count)
+    }
+
     async fn optimize_image_urls_internal(
         &self,
         urls: Vec<String>,
@@ -185,13 +396,16 @@ impl ImageOptimizer {
             self.config.formats.clone()
         };
 
+        let quality = self.default_quality();
+
         tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
+        tracing::info!("Pre-optimizing with quality: {}", quality);
 
         let mut tasks = Vec::new();
         for url in &urls {
             for &width in &sizes {
                 for &format in &formats {
-                    tasks.push((url.clone(), width, format));
+                    tasks.push((url.clone(), width, format, quality));
                 }
             }
         }
@@ -200,11 +414,12 @@ impl ImageOptimizer {
 
         if dry_run {
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
-            for (url, width, format) in &tasks {
+            for (url, width, format, q) in &tasks {
                 tracing::info!(
-                    "  - {} (width={}, ext={}, format={:?})",
+                    "  - {} (width={}, quality={}, ext={}, format={:?})",
                     url,
                     width,
+                    q,
                     format.extension(),
                     format
                 );
@@ -215,14 +430,14 @@ impl ImageOptimizer {
         let optimized_count = Arc::new(AtomicUsize::new(0));
 
         let results: Vec<_> = stream::iter(tasks)
-            .map(|(url, width, format)| {
+            .map(|(url, width, format, q)| {
                 let optimized_count = Arc::clone(&optimized_count);
 
                 async move {
                     let params = OptimizeParams {
                         url: url.clone(),
                         w: Some(width),
-                        q: 75,
+                        q,
                         f: Some(format.extension().to_string()),
                     };
 
@@ -239,9 +454,10 @@ impl ImageOptimizer {
                         }
                         Err(e) => {
                             tracing::warn!(
-                                "Failed to pre-optimize {} (width={}, ext={}, format={:?}): {}",
+                                "Failed to pre-optimize {} (width={}, quality={}, ext={}, format={:?}): {}",
                                 url,
                                 width,
+                                q,
                                 format.extension(),
                                 format,
                                 e
@@ -268,7 +484,7 @@ impl ImageOptimizer {
 
     fn matches_local_patterns(&self, path: &str) -> bool {
         if self.config.local_patterns.is_empty() {
-            return true;
+            return false;
         }
 
         for pattern in &self.config.local_patterns {
@@ -368,29 +584,34 @@ impl ImageOptimizer {
         hasher.update(params.url.as_bytes());
         hasher.update(params.w.unwrap_or(0).to_le_bytes());
         hasher.update([params.q]);
-        if let Some(ref format) = params.f {
-            hasher.update(format.as_bytes());
-        }
+
+        let format_str = params.f.as_deref().unwrap_or("avif");
+        hasher.update(format_str.as_bytes());
 
         format!("{:x}", hasher.finalize())
     }
 
     fn validate_url(&self, url_str: &str) -> Result<(), ImageError> {
         if url_str.starts_with('/') {
-            if !self.config.local_patterns.is_empty() {
-                let mut allowed = false;
-                for pattern in &self.config.local_patterns {
-                    if self.matches_local_pattern(url_str, pattern) {
-                        allowed = true;
-                        break;
-                    }
+            if self.config.local_patterns.is_empty() {
+                return Err(ImageError::UnauthorizedDomain(format!(
+                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
+                    url_str
+                )));
+            }
+
+            let mut allowed = false;
+            for pattern in &self.config.local_patterns {
+                if self.matches_local_pattern(url_str, pattern) {
+                    allowed = true;
+                    break;
                 }
-                if !allowed {
-                    return Err(ImageError::UnauthorizedDomain(format!(
-                        "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
-                        url_str
-                    )));
-                }
+            }
+            if !allowed {
+                return Err(ImageError::UnauthorizedDomain(format!(
+                    "Local path not allowed: {}. Configure localPatterns in your image config to allow local paths.",
+                    url_str
+                )));
             }
             return Ok(());
         }

@@ -3,8 +3,8 @@ mod config;
 mod optimizer;
 mod types;
 
-pub use config::{ImageConfig, LocalPattern, RemotePattern};
-pub use optimizer::ImageOptimizer;
+pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
+pub use optimizer::{ImageOptimizer, PreloadImage};
 pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
 
 use axum::{

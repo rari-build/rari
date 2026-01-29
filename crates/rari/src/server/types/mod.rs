@@ -32,6 +32,7 @@ pub struct ServerState {
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
     pub endpoint_rate_limiters: EndpointRateLimiters,
+    pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,
 }
 
 #[derive(Debug, Deserialize)]

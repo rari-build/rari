@@ -12,6 +12,7 @@ import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
+import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin } from './server-build'
 
 interface RouterPluginOptions {
@@ -40,7 +41,7 @@ interface RariOptions {
     deviceSizes?: number[]
     imageSizes?: number[]
     formats?: ('avif' | 'webp')[]
-    quality?: number[]
+    qualityAllowlist?: number[]
     minimumCacheTTL?: number
     maxCacheSize?: number
   }
@@ -70,7 +71,7 @@ const DEFAULT_IMAGE_CONFIG = {
   deviceSizes: DEFAULT_DEVICE_SIZES,
   imageSizes: DEFAULT_IMAGE_SIZES,
   formats: DEFAULT_FORMATS,
-  quality: DEFAULT_QUALITY_LEVELS,
+  qualityAllowlist: DEFAULT_QUALITY_LEVELS,
   minimumCacheTTL: DEFAULT_MINIMUM_CACHE_TTL,
   maxCacheSize: DEFAULT_MAX_CACHE_SIZE,
 }
@@ -108,6 +109,25 @@ async function loadEntryClient(imports: string, registrations: string): Promise<
 
 async function loadReactServerDomShim(): Promise<string> {
   return loadRuntimeFile('react-server-dom-shim.js')
+}
+
+function writeImageConfig(projectRoot: string, options: RariOptions): void {
+  const srcDir = path.join(projectRoot, 'src')
+  const imageManifest = scanForImageUsage(srcDir)
+
+  const imageConfig = {
+    ...DEFAULT_IMAGE_CONFIG,
+    ...options.images,
+    preoptimizeManifest: imageManifest.images,
+  }
+
+  const distDir = path.join(projectRoot, 'dist')
+  const serverDir = path.join(distDir, 'server')
+  if (!fs.existsSync(serverDir))
+    fs.mkdirSync(serverDir, { recursive: true })
+
+  const configPath = path.join(serverDir, 'image.json')
+  fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
 }
 
 function scanForClientComponents(srcDir: string, additionalDirs: string[] = []): Set<string> {
@@ -953,17 +973,7 @@ const ${componentName} = registerClientReference(
     configureServer(server) {
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
-
-      const imageConfig = {
-        ...DEFAULT_IMAGE_CONFIG,
-        ...options.images,
-      }
-      const distDir = path.join(projectRoot, 'dist')
-      const serverDir = path.join(distDir, 'server')
-      if (!fs.existsSync(serverDir))
-        fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image.json')
-      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+      writeImageConfig(projectRoot, options)
 
       let serverComponentBuilder: any = null
 
@@ -1741,17 +1751,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
     },
 
     writeBundle() {
-      const imageConfig = {
-        ...DEFAULT_IMAGE_CONFIG,
-        ...options.images,
-      }
       const projectRoot = options.projectRoot || process.cwd()
-      const distDir = path.join(projectRoot, 'dist')
-      const serverDir = path.join(distDir, 'server')
-      if (!fs.existsSync(serverDir))
-        fs.mkdirSync(serverDir, { recursive: true })
-      const configPath = path.join(serverDir, 'image.json')
-      fs.writeFileSync(configPath, JSON.stringify(imageConfig, null, 2))
+      writeImageConfig(projectRoot, options)
     },
   }
 

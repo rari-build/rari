@@ -6,7 +6,8 @@
         "crates/**/*"
       ],
       "ignoreDependencies": [
-        "@typescript/native-preview" // Used by TypeScript tooling
+        "@typescript/native-preview", // Used by TypeScript tooling
+        "@typescript-eslint/utils" // Used by antfu eslint config
       ]
     },
     "packages/rari": {
