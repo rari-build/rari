@@ -34,7 +34,7 @@ fn wrap_html_with_metadata(
 
     if is_complete {
         if let Some(metadata) = metadata {
-            inject_metadata(&html_content, metadata, state.image_optimizer.as_ref())
+            inject_metadata(&html_content, metadata, state.image_optimizer.as_deref())
         } else {
             html_content
         }
@@ -522,7 +522,7 @@ async fn render_streaming_response(
     };
 
     let base_shell = if let Some(ref metadata) = context.metadata {
-        inject_metadata(&base_shell, metadata, state.image_optimizer.as_ref())
+        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
     } else {
         base_shell
     };
@@ -1184,7 +1184,7 @@ pub async fn handle_app_route(
                     );
 
                     let base_shell = if let Some(ref metadata) = context.metadata {
-                        inject_metadata(&base_shell, metadata, state.image_optimizer.as_ref())
+                        inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
                     } else {
                         base_shell
                     };

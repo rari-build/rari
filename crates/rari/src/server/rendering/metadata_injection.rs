@@ -1,12 +1,11 @@
 use crate::rsc::rendering::layout::types::PageMetadata;
 use crate::server::image::ImageOptimizer;
 use cow_utils::CowUtils;
-use std::sync::Arc;
 
 pub fn inject_metadata(
     html: &str,
     metadata: &PageMetadata,
-    image_optimizer: Option<&Arc<ImageOptimizer>>,
+    image_optimizer: Option<&ImageOptimizer>,
 ) -> String {
     let mut result = html.to_string();
 
