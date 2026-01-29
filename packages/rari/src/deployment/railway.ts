@@ -2,22 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
-
-function logInfo(message: string) {
-  console.warn(`${colors.blue('info')} ${message}`)
-}
-
-function logSuccess(message: string) {
-  console.warn(`${colors.green('✓')} ${message}`)
-}
-
-function logError(message: string) {
-  console.error(`${colors.red('✗')} ${message}`)
-}
-
-function logWarning(message: string) {
-  console.warn(`${colors.yellow('⚠')} ${message}`)
-}
+import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarning } from './utils'
 
 export async function createRailwayDeployment() {
   const cwd = process.cwd()
@@ -46,8 +31,16 @@ export async function createRailwayDeployment() {
     packageJson.scripts['deploy:railway'] = 'echo "Push to GitHub and connect to Railway to deploy"'
 
     packageJson.engines = packageJson.engines || {}
-    if (!packageJson.engines.node)
+    if (packageJson.engines.node) {
+      if (!isNodeVersionSufficient(packageJson.engines.node)) {
+        logWarning(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
+        logWarning('Updating to >=20.6.0 for Railway deployment compatibility')
+        packageJson.engines.node = '>=20.6.0'
+      }
+    }
+    else {
       packageJson.engines.node = '>=20.6.0'
+    }
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')

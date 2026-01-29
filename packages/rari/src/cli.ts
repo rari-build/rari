@@ -169,10 +169,6 @@ async function runViteBuild() {
 }
 
 async function preOptimizeImages() {
-  const { spawn } = await import('node:child_process')
-  const { resolve } = await import('node:path')
-  const { existsSync } = await import('node:fs')
-
   const imageConfigPath = resolve(process.cwd(), 'dist', 'server', 'image.json')
 
   if (!existsSync(imageConfigPath))
