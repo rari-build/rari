@@ -68,12 +68,26 @@ impl ImageOptimizer {
         }
 
         let public_dir = self.project_path.join("public");
-        if !public_dir.exists() {
-            tracing::warn!(
-                "Public directory does not exist at {:?}, skipping local image pre-optimization",
-                public_dir
-            );
-            return Ok(0);
+        match tokio::fs::try_exists(&public_dir).await {
+            Ok(false) => {
+                tracing::warn!(
+                    "Public directory does not exist at {:?}, skipping local image pre-optimization",
+                    public_dir
+                );
+                return Ok(0);
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Failed to check if public directory exists at {:?}: {}",
+                    public_dir,
+                    e
+                );
+                return Err(ImageError::ProcessingError(format!(
+                    "Failed to check public directory: {}",
+                    e
+                )));
+            }
+            Ok(true) => {}
         }
 
         tracing::debug!("Scanning public directory: {:?}", public_dir);
