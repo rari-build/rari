@@ -33,13 +33,13 @@ export async function createRailwayDeployment() {
     packageJson.engines = packageJson.engines || {}
     if (packageJson.engines.node) {
       if (!isNodeVersionSufficient(packageJson.engines.node)) {
-        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
-        logWarn('Updating to >=20.6.0 for Railway deployment compatibility')
-        packageJson.engines.node = '>=20.6.0'
+        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=22.0.0`)
+        logWarn('Updating to >=22.0.0 for Railway deployment compatibility')
+        packageJson.engines.node = '>=22.0.0'
       }
     }
     else {
-      packageJson.engines.node = '>=20.6.0'
+      packageJson.engines.node = '>=22.0.0'
     }
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
