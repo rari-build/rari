@@ -102,7 +102,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
       format: 'esm',
       write: false,
       external: ['rari'],
-      target: 'node20',
+      target: 'node22',
     })
 
     if (result.outputFiles && result.outputFiles.length > 0) {
