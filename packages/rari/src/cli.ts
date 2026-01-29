@@ -41,9 +41,63 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
-function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
+function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
+  if (existsSync(resolve(process.cwd(), 'pnpm-lock.yaml')))
+    return 'pnpm'
+
+  if (existsSync(resolve(process.cwd(), 'yarn.lock')))
+    return 'yarn'
+
+  if (existsSync(resolve(process.cwd(), 'bun.lockb')))
+    return 'bun'
+
+  try {
+    const pkgPath = resolve(process.cwd(), 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+      if (pkg.packageManager?.startsWith('pnpm'))
+        return 'pnpm'
+      if (pkg.packageManager?.startsWith('yarn'))
+        return 'yarn'
+      if (pkg.packageManager?.startsWith('bun'))
+        return 'bun'
+    }
+  }
+  catch {}
+
+  return 'npm'
+}
+
+function getPackageExecutor(): string {
+  const pm = detectPackageManager()
   const isWindows = process.platform === 'win32'
 
+  switch (pm) {
+    case 'bun':
+      return isWindows ? 'bun.cmd' : 'bun'
+    case 'pnpm':
+      return isWindows ? 'pnpm.cmd' : 'pnpm'
+    case 'yarn':
+      return isWindows ? 'yarn.cmd' : 'yarn'
+    default:
+      return isWindows ? 'npx.cmd' : 'npx'
+  }
+}
+
+function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
+  if (command === 'npx') {
+    const executor = getPackageExecutor()
+    if (executor.includes('pnpm'))
+      return spawn(executor, ['exec', ...args], options)
+
+    if (executor.includes('yarn'))
+      return spawn(executor, ['dlx', ...args], options)
+
+    if (executor.includes('bun'))
+      return spawn(executor, ['x', ...args], options)
+  }
+
+  const isWindows = process.platform === 'win32'
   if (isWindows && command === 'npx')
     return spawn('npx.cmd', args, options)
 
