@@ -119,6 +119,11 @@ impl ImageOptimizer {
             return self.preoptimize_from_manifest(dry_run).await;
         }
 
+        if self.config.local_patterns.is_empty() {
+            tracing::info!("No local_patterns configured, skipping local scan");
+            return Ok(0);
+        }
+
         tracing::info!("No manifest found, scanning public directory...");
 
         let public_dir = self.project_path.join("public");
@@ -235,6 +240,19 @@ impl ImageOptimizer {
             }
 
             let quality = variant.quality.unwrap_or(default_quality);
+
+            if !self.config.quality_allowlist.is_empty()
+                && !self.config.quality_allowlist.contains(&quality)
+            {
+                tracing::debug!(
+                    "Skipping {} - quality {} not in allowlist {:?}",
+                    variant.src,
+                    quality,
+                    self.config.quality_allowlist
+                );
+                continue;
+            }
+
             let should_preload = variant.preload.unwrap_or(false);
 
             let widths: Vec<u32> = if let Some(width) = variant.width {

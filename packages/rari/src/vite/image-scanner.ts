@@ -82,7 +82,7 @@ function extractImageUsages(content: string, filePath: string, images: Map<strin
 
     const transformedCode = result.code
 
-    const imageIdentifiers = new Set<string>(['Image'])
+    const imageIdentifiers = new Set<string>()
 
     const defaultImportRegex = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
     for (const match of transformedCode.matchAll(defaultImportRegex))
@@ -95,6 +95,9 @@ function extractImageUsages(content: string, filePath: string, images: Map<strin
       else
         imageIdentifiers.add('Image')
     }
+
+    if (imageIdentifiers.size === 0)
+      return
 
     for (const identifier of imageIdentifiers) {
       const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -119,7 +122,8 @@ function extractImageUsages(content: string, filePath: string, images: Map<strin
         const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
 
         const preloadMatch = propsString.match(/preload:\s*(true|!0)/)
-        const preload = !!preloadMatch
+        const preloadFalseMatch = propsString.match(/preload:\s*(false|!1)/)
+        const preload = !!preloadMatch && !preloadFalseMatch
 
         const key = `${src}:${width || 'auto'}:${quality || 75}`
 
@@ -168,7 +172,7 @@ function processImageProps(propsString: string, images: Map<string, ImageUsage>)
   const qualityMatch = propsString.match(/quality=\{?(\d+)\}?/)
   const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
 
-  const preload = /preload(?:=\{?true\}?)?/.test(propsString)
+  const preload = /preload(?:=\{?true\}?)?/.test(propsString) && !/preload=\{?false\}?/.test(propsString)
 
   const key = `${src}:${width || 'auto'}:${quality || 75}`
 

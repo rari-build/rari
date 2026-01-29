@@ -68,7 +68,7 @@ The `localPatterns` array defines which paths in your `public` directory should 
 - `deviceSizes` - Widths generated for fixed-size images (default: `[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`)
 - `imageSizes` - Widths generated for `fill` images (default: `[16, 32, 48, 64, 96, 128, 256, 384]`)
 - `formats` - Output formats to generate (default: `['avif', 'webp']`)
-- `qualityAllowlist` - Allowed quality values that can be requested (default: `[25, 50, 75, 100]`). The first value is used for preprocessing.
+- `qualityAllowlist` - Allowed quality values that can be requested (default: `[25, 50, 75, 100]`). The first value is used during build-time image preprocessing (manifest generation and preoptimization) to produce optimized source images and placeholders before runtime. Note that this is separate from the runtime `quality` prop default (75), which controls on-demand optimization quality. For example, if `qualityAllowlist: [25, 50, 75, 100]`, build-time preprocessing will use quality 25, while runtime requests default to quality 75 unless specified otherwise.
 
 ## Basic Usage
 
