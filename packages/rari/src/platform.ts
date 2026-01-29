@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
 interface PlatformInfo {
   platform: string
@@ -101,8 +102,8 @@ export function getBinaryPath(): string {
   }
 
   try {
-    const packagePath = require.resolve(`${packageName}/package.json`)
-    const packageDir = packagePath.replace('/package.json', '')
+    const packagePath = import.meta.resolve(`${packageName}/package.json`)
+    const packageDir = fileURLToPath(new URL('.', packagePath))
     const binaryPath = join(packageDir, 'bin', binaryName)
 
     if (existsSync(binaryPath))

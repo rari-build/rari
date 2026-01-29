@@ -554,9 +554,9 @@ if (import.meta.hot) {
 
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
-        const reactPath = require.resolve('react')
-        const reactDomClientPath = require.resolve('react-dom/client')
-        const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
+        const reactPath = fileURLToPath(import.meta.resolve('react'))
+        const reactDomClientPath = fileURLToPath(import.meta.resolve('react-dom/client'))
+        const reactJsxRuntimePath = fileURLToPath(import.meta.resolve('react/jsx-runtime'))
         const aliasesToAppend: Array<{ find: string, replacement: string }>
           = []
         if (!aliasFinds.has('react/jsx-runtime')) {
@@ -566,9 +566,9 @@ if (import.meta.hot) {
           })
         }
         try {
-          const reactJsxDevRuntimePath = require.resolve(
+          const reactJsxDevRuntimePath = fileURLToPath(import.meta.resolve(
             'react/jsx-dev-runtime',
-          )
+          ))
           if (!aliasFinds.has('react/jsx-dev-runtime')) {
             aliasesToAppend.push({
               find: 'react/jsx-dev-runtime',

@@ -39,6 +39,15 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
+function crossPlatformSpawn(command: string, args: string[], options: any) {
+  const isWindows = process.platform === 'win32'
+
+  if (isWindows && command === 'npx')
+    return spawn('npx.cmd', args, options)
+
+  return spawn(command, args, options)
+}
+
 function logInfo(message: string) {
   console.warn(`${colors.blue('info')} ${message}`)
 }
@@ -94,7 +103,6 @@ function getDeploymentConfig() {
 async function runViteBuild() {
   const { existsSync, rmSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const { spawn } = await import('node:child_process')
 
   const distPath = resolve(process.cwd(), 'dist')
 
@@ -104,10 +112,9 @@ async function runViteBuild() {
   }
 
   logInfo('Type checking...')
-  const typecheckProcess = spawn('npx', ['tsgo'], {
+  const typecheckProcess = crossPlatformSpawn('npx', ['tsgo'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -125,10 +132,9 @@ async function runViteBuild() {
   })
 
   logInfo('Building for production...')
-  const buildProcess = spawn('npx', ['vite', 'build'], {
+  const buildProcess = crossPlatformSpawn('npx', ['vite', 'build'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -164,7 +170,7 @@ async function preOptimizeImages() {
     return
 
   try {
-    const binaryPath = await getBinaryPath()
+    const binaryPath = getBinaryPath()
 
     const optimizeProcess = spawn(binaryPath, ['optimize-images'], {
       stdio: 'inherit',
@@ -196,17 +202,15 @@ async function preOptimizeImages() {
 async function runViteDev() {
   const { existsSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const { spawn } = await import('node:child_process')
 
   const distPath = resolve(process.cwd(), 'dist')
 
   if (!existsSync(distPath)) {
     logInfo('First run detected - building project...')
 
-    const buildProcess = spawn('npx', ['vite', 'build', '--mode', 'development'], {
+    const buildProcess = crossPlatformSpawn('npx', ['vite', 'build', '--mode', 'development'], {
       stdio: 'inherit',
       cwd: process.cwd(),
-      shell: true,
     })
 
     await new Promise<void>((resolve, reject) => {
@@ -225,10 +229,9 @@ async function runViteDev() {
   }
 
   logInfo('Starting Vite dev server...')
-  const viteProcess = spawn('npx', ['vite'], {
+  const viteProcess = crossPlatformSpawn('npx', ['vite'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   const shutdown = () => {

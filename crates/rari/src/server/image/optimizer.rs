@@ -26,6 +26,7 @@ pub struct ImageOptimizer {
     http_client: Client,
     project_path: PathBuf,
     processing_semaphore: Arc<Semaphore>,
+    concurrency: usize,
 }
 
 impl ImageOptimizer {
@@ -49,6 +50,7 @@ impl ImageOptimizer {
             http_client,
             project_path: project_path.to_path_buf(),
             processing_semaphore,
+            concurrency,
         }
     }
 
@@ -249,9 +251,7 @@ impl ImageOptimizer {
                     }
                 }
             })
-            .buffer_unordered(
-                self.config.optimization_concurrency.unwrap_or(DEFAULT_CONCURRENCY).max(1),
-            )
+            .buffer_unordered(self.concurrency)
             .collect()
             .await;
 
