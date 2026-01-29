@@ -377,18 +377,18 @@ pub fn inject_metadata(
         }
     }
 
-    if let Some(optimizer) = image_optimizer {
-        if let Some(head_end) = result.find("</head>") {
-            let preload_links = optimizer.get_preload_links();
-            if !preload_links.is_empty() {
-                let mut preload_html = String::new();
-                for link in preload_links {
-                    preload_html.push_str("    ");
-                    preload_html.push_str(&link);
-                    preload_html.push('\n');
-                }
-                result.insert_str(head_end, &preload_html);
+    if let Some(optimizer) = image_optimizer
+        && let Some(head_end) = result.find("</head>")
+    {
+        let preload_links = optimizer.get_preload_links();
+        if !preload_links.is_empty() {
+            let mut preload_html = String::new();
+            for link in preload_links {
+                preload_html.push_str("    ");
+                preload_html.push_str(&link);
+                preload_html.push('\n');
             }
+            result.insert_str(head_end, &preload_html);
         }
     }
 
