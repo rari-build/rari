@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
+import { logError, logInfo, logSuccess, logWarn } from './logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
 function loadEnvFile() {
@@ -60,22 +61,6 @@ function normalizeError(error: unknown): string {
   catch {
     return String(error)
   }
-}
-
-function logInfo(message: string) {
-  console.warn(`${colors.blue('info')} ${message}`)
-}
-
-function logSuccess(message: string) {
-  console.warn(`${colors.green('✓')} ${message}`)
-}
-
-function logWarn(message: string) {
-  console.warn(`${colors.yellow('⚠')} ${message}`)
-}
-
-function logError(message: string) {
-  console.error(`${colors.red('✗')} ${message}`)
 }
 
 function isRailwayEnvironment(): boolean {
