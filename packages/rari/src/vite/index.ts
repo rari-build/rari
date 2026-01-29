@@ -12,6 +12,7 @@ import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
 import { HMRCoordinator } from './hmr-coordinator'
+import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin } from './server-build'
 
 interface RouterPluginOptions {
@@ -953,10 +954,12 @@ const ${componentName} = registerClientReference(
     configureServer(server) {
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
+      const imageManifest = scanForImageUsage(srcDir)
 
       const imageConfig = {
         ...DEFAULT_IMAGE_CONFIG,
         ...options.images,
+        preoptimizeManifest: imageManifest.images,
       }
       const distDir = path.join(projectRoot, 'dist')
       const serverDir = path.join(distDir, 'server')
@@ -1741,11 +1744,15 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
     },
 
     writeBundle() {
+      const projectRoot = options.projectRoot || process.cwd()
+      const srcDir = path.join(projectRoot, 'src')
+      const imageManifest = scanForImageUsage(srcDir)
+
       const imageConfig = {
         ...DEFAULT_IMAGE_CONFIG,
         ...options.images,
+        preoptimizeManifest: imageManifest.images,
       }
-      const projectRoot = options.projectRoot || process.cwd()
       const distDir = path.join(projectRoot, 'dist')
       const serverDir = path.join(distDir, 'server')
       if (!fs.existsSync(serverDir))
