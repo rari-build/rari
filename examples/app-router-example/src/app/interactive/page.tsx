@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import Counter from '@/components/Counter'
 import TodoList from '@/components/TodoList'
 
@@ -39,7 +40,7 @@ export default async function InteractivePage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Interactive Components | rari App Router',
   description: 'Testing client components with RSC',
 }

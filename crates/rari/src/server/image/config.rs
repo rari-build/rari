@@ -22,6 +22,8 @@ pub struct ImageConfig {
     pub max_redirects: u8,
     #[serde(default = "default_minimum_cache_ttl")]
     pub minimum_cache_ttl: u64,
+    #[serde(default)]
+    pub optimization_concurrency: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +53,7 @@ impl Default for ImageConfig {
             quality_allowlist: default_quality_allowlist(),
             max_redirects: default_max_redirects(),
             minimum_cache_ttl: default_minimum_cache_ttl(),
+            optimization_concurrency: None,
         }
     }
 }
@@ -68,7 +71,7 @@ fn default_image_sizes() -> Vec<u32> {
 }
 
 fn default_formats() -> Vec<ImageFormat> {
-    vec![ImageFormat::WebP]
+    vec![ImageFormat::Avif]
 }
 
 fn default_quality_allowlist() -> Vec<u8> {

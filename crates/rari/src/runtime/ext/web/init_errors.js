@@ -269,9 +269,8 @@ function processUnhandledPromiseRejection(promise, reason) {
 
   // If event was not prevented (or "unhandledrejection" listeners didn't
   // throw) we will let Rust side handle it.
-  if (rejectionEvent.defaultPrevented) {
+  if (rejectionEvent.defaultPrevented)
     return true
-  }
 
   return false
 }
@@ -286,9 +285,8 @@ function processRejectionHandled(promise, reason) {
   // Note that the handler may throw, causing a recursive "error" event
   globalThis_.dispatchEvent(rejectionHandledEvent)
 
-  if (typeof internals.nodeProcessRejectionHandledCallback !== 'undefined') {
+  if (typeof internals.nodeProcessRejectionHandledCallback !== 'undefined')
     internals.nodeProcessRejectionHandledCallback(rejectionHandledEvent)
-  }
 }
 
 core.setReportExceptionCallback(event.reportException)

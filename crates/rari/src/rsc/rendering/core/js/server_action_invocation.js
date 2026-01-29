@@ -15,30 +15,29 @@
         const formDataLike = {
           data: arg,
           get(key) {
-            if (hasOwn.call(this.data, key)) {
+            if (hasOwn.call(this.data, key))
               return this.data[key]
-            }
+
             return undefined
           },
           has(key) {
             return hasOwn.call(this.data, key)
           },
           set(key, value) {
-            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype')
               return
-            }
+
             this.data[key] = value
           },
           append(key, value) {
-            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype')
               return
-            }
+
             this.data[key] = value
           },
           delete(key) {
-            if (hasOwn.call(this.data, key)) {
+            if (hasOwn.call(this.data, key))
               delete this.data[key]
-            }
           },
           entries() {
             return Object.keys(this.data)

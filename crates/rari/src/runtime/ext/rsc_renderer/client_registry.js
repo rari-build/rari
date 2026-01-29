@@ -1,14 +1,11 @@
-if (typeof globalThis['~clientComponents'] === 'undefined') {
+if (typeof globalThis['~clientComponents'] === 'undefined')
   globalThis['~clientComponents'] = {}
-}
 
-if (typeof globalThis['~clientComponentNames'] === 'undefined') {
+if (typeof globalThis['~clientComponentNames'] === 'undefined')
   globalThis['~clientComponentNames'] = {}
-}
 
-if (typeof globalThis['~clientComponentPaths'] === 'undefined') {
+if (typeof globalThis['~clientComponentPaths'] === 'undefined')
   globalThis['~clientComponentPaths'] = {}
-}
 
 function registerClientComponent(componentId, componentPath, component) {
   if (!componentId || !componentPath) {
@@ -100,7 +97,7 @@ function extractComponentNameFromPath(componentPath) {
     return null
 
   const pathParts = componentPath.split(/[/\\]/)
-  const fileName = pathParts[pathParts.length - 1]
+  const fileName = pathParts.at(-1)
 
   if (!fileName)
     return null
@@ -108,7 +105,7 @@ function extractComponentNameFromPath(componentPath) {
   const nameWithoutExt = fileName.replace(/\.(?:js|jsx|ts|tsx)$/, '')
 
   if (nameWithoutExt.toLowerCase() === 'index') {
-    const parentDir = pathParts[pathParts.length - 2]
+    const parentDir = pathParts.at(-2)
     return parentDir || null
   }
 

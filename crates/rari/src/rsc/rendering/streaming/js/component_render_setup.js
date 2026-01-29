@@ -359,9 +359,8 @@ globalThis['~render'].componentAsync = async function () {
           }
         }
 
-        if (el.children && Array.isArray(el.children)) {
+        if (el.children && Array.isArray(el.children))
           el.children = el.children.map(child => processSuspenseInStructure(child, parentBoundaryId))
-        }
 
         return el
       }
@@ -448,9 +447,8 @@ globalThis['~render'].componentAsync = async function () {
       globalThis['~render'].streamingResult = finalResult
     }
 
-    if (!globalThis['~render'].initialComplete) {
+    if (!globalThis['~render'].initialComplete)
       globalThis['~render'].initialComplete = true
-    }
 
     if (!globalThis['~render'])
       globalThis['~render'] = {}

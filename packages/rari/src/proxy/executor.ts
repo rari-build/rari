@@ -41,9 +41,8 @@ export class ProxyExecutor {
       longitude?: string
     }
   }): Promise<ProxyResult> {
-    if (!this.proxyFn) {
+    if (!this.proxyFn)
       return { continue: true }
-    }
 
     const rariRequest = RariRequest.fromRequest(request, options)
 

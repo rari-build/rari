@@ -124,9 +124,9 @@ async function renderToHtml(element, depth = 0, isRawContent = false) {
 
   if (Array.isArray(element)) {
     const results = []
-    for (const child of element) {
+    for (const child of element)
       results.push(await renderToHtml(child, depth + 1, isRawContent))
-    }
+
     return results.join('')
   }
 

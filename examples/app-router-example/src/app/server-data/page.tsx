@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import process from 'node:process'
 
 async function fetchData() {
@@ -86,7 +87,7 @@ export default async function ServerDataPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Server Data | rari App Router',
   description: 'Async server component data fetching',
 }

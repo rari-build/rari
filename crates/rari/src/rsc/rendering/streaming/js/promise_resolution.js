@@ -35,7 +35,7 @@
     try {
       const additionalProps = {}
       for (const key in error) {
-        if (Object.prototype.hasOwnProperty.call(error, key) && key !== 'name' && key !== 'message' && key !== 'stack') {
+        if (Object.hasOwn(error, key) && key !== 'name' && key !== 'message' && key !== 'stack') {
           try {
             const value = error[key]
             if (value !== undefined && value !== null
@@ -112,12 +112,10 @@
 
       let rscData
       try {
-        if (globalThis.renderToRsc) {
+        if (globalThis.renderToRsc)
           rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~rsc']?.clientComponents || {})
-        }
-        else {
+        else
           rscData = resolvedElement
-        }
       }
       catch (rscError) {
         return safeSerializeError(rscError, 'rsc_conversion')

@@ -82,7 +82,7 @@ export class StatePreserver {
 
         const formData = new FormData(form)
 
-        if (Array.from(formData.entries()).length > 0)
+        if (!formData.entries().next().done)
           formDataMap.set(formId, formData)
       })
     }
@@ -219,22 +219,18 @@ export class StatePreserver {
                 if (elements instanceof RadioNodeList) {
                   elements.forEach((element) => {
                     if (element instanceof HTMLInputElement) {
-                      if (element.type === 'radio' || element.type === 'checkbox') {
+                      if (element.type === 'radio' || element.type === 'checkbox')
                         element.checked = element.value === value
-                      }
-                      else {
+                      else
                         element.value = value as string
-                      }
                     }
                   })
                 }
                 else if (elements instanceof HTMLInputElement || elements instanceof HTMLTextAreaElement || elements instanceof HTMLSelectElement) {
-                  if (elements instanceof HTMLInputElement && (elements.type === 'checkbox' || elements.type === 'radio')) {
+                  if (elements instanceof HTMLInputElement && (elements.type === 'checkbox' || elements.type === 'radio'))
                     elements.checked = elements.value === value
-                  }
-                  else {
+                  else
                     elements.value = value as string
-                  }
                 }
               }
               catch {

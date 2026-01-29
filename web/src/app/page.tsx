@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import FeatureCard from '@/components/FeatureCard'
 import HeroSection from '@/components/HeroSection'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
@@ -102,7 +103,7 @@ export default async function HomePage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'rari: Runtime Accelerated Rendering Infrastructure',
   description:
     'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',

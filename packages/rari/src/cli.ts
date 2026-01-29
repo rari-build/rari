@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import type { SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
+import { logError, logInfo, logSuccess, logWarn } from './logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
 function loadEnvFile() {
@@ -39,16 +41,26 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
-function logInfo(message: string) {
-  console.warn(`${colors.blue('info')} ${message}`)
+function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
+  const isWindows = process.platform === 'win32'
+
+  if (isWindows && command === 'npx')
+    return spawn('npx.cmd', args, options)
+
+  return spawn(command, args, options)
 }
 
-function logSuccess(message: string) {
-  console.warn(`${colors.green('✓')} ${message}`)
-}
-
-function logError(message: string) {
-  console.error(`${colors.red('✗')} ${message}`)
+function normalizeError(error: unknown): string {
+  if (error instanceof Error)
+    return error.message
+  if (typeof error === 'string')
+    return error
+  try {
+    return JSON.stringify(error)
+  }
+  catch {
+    return String(error)
+  }
 }
 
 function isRailwayEnvironment(): boolean {
@@ -90,7 +102,6 @@ function getDeploymentConfig() {
 async function runViteBuild() {
   const { existsSync, rmSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const { spawn } = await import('node:child_process')
 
   const distPath = resolve(process.cwd(), 'dist')
 
@@ -100,10 +111,9 @@ async function runViteBuild() {
   }
 
   logInfo('Type checking...')
-  const typecheckProcess = spawn('npx', ['tsgo'], {
+  const typecheckProcess = crossPlatformSpawn('npx', ['tsgo'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -121,10 +131,9 @@ async function runViteBuild() {
   })
 
   logInfo('Building for production...')
-  const buildProcess = spawn('npx', ['vite', 'build'], {
+  const buildProcess = crossPlatformSpawn('npx', ['vite', 'build'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -140,22 +149,63 @@ async function runViteBuild() {
     })
     buildProcess.on('error', reject)
   })
+
+  await preOptimizeImages()
+}
+
+async function preOptimizeImages() {
+  const imageConfigPath = resolve(process.cwd(), 'dist', 'server', 'image.json')
+
+  if (!existsSync(imageConfigPath))
+    return
+
+  const publicPath = resolve(process.cwd(), 'public')
+
+  if (!existsSync(publicPath))
+    return
+
+  try {
+    const binaryPath = getBinaryPath()
+
+    const optimizeProcess = spawn(binaryPath, ['optimize-images'], {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      shell: false,
+    })
+
+    await new Promise<void>((resolve) => {
+      optimizeProcess.on('exit', (code) => {
+        if (code === 0) {
+          resolve()
+        }
+        else {
+          logWarn(`Image pre-optimization exited with code ${code}`)
+          resolve()
+        }
+      })
+      optimizeProcess.on('error', (err) => {
+        logWarn(`Image pre-optimization error: ${normalizeError(err)}`)
+        resolve()
+      })
+    })
+  }
+  catch (error) {
+    logWarn(`Could not pre-optimize images: ${normalizeError(error)}`)
+  }
 }
 
 async function runViteDev() {
   const { existsSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const { spawn } = await import('node:child_process')
 
   const distPath = resolve(process.cwd(), 'dist')
 
   if (!existsSync(distPath)) {
     logInfo('First run detected - building project...')
 
-    const buildProcess = spawn('npx', ['vite', 'build', '--mode', 'development'], {
+    const buildProcess = crossPlatformSpawn('npx', ['vite', 'build', '--mode', 'development'], {
       stdio: 'inherit',
       cwd: process.cwd(),
-      shell: true,
     })
 
     await new Promise<void>((resolve, reject) => {
@@ -174,10 +224,9 @@ async function runViteDev() {
   }
 
   logInfo('Starting Vite dev server...')
-  const viteProcess = spawn('npx', ['vite'], {
+  const viteProcess = crossPlatformSpawn('npx', ['vite'], {
     stdio: 'inherit',
     cwd: process.cwd(),
-    shell: true,
   })
 
   const shutdown = () => {

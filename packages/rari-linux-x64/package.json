@@ -1,5 +1,6 @@
 {
   "name": "rari-linux-x64",
+  "type": "module",
   "version": "0.8.0",
   "description": "Runtime Accelerated Rendering Infrastructure (Linux x64 binary)",
   "author": "Ryan Skinner",
@@ -35,6 +36,6 @@
     "bin/rari"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.6.0"
   }
 }

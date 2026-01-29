@@ -15,7 +15,7 @@ class ResponseCookiesImpl implements ResponseCookies {
   }
 
   getAll() {
-    return Array.from(this.cookies.values()).map(cookie => ({
+    return Array.from(this.cookies.values(), cookie => ({
       name: cookie.name,
       value: cookie.value,
       path: cookie.options?.path,
@@ -45,7 +45,7 @@ class ResponseCookiesImpl implements ResponseCookies {
   }
 
   toSetCookieHeaders(): string[] {
-    return Array.from(this.cookies.values()).map((cookie) => {
+    return Array.from(this.cookies.values(), (cookie) => {
       let header = `${cookie.name}=${cookie.value}`
 
       if (cookie.options) {

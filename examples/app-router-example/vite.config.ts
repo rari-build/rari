@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [
     rari({
       images: {
+        deviceSizes: [1920],
+        imageSizes: [384, 400, 600, 1200],
         remotePatterns: [
           {
             hostname: 'images.unsplash.com',

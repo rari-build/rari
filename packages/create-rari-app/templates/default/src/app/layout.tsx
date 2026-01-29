@@ -1,5 +1,5 @@
 /* eslint-disable style/object-curly-spacing */
-import type { LayoutProps } from 'rari'
+import type { LayoutProps, Metadata } from 'rari'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps) {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: '{{PROJECT_NAME}}',
   description: 'A rari application',
 }

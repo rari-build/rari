@@ -49,9 +49,9 @@
             if (!globalThis['~suspense'].discoveredBoundaries)
               globalThis['~suspense'].discoveredBoundaries = []
             globalThis['~suspense'].discoveredBoundaries.push({ id: boundaryId, fallback: serializableFallback, parentId: previousBoundaryId })
-            if (!props.children) {
+            if (!props.children)
               return safeFallback
-            }
+
             return props.children
           }
           catch (error) {

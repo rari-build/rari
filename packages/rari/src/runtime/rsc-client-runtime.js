@@ -473,7 +473,7 @@ class RscClient {
               }
             }
             else {
-              if (processedProps && Object.prototype.hasOwnProperty.call(processedProps, '~boundaryId')) {
+              if (processedProps && Object.hasOwn(processedProps, '~boundaryId')) {
                 const { '~boundaryId': tildeBoundaryId, ...rest } = processedProps
                 processedProps = rest
               }
@@ -511,16 +511,15 @@ class RscClient {
       try {
         while (true) {
           const { value, done } = await reader.read()
-          if (done) {
+          if (done)
             break
-          }
 
           const chunk = decoder.decode(value, { stream: true })
           buffered += chunk
 
           const lines = buffered.split(newlineChar)
           const completeLines = lines.slice(0, -1)
-          buffered = lines[lines.length - 1]
+          buffered = lines.at(-1)
 
           for (const line of completeLines) {
             if (!line.trim())
@@ -567,18 +566,18 @@ class RscClient {
                 if (Array.isArray(parsed) && parsed.length >= 4) {
                   const [marker, selector, props] = parsed
                   const boundaryId = props?.['~boundaryId']
-                  if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && boundaryId) {
+                  if (marker === '$' && (selector === 'react.suspense' || selector === 'suspense') && props && boundaryId)
                     boundaryRowMap.set(`$L${rowId}`, boundaryId)
-                  }
-                  if (marker === '$' && props && Object.prototype.hasOwnProperty.call(props, 'children')) {
+
+                  if (marker === '$' && props && Object.hasOwn(props, 'children')) {
                     if (typeof selector === 'string' && selector.startsWith('$L')) {
                       const target = boundaryRowMap.get(selector) || null
                       if (target) {
                         const resolvedContent = convertRscToReact(props.children)
                         boundaryUpdates.set(target, resolvedContent)
-                        if (streamingComponent) {
+                        if (streamingComponent)
                           streamingComponent.updateBoundary(target, resolvedContent)
-                        }
+
                         continue
                       }
                     }
@@ -590,9 +589,8 @@ class RscClient {
                     const sel = parsed[1]
                     const p = parsed[3]
                     const boundaryId = p?.['~boundaryId']
-                    if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && boundaryId) {
+                    if (typeof sel === 'string' && (sel === 'react.suspense' || sel === 'suspense') && p && boundaryId)
                       canUseAsRoot = false
-                    }
                   }
                   if (canUseAsRoot) {
                     initialContent = convertRscToReact(parsed)
@@ -784,21 +782,20 @@ class RscClient {
       }
     }
 
-    if (errors.length > 0) {
+    if (errors.length > 0)
       throw new Error(`RSC Server Error: ${errors.map(e => e.message || e).join(', ')}`)
-    }
 
     let rootElement = null
 
-    const elementKeys = Array.from(elements.keys()).sort((a, b) => Number.parseInt(a) - Number.parseInt(b))
+    const elementKeys = elements.keys().toSorted((a, b) => Number.parseInt(a) - Number.parseInt(b))
     for (const key of elementKeys) {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
         const [, type, , props] = element
         const boundaryId = props?.['~boundaryId']
-        if (type === 'react.suspense' && props && boundaryId) {
+        if (type === 'react.suspense' && props && boundaryId)
           continue
-        }
+
         rootElement = element
         break
       }
@@ -914,15 +911,12 @@ class RscClient {
               return result
             }).filter(child => child !== null && child !== undefined)
 
-            if (processedChildren.length === 0) {
+            if (processedChildren.length === 0)
               processed[key] = null
-            }
-            else if (processedChildren.length === 1) {
+            else if (processedChildren.length === 1)
               processed[key] = processedChildren[0]
-            }
-            else {
+            else
               processed[key] = processedChildren
-            }
           }
         }
         else {
@@ -1009,9 +1003,7 @@ function ServerComponentWrapper({
       return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
       )
     }
-    else if (data) {
-      return data
-    }
+    return data
   }
 
   return createElement(RscErrorComponent, {
@@ -1262,9 +1254,8 @@ if (import.meta.hot) {
       }
     }
 
-    for (const key of keysToDelete) {
+    for (const key of keysToDelete)
       rscClient.componentCache.delete(key)
-    }
   }
 
   async function invalidateAppRouterCache(data) {
@@ -1387,12 +1378,10 @@ class HMRErrorOverlay {
 
   show(error) {
     this.currentError = error
-    if (this.overlay) {
+    if (this.overlay)
       this.updateOverlay(error)
-    }
-    else {
+    else
       this.createOverlay(error)
-    }
   }
 
   hide() {
@@ -1470,12 +1459,10 @@ if (import.meta.hot) {
     })
 
     if (errorCount && maxErrors) {
-      if (errorCount >= maxErrors) {
+      if (errorCount >= maxErrors)
         console.error(`[rari] HMR: Maximum error count (${maxErrors}) reached. Consider restarting the dev server if issues persist.`)
-      }
-      else if (errorCount >= maxErrors - 2) {
+      else if (errorCount >= maxErrors - 2)
         console.warn(`[rari] HMR: Error count: ${errorCount}/${maxErrors}. Approaching maximum error threshold.`)
-      }
     }
   })
 

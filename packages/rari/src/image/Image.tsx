@@ -2,7 +2,7 @@
 
 import type { ImageFormat } from './constants'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES } from './constants'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS } from './constants'
 
 export interface ImageProps {
   src: string | StaticImageData
@@ -143,9 +143,8 @@ export function Image({
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
+          if (entry.isIntersecting)
             observer.unobserve(img)
-          }
         })
       },
       {
@@ -205,13 +204,13 @@ export function Image({
     )
   }
 
-  const sizesArray = fill ? DEFAULT_IMAGE_SIZES : DEFAULT_DEVICE_SIZES
   const defaultWidth = imgWidth || 1920
+  const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
 
   const buildSrcSet = (format?: ImageFormat) => {
-    if (loader) {
+    if (loader)
       return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
-    }
+
     return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
   }
 
@@ -219,12 +218,14 @@ export function Image({
     ? loader({ src: finalSrc, width: defaultWidth, quality })
     : buildImageUrl(finalSrc, defaultWidth, quality)
 
+  const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
+
   const imgElement = (
     <img
       ref={imgRef}
       src={mainSrc}
-      srcSet={buildSrcSet()}
-      sizes={sizes}
+      srcSet={shouldUseSrcSet ? buildSrcSet() : undefined}
+      sizes={shouldUseSrcSet ? sizes : undefined}
       alt={showAltText ? alt : ''}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
@@ -237,6 +238,9 @@ export function Image({
       className={className}
     />
   )
+
+  if (!shouldUseSrcSet)
+    return imgElement
 
   return (
     <picture ref={pictureRef}>

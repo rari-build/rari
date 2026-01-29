@@ -1,6 +1,6 @@
-/* eslint-disable no-undef, react/no-unnecessary-use-prefix  */
+/* eslint-disable react/no-unnecessary-use-prefix  */
 if (typeof globalThis.React === 'undefined') {
-  React = {
+  globalThis.React = {
     createElement(type, props, ...children) {
       return { $$typeof: Symbol.for('react.transitional.element'), type, props: props || {}, children }
     },
@@ -13,12 +13,10 @@ if (typeof globalThis.React === 'undefined') {
       }
 
       setState(updater) {
-        if (typeof updater === 'function') {
+        if (typeof updater === 'function')
           this.state = { ...this.state, ...updater(this.state, this.props) }
-        }
-        else {
+        else
           this.state = { ...this.state, ...updater }
-        }
       }
 
       render() {
@@ -36,12 +34,10 @@ if (!globalThis.React.Component) {
     }
 
     setState(updater) {
-      if (typeof updater === 'function') {
+      if (typeof updater === 'function')
         this.state = { ...this.state, ...updater(this.state, this.props) }
-      }
-      else {
+      else
         this.state = { ...this.state, ...updater }
-      }
     }
 
     render() {

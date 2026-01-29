@@ -1,4 +1,4 @@
-export interface ServerPropsResult {
+export interface ServerSidePropsResult {
   props: Record<string, any>
   revalidate?: number
   notFound?: boolean
@@ -79,7 +79,7 @@ export async function extractServerProps(
   componentPath: string,
   params: Record<string, string>,
   searchParams: Record<string, string>,
-): Promise<ServerPropsResult> {
+): Promise<ServerSidePropsResult> {
   try {
     const module = await import(/* @vite-ignore */ componentPath)
 
@@ -176,12 +176,10 @@ export function mergeMetadata(
 
   if (childMetadata.title !== undefined) {
     if (typeof childMetadata.title === 'string') {
-      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template) {
+      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template)
         merged.title = parentMetadata.title.template.replace('%s', childMetadata.title)
-      }
-      else {
+      else
         merged.title = childMetadata.title
-      }
     }
     else {
       merged.title = childMetadata.title
@@ -254,7 +252,7 @@ export async function hasServerSideDataFetching(
 }
 
 const propsCache = new Map<string, {
-  result: ServerPropsResult
+  result: ServerSidePropsResult
   timestamp: number
 }>()
 
@@ -262,8 +260,8 @@ export async function extractServerPropsWithCache(
   componentPath: string,
   params: Record<string, string>,
   searchParams: Record<string, string>,
-  cacheTime: number = 60000, // 1 minute default
-): Promise<ServerPropsResult> {
+  cacheTime: number = 60000,
+): Promise<ServerSidePropsResult> {
   const cacheKey = `${componentPath}:${JSON.stringify(params)}:${JSON.stringify(searchParams)}`
   const cached = propsCache.get(cacheKey)
 

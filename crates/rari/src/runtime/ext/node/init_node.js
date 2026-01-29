@@ -58,9 +58,8 @@ if (!globalThis.process) {
     ppid: 0,
     title: 'node',
     exit: (code = 0) => {
-      if (globalThis.Deno?.exit) {
+      if (globalThis.Deno?.exit)
         globalThis.Deno.exit(code)
-      }
     },
     kill: () => {},
     memoryUsage: () => ({
@@ -498,9 +497,9 @@ const nodeModules = new Map([
       parse: (str) => {
         const params = new URLSearchParams(str)
         const result = {}
-        for (const [key, value] of params) {
+        for (const [key, value] of params)
           result[key] = value
-        }
+
         return result
       },
       stringify: (obj) => {
@@ -514,9 +513,9 @@ const nodeModules = new Map([
       parse: (str) => {
         const params = new URLSearchParams(str)
         const result = {}
-        for (const [key, value] of params) {
+        for (const [key, value] of params)
           result[key] = value
-        }
+
         return result
       },
       stringify: (obj) => {

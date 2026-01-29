@@ -69,15 +69,12 @@ function parseWireFormat(wireFormat) {
           i++
         }
         else {
-          if (charCode >= 48 && charCode <= 57) {
+          if (charCode >= 48 && charCode <= 57)
             rowID = (rowID << 4) | (charCode - 48)
-          }
-          else if (charCode >= 97 && charCode <= 102) {
+          else if (charCode >= 97 && charCode <= 102)
             rowID = (rowID << 4) | (charCode - 87)
-          }
-          else if (charCode >= 65 && charCode <= 70) {
+          else if (charCode >= 65 && charCode <= 70)
             rowID = (rowID << 4) | (charCode - 55)
-          }
           i++
         }
         break
@@ -328,15 +325,13 @@ function processProps(props, wireModules, moduleMap, symbols, chunks) {
 
   const processed = {}
   for (const key in props) {
-    if (Object.prototype.hasOwnProperty.call(props, key)) {
+    if (Object.hasOwn(props, key)) {
       if (key.startsWith('~') || key === 'ref')
         continue
-      if (key === 'children') {
+      if (key === 'children')
         processed[key] = props.children ? rscToReact(props.children, wireModules, moduleMap, symbols, chunks) : undefined
-      }
-      else {
+      else
         processed[key] = props[key]
-      }
     }
   }
   return processed

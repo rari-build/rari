@@ -1,7 +1,9 @@
 use cow_utils::CowUtils;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Archive, RkyvDeserialize, RkyvSerialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub enum ImageFormat {
     Avif,
     WebP,

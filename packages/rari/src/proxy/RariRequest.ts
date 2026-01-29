@@ -82,8 +82,8 @@ class RequestCookiesImpl implements RequestCookies {
 
   getPendingChanges() {
     return {
-      deletes: Array.from(this.pendingDeletes),
-      sets: Array.from(this.pendingSets.values()),
+      deletes: [...this.pendingDeletes],
+      sets: [...this.pendingSets.values()],
     }
   }
 }

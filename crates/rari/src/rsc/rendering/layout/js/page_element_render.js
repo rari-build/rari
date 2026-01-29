@@ -23,12 +23,10 @@
 
       for (const [key, value] of Object.entries(el.props)) {
         if (key === 'children') {
-          if (Array.isArray(value)) {
+          if (Array.isArray(value))
             result.props.children = value.map(serializeElement)
-          }
-          else {
+          else
             result.props.children = serializeElement(value)
-          }
         }
         else {
           result.props[key] = value

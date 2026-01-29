@@ -235,7 +235,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
           for (const exp of exports) {
             const trimmed = exp.trim()
             const parts = trimmed.split(/\s+as\s+/)
-            const exportedName = parts[parts.length - 1].trim()
+            const exportedName = parts.at(-1)?.trim()
             if (exportedName)
               exportedNames.push(exportedName)
           }
@@ -250,7 +250,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       for (const exp of exports) {
         const trimmed = exp.trim()
         const parts = trimmed.split(/\s+as\s+/)
-        const exportedName = parts[parts.length - 1].trim()
+        const exportedName = parts.at(-1)?.trim()
         if (exportedName)
           exportedNames.push(exportedName)
       }
@@ -365,12 +365,10 @@ if (import.meta.hot) {
       let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
 
       for (const name of exportedNames) {
-        if (name === 'default') {
+        if (name === 'default')
           newCode += `export default createServerReference("default", ${JSON.stringify(moduleId)}, "default");\n`
-        }
-        else {
+        else
           newCode += `export const ${name} = createServerReference("${name}", ${JSON.stringify(moduleId)}, "${name}");\n`
-        }
       }
 
       return newCode
@@ -393,12 +391,10 @@ if (import.meta.hot) {
         = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
 
       for (const name of exportedNames) {
-        if (name === 'default') {
+        if (name === 'default')
           newCode += `export default createServerComponentWrapper("${componentId}", ${JSON.stringify(id)});\n`
-        }
-        else {
+        else
           newCode += `export const ${name} = createServerComponentWrapper("${componentId}_${name}", ${JSON.stringify(id)});\n`
-        }
       }
 
       return newCode
@@ -539,9 +535,7 @@ if (import.meta.hot) {
         ? ((config.resolve as any).dedupe as string[])
         : []
       const toAdd = ['react', 'react-dom'];
-      (config.resolve as any).dedupe = Array.from(
-        new Set([...(existingDedupe || []), ...toAdd]),
-      )
+      (config.resolve as any).dedupe = [...new Set([...(existingDedupe || []), ...toAdd])]
 
       let existingAlias: Array<{
         find: string | RegExp
@@ -560,9 +554,9 @@ if (import.meta.hot) {
 
       const aliasFinds = new Set(existingAlias.map(a => String(a.find)))
       try {
-        const reactPath = require.resolve('react')
-        const reactDomClientPath = require.resolve('react-dom/client')
-        const reactJsxRuntimePath = require.resolve('react/jsx-runtime')
+        const reactPath = fileURLToPath(import.meta.resolve('react'))
+        const reactDomClientPath = fileURLToPath(import.meta.resolve('react-dom/client'))
+        const reactJsxRuntimePath = fileURLToPath(import.meta.resolve('react/jsx-runtime'))
         const aliasesToAppend: Array<{ find: string, replacement: string }>
           = []
         if (!aliasFinds.has('react/jsx-runtime')) {
@@ -572,9 +566,9 @@ if (import.meta.hot) {
           })
         }
         try {
-          const reactJsxDevRuntimePath = require.resolve(
+          const reactJsxDevRuntimePath = fileURLToPath(import.meta.resolve(
             'react/jsx-dev-runtime',
-          )
+          ))
           if (!aliasFinds.has('react/jsx-dev-runtime')) {
             aliasesToAppend.push({
               find: 'react/jsx-dev-runtime',
@@ -717,9 +711,8 @@ if (import.meta.hot) {
     },
 
     transform(code, id) {
-      if (!/\.(?:tsx?|jsx?)$/.test(id)) {
+      if (!/\.(?:tsx?|jsx?)$/.test(id))
         return null
-      }
 
       const environment = (this as any).environment
 
@@ -982,8 +975,9 @@ const ${componentName} = registerClientReference(
 
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
-            serverDir: 'server',
+            rscDir: 'server',
             manifestPath: 'server/manifest.json',
+            serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
@@ -1012,9 +1006,8 @@ const ${componentName} = registerClientReference(
                 }
                 else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
                   try {
-                    if (isServerComponent(fullPath)) {
+                    if (isServerComponent(fullPath))
                       serverComponentPaths.push(fullPath)
-                    }
                   }
                   catch (error) {
                     console.error(`[rari] Error checking ${fullPath}:`, error)
@@ -1046,13 +1039,11 @@ const ${componentName} = registerClientReference(
           for (const component of components) {
             try {
               const isAppRouterComponent = component.id.startsWith('app/')
-              if (isAppRouterComponent) {
+              if (isAppRouterComponent)
                 continue
-              }
 
-              if (component.code.includes('"use server"') || component.code.includes('\'use server\'')) {
+              if (component.code.includes('"use server"') || component.code.includes('\'use server\''))
                 continue
-              }
 
               const registerResponse = await fetch(
                 `${baseUrl}/_rari/register`,
@@ -1180,16 +1171,14 @@ const ${componentName} = registerClientReference(
 
         rustServerProcess.stdout?.on('data', (data: Buffer) => {
           const output = data.toString().trim()
-          if (output) {
+          if (output)
             console.error(`${output}`)
-          }
         })
 
         rustServerProcess.stderr?.on('data', (data: Buffer) => {
           const output = data.toString().trim()
-          if (output && !output.includes('warning')) {
+          if (output && !output.includes('warning'))
             console.error(`${output}`)
-          }
         })
 
         rustServerProcess.on('error', (error: Error) => {
@@ -1203,15 +1192,12 @@ const ${componentName} = registerClientReference(
 
         rustServerProcess.on('exit', (code: number, signal: string) => {
           rustServerProcess = null
-          if (signal) {
+          if (signal)
             console.error(`rari server stopped by signal ${signal}`)
-          }
-          else if (code === 0) {
+          else if (code === 0)
             console.error('rari server stopped successfully')
-          }
-          else if (code) {
+          else if (code)
             console.error(`rari server exited with code ${code}`)
-          }
         })
 
         setTimeout(async () => {
@@ -1253,15 +1239,15 @@ const ${componentName} = registerClientReference(
 
       const handleServerComponentHMR = async (filePath: string) => {
         try {
-          if (!isServerComponent(filePath)) {
+          if (!isServerComponent(filePath))
             return
-          }
 
           const { ServerComponentBuilder } = await import('./server-build')
           const builder = new ServerComponentBuilder(projectRoot, {
             outDir: 'dist',
-            serverDir: 'server',
+            rscDir: 'server',
             manifestPath: 'server/manifest.json',
+            serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
             rateLimit: options.rateLimit,
@@ -1339,9 +1325,10 @@ const ${componentName} = registerClientReference(
           try {
             const headers: Record<string, string> = {}
             for (const [key, value] of Object.entries(req.headers)) {
-              if (value && typeof value === 'string') {
+              if (typeof value === 'string')
                 headers[key] = value
-              }
+              else if (Array.isArray(value))
+                headers[key] = value.join(',')
             }
             headers.host = `localhost:${serverPort}`
             headers['accept-encoding'] = 'identity'
@@ -1379,6 +1366,7 @@ const ${componentName} = registerClientReference(
             else {
               res.end()
             }
+
             return
           }
           catch (error) {
@@ -1494,9 +1482,8 @@ const ${componentName} = registerClientReference(
       if (process.env.NODE_ENV === 'production') {
         try {
           const resolvedPath = path.resolve(id)
-          if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath)) {
+          if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath))
             return { id, external: true }
-          }
         }
         catch {}
       }
@@ -1518,21 +1505,10 @@ const ${componentName} = registerClientReference(
           { path: 'rari/image', exports: ['Image'] },
         ]
 
-        const clientComponentsArray = Array.from(allClientComponents).filter((componentPath) => {
+        const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            const lines = code.split('\n')
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
-                continue
-              if (trimmed === '\'use client\'' || trimmed === '"use client"'
-                || trimmed === '\'use client\';' || trimmed === '"use client";') {
-                return true
-              }
-              break
-            }
-            return false
+            return hasTopLevelDirective(code, 'use client')
           }
           catch {
             return false
@@ -1697,18 +1673,14 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
       if (isAppRouterFile && isSpecialRouteFile) {
         let fileType = 'page'
-        if (isLayoutFile) {
+        if (isLayoutFile)
           fileType = 'layout'
-        }
-        else if (isLoadingFile) {
+        else if (isLoadingFile)
           fileType = 'loading'
-        }
-        else if (isErrorFile) {
+        else if (isErrorFile)
           fileType = 'error'
-        }
-        else if (isNotFoundFile) {
+        else if (isNotFoundFile)
           fileType = 'not-found'
-        }
 
         if (serverComponentBuilder && componentType === 'server') {
           try {
@@ -1728,9 +1700,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         return undefined
       }
 
-      if (componentType === 'client') {
+      if (componentType === 'client')
         return
-      }
 
       if (componentType === 'server') {
         if (hmrCoordinator)
@@ -1793,13 +1764,11 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]
 
-  if (options.proxy !== false) {
+  if (options.proxy !== false)
     plugins.push(rariProxy(options.proxy || {}))
-  }
 
-  if (options.router !== false) {
+  if (options.router !== false)
     plugins.push(rariRouter(options.router || {}))
-  }
 
   return plugins
 }

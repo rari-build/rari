@@ -207,7 +207,8 @@ impl Server {
         let config_path = "dist/server/image.json";
 
         if let Ok(image_config_str) = std::fs::read_to_string(config_path)
-            && let Ok(image_config) = serde_json::from_str(&image_config_str)
+            && let Ok(image_config) =
+                serde_json::from_str::<crate::server::image::ImageConfig>(&image_config_str)
         {
             config.images = image_config;
         }

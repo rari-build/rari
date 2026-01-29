@@ -1,3 +1,5 @@
+import type { Metadata } from 'rari'
+
 export default function AboutPage() {
   return (
     <div className="space-y-8">
@@ -225,7 +227,7 @@ export default function AboutPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'About | rari App Router',
   description: 'Learn about the rari app router implementation',
 }

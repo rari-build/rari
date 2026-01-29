@@ -2,22 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import colors from '@rari/colors'
-
-function logInfo(message: string) {
-  console.warn(`${colors.blue('info')} ${message}`)
-}
-
-function logSuccess(message: string) {
-  console.warn(`${colors.green('✓')} ${message}`)
-}
-
-function logError(message: string) {
-  console.error(`${colors.red('✗')} ${message}`)
-}
-
-function logWarning(message: string) {
-  console.warn(`${colors.yellow('⚠')} ${message}`)
-}
+import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRailwayDeployment() {
   const cwd = process.cwd()
@@ -36,8 +21,8 @@ export async function createRailwayDeployment() {
     packageJson.scripts = packageJson.scripts || {}
 
     if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarning(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarning('Backing up to start:original and replacing with "rari start"')
+      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
+      logWarn('Backing up to start:original and replacing with "rari start"')
       packageJson.scripts['start:original'] = packageJson.scripts.start
     }
 
@@ -46,8 +31,16 @@ export async function createRailwayDeployment() {
     packageJson.scripts['deploy:railway'] = 'echo "Push to GitHub and connect to Railway to deploy"'
 
     packageJson.engines = packageJson.engines || {}
-    if (!packageJson.engines.node)
-      packageJson.engines.node = '>=20.0.0'
+    if (packageJson.engines.node) {
+      if (!isNodeVersionSufficient(packageJson.engines.node)) {
+        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=20.6.0`)
+        logWarn('Updating to >=20.6.0 for Railway deployment compatibility')
+        packageJson.engines.node = '>=20.6.0'
+      }
+    }
+    else {
+      packageJson.engines.node = '>=20.6.0'
+    }
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')
@@ -76,7 +69,7 @@ restartPolicyMaxRetries = 3
 
   const railwayTomlPath = join(cwd, 'railway.toml')
   if (existsSync(railwayTomlPath)) {
-    logWarning('railway.toml already exists, backing up to railway.toml.backup')
+    logWarn('railway.toml already exists, backing up to railway.toml.backup')
     const existingConfig = readFileSync(railwayTomlPath, 'utf-8')
     writeFileSync(join(cwd, 'railway.toml.backup'), existingConfig)
   }

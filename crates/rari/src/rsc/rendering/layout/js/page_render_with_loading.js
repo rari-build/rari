@@ -5,10 +5,11 @@ const PageComponent = globalThis['{page_component_id}']
 if (!PageComponent || typeof PageComponent !== 'function')
   throw new Error('Page component {page_component_id} not found')
 
+let pageElement
 const LoadingComponent = globalThis['{loading_id}']
 if (!LoadingComponent || typeof LoadingComponent !== 'function') {
   const pageProps = {page_props_json}
-  var pageElement = React.createElement(PageComponent, pageProps)
+  pageElement = React.createElement(PageComponent, pageProps)
   timings.isAsync = PageComponent.constructor.name === 'AsyncFunction'
 }
 else {
@@ -42,7 +43,7 @@ else {
       }
 
       const loadingFallback = LoadingComponent()
-      var pageElement = React.createElement(
+      pageElement = React.createElement(
         React.Suspense,
         { 'fallback': loadingFallback, '~boundaryId': promiseId },
         lazyMarker,
@@ -52,7 +53,7 @@ else {
       const pageResult = (async () => await PageComponent(pageProps))()
 
       const loadingFallback = LoadingComponent()
-      var pageElement = React.createElement(
+      pageElement = React.createElement(
         React.Suspense,
         { fallback: loadingFallback },
         pageResult,
@@ -60,7 +61,7 @@ else {
     }
   }
   else {
-    var pageElement = React.createElement(PageComponent, pageProps)
+    pageElement = React.createElement(PageComponent, pageProps)
   }
 
   timings.isAsync = isAsync

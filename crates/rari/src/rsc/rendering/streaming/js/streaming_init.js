@@ -9,9 +9,9 @@ if (!globalThis.renderToRsc) {
 
     if (Array.isArray(element)) {
       const results = []
-      for (const child of element) {
+      for (const child of element)
         results.push(await globalThis.renderToRsc(child, clientComponents))
-      }
+
       return results
     }
 
@@ -38,9 +38,8 @@ if (!globalThis.renderToRsc) {
             const props = element.props || {}
             let result = element.type(props)
 
-            if (result && typeof result.then === 'function') {
+            if (result && typeof result.then === 'function')
               result = await result
-            }
 
             return await globalThis.renderToRsc(result, clientComponents)
           }
@@ -64,9 +63,8 @@ if (!globalThis.renderToRsc) {
   }
 }
 
-if (typeof React === 'undefined') {
+if (typeof React === 'undefined')
   throw new TypeError('React is not available in streaming context. This suggests the runtime was not properly initialized with React extensions.')
-}
 
 if (!globalThis['~suspense']) {
   globalThis['~suspense'] = {

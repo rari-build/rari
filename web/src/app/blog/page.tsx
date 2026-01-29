@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -106,7 +107,7 @@ export default async function BlogIndexPage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'rari Blog',
   description: 'Latest news and updates from the rari team.',
 }

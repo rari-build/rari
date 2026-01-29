@@ -83,7 +83,7 @@ export class HMRCoordinator {
       clearTimeout(this.batchTimer)
 
     this.batchTimer = setTimeout(async () => {
-      const filesToProcess = Array.from(this.pendingFiles)
+      const filesToProcess = [...this.pendingFiles]
       this.pendingFiles.clear()
       this.batchTimer = null
 
@@ -163,12 +163,10 @@ export class HMRCoordinator {
           })
         })
 
-        if (successful.length === 1) {
+        if (successful.length === 1)
           this.queueLog('success', `Server component updated: ${successful[0].relativePath} (${duration}ms)`)
-        }
-        else {
+        else
           this.queueLog('success', `${successful.length} server components updated (${duration}ms)`)
-        }
 
         this.errorHandler.reset()
 
@@ -250,12 +248,10 @@ export class HMRCoordinator {
       const lines = code.split('\n')
       for (const line of lines) {
         const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
           continue
-        }
-        if (trimmed === '\'use client\'' || trimmed === '"use client"') {
+        if (trimmed === '\'use client\'' || trimmed === '"use client"')
           return 'client'
-        }
         break
       }
 
@@ -338,9 +334,9 @@ export class HMRCoordinator {
       this.batchTimer = null
     }
 
-    for (const timer of this.pendingUpdates.values()) {
+    for (const timer of this.pendingUpdates.values())
       clearTimeout(timer)
-    }
+
     this.pendingUpdates.clear()
     this.pendingFiles.clear()
     this.errorHandler.dispose()

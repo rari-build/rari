@@ -23,7 +23,7 @@ export {
 
 export type {
   MetadataResult,
-  ServerPropsResult,
+  ServerSidePropsResult,
   StaticParamsResult,
 } from './router/props-extractor'
 export type * from './router/route-info-types'
@@ -59,3 +59,10 @@ export {
 } from './runtime-client'
 
 export type { RuntimeClient } from './runtime-client'
+
+export type {
+  ServerConfig,
+  ServerCSPConfig,
+  ServerRateLimitConfig,
+  ServerSpamBlockerConfig,
+} from './types/server-config'

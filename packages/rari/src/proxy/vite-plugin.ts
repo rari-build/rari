@@ -81,12 +81,10 @@ export function rariProxy(options: ProxyPluginOptions = {}): Plugin {
     async buildStart() {
       proxyFile = await findProxyFile()
 
-      if (proxyFile) {
+      if (proxyFile)
         log(`Proxy enabled: ${proxyFile.relativePath}`)
-      }
-      else {
+      else
         log('No proxy file found')
-      }
     },
 
     configureServer(server) {

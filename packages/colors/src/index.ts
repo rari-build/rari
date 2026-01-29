@@ -1,7 +1,7 @@
 import process from 'node:process'
 
 const isColorSupported
-  = !(process.env.NO_COLOR || process.argv.includes('--no-color'))
+  = !process.env.NO_COLOR && !process.argv.includes('--no-color')
     && (
       process.env.FORCE_COLOR
       || process.argv.includes('--color')

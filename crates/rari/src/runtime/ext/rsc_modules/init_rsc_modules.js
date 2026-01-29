@@ -1,23 +1,19 @@
 (function initializeRscModules() {
   if (!globalThis['~rsc'])
     globalThis['~rsc'] = {}
-  if (!globalThis['~rsc'].modules) {
+  if (!globalThis['~rsc'].modules)
     globalThis['~rsc'].modules = {}
-  }
 
   if (!globalThis['~serverFunctions'])
     globalThis['~serverFunctions'] = {}
-  if (!globalThis['~serverFunctions'].exported) {
+  if (!globalThis['~serverFunctions'].exported)
     globalThis['~serverFunctions'].exported = {}
-  }
 
-  if (!globalThis['~serverFunctions'].all) {
+  if (!globalThis['~serverFunctions'].all)
     globalThis['~serverFunctions'].all = {}
-  }
 
-  if (!globalThis['~serverFunctions'].registered) {
+  if (!globalThis['~serverFunctions'].registered)
     globalThis['~serverFunctions'].registered = new Set()
-  }
 
   globalThis.registerModule = function (
     moduleKeyOrModule,
@@ -124,12 +120,10 @@
     try {
       const result = serverFunction(...args)
 
-      if (result && typeof result.then === 'function') {
+      if (result && typeof result.then === 'function')
         promise = result
-      }
-      else {
+      else
         promise = Promise.resolve(result)
-      }
     }
     catch (error) {
       promise = Promise.reject(error)
@@ -150,6 +144,7 @@
         ) {
           globalThis.PromiseManager.registerFunction(functionName, args, value)
         }
+
         return value
       },
       (error) => {

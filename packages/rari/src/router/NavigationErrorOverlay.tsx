@@ -75,9 +75,8 @@ export function NavigationErrorOverlay({
         padding: '20px',
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && onDismiss) {
+        if (e.target === e.currentTarget && onDismiss)
           onDismiss()
-        }
       }}
     >
       <div

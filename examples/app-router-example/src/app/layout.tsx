@@ -1,4 +1,4 @@
-import type { LayoutProps } from 'rari'
+import type { LayoutProps, Metadata } from 'rari'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -75,7 +75,7 @@ export default function RootLayout({ children }: LayoutProps) {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'rari App Router Example',
   description: 'Testing the new app router implementation',
 }

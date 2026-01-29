@@ -1,3 +1,4 @@
+import type { Metadata } from 'rari'
 import { Image } from 'rari/image'
 
 export default function TestImagePage() {
@@ -276,7 +277,7 @@ export default function TestImagePage() {
   )
 }
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Image Optimization | rari App Router',
   description: 'High-performance image optimization powered by Rust',
 }
