@@ -529,10 +529,28 @@ impl ImageOptimizer {
             let public_path = self.project_path.join("public");
             let file_path = public_path.join(url.trim_start_matches('/'));
 
-            let bytes = tokio::fs::read(&file_path).await.map_err(|e| {
+            let canonical_public = public_path.canonicalize().map_err(|e| {
+                ImageError::FetchError(format!("Failed to canonicalize public directory: {}", e))
+            })?;
+            let canonical_file = file_path.canonicalize().map_err(|e| {
+                ImageError::FetchError(format!(
+                    "Failed to canonicalize file path {}: {}",
+                    file_path.display(),
+                    e
+                ))
+            })?;
+
+            if !canonical_file.starts_with(&canonical_public) {
+                return Err(ImageError::InvalidUrl(format!(
+                    "Path traversal detected: {} escapes public directory",
+                    url
+                )));
+            }
+
+            let bytes = tokio::fs::read(&canonical_file).await.map_err(|e| {
                 ImageError::FetchError(format!(
                     "Failed to read local file {}: {}",
-                    file_path.display(),
+                    canonical_file.display(),
                     e
                 ))
             })?;
