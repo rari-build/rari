@@ -855,6 +855,20 @@ impl ImageOptimizer {
         let mut current_url = url.to_string();
         let mut redirect_count = 0;
 
+        let redact_url = |value: &str| {
+            Url::parse(value)
+                .map(|u| {
+                    let host = u.host_str().unwrap_or("");
+                    match u.port() {
+                        Some(port) => {
+                            format!("{}://{}:{}{}", u.scheme(), host, port, u.path())
+                        }
+                        None => format!("{}://{}{}", u.scheme(), host, u.path()),
+                    }
+                })
+                .unwrap_or_else(|_| "<invalid url>".to_string())
+        };
+
         loop {
             self.validate_remote_url(&current_url)?;
 
@@ -899,8 +913,8 @@ impl ImageOptimizer {
 
                 tracing::debug!(
                     "Following validated redirect: {} -> {}",
-                    current_url,
-                    redirect_url
+                    redact_url(&current_url),
+                    redact_url(&redirect_url)
                 );
                 current_url = redirect_url;
                 redirect_count += 1;
@@ -911,7 +925,7 @@ impl ImageOptimizer {
                 return Err(ImageError::FetchError(format!(
                     "HTTP {}: {}",
                     response.status(),
-                    current_url
+                    redact_url(&current_url)
                 )));
             }
 
