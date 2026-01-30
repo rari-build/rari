@@ -186,8 +186,6 @@ globalThis['~render'].componentAsync = async function () {
       element = Component(props)
 
       if (element && typeof element.then === 'function') {
-        isAsyncResult = true
-
         const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
         const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
