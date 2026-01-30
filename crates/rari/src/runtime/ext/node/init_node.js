@@ -604,7 +604,7 @@ const nodeModules = new Map([
       execSync: (cmd, options = {}) => {
         const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
@@ -641,7 +641,7 @@ const nodeModules = new Map([
       execSync: (cmd, options = {}) => {
         const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
