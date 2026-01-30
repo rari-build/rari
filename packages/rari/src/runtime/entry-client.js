@@ -7,6 +7,40 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import 'virtual:rsc-integration'
 
+function createSsrManifest() {
+  return {
+    moduleMap: new Proxy({}, {
+      get(_target, moduleId) {
+        return new Proxy({}, {
+          get(_moduleTarget, exportName) {
+            return {
+              id: `${moduleId}#${exportName}`,
+              chunks: [],
+              name: exportName,
+            }
+          },
+        })
+      },
+    }),
+    moduleLoading: new Proxy({}, {
+      get(_target, moduleId) {
+        return {
+          async [exportName]() {
+            try {
+              const module = await import(/* @vite-ignore */ `/${moduleId}`)
+              return module[exportName] || module.default
+            }
+            catch (error) {
+              console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
+              return null
+            }
+          },
+        }[exportName]
+      },
+    }),
+  }
+}
+
 function getClientComponent(id) {
   if (globalThis['~clientComponents'][id]?.component)
     return globalThis['~clientComponents'][id].component
@@ -223,37 +257,7 @@ export async function renderApp() {
 
         const stream = response.body
 
-        const ssrManifest = {
-          moduleMap: new Proxy({}, {
-            get(_target, moduleId) {
-              return new Proxy({}, {
-                get(_moduleTarget, exportName) {
-                  return {
-                    id: `${moduleId}#${exportName}`,
-                    chunks: [],
-                    name: exportName,
-                  }
-                },
-              })
-            },
-          }),
-          moduleLoading: new Proxy({}, {
-            get(_target, moduleId) {
-              return {
-                async [exportName]() {
-                  try {
-                    const module = await import(/* @vite-ignore */ `/${moduleId}`)
-                    return module[exportName] || module.default
-                  }
-                  catch (error) {
-                    console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
-                    return null
-                  }
-                },
-              }[exportName]
-            },
-          }),
-        }
+        const ssrManifest = createSsrManifest()
 
         element = await createFromReadableStream(stream, ssrManifest)
       }
@@ -300,37 +304,7 @@ export async function renderApp() {
             },
           })
 
-          const ssrManifest = {
-            moduleMap: new Proxy({}, {
-              get(_target, moduleId) {
-                return new Proxy({}, {
-                  get(_moduleTarget, exportName) {
-                    return {
-                      id: `${moduleId}#${exportName}`,
-                      chunks: [],
-                      name: exportName,
-                    }
-                  },
-                })
-              },
-            }),
-            moduleLoading: new Proxy({}, {
-              get(_target, moduleId) {
-                return {
-                  async [exportName]() {
-                    try {
-                      const module = await import(/* @vite-ignore */ `/${moduleId}`)
-                      return module[exportName] || module.default
-                    }
-                    catch (error) {
-                      console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
-                      return null
-                    }
-                  },
-                }[exportName]
-              },
-            }),
-          }
+          const ssrManifest = createSsrManifest()
 
           element = await createFromReadableStream(stream, ssrManifest)
         }
@@ -342,37 +316,7 @@ export async function renderApp() {
             },
           })
 
-          const ssrManifest = {
-            moduleMap: new Proxy({}, {
-              get(_target, moduleId) {
-                return new Proxy({}, {
-                  get(_moduleTarget, exportName) {
-                    return {
-                      id: `${moduleId}#${exportName}`,
-                      chunks: [],
-                      name: exportName,
-                    }
-                  },
-                })
-              },
-            }),
-            moduleLoading: new Proxy({}, {
-              get(_target, moduleId) {
-                return {
-                  async [exportName]() {
-                    try {
-                      const module = await import(/* @vite-ignore */ `/${moduleId}`)
-                      return module[exportName] || module.default
-                    }
-                    catch (error) {
-                      console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
-                      return null
-                    }
-                  },
-                }[exportName]
-              },
-            }),
-          }
+          const ssrManifest = createSsrManifest()
 
           element = await createFromReadableStream(stream, ssrManifest)
         }
@@ -412,37 +356,7 @@ export async function renderApp() {
           },
         })
 
-        const ssrManifest = {
-          moduleMap: new Proxy({}, {
-            get(_target, moduleId) {
-              return new Proxy({}, {
-                get(_moduleTarget, exportName) {
-                  return {
-                    id: `${moduleId}#${exportName}`,
-                    chunks: [],
-                    name: exportName,
-                  }
-                },
-              })
-            },
-          }),
-          moduleLoading: new Proxy({}, {
-            get(_target, moduleId) {
-              return {
-                async [exportName]() {
-                  try {
-                    const module = await import(/* @vite-ignore */ `/${moduleId}`)
-                    return module[exportName] || module.default
-                  }
-                  catch (error) {
-                    console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
-                    return null
-                  }
-                },
-              }[exportName]
-            },
-          }),
-        }
+        const ssrManifest = createSsrManifest()
 
         element = await createFromReadableStream(stream, ssrManifest)
       }

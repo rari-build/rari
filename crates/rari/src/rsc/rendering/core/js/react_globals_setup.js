@@ -1,4 +1,22 @@
 /* eslint-disable react/no-unnecessary-use-prefix  */
+class ReactComponent {
+  constructor(props) {
+    this.props = props
+    this.state = {}
+  }
+
+  setState(updater) {
+    if (typeof updater === 'function')
+      this.state = { ...this.state, ...updater(this.state, this.props) }
+    else
+      this.state = { ...this.state, ...updater }
+  }
+
+  render() {
+    return null
+  }
+}
+
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
@@ -6,45 +24,12 @@ if (typeof globalThis.React === 'undefined') {
     },
     Fragment(props) { return props?.children || null },
     Suspense(props) { return props?.children || props?.fallback || null },
-    Component: class Component {
-      constructor(props) {
-        this.props = props
-        this.state = {}
-      }
-
-      setState(updater) {
-        if (typeof updater === 'function')
-          this.state = { ...this.state, ...updater(this.state, this.props) }
-        else
-          this.state = { ...this.state, ...updater }
-      }
-
-      render() {
-        return null
-      }
-    },
+    Component: ReactComponent,
   }
 }
 
-if (!globalThis.React.Component) {
-  globalThis.React.Component = class Component {
-    constructor(props) {
-      this.props = props
-      this.state = {}
-    }
-
-    setState(updater) {
-      if (typeof updater === 'function')
-        this.state = { ...this.state, ...updater(this.state, this.props) }
-      else
-        this.state = { ...this.state, ...updater }
-    }
-
-    render() {
-      return null
-    }
-  }
-}
+if (!globalThis.React.Component)
+  globalThis.React.Component = ReactComponent
 
 if (typeof globalThis.Component === 'undefined')
   globalThis.Component = globalThis.React.Component
