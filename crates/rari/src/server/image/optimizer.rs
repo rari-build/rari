@@ -857,7 +857,12 @@ impl ImageOptimizer {
                 )));
             }
 
-            let mut bytes = Vec::new();
+            let mut bytes = if let Some(content_length) = response.content_length() {
+                let capacity = (content_length as usize).min(MAX_SOURCE_IMAGE_SIZE);
+                Vec::with_capacity(capacity)
+            } else {
+                Vec::new()
+            };
             let mut stream = response.bytes_stream();
 
             while let Some(chunk) = stream.next().await {
