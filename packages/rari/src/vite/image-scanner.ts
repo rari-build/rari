@@ -61,15 +61,12 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
 function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
   try {
     let loader: 'tsx' | 'jsx' | 'ts'
-    if (filePath.endsWith('.tsx')) {
+    if (filePath.endsWith('.tsx'))
       loader = 'tsx'
-    }
-    else if (filePath.endsWith('.jsx')) {
+    else if (filePath.endsWith('.jsx'))
       loader = 'jsx'
-    }
-    else {
+    else
       loader = 'ts'
-    }
 
     const result = transformSync(content, {
       loader,
@@ -147,13 +144,11 @@ function extractImageUsagesWithRegex(content: string, images: Map<string, ImageU
   const selfClosingRegex = /<Image\s([^/>]+)\/>/g
   const openingRegex = /<Image\s([^>]+)>/g
 
-  for (const match of content.matchAll(selfClosingRegex)) {
+  for (const match of content.matchAll(selfClosingRegex))
     processImageProps(match[1], images)
-  }
 
-  for (const match of content.matchAll(openingRegex)) {
+  for (const match of content.matchAll(openingRegex))
     processImageProps(match[1], images)
-  }
 }
 
 function processImageProps(propsString: string, images: Map<string, ImageUsage>) {

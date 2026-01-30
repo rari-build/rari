@@ -8,7 +8,8 @@ export function isValidSlug(slug: unknown): slug is string {
 export function isValidSlugArray(slug: unknown): slug is string[] {
   if (!Array.isArray(slug))
     return false
-  return slug.every(s => typeof s === 'string' && !s.includes('..') && s.length > 0)
+
+  return slug.every(s => typeof s === 'string' && !s.includes('..') && !s.includes('/') && s.length > 0)
 }
 
 export function getBlogFilePath(slug: string) {

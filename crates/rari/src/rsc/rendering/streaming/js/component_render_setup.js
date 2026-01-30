@@ -39,6 +39,7 @@ globalThis['~render'].componentAsync = async function () {
               return true
             if (typeof type === 'function' && type.name === 'Suspense')
               return true
+
             return false
           }
 
@@ -63,6 +64,7 @@ globalThis['~render'].componentAsync = async function () {
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
             return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId }, ...children)
           }
+
           return globalThis['~react'].originalCreateElement(type, props, ...children)
         }
       }
@@ -102,7 +104,7 @@ globalThis['~render'].componentAsync = async function () {
 
         let fallbackContent
         if (loadingComponent) {
-          if (loadingComponent && typeof loadingComponent === 'object'
+          if (typeof loadingComponent === 'object'
             && (loadingComponent.type || loadingComponent.$$typeof)) {
             fallbackContent = loadingComponent
           }
@@ -184,8 +186,6 @@ globalThis['~render'].componentAsync = async function () {
       element = Component(props)
 
       if (element && typeof element.then === 'function') {
-        isAsyncResult = true
-
         const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
         const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
@@ -344,6 +344,7 @@ globalThis['~render'].componentAsync = async function () {
                 })
                 return safeFallback
               }
+
               return safeFallback
             }
 

@@ -22,7 +22,7 @@ catalogs:
     '@sentry/react': ^10.38.0
     '@types/node': ^25.1.0
     '@typescript-eslint/utils': ^8.54.0
-    '@typescript/native-preview': ^7.0.0-dev.20260129.1
+    '@typescript/native-preview': ^7.0.0-dev.20260130.1
     eslint-plugin-de-morgan: ^2.0.0
     oxlint: ^1.42.0
     rari: ^0.8.3

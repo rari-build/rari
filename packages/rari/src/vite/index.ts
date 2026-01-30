@@ -178,11 +178,8 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 
 export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
-  const serverComponents = new Set<string>()
   const clientComponents = new Set<string>()
   let rustServerProcess: any = null
-
-  const serverImportedClientComponents = new Set<string>()
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
@@ -211,7 +208,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       catch {}
     }
 
-    let pathForFsOperations = filePath
+    let pathForFsOperations
     try {
       pathForFsOperations = fs.realpathSync(filePath)
     }
@@ -259,8 +256,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
             if (exportedName)
               exportedNames.push(exportedName)
           }
+
           return exportedNames
         }
+
         return []
       }
 
@@ -432,14 +431,16 @@ if (import.meta.hot) {
 
     for (const name of exportedNames) {
       if (name === 'default') {
+        const errorMsg = `Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`
         newCode += 'export default '
         newCode += 'registerClientReference(function() {'
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
+        newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       else {
+        const errorMsg = `Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`
         newCode += `export const ${name} = `
         newCode += 'registerClientReference(function() {'
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
+        newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       newCode += '},'
       newCode += `${JSON.stringify(id)},`
@@ -531,11 +532,13 @@ if (import.meta.hot) {
               config.build.rolldownOptions = config.build.rolldownOptions || {}
 
               const existingInput = config.build.rolldownOptions.input || { main: './index.html' }
-              const inputObj: Record<string, string> = typeof existingInput === 'string'
-                ? { main: existingInput }
-                : Array.isArray(existingInput)
-                  ? { main: existingInput[0] || './index.html' }
-                  : { ...existingInput }
+              let inputObj: Record<string, string>
+              if (typeof existingInput === 'string')
+                inputObj = { main: existingInput }
+              else if (Array.isArray(existingInput))
+                inputObj = { main: existingInput[0] || './index.html' }
+              else
+                inputObj = { ...existingInput }
 
               htmlImports.forEach(({ path: importPath, name }) => {
                 inputObj[name] = `./${importPath}`
@@ -769,7 +772,6 @@ if (import.meta.hot) {
 
       if (isServerComponent(id)) {
         componentTypeCache.set(id, 'server')
-        serverComponents.add(id)
 
         if (
           environment
@@ -861,8 +863,6 @@ ${clientTransformedCode}`
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
           if (!importingFileIsClient) {
-            serverImportedClientComponents.add(resolvedImportPath)
-
             const originalImport = line
             const componentName = importedDefault || 'default'
 
@@ -888,7 +888,6 @@ const ${componentName} = registerClientReference(
           hasServerImports = true
           needsReactImport = true
           needsWrapperImport = true
-          serverComponents.add(resolvedImportPath)
 
           const originalImport = line
 
@@ -1385,6 +1384,7 @@ const ${componentName} = registerClientReference(
               res.statusCode = 500
               res.end('Internal Server Error')
             }
+
             return
           }
         }
@@ -1716,6 +1716,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       if (componentType === 'server') {
         if (hmrCoordinator)
           await hmrCoordinator.handleServerComponentUpdate(file, server)
+
         return []
       }
 

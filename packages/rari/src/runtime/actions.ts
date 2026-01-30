@@ -28,6 +28,7 @@ export function createServerReference(
           })
           return obj
         }
+
         return arg
       })
 
@@ -58,8 +59,12 @@ export function createServerReference(
       const result: ServerActionResponse = await response.json()
 
       if (result.redirect) {
-        if (typeof window !== 'undefined')
-          window.location.href = result.redirect
+        if (typeof window !== 'undefined') {
+          const absoluteRedirect = new URL(result.redirect, window.location.href).href
+          if (absoluteRedirect !== window.location.href)
+            window.location.href = absoluteRedirect
+        }
+
         return { redirect: result.redirect }
       }
 

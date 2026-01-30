@@ -272,6 +272,7 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
         await fs.unlink(tempFile)
       }
       catch {}
+
       return false
     }
   }

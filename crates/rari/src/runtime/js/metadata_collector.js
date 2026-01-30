@@ -1,4 +1,3 @@
-/* eslint-disable unused-imports/no-unused-vars */
 /* eslint-disable no-undef */
 (async () => {
   const layoutPaths = LAYOUT_PATHS_PLACEHOLDER
@@ -67,19 +66,16 @@
         }
       }
 
-      try {
-        const module = await import(modulePath)
+      const module = await import(modulePath)
 
-        if (typeof module.generateMetadata === 'function') {
-          const result = await module.generateMetadata({ params, searchParams })
-          if (result && typeof result === 'object')
-            return result
-        }
-
-        if (module.metadata && typeof module.metadata === 'object')
-          return module.metadata
+      if (typeof module.generateMetadata === 'function') {
+        const result = await module.generateMetadata({ params, searchParams })
+        if (result && typeof result === 'object')
+          return result
       }
-      catch (importError) {}
+
+      if (module.metadata && typeof module.metadata === 'object')
+        return module.metadata
 
       return {}
     }

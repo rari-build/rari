@@ -303,6 +303,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           window.history.pushState(window.history.state, '', `${targetPath}#${hash}`)
         }
       }
+
       return
     }
 
@@ -619,6 +620,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' })
         window.history.pushState(window.history.state, '', href)
       }
+
       return
     }
 

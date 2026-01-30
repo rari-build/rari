@@ -33,6 +33,7 @@ function renderElement(element, rendered, rowId, moduleMap) {
       const refId = Number.parseInt(match[1], 10)
       return rendered.get(refId) || ''
     }
+
     return ''
   }
 
@@ -68,11 +69,10 @@ function renderElement(element, rendered, rowId, moduleMap) {
         try {
           const childrenData = JSON.parse(children_ref)
           if (childrenData && typeof childrenData === 'object') {
-            if (childrenData.__rari_lazy === true)
-              children = null
-            else if (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true)
-              children = null
-            else
+            const isLazy = childrenData.__rari_lazy === true
+              || (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true)
+
+            if (!isLazy)
               children = renderElement(childrenData, rendered, undefined, moduleMap)
           }
           else {
@@ -124,7 +124,7 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
     return ''
   }
 
-  const attributes = renderAttributes(props, rowId)
+  const attributes = renderAttributes(props)
 
   if (props.dangerouslySetInnerHTML && typeof props.dangerouslySetInnerHTML === 'object' && '__html' in props.dangerouslySetInnerHTML) {
     const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']
@@ -137,7 +137,7 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
   const rawContentTags = ['style', 'script']
   let children
   if (rawContentTags.includes(tag))
-    children = renderChildrenRaw(props.children, rendered)
+    children = renderChildrenRaw(props.children)
   else
     children = renderChildren(props.children, rendered, moduleMap)
 
@@ -276,6 +276,7 @@ function renderChildrenRaw(children) {
         return child
       if (typeof child === 'number' || typeof child === 'boolean')
         return String(child)
+
       return ''
     }).join('')
   }

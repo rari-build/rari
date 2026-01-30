@@ -31,6 +31,7 @@ class RequestCookiesImpl implements RequestCookies {
     const pending = this.pendingSets.get(name)
     if (pending)
       return { name: pending.name, value: pending.value, path: pending.options?.path }
+
     return this.cookies.get(name)
   }
 
@@ -52,6 +53,7 @@ class RequestCookiesImpl implements RequestCookies {
   has(name: string): boolean {
     if (this.pendingDeletes.has(name))
       return false
+
     return this.pendingSets.has(name) || this.cookies.has(name)
   }
 

@@ -144,6 +144,7 @@ let globalExecutor: ProxyExecutor | null = null
 export function getProxyExecutor(): ProxyExecutor {
   if (!globalExecutor)
     globalExecutor = new ProxyExecutor()
+
   return globalExecutor
 }
 

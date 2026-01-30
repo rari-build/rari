@@ -22,6 +22,7 @@ export async function getHighlighter(): Promise<HighlighterCore | null> {
       return null
     }
   }
+
   return shikiHighlighter
 }
 

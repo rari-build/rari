@@ -251,6 +251,7 @@ class AppRouteGenerator {
       if (files.includes(fileName))
         return fileName
     }
+
     return undefined
   }
 
@@ -274,6 +275,7 @@ class AppRouteGenerator {
         const match = segment.match(SEGMENT_PATTERNS.DYNAMIC)
         return `[${match![1]}]`
       }
+
       return segment
     })
 
@@ -333,6 +335,7 @@ class AppRouteGenerator {
     const parts = filePath.split(/[/\\]/).filter(Boolean)
     if (parts.length === 0)
       return null
+
     return parts.slice(0, -1).join('/')
   }
 
@@ -368,6 +371,7 @@ class AppRouteGenerator {
           return 3
         if (hasCatchAll)
           return 2
+
         return 1
       }
 

@@ -31,6 +31,7 @@ if (!globalThis.renderToRsc) {
           }
           if (rscProps.children === undefined)
             delete rscProps.children
+
           return ['$', element.type, uniqueKey, rscProps]
         }
         else if (typeof element.type === 'function') {

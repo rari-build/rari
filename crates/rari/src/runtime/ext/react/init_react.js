@@ -39,13 +39,14 @@ globalThis.ReactDOMServer = {
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
-      const normalizedChildren
-        = children && children.length > 0
-          ? children
-          : props
-            && Object.hasOwn(props || {}, 'children')
-            ? props.children
-            : undefined
+      let normalizedChildren
+      if (children && children.length > 0)
+        normalizedChildren = children
+      else if (props && Object.hasOwn(props || {}, 'children'))
+        normalizedChildren = props.children
+      else
+        normalizedChildren = undefined
+
       return {
         $$typeof: Symbol.for('react.transitional.element'),
         type,
@@ -231,6 +232,7 @@ function renderAttributes(attributes, _isStatic) {
         return false
       if (key.startsWith('__'))
         return false
+
       return value !== null && value !== undefined && value !== false
     })
     .map(([key, value]) => {
@@ -249,6 +251,7 @@ function renderAttributes(attributes, _isStatic) {
           .join(';')
         return ` style="${styleStr}"`
       }
+
       return ` ${key}="${escapeHtml(String(value))}"`
     })
     .join('')

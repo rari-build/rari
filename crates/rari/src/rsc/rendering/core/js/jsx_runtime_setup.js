@@ -10,6 +10,7 @@ globalThis['~react'].jsxRuntime = globalThis['~react'].jsxRuntime || {
     }
     if (props && props.children !== undefined)
       element.props = { ...element.props, children: props.children }
+
     return element
   },
   jsxs(type, props, key) {

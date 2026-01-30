@@ -6,6 +6,7 @@ if (typeof globalThis['~registryProxy'] === 'undefined') {
         return globalThis['~rsc'].functions[prop]
       if (typeof globalThis[prop] === 'function')
         return globalThis[prop]
+
       return undefined
     },
   })

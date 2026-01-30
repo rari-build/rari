@@ -11,6 +11,7 @@ class ResponseCookiesImpl implements ResponseCookies {
     const cookie = this.cookies.get(name)
     if (!cookie)
       return undefined
+
     return { name: cookie.name, value: cookie.value, path: cookie.options?.path }
   }
 

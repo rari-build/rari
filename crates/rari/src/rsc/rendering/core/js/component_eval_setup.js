@@ -5,6 +5,24 @@ if (typeof _jsx === 'undefined')
 if (typeof _jsxs === 'undefined')
   var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || (() => null)
 
+class ReactComponent {
+  constructor(props) {
+    this.props = props
+    this.state = {}
+  }
+
+  setState(updater) {
+    if (typeof updater === 'function')
+      this.state = { ...this.state, ...updater(this.state, this.props) }
+    else
+      this.state = { ...this.state, ...updater }
+  }
+
+  render() {
+    return null
+  }
+}
+
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
@@ -12,48 +30,15 @@ if (typeof globalThis.React === 'undefined') {
     },
     Fragment(props) { return props?.children || null },
     Suspense(props) { return props?.children || props?.fallback || null },
-    Component: class Component {
-      constructor(props) {
-        this.props = props
-        this.state = {}
-      }
-
-      setState(updater) {
-        if (typeof updater === 'function')
-          this.state = { ...this.state, ...updater(this.state, this.props) }
-        else
-          this.state = { ...this.state, ...updater }
-      }
-
-      render() {
-        return null
-      }
-    },
+    Component: ReactComponent,
   }
 }
 
 if (!globalThis.React.Suspense)
   globalThis.React.Suspense = function (props) { return props?.children || props?.fallback || null }
 
-if (!globalThis.React.Component) {
-  globalThis.React.Component = class Component {
-    constructor(props) {
-      this.props = props
-      this.state = {}
-    }
-
-    setState(updater) {
-      if (typeof updater === 'function')
-        this.state = { ...this.state, ...updater(this.state, this.props) }
-      else
-        this.state = { ...this.state, ...updater }
-    }
-
-    render() {
-      return null
-    }
-  }
-}
+if (!globalThis.React.Component)
+  globalThis.React.Component = ReactComponent
 
 if (typeof globalThis.Suspense === 'undefined')
   globalThis.Suspense = globalThis.React.Suspense

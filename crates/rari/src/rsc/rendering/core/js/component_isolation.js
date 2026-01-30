@@ -27,6 +27,7 @@
       const fnMatch = String(promise).match(/(\w+)\s*\(/)
       if (fnMatch && fnMatch[1])
         promiseMap.set(fnMatch[1], result)
+
       return true
     }
 

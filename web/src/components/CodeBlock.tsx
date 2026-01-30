@@ -24,6 +24,7 @@ function getFileIcon(filename: string) {
     return React
   if (lowerFilename.endsWith('.ts') || lowerFilename.endsWith('.mts') || lowerFilename.endsWith('.cts'))
     return TypeScript
+
   return File
 }
 

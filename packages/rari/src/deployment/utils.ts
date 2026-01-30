@@ -12,7 +12,6 @@ export function isNodeVersionSufficient(versionRange: string): boolean {
     match = cleaned.match(/^(\d+)\.(\d+)\.x/)
   if (!match)
     match = cleaned.match(/^(\d+)\.x/)
-
   if (!match)
     return false
 

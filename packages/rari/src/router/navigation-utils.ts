@@ -2,7 +2,7 @@ import type { RouteInfo } from './navigation-types'
 import type { AppRouteManifest, LayoutEntry, RouteSegment } from './types'
 
 export function parseRoutePath(path: string): string[] {
-  const normalized = path.replace(/^\/+|\/+$/g, '')
+  const normalized = path.replace(/(^\/+)|(\/+$)/g, '')
   return normalized ? normalized.split('/') : []
 }
 
@@ -25,6 +25,7 @@ export function matchRouteParams(
           params[segment.param] = []
         continue
       }
+
       return null
     }
 

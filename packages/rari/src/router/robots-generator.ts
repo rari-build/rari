@@ -13,11 +13,13 @@ export function generateRobotsTxt(robots: Robots): string {
   const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
 
   for (const rule of rules) {
-    const userAgents = Array.isArray(rule.userAgent)
-      ? rule.userAgent
-      : rule.userAgent
-        ? [rule.userAgent]
-        : ['*']
+    let userAgents: string[]
+    if (Array.isArray(rule.userAgent))
+      userAgents = rule.userAgent
+    else if (rule.userAgent)
+      userAgents = [rule.userAgent]
+    else
+      userAgents = ['*']
 
     for (const userAgent of userAgents) {
       lines.push(`User-Agent: ${userAgent}`)
@@ -128,6 +130,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
           await fs.unlink(tempFile)
         }
         catch {}
+
         return false
       }
     }

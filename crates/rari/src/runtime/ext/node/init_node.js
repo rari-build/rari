@@ -24,6 +24,7 @@ if (!globalThis.process) {
           return 'linux'
         if (os === 'windows')
           return 'win32'
+
         return 'linux'
       }
       catch {
@@ -37,6 +38,7 @@ if (!globalThis.process) {
           return 'x64'
         if (arch === 'aarch64')
           return 'arm64'
+
         return 'x64'
       }
       catch {
@@ -93,6 +95,7 @@ const fs = {
         globalThis.Deno.statSync(path)
         return true
       }
+
       return false
     }
     catch {
@@ -122,7 +125,6 @@ const fs = {
   readFile: (path, encoding, callback) => {
     if (typeof encoding === 'function') {
       callback = encoding
-      encoding = 'utf8'
     }
     try {
       if (globalThis.Deno?.readTextFile) {
@@ -142,7 +144,6 @@ const fs = {
   writeFile: (path, data, encoding, callback) => {
     if (typeof encoding === 'function') {
       callback = encoding
-      encoding = 'utf8'
     }
     try {
       if (globalThis.Deno?.writeTextFile) {
@@ -197,6 +198,7 @@ const path = {
           break
       }
     }
+
     return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
   },
   dirname: (path) => {
@@ -208,6 +210,7 @@ const path = {
     let base = path.split('/').pop() || ''
     if (ext && base.endsWith(ext))
       base = base.slice(0, -ext.length)
+
     return base
   },
   extname: (path) => {
@@ -235,6 +238,7 @@ const path = {
             break
         }
       }
+
       return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
     },
     dirname: (path) => {
@@ -246,6 +250,7 @@ const path = {
       let base = path.split('/').pop() || ''
       if (ext && base.endsWith(ext))
         base = base.slice(0, -ext.length)
+
       return base
     },
     extname: (path) => {
@@ -341,6 +346,7 @@ const os = {
         return 'linux'
       if (platform === 'windows')
         return 'win32'
+
       return 'linux'
     }
     catch {
@@ -354,6 +360,7 @@ const os = {
         return 'x64'
       if (arch === 'aarch64')
         return 'arm64'
+
       return 'x64'
     }
     catch {
@@ -400,6 +407,7 @@ const Buffer = globalThis.Buffer || {
   from: (data, encoding = 'utf8') => {
     if (typeof data === 'string')
       return new TextEncoder().encode(data)
+
     return new Uint8Array(data)
   },
   alloc: (size, fill = 0) => {
@@ -594,7 +602,7 @@ const nodeModules = new Map([
       execSync: (cmd, options = {}) => {
         const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
@@ -631,7 +639,7 @@ const nodeModules = new Map([
       execSync: (cmd, options = {}) => {
         const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
@@ -793,7 +801,6 @@ if (!globalThis['~node'])
   globalThis['~node'] = {}
 if (!globalThis['~node'].modules) {
   globalThis['~node'].modules = nodeModules
-  const streamExports = nodeModules.get('node:stream')
 }
 
 if (globalThis.import) {

@@ -65,7 +65,9 @@
               globalThis['~suspense'].pendingPromises.push({ id: promiseId, boundaryId, componentPath: (error.componentName || 'unknown') })
               return props.fallback || null
             }
-            return props?.fallback || React.createElement('div', null, `Suspense Error: ${error && error.message ? error.message : 'Unknown'}`)
+
+            console.error('[rari] Suspense error in streaming render', error)
+            return props?.fallback || React.createElement('div', null, 'Suspense Error')
           }
           finally {
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
@@ -89,7 +91,7 @@
         }
       }
     }
-    catch {
+    catch (e) {
       console.error('Failed to load React in streaming context:', e)
       throw new Error(`Cannot initialize streaming without React: ${e.message}`)
     }

@@ -52,13 +52,10 @@ function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
 
     if (existsSync(resolve(currentDir, 'pnpm-lock.yaml')))
       return 'pnpm'
-
     if (existsSync(resolve(currentDir, 'yarn.lock')))
       return 'yarn'
-
     if (existsSync(resolve(currentDir, 'bun.lockb')))
       return 'bun'
-
     if (existsSync(resolve(currentDir, 'package-lock.json')))
       return 'npm'
 
@@ -106,17 +103,12 @@ function getPackageExecutor(): string {
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
   if (command === 'npx') {
     const executor = getPackageExecutor()
-    if (executor.includes('bun')) {
+    if (executor.includes('bun'))
       return spawn(executor, ['x', ...args], options)
-    }
-
-    if (executor.includes('pnpm')) {
+    if (executor.includes('pnpm'))
       return spawn(executor, ['exec', ...args], options)
-    }
-
-    if (executor.includes('yarn')) {
+    if (executor.includes('yarn'))
       return spawn(executor, ['dlx', ...args], options)
-    }
   }
 
   const isWindows = process.platform === 'win32'
@@ -164,6 +156,7 @@ function getPlatformName(): string {
     return 'Railway'
   if (isRenderEnvironment())
     return 'Render'
+
   return 'local'
 }
 

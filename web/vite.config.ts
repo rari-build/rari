@@ -37,8 +37,10 @@ export default defineConfig({
                     return 'react-dom'
                   if (moduleId.includes('react'))
                     return 'react'
+
                   return 'vendor'
                 }
+
                 return null
               },
             },

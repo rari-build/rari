@@ -269,10 +269,7 @@ function processUnhandledPromiseRejection(promise, reason) {
 
   // If event was not prevented (or "unhandledrejection" listeners didn't
   // throw) we will let Rust side handle it.
-  if (rejectionEvent.defaultPrevented)
-    return true
-
-  return false
+  return rejectionEvent.defaultPrevented
 }
 
 core.setHandledPromiseRejectionHandler(processRejectionHandled)

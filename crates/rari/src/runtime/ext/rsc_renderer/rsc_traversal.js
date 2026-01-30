@@ -279,7 +279,14 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
           })
         }
 
-        traversedChildren = lazyMarkers.length === 1 ? lazyMarkers[0] : (lazyMarkers.length > 0 ? lazyMarkers : null)
+        let traversedChildrenValue
+        if (lazyMarkers.length === 1)
+          traversedChildrenValue = lazyMarkers[0]
+        else if (lazyMarkers.length > 0)
+          traversedChildrenValue = lazyMarkers
+        else
+          traversedChildrenValue = null
+        traversedChildren = traversedChildrenValue
       }
       else {
         const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
@@ -383,6 +390,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
             processedProps[key] = value
         }
       }
+
       return ['$', componentId, uniqueKey, processedProps]
     }
     else {
@@ -470,6 +478,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
       if (rendered === element)
         return null
+
       return await traverseToRsc(rendered, clientComponents, depth + 1)
     }
     catch (error) {
@@ -548,6 +557,7 @@ async function renderServerComponent(element) {
       if (result && typeof result.then === 'function')
         result = await result
     }
+
     return result
   }
   catch (error) {

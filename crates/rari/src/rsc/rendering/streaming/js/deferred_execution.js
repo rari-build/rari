@@ -174,7 +174,7 @@
           })
         }
       }
-      catch {
+      catch (e) {
         results.push(captureErrorContext(e, deferred))
       }
     }
@@ -191,5 +191,6 @@
       results,
     }
   }
+
   return { success: true, count: 0, total: 0 }
 })()

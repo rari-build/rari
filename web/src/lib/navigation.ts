@@ -46,6 +46,7 @@ export function getBreadcrumbs(path: string): Array<{ label: string, href?: stri
       if (item.items && findPath(item.items, newPath))
         return true
     }
+
     return false
   }
 
