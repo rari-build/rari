@@ -768,6 +768,7 @@ impl ImageOptimizer {
                         || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
                         || (octets[0] == 192 && octets[1] == 168)
                         || (octets[0] == 169 && octets[1] == 254)
+                        || (octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127))
                         || octets[0] == 0
                     {
                         return Err(ImageError::UnauthorizedDomain(format!(
@@ -777,15 +778,32 @@ impl ImageOptimizer {
                     }
                 }
                 url::Host::Ipv6(ip) => {
-                    let segments = ip.segments();
-                    if ip.is_loopback()
-                        || (segments[0] & 0xfe00) == 0xfc00
-                        || (segments[0] & 0xffc0) == 0xfe80
-                    {
-                        return Err(ImageError::UnauthorizedDomain(format!(
-                            "Private or reserved IPv6 address '{}' is not allowed",
-                            host
-                        )));
+                    if let Some(ipv4) = ip.to_ipv4_mapped() {
+                        let octets = ipv4.octets();
+                        if octets[0] == 10
+                            || octets[0] == 127
+                            || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
+                            || (octets[0] == 192 && octets[1] == 168)
+                            || (octets[0] == 169 && octets[1] == 254)
+                            || (octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127))
+                            || octets[0] == 0
+                        {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+                    } else {
+                        let segments = ip.segments();
+                        if ip.is_loopback()
+                            || (segments[0] & 0xfe00) == 0xfc00
+                            || (segments[0] & 0xffc0) == 0xfe80
+                        {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
                     }
                 }
                 url::Host::Domain(domain) => {
@@ -794,7 +812,6 @@ impl ImageOptimizer {
                         || domain_lower.ends_with(".internal")
                         || domain_lower.ends_with(".localhost")
                         || domain_lower == "metadata.google.internal"
-                        || domain_lower == "169.254.169.254"
                     {
                         return Err(ImageError::UnauthorizedDomain(format!(
                             "Internal domain '{}' is not allowed",
@@ -831,6 +848,7 @@ impl ImageOptimizer {
     }
 
     async fn make_validated_request(&self, url: &str) -> Result<reqwest::Response, ImageError> {
+        self.validate_remote_url(url)?;
         self.http_client.get(url).send().await.map_err(|e| ImageError::FetchError(e.to_string()))
     }
 
@@ -896,8 +914,6 @@ impl ImageOptimizer {
         };
 
         loop {
-            self.validate_remote_url(&current_url)?;
-
             let response = self.make_validated_request(&current_url).await?;
 
             if response.status().is_redirection() {
