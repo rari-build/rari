@@ -7,9 +7,14 @@ type FnCache = FxHashMap<String, Box<dyn RsFunction>>;
 
 mod callbacks;
 
-#[op2]
-fn op_register_entrypoint(state: &mut OpState, #[global] callback: v8::Global<v8::Function>) {
-    state.put(callback);
+#[op2(fast)]
+fn op_register_entrypoint(
+    scope: &mut v8::PinScope<'_, '_>,
+    state: &mut OpState,
+    callback: v8::Local<v8::Function>,
+) {
+    let global_callback = v8::Global::new(scope, callback);
+    state.put(global_callback);
 }
 
 #[op2]

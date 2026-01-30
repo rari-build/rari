@@ -750,8 +750,6 @@ impl ImageOptimizer {
             || host_lower == "::1"
             || host_lower == "0.0.0.0"
             || host_lower.starts_with("127.")
-            || host_lower == "[::1]"
-            || host_lower == "[0:0:0:0:0:0:0:1]"
         {
             return Err(ImageError::UnauthorizedDomain(format!(
                 "Loopback host '{}' is not allowed",
