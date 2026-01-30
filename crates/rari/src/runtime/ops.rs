@@ -283,18 +283,20 @@ pub async fn op_fetch_with_cache(
     }
 }
 
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
 
-fn get_http_client() -> &'static reqwest::Client {
+fn get_http_client() -> Result<&'static reqwest::Client, String> {
     HTTP_CLIENT
-        .get_or_init(|| reqwest::Client::builder().build().expect("Failed to create HTTP client"))
+        .get_or_init(|| reqwest::Client::builder().build())
+        .as_ref()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
 ) -> Result<(u16, String), String> {
-    let client = get_http_client();
+    let client = get_http_client()?;
     let mut request = client.get(url);
 
     if let Some(headers_str) = options.get("headers") {
