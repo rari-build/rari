@@ -481,8 +481,8 @@ class RscClient {
             }
             else {
               if (processedProps && Object.hasOwn(processedProps, '~boundaryId')) {
-                const { '~boundaryId': tildeBoundaryId, ...rest } = processedProps
-                processedProps = rest
+                processedProps = { ...processedProps }
+                delete processedProps['~boundaryId']
               }
               const reactElement = createElement(type, key ? { ...processedProps, key } : processedProps)
               return reactElement

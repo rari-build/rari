@@ -803,7 +803,6 @@ if (!globalThis['~node'])
   globalThis['~node'] = {}
 if (!globalThis['~node'].modules) {
   globalThis['~node'].modules = nodeModules
-  const streamExports = nodeModules.get('node:stream')
 }
 
 if (globalThis.import) {
