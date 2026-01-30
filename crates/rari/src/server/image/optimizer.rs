@@ -778,32 +778,73 @@ impl ImageOptimizer {
                     }
                 }
                 url::Host::Ipv6(ip) => {
-                    if let Some(ipv4) = ip.to_ipv4_mapped() {
-                        let octets = ipv4.octets();
-                        if octets[0] == 10
+                    let segments = ip.segments();
+
+                    let is_private_ipv4 = |octets: [u8; 4]| -> bool {
+                        octets[0] == 10
                             || octets[0] == 127
                             || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
                             || (octets[0] == 192 && octets[1] == 168)
                             || (octets[0] == 169 && octets[1] == 254)
                             || (octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127))
                             || octets[0] == 0
-                        {
+                    };
+
+                    if let Some(ipv4) = ip.to_ipv4_mapped() {
+                        let octets = ipv4.octets();
+                        if is_private_ipv4(octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
                                 "Private or reserved IPv6 address '{}' is not allowed",
                                 host
                             )));
                         }
-                    } else {
-                        let segments = ip.segments();
-                        if ip.is_loopback()
-                            || (segments[0] & 0xfe00) == 0xfc00
-                            || (segments[0] & 0xffc0) == 0xfe80
-                        {
+                    } else if segments[0] == 0x2002 {
+                        let octets = [
+                            (segments[1] >> 8) as u8,
+                            (segments[1] & 0xff) as u8,
+                            (segments[2] >> 8) as u8,
+                            (segments[2] & 0xff) as u8,
+                        ];
+                        if is_private_ipv4(octets) {
                             return Err(ImageError::UnauthorizedDomain(format!(
                                 "Private or reserved IPv6 address '{}' is not allowed",
                                 host
                             )));
                         }
+                    } else if segments[0] == 0x2001 && segments[1] == 0x0000 {
+                        let server_octets = [
+                            (segments[2] >> 8) as u8,
+                            (segments[2] & 0xff) as u8,
+                            (segments[3] >> 8) as u8,
+                            (segments[3] & 0xff) as u8,
+                        ];
+                        if is_private_ipv4(server_octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+
+                        let client_octets = [
+                            ((segments[6] >> 8) ^ 0xff) as u8,
+                            ((segments[6] & 0xff) ^ 0xff) as u8,
+                            ((segments[7] >> 8) ^ 0xff) as u8,
+                            ((segments[7] & 0xff) ^ 0xff) as u8,
+                        ];
+                        if is_private_ipv4(client_octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+                    } else if ip.is_loopback()
+                        || (segments[0] & 0xfe00) == 0xfc00
+                        || (segments[0] & 0xffc0) == 0xfe80
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Private or reserved IPv6 address '{}' is not allowed",
+                            host
+                        )));
                     }
                 }
                 url::Host::Domain(domain) => {
@@ -893,8 +934,6 @@ impl ImageOptimizer {
 
             return Ok(bytes);
         }
-
-        self.validate_remote_url(url)?;
 
         let mut current_url = url.to_string();
         let mut redirect_count = 0;
