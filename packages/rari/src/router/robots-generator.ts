@@ -128,6 +128,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
           await fs.unlink(tempFile)
         }
         catch {}
+
         return false
       }
     }

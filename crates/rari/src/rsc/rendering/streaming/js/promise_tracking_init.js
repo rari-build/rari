@@ -7,6 +7,7 @@
     globalThis['~render'] = {}
   if (!globalThis['~render'].deferredAsyncComponents)
     globalThis['~render'].deferredAsyncComponents = []
+
   return {
     initialized: true,
     existingPromises: Object.keys(globalThis['~suspense'].promises || {}).length,

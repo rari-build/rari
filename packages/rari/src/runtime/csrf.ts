@@ -26,6 +26,7 @@ export async function refreshCsrfToken(): Promise<boolean> {
       meta.setAttribute('content', data.token)
       return true
     }
+
     return false
   }
   catch (error) {

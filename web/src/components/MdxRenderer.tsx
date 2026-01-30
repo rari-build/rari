@@ -30,6 +30,7 @@ function findContentFile(filePath: string): string | null {
     }
     catch {}
   }
+
   return null
 }
 

@@ -383,6 +383,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
             processedProps[key] = value
         }
       }
+
       return ['$', componentId, uniqueKey, processedProps]
     }
     else {
@@ -470,6 +471,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
       if (rendered === element)
         return null
+
       return await traverseToRsc(rendered, clientComponents, depth + 1)
     }
     catch (error) {
@@ -548,6 +550,7 @@ async function renderServerComponent(element) {
       if (result && typeof result.then === 'function')
         result = await result
     }
+
     return result
   }
   catch (error) {

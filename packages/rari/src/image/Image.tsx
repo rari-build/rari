@@ -45,6 +45,7 @@ function buildImageUrl(
   params.set('q', quality.toString())
   if (format)
     params.set('f', format)
+
   return `/_rari/image?${params}`
 }
 

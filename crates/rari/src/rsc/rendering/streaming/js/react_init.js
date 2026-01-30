@@ -65,6 +65,7 @@
               globalThis['~suspense'].pendingPromises.push({ id: promiseId, boundaryId, componentPath: (error.componentName || 'unknown') })
               return props.fallback || null
             }
+
             return props?.fallback || React.createElement('div', null, `Suspense Error: ${error && error.message ? error.message : 'Unknown'}`)
           }
           finally {

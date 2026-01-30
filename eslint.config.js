@@ -18,6 +18,15 @@ export default antfu(
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    rules: {
+      'padding-line-between-statements': [
+        'error',
+        { blankLine: 'always', prev: ['if', 'for', 'while', 'switch'], next: 'return' },
+        { blankLine: 'always', prev: 'block-like', next: 'return' },
+      ],
+    },
+  },
   deMorgan.configs.recommended,
   e18e.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),

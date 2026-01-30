@@ -259,8 +259,10 @@ export function rari(options: RariOptions = {}): Plugin[] {
             if (exportedName)
               exportedNames.push(exportedName)
           }
+
           return exportedNames
         }
+
         return []
       }
 
@@ -1385,6 +1387,7 @@ const ${componentName} = registerClientReference(
               res.statusCode = 500
               res.end('Internal Server Error')
             }
+
             return
           }
         }
@@ -1716,6 +1719,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       if (componentType === 'server') {
         if (hmrCoordinator)
           await hmrCoordinator.handleServerComponentUpdate(file, server)
+
         return []
       }
 

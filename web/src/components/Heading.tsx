@@ -26,6 +26,7 @@ function extractTextContent(children: ReactNode): string {
     const element = children as { props: { children?: ReactNode } }
     return extractTextContent(element.props.children)
   }
+
   return ''
 }
 

@@ -110,6 +110,7 @@ export function debounce<T extends (...args: any[]) => any>(
     }
     if (timeoutId === null)
       timeoutId = setTimeout(timerExpired, wait)
+
     return undefined
   }
 

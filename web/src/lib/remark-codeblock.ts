@@ -64,6 +64,7 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
             text += extractText(child.children)
           }
         }
+
         return text
       }
 

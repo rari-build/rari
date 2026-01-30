@@ -28,6 +28,7 @@ function replaceClose(string: string, close: string, replace: string, index: num
     cursor = index + close.length
     index = string.indexOf(close, cursor)
   } while (~index)
+
   return result + string.substring(cursor)
 }
 

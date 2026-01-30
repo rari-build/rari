@@ -25,6 +25,7 @@ export function matchRouteParams(
           params[segment.param] = []
         continue
       }
+
       return null
     }
 

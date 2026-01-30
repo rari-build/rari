@@ -56,6 +56,7 @@ if (typeof window !== 'undefined') {
         catch (e) {
           console.error('[rari] Failed to parse import row:', contentStr, e)
         }
+
         return
       }
 
@@ -84,6 +85,7 @@ if (typeof window !== 'undefined') {
             if (props && props.children)
               return containsClientComponents(props.children)
           }
+
           return element.some(child => containsClientComponents(child))
         }
 
@@ -99,6 +101,7 @@ if (typeof window !== 'undefined') {
 
         if (globalThis['~rari'].hydrateClientComponents)
           globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
+
         return
       }
 
@@ -273,6 +276,7 @@ export function createClientModuleMap() {
       default: componentInfo.component,
     }
   }
+
   return moduleMap
 }
 
@@ -362,6 +366,7 @@ class RscClient {
           list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
       }
       catch {}
+
       return list
     })()
     let response = null
@@ -385,6 +390,7 @@ class RscClient {
           lastError = e
         }
       }
+
       return null
     }
 
@@ -459,6 +465,7 @@ class RscClient {
                   return reactElement
                 }
               }
+
               return processedProps && processedProps.children ? processedProps.children : null
             }
             if (type.includes('.tsx#') || type.includes('.jsx#')) {
@@ -1003,6 +1010,7 @@ function ServerComponentWrapper({
       return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
       )
     }
+
     return data
   }
 
@@ -1039,6 +1047,7 @@ function createServerComponentWrapper(componentName) {
 
       if (typeof window !== 'undefined')
         window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
+
       return () => window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
     }, [])
 
@@ -1430,6 +1439,7 @@ let hmrErrorOverlay = null
 function getErrorOverlay() {
   if (!hmrErrorOverlay)
     hmrErrorOverlay = new HMRErrorOverlay()
+
   return hmrErrorOverlay
 }
 

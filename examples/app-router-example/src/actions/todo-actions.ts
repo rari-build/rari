@@ -52,6 +52,7 @@ export async function deleteTodo(formData: FormData) {
 
   if (todos.length === initialLength)
     return { success: false, error: 'Todo not found', todos }
+
   return { success: true, todos }
 }
 

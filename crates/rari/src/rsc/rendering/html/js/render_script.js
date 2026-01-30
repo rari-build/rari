@@ -33,6 +33,7 @@ function renderElement(element, rendered, rowId, moduleMap) {
       const refId = Number.parseInt(match[1], 10)
       return rendered.get(refId) || ''
     }
+
     return ''
   }
 
@@ -276,6 +277,7 @@ function renderChildrenRaw(children) {
         return child
       if (typeof child === 'number' || typeof child === 'boolean')
         return String(child)
+
       return ''
     }).join('')
   }

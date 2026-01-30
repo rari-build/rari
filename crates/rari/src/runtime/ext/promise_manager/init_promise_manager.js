@@ -30,6 +30,7 @@
       globalThis['~promises'].componentSpecific.set(componentId, new Map())
     if (!globalThis['~promises'].componentCache.has(componentId))
       globalThis['~promises'].componentCache.set(componentId, new WeakMap())
+
     return componentId
   }
 
@@ -305,6 +306,7 @@
       const promise = promiseFactory()
       if (promise && typeof promise.then === 'function')
         return globalThis['~promises'].wrapWithErrorHandling(promise, componentId)
+
       return promise
     }
     catch (error) {

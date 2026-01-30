@@ -93,6 +93,7 @@ function setupPartialHydration() {
                 else
                   return processedProps.children || null
               }
+
               return processedProps.children || null
             }
 
@@ -107,6 +108,7 @@ function setupPartialHydration() {
           if (React.isValidElement(result) && !result.key)
             // eslint-disable-next-line react/no-clone-element
             return React.cloneElement(result, { key: index })
+
           return result
         })
       }
@@ -183,6 +185,7 @@ export async function renderApp() {
         }
       })
     }
+
     return
   }
 
@@ -599,6 +602,7 @@ function rscToReact(rsc, modules, symbols) {
           const processedProps = processProps(props, modules, symbols)
           return React.createElement(Suspense, key ? { ...processedProps, key } : processedProps)
         }
+
         return null
       }
 
@@ -614,6 +618,7 @@ function rscToReact(rsc, modules, symbols) {
             return React.createElement(Component, { key, ...childProps })
           }
         }
+
         return null
       }
 
@@ -626,6 +631,7 @@ function rscToReact(rsc, modules, symbols) {
         throw error
       }
     }
+
     return rsc.map(child => rscToReact(child, modules, symbols))
   }
 
@@ -647,6 +653,7 @@ function processProps(props, modules, symbols) {
         processed[key] = props[key]
     }
   }
+
   return processed
 }
 

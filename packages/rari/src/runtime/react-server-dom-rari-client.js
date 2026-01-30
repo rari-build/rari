@@ -228,8 +228,10 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
       const referencedChunk = chunks?.get(rowId)
       if (referencedChunk)
         return rscToReact(referencedChunk, wireModules, moduleMap, symbols, chunks)
+
       return null
     }
+
     return rsc
   }
 
@@ -255,6 +257,7 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
           const processedProps = processProps(props, wireModules, moduleMap, symbols, chunks)
           return React.createElement(React.Suspense, key ? { ...processedProps, key } : processedProps)
         }
+
         return null
       }
 
@@ -334,6 +337,7 @@ function processProps(props, wireModules, moduleMap, symbols, chunks) {
         processed[key] = props[key]
     }
   }
+
   return processed
 }
 

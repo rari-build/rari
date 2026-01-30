@@ -28,6 +28,7 @@ export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
             onSuccess()
         })
       }
+
       return result
     },
     { success: false, todos: [] },

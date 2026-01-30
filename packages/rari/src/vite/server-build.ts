@@ -201,6 +201,7 @@ export class ServerComponentBuilder {
         if (trimmed)
           break
       }
+
       return !hasClientDirective && !hasServerDirective
     }
     catch {
@@ -279,6 +280,7 @@ export class ServerComponentBuilder {
       if (trimmed)
         break
     }
+
     return false
   }
 
@@ -1041,6 +1043,7 @@ const ${importName} = (props) => {
                     }
                   }
                 }
+
                 return null
               })
 
@@ -1112,6 +1115,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                     namespace: 'transformed-server-component',
                   }
                 }
+
                 return null
               })
 

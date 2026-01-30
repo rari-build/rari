@@ -3,6 +3,7 @@ const hasOwn = Object.prototype.hasOwnProperty
 function safeHasOwnProperty(obj, key) {
   if (obj == null || typeof obj !== 'object')
     return false
+
   return hasOwn.call(obj, key)
 }
 
@@ -11,6 +12,7 @@ function safeGetProperty(obj, key) {
     return undefined
   if (safeHasOwnProperty(obj, key))
     return obj[key]
+
   return undefined
 }
 
@@ -39,6 +41,7 @@ function sanitizeValue(value) {
       if (safeHasOwnProperty(value, key) && !isDangerousProperty(key))
         sanitized[key] = sanitizeValue(value[key])
     }
+
     return sanitized
   }
 

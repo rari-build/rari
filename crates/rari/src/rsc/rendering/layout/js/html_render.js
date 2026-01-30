@@ -17,6 +17,7 @@ function escapeHtml(text) {
 function kebabCase(str) {
   if (/^(?:Webkit|Moz|Ms|O)[A-Z]/.test(str))
     return `-${str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}`
+
   return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
 }
 

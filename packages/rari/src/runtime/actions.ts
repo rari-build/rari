@@ -28,6 +28,7 @@ export function createServerReference(
           })
           return obj
         }
+
         return arg
       })
 
@@ -60,6 +61,7 @@ export function createServerReference(
       if (result.redirect) {
         if (typeof window !== 'undefined')
           window.location.href = result.redirect
+
         return { redirect: result.redirect }
       }
 

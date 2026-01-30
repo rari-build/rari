@@ -249,6 +249,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const processedProps = processProps(props, modules, layoutPath, symbols, rows)
         return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
+
       return rsc.map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
         if (!element)
@@ -277,6 +278,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const promise = new Promise<never>(() => {})
       suspendingPromisesRef.current.set(contentRef, promise)
     }
+
     return suspendingPromisesRef.current.get(contentRef)!
   }
 
@@ -336,6 +338,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
       }
     }
+
     return processed
   }
 

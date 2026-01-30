@@ -164,6 +164,7 @@ function getPlatformName(): string {
     return 'Railway'
   if (isRenderEnvironment())
     return 'Render'
+
   return 'local'
 }
 

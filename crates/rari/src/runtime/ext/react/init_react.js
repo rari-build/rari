@@ -231,6 +231,7 @@ function renderAttributes(attributes, _isStatic) {
         return false
       if (key.startsWith('__'))
         return false
+
       return value !== null && value !== undefined && value !== false
     })
     .map(([key, value]) => {
@@ -249,6 +250,7 @@ function renderAttributes(attributes, _isStatic) {
           .join(';')
         return ` style="${styleStr}"`
       }
+
       return ` ${key}="${escapeHtml(String(value))}"`
     })
     .join('')

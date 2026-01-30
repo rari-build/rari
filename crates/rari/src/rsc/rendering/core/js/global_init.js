@@ -43,6 +43,7 @@
         const permissions = globalThis['~components'].permissions.get(componentId)
         if (!permissions)
           return false
+
         return permissions[permissionType] === true
       }
     }
