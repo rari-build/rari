@@ -104,7 +104,7 @@ globalThis['~render'].componentAsync = async function () {
 
         let fallbackContent
         if (loadingComponent) {
-          if (loadingComponent && typeof loadingComponent === 'object'
+          if (typeof loadingComponent === 'object'
             && (loadingComponent.type || loadingComponent.$$typeof)) {
             fallbackContent = loadingComponent
           }
