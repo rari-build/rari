@@ -174,7 +174,7 @@
           })
         }
       }
-      catch {
+      catch (e) {
         results.push(captureErrorContext(e, deferred))
       }
     }

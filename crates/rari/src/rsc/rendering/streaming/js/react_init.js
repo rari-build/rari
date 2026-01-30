@@ -66,7 +66,8 @@
               return props.fallback || null
             }
 
-            return props?.fallback || React.createElement('div', null, `Suspense Error: ${error && error.message ? error.message : 'Unknown'}`)
+            console.error('[rari] Suspense error in streaming render', error)
+            return props?.fallback || React.createElement('div', null, 'Suspense Error')
           }
           finally {
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
