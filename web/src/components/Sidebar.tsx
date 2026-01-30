@@ -151,11 +151,13 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             {navigation.map((item) => {
               const isDocs = item.id === 'docs'
               const isSponsor = item.id === 'sponsor'
-              const isActive = isDocs
-                ? pathname === '/docs'
-                : item.href === '/'
-                  ? pathname === item.href
-                  : pathname?.startsWith(item.href)
+              let isActive: boolean
+              if (isDocs)
+                isActive = pathname === '/docs'
+              else if (item.href === '/')
+                isActive = pathname === item.href
+              else
+                isActive = pathname?.startsWith(item.href) ?? false
 
               const isDisabled = isDocs && pathname === '/docs/getting-started'
 
@@ -171,11 +173,16 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                       : (
                           <a
                             href={item.href}
-                            {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                            className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
-                              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
-                              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
-                            }`}
+                            target={isSponsor ? '_blank' : undefined}
+                            rel={isSponsor ? 'noopener noreferrer' : undefined}
+                            className={[
+                              'flex-1',
+                              isSponsor ? 'flex items-center' : 'block',
+                              'px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group',
+                              isActive
+                                ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
+                                : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100',
+                            ].join(' ')}
                             aria-current={isActive ? 'page' : undefined}
                           >
                             {!isActive && (

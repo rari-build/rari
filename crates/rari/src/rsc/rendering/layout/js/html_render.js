@@ -71,10 +71,8 @@ async function renderHtmlElement(tagName, props, depth) {
       continue
     }
 
-    if (typeof value === 'string' || typeof value === 'number') {
+    if (typeof value === 'string' || typeof value === 'number')
       html += ` ${key}="${escapeHtml(String(value))}"`
-      continue
-    }
   }
 
   if (isSelfClosing(tagName)) {

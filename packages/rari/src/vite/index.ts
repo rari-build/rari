@@ -533,11 +533,13 @@ if (import.meta.hot) {
               config.build.rolldownOptions = config.build.rolldownOptions || {}
 
               const existingInput = config.build.rolldownOptions.input || { main: './index.html' }
-              const inputObj: Record<string, string> = typeof existingInput === 'string'
-                ? { main: existingInput }
-                : Array.isArray(existingInput)
-                  ? { main: existingInput[0] || './index.html' }
-                  : { ...existingInput }
+              let inputObj: Record<string, string>
+              if (typeof existingInput === 'string')
+                inputObj = { main: existingInput }
+              else if (Array.isArray(existingInput))
+                inputObj = { main: existingInput[0] || './index.html' }
+              else
+                inputObj = { ...existingInput }
 
               htmlImports.forEach(({ path: importPath, name }) => {
                 inputObj[name] = `./${importPath}`

@@ -120,9 +120,12 @@ export function Image({
       const link = document.createElement('link')
       link.rel = 'preload'
       link.as = 'image'
-      link.href = loader
-        ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
-        : (unoptimized ? finalSrc : buildImageUrl(finalSrc, imgWidth || 1920, quality))
+      if (loader)
+        link.href = loader({ src: finalSrc, width: imgWidth || 1920, quality })
+      else if (unoptimized)
+        link.href = finalSrc
+      else
+        link.href = buildImageUrl(finalSrc, imgWidth || 1920, quality)
       if (sizes)
         link.setAttribute('imagesizes', sizes)
       document.head.appendChild(link)
