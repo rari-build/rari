@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -44,6 +45,8 @@ impl ImageOptimizer {
         let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
         let http_client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .build()
             .expect("Failed to create HTTP client");
 
@@ -765,6 +768,7 @@ impl ImageOptimizer {
         if host_lower == "localhost"
             || host_lower == "127.0.0.1"
             || host_lower == "::1"
+            || host_lower == "0.0.0.0"
             || host_lower.starts_with("127.")
         {
             return Err(ImageError::UnauthorizedDomain(format!(
@@ -794,7 +798,7 @@ impl ImageOptimizer {
 
         let mut allowed = false;
         for pattern in &self.config.remote_patterns {
-            if self.hostname_matches(host, &pattern.hostname) {
+            if self.matches_pattern(&parsed, pattern) {
                 allowed = true;
                 break;
             }
@@ -908,8 +912,6 @@ impl ImageOptimizer {
                         })?
                         .to_string()
                 };
-
-                self.validate_url(&redirect_url)?;
 
                 tracing::debug!(
                     "Following validated redirect: {} -> {}",
