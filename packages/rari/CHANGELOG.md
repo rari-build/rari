@@ -1,9 +1,49 @@
-## [0.8.1] - 2026-01-29
+## [0.8.2] - 2026-01-30
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.8.2
+## [0.8.2] - 2026-01-30
+
+### 🚀 Features
+
+- *(image)* Add quality allowlist configuration for image optimization
+- *(image)* Add preoptimization manifest support for image variants
+- *(image)* Add preload image tracking and metadata injection support
+- *(image)* Improve image scanner and optimizer robustness
+- *(image)* Improve image scanner and optimizer robustness
+
+### 🐛 Bug Fixes
+
+- *(image)* Move preload registration after dry-run check
+
+### 🚜 Refactor
+
+- *(react)* Remove polyfill for Object.hasOwn
+- *(metadata-injection)* Simplify nested conditionals with let-else chains
+- *(metadata-injection)* Simplify image optimizer reference handling
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Update Node.js target version to 22
+- *(codeql)* Ignore tags on push events
+- *(knip)* Add @typescript-eslint/utils to ignored dependencies
+- *(release)* Bump version to 0.8.2
+## [create-rari-app@0.4.1] - 2026-01-29
+
+### 💼 Other
+
+- Create-rari-app@0.4.1
+## [rari@0.8.1] - 2026-01-29
 
 ### 🚀 Features
 
 - *(cli)* Add automatic package manager detection and cross-platform execution
 - *(cli)* Improve package manager detection with monorepo support
+
+### 💼 Other
+
+- Rari@0.8.1
 
 ### ⚙️ Miscellaneous Tasks
 
