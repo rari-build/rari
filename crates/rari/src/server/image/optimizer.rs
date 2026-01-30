@@ -745,6 +745,71 @@ impl ImageOptimizer {
         }
     }
 
+    fn validate_remote_url(&self, url: &str) -> Result<(), ImageError> {
+        let parsed = Url::parse(url)
+            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL '{}': {}", url, e)))?;
+
+        match parsed.scheme() {
+            "http" | "https" => {}
+            other => {
+                return Err(ImageError::InvalidUrl(format!("Unsupported URL scheme '{}'", other)));
+            }
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| ImageError::InvalidUrl(format!("URL '{}' is missing a host", url)))?;
+
+        let host_lower = host.cow_to_ascii_lowercase();
+
+        if host_lower == "localhost"
+            || host_lower == "127.0.0.1"
+            || host_lower == "::1"
+            || host_lower.starts_with("127.")
+        {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "Loopback host '{}' is not allowed",
+                host
+            )));
+        }
+
+        if let Some(host_enum) = parsed.host() {
+            match host_enum {
+                url::Host::Ipv4(_) | url::Host::Ipv6(_) => {
+                    return Err(ImageError::UnauthorizedDomain(format!(
+                        "IP literal host '{}' is not allowed",
+                        host
+                    )));
+                }
+                url::Host::Domain(_) => {}
+            }
+        }
+
+        if self.config.remote_patterns.is_empty() {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "No remote image domains are configured; rejecting host '{}'",
+                host
+            )));
+        }
+
+        let mut allowed = false;
+        for pattern in &self.config.remote_patterns {
+            if self.hostname_matches(host, &pattern.hostname) {
+                allowed = true;
+                break;
+            }
+        }
+
+        if !allowed {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "Host '{}' is not allowed for remote images",
+                host
+            )));
+        }
+
+        Ok(())
+    }
+
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
         if url.starts_with('/') {
             let public_path = self.project_path.join("public");
@@ -791,6 +856,8 @@ impl ImageOptimizer {
         let mut redirect_count = 0;
 
         loop {
+            self.validate_remote_url(&current_url)?;
+
             let response = self
                 .http_client
                 .get(&current_url)
