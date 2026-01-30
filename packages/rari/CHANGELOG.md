@@ -1,9 +1,46 @@
-## [0.8.2] - 2026-01-30
+## [0.8.3] - 2026-01-30
+
+### 🚀 Features
+
+- *(image-optimizer)* Add remote URL validation for security
+- *(image-optimizer)* Add request timeouts and improve URL validation
+
+### 🐛 Bug Fixes
+
+- *(server)* Add URL validation and manual redirect handling
+- *(image-optimizer)* Redact sensitive URL data in debug logs
+- *(image-optimizer)* Enhance remote URL validation with private IP detection
+- *(image-optimizer)* Improve private IP range detection and validation
+- *(image-optimizer)* Enhance IPv6 private address detection
+- *(runtime)* Redact RSC operation JSON in error logs
+
+### 🚜 Refactor
+
+- *(runtime)* Improve HTTP client error handling with Result type
+
+### ⚡ Performance
+
+- *(image-optimizer)* Pre-allocate vector capacity for response bytes
+- *(runtime)* Implement HTTP client singleton with OnceLock
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.8.3
+## [create-rari-app@0.4.2] - 2026-01-30
+
+### 💼 Other
+
+- Create-rari-app@0.4.2
+## [rari@0.8.2] - 2026-01-30
+
+### 💼 Other
+
+- Rari@0.8.2
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump optional dependencies to 0.8.2
-## [0.8.2] - 2026-01-30
+## [0.8.2] - 2026-01-29
 
 ### 🚀 Features
 
