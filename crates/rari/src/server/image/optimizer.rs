@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -43,7 +44,9 @@ impl ImageOptimizer {
     pub fn new(config: ImageConfig, project_path: &Path) -> Self {
         let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
         let http_client = Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(config.max_redirects as usize))
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .build()
             .expect("Failed to create HTTP client");
 
@@ -616,27 +619,7 @@ impl ImageOptimizer {
             return Ok(());
         }
 
-        let url = Url::parse(url_str)
-            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL: {}", e)))?;
-
-        if url.scheme() == "file" {
-            return Err(ImageError::InvalidUrl("file:// URLs are not allowed".to_string()));
-        }
-
-        if self.config.remote_patterns.is_empty() {
-            return Err(ImageError::UnauthorizedDomain(format!(
-                "Remote URL not allowed: {}. Configure remotePatterns in your image config to allow external domains.",
-                url_str
-            )));
-        }
-
-        for pattern in &self.config.remote_patterns {
-            if self.matches_pattern(&url, pattern) {
-                return Ok(());
-            }
-        }
-
-        Err(ImageError::UnauthorizedDomain(url_str.to_string()))
+        self.validate_remote_url(url_str)
     }
 
     fn matches_local_pattern(&self, path: &str, pattern: &LocalPattern) -> bool {
@@ -745,6 +728,169 @@ impl ImageOptimizer {
         }
     }
 
+    fn validate_remote_url(&self, url: &str) -> Result<(), ImageError> {
+        let parsed = Url::parse(url)
+            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL '{}': {}", url, e)))?;
+
+        match parsed.scheme() {
+            "http" | "https" => {}
+            other => {
+                return Err(ImageError::InvalidUrl(format!("Unsupported URL scheme '{}'", other)));
+            }
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| ImageError::InvalidUrl(format!("URL '{}' is missing a host", url)))?;
+
+        let host_lower = host.cow_to_ascii_lowercase();
+
+        if host_lower == "localhost"
+            || host_lower == "127.0.0.1"
+            || host_lower == "::1"
+            || host_lower == "0.0.0.0"
+            || host_lower.starts_with("127.")
+        {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "Loopback host '{}' is not allowed",
+                host
+            )));
+        }
+
+        if let Some(host_enum) = parsed.host() {
+            match host_enum {
+                url::Host::Ipv4(ip) => {
+                    let octets = ip.octets();
+                    if octets[0] == 10
+                        || octets[0] == 127
+                        || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
+                        || (octets[0] == 192 && octets[1] == 168)
+                        || (octets[0] == 169 && octets[1] == 254)
+                        || (octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127))
+                        || octets[0] == 0
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Private or reserved IP address '{}' is not allowed",
+                            host
+                        )));
+                    }
+                }
+                url::Host::Ipv6(ip) => {
+                    let segments = ip.segments();
+
+                    let is_private_ipv4 = |octets: [u8; 4]| -> bool {
+                        octets[0] == 10
+                            || octets[0] == 127
+                            || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
+                            || (octets[0] == 192 && octets[1] == 168)
+                            || (octets[0] == 169 && octets[1] == 254)
+                            || (octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127))
+                            || octets[0] == 0
+                    };
+
+                    if let Some(ipv4) = ip.to_ipv4_mapped() {
+                        let octets = ipv4.octets();
+                        if is_private_ipv4(octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+                    } else if segments[0] == 0x2002 {
+                        let octets = [
+                            (segments[1] >> 8) as u8,
+                            (segments[1] & 0xff) as u8,
+                            (segments[2] >> 8) as u8,
+                            (segments[2] & 0xff) as u8,
+                        ];
+                        if is_private_ipv4(octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+                    } else if segments[0] == 0x2001 && segments[1] == 0x0000 {
+                        let server_octets = [
+                            (segments[2] >> 8) as u8,
+                            (segments[2] & 0xff) as u8,
+                            (segments[3] >> 8) as u8,
+                            (segments[3] & 0xff) as u8,
+                        ];
+                        if is_private_ipv4(server_octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+
+                        let client_octets = [
+                            ((segments[6] >> 8) ^ 0xff) as u8,
+                            ((segments[6] & 0xff) ^ 0xff) as u8,
+                            ((segments[7] >> 8) ^ 0xff) as u8,
+                            ((segments[7] & 0xff) ^ 0xff) as u8,
+                        ];
+                        if is_private_ipv4(client_octets) {
+                            return Err(ImageError::UnauthorizedDomain(format!(
+                                "Private or reserved IPv6 address '{}' is not allowed",
+                                host
+                            )));
+                        }
+                    } else if ip.is_loopback()
+                        || (segments[0] & 0xfe00) == 0xfc00
+                        || (segments[0] & 0xffc0) == 0xfe80
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Private or reserved IPv6 address '{}' is not allowed",
+                            host
+                        )));
+                    }
+                }
+                url::Host::Domain(domain) => {
+                    let domain_lower = domain.cow_to_ascii_lowercase();
+                    if domain_lower.ends_with(".local")
+                        || domain_lower.ends_with(".internal")
+                        || domain_lower.ends_with(".localhost")
+                        || domain_lower == "metadata.google.internal"
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Internal domain '{}' is not allowed",
+                            host
+                        )));
+                    }
+                }
+            }
+        }
+
+        if self.config.remote_patterns.is_empty() {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "No remote image domains are configured; rejecting host '{}'",
+                host
+            )));
+        }
+
+        let mut allowed = false;
+        for pattern in &self.config.remote_patterns {
+            if self.matches_pattern(&parsed, pattern) {
+                allowed = true;
+                break;
+            }
+        }
+
+        if !allowed {
+            return Err(ImageError::UnauthorizedDomain(format!(
+                "Host '{}' is not allowed for remote images",
+                host
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn make_validated_request(&self, url: &str) -> Result<reqwest::Response, ImageError> {
+        self.validate_remote_url(url)?;
+        self.http_client.get(url).send().await.map_err(|e| ImageError::FetchError(e.to_string()))
+    }
+
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
         if url.starts_with('/') {
             let public_path = self.project_path.join("public");
@@ -787,41 +933,104 @@ impl ImageOptimizer {
             return Ok(bytes);
         }
 
-        let response = self
-            .http_client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ImageError::FetchError(e.to_string()))?;
+        let mut current_url = url.to_string();
+        let mut redirect_count = 0;
 
-        if !response.status().is_success() {
-            return Err(ImageError::FetchError(format!("HTTP {}: {}", response.status(), url)));
-        }
+        let redact_url = |value: &str| {
+            Url::parse(value)
+                .map(|u| {
+                    let host = u.host_str().unwrap_or("");
+                    match u.port() {
+                        Some(port) => {
+                            format!("{}://{}:{}{}", u.scheme(), host, port, u.path())
+                        }
+                        None => format!("{}://{}{}", u.scheme(), host, u.path()),
+                    }
+                })
+                .unwrap_or_else(|_| "<invalid url>".to_string())
+        };
 
-        if let Some(content_length) = response.content_length()
-            && content_length as usize > MAX_SOURCE_IMAGE_SIZE
-        {
-            return Err(ImageError::InvalidParams(format!(
-                "Image too large: {} bytes (max {} bytes)",
-                content_length, MAX_SOURCE_IMAGE_SIZE
-            )));
-        }
+        loop {
+            let response = self.make_validated_request(&current_url).await?;
 
-        let mut bytes = Vec::new();
-        let mut stream = response.bytes_stream();
+            if response.status().is_redirection() {
+                if redirect_count >= self.config.max_redirects {
+                    return Err(ImageError::FetchError(format!(
+                        "Too many redirects (max {})",
+                        self.config.max_redirects
+                    )));
+                }
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
-            if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
-                return Err(ImageError::InvalidParams(format!(
-                    "Image too large (max {} bytes)",
-                    MAX_SOURCE_IMAGE_SIZE
+                let location = response
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .ok_or_else(|| {
+                        ImageError::FetchError("Redirect without Location header".to_string())
+                    })?;
+
+                let redirect_url = if location.starts_with("http://")
+                    || location.starts_with("https://")
+                {
+                    location.to_string()
+                } else {
+                    let base = Url::parse(&current_url)
+                        .map_err(|e| ImageError::InvalidUrl(format!("Invalid base URL: {}", e)))?;
+                    base.join(location)
+                        .map_err(|e| {
+                            ImageError::InvalidUrl(format!("Invalid redirect URL: {}", e))
+                        })?
+                        .to_string()
+                };
+
+                tracing::debug!(
+                    "Following validated redirect: {} -> {}",
+                    redact_url(&current_url),
+                    redact_url(&redirect_url)
+                );
+                current_url = redirect_url;
+                redirect_count += 1;
+                continue;
+            }
+
+            if !response.status().is_success() {
+                return Err(ImageError::FetchError(format!(
+                    "HTTP {}: {}",
+                    response.status(),
+                    redact_url(&current_url)
                 )));
             }
-            bytes.extend_from_slice(&chunk);
-        }
 
-        Ok(bytes)
+            if let Some(content_length) = response.content_length()
+                && content_length as usize > MAX_SOURCE_IMAGE_SIZE
+            {
+                return Err(ImageError::InvalidParams(format!(
+                    "Image too large: {} bytes (max {} bytes)",
+                    content_length, MAX_SOURCE_IMAGE_SIZE
+                )));
+            }
+
+            let mut bytes = if let Some(content_length) = response.content_length() {
+                let capacity = (content_length as usize).min(MAX_SOURCE_IMAGE_SIZE);
+                Vec::with_capacity(capacity)
+            } else {
+                Vec::new()
+            };
+            let mut stream = response.bytes_stream();
+
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
+                if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
+                    return Err(ImageError::InvalidParams(format!(
+                        "Image too large (max {} bytes)",
+                        MAX_SOURCE_IMAGE_SIZE
+                    )));
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+
+            return Ok(bytes);
+        }
     }
 
     fn determine_format_from_param(format_str: Option<&str>) -> ImageFormat {

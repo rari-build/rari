@@ -2,7 +2,7 @@ use crate::error::RariError as Error;
 use crate::runtime::JsError;
 use deno_core::{OpState, op2, v8};
 use rustc_hash::FxHashMap;
-use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
+use std::{future::Future, pin::Pin, rc::Rc};
 
 pub trait RsStoredCallback: 'static {
     #[allow(dead_code)]
@@ -140,7 +140,7 @@ macro_rules! rs_fn {
 }
 
 #[allow(dead_code)]
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn run_rscallback<T: RsCallback>(
     #[serde] args: T::Arguments,
@@ -160,12 +160,12 @@ fn find_callback(name: &str, state: &OpState) -> Result<Rc<Box<dyn RsStoredCallb
 }
 
 #[allow(dead_code)]
-#[op2(async)]
+#[op2]
 #[serde]
 pub async fn rscallback(
     #[string] name: String,
     #[serde] args: serde_json::Value,
-    state: Rc<RefCell<OpState>>,
+    state: Rc<std::cell::RefCell<OpState>>,
 ) -> Result<serde_json::Value, JsError> {
     let name_clone = name.clone();
 

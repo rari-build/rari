@@ -330,6 +330,16 @@ async fn handle_reload(
         }
     };
 
+    if file_path.contains("://") {
+        error!("Invalid file path: contains URL scheme");
+        #[allow(clippy::disallowed_methods)]
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "componentId": component_id,
+            "error": "Invalid file path: URL schemes not allowed"
+        })));
+    }
+
     let client = reqwest::Client::new();
     let vite_base_url = format!("http://{}", config.vite_address());
 

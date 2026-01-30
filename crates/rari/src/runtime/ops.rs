@@ -1,10 +1,9 @@
-use deno_core::OpDecl;
-use deno_core::OpState;
-use deno_core::error::ResourceError;
+use deno_core::{OpDecl, OpState, op2};
+use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::vec::Vec;
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -59,17 +58,20 @@ impl StreamOpState {
 }
 
 #[allow(clippy::disallowed_methods)]
-#[deno_core::op2(async)]
+#[op2]
 pub async fn op_send_chunk_to_rust(
     state: Rc<RefCell<OpState>>,
     #[string] operation_json: String,
-) -> Result<(), ResourceError> {
+) -> Result<(), JsErrorBox> {
     let operation: RscStreamOperation = match serde_json::from_str(&operation_json) {
         Ok(op) => op,
         Err(e) => {
-            let err_msg = format!("Invalid JSON for RSC operation: {e}. JSON: {operation_json}");
+            let err_msg = format!(
+                "Invalid JSON for RSC operation: {e}. JSON length: {}",
+                operation_json.len()
+            );
             error!("{err_msg}");
-            return Err(ResourceError::Other(err_msg));
+            return Err(JsErrorBox::generic(err_msg));
         }
     };
 
@@ -77,7 +79,7 @@ pub async fn op_send_chunk_to_rust(
         let mut op_state_ref = state.borrow_mut();
         let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
             Some(sos) => sos,
-            None => return Err(ResourceError::Other("StreamOpState not found.".to_string())),
+            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
         };
 
         match &operation {
@@ -142,7 +144,7 @@ pub async fn op_send_chunk_to_rust(
         (Some(_sender), RscStreamOperation::Complete { final_row_id: _ }) => {}
         (None, operation) => {
             error!("No sender available for operation: {operation:?}");
-            return Err(ResourceError::Other("No chunk sender available".to_string()));
+            return Err(JsErrorBox::generic("No chunk sender available"));
         }
     }
 
@@ -210,7 +212,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
     vec![op_send_chunk_to_rust(), op_internal_log()]
 }
 
-#[deno_core::op2(fast)]
+#[op2(fast)]
 pub fn op_internal_log(#[string] message: &str) {
     error!("[rari] {message}");
 }
@@ -222,15 +224,15 @@ pub struct FetchOpState {
 }
 
 #[allow(clippy::disallowed_methods)]
-#[deno_core::op2(async)]
+#[op2]
 #[serde]
 pub async fn op_fetch_with_cache(
     state: Rc<RefCell<OpState>>,
     #[string] url: String,
     #[string] options_json: String,
-) -> Result<serde_json::Value, ResourceError> {
+) -> Result<serde_json::Value, JsErrorBox> {
     let options: rustc_hash::FxHashMap<String, String> = serde_json::from_str(&options_json)
-        .map_err(|e| ResourceError::Other(format!("Invalid options JSON: {}", e)))?;
+        .map_err(|e| JsErrorBox::generic(format!("Invalid options JSON: {}", e)))?;
 
     let request_context = {
         let op_state_ref = state.borrow();
@@ -281,11 +283,20 @@ pub async fn op_fetch_with_cache(
     }
 }
 
+static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
+
+fn get_http_client() -> Result<&'static reqwest::Client, String> {
+    HTTP_CLIENT
+        .get_or_init(|| reqwest::Client::builder().build())
+        .as_ref()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))
+}
+
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
 ) -> Result<(u16, String), String> {
-    let client = reqwest::Client::new();
+    let client = get_http_client()?;
     let mut request = client.get(url);
 
     if let Some(headers_str) = options.get("headers") {
