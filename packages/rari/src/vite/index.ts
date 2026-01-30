@@ -434,14 +434,16 @@ if (import.meta.hot) {
 
     for (const name of exportedNames) {
       if (name === 'default') {
+        const errorMsg = `Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`
         newCode += 'export default '
         newCode += 'registerClientReference(function() {'
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call the default export of ${id} from the server but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
+        newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       else {
+        const errorMsg = `Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`
         newCode += `export const ${name} = `
         newCode += 'registerClientReference(function() {'
-        newCode += `throw new Error(${JSON.stringify(`Attempted to call ${name}() from the server but ${name} is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.`)});`
+        newCode += `throw new Error(${JSON.stringify(errorMsg)});`
       }
       newCode += '},'
       newCode += `${JSON.stringify(id)},`
