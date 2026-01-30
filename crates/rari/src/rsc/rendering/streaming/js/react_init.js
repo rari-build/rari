@@ -91,7 +91,7 @@
         }
       }
     }
-    catch {
+    catch (e) {
       console.error('Failed to load React in streaming context:', e)
       throw new Error(`Cannot initialize streaming without React: ${e.message}`)
     }
