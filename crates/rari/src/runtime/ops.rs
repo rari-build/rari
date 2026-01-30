@@ -66,7 +66,10 @@ pub async fn op_send_chunk_to_rust(
     let operation: RscStreamOperation = match serde_json::from_str(&operation_json) {
         Ok(op) => op,
         Err(e) => {
-            let err_msg = format!("Invalid JSON for RSC operation: {e}. JSON: {operation_json}");
+            let err_msg = format!(
+                "Invalid JSON for RSC operation: {e}. JSON length: {}",
+                operation_json.len()
+            );
             error!("{err_msg}");
             return Err(JsErrorBox::generic(err_msg));
         }
