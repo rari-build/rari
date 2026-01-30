@@ -125,7 +125,7 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
     return ''
   }
 
-  const attributes = renderAttributes(props, rowId)
+  const attributes = renderAttributes(props)
 
   if (props.dangerouslySetInnerHTML && typeof props.dangerouslySetInnerHTML === 'object' && '__html' in props.dangerouslySetInnerHTML) {
     const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']
@@ -138,7 +138,7 @@ function renderTag(tag, props, rendered, rowId, moduleMap) {
   const rawContentTags = ['style', 'script']
   let children
   if (rawContentTags.includes(tag))
-    children = renderChildrenRaw(props.children, rendered)
+    children = renderChildrenRaw(props.children)
   else
     children = renderChildren(props.children, rendered, moduleMap)
 
