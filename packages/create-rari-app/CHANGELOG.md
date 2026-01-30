@@ -1,3 +1,46 @@
+## [rari@0.8.4] - 2026-01-30
+
+### 💼 Other
+
+- Rari@0.8.4
+## [0.8.4] - 2026-01-30
+
+### 🐛 Bug Fixes
+
+- Correct typos and improve error handling in RSC rendering
+- Correct error handling and redirect URL assignment
+
+### 🚜 Refactor
+
+- Extract React component and SSR manifest creation logic
+- *(rsc)* Remove unused rowId parameter from render functions
+- *(vite)* Extract error messages to variables for clarity
+- *(vite)* Remove unused component tracking sets
+
+### 🎨 Styling
+
+- Add blank lines for improved code readability
+- Remove unnecessary braces from single-statement conditionals
+- *(eslint)* Refactor config and improve lint scope
+- Simplify conditional expressions and improve code readability
+- Improve regex patterns for string and path normalization
+- *(rsc)* Remove redundant loadingComponent check
+- *(metadata_collector)* Remove unused eslint directive and simplify error handling
+- *(rsc)* Remove unused isAsyncResult assignment
+- Remove unused variables and simplify property deletion
+- *(render_script)* Simplify lazy children detection logic
+- Remove unused variable assignments and simplify encoding defaults
+- *(cli)* Remove unnecessary blank lines in detectPackageManager
+
+### ⚙️ Miscellaneous Tasks
+
+- *(codeql)* Specify pull request event types
+- *(release)* Bump version to 0.8.4
+## [create-rari-app@0.4.3] - 2026-01-30
+
+### 💼 Other
+
+- Create-rari-app@0.4.3
 ## [rari@0.8.3] - 2026-01-30
 
 ### 💼 Other
