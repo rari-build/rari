@@ -25,7 +25,7 @@ catalogs:
     '@typescript/native-preview': ^7.0.0-dev.20260130.1
     eslint-plugin-de-morgan: ^2.0.0
     oxlint: ^1.42.0
-    rari: ^0.8.3
+    rari: ^0.8.4
   eslint:
     '@antfu/eslint-config': ^7.2.0
     '@eslint-react/eslint-plugin': ^2.8.1
