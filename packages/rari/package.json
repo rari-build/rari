@@ -91,11 +91,11 @@
     "esbuild": "catalog:build"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.8.1",
-    "rari-darwin-x64": "0.8.1",
-    "rari-linux-arm64": "0.8.1",
-    "rari-linux-x64": "0.8.1",
-    "rari-win32-x64": "0.8.1"
+    "rari-darwin-arm64": "0.8.2",
+    "rari-darwin-x64": "0.8.2",
+    "rari-linux-arm64": "0.8.2",
+    "rari-linux-x64": "0.8.2",
+    "rari-win32-x64": "0.8.2"
   },
   "devDependencies": {
     "@types/node": "catalog:",
