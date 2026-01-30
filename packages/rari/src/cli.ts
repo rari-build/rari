@@ -106,17 +106,12 @@ function getPackageExecutor(): string {
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
   if (command === 'npx') {
     const executor = getPackageExecutor()
-    if (executor.includes('bun')) {
+    if (executor.includes('bun'))
       return spawn(executor, ['x', ...args], options)
-    }
-
-    if (executor.includes('pnpm')) {
+    if (executor.includes('pnpm'))
       return spawn(executor, ['exec', ...args], options)
-    }
-
-    if (executor.includes('yarn')) {
+    if (executor.includes('yarn'))
       return spawn(executor, ['dlx', ...args], options)
-    }
   }
 
   const isWindows = process.platform === 'win32'
