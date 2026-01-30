@@ -125,7 +125,6 @@ const fs = {
   readFile: (path, encoding, callback) => {
     if (typeof encoding === 'function') {
       callback = encoding
-      encoding = 'utf8'
     }
     try {
       if (globalThis.Deno?.readTextFile) {
@@ -145,7 +144,6 @@ const fs = {
   writeFile: (path, data, encoding, callback) => {
     if (typeof encoding === 'function') {
       callback = encoding
-      encoding = 'utf8'
     }
     try {
       if (globalThis.Deno?.writeTextFile) {

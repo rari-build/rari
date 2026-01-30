@@ -1177,11 +1177,6 @@ if (import.meta.hot) {
       const rariServerUrl = window.location.origin
       const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
-      let componentId = filePath
-      if (componentId.startsWith('src/'))
-        componentId = componentId.substring(4)
-      componentId = componentId.replace(/\.(tsx|ts|jsx|js)$/, '')
-
       const reloadResponse = await fetch(reloadUrl, {
         method: 'POST',
         headers: {

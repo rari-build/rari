@@ -208,7 +208,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       catch {}
     }
 
-    let pathForFsOperations = filePath
+    let pathForFsOperations
     try {
       pathForFsOperations = fs.realpathSync(filePath)
     }
