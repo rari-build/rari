@@ -178,11 +178,8 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 
 export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
-  const serverComponents = new Set<string>()
   const clientComponents = new Set<string>()
   let rustServerProcess: any = null
-
-  const serverImportedClientComponents = new Set<string>()
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
@@ -775,7 +772,6 @@ if (import.meta.hot) {
 
       if (isServerComponent(id)) {
         componentTypeCache.set(id, 'server')
-        serverComponents.add(id)
 
         if (
           environment
@@ -867,8 +863,6 @@ ${clientTransformedCode}`
           && (environment.name === 'rsc' || environment.name === 'ssr')
         ) {
           if (!importingFileIsClient) {
-            serverImportedClientComponents.add(resolvedImportPath)
-
             const originalImport = line
             const componentName = importedDefault || 'default'
 
@@ -894,7 +888,6 @@ const ${componentName} = registerClientReference(
           hasServerImports = true
           needsReactImport = true
           needsWrapperImport = true
-          serverComponents.add(resolvedImportPath)
 
           const originalImport = line
 
