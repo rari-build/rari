@@ -52,13 +52,10 @@ function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
 
     if (existsSync(resolve(currentDir, 'pnpm-lock.yaml')))
       return 'pnpm'
-
     if (existsSync(resolve(currentDir, 'yarn.lock')))
       return 'yarn'
-
     if (existsSync(resolve(currentDir, 'bun.lockb')))
       return 'bun'
-
     if (existsSync(resolve(currentDir, 'package-lock.json')))
       return 'npm'
 
