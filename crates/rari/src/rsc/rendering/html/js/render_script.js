@@ -69,11 +69,10 @@ function renderElement(element, rendered, rowId, moduleMap) {
         try {
           const childrenData = JSON.parse(children_ref)
           if (childrenData && typeof childrenData === 'object') {
-            if (childrenData.__rari_lazy === true)
-              children = null
-            else if (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true)
-              children = null
-            else
+            const isLazy = childrenData.__rari_lazy === true
+              || (Array.isArray(childrenData) && childrenData.length > 0 && childrenData[0].__rari_lazy === true)
+
+            if (!isLazy)
               children = renderElement(childrenData, rendered, undefined, moduleMap)
           }
           else {
