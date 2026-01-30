@@ -619,27 +619,7 @@ impl ImageOptimizer {
             return Ok(());
         }
 
-        let url = Url::parse(url_str)
-            .map_err(|e| ImageError::InvalidUrl(format!("Invalid URL: {}", e)))?;
-
-        if url.scheme() == "file" {
-            return Err(ImageError::InvalidUrl("file:// URLs are not allowed".to_string()));
-        }
-
-        if self.config.remote_patterns.is_empty() {
-            return Err(ImageError::UnauthorizedDomain(format!(
-                "Remote URL not allowed: {}. Configure remotePatterns in your image config to allow external domains.",
-                url_str
-            )));
-        }
-
-        for pattern in &self.config.remote_patterns {
-            if self.matches_pattern(&url, pattern) {
-                return Ok(());
-            }
-        }
-
-        Err(ImageError::UnauthorizedDomain(url_str.to_string()))
+        self.validate_remote_url(url_str)
     }
 
     fn matches_local_pattern(&self, path: &str, pattern: &LocalPattern) -> bool {
@@ -770,6 +750,8 @@ impl ImageOptimizer {
             || host_lower == "::1"
             || host_lower == "0.0.0.0"
             || host_lower.starts_with("127.")
+            || host_lower == "[::1]"
+            || host_lower == "[0:0:0:0:0:0:0:1]"
         {
             return Err(ImageError::UnauthorizedDomain(format!(
                 "Loopback host '{}' is not allowed",
@@ -779,13 +761,47 @@ impl ImageOptimizer {
 
         if let Some(host_enum) = parsed.host() {
             match host_enum {
-                url::Host::Ipv4(_) | url::Host::Ipv6(_) => {
-                    return Err(ImageError::UnauthorizedDomain(format!(
-                        "IP literal host '{}' is not allowed",
-                        host
-                    )));
+                url::Host::Ipv4(ip) => {
+                    let octets = ip.octets();
+                    if octets[0] == 10
+                        || octets[0] == 127
+                        || (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31))
+                        || (octets[0] == 192 && octets[1] == 168)
+                        || (octets[0] == 169 && octets[1] == 254)
+                        || octets[0] == 0
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Private or reserved IP address '{}' is not allowed",
+                            host
+                        )));
+                    }
                 }
-                url::Host::Domain(_) => {}
+                url::Host::Ipv6(ip) => {
+                    let segments = ip.segments();
+                    if ip.is_loopback()
+                        || (segments[0] & 0xfe00) == 0xfc00
+                        || (segments[0] & 0xffc0) == 0xfe80
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Private or reserved IPv6 address '{}' is not allowed",
+                            host
+                        )));
+                    }
+                }
+                url::Host::Domain(domain) => {
+                    let domain_lower = domain.cow_to_ascii_lowercase();
+                    if domain_lower.ends_with(".local")
+                        || domain_lower.ends_with(".internal")
+                        || domain_lower.ends_with(".localhost")
+                        || domain_lower == "metadata.google.internal"
+                        || domain_lower == "169.254.169.254"
+                    {
+                        return Err(ImageError::UnauthorizedDomain(format!(
+                            "Internal domain '{}' is not allowed",
+                            host
+                        )));
+                    }
+                }
             }
         }
 
@@ -812,6 +828,10 @@ impl ImageOptimizer {
         }
 
         Ok(())
+    }
+
+    async fn make_validated_request(&self, url: &str) -> Result<reqwest::Response, ImageError> {
+        self.http_client.get(url).send().await.map_err(|e| ImageError::FetchError(e.to_string()))
     }
 
     async fn fetch_image(&self, url: &str) -> Result<Vec<u8>, ImageError> {
@@ -856,6 +876,8 @@ impl ImageOptimizer {
             return Ok(bytes);
         }
 
+        self.validate_remote_url(url)?;
+
         let mut current_url = url.to_string();
         let mut redirect_count = 0;
 
@@ -876,12 +898,7 @@ impl ImageOptimizer {
         loop {
             self.validate_remote_url(&current_url)?;
 
-            let response = self
-                .http_client
-                .get(&current_url)
-                .send()
-                .await
-                .map_err(|e| ImageError::FetchError(e.to_string()))?;
+            let response = self.make_validated_request(&current_url).await?;
 
             if response.status().is_redirection() {
                 if redirect_count >= self.config.max_redirects {
