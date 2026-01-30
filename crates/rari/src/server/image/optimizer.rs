@@ -43,7 +43,7 @@ impl ImageOptimizer {
     pub fn new(config: ImageConfig, project_path: &Path) -> Self {
         let cache = Arc::new(ImageCache::new(config.max_cache_size, project_path));
         let http_client = Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(config.max_redirects as usize))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("Failed to create HTTP client");
 
@@ -787,41 +787,92 @@ impl ImageOptimizer {
             return Ok(bytes);
         }
 
-        let response = self
-            .http_client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ImageError::FetchError(e.to_string()))?;
+        let mut current_url = url.to_string();
+        let mut redirect_count = 0;
 
-        if !response.status().is_success() {
-            return Err(ImageError::FetchError(format!("HTTP {}: {}", response.status(), url)));
-        }
+        loop {
+            let response = self
+                .http_client
+                .get(&current_url)
+                .send()
+                .await
+                .map_err(|e| ImageError::FetchError(e.to_string()))?;
 
-        if let Some(content_length) = response.content_length()
-            && content_length as usize > MAX_SOURCE_IMAGE_SIZE
-        {
-            return Err(ImageError::InvalidParams(format!(
-                "Image too large: {} bytes (max {} bytes)",
-                content_length, MAX_SOURCE_IMAGE_SIZE
-            )));
-        }
+            if response.status().is_redirection() {
+                if redirect_count >= self.config.max_redirects {
+                    return Err(ImageError::FetchError(format!(
+                        "Too many redirects (max {})",
+                        self.config.max_redirects
+                    )));
+                }
 
-        let mut bytes = Vec::new();
-        let mut stream = response.bytes_stream();
+                let location = response
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .ok_or_else(|| {
+                        ImageError::FetchError("Redirect without Location header".to_string())
+                    })?;
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
-            if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
-                return Err(ImageError::InvalidParams(format!(
-                    "Image too large (max {} bytes)",
-                    MAX_SOURCE_IMAGE_SIZE
+                let redirect_url = if location.starts_with("http://")
+                    || location.starts_with("https://")
+                {
+                    location.to_string()
+                } else {
+                    let base = Url::parse(&current_url)
+                        .map_err(|e| ImageError::InvalidUrl(format!("Invalid base URL: {}", e)))?;
+                    base.join(location)
+                        .map_err(|e| {
+                            ImageError::InvalidUrl(format!("Invalid redirect URL: {}", e))
+                        })?
+                        .to_string()
+                };
+
+                self.validate_url(&redirect_url)?;
+
+                tracing::debug!(
+                    "Following validated redirect: {} -> {}",
+                    current_url,
+                    redirect_url
+                );
+                current_url = redirect_url;
+                redirect_count += 1;
+                continue;
+            }
+
+            if !response.status().is_success() {
+                return Err(ImageError::FetchError(format!(
+                    "HTTP {}: {}",
+                    response.status(),
+                    current_url
                 )));
             }
-            bytes.extend_from_slice(&chunk);
-        }
 
-        Ok(bytes)
+            if let Some(content_length) = response.content_length()
+                && content_length as usize > MAX_SOURCE_IMAGE_SIZE
+            {
+                return Err(ImageError::InvalidParams(format!(
+                    "Image too large: {} bytes (max {} bytes)",
+                    content_length, MAX_SOURCE_IMAGE_SIZE
+                )));
+            }
+
+            let mut bytes = Vec::new();
+            let mut stream = response.bytes_stream();
+
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| ImageError::FetchError(e.to_string()))?;
+                if bytes.len() + chunk.len() > MAX_SOURCE_IMAGE_SIZE {
+                    return Err(ImageError::InvalidParams(format!(
+                        "Image too large (max {} bytes)",
+                        MAX_SOURCE_IMAGE_SIZE
+                    )));
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+
+            return Ok(bytes);
+        }
     }
 
     fn determine_format_from_param(format_str: Option<&str>) -> ImageFormat {
