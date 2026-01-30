@@ -3,6 +3,7 @@ use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -279,11 +280,18 @@ pub async fn op_fetch_with_cache(
     }
 }
 
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn get_http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT
+        .get_or_init(|| reqwest::Client::builder().build().expect("Failed to create HTTP client"))
+}
+
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
 ) -> Result<(u16, String), String> {
-    let client = reqwest::Client::new();
+    let client = get_http_client();
     let mut request = client.get(url);
 
     if let Some(headers_str) = options.get("headers") {
