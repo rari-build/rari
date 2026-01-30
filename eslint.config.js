@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { antfu } from '@antfu/eslint-config'
 import e18e from '@e18e/eslint-plugin'
 import deMorgan from 'eslint-plugin-de-morgan'
@@ -8,15 +7,7 @@ export default antfu(
   {
     react: true,
     typescript: true,
-    ignores: [
-      '**/packages/create-rari-app/templates/**',
-    ],
-  },
-  {
-    files: ['examples/**/src/app/**', 'web/src/app/**'],
-    rules: {
-      'react-refresh/only-export-components': 'off',
-    },
+    ignores: ['**/packages/create-rari-app/templates/**'],
   },
   {
     rules: {
@@ -27,7 +18,13 @@ export default antfu(
       ],
     },
   },
+  {
+    files: ['examples/**/src/app/**', 'web/src/app/**'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
   deMorgan.configs.recommended,
   e18e.configs.recommended,
-  ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, '.oxlintrc.json')),
+  ...oxlint.buildFromOxlintConfigFile(`${import.meta.dirname}/.oxlintrc.json`),
 )

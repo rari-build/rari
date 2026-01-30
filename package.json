@@ -7,8 +7,8 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
-    "lint": "pnpm -r run lint && oxlint crates/ && eslint .",
-    "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint . --fix",
+    "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/ packages/ web/ examples/",
+    "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ packages/ web/ examples/ --fix",
     "lint:knip": "knip"
   },
   "devDependencies": {
