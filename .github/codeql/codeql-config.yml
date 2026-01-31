@@ -1,5 +1,0 @@
-name: CodeQL Config
-
-paths-ignore:
-  - packages/rari/src/runtime/entry-client.js
-  - packages/rari/src/runtime/rsc-client-runtime.js
