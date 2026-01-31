@@ -35,6 +35,8 @@
     "rari": "./bin/rari"
   },
   "files": [
+    "LICENSE",
+    "README.md",
     "bin/rari"
   ],
   "engines": {
