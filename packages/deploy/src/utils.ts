@@ -40,8 +40,5 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
   const [, major] = match
   const majorNum = Number.parseInt(major, 10)
 
-  if (majorNum >= minMajor)
-    return true
-
-  return false
+  return majorNum >= minMajor
 }
