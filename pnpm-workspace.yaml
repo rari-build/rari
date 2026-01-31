@@ -36,10 +36,10 @@ catalogs:
     knip: ^5.82.1
   mdx:
     '@mdx-js/mdx': 3.1.1
-    '@shikijs/core': ^3.21.0
-    '@shikijs/engine-oniguruma': ^3.21.0
-    '@shikijs/langs': ^3.21.0
-    '@shikijs/themes': ^3.21.0
+    '@shikijs/core': ^3.22.0
+    '@shikijs/engine-oniguruma': ^3.22.0
+    '@shikijs/langs': ^3.22.0
+    '@shikijs/themes': ^3.22.0
   react:
     '@types/react': ^19.2.10
     '@types/react-dom': ^19.2.3
