@@ -286,16 +286,20 @@ async fn run_non_interactive(
         }
 
         for pkg in &packages {
-            if dry_run {
-                println!(
-                    "  {} Would generate README and LICENSE for {}...",
-                    "[DRY RUN]".yellow(),
-                    pkg.name
-                );
-            } else {
-                println!("  {} Generating README and LICENSE for {}...", "→".cyan(), pkg.name);
-                crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
-                println!("  {} Generated README and LICENSE", "✓".green());
+            let needs_generated_files = matches!(pkg.name.as_str(), "rari" | "create-rari-app");
+
+            if needs_generated_files {
+                if dry_run {
+                    println!(
+                        "  {} Would generate README and LICENSE for {}...",
+                        "[DRY RUN]".yellow(),
+                        pkg.name
+                    );
+                } else {
+                    println!("  {} Generating README and LICENSE for {}...", "→".cyan(), pkg.name);
+                    crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
+                    println!("  {} Generated README and LICENSE", "✓".green());
+                }
             }
 
             let is_prerelease =
@@ -320,22 +324,26 @@ async fn run_non_interactive(
                     println!("  {} Published {}@{}", "✓".green(), pkg.name, new_version);
                 }
 
-                println!("  {} Cleaning up generated files for {}...", "→".cyan(), pkg.name);
-                let cleanup_result = crate::files::cleanup_package_files(&pkg.path).await;
+                if needs_generated_files {
+                    println!("  {} Cleaning up generated files for {}...", "→".cyan(), pkg.name);
+                    let cleanup_result = crate::files::cleanup_package_files(&pkg.path).await;
 
-                if let Err(e) = publish_result {
-                    if let Err(cleanup_err) = cleanup_result {
-                        println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
+                    if let Err(e) = publish_result {
+                        if let Err(cleanup_err) = cleanup_result {
+                            println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
+                        }
+                        return Err(e);
                     }
-                    return Err(e);
-                }
 
-                if let Err(cleanup_err) = cleanup_result {
-                    println!("  {} Cleanup failed: {}", "⚠".yellow(), cleanup_err);
-                    return Err(cleanup_err);
-                }
+                    if let Err(cleanup_err) = cleanup_result {
+                        println!("  {} Cleanup failed: {}", "⚠".yellow(), cleanup_err);
+                        return Err(cleanup_err);
+                    }
 
-                println!("  {} Cleaned up generated files", "✓".green());
+                    println!("  {} Cleaned up generated files", "✓".green());
+                } else {
+                    publish_result?;
+                }
             }
         }
 

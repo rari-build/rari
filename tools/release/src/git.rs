@@ -57,10 +57,32 @@ pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {
 
 pub async fn add_and_commit_multiple(message: &str, paths: &[&Path]) -> Result<()> {
     for path in paths {
-        Command::new("git").args(["add", "."]).current_dir(path).output().await?;
+        let output = Command::new("git").args(["add", "."]).current_dir(path).output().await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "Failed to git add in {}:\nstdout: {}\nstderr: {}",
+                path.display(),
+                stdout,
+                stderr
+            );
+        }
     }
 
-    Command::new("git").args(["commit", "-m", message]).output().await?;
+    let output = Command::new("git").args(["commit", "-m", message]).output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!(
+            "Failed to git commit with message '{}':\nstdout: {}\nstderr: {}",
+            message,
+            stdout,
+            stderr
+        );
+    }
 
     Ok(())
 }

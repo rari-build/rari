@@ -238,9 +238,7 @@ pub async fn generate_package_files(package_name: &str, package_path: &Path) -> 
             generate_create_rari_app_readme(package_path).await?;
             copy_license(package_path).await?;
         }
-        _ => {
-            anyhow::bail!("Unknown package: {}", package_name);
-        }
+        _ => {}
     }
     Ok(())
 }

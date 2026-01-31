@@ -90,12 +90,9 @@ impl App {
             match unit {
                 ReleaseUnit::Single(pkg) => packages.push(pkg.clone()),
                 ReleaseUnit::Group(group) => {
-                    packages.push(Package {
-                        name: group.name.clone(),
-                        path: group.packages[0].path.clone(),
-                        current_version: group.current_version.clone(),
-                        needs_build: false,
-                    });
+                    for pkg in &group.packages {
+                        packages.push(pkg.clone());
+                    }
                 }
             }
         }
@@ -403,14 +400,20 @@ impl App {
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
 
-                    if self.dry_run {
-                        self.status_messages
-                            .push("[DRY RUN] Would generate README and LICENSE...".to_string());
-                    } else {
-                        self.status_messages.push("Generating README and LICENSE...".to_string());
-                        crate::files::generate_package_files(&package.name, &package.path).await?;
+                    let needs_generated_files =
+                        matches!(package.name.as_str(), "rari" | "create-rari-app");
+                    if needs_generated_files {
+                        if self.dry_run {
+                            self.status_messages
+                                .push("[DRY RUN] Would generate README and LICENSE...".to_string());
+                        } else {
+                            self.status_messages
+                                .push("Generating README and LICENSE...".to_string());
+                            crate::files::generate_package_files(&package.name, &package.path)
+                                .await?;
+                        }
+                        self.status_messages.push("* Generated README and LICENSE".to_string());
                     }
-                    self.status_messages.push("* Generated README and LICENSE".to_string());
 
                     self.publish_step = PublishStep::Publishing;
                     self.publish_progress = 0.85;
@@ -435,20 +438,31 @@ impl App {
                                 .push(format!("* Published {}@{}", package.name, version));
                         }
 
-                        self.status_messages.push("Cleaning up generated files...".to_string());
-                        let cleanup_result =
-                            crate::files::cleanup_package_files(&package.path).await;
+                        let needs_generated_files =
+                            matches!(package.name.as_str(), "rari" | "create-rari-app");
+                        if needs_generated_files {
+                            self.status_messages.push("Cleaning up generated files...".to_string());
+                            let cleanup_result =
+                                crate::files::cleanup_package_files(&package.path).await;
 
-                        if let Err(e) = publish_result {
+                            if let Err(e) = publish_result {
+                                if let Err(cleanup_err) = cleanup_result {
+                                    self.status_messages
+                                        .push(format!("⚠ Cleanup also failed: {}", cleanup_err));
+                                }
+                                return Err(e);
+                            }
+
                             if let Err(cleanup_err) = cleanup_result {
                                 self.status_messages
-                                    .push(format!("⚠ Cleanup also failed: {}", cleanup_err));
+                                    .push(format!("⚠ Cleanup failed: {}", cleanup_err));
+                                return Err(cleanup_err);
                             }
-                            return Err(e);
-                        }
 
-                        cleanup_result?;
-                        self.status_messages.push("* Cleaned up generated files".to_string());
+                            self.status_messages.push("* Cleaned up generated files".to_string());
+                        } else {
+                            publish_result?;
+                        }
                     }
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
