@@ -33,7 +33,6 @@ pub enum PostReleaseStep {
 pub enum PublishStep {
     Building,
     UpdatingVersion,
-    PreparingChangelog,
     GeneratingChangelog,
     Committing,
     Publishing,
@@ -368,12 +367,8 @@ impl App {
                         package.update_version(version).await?;
                     }
                     self.status_messages.push("* Updated version".to_string());
-                    self.publish_step = PublishStep::PreparingChangelog;
-                    self.publish_progress = 0.35;
-                }
-                PublishStep::PreparingChangelog => {
                     self.publish_step = PublishStep::GeneratingChangelog;
-                    self.publish_progress = 0.5;
+                    self.publish_progress = 0.4;
                 }
                 PublishStep::GeneratingChangelog => {
                     if self.dry_run {

@@ -264,13 +264,6 @@ async fn run_non_interactive(
             let project_root = std::path::PathBuf::from(".");
             let tag = format!("v{}", new_version);
             crate::npm::generate_changelog(&tag, &project_root).await?;
-
-            let source = project_root.join("CHANGELOG.md");
-            for pkg in &packages {
-                let target = pkg.path.join("CHANGELOG.md");
-                tokio::fs::copy(&source, &target).await?;
-            }
-            tokio::fs::remove_file(&source).await?;
             println!("  {} Generated changelog", "✓".green());
         }
 
@@ -281,8 +274,12 @@ async fn run_non_interactive(
             println!("  {} Would create tag: {}", "[DRY RUN]".yellow(), tag);
         } else {
             println!("  {} Committing changes...", "→".cyan());
-            for path in unit.paths() {
-                crate::git::add_and_commit(&message, path).await?;
+            let paths = unit.paths();
+            if paths.len() > 1 {
+                let path_refs: Vec<&std::path::Path> = paths.iter().map(|p| p.as_path()).collect();
+                crate::git::add_and_commit_multiple(&message, &path_refs).await?;
+            } else {
+                crate::git::add_and_commit(&message, paths[0]).await?;
             }
             crate::git::create_tag(&tag).await?;
             println!("  {} Committed and tagged", "✓".green());
@@ -326,10 +323,6 @@ async fn run_non_interactive(
                 println!("  {} Cleaning up generated files for {}...", "→".cyan(), pkg.name);
                 let cleanup_result = crate::files::cleanup_package_files(&pkg.path).await;
 
-                if cleanup_result.is_ok() {
-                    println!("  {} Cleaned up generated files", "✓".green());
-                }
-
                 if let Err(e) = publish_result {
                     if let Err(cleanup_err) = cleanup_result {
                         println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
@@ -337,7 +330,12 @@ async fn run_non_interactive(
                     return Err(e);
                 }
 
-                cleanup_result?;
+                if let Err(cleanup_err) = cleanup_result {
+                    println!("  {} Cleanup failed: {}", "⚠".yellow(), cleanup_err);
+                    return Err(cleanup_err);
+                }
+
+                println!("  {} Cleaned up generated files", "✓".green());
             }
         }
 

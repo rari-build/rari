@@ -55,6 +55,16 @@ pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {
     Ok(())
 }
 
+pub async fn add_and_commit_multiple(message: &str, paths: &[&Path]) -> Result<()> {
+    for path in paths {
+        Command::new("git").args(["add", "."]).current_dir(path).output().await?;
+    }
+
+    Command::new("git").args(["commit", "-m", message]).output().await?;
+
+    Ok(())
+}
+
 pub async fn create_tag(tag: &str) -> Result<()> {
     Command::new("git").args(["tag", tag]).output().await?;
 
