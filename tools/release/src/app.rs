@@ -444,10 +444,6 @@ impl App {
                         let cleanup_result =
                             crate::files::cleanup_package_files(&package.path).await;
 
-                        if cleanup_result.is_ok() {
-                            self.status_messages.push("* Cleaned up generated files".to_string());
-                        }
-
                         if let Err(e) = publish_result {
                             if let Err(cleanup_err) = cleanup_result {
                                 self.status_messages
@@ -457,6 +453,7 @@ impl App {
                         }
 
                         cleanup_result?;
+                        self.status_messages.push("* Cleaned up generated files".to_string());
                     }
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
