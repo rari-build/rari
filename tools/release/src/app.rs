@@ -33,6 +33,7 @@ pub enum PostReleaseStep {
 pub enum PublishStep {
     Building,
     UpdatingVersion,
+    GeneratingFiles,
     GeneratingChangelog,
     Committing,
     Publishing,
@@ -337,8 +338,20 @@ impl App {
                         package.update_version(version).await?;
                     }
                     self.status_messages.push("* Updated version".to_string());
+                    self.publish_step = PublishStep::GeneratingFiles;
+                    self.publish_progress = 0.35;
+                }
+                PublishStep::GeneratingFiles => {
+                    if self.dry_run {
+                        self.status_messages
+                            .push("[DRY RUN] Would generate README and LICENSE...".to_string());
+                    } else {
+                        self.status_messages.push("Generating README and LICENSE...".to_string());
+                        crate::files::generate_package_files(&package.name, &package.path).await?;
+                    }
+                    self.status_messages.push("* Generated README and LICENSE".to_string());
                     self.publish_step = PublishStep::GeneratingChangelog;
-                    self.publish_progress = 0.4;
+                    self.publish_progress = 0.5;
                 }
                 PublishStep::GeneratingChangelog => {
                     if self.dry_run {
@@ -357,7 +370,7 @@ impl App {
                     }
                     self.status_messages.push("* Generated changelog".to_string());
                     self.publish_step = PublishStep::Committing;
-                    self.publish_progress = 0.6;
+                    self.publish_progress = 0.7;
                 }
                 PublishStep::Committing => {
                     let message = format!("release: {}@{}", package.name, version);
@@ -373,7 +386,7 @@ impl App {
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
                     self.publish_step = PublishStep::Publishing;
-                    self.publish_progress = 0.8;
+                    self.publish_progress = 0.85;
                 }
                 PublishStep::Publishing => {
                     let is_prerelease =
@@ -387,8 +400,13 @@ impl App {
                     } else {
                         self.status_messages.push("Publishing to npm...".to_string());
                         npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await?;
+                        self.status_messages
+                            .push(format!("* Published {}@{}", package.name, version));
+
+                        self.status_messages.push("Cleaning up generated files...".to_string());
+                        crate::files::cleanup_package_files(&package.path).await?;
+                        self.status_messages.push("* Cleaned up generated files".to_string());
                     }
-                    self.status_messages.push(format!("* Published {}@{}", package.name, version));
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 

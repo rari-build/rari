@@ -1,4 +1,5 @@
 mod app;
+mod files;
 mod git;
 mod npm;
 mod package;
@@ -225,11 +226,13 @@ async fn run_non_interactive(
             println!("  {} Updating version...", "→".cyan());
             package.update_version(&new_version).await?;
             println!("  {} Updated version", "✓".green());
-
             println!("  {} Updating lockfile...", "→".cyan());
             let project_root = std::path::PathBuf::from(".");
             crate::npm::install_dependencies(&project_root).await?;
             println!("  {} Updated lockfile", "✓".green());
+            println!("  {} Generating README and LICENSE...", "→".cyan());
+            crate::files::generate_package_files(&package.name, &package.path).await?;
+            println!("  {} Generated README and LICENSE", "✓".green());
         }
 
         if dry_run {
@@ -276,6 +279,9 @@ async fn run_non_interactive(
             let otp = std::env::var("NPM_OTP").ok();
             crate::npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await?;
             println!("  {} Published {}@{}", "✓".green(), package.name, new_version);
+            println!("  {} Cleaning up generated files...", "→".cyan());
+            crate::files::cleanup_package_files(&package.path).await?;
+            println!("  {} Cleaned up generated files", "✓".green());
         }
 
         println!();
