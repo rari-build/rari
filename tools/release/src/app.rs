@@ -41,7 +41,7 @@ pub enum PublishStep {
 
 pub struct App {
     pub screen: Screen,
-    pub packages: Vec<Package>,
+    pub release_units: Vec<crate::package::ReleaseUnit>,
     pub selected_package_idx: usize,
     pub selected_version_idx: usize,
     pub version_types: Vec<ReleaseType>,
@@ -85,23 +85,11 @@ impl App {
             }
         }
 
-        let mut packages = Vec::new();
-        for unit in &release_units {
-            match unit {
-                ReleaseUnit::Single(pkg) => packages.push(pkg.clone()),
-                ReleaseUnit::Group(group) => {
-                    for pkg in &group.packages {
-                        packages.push(pkg.clone());
-                    }
-                }
-            }
-        }
-
         let needs_otp = std::env::var("NPM_OTP").is_err();
 
         Ok(Self {
             screen: Screen::PackageSelection,
-            packages,
+            release_units,
             selected_package_idx: 0,
             selected_version_idx: 0,
             version_types: ReleaseType::all(),
@@ -126,15 +114,16 @@ impl App {
                     }
                 }
                 KeyCode::Down => {
-                    if self.selected_package_idx < self.packages.len() - 1 {
+                    if self.selected_package_idx < self.release_units.len() - 1 {
                         self.selected_package_idx += 1;
                     }
                 }
                 KeyCode::Enter => {
                     let package_idx = self.selected_package_idx;
-                    let package = &self.packages[package_idx];
+                    let unit = &self.release_units[package_idx];
+                    let first_path = unit.paths()[0];
                     self.recent_commits =
-                        git::get_commits_since_tag(&package.name, &package.path).await?;
+                        git::get_commits_since_tag(unit.name(), first_path).await?;
                     self.screen = Screen::VersionSelection { package_idx };
                     self.selected_version_idx = 0;
                 }
@@ -154,14 +143,14 @@ impl App {
                 }
                 KeyCode::Enter => {
                     let release_type = self.version_types[self.selected_version_idx];
-                    let package = &self.packages[*package_idx];
+                    let unit = &self.release_units[*package_idx];
                     if release_type == ReleaseType::Custom {
                         self.screen = Screen::CustomVersion {
                             package_idx: *package_idx,
                             input: String::new(),
                         };
                     } else if let Some(new_version) =
-                        release_type.to_version(&package.current_version)
+                        release_type.to_version(unit.current_version())
                     {
                         if self.needs_otp {
                             self.screen = Screen::OtpInput {
@@ -200,9 +189,9 @@ impl App {
                         Screen::CustomVersion { package_idx: *package_idx, input: new_input };
                 }
                 KeyCode::Enter => {
-                    let package = &self.packages[*package_idx];
+                    let unit = &self.release_units[*package_idx];
                     if let Ok(version) = semver::Version::parse(input) {
-                        let current = semver::Version::parse(&package.current_version)
+                        let current = semver::Version::parse(unit.current_version())
                             .expect("current version should be valid semver");
                         if version > current {
                             if self.needs_otp {
@@ -340,15 +329,19 @@ impl App {
 
     pub async fn update(&mut self) -> Result<()> {
         if let Screen::Publishing { package_idx, version, otp } = &self.screen.clone() {
-            let package = &self.packages[*package_idx];
+            let unit = &self.release_units[*package_idx];
             match self.publish_step {
                 PublishStep::Building => {
                     if self.dry_run {
                         self.status_messages.push("[DRY RUN] Would build package...".to_string());
                     } else {
                         self.status_messages.push("Building package...".to_string());
-                        if package.needs_build {
-                            npm::build_package(&package.path).await?;
+                        if unit.needs_build() {
+                            for pkg in unit.packages() {
+                                if pkg.needs_build {
+                                    npm::build_package(&pkg.path).await?;
+                                }
+                            }
                         }
                     }
                     self.status_messages.push("* Built package".to_string());
@@ -361,7 +354,7 @@ impl App {
                             .push(format!("[DRY RUN] Would update version to {}...", version));
                     } else {
                         self.status_messages.push("Updating version...".to_string());
-                        package.update_version(version).await?;
+                        unit.update_version(version).await?;
                     }
                     self.status_messages.push("* Updated version".to_string());
                     self.publish_step = PublishStep::GeneratingChangelog;
@@ -376,43 +369,51 @@ impl App {
                         let project_root = PathBuf::from(".");
                         let tag = format!("v{}", version);
                         npm::generate_changelog(&tag, &project_root).await?;
-
-                        let source = project_root.join("CHANGELOG.md");
-                        let target = package.path.join("CHANGELOG.md");
-                        tokio::fs::copy(&source, &target).await?;
-                        tokio::fs::remove_file(&source).await?;
                     }
                     self.status_messages.push("* Generated changelog".to_string());
                     self.publish_step = PublishStep::Committing;
                     self.publish_progress = 0.7;
                 }
                 PublishStep::Committing => {
-                    let message = format!("release: {}@{}", package.name, version);
-                    let tag = format!("{}@{}", package.name, version);
+                    let message = format!("release: {}@{}", unit.name(), version);
+                    let tag = format!("{}@{}", unit.name(), version);
                     if self.dry_run {
                         self.status_messages
                             .push(format!("[DRY RUN] Would commit with message: {}", message));
                         self.status_messages.push(format!("[DRY RUN] Would create tag: {}", tag));
                     } else {
                         self.status_messages.push("Committing changes...".to_string());
-                        git::add_and_commit(&message, &package.path).await?;
+                        let paths = unit.paths();
+                        if paths.len() > 1 {
+                            let path_refs: Vec<&std::path::Path> =
+                                paths.iter().map(|p| p.as_path()).collect();
+                            git::add_and_commit_multiple(&message, &path_refs).await?;
+                        } else {
+                            git::add_and_commit(&message, paths[0]).await?;
+                        }
                         git::create_tag(&tag).await?;
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
 
-                    let needs_generated_files =
-                        matches!(package.name.as_str(), "rari" | "create-rari-app");
-                    if needs_generated_files {
-                        if self.dry_run {
+                    for pkg in unit.packages() {
+                        let needs_generated_files =
+                            matches!(pkg.name.as_str(), "rari" | "create-rari-app");
+                        if needs_generated_files {
+                            if self.dry_run {
+                                self.status_messages.push(format!(
+                                    "[DRY RUN] Would generate README and LICENSE for {}...",
+                                    pkg.name
+                                ));
+                            } else {
+                                self.status_messages.push(format!(
+                                    "Generating README and LICENSE for {}...",
+                                    pkg.name
+                                ));
+                                crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
+                            }
                             self.status_messages
-                                .push("[DRY RUN] Would generate README and LICENSE...".to_string());
-                        } else {
-                            self.status_messages
-                                .push("Generating README and LICENSE...".to_string());
-                            crate::files::generate_package_files(&package.name, &package.path)
-                                .await?;
+                                .push(format!("* Generated README and LICENSE for {}", pkg.name));
                         }
-                        self.status_messages.push("* Generated README and LICENSE".to_string());
                     }
 
                     self.publish_step = PublishStep::Publishing;
@@ -421,61 +422,72 @@ impl App {
                 PublishStep::Publishing => {
                     let is_prerelease =
                         semver::Version::parse(version).map(|v| !v.pre.is_empty()).unwrap_or(false);
-                    if self.dry_run {
-                        let tag = if is_prerelease { "next" } else { "latest" };
-                        self.status_messages.push(format!(
-                            "[DRY RUN] Would publish {}@{} with tag '{}'",
-                            package.name, version, tag
-                        ));
-                    } else {
-                        self.status_messages.push("Publishing to npm...".to_string());
-                        let publish_result =
-                            npm::publish_package(&package.path, is_prerelease, otp.as_deref())
-                                .await;
 
-                        if publish_result.is_ok() {
-                            self.status_messages
-                                .push(format!("* Published {}@{}", package.name, version));
-                        }
+                    for pkg in unit.packages() {
+                        if self.dry_run {
+                            let tag = if is_prerelease { "next" } else { "latest" };
+                            self.status_messages.push(format!(
+                                "[DRY RUN] Would publish {}@{} with tag '{}'",
+                                pkg.name, version, tag
+                            ));
+                        } else {
+                            self.status_messages.push(format!("Publishing {} to npm...", pkg.name));
+                            let publish_result =
+                                npm::publish_package(&pkg.path, is_prerelease, otp.as_deref())
+                                    .await;
 
-                        let needs_generated_files =
-                            matches!(package.name.as_str(), "rari" | "create-rari-app");
-                        if needs_generated_files {
-                            self.status_messages.push("Cleaning up generated files...".to_string());
-                            let cleanup_result =
-                                crate::files::cleanup_package_files(&package.path).await;
+                            if publish_result.is_ok() {
+                                self.status_messages
+                                    .push(format!("* Published {}@{}", pkg.name, version));
+                            }
 
-                            if let Err(e) = publish_result {
+                            let needs_generated_files =
+                                matches!(pkg.name.as_str(), "rari" | "create-rari-app");
+                            if needs_generated_files {
+                                self.status_messages.push(format!(
+                                    "Cleaning up generated files for {}...",
+                                    pkg.name
+                                ));
+                                let cleanup_result =
+                                    crate::files::cleanup_package_files(&pkg.path).await;
+
+                                if let Err(e) = publish_result {
+                                    if let Err(cleanup_err) = cleanup_result {
+                                        self.status_messages.push(format!(
+                                            "⚠ Cleanup also failed: {}",
+                                            cleanup_err
+                                        ));
+                                    }
+                                    return Err(e);
+                                }
+
                                 if let Err(cleanup_err) = cleanup_result {
                                     self.status_messages
-                                        .push(format!("⚠ Cleanup also failed: {}", cleanup_err));
+                                        .push(format!("⚠ Cleanup failed: {}", cleanup_err));
+                                    return Err(cleanup_err);
                                 }
-                                return Err(e);
-                            }
 
-                            if let Err(cleanup_err) = cleanup_result {
                                 self.status_messages
-                                    .push(format!("⚠ Cleanup failed: {}", cleanup_err));
-                                return Err(cleanup_err);
+                                    .push(format!("* Cleaned up generated files for {}", pkg.name));
+                            } else {
+                                publish_result?;
                             }
-
-                            self.status_messages.push("* Cleaned up generated files".to_string());
-                        } else {
-                            publish_result?;
                         }
                     }
+
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 
-                    let tag = format!("{}@{}", package.name, version);
+                    let tag = format!("{}@{}", unit.name(), version);
                     self.released_packages.push(ReleasedPackage {
-                        name: package.name.clone(),
+                        name: unit.name().to_string(),
                         version: version.clone(),
                         tag: tag.clone(),
                         commits: self.recent_commits.clone(),
                     });
 
-                    let has_more_packages = self.selected_package_idx < self.packages.len() - 1;
+                    let has_more_packages =
+                        self.selected_package_idx < self.release_units.len() - 1;
                     self.screen = Screen::PostPublish { has_more_packages };
                 }
                 PublishStep::Done => {}
@@ -543,20 +555,20 @@ impl App {
                 ui::render_package_selection(frame, self);
             }
             Screen::VersionSelection { package_idx } => {
-                let package = &self.packages[*package_idx];
-                ui::render_version_selection(frame, self, package);
+                let unit = &self.release_units[*package_idx];
+                ui::render_version_selection(frame, self, unit);
             }
             Screen::CustomVersion { package_idx, input } => {
-                let package = &self.packages[*package_idx];
-                ui::render_custom_version(frame, self, package, input);
+                let unit = &self.release_units[*package_idx];
+                ui::render_custom_version(frame, self, unit, input);
             }
             Screen::OtpInput { package_idx, input, .. } => {
-                let package = &self.packages[*package_idx];
-                ui::render_otp_input(frame, self, package, input);
+                let unit = &self.release_units[*package_idx];
+                ui::render_otp_input(frame, self, unit, input);
             }
             Screen::Publishing { package_idx, version, .. } => {
-                let package = &self.packages[*package_idx];
-                ui::render_publishing(frame, self, package, version);
+                let unit = &self.release_units[*package_idx];
+                ui::render_publishing(frame, self, unit, version);
             }
             Screen::PostPublish { has_more_packages } => {
                 ui::render_post_publish(frame, self, *has_more_packages);

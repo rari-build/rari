@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::package::Package;
+use crate::package::ReleaseUnit;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -25,12 +25,12 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
     frame.render_widget(title, chunks[0]);
 
     let items: Vec<ListItem> = app
-        .packages
+        .release_units
         .iter()
         .enumerate()
-        .map(|(idx, pkg)| {
+        .map(|(idx, unit)| {
             let prefix = if idx == app.selected_package_idx { "> " } else { "  " };
-            let content = format!("{}{} (v{})", prefix, pkg.name, pkg.current_version);
+            let content = format!("{}{} (v{})", prefix, unit.name(), unit.current_version());
             ListItem::new(content).style(if idx == app.selected_package_idx {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
@@ -49,7 +49,7 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
     frame.render_widget(help, chunks[2]);
 }
 
-pub fn render_version_selection(frame: &mut Frame, app: &App, package: &Package) {
+pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -62,20 +62,32 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, package: &Package)
         ])
         .split(area);
 
-    let info = Paragraph::new(vec![
+    let mut info_lines = vec![
         Line::from(vec![
             Span::raw("Package: "),
             Span::styled(
-                &package.name,
+                unit.name(),
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
             Span::raw("Current Version: "),
-            Span::styled(&package.current_version, Style::default().fg(Color::Yellow)),
+            Span::styled(unit.current_version(), Style::default().fg(Color::Yellow)),
         ]),
-    ])
-    .block(Block::default().borders(Borders::ALL).title("Package Info"));
+    ];
+
+    if let ReleaseUnit::Group(group) = unit {
+        info_lines.push(Line::from(vec![
+            Span::raw("Packages: "),
+            Span::styled(
+                format!("{} binaries", group.packages.len()),
+                Style::default().fg(Color::Green),
+            ),
+        ]));
+    }
+
+    let info = Paragraph::new(info_lines)
+        .block(Block::default().borders(Borders::ALL).title("Package Info"));
     frame.render_widget(info, chunks[0]);
 
     let commits: Vec<Line> =
@@ -90,7 +102,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, package: &Package)
         .enumerate()
         .map(|(idx, vt)| {
             let prefix = if idx == app.selected_version_idx { "> * " } else { "  o " };
-            let content = format!("{}{}", prefix, vt.label(&package.current_version));
+            let content = format!("{}{}", prefix, vt.label(unit.current_version()));
             ListItem::new(content).style(if idx == app.selected_version_idx {
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             } else {
@@ -109,7 +121,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, package: &Package)
     frame.render_widget(help, chunks[3]);
 }
 
-pub fn render_custom_version(frame: &mut Frame, app: &App, package: &Package, input: &str) {
+pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, input: &str) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -126,13 +138,13 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, package: &Package, in
         Line::from(vec![
             Span::raw("Package: "),
             Span::styled(
-                &package.name,
+                unit.name(),
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
             Span::raw("Current Version: "),
-            Span::styled(&package.current_version, Style::default().fg(Color::Yellow)),
+            Span::styled(unit.current_version(), Style::default().fg(Color::Yellow)),
         ]),
     ])
     .block(Block::default().borders(Borders::ALL).title("Package Info"));
@@ -156,7 +168,7 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, package: &Package, in
     }
 }
 
-pub fn render_otp_input(frame: &mut Frame, app: &App, package: &Package, input: &str) {
+pub fn render_otp_input(frame: &mut Frame, app: &App, unit: &ReleaseUnit, input: &str) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -173,13 +185,13 @@ pub fn render_otp_input(frame: &mut Frame, app: &App, package: &Package, input: 
         Line::from(vec![
             Span::raw("Package: "),
             Span::styled(
-                &package.name,
+                unit.name(),
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
             Span::raw("Current Version: "),
-            Span::styled(&package.current_version, Style::default().fg(Color::Yellow)),
+            Span::styled(unit.current_version(), Style::default().fg(Color::Yellow)),
         ]),
     ])
     .block(Block::default().borders(Borders::ALL).title("Package Info"));
@@ -219,7 +231,7 @@ pub fn render_otp_input(frame: &mut Frame, app: &App, package: &Package, input: 
     }
 }
 
-pub fn render_publishing(frame: &mut Frame, app: &App, package: &Package, version: &str) {
+pub fn render_publishing(frame: &mut Frame, app: &App, unit: &ReleaseUnit, version: &str) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -233,9 +245,9 @@ pub fn render_publishing(frame: &mut Frame, app: &App, package: &Package, versio
         .split(area);
 
     let title_text = if app.dry_run {
-        format!("[DRY RUN] Publishing {}@{}", package.name, version)
+        format!("[DRY RUN] Publishing {}@{}", unit.name(), version)
     } else {
-        format!("Publishing {}@{}", package.name, version)
+        format!("Publishing {}@{}", unit.name(), version)
     };
     let title = Paragraph::new(title_text)
         .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
