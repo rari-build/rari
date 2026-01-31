@@ -342,14 +342,6 @@ impl App {
                     self.publish_progress = 0.35;
                 }
                 PublishStep::GeneratingFiles => {
-                    if self.dry_run {
-                        self.status_messages
-                            .push("[DRY RUN] Would generate README and LICENSE...".to_string());
-                    } else {
-                        self.status_messages.push("Generating README and LICENSE...".to_string());
-                        crate::files::generate_package_files(&package.name, &package.path).await?;
-                    }
-                    self.status_messages.push("* Generated README and LICENSE".to_string());
                     self.publish_step = PublishStep::GeneratingChangelog;
                     self.publish_progress = 0.5;
                 }
@@ -385,6 +377,16 @@ impl App {
                         git::create_tag(&tag).await?;
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
+
+                    if self.dry_run {
+                        self.status_messages
+                            .push("[DRY RUN] Would generate README and LICENSE...".to_string());
+                    } else {
+                        self.status_messages.push("Generating README and LICENSE...".to_string());
+                        crate::files::generate_package_files(&package.name, &package.path).await?;
+                    }
+                    self.status_messages.push("* Generated README and LICENSE".to_string());
+
                     self.publish_step = PublishStep::Publishing;
                     self.publish_progress = 0.85;
                 }
@@ -399,13 +401,20 @@ impl App {
                         ));
                     } else {
                         self.status_messages.push("Publishing to npm...".to_string());
-                        npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await?;
-                        self.status_messages
-                            .push(format!("* Published {}@{}", package.name, version));
+                        let publish_result =
+                            npm::publish_package(&package.path, is_prerelease, otp.as_deref())
+                                .await;
+
+                        if publish_result.is_ok() {
+                            self.status_messages
+                                .push(format!("* Published {}@{}", package.name, version));
+                        }
 
                         self.status_messages.push("Cleaning up generated files...".to_string());
                         crate::files::cleanup_package_files(&package.path).await?;
                         self.status_messages.push("* Cleaned up generated files".to_string());
+
+                        publish_result?;
                     }
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;

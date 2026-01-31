@@ -230,9 +230,6 @@ async fn run_non_interactive(
             let project_root = std::path::PathBuf::from(".");
             crate::npm::install_dependencies(&project_root).await?;
             println!("  {} Updated lockfile", "✓".green());
-            println!("  {} Generating README and LICENSE...", "→".cyan());
-            crate::files::generate_package_files(&package.name, &package.path).await?;
-            println!("  {} Generated README and LICENSE", "✓".green());
         }
 
         if dry_run {
@@ -262,6 +259,14 @@ async fn run_non_interactive(
             println!("  {} Committed and tagged", "✓".green());
         }
 
+        if dry_run {
+            println!("  {} Would generate README and LICENSE...", "[DRY RUN]".yellow());
+        } else {
+            println!("  {} Generating README and LICENSE...", "→".cyan());
+            crate::files::generate_package_files(&package.name, &package.path).await?;
+            println!("  {} Generated README and LICENSE", "✓".green());
+        }
+
         let is_prerelease =
             semver::Version::parse(&new_version).map(|v| !v.pre.is_empty()).unwrap_or(false);
         let npm_tag = if is_prerelease { "next" } else { "latest" };
@@ -277,11 +282,18 @@ async fn run_non_interactive(
         } else {
             println!("  {} Publishing to npm...", "→".cyan());
             let otp = std::env::var("NPM_OTP").ok();
-            crate::npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await?;
-            println!("  {} Published {}@{}", "✓".green(), package.name, new_version);
+            let publish_result =
+                crate::npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await;
+
+            if publish_result.is_ok() {
+                println!("  {} Published {}@{}", "✓".green(), package.name, new_version);
+            }
+
             println!("  {} Cleaning up generated files...", "→".cyan());
             crate::files::cleanup_package_files(&package.path).await?;
             println!("  {} Cleaned up generated files", "✓".green());
+
+            publish_result?;
         }
 
         println!();

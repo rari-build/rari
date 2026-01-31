@@ -238,8 +238,17 @@ pub async fn cleanup_package_files(package_path: &Path) -> Result<()> {
     let readme_path = package_path.join("README.md");
     let license_path = package_path.join("LICENSE");
 
-    let _ = fs::remove_file(readme_path).await;
-    let _ = fs::remove_file(license_path).await;
+    match fs::remove_file(&readme_path).await {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+
+    match fs::remove_file(&license_path).await {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
 
     Ok(())
 }
