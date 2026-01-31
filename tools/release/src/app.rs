@@ -152,7 +152,8 @@ impl App {
                     } else if let Some(new_version) =
                         release_type.to_version(unit.current_version())
                     {
-                        if self.needs_otp {
+                        let is_binary_group = matches!(unit.name(), "rari-binaries");
+                        if self.needs_otp && !is_binary_group {
                             self.screen = Screen::OtpInput {
                                 package_idx: *package_idx,
                                 version: new_version,
@@ -194,7 +195,8 @@ impl App {
                         let current = semver::Version::parse(unit.current_version())
                             .expect("current version should be valid semver");
                         if version > current {
-                            if self.needs_otp {
+                            let is_binary_group = matches!(unit.name(), "rari-binaries");
+                            if self.needs_otp && !is_binary_group {
                                 self.screen = Screen::OtpInput {
                                     package_idx: *package_idx,
                                     version: version.to_string(),
@@ -361,22 +363,46 @@ impl App {
                     self.publish_progress = 0.4;
                 }
                 PublishStep::GeneratingChangelog => {
-                    if self.dry_run {
-                        self.status_messages
-                            .push("[DRY RUN] Would generate changelog...".to_string());
+                    let is_binary_group = matches!(unit.name(), "rari-binaries");
+
+                    if is_binary_group {
+                        if self.dry_run {
+                            self.status_messages
+                                .push("[DRY RUN] Skipping changelog for binaries...".to_string());
+                        } else {
+                            self.status_messages
+                                .push("Skipping changelog for binaries...".to_string());
+                        }
                     } else {
-                        self.status_messages.push("Generating changelog...".to_string());
-                        let project_root = PathBuf::from(".");
-                        let tag = format!("v{}", version);
-                        npm::generate_changelog(&tag, &project_root).await?;
+                        if self.dry_run {
+                            self.status_messages
+                                .push("[DRY RUN] Would generate changelog...".to_string());
+                        } else {
+                            self.status_messages.push("Generating changelog...".to_string());
+                            let project_root = PathBuf::from(".");
+                            let tag = format!("v{}", version);
+                            npm::generate_changelog(&tag, &project_root).await?;
+                        }
+                        self.status_messages.push("* Generated changelog".to_string());
                     }
-                    self.status_messages.push("* Generated changelog".to_string());
+
+                    if !self.dry_run {
+                        self.status_messages.push("Updating lockfile...".to_string());
+                        let project_root = PathBuf::from(".");
+                        npm::install_dependencies(&project_root).await?;
+                        self.status_messages.push("* Updated lockfile".to_string());
+                    }
+
                     self.publish_step = PublishStep::Committing;
                     self.publish_progress = 0.7;
                 }
                 PublishStep::Committing => {
                     let message = format!("release: {}@{}", unit.name(), version);
-                    let tag = format!("{}@{}", unit.name(), version);
+                    let tag = if matches!(unit.name(), "rari-binaries") {
+                        format!("v{}", version)
+                    } else {
+                        format!("{}@{}", unit.name(), version)
+                    };
                     if self.dry_run {
                         self.status_messages
                             .push(format!("[DRY RUN] Would commit with message: {}", message));
@@ -423,54 +449,72 @@ impl App {
                     let is_prerelease =
                         semver::Version::parse(version).map(|v| !v.pre.is_empty()).unwrap_or(false);
 
-                    for pkg in unit.packages() {
+                    let is_binary_group = matches!(unit.name(), "rari-binaries");
+
+                    if is_binary_group {
                         if self.dry_run {
-                            let tag = if is_prerelease { "next" } else { "latest" };
-                            self.status_messages.push(format!(
-                                "[DRY RUN] Would publish {}@{} with tag '{}'",
-                                pkg.name, version, tag
-                            ));
+                            self.status_messages.push(
+                                "[DRY RUN] Binary packages will be published via GitHub Actions"
+                                    .to_string(),
+                            );
                         } else {
-                            self.status_messages.push(format!("Publishing {} to npm...", pkg.name));
-                            let publish_result =
-                                npm::publish_package(&pkg.path, is_prerelease, otp.as_deref())
-                                    .await;
-
-                            if publish_result.is_ok() {
-                                self.status_messages
-                                    .push(format!("* Published {}@{}", pkg.name, version));
-                            }
-
-                            let needs_generated_files =
-                                matches!(pkg.name.as_str(), "rari" | "create-rari-app");
-                            if needs_generated_files {
+                            self.status_messages.push(
+                                "Binary packages will be published via GitHub Actions".to_string(),
+                            );
+                        }
+                    } else {
+                        for pkg in unit.packages() {
+                            if self.dry_run {
+                                let tag = if is_prerelease { "next" } else { "latest" };
                                 self.status_messages.push(format!(
-                                    "Cleaning up generated files for {}...",
-                                    pkg.name
+                                    "[DRY RUN] Would publish {}@{} with tag '{}'",
+                                    pkg.name, version, tag
                                 ));
-                                let cleanup_result =
-                                    crate::files::cleanup_package_files(&pkg.path).await;
-
-                                if let Err(e) = publish_result {
-                                    if let Err(cleanup_err) = cleanup_result {
-                                        self.status_messages.push(format!(
-                                            "⚠ Cleanup also failed: {}",
-                                            cleanup_err
-                                        ));
-                                    }
-                                    return Err(e);
-                                }
-
-                                if let Err(cleanup_err) = cleanup_result {
-                                    self.status_messages
-                                        .push(format!("⚠ Cleanup failed: {}", cleanup_err));
-                                    return Err(cleanup_err);
-                                }
-
-                                self.status_messages
-                                    .push(format!("* Cleaned up generated files for {}", pkg.name));
                             } else {
-                                publish_result?;
+                                self.status_messages
+                                    .push(format!("Publishing {} to npm...", pkg.name));
+                                let publish_result =
+                                    npm::publish_package(&pkg.path, is_prerelease, otp.as_deref())
+                                        .await;
+
+                                if publish_result.is_ok() {
+                                    self.status_messages
+                                        .push(format!("* Published {}@{}", pkg.name, version));
+                                }
+
+                                let needs_generated_files =
+                                    matches!(pkg.name.as_str(), "rari" | "create-rari-app");
+                                if needs_generated_files {
+                                    self.status_messages.push(format!(
+                                        "Cleaning up generated files for {}...",
+                                        pkg.name
+                                    ));
+                                    let cleanup_result =
+                                        crate::files::cleanup_package_files(&pkg.path).await;
+
+                                    if let Err(e) = publish_result {
+                                        if let Err(cleanup_err) = cleanup_result {
+                                            self.status_messages.push(format!(
+                                                "⚠ Cleanup also failed: {}",
+                                                cleanup_err
+                                            ));
+                                        }
+                                        return Err(e);
+                                    }
+
+                                    if let Err(cleanup_err) = cleanup_result {
+                                        self.status_messages
+                                            .push(format!("⚠ Cleanup failed: {}", cleanup_err));
+                                        return Err(cleanup_err);
+                                    }
+
+                                    self.status_messages.push(format!(
+                                        "* Cleaned up generated files for {}",
+                                        pkg.name
+                                    ));
+                                } else {
+                                    publish_result?;
+                                }
                             }
                         }
                     }
@@ -478,7 +522,11 @@ impl App {
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 
-                    let tag = format!("{}@{}", unit.name(), version);
+                    let tag = if matches!(unit.name(), "rari-binaries") {
+                        format!("v{}", version)
+                    } else {
+                        format!("{}@{}", unit.name(), version)
+                    };
                     self.released_packages.push(ReleasedPackage {
                         name: unit.name().to_string(),
                         version: version.clone(),
