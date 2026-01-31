@@ -134,7 +134,7 @@ async fn run_non_interactive(
     env_version: Option<String>,
     env_type: Option<String>,
 ) -> Result<()> {
-    use crate::package::{Package, ReleaseType, ReleasedPackage};
+    use crate::package::{Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage};
     use colored::Colorize;
 
     println!("{}", "rari Release Script".cyan().bold());
@@ -150,32 +150,46 @@ async fn run_non_interactive(
         println!();
     }
 
-    let mut packages = vec![
-        Package::load("rari", "packages/rari", true).await?,
-        Package::load("create-rari-app", "packages/create-rari-app", true).await?,
+    let binary_packages = vec![
+        Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64", false).await?,
+        Package::load("rari-darwin-x64", "packages/rari-darwin-x64", false).await?,
+        Package::load("rari-linux-arm64", "packages/rari-linux-arm64", false).await?,
+        Package::load("rari-linux-x64", "packages/rari-linux-x64", false).await?,
+        Package::load("rari-win32-x64", "packages/rari-win32-x64", false).await?,
+    ];
+
+    let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
+
+    let mut release_units = vec![
+        ReleaseUnit::Single(Package::load("rari", "packages/rari", true).await?),
+        ReleaseUnit::Single(
+            Package::load("create-rari-app", "packages/create-rari-app", true).await?,
+        ),
+        ReleaseUnit::Group(binary_group),
     ];
 
     if let Some(only_list) = &only {
-        packages.retain(|p| only_list.contains(&p.name));
-        if packages.is_empty() {
+        release_units.retain(|unit| only_list.contains(&unit.name().to_string()));
+        if release_units.is_empty() {
             anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
         }
     }
 
     let mut released_packages: Vec<ReleasedPackage> = Vec::new();
 
-    for package in packages {
-        println!("{} {}", "📦 Releasing".bold(), package.name.cyan().bold());
+    for unit in release_units {
+        let unit_name = unit.name();
+        println!("{} {}", "📦 Releasing".bold(), unit_name.cyan().bold());
 
         let new_version = if let Some(ref version) = env_version {
             let v = semver::Version::parse(version)
                 .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {}", version))?;
-            let current = semver::Version::parse(&package.current_version)?;
+            let current = semver::Version::parse(unit.current_version())?;
             if v <= current {
                 anyhow::bail!(
                     "RELEASE_VERSION ({}) must be greater than current version {}",
                     version,
-                    package.current_version
+                    unit.current_version()
                 );
             }
             version.clone()
@@ -191,7 +205,7 @@ async fn run_non_interactive(
                 _ => anyhow::bail!("Invalid RELEASE_TYPE: {}", type_str),
             };
             release_type
-                .to_version(&package.current_version)
+                .to_version(unit.current_version())
                 .ok_or_else(|| anyhow::anyhow!("Failed to calculate version"))?
         } else {
             anyhow::bail!(
@@ -199,23 +213,34 @@ async fn run_non_interactive(
             );
         };
 
-        println!("  {} {} → {}", "Version:".bold(), package.current_version, new_version.green());
+        println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
 
-        let commits = crate::git::get_commits_since_tag(&package.name, &package.path).await?;
+        let first_path = unit.paths()[0];
+        let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
         if !commits.is_empty() {
             println!("  {} Commits since last release:", "ℹ".blue().bold());
             for commit in commits.iter().take(5) {
                 println!("    {}", commit);
             }
         }
+
+        let packages = unit.packages();
+        if packages.len() > 1 {
+            println!("  {} Packages in group:", "ℹ".blue().bold());
+            for pkg in &packages {
+                println!("    • {}", pkg.name);
+            }
+        }
         println!();
 
         if dry_run {
             println!("  {} Would build package...", "[DRY RUN]".yellow());
-        } else {
+        } else if unit.needs_build() {
             println!("  {} Building package...", "→".cyan());
-            if package.needs_build {
-                crate::npm::build_package(&package.path).await?;
+            for pkg in &packages {
+                if pkg.needs_build {
+                    crate::npm::build_package(&pkg.path).await?;
+                }
             }
             println!("  {} Built package", "✓".green());
         }
@@ -224,7 +249,7 @@ async fn run_non_interactive(
             println!("  {} Would update version to {}...", "[DRY RUN]".yellow(), new_version);
         } else {
             println!("  {} Updating version...", "→".cyan());
-            package.update_version(&new_version).await?;
+            unit.update_version(&new_version).await?;
             println!("  {} Updated version", "✓".green());
             println!("  {} Updating lockfile...", "→".cyan());
             let project_root = std::path::PathBuf::from(".");
@@ -241,77 +266,87 @@ async fn run_non_interactive(
             crate::npm::generate_changelog(&tag, &project_root).await?;
 
             let source = project_root.join("CHANGELOG.md");
-            let target = package.path.join("CHANGELOG.md");
-            tokio::fs::copy(&source, &target).await?;
+            for pkg in &packages {
+                let target = pkg.path.join("CHANGELOG.md");
+                tokio::fs::copy(&source, &target).await?;
+            }
             tokio::fs::remove_file(&source).await?;
             println!("  {} Generated changelog", "✓".green());
         }
 
-        let message = format!("release: {}@{}", package.name, new_version);
-        let tag = format!("{}@{}", package.name, new_version);
+        let message = format!("release: {}@{}", unit_name, new_version);
+        let tag = format!("{}@{}", unit_name, new_version);
         if dry_run {
             println!("  {} Would commit: {}", "[DRY RUN]".yellow(), message);
             println!("  {} Would create tag: {}", "[DRY RUN]".yellow(), tag);
         } else {
             println!("  {} Committing changes...", "→".cyan());
-            crate::git::add_and_commit(&message, &package.path).await?;
+            for path in unit.paths() {
+                crate::git::add_and_commit(&message, path).await?;
+            }
             crate::git::create_tag(&tag).await?;
             println!("  {} Committed and tagged", "✓".green());
         }
 
-        if dry_run {
-            println!("  {} Would generate README and LICENSE...", "[DRY RUN]".yellow());
-        } else {
-            println!("  {} Generating README and LICENSE...", "→".cyan());
-            crate::files::generate_package_files(&package.name, &package.path).await?;
-            println!("  {} Generated README and LICENSE", "✓".green());
-        }
-
-        let is_prerelease =
-            semver::Version::parse(&new_version).map(|v| !v.pre.is_empty()).unwrap_or(false);
-        let npm_tag = if is_prerelease { "next" } else { "latest" };
-
-        if dry_run {
-            println!(
-                "  {} Would publish {}@{} with tag '{}'",
-                "[DRY RUN]".yellow(),
-                package.name,
-                new_version,
-                npm_tag
-            );
-        } else {
-            println!("  {} Publishing to npm...", "→".cyan());
-            let otp = std::env::var("NPM_OTP").ok();
-            let publish_result =
-                crate::npm::publish_package(&package.path, is_prerelease, otp.as_deref()).await;
-
-            if publish_result.is_ok() {
-                println!("  {} Published {}@{}", "✓".green(), package.name, new_version);
+        for pkg in &packages {
+            if dry_run {
+                println!(
+                    "  {} Would generate README and LICENSE for {}...",
+                    "[DRY RUN]".yellow(),
+                    pkg.name
+                );
+            } else {
+                println!("  {} Generating README and LICENSE for {}...", "→".cyan(), pkg.name);
+                crate::files::generate_package_files(&pkg.name, &pkg.path).await?;
+                println!("  {} Generated README and LICENSE", "✓".green());
             }
 
-            println!("  {} Cleaning up generated files...", "→".cyan());
-            let cleanup_result = crate::files::cleanup_package_files(&package.path).await;
+            let is_prerelease =
+                semver::Version::parse(&new_version).map(|v| !v.pre.is_empty()).unwrap_or(false);
+            let npm_tag = if is_prerelease { "next" } else { "latest" };
 
-            if cleanup_result.is_ok() {
-                println!("  {} Cleaned up generated files", "✓".green());
-            }
+            if dry_run {
+                println!(
+                    "  {} Would publish {}@{} with tag '{}'",
+                    "[DRY RUN]".yellow(),
+                    pkg.name,
+                    new_version,
+                    npm_tag
+                );
+            } else {
+                println!("  {} Publishing {} to npm...", "→".cyan(), pkg.name);
+                let otp = std::env::var("NPM_OTP").ok();
+                let publish_result =
+                    crate::npm::publish_package(&pkg.path, is_prerelease, otp.as_deref()).await;
 
-            if let Err(e) = publish_result {
-                if let Err(cleanup_err) = cleanup_result {
-                    println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
+                if publish_result.is_ok() {
+                    println!("  {} Published {}@{}", "✓".green(), pkg.name, new_version);
                 }
-                return Err(e);
-            }
 
-            cleanup_result?;
+                println!("  {} Cleaning up generated files for {}...", "→".cyan(), pkg.name);
+                let cleanup_result = crate::files::cleanup_package_files(&pkg.path).await;
+
+                if cleanup_result.is_ok() {
+                    println!("  {} Cleaned up generated files", "✓".green());
+                }
+
+                if let Err(e) = publish_result {
+                    if let Err(cleanup_err) = cleanup_result {
+                        println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
+                    }
+                    return Err(e);
+                }
+
+                cleanup_result?;
+            }
         }
 
         println!();
-        println!("  {} Released {}@{}", "✅".green(), package.name, new_version);
+        println!("  {} Released {}@{}", "✅".green(), unit_name, new_version);
         println!();
 
         released_packages.push(ReleasedPackage {
-            name: package.name.clone(),
+            name: unit_name.to_string(),
             version: new_version.clone(),
             tag: tag.clone(),
             commits: commits.clone(),

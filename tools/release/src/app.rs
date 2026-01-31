@@ -59,15 +59,45 @@ pub struct App {
 
 impl App {
     pub async fn new(only: Option<Vec<String>>, dry_run: bool) -> Result<Self> {
-        let mut packages = vec![
-            Package::load("rari", "packages/rari", true).await?,
-            Package::load("create-rari-app", "packages/create-rari-app", true).await?,
+        use crate::package::{PackageGroup, ReleaseUnit};
+
+        let binary_packages = vec![
+            Package::load("rari-darwin-arm64", "packages/rari-darwin-arm64", false).await?,
+            Package::load("rari-darwin-x64", "packages/rari-darwin-x64", false).await?,
+            Package::load("rari-linux-arm64", "packages/rari-linux-arm64", false).await?,
+            Package::load("rari-linux-x64", "packages/rari-linux-x64", false).await?,
+            Package::load("rari-win32-x64", "packages/rari-win32-x64", false).await?,
+        ];
+
+        let binary_group = PackageGroup::new("rari-binaries".to_string(), binary_packages).await?;
+
+        let mut release_units = vec![
+            ReleaseUnit::Single(Package::load("rari", "packages/rari", true).await?),
+            ReleaseUnit::Single(
+                Package::load("create-rari-app", "packages/create-rari-app", true).await?,
+            ),
+            ReleaseUnit::Group(binary_group),
         ];
 
         if let Some(only_list) = only {
-            packages.retain(|p| only_list.contains(&p.name));
-            if packages.is_empty() {
+            release_units.retain(|unit| only_list.contains(&unit.name().to_string()));
+            if release_units.is_empty() {
                 anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
+            }
+        }
+
+        let mut packages = Vec::new();
+        for unit in &release_units {
+            match unit {
+                ReleaseUnit::Single(pkg) => packages.push(pkg.clone()),
+                ReleaseUnit::Group(group) => {
+                    packages.push(Package {
+                        name: group.name.clone(),
+                        path: group.packages[0].path.clone(),
+                        current_version: group.current_version.clone(),
+                        needs_build: false,
+                    });
+                }
             }
         }
 
