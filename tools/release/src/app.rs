@@ -33,7 +33,7 @@ pub enum PostReleaseStep {
 pub enum PublishStep {
     Building,
     UpdatingVersion,
-    GeneratingFiles,
+    PreparingChangelog,
     GeneratingChangelog,
     Committing,
     Publishing,
@@ -338,10 +338,10 @@ impl App {
                         package.update_version(version).await?;
                     }
                     self.status_messages.push("* Updated version".to_string());
-                    self.publish_step = PublishStep::GeneratingFiles;
+                    self.publish_step = PublishStep::PreparingChangelog;
                     self.publish_progress = 0.35;
                 }
-                PublishStep::GeneratingFiles => {
+                PublishStep::PreparingChangelog => {
                     self.publish_step = PublishStep::GeneratingChangelog;
                     self.publish_progress = 0.5;
                 }
@@ -411,10 +411,22 @@ impl App {
                         }
 
                         self.status_messages.push("Cleaning up generated files...".to_string());
-                        crate::files::cleanup_package_files(&package.path).await?;
-                        self.status_messages.push("* Cleaned up generated files".to_string());
+                        let cleanup_result =
+                            crate::files::cleanup_package_files(&package.path).await;
 
-                        publish_result?;
+                        if cleanup_result.is_ok() {
+                            self.status_messages.push("* Cleaned up generated files".to_string());
+                        }
+
+                        if let Err(e) = publish_result {
+                            if let Err(cleanup_err) = cleanup_result {
+                                self.status_messages
+                                    .push(format!("⚠ Cleanup also failed: {}", cleanup_err));
+                            }
+                            return Err(e);
+                        }
+
+                        cleanup_result?;
                     }
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;

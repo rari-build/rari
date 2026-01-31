@@ -213,7 +213,18 @@ MIT License - see [LICENSE](https://github.com/rari-build/rari/blob/main/LICENSE
 pub async fn copy_license(package_path: &Path) -> Result<()> {
     let root_license = Path::new("LICENSE");
     let package_license = package_path.join("LICENSE");
-    fs::copy(root_license, package_license).await?;
+
+    fs::copy(root_license, package_license).await.map_err(|e| {
+        let cwd = std::env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "<unknown>".to_string());
+        anyhow::anyhow!(
+            "Failed to copy LICENSE from {} (cwd: {}): {}",
+            root_license.display(),
+            cwd,
+            e
+        )
+    })?;
     Ok(())
 }
 

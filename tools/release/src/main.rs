@@ -290,10 +290,20 @@ async fn run_non_interactive(
             }
 
             println!("  {} Cleaning up generated files...", "→".cyan());
-            crate::files::cleanup_package_files(&package.path).await?;
-            println!("  {} Cleaned up generated files", "✓".green());
+            let cleanup_result = crate::files::cleanup_package_files(&package.path).await;
 
-            publish_result?;
+            if cleanup_result.is_ok() {
+                println!("  {} Cleaned up generated files", "✓".green());
+            }
+
+            if let Err(e) = publish_result {
+                if let Err(cleanup_err) = cleanup_result {
+                    println!("  {} Cleanup also failed: {}", "⚠".yellow(), cleanup_err);
+                }
+                return Err(e);
+            }
+
+            cleanup_result?;
         }
 
         println!();
