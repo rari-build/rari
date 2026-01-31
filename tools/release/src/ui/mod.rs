@@ -197,7 +197,8 @@ pub fn render_otp_input(frame: &mut Frame, app: &App, package: &Package, input: 
     frame.render_widget(otp_info, chunks[1]);
 
     let masked = "*".repeat(input.len());
-    let display = format!("{}{}", masked, "_".repeat(6 - input.len()));
+    let underscores = if input.len() < 6 { "_".repeat(6 - input.len()) } else { String::new() };
+    let display = format!("{}{}", masked, underscores);
     let input_widget = Paragraph::new(display)
         .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)

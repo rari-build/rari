@@ -210,13 +210,15 @@ impl App {
             },
             Screen::OtpInput { package_idx, version, input } => match key {
                 KeyCode::Char(c) if c.is_ascii_digit() => {
-                    let mut new_input = input.clone();
-                    new_input.push(c);
-                    self.screen = Screen::OtpInput {
-                        package_idx: *package_idx,
-                        version: version.clone(),
-                        input: new_input,
-                    };
+                    if input.len() < 6 {
+                        let mut new_input = input.clone();
+                        new_input.push(c);
+                        self.screen = Screen::OtpInput {
+                            package_idx: *package_idx,
+                            version: version.clone(),
+                            input: new_input,
+                        };
+                    }
                 }
                 KeyCode::Backspace => {
                     let mut new_input = input.clone();
