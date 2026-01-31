@@ -1,0 +1,17 @@
+{
+  "name": "@rari/deploy",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deployment utilities for rari CLI tools",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:default",
+    "tsdown": "catalog:build"
+  }
+}

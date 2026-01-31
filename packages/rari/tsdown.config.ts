@@ -17,7 +17,7 @@ export default defineConfig({
   fixedExtension: true,
   format: 'esm',
   minify: true,
-  noExternal: ['@rari/colors'],
+  noExternal: ['@rari/colors', '@rari/deploy'],
   inputOptions(options) {
     return {
       ...options,
