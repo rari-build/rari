@@ -29,7 +29,7 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
   const andParts = cleaned.split(/\s+(?:&&\s+)?/).filter(part => part && part !== '&&')
   if (andParts.length > 1) {
     for (const part of andParts) {
-      const lowerBound = extractLowerBound(part, minMajor)
+      const lowerBound = extractLowerBound(part)
       if (lowerBound !== null && lowerBound >= minMajor)
         return true
     }
@@ -40,7 +40,7 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
   return extractMajorAndCompare(cleaned, minMajor)
 }
 
-function extractLowerBound(range: string, _minMajor: number): number | null {
+function extractLowerBound(range: string): number | null {
   const match = range.match(/^>=?\s*(\d+)/)
   if (match)
     return Number.parseInt(match[1], 10)
@@ -63,13 +63,10 @@ function couldIncludeVersion(range: string, targetMajor: number): boolean {
 function extractMajorAndCompare(versionRange: string, minMajor: number): boolean {
   let match: RegExpMatchArray | null = null
 
-  match = versionRange.match(/^>=?\s*(\d+)\.(\d+)\.(\d+)/)
-  if (match) {
-    const majorNum = Number.parseInt(match[1], 10)
-    return majorNum >= minMajor
-  }
+  if (/^<=?\s*\d+/.test(versionRange))
+    return false
 
-  match = versionRange.match(/^<=?\s*(\d+)\.(\d+)\.(\d+)/)
+  match = versionRange.match(/^>=?\s*(\d+)\.(\d+)\.(\d+)/)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
@@ -105,7 +102,7 @@ function extractMajorAndCompare(versionRange: string, minMajor: number): boolean
     return majorNum >= minMajor
   }
 
-  match = versionRange.match(/^(?:>=?|<=?|[=~^])\s*(\d+)(?:\s|$)/)
+  match = versionRange.match(/^(?:>=?|[=~^])\s*(\d+)(?:\s|$)/)
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
