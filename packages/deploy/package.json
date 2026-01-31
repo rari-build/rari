@@ -7,6 +7,20 @@
   "author": "Ryan Skinner",
   "license": "MIT",
   "homepage": "https://github.com/rari-build/rari#readme",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./railway": {
+      "types": "./dist/railway.d.ts",
+      "import": "./dist/railway.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js"
+    }
+  },
   "scripts": {
     "build": "tsdown"
   },

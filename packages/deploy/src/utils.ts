@@ -1,5 +1,7 @@
 import colors from '@rari/colors'
 
+export const MIN_SUPPORTED_NODE_MAJOR = 22
+
 export function logInfo(message: string) {
   console.warn(`${colors.blue('info')} ${message}`)
 }
@@ -16,7 +18,7 @@ export function logWarn(message: string) {
   console.warn(`${colors.yellow('⚠')} ${message}`)
 }
 
-export function isNodeVersionSufficient(versionRange: string): boolean {
+export function isNodeVersionSufficient(versionRange: string, minMajor: number = MIN_SUPPORTED_NODE_MAJOR): boolean {
   const cleaned = versionRange.trim()
 
   let match = cleaned.match(/^>=?\s*(\d+)\.(\d+)\.(\d+)/)
@@ -34,7 +36,7 @@ export function isNodeVersionSufficient(versionRange: string): boolean {
   const [, major] = match
   const majorNum = Number.parseInt(major, 10)
 
-  if (majorNum >= 22)
+  if (majorNum >= minMajor)
     return true
 
   return false
