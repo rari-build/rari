@@ -29,6 +29,10 @@ export function isNodeVersionSufficient(versionRange: string, minMajor: number =
   if (!match)
     match = cleaned.match(/^(\d+)\.(\d+)\.x/)
   if (!match)
+    match = cleaned.match(/^>=?\s*(\d+)(?:\.\d+)?(?:\.\d+)?$/)
+  if (!match)
+    match = cleaned.match(/^[~^]\s*(\d+)(?:\.\d+)?(?:\.\d+)?$/)
+  if (!match)
     match = cleaned.match(/^(\d+)\.x/)
   if (!match)
     return false
