@@ -18,6 +18,94 @@ pub struct Package {
     pub needs_build: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct PackageGroup {
+    pub name: String,
+    pub packages: Vec<Package>,
+    pub current_version: String,
+}
+
+impl PackageGroup {
+    pub async fn new(name: String, packages: Vec<Package>) -> Result<Self> {
+        if packages.is_empty() {
+            anyhow::bail!("PackageGroup must contain at least one package");
+        }
+
+        let current_version = packages[0].current_version.clone();
+
+        for pkg in &packages {
+            if pkg.current_version != current_version {
+                anyhow::bail!(
+                    "All packages in group '{}' must have the same version. Found {} with version {} but expected {}",
+                    name,
+                    pkg.name,
+                    pkg.current_version,
+                    current_version
+                );
+            }
+        }
+
+        Ok(Self { name, packages, current_version })
+    }
+
+    pub async fn update_all_versions(&self, new_version: &str) -> Result<()> {
+        for package in &self.packages {
+            package.update_version(new_version).await?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ReleaseUnit {
+    Single(Package),
+    Group(PackageGroup),
+}
+
+impl ReleaseUnit {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Single(pkg) => &pkg.name,
+            Self::Group(group) => &group.name,
+        }
+    }
+
+    pub fn current_version(&self) -> &str {
+        match self {
+            Self::Single(pkg) => &pkg.current_version,
+            Self::Group(group) => &group.current_version,
+        }
+    }
+
+    pub fn packages(&self) -> Vec<&Package> {
+        match self {
+            Self::Single(pkg) => vec![pkg],
+            Self::Group(group) => group.packages.iter().collect(),
+        }
+    }
+
+    pub fn needs_build(&self) -> bool {
+        match self {
+            Self::Single(pkg) => pkg.needs_build,
+            Self::Group(group) => group.packages.iter().any(|p| p.needs_build),
+        }
+    }
+
+    pub async fn update_version(&self, new_version: &str) -> Result<()> {
+        match self {
+            Self::Single(pkg) => pkg.update_version(new_version).await,
+            Self::Group(group) => group.update_all_versions(new_version).await,
+        }
+    }
+
+    pub fn paths(&self) -> Vec<&PathBuf> {
+        match self {
+            Self::Single(pkg) => vec![&pkg.path],
+            Self::Group(group) => group.packages.iter().map(|p| &p.path).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReleasedPackage {
     pub name: String,
