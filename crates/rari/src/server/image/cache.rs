@@ -30,15 +30,17 @@ impl ImageCache {
 
         let cache_dir = Self::resolve_cache_dir(project_path);
 
-        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-            tracing::error!("Failed to create image cache directory: {}", e);
-        }
-
         Self {
             memory_cache: Mutex::new(LruCache::new(capacity)),
             cache_dir,
             max_memory_size,
             current_memory_size: Mutex::new(0),
+        }
+    }
+
+    fn ensure_cache_dir(&self) {
+        if let Err(e) = std::fs::create_dir_all(&self.cache_dir) {
+            tracing::error!("Failed to create image cache directory: {}", e);
         }
     }
 
@@ -48,7 +50,7 @@ impl ImageCache {
         if is_production {
             PathBuf::from("/tmp/rari-image-cache")
         } else {
-            project_path.join("dist").join("cache").join("images")
+            project_path.join(".cache").join("images")
         }
     }
 
@@ -101,6 +103,8 @@ impl ImageCache {
             .ok();
 
         if let Some(serialized) = serialized {
+            self.ensure_cache_dir();
+
             let path = self.cache_filename(&key);
             let data = serialized.into_vec();
 

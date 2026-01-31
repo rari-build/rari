@@ -24,7 +24,7 @@ impl OgImageCache {
         if is_production {
             PathBuf::from("/tmp/rari-og-cache")
         } else {
-            project_path.join("dist").join("cache").join("og")
+            project_path.join(".cache").join("og")
         }
     }
 

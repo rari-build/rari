@@ -119,21 +119,28 @@ async fn run_optimize_images(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let project_path = std::env::current_dir()?;
 
+    let image_config_path = project_path.join("dist").join("server").join("image.json");
+
+    let image_config: rari::server::image::ImageConfig =
+        if tokio::fs::try_exists(&image_config_path).await? {
+            let config_content = tokio::fs::read_to_string(&image_config_path).await?;
+            serde_json::from_str(&config_content)?
+        } else {
+            return Ok(());
+        };
+
+    let has_work =
+        !image_config.preoptimize_manifest.is_empty() || !image_config.local_patterns.is_empty();
+
+    if !has_work {
+        return Ok(());
+    }
+
     if dry_run {
         tracing::info!("Running in dry-run mode (preview only, no writes)...");
     } else {
         tracing::info!("Pre-optimizing local images...");
     }
-
-    let image_config_path = project_path.join("dist").join("server").join("image.json");
-
-    let image_config = if tokio::fs::try_exists(&image_config_path).await? {
-        let config_content = tokio::fs::read_to_string(&image_config_path).await?;
-        serde_json::from_str(&config_content)?
-    } else {
-        tracing::warn!("No image.json found, using default configuration");
-        rari::server::image::ImageConfig::default()
-    };
 
     let optimizer = ImageOptimizer::new(image_config, &project_path);
 

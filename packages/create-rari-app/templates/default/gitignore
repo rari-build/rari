@@ -7,6 +7,9 @@ bin/
 dist/
 build/
 
+# Cache
+.cache/
+
 # Environment variables
 .env
 .env.local
