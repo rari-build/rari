@@ -27,10 +27,22 @@
         "src/runtime/rsc-client-runtime.js"
       ],
       "ignoreDependencies": [
-        "@rari/colors" // Bundled via noExternal in tsdown config
+        "@rari/colors", // Bundled via noExternal in tsdown config
+        "@rari/deploy" // Bundled via noExternal in tsdown config
       ]
     },
     "packages/create-rari-app": {
+      "entry": [
+        "src/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "@rari/colors" // Bundled via noExternal in tsdown config
+      ]
+    },
+    "packages/deploy": {
       "entry": [
         "src/**/*.ts"
       ],

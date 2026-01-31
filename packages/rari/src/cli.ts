@@ -393,7 +393,7 @@ async function deployToRailway() {
     process.exit(1)
   }
 
-  const { createRailwayDeployment } = await import('./deployment/railway.js')
+  const { createRailwayDeployment } = await import('@rari/deploy/railway')
   await createRailwayDeployment()
 }
 
@@ -405,7 +405,7 @@ async function deployToRender() {
     process.exit(1)
   }
 
-  const { createRenderDeployment } = await import('./deployment/render.js')
+  const { createRenderDeployment } = await import('@rari/deploy/render')
   await createRenderDeployment()
 }
 
