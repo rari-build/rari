@@ -22,8 +22,6 @@ const navigation = [
   { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
 
-const EMPTY_TOGGLES: Record<string, boolean> = {}
-
 function Chevron({ isOpen }: { isOpen: boolean }) {
   return (
     <ChevronRight
@@ -34,19 +32,22 @@ function Chevron({ isOpen }: { isOpen: boolean }) {
 
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const isDocsPage = pathname?.startsWith('/docs')
-  const [manualTogglesWithPath, setManualTogglesWithPath] = useState<{
-    pathname: string
-    toggles: Record<string, boolean>
-  }>({ pathname, toggles: EMPTY_TOGGLES })
-  const [manualDocsToggleWithPath, setManualDocsToggleWithPath] = useState<{
-    pathname: string
-    toggle: boolean | undefined
-  }>({ pathname, toggle: undefined })
+  const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
+  const [manualDocsToggle, setManualDocsToggle] = useState<boolean | undefined>(undefined)
+  const [lastPathname, setLastPathname] = useState(pathname)
 
-  const manualToggles = pathname === manualTogglesWithPath.pathname ? manualTogglesWithPath.toggles : EMPTY_TOGGLES
-  const manualDocsToggle = pathname === manualDocsToggleWithPath.pathname ? manualDocsToggleWithPath.toggle : undefined
+  const currentManualToggles = pathname !== lastPathname ? {} : manualToggles
+  const currentManualDocsToggle = pathname !== lastPathname ? undefined : manualDocsToggle
 
-  const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname)
+    if (Object.keys(manualToggles).length > 0)
+      setManualToggles({})
+    if (manualDocsToggle !== undefined)
+      setManualDocsToggle(undefined)
+  }
+
+  const isDocsExpanded = currentManualDocsToggle !== undefined ? currentManualDocsToggle : isDocsPage
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
@@ -54,14 +55,21 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     docsNavigation.forEach((section, idx) => {
       const sectionKey = `section-${idx}`
 
-      if (manualToggles[sectionKey] !== undefined) {
-        sections[sectionKey] = manualToggles[sectionKey]
+      if (currentManualToggles[sectionKey] !== undefined) {
+        sections[sectionKey] = currentManualToggles[sectionKey]
       }
       else {
-        const shouldExpand = !!(
-          (section.href && pathname?.startsWith(section.href))
-          || (section.items?.some(item => item.href && pathname?.startsWith(item.href)))
-        )
+        let shouldExpand = true
+        if (section.href && pathname?.startsWith(section.href)) {
+          shouldExpand = true
+        }
+        else if (section.items) {
+          const hasActiveChild = section.items.some(item =>
+            item.href && pathname?.startsWith(item.href),
+          )
+          if (hasActiveChild)
+            shouldExpand = true
+        }
         sections[sectionKey] = shouldExpand
       }
 
@@ -69,14 +77,21 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         section.items.forEach((item, itemIdx) => {
           const itemKey = `${sectionKey}-item-${itemIdx}`
 
-          if (manualToggles[itemKey] !== undefined) {
-            sections[itemKey] = manualToggles[itemKey]
+          if (currentManualToggles[itemKey] !== undefined) {
+            sections[itemKey] = currentManualToggles[itemKey]
           }
           else {
-            const shouldExpand = !!(
-              (item.href && pathname?.startsWith(item.href))
-              || (item.items?.some(nested => nested.href && pathname === nested.href))
-            )
+            let shouldExpand = true
+            if (item.href && pathname?.startsWith(item.href)) {
+              shouldExpand = true
+            }
+            else if (item.items) {
+              const hasActiveNestedChild = item.items.some(nested =>
+                nested.href && pathname === nested.href,
+              )
+              if (hasActiveNestedChild)
+                shouldExpand = true
+            }
             sections[itemKey] = shouldExpand
           }
         })
@@ -84,17 +99,10 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     })
 
     return sections
-  }, [pathname, manualToggles])
+  }, [pathname, currentManualToggles])
 
   const toggleSection = (key: string) => {
-    setManualTogglesWithPath((prev) => {
-      const currentToggles = pathname === prev.pathname ? prev.toggles : EMPTY_TOGGLES
-      const currentExpanded = currentToggles[key] ?? expandedSections[key]
-      return {
-        pathname,
-        toggles: { ...currentToggles, [key]: !currentExpanded },
-      }
-    })
+    setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))
   }
 
   useEffect(() => {
@@ -151,13 +159,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             {navigation.map((item) => {
               const isDocs = item.id === 'docs'
               const isSponsor = item.id === 'sponsor'
-              let isActive: boolean
-              if (isDocs)
-                isActive = pathname === '/docs'
-              else if (item.href === '/')
-                isActive = pathname === item.href
-              else
-                isActive = pathname?.startsWith(item.href) ?? false
+              const isActive = isDocs
+                ? pathname === '/docs'
+                : item.href === '/'
+                  ? pathname === item.href
+                  : pathname?.startsWith(item.href)
 
               const isDisabled = isDocs && pathname === '/docs/getting-started'
 
@@ -173,16 +179,11 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                       : (
                           <a
                             href={item.href}
-                            target={isSponsor ? '_blank' : undefined}
-                            rel={isSponsor ? 'noopener noreferrer' : undefined}
-                            className={[
-                              'flex-1',
-                              isSponsor ? 'flex items-center' : 'block',
-                              'px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group',
-                              isActive
-                                ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
-                                : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100',
-                            ].join(' ')}
+                            {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                            className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
+                              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
+                              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                            }`}
                             aria-current={isActive ? 'page' : undefined}
                           >
                             {!isActive && (
@@ -195,11 +196,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                     {isDocs && (
                       <button
                         type="button"
-                        onClick={() => setManualDocsToggleWithPath((prev) => {
-                          const currentToggle = pathname === prev.pathname ? prev.toggle : undefined
-                          const currentExpanded = currentToggle !== undefined ? currentToggle : isDocsPage
-                          return { pathname, toggle: !currentExpanded }
-                        })}
+                        onClick={() => setManualDocsToggle(!isDocsExpanded)}
                         className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
                         aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
                         aria-expanded={isDocsExpanded}
