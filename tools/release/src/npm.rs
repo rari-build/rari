@@ -31,7 +31,7 @@ pub async fn publish_package(
     is_prerelease: bool,
     otp: Option<&str>,
 ) -> Result<()> {
-    let mut args = vec!["publish", "--access", "public"];
+    let mut args = vec!["publish", "--access", "public", "--no-git-checks"];
 
     if is_prerelease {
         args.push("--tag");
