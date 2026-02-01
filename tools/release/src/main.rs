@@ -283,6 +283,13 @@ async fn run_non_interactive(
             } else {
                 crate::git::add_and_commit(&message, paths[0]).await?;
             }
+
+            let changelog_path = std::path::PathBuf::from("CHANGELOG.md");
+            if changelog_path.exists() {
+                crate::git::add_file(&changelog_path).await?;
+                crate::git::amend_commit().await?;
+            }
+
             crate::git::create_tag(&tag).await?;
             println!("  {} Committed and tagged", "✓".green());
         }

@@ -410,6 +410,13 @@ impl App {
                         } else {
                             git::add_and_commit(&message, paths[0]).await?;
                         }
+
+                        let changelog_path = PathBuf::from("CHANGELOG.md");
+                        if changelog_path.exists() {
+                            git::add_file(&changelog_path).await?;
+                            git::amend_commit().await?;
+                        }
+
                         git::create_tag(&tag).await?;
                     }
                     self.status_messages.push("* Committed and tagged".to_string());
