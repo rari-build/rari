@@ -386,13 +386,6 @@ impl App {
                         self.status_messages.push("* Generated changelog".to_string());
                     }
 
-                    if !self.dry_run {
-                        self.status_messages.push("Updating lockfile...".to_string());
-                        let project_root = PathBuf::from(".");
-                        npm::install_dependencies(&project_root).await?;
-                        self.status_messages.push("* Updated lockfile".to_string());
-                    }
-
                     self.publish_step = PublishStep::Committing;
                     self.publish_progress = 0.7;
                 }

@@ -26,18 +26,6 @@ pub async fn build_package(package_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub async fn install_dependencies(project_root: &Path) -> Result<()> {
-    let output = Command::new("pnpm").args(["install"]).current_dir(project_root).output().await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!("Failed to install dependencies:\nstdout: {}\nstderr: {}", stdout, stderr);
-    }
-
-    Ok(())
-}
-
 pub async fn publish_package(
     package_path: &Path,
     is_prerelease: bool,
