@@ -102,7 +102,10 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
       input: virtualModuleId,
       external: ['rari'],
       platform: 'node',
-      output: { format: 'esm' },
+      output: {
+        format: 'esm',
+        inlineDynamicImports: true,
+      },
       plugins: [{
         name: 'virtual-robots',
         resolveId(resolveId) {
@@ -114,8 +117,11 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
           return null
         },
         load(loadId) {
-          if (loadId === virtualModuleId)
-            return { code: sourceCode, moduleType: 'ts' }
+          if (loadId === virtualModuleId) {
+            const ext = path.extname(robotsFile.path).slice(1)
+            const moduleType = ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx' ? ext : 'ts'
+            return { code: sourceCode, moduleType }
+          }
 
           return null
         },
@@ -129,9 +135,14 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     const module = await import(dataUrl)
 
-    const robotsData: Robots = typeof module.default === 'function'
-      ? module.default()
-      : module.default
+    let robotsData: Robots
+    if (typeof module.default === 'function') {
+      const result = module.default()
+      robotsData = result instanceof Promise ? await result : result
+    }
+    else {
+      robotsData = module.default
+    }
 
     const content = generateRobotsTxt(robotsData)
     await fs.writeFile(outputPath, content)

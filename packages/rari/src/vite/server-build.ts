@@ -495,7 +495,7 @@ const ${importName} = (props) => {
     return inputPath.includes('/app/') || inputPath.includes('\\app\\')
   }
 
-  private createBuildPlugins(virtualModuleId: string, transformedCode: string, loader: string, inputPath: string, isPage = false) {
+  private createBuildPlugins(virtualModuleId: string, transformedCode: string, loader: 'tsx' | 'jsx' | 'ts' | 'js', inputPath: string, isPage = false) {
     const resolveDir = path.dirname(inputPath)
     const isProxyFile = path.basename(inputPath).match(/^proxy\.(?:tsx?|jsx?|mts|mjs)$/)
     const self = this
@@ -533,7 +533,7 @@ const ${importName} = (props) => {
           if (id === virtualModuleId) {
             return {
               code: transformedCode,
-              moduleType: loader as any,
+              moduleType: loader,
             }
           }
 
@@ -597,7 +597,9 @@ const ${importName} = (props) => {
                       break
                   }
                 }
-                catch {}
+                catch (error) {
+                  console.error(`[rari] Failed to read file for server action detection: ${pathWithExt}`, error)
+                }
                 break
               }
             }
@@ -821,16 +823,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       inputPath,
     )
     const isPage = this.isPageComponent(inputPath)
-    let transformedCode = isPage
+    const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
       : clientTransformedCode
 
-    const isProxyFile = path.basename(inputPath).match(/^proxy\.(?:tsx?|jsx?|mts|mjs)$/)
-    if (isProxyFile)
-      transformedCode = this.transformProxyImports(transformedCode)
-
     const ext = path.extname(inputPath)
-    let loader: string
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
     if (ext === '.tsx')
       loader = 'tsx'
     else if (ext === '.ts')
@@ -851,7 +849,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         minify: this.options.minify,
       },
       moduleTypes: {
-        [`.${loader}`]: loader as any,
+        [`.${loader}`]: loader,
       },
       resolve: {
         mainFields: ['module', 'main'],
@@ -1042,16 +1040,12 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       inputPath,
     )
     const isPage = this.isPageComponent(inputPath)
-    let transformedCode = isPage
+    const transformedCode = isPage
       ? this.transformComponentImportsToGlobal(clientTransformedCode)
       : clientTransformedCode
 
-    const isProxyFile = path.basename(inputPath).match(/^proxy\.(?:tsx?|jsx?|mts|mjs)$/)
-    if (isProxyFile)
-      transformedCode = this.transformProxyImports(transformedCode)
-
     const ext = path.extname(inputPath)
-    let loader: string
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
     if (ext === '.tsx')
       loader = 'tsx'
     else if (ext === '.ts')
@@ -1072,7 +1066,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
         minify: this.options.minify,
       },
       moduleTypes: {
-        [`.${loader}`]: loader as any,
+        [`.${loader}`]: loader,
       },
       resolve: {
         mainFields: ['module', 'main'],
@@ -1102,23 +1096,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       throw new Error('No output generated from Rolldown')
 
     let code = result.output[0].code
-
-    code = code.replace(
-      /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-runtime['"];?\s*/g,
-      '// jsx/jsxs are available as globals\n',
-    )
-    code = code.replace(
-      /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-dev-runtime['"];?\s*/g,
-      '// jsx/jsxs are available as globals\n',
-    )
-    code = code.replace(
-      /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?\s*/g,
-      '// React is available as globalThis.React\n',
-    )
-    code = code.replace(
-      /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
-      '// React is available as globalThis.React\n',
-    )
 
     const timestamp = new Date().toISOString()
     code = `// Built: ${timestamp}\n${code}`
@@ -1298,10 +1275,6 @@ if (!globalThis["${componentId}"]) {
 }`
 
     return selfRegisteringCode
-  }
-
-  private transformProxyImports(code: string): string {
-    return code
   }
 
   private transformClientImports(code: string, inputPath: string): string {

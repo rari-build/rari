@@ -180,54 +180,6 @@ export async function findSitemapFiles(
   return sitemapFiles
 }
 
-async function buildAndExecuteSitemapModule(
-  sitemapPath: string,
-  id?: string,
-): Promise<Sitemap> {
-  const { build } = await import('rolldown')
-  const sourceCode = await fs.readFile(sitemapPath, 'utf-8')
-  const virtualModuleId = `\0virtual:sitemap`
-
-  const result = await build({
-    input: virtualModuleId,
-    external: ['rari'],
-    platform: 'node',
-    output: { format: 'esm' },
-    plugins: [{
-      name: 'virtual-sitemap',
-      resolveId(resolveId) {
-        if (resolveId === virtualModuleId)
-          return resolveId
-        if (resolveId.startsWith('.'))
-          return path.resolve(path.dirname(sitemapPath), resolveId)
-
-        return null
-      },
-      load(loadId) {
-        if (loadId === virtualModuleId)
-          return { code: sourceCode, moduleType: 'ts' }
-
-        return null
-      },
-    }],
-  })
-
-  if (!result.output || result.output.length === 0)
-    throw new Error('Failed to build sitemap module')
-
-  const code = result.output[0].code
-  const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
-  const module = await import(dataUrl)
-
-  if (typeof module.default === 'function') {
-    return id !== undefined
-      ? await module.default({ id: Promise.resolve(id) })
-      : await module.default()
-  }
-
-  return module.default
-}
-
 export async function generateSitemapFiles(options: SitemapGeneratorOptions): Promise<boolean> {
   const { appDir, extensions } = options
   const sitemapFiles = await findSitemapFiles(appDir, extensions)
@@ -264,8 +216,11 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
           return null
         },
         load(loadId) {
-          if (loadId === virtualModuleId)
-            return { code: sourceCode, moduleType: 'ts' }
+          if (loadId === virtualModuleId) {
+            const ext = path.extname(sitemapFile.path).slice(1)
+            const moduleType = ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx' ? ext : 'ts'
+            return { code: sourceCode, moduleType }
+          }
 
           return null
         },
@@ -283,7 +238,12 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
       const sitemapIds = await module.generateSitemaps()
 
       for (const { id } of sitemapIds) {
-        const sitemapData = await buildAndExecuteSitemapModule(sitemapFile.path, String(id))
+        let sitemapData: Sitemap
+        if (typeof module.default === 'function')
+          sitemapData = await module.default({ id: Promise.resolve(String(id)) })
+        else
+          sitemapData = module.default
+
         const content = generateSitemapXml(sitemapData)
         const outputPath = path.join(options.outDir, `sitemap/${id}.xml`)
 

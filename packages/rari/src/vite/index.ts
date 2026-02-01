@@ -7,7 +7,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { transformSync } from 'rolldown/experimental'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
@@ -236,27 +235,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
   function parseExportedNames(code: string): string[] {
     try {
-      const result = transformSync('virtual.tsx', code, {
-        lang: 'tsx',
-      })
-
-      const exportMatch = result.code.match(/export\s*\{([^}]+)\}/)
+      const exportMatch = code.match(/export\s*\{([^}]+)\}/)
       if (!exportMatch) {
-        const reExportMatch = code.match(/export\s*\{([^}]+)\}/)
-        if (reExportMatch) {
-          const exportedNames: string[] = []
-          const exports = reExportMatch[1].split(',')
-          for (const exp of exports) {
-            const trimmed = exp.trim()
-            const parts = trimmed.split(/\s+as\s+/)
-            const exportedName = parts.at(-1)?.trim()
-            if (exportedName)
-              exportedNames.push(exportedName)
-          }
-
-          return exportedNames
-        }
-
         return []
       }
 
@@ -283,16 +263,23 @@ export function rari(options: RariOptions = {}): Plugin[] {
     directive: 'use client' | 'use server',
   ): boolean {
     try {
-      const result = transformSync('virtual.tsx', code, {
-        lang: 'tsx',
-      })
+      const lines = code.split('\n')
 
-      const trimmed = result.code.trimStart()
-      const directivePattern = new RegExp(
-        `^(['"\`])${directive.replace(/\s/g, '\\s+')}\\1\\s*;?`,
-      )
+      for (const line of lines) {
+        const trimmed = line.trim()
 
-      return directivePattern.test(trimmed)
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
+          continue
+
+        if (trimmed === `'${directive}'` || trimmed === `"${directive}"`
+          || trimmed === `'${directive}';` || trimmed === `"${directive}";`) {
+          return true
+        }
+
+        break
+      }
+
+      return false
     }
     catch {
       return false
@@ -498,6 +485,26 @@ if (import.meta.hot) {
 
   const serverComponentBuilder: any = null
   let rustServerReady = false
+
+  async function checkRustServerHealth(): Promise<boolean> {
+    const serverPort = process.env.SERVER_PORT
+      ? Number(process.env.SERVER_PORT)
+      : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+    const baseUrl = `http://localhost:${serverPort}`
+
+    try {
+      const healthResponse = await fetch(`${baseUrl}/_rari/health`, {
+        signal: AbortSignal.timeout(1000),
+      })
+      const isHealthy = healthResponse.ok
+      rustServerReady = isHealthy
+      return isHealthy
+    }
+    catch {
+      rustServerReady = false
+      return false
+    }
+  }
 
   const mainPlugin: Plugin = {
     name: 'rari',
@@ -1186,6 +1193,7 @@ const ${componentName} = registerClientReference(
         })
 
         rustServerProcess.on('error', (error: Error) => {
+          rustServerReady = false
           console.error('Failed to start rari server:', error.message)
           if (error.message.includes('ENOENT')) {
             console.error(
@@ -1196,6 +1204,7 @@ const ${componentName} = registerClientReference(
 
         rustServerProcess.on('exit', (code: number, signal: string) => {
           rustServerProcess = null
+          rustServerReady = false
           if (signal)
             console.error(`rari server stopped by signal ${signal}`)
           else if (code === 0)
@@ -1204,26 +1213,18 @@ const ${componentName} = registerClientReference(
             console.error(`rari server exited with code ${code}`)
         })
 
-        const baseUrl = `http://localhost:${serverPort}`
-
         let serverReady = false
         for (let i = 0; i < 20; i++) {
-          try {
-            const healthResponse = await fetch(`${baseUrl}/_rari/health`)
-            if (healthResponse.ok) {
-              serverReady = true
-              break
-            }
+          serverReady = await checkRustServerHealth()
+          if (serverReady) {
+            break
           }
-          catch {
-            await new Promise(resolve => setTimeout(resolve, 500))
-          }
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
 
         if (serverReady) {
           await ensureClientComponentsRegistered()
           await discoverAndRegisterComponents()
-          rustServerReady = true
         }
         else {
           console.error(
@@ -1314,25 +1315,28 @@ const ${componentName} = registerClientReference(
 
         if (isRscRequest && req.url && !req.url.startsWith('/api') && !req.url.startsWith('/rsc') && !req.url.includes('.')) {
           if (!rustServerReady) {
-            const maxWait = 10000
-            const startWait = Date.now()
-            const checkInterval = 100
+            const isHealthy = await checkRustServerHealth()
+            if (!isHealthy) {
+              const maxWait = 10000
+              const startWait = Date.now()
+              const checkInterval = 100
 
-            while ((Date.now() - startWait) < maxWait) {
-              if (rustServerReady)
-                break
+              while ((Date.now() - startWait) < maxWait) {
+                if (await checkRustServerHealth())
+                  break
 
-              await new Promise(resolve => setTimeout(resolve, checkInterval))
-            }
-
-            if (!rustServerReady) {
-              console.error('[rari] Rust server not ready, cannot proxy RSC request')
-              if (!res.headersSent) {
-                res.statusCode = 503
-                res.end('Server not ready')
+                await new Promise(resolve => setTimeout(resolve, checkInterval))
               }
 
-              return
+              if (!rustServerReady) {
+                console.error('[rari] Rust server not ready, cannot proxy RSC request')
+                if (!res.headersSent) {
+                  res.statusCode = 503
+                  res.end('Server not ready')
+                }
+
+                return
+              }
             }
           }
 
@@ -1479,6 +1483,8 @@ const ${componentName} = registerClientReference(
           rustServerProcess.kill('SIGTERM')
           rustServerProcess = null
         }
+
+        rustServerReady = false
       })
     },
 

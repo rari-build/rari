@@ -76,6 +76,7 @@ async function extractImageUsages(content: string, filePath: string, images: Map
     const result = await build({
       input: virtualModuleId,
       platform: 'browser',
+      write: false,
       output: {
         format: 'esm',
       },
