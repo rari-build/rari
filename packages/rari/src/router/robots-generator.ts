@@ -137,8 +137,8 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
 
     let robotsData: Robots
     if (typeof module.default === 'function') {
-      const result = module.default()
-      robotsData = result instanceof Promise ? await result : result
+      const robotsResult = module.default()
+      robotsData = robotsResult instanceof Promise ? await robotsResult : robotsResult
     }
     else {
       robotsData = module.default
