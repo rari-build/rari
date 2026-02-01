@@ -235,23 +235,31 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
   function parseExportedNames(code: string): string[] {
     try {
-      const exportMatch = code.match(/export\s*\{([^}]+)\}/)
-      if (!exportMatch) {
-        return []
-      }
-
       const exportedNames: string[] = []
-      const exports = exportMatch[1].split(',')
-
-      for (const exp of exports) {
-        const trimmed = exp.trim()
-        const parts = trimmed.split(/\s+as\s+/)
-        const exportedName = parts.at(-1)?.trim()
-        if (exportedName)
-          exportedNames.push(exportedName)
+      const namedExportMatch = code.matchAll(/export\s*\{([^}]+)\}/g)
+      for (const match of namedExportMatch) {
+        const exports = match[1].split(',')
+        for (const exp of exports) {
+          const trimmed = exp.trim()
+          const parts = trimmed.split(/\s+as\s+/)
+          const exportedName = parts.at(-1)?.trim()
+          if (exportedName)
+            exportedNames.push(exportedName)
+        }
       }
 
-      return exportedNames
+      if (/export\s+default\s+(?:function|class)\s+\w+/.test(code))
+        exportedNames.push('default')
+      else if (/export\s+default\s+/.test(code))
+        exportedNames.push('default')
+
+      const declarationExports = code.matchAll(/export\s+(?:const|let|var|function|class)\s+(\w+)/g)
+      for (const match of declarationExports) {
+        if (match[1])
+          exportedNames.push(match[1])
+      }
+
+      return [...new Set(exportedNames)]
     }
     catch {
       return []

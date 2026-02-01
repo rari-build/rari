@@ -870,7 +870,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (!result.output || result.output.length === 0)
       throw new Error('No output generated from Rolldown')
 
-    let code = result.output[0].code
+    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No entry chunk found in Rolldown output')
+
+    let code = entryChunk.code
 
     const timestamp = new Date().toISOString()
     code = `// Built: ${timestamp}\n${code}`
@@ -1095,7 +1099,11 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     if (!result.output || result.output.length === 0)
       throw new Error('No output generated from Rolldown')
 
-    let code = result.output[0].code
+    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No entry chunk found in Rolldown output')
+
+    let code = entryChunk.code
 
     const timestamp = new Date().toISOString()
     code = `// Built: ${timestamp}\n${code}`
