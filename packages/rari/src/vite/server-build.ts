@@ -724,7 +724,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             return {
               code: contents,
               moduleType: 'js',
-              resolveDir: path.dirname(filePath),
             }
           }
 
@@ -1085,14 +1084,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           ...this.options.define,
         },
       },
-      external: [
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-        /^node:/,
-        'rari/image',
-      ],
       plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage),
     })
 
