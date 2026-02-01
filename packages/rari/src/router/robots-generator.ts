@@ -102,6 +102,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
       input: virtualModuleId,
       external: ['rari'],
       platform: 'node',
+      write: false,
       output: {
         format: 'esm',
         codeSplitting: false,

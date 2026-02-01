@@ -204,6 +204,7 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
       input: virtualModuleId,
       external: ['rari'],
       platform: 'node',
+      write: false,
       output: { format: 'esm' },
       plugins: [{
         name: 'virtual-sitemap',
