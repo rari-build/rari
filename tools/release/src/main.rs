@@ -284,9 +284,20 @@ async fn run_non_interactive(
                 crate::git::add_and_commit(&message, paths[0]).await?;
             }
 
+            let mut files_to_add = Vec::new();
             let changelog_path = std::path::PathBuf::from("CHANGELOG.md");
             if changelog_path.exists() {
-                crate::git::add_file(&changelog_path).await?;
+                files_to_add.push(changelog_path);
+            }
+            let lockfile_path = std::path::PathBuf::from("pnpm-lock.yaml");
+            if lockfile_path.exists() {
+                files_to_add.push(lockfile_path);
+            }
+
+            if !files_to_add.is_empty() {
+                for file in &files_to_add {
+                    crate::git::add_file(file).await?;
+                }
                 crate::git::amend_commit().await?;
             }
 
