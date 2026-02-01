@@ -326,23 +326,26 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
     let client = Client::new();
     let health_url = format!("http://{}/vite-server/", config.vite_address());
 
-    match client.get(&health_url).send().await {
-        Ok(response) => {
-            if response.status().is_success() {
-                Ok(())
-            } else {
-                Err(RariError::network(format!(
-                    "Vite server returned status: {}",
-                    response.status()
-                )))
+    for attempt in 1..=60 {
+        match client.get(&health_url).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                if attempt < 60 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    continue;
+                }
             }
         }
-        Err(e) => Err(RariError::network(format!(
-            "Failed to connect to Vite server at {}: {}",
-            config.vite_address(),
-            e
-        ))),
     }
+
+    Err(RariError::network(format!(
+        "Failed to connect to Vite server at {} after 60 attempts",
+        config.vite_address()
+    )))
 }
 
 #[cfg(test)]

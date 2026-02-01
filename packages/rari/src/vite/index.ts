@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { transformSync } from 'esbuild'
+import { transformSync } from 'rolldown/experimental'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
@@ -111,9 +111,9 @@ async function loadReactServerDomShim(): Promise<string> {
   return loadRuntimeFile('react-server-dom-shim.js')
 }
 
-function writeImageConfig(projectRoot: string, options: RariOptions): void {
+async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
-  const imageManifest = scanForImageUsage(srcDir)
+  const imageManifest = await scanForImageUsage(srcDir)
 
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
@@ -236,11 +236,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
   function parseExportedNames(code: string): string[] {
     try {
-      const result = transformSync(code, {
-        loader: 'tsx',
-        format: 'esm',
-        target: 'esnext',
-        logLevel: 'silent',
+      const result = transformSync('virtual.tsx', code, {
+        lang: 'tsx',
       })
 
       const exportMatch = result.code.match(/export\s*\{([^}]+)\}/)
@@ -286,11 +283,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
     directive: 'use client' | 'use server',
   ): boolean {
     try {
-      const result = transformSync(code, {
-        loader: 'tsx',
-        format: 'esm',
-        target: 'esnext',
-        logLevel: 'silent',
+      const result = transformSync('virtual.tsx', code, {
+        lang: 'tsx',
       })
 
       const trimmed = result.code.trimStart()
@@ -503,6 +497,7 @@ if (import.meta.hot) {
   }
 
   const serverComponentBuilder: any = null
+  let rustServerReady = false
 
   const mainPlugin: Plugin = {
     name: 'rari',
@@ -969,10 +964,10 @@ const ${componentName} = registerClientReference(
       return null
     },
 
-    configureServer(server) {
+    async configureServer(server) {
       const projectRoot = options.projectRoot || process.cwd()
       const srcDir = path.join(projectRoot, 'src')
-      writeImageConfig(projectRoot, options)
+      await writeImageConfig(projectRoot, options)
 
       let serverComponentBuilder: any = null
 
@@ -1209,41 +1204,32 @@ const ${componentName} = registerClientReference(
             console.error(`rari server exited with code ${code}`)
         })
 
-        setTimeout(async () => {
+        const baseUrl = `http://localhost:${serverPort}`
+
+        let serverReady = false
+        for (let i = 0; i < 20; i++) {
           try {
-            const serverPort = process.env.SERVER_PORT
-              ? Number(process.env.SERVER_PORT)
-              : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-            const baseUrl = `http://localhost:${serverPort}`
-
-            let serverReady = false
-            for (let i = 0; i < 10; i++) {
-              try {
-                const healthResponse = await fetch(`${baseUrl}/_rari/health`)
-                if (healthResponse.ok) {
-                  serverReady = true
-                  break
-                }
-              }
-              catch {
-                await new Promise(resolve => setTimeout(resolve, 500))
-              }
-            }
-
-            if (serverReady) {
-              await ensureClientComponentsRegistered()
-              await discoverAndRegisterComponents()
-            }
-            else {
-              console.error(
-                'Server failed to become ready for component registration',
-              )
+            const healthResponse = await fetch(`${baseUrl}/_rari/health`)
+            if (healthResponse.ok) {
+              serverReady = true
+              break
             }
           }
-          catch (error) {
-            console.error('Failed during component registration:', error)
+          catch {
+            await new Promise(resolve => setTimeout(resolve, 500))
           }
-        }, 1000)
+        }
+
+        if (serverReady) {
+          await ensureClientComponentsRegistered()
+          await discoverAndRegisterComponents()
+          rustServerReady = true
+        }
+        else {
+          console.error(
+            'Server failed to become ready for component registration',
+          )
+        }
       }
 
       const handleServerComponentHMR = async (filePath: string) => {
@@ -1318,13 +1304,38 @@ const ${componentName} = registerClientReference(
         }
       }
 
-      startRustServer()
+      startRustServer().catch((error) => {
+        console.error('[rari] Failed to start Rust server:', error)
+      })
 
       server.middlewares.use(async (req, res, next) => {
         const acceptHeader = req.headers.accept
         const isRscRequest = acceptHeader && acceptHeader.includes('text/x-component')
 
         if (isRscRequest && req.url && !req.url.startsWith('/api') && !req.url.startsWith('/rsc') && !req.url.includes('.')) {
+          if (!rustServerReady) {
+            const maxWait = 10000
+            const startWait = Date.now()
+            const checkInterval = 100
+
+            while ((Date.now() - startWait) < maxWait) {
+              if (rustServerReady)
+                break
+
+              await new Promise(resolve => setTimeout(resolve, checkInterval))
+            }
+
+            if (!rustServerReady) {
+              console.error('[rari] Rust server not ready, cannot proxy RSC request')
+              if (!res.headersSent) {
+                res.statusCode = 503
+                res.end('Server not ready')
+              }
+
+              return
+            }
+          }
+
           const serverPort = process.env.SERVER_PORT
             ? Number(process.env.SERVER_PORT)
             : Number(process.env.PORT || process.env.RSC_PORT || 3000)
@@ -1751,9 +1762,9 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       },
     },
 
-    writeBundle() {
+    async writeBundle() {
       const projectRoot = options.projectRoot || process.cwd()
-      writeImageConfig(projectRoot, options)
+      await writeImageConfig(projectRoot, options)
     },
   }
 

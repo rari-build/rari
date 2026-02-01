@@ -108,26 +108,16 @@ impl ImageOptimizer {
     }
 
     async fn preoptimize_local_images_internal(&self, dry_run: bool) -> Result<usize, ImageError> {
-        if dry_run {
-            tracing::info!("Starting local image pre-optimization preview (dry-run)...");
-        } else {
-            tracing::info!("Starting local image pre-optimization...");
-        }
-
         if !self.config.preoptimize_manifest.is_empty() {
-            tracing::info!(
-                "Using preoptimize manifest with {} image variants",
-                self.config.preoptimize_manifest.len()
-            );
             return self.preoptimize_from_manifest(dry_run).await;
         }
 
         if self.config.local_patterns.is_empty() {
-            tracing::info!("No local_patterns configured, skipping local scan");
+            tracing::debug!("No local_patterns configured, skipping local scan");
             return Ok(0);
         }
 
-        tracing::info!("No manifest found, scanning public directory...");
+        tracing::debug!("No manifest found, scanning public directory...");
 
         let public_dir = self.project_path.join("public");
         match tokio::fs::try_exists(&public_dir).await {
@@ -206,19 +196,13 @@ impl ImageOptimizer {
         }
 
         if image_paths.is_empty() {
-            tracing::warn!("No local images found for pre-optimization");
+            tracing::debug!("No local images found for pre-optimization");
             return Ok(0);
         }
 
-        tracing::info!("Found {} local images to pre-optimize", image_paths.len());
+        tracing::debug!("Found {} local images to scan", image_paths.len());
         for path in &image_paths {
             tracing::debug!("  - {}", path);
-        }
-
-        if dry_run {
-            tracing::info!("[DRY RUN] Would pre-optimize {} local images...", image_paths.len());
-        } else {
-            tracing::info!("Pre-optimizing {} local images...", image_paths.len());
         }
 
         self.optimize_image_urls_internal(image_paths, dry_run).await
@@ -289,13 +273,13 @@ impl ImageOptimizer {
         }
 
         if tasks.is_empty() {
-            tracing::warn!("No images to pre-optimize from manifest");
+            tracing::debug!("No images to pre-optimize from manifest");
             return Ok(0);
         }
 
-        tracing::info!("Pre-optimizing {} image variants from manifest", tasks.len());
-
         if dry_run {
+            tracing::info!("Starting local image pre-optimization preview (dry-run)...");
+            tracing::info!("Using preoptimize manifest with {} image variants", tasks.len());
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
             for (url, width, format, q) in &tasks {
                 tracing::info!(
@@ -316,11 +300,44 @@ impl ImageOptimizer {
             return Ok(tasks.len());
         }
 
+        let mut needs_optimization = 0;
+        for (url, width, format, q) in &tasks {
+            let params = OptimizeParams {
+                url: url.clone(),
+                w: Some(*width),
+                q: *q,
+                f: Some(format.extension().to_string()),
+            };
+            let cache_key = self.generate_cache_key(&params);
+            if self.cache.get(&cache_key).await.is_none() {
+                needs_optimization += 1;
+            }
+        }
+
+        if needs_optimization == 0 {
+            tracing::debug!("All {} image variants are already cached", tasks.len());
+            if !preload_list.is_empty() {
+                let mut preload_images =
+                    self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
+                preload_images.extend(preload_list);
+                tracing::debug!("Registered {} images for preloading", preload_images.len());
+            }
+            return Ok(0);
+        }
+
+        tracing::info!("Starting local image pre-optimization...");
+        tracing::info!("Using preoptimize manifest with {} image variants", tasks.len());
+        tracing::info!(
+            "Pre-optimizing {} image variants from manifest ({} already cached)",
+            needs_optimization,
+            tasks.len() - needs_optimization
+        );
+
         if !preload_list.is_empty() {
             let mut preload_images =
                 self.preload_images.write().unwrap_or_else(|poison| poison.into_inner());
             preload_images.extend(preload_list);
-            tracing::info!("Registered {} images for preloading", preload_images.len());
+            tracing::debug!("Registered {} images for preloading", preload_images.len());
         }
 
         let optimized_count = Arc::new(AtomicUsize::new(0));
@@ -374,7 +391,9 @@ impl ImageOptimizer {
             tracing::warn!("Pre-optimization completed with {} errors", errors);
         }
 
-        tracing::info!("Pre-optimized {} image variants from manifest", final_count);
+        if final_count > 0 {
+            tracing::info!("Pre-optimized {} image variants from manifest", final_count);
+        }
         Ok(final_count)
     }
 
@@ -401,9 +420,6 @@ impl ImageOptimizer {
 
         let quality = self.default_quality();
 
-        tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
-        tracing::info!("Pre-optimizing with quality: {}", quality);
-
         let mut tasks = Vec::new();
         for url in &urls {
             for &width in &sizes {
@@ -416,6 +432,10 @@ impl ImageOptimizer {
         tracing::debug!("Generated {} optimization tasks", tasks.len());
 
         if dry_run {
+            tracing::info!("Starting local image pre-optimization preview (dry-run)...");
+            tracing::info!("Found {} local images to pre-optimize", urls.len());
+            tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
+            tracing::info!("Pre-optimizing with quality: {}", quality);
             tracing::info!("[DRY RUN] Would process {} image variants:", tasks.len());
             for (url, width, format, q) in &tasks {
                 tracing::info!(
@@ -429,6 +449,35 @@ impl ImageOptimizer {
             }
             return Ok(tasks.len());
         }
+
+        let mut needs_optimization = 0;
+        for (url, width, format, q) in &tasks {
+            let params = OptimizeParams {
+                url: url.clone(),
+                w: Some(*width),
+                q: *q,
+                f: Some(format.extension().to_string()),
+            };
+            let cache_key = self.generate_cache_key(&params);
+            if self.cache.get(&cache_key).await.is_none() {
+                needs_optimization += 1;
+            }
+        }
+
+        if needs_optimization == 0 {
+            tracing::debug!("All {} image variants are already cached", tasks.len());
+            return Ok(0);
+        }
+
+        tracing::info!("Starting local image pre-optimization...");
+        tracing::info!("Found {} local images to pre-optimize", urls.len());
+        tracing::info!("Pre-optimizing for {} sizes: {:?}", sizes.len(), sizes);
+        tracing::info!("Pre-optimizing with quality: {}", quality);
+        tracing::info!(
+            "Pre-optimizing {} image variants ({} already cached)",
+            needs_optimization,
+            tasks.len() - needs_optimization
+        );
 
         let optimized_count = Arc::new(AtomicUsize::new(0));
 
@@ -481,7 +530,9 @@ impl ImageOptimizer {
             tracing::warn!("Pre-optimization completed with {} errors", errors);
         }
 
-        tracing::info!("Pre-optimized {} image variants", final_count);
+        if final_count > 0 {
+            tracing::info!("Pre-optimized {} image variants", final_count);
+        }
         Ok(final_count)
     }
 

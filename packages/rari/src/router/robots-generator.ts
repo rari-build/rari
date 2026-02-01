@@ -1,6 +1,7 @@
+import type { Robots } from '../types/metadata-route'
+import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { Robots } from '../types/metadata-route'
 
 export interface RobotsGeneratorOptions {
   appDir: string
@@ -13,13 +14,11 @@ export function generateRobotsTxt(robots: Robots): string {
   const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
 
   for (const rule of rules) {
-    let userAgents: string[]
-    if (Array.isArray(rule.userAgent))
-      userAgents = rule.userAgent
-    else if (rule.userAgent)
-      userAgents = [rule.userAgent]
-    else
-      userAgents = ['*']
+    const userAgents = Array.isArray(rule.userAgent)
+      ? rule.userAgent
+      : rule.userAgent
+        ? [rule.userAgent]
+        : ['*']
 
     for (const userAgent of userAgents) {
       lines.push(`User-Agent: ${userAgent}`)
@@ -95,50 +94,51 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
   }
 
   try {
-    const esbuild = await import('esbuild')
+    const { build } = await import('rolldown')
+    const sourceCode = await fs.readFile(robotsFile.path, 'utf-8')
+    const virtualModuleId = `\0virtual:robots`
 
-    const result = await esbuild.build({
-      entryPoints: [robotsFile.path],
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      write: false,
+    const result = await build({
+      input: virtualModuleId,
       external: ['rari'],
-      target: 'node22',
+      platform: 'node',
+      output: { format: 'esm' },
+      plugins: [{
+        name: 'virtual-robots',
+        resolveId(resolveId) {
+          if (resolveId === virtualModuleId)
+            return resolveId
+          if (resolveId.startsWith('.'))
+            return path.resolve(path.dirname(robotsFile.path), resolveId)
+
+          return null
+        },
+        load(loadId) {
+          if (loadId === virtualModuleId)
+            return { code: sourceCode, moduleType: 'ts' }
+
+          return null
+        },
+      }],
     })
 
-    if (result.outputFiles && result.outputFiles.length > 0) {
-      const code = result.outputFiles[0].text
-      const tempFile = path.join(outDir, '_robots_temp.mjs')
-      await fs.writeFile(tempFile, code)
+    if (!result.output || result.output.length === 0)
+      throw new Error('Failed to build robots module')
 
-      try {
-        const module = await import(`file://${tempFile}`)
-        const robotsData: Robots = typeof module.default === 'function'
-          ? module.default()
-          : module.default
+    const code = result.output[0].code
+    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    const module = await import(dataUrl)
 
-        const content = generateRobotsTxt(robotsData)
-        await fs.writeFile(outputPath, content)
-        await fs.unlink(tempFile)
+    const robotsData: Robots = typeof module.default === 'function'
+      ? module.default()
+      : module.default
 
-        return true
-      }
-      catch (execError) {
-        console.error('[rari] Failed to execute robots file:', execError)
-        try {
-          await fs.unlink(tempFile)
-        }
-        catch {}
-
-        return false
-      }
-    }
+    const content = generateRobotsTxt(robotsData)
+    await fs.writeFile(outputPath, content)
+    return true
   }
-  catch (buildError) {
-    console.error('[rari] Failed to build robots file:', buildError)
+  catch (error) {
+    console.error('[rari] Failed to build/execute robots file:', error)
     return false
   }
-
-  return false
 }
