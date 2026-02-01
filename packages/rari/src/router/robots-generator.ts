@@ -104,7 +104,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
       platform: 'node',
       output: {
         format: 'esm',
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
       plugins: [{
         name: 'virtual-robots',
