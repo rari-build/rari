@@ -1,4 +1,4 @@
-## [0.8.5] - 2026-02-01
+## [rari@0.8.5] - 2026-02-01
 
 ### 🚀 Features
 
@@ -8,13 +8,14 @@
 
 - Rari@0.8.5
 - Rari@0.8.5
+- Rari@0.8.5
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump binary package versions to 0.8.5
 - *(rari)* Bump version to 0.8.4
 - *(rari)* Revert version to 0.8.4
-## [0.8.5] - 2026-02-01
+## [0.8.5] - 2026-01-31
 
 ### 🚀 Features
 
