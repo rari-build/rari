@@ -155,8 +155,6 @@ async fn run_optimize_images(
             Ok(count) => {
                 if count > 0 {
                     tracing::info!("Successfully pre-optimized {} image variants", count);
-                } else {
-                    tracing::info!("No image variants needed pre-optimization");
                 }
                 Ok(())
             }
