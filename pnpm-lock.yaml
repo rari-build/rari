@@ -189,15 +189,6 @@ importers:
         specifier: catalog:tailwind
         version: 4.1.18
 
-  packages/colors:
-    devDependencies:
-      '@types/node':
-        specifier: catalog:default
-        version: 25.2.0
-      tsdown:
-        specifier: catalog:build
-        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260202.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
-
   packages/create-rari-app:
     dependencies:
       '@clack/prompts':
