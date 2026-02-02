@@ -926,7 +926,7 @@ if (typeof window !== 'undefined') {{
                     return Ok(s.to_string());
                 }
 
-                if s.starts_with('I') || s.starts_with('S') || s.starts_with('E') {
+                if s.starts_with("I[") || s.starts_with("S[") || s.starts_with("E[") {
                     return Ok(String::new());
                 }
 
