@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { styleText } from 'node:util'
 import {
   cancel,
   confirm,
@@ -15,7 +16,6 @@ import {
   spinner,
   text,
 } from '@clack/prompts'
-import colors from '@rari/colors'
 
 interface ProjectOptions {
   name: string
@@ -39,18 +39,18 @@ const packageManagers = {
 } as const
 
 async function main() {
-  intro(colors.bgCyan(colors.black(' create-rari-app ')))
+  intro(styleText(['bgCyan', 'black'], ' create-rari-app '))
 
   const args = process.argv.slice(2)
   let projectName = args[0]
 
   if (projectName) {
     if (projectName.includes(' ')) {
-      console.error(colors.red('Error: Project name cannot contain spaces.'))
+      console.error(styleText('red', 'Error: Project name cannot contain spaces.'))
       process.exit(1)
     }
     if (!/^[@\w/-]+$/.test(projectName)) {
-      console.error(colors.red('Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
+      console.error(styleText('red', 'Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
       process.exit(1)
     }
   }
@@ -122,16 +122,16 @@ async function main() {
 
   await createProject(options)
 
-  outro(colors.green('🎉 Project created successfully!'))
+  outro(styleText('green', '🎉 Project created successfully!'))
 
   console.warn()
-  console.warn(colors.cyan('Next steps:'))
-  console.warn(colors.gray(`  cd ${options.name}`))
+  console.warn(styleText('cyan', 'Next steps:'))
+  console.warn(styleText('gray', `  cd ${options.name}`))
 
   if (!options.installDeps)
-    console.warn(colors.gray(`  ${options.packageManager} install`))
+    console.warn(styleText('gray', `  ${options.packageManager} install`))
 
-  console.warn(colors.gray(`  ${options.packageManager} run dev`))
+  console.warn(styleText('gray', `  ${options.packageManager} run dev`))
   console.warn()
 }
 
@@ -232,6 +232,6 @@ async function installDependencies(
 }
 
 main().catch((error) => {
-  console.error(colors.red('Error:'), error.message)
+  console.error(styleText('red', 'Error:'), error.message)
   process.exit(1)
 })

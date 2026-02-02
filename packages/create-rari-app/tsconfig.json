@@ -3,9 +3,6 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "paths": {
-      "@rari/colors": ["../colors/src/index.ts"]
-    },
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true

@@ -5,5 +5,4 @@ export default defineConfig({
   format: 'esm',
   dts: true,
   minify: true,
-  noExternal: ['@rari/colors'],
 })

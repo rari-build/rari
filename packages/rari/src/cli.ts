@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
-import colors from '@rari/colors'
+import { styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from './logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
@@ -415,62 +415,62 @@ async function main() {
     case 'help':
     case '--help':
     case '-h':
-      console.warn(`${colors.bold('rari CLI')}
+      console.warn(`${styleText('bold', 'rari CLI')}
 
-${colors.bold('Usage:')}
-  ${colors.cyan('rari dev')}                 Start the development server with Vite
-  ${colors.cyan('rari build')}               Build for production
-  ${colors.cyan('rari start')}               Start the rari server (defaults to production)
-  ${colors.cyan('rari deploy railway')}      Setup Railway deployment
-  ${colors.cyan('rari deploy render')}       Setup Render deployment
-  ${colors.cyan('rari help')}                Show this help message
+${styleText('bold', 'Usage:')}
+  ${styleText('cyan', 'rari dev')}                 Start the development server with Vite
+  ${styleText('cyan', 'rari build')}               Build for production
+  ${styleText('cyan', 'rari start')}               Start the rari server (defaults to production)
+  ${styleText('cyan', 'rari deploy railway')}      Setup Railway deployment
+  ${styleText('cyan', 'rari deploy render')}       Setup Render deployment
+  ${styleText('cyan', 'rari help')}                Show this help message
 
-${colors.bold('Environment Variables:')}
-  ${colors.yellow('PORT')}                     Server port (default: 3000)
-  ${colors.yellow('RSC_PORT')}                 Alternative server port
-  ${colors.yellow('NODE_ENV')}                 Environment (default: production for start, development for dev)
-  ${colors.yellow('RUST_LOG')}                 Rust logging level (default: info)
+${styleText('bold', 'Environment Variables:')}
+  ${styleText('yellow', 'PORT')}                     Server port (default: 3000)
+  ${styleText('yellow', 'RSC_PORT')}                 Alternative server port
+  ${styleText('yellow', 'NODE_ENV')}                 Environment (default: production for start, development for dev)
+  ${styleText('yellow', 'RUST_LOG')}                 Rust logging level (default: info)
 
-${colors.bold('Examples:')}
-  ${colors.gray('# Start development server with Vite')}
-  ${colors.cyan('rari dev')}
+${styleText('bold', 'Examples:')}
+  ${styleText('gray', '# Start development server with Vite')}
+  ${styleText('cyan', 'rari dev')}
 
-  ${colors.gray('# Build for production')}
-  ${colors.cyan('rari build')}
+  ${styleText('gray', '# Build for production')}
+  ${styleText('cyan', 'rari build')}
 
-  ${colors.gray('# Start production server (default)')}
-  ${colors.cyan('rari start')}
+  ${styleText('gray', '# Start production server (default)')}
+  ${styleText('cyan', 'rari start')}
 
-  ${colors.gray('# Start in development mode')}
-  ${colors.cyan('NODE_ENV=development rari start')}
+  ${styleText('gray', '# Start in development mode')}
+  ${styleText('cyan', 'NODE_ENV=development rari start')}
 
-  ${colors.gray('# Start production server on port 8080')}
-  ${colors.cyan('PORT=8080 rari start')}
+  ${styleText('gray', '# Start production server on port 8080')}
+  ${styleText('cyan', 'PORT=8080 rari start')}
 
-  ${colors.gray('# Setup Railway deployment')}
-  ${colors.cyan('rari deploy railway')}
+  ${styleText('gray', '# Setup Railway deployment')}
+  ${styleText('cyan', 'rari deploy railway')}
 
-  ${colors.gray('# Setup Render deployment')}
-  ${colors.cyan('rari deploy render')}
+  ${styleText('gray', '# Setup Render deployment')}
+  ${styleText('cyan', 'rari deploy render')}
 
-  ${colors.gray('# Start with debug logging')}
-  ${colors.cyan('RUST_LOG=debug rari start')}
+  ${styleText('gray', '# Start with debug logging')}
+  ${styleText('cyan', 'RUST_LOG=debug rari start')}
 
-${colors.bold('Deployment:')}
-  ${colors.cyan('rari deploy railway')}     Creates Railway deployment files
-  ${colors.cyan('rari deploy render')}      Creates Render deployment files
+${styleText('bold', 'Deployment:')}
+  ${styleText('cyan', 'rari deploy railway')}     Creates Railway deployment files
+  ${styleText('cyan', 'rari deploy render')}      Creates Render deployment files
 
   Platform deployment automatically detects the environment and configures:
   - Host binding (0.0.0.0 for platforms, 127.0.0.1 for local)
   - Port from platform's PORT environment variable
   - Production mode optimization
 
-${colors.bold('Binary Resolution:')}
+${styleText('bold', 'Binary Resolution:')}
   1. Platform-specific package (rari-{platform}-{arch})
   2. Global binary in PATH
   3. Install from source with Cargo
 
-${colors.bold('Notes:')}
+${styleText('bold', 'Notes:')}
   - 'rari start' defaults to production mode unless NODE_ENV is set
   - 'rari dev' runs in development mode with Vite hot reload
   - 'rari build' cleans, type checks, and builds for production
@@ -507,8 +507,8 @@ ${colors.bold('Notes:')}
       break
 
     default:
-      console.error(`${colors.bold('Unknown command:')} ${command}`)
-      console.warn(`Run "${colors.cyan('rari help')}" for available commands`)
+      console.error(`${styleText('bold', 'Unknown command:')} ${command}`)
+      console.warn(`Run "${styleText('cyan', 'rari help')}" for available commands`)
       process.exit(1)
   }
 }

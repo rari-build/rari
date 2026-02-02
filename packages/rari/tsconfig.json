@@ -5,7 +5,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "paths": {
-      "@rari/colors": ["../colors/src/index.ts"],
       "@rari/deploy": ["../deploy/src/index.ts"],
       "@rari/deploy/railway": ["../deploy/src/railway.ts"],
       "@rari/deploy/render": ["../deploy/src/render.ts"]

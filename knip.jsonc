@@ -27,7 +27,6 @@
         "src/runtime/rsc-client-runtime.js"
       ],
       "ignoreDependencies": [
-        "@rari/colors", // Bundled via noExternal in tsdown config
         "@rari/deploy" // Bundled via noExternal in tsdown config
       ]
     },
@@ -37,9 +36,6 @@
       ],
       "project": [
         "src/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "@rari/colors" // Bundled via noExternal in tsdown config
       ]
     },
     "packages/deploy": {
@@ -48,9 +44,6 @@
       ],
       "project": [
         "src/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "@rari/colors" // Bundled via noExternal in tsdown config
       ]
     },
     "examples/app-router-example": {
