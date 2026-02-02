@@ -794,36 +794,108 @@ export const __esModule = true;
     }
 
     fn wrap_cjs_module(&self, content: &str, file_path: &str) -> String {
+        let file_dir = if let Some(last_slash) = file_path.rfind('/') {
+            &file_path[..last_slash]
+        } else {
+            "."
+        };
+
         format!(
             r#"
 // CJS-to-ESM wrapper for: {file_path}
 const __cjs_module__ = {{ exports: {{}} }};
 const __cjs_exports__ = __cjs_module__.exports;
+const __cjs_dirname__ = '{file_dir}';
+const __cjs_filename__ = '{file_path}';
 
 const __require__ = (id) => {{
-    if (typeof globalThis.__rari_require__ === 'function') {{
-        try {{
-            return globalThis.__rari_require__(id, '{file_path}');
-        }} catch (error) {{
-            throw new Error(`Cannot find module '${{id}}' from '{file_path}': ${{error.message}}`);
+    if (id.startsWith('./') || id.startsWith('../')) {{
+        let resolvedPath = __cjs_dirname__;
+        const parts = id.split('/');
+        for (const part of parts) {{
+            if (part === '..') {{
+                const lastSlash = resolvedPath.lastIndexOf('/');
+                if (lastSlash > 0) {{
+                    resolvedPath = resolvedPath.substring(0, lastSlash);
+                }}
+            }} else if (part !== '.' && part !== '') {{
+                resolvedPath = resolvedPath + '/' + part;
+            }}
         }}
+
+        const tryPaths = [];
+        if (resolvedPath.endsWith('.js') || resolvedPath.endsWith('.json')) {{
+            tryPaths.push(resolvedPath);
+        }} else {{
+            tryPaths.push(resolvedPath + '.js');
+            tryPaths.push(resolvedPath + '/index.js');
+            tryPaths.push(resolvedPath);
+        }}
+
+        for (const tryPath of tryPaths) {{
+            try {{
+                const fileContent = Deno.readTextFileSync(tryPath);
+
+                if (tryPath.endsWith('.json')) {{
+                    return JSON.parse(fileContent);
+                }}
+
+                const nestedModule = {{ exports: {{}} }};
+                const nestedExports = nestedModule.exports;
+                const nestedDirname = tryPath.substring(0, tryPath.lastIndexOf('/'));
+                const nestedFilename = tryPath;
+
+                const nestedRequire = (nestedId) => {{
+                    if (nestedId.startsWith('./') || nestedId.startsWith('../')) {{
+                        let nestedResolved = nestedDirname;
+                        const nestedParts = nestedId.split('/');
+                        for (const p of nestedParts) {{
+                            if (p === '..') {{
+                                const ls = nestedResolved.lastIndexOf('/');
+                                if (ls > 0) nestedResolved = nestedResolved.substring(0, ls);
+                            }} else if (p !== '.' && p !== '') {{
+                                nestedResolved = nestedResolved + '/' + p;
+                            }}
+                        }}
+                        const nestedTryPaths = nestedResolved.endsWith('.js') || nestedResolved.endsWith('.json')
+                            ? [nestedResolved]
+                            : [nestedResolved + '.js', nestedResolved + '/index.js', nestedResolved];
+                        for (const ntp of nestedTryPaths) {{
+                            try {{
+                                const nc = Deno.readTextFileSync(ntp);
+                                if (ntp.endsWith('.json')) return JSON.parse(nc);
+                                const nm = {{ exports: {{}} }};
+                                const nfn = new Function('module', 'exports', 'require', '__filename', '__dirname', nc);
+                                nfn(nm, nm.exports, nestedRequire, ntp, ntp.substring(0, ntp.lastIndexOf('/')));
+                                return nm.exports;
+                            }} catch {{}}
+                        }}
+                    }}
+                    throw new Error(`Cannot find module '${{nestedId}}'`);
+                }};
+
+                const moduleFn = new Function('module', 'exports', 'require', '__filename', '__dirname', fileContent);
+                moduleFn(nestedModule, nestedExports, nestedRequire, nestedFilename, nestedDirname);
+
+                return nestedModule.exports;
+            }} catch (e) {{
+                continue;
+            }}
+        }}
+
+        throw new Error(`Cannot find module '${{id}}' from '{file_path}'`);
     }}
 
-    if (typeof import.meta?.resolve === 'function') {{
-        try {{
-            const resolved = import.meta.resolve(id);
-            throw new Error(`Module '${{id}}' resolved to ${{resolved}} but dynamic require is not fully supported. Use dynamic import() instead.`);
-        }} catch (e) {{
-            throw new Error(`Cannot find module '${{id}}' from '{file_path}'`);
-        }}
+    if (id.startsWith('node:')) {{
+        return {{ __esModule: true, default: {{}} }};
     }}
 
-    throw new Error(`Cannot find module '${{id}}' from '{file_path}': require() is not available in this context`);
+    throw new Error(`Cannot find module '${{id}}' from '{file_path}': bare specifier requires are not supported in CJS wrapper`);
 }};
 
-(function(module, exports, require) {{
+(function(module, exports, require, __filename, __dirname) {{
 {content}
-}})(__cjs_module__, __cjs_exports__, __require__);
+}})(__cjs_module__, __cjs_exports__, __require__, __cjs_filename__, __cjs_dirname__);
 
 const __result__ = __cjs_module__.exports;
 
@@ -855,6 +927,7 @@ const __keys__ = Object.keys(__result__);
 export {{ __exportProxy__ as __cjsExports__, __keys__ }};
 "#,
             file_path = file_path,
+            file_dir = file_dir,
             content = content
         )
     }
