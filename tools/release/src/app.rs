@@ -388,7 +388,11 @@ impl App {
                 }
                 PublishStep::Committing => {
                     let message = format!("release: {}@{}", unit.name(), version);
-                    let tag = format!("{}@{}", unit.name(), version);
+                    let tag = if unit.name() == "rari-binaries" {
+                        format!("v{}", version)
+                    } else {
+                        format!("{}@{}", unit.name(), version)
+                    };
                     if self.dry_run {
                         self.status_messages
                             .push(format!("[DRY RUN] Would commit with message: {}", message));

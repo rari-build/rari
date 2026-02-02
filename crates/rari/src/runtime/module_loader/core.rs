@@ -768,15 +768,23 @@ export const __esModule = true;
         let mut current_dir = path.parent()?.to_path_buf();
 
         while !current_dir.as_os_str().is_empty() {
+            if let Some(cached_type) = self.module_resolver.get_cached_package_type(&current_dir) {
+                return Some(cached_type);
+            }
+
             let package_json_path = current_dir.join("package.json");
             if package_json_path.exists() {
-                if let Ok(content) = fs::read_to_string(&package_json_path)
+                let package_type = if let Ok(content) = fs::read_to_string(&package_json_path)
                     && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
                     && let Some(type_field) = json.get("type").and_then(|v| v.as_str())
                 {
-                    return Some(type_field.to_string());
-                }
-                return Some("commonjs".to_string());
+                    type_field.to_string()
+                } else {
+                    "commonjs".to_string()
+                };
+
+                self.module_resolver.cache_package_type(current_dir, package_type.clone());
+                return Some(package_type);
             }
             if !current_dir.pop() {
                 break;
@@ -1259,7 +1267,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                                     return Some(file_url);
                                 }
                             } else if let Some(nested_conditional) = condition_value.as_object() {
-                                let nested_conditions = ["default", "module", "main"];
+                                let nested_conditions = ["import", "module", "default"];
                                 for nested_condition in &nested_conditions {
                                     if let Some(path) = nested_conditional
                                         .get(*nested_condition)

@@ -254,11 +254,22 @@ async fn run_non_interactive(
         }
 
         if dry_run {
-            println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
+            if unit_name == "rari" {
+                println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
+            } else {
+                println!(
+                    "  {} Would skip changelog generation (non-rari unit)",
+                    "[DRY RUN]".yellow()
+                );
+            }
         } else if unit_name == "rari" {
             println!("  {} Generating changelog...", "→".cyan());
             let project_root = std::path::PathBuf::from(".");
-            let tag = format!("{}@{}", unit_name, new_version);
+            let tag = if unit_name == "rari-binaries" {
+                format!("v{}", new_version)
+            } else {
+                format!("{}@{}", unit_name, new_version)
+            };
             crate::npm::generate_changelog(&tag, &project_root).await?;
             println!("  {} Generated changelog", "✓".green());
         } else {
@@ -266,7 +277,11 @@ async fn run_non_interactive(
         }
 
         let message = format!("release: {}@{}", unit_name, new_version);
-        let tag = format!("{}@{}", unit_name, new_version);
+        let tag = if unit_name == "rari-binaries" {
+            format!("v{}", new_version)
+        } else {
+            format!("{}@{}", unit_name, new_version)
+        };
         if dry_run {
             println!("  {} Would commit: {}", "[DRY RUN]".yellow(), message);
             println!("  {} Would create tag: {}", "[DRY RUN]".yellow(), tag);

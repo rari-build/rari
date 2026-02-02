@@ -187,6 +187,10 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
   if (sitemapFiles.length === 0)
     return false
 
+  await fs.mkdir(options.outDir, { recursive: true })
+  const sitemapDir = path.join(options.outDir, 'sitemap')
+  await fs.mkdir(sitemapDir, { recursive: true })
+
   const sitemapFile = sitemapFiles[0]
 
   if (sitemapFile.type === 'static') {
@@ -219,7 +223,34 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
         load(loadId) {
           if (loadId === virtualModuleId) {
             const ext = path.extname(sitemapFile.path).slice(1)
-            const moduleType = ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx' ? ext : 'ts'
+
+            let moduleType: 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty'
+
+            switch (ext) {
+              case 'ts':
+                moduleType = 'ts'
+                break
+              case 'tsx':
+                moduleType = 'tsx'
+                break
+              case 'js':
+              case 'mjs':
+              case 'cjs':
+                moduleType = 'js'
+                break
+              case 'jsx':
+                moduleType = 'jsx'
+                break
+              case 'json':
+                moduleType = 'json'
+                break
+              default:
+                throw new Error(
+                  `Unsupported sitemap file extension: ".${ext}". `
+                  + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs, .json`,
+                )
+            }
+
             return { code: sourceCode, moduleType }
           }
 
@@ -248,7 +279,6 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
         const content = generateSitemapXml(sitemapData)
         const outputPath = path.join(options.outDir, `sitemap/${id}.xml`)
 
-        await fs.mkdir(path.dirname(outputPath), { recursive: true })
         await fs.writeFile(outputPath, content)
       }
     }
