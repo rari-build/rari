@@ -1,7 +1,7 @@
 {
   "name": "rari-darwin-x64",
   "type": "module",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "Runtime Accelerated Rendering Infrastructure (macOS x64 binary)",
   "author": "Ryan Skinner",
   "license": "MIT",
