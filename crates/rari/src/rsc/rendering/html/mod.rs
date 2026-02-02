@@ -241,6 +241,28 @@ impl RscHtmlRenderer {
         Ok(rows)
     }
 
+    fn looks_like_rsc_payload(value: &JsonValue) -> bool {
+        match value {
+            JsonValue::Array(arr) => arr.first().and_then(|v| v.as_str()) == Some("$"),
+            JsonValue::Object(obj) => {
+                obj.contains_key("Suspense")
+                    || obj.contains_key("Component")
+                    || obj.contains_key("Text")
+                    || obj.contains_key("Reference")
+                    || obj.contains_key("Promise")
+            }
+            _ => false,
+        }
+    }
+
+    fn is_rsc_payload(s: &str) -> bool {
+        if let Ok(value) = serde_json::from_str::<JsonValue>(s) {
+            Self::looks_like_rsc_payload(&value)
+        } else {
+            false
+        }
+    }
+
     fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{}'", line))
@@ -427,18 +449,27 @@ impl RscHtmlRenderer {
             .map(|row| {
                 let data_json = match &row.data {
                     RscElement::Component { tag, key, props } => {
-                        serde_json::json!({
-                            "Component": {
-                                "tag": tag,
-                                "key": key,
-                                "props": props
-                            }
-                        })
+                        serde_json::json!(["$", tag, key.as_deref().unwrap_or(""), props])
                     }
                     RscElement::Text(text) => {
-                        serde_json::json!({
-                            "Text": text
-                        })
+                        if text.starts_with("I[") {
+                            serde_json::json!({
+                                "Text": text
+                            })
+                        } else if text.starts_with('[') || text.starts_with('{') {
+                            match serde_json::from_str::<serde_json::Value>(text) {
+                                Ok(parsed) => {
+                                    if Self::looks_like_rsc_payload(&parsed) {
+                                        parsed
+                                    } else {
+                                        serde_json::json!(text)
+                                    }
+                                }
+                                Err(_) => serde_json::json!(text),
+                            }
+                        } else {
+                            serde_json::json!(text)
+                        }
                     }
                     RscElement::Reference(ref_str) => {
                         serde_json::json!({
@@ -472,6 +503,7 @@ impl RscHtmlRenderer {
             .collect();
 
         let rows_array = serde_json::Value::Array(rows_json);
+
         let result =
             self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
                 |e| RariError::internal(format!("Failed to execute renderRscToHtml: {}", e)),
@@ -680,18 +712,15 @@ impl RscToHtmlConverter {
             RscChunkType::InitialShell => {
                 let html = if !self.shell_sent {
                     self.shell_sent = true;
-                    let mut output = self.generate_html_shell();
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(rsc_html) => {
-                            output.extend(rsc_html);
+                    let output = self.generate_html_shell();
 
-                            output
-                        }
-                        Err(e) => {
-                            error!("Error parsing RSC in shell: {}", e);
-                            output
-                        }
+                    let rsc_line = String::from_utf8_lossy(&chunk.data);
+
+                    if !self.payload_embedding_disabled {
+                        self.rsc_wire_format.push(rsc_line.trim().to_string());
                     }
+
+                    output
                 } else {
                     match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
                         Ok(rsc_html) => rsc_html,
@@ -855,11 +884,24 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        if json_str.starts_with('I') || json_str.starts_with('S') {
+        if json_str.starts_with('I') || json_str.starts_with('S') || json_str.starts_with('E') {
             return Ok(Vec::new());
         }
 
         if json_str.starts_with('"') && json_str.contains("$S") {
+            return Ok(Vec::new());
+        }
+
+        if json_str.starts_with('"')
+            && let Ok(serde_json::Value::String(s)) = serde_json::from_str(json_str)
+            && RscHtmlRenderer::is_rsc_payload(&s)
+        {
+            return Ok(Vec::new());
+        }
+
+        const PAYLOAD_SIZE_LIMIT: usize = 5000;
+
+        if json_str.starts_with("[[") || json_str.len() > PAYLOAD_SIZE_LIMIT {
             return Ok(Vec::new());
         }
 
@@ -910,6 +952,22 @@ if (typeof window !== 'undefined') {{
                         RariError::internal(format!("Invalid chunk reference: {}", s))
                     })?;
                     return Ok(s.to_string());
+                }
+
+                if s.starts_with("I[") || s.starts_with("S[") || s.starts_with("E[") {
+                    return Ok(String::new());
+                }
+
+                if let Some(colon_pos) = s.find(':')
+                    && s[..colon_pos].chars().all(|c| c.is_ascii_digit())
+                {
+                    let after_colon = &s[colon_pos + 1..];
+                    if !after_colon.is_empty()
+                        && (after_colon.starts_with('[') || after_colon.starts_with('{'))
+                        && serde_json::from_str::<serde_json::Value>(after_colon).is_ok()
+                    {
+                        return Ok(String::new());
+                    }
                 }
 
                 return Ok(Self::escape_html(s));
@@ -1083,12 +1141,28 @@ if (typeof window !== 'undefined') {{
                                     }
                                     acc
                                 });
-                                let value_str = v.as_str().unwrap_or_else(|| {
-                                    if let Some(n) = v.as_f64() {
-                                        return Box::leak(n.to_string().into_boxed_str());
+                                let value_str = if let Some(s) = v.as_str() {
+                                    s.to_string()
+                                } else if let Some(b) = v.as_bool() {
+                                    if b { "true".to_string() } else { "false".to_string() }
+                                } else if let Some(i) = v.as_i64() {
+                                    i.to_string()
+                                } else if let Some(u) = v.as_u64() {
+                                    u.to_string()
+                                } else if let Some(f) = v.as_f64() {
+                                    if f.is_finite() {
+                                        format!("{:.10}", f)
+                                            .trim_end_matches('0')
+                                            .trim_end_matches('.')
+                                            .to_string()
+                                    } else {
+                                        f.to_string()
                                     }
-                                    ""
-                                });
+                                } else if v.is_object() || v.is_array() {
+                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
+                                } else {
+                                    v.to_string()
+                                };
                                 format!("{}:{}", kebab_key, value_str)
                             })
                             .collect();

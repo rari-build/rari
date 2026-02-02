@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import colors from '@rari/colors'
+import { styleText } from 'node:util'
 import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRailwayDeployment() {
@@ -209,10 +209,10 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
   logSuccess('Railway deployment setup complete! 🎉')
   console.warn('')
   logInfo('Next steps:')
-  console.warn(`  1. ${colors.cyan('git add .')}`)
-  console.warn(`  2. ${colors.cyan('git commit -m "Add Railway deployment"')}`)
-  console.warn(`  3. ${colors.cyan('git push origin main')}`)
-  console.warn(`  4. Go to ${colors.cyan('https://railway.app')} and deploy from GitHub`)
+  console.warn(`  1. ${styleText('cyan', 'git add .')}`)
+  console.warn(`  2. ${styleText('cyan', 'git commit -m "Add Railway deployment"')}`)
+  console.warn(`  3. ${styleText('cyan', 'git push origin main')}`)
+  console.warn(`  4. Go to ${styleText('cyan', 'https://railway.app')} and deploy from GitHub`)
   console.warn('')
   logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Railway environment')

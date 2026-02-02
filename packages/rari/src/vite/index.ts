@@ -1551,7 +1551,7 @@ const ${componentName} = registerClientReference(
         })
 
         const imports = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath)
+          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
           const componentName = `ClientComponent${index}`
 
           try {
@@ -1570,20 +1570,20 @@ const ${componentName} = registerClientReference(
         }).join('\n')
 
         const registrations = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath)
-          const componentName = `ClientComponent${index}`
+          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
           const componentId = path.basename(componentPath, path.extname(componentPath))
+          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
 
           return `
-globalThis['~clientComponents']["${relativePath}"] = {
+globalThis['~clientComponents']["${registrationPath}"] = {
   id: "${componentId}",
-  path: "${relativePath}",
+  path: "${registrationPath}",
   type: "client",
-  component: ${componentName},
+  component: ${`ClientComponent${index}`},
   registered: true
 };
-globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${relativePath}"];
-globalThis['~clientComponentPaths']["${relativePath}"] = "${componentId}";`
+globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${registrationPath}"];
+globalThis['~clientComponentPaths']["${registrationPath}"] = "${componentId}";`
         }).join('\n')
 
         const externalImports = externalClientComponents.map((ext, index) => {

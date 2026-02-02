@@ -563,6 +563,8 @@ function processProps(props, modules, symbols) {
         continue
       if (key === 'children')
         processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
+      else if (key === 'dangerouslySetInnerHTML')
+        processed[key] = props[key]
       else
         processed[key] = props[key]
     }

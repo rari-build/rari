@@ -737,7 +737,7 @@ const createElement = (type, props, ...children) => {
   return { type, props: props || {}, children: children.flat() };
 };
 
-const Fragment = Symbol('react.fragment');
+const Fragment = Symbol.for('react.fragment');
 const Suspense = (props) => props.children;
 const useState = (initial) => [initial, () => {}];
 const useEffect = () => {};

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import colors from '@rari/colors'
+import { styleText } from 'node:util'
 import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRenderDeployment() {
@@ -215,10 +215,10 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
   logSuccess('Render deployment setup complete! 🎉')
   console.warn('')
   logInfo('Next steps:')
-  console.warn(`  1. ${colors.cyan('git add .')}`)
-  console.warn(`  2. ${colors.cyan('git commit -m "Add Render deployment"')}`)
-  console.warn(`  3. ${colors.cyan('git push origin main')}`)
-  console.warn(`  4. Go to ${colors.cyan('https://render.com')} and create a Web Service`)
+  console.warn(`  1. ${styleText('cyan', 'git add .')}`)
+  console.warn(`  2. ${styleText('cyan', 'git commit -m "Add Render deployment"')}`)
+  console.warn(`  3. ${styleText('cyan', 'git push origin main')}`)
+  console.warn(`  4. Go to ${styleText('cyan', 'https://render.com')} and create a Web Service`)
   console.warn('')
   logInfo('Your rari app will automatically:')
   console.warn('  ✅ Detect Render environment')

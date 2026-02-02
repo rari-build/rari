@@ -333,6 +333,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
           }
         }
+        else if (key === 'dangerouslySetInnerHTML') {
+          processed[key] = props[key]
+        }
         else {
           processed[key] = rscToReact(props[key], modules, layoutPath, symbols, rows)
         }
@@ -427,8 +430,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               }
             }
 
-            if (!rootElement && Array.isArray(elementData) && elementData[0] === '$')
-              rootElement = elementData
+            if (!rootElement && Array.isArray(elementData)) {
+              if (elementData[0] === '$') {
+                rootElement = elementData
+              }
+              else if (Array.isArray(elementData[0]) && elementData[0][0] === '$') {
+                rootElement = elementData.length === 1 ? elementData[0] : elementData
+              }
+            }
           }
         }
         catch (e) {
@@ -449,8 +458,29 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
       }
 
-      if (rootElement && Array.isArray(rootElement) && rootElement[0] === '$')
-        rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
+      if (rootElement && Array.isArray(rootElement)) {
+        if (rootElement[0] === '$') {
+          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
+        }
+        else if (Array.isArray(rootElement[0])) {
+          const elements = rootElement
+            .map((el: any) =>
+              Array.isArray(el) && el[0] === '$'
+                ? rscToReact(el, modules, undefined, symbols, rows)
+                : el,
+            )
+            .filter((el: any) => {
+              return (
+                el == null
+                || typeof el === 'string'
+                || typeof el === 'number'
+                || typeof el === 'boolean'
+                || React.isValidElement(el)
+              )
+            })
+          rootElement = elements.length === 1 ? elements[0] : elements
+        }
+      }
 
       return {
         element: rootElement,
@@ -768,6 +798,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const extracted = extractBodyContent(rscPayload.element)
     contentToRender = extracted || rscPayload.element
   }
+
+  if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))
+    contentToRender = contentToRender[0]
 
   if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
     console.error('[rari] AppRouter: Invalid content to render:', contentToRender)
