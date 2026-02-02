@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct ModuleResolver {
@@ -26,10 +26,18 @@ impl ModuleResolver {
     }
 
     pub fn cache_size(&self) -> usize {
+        self.resolved_packages.len() + self.package_type_cache.len()
+    }
+
+    pub fn resolved_packages_count(&self) -> usize {
         self.resolved_packages.len()
     }
 
-    pub fn get_cached_package_type(&self, dir: &PathBuf) -> Option<String> {
+    pub fn package_type_cache_count(&self) -> usize {
+        self.package_type_cache.len()
+    }
+
+    pub fn get_cached_package_type(&self, dir: &Path) -> Option<String> {
         self.package_type_cache.get(dir).map(|entry| entry.value().clone())
     }
 

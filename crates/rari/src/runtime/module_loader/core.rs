@@ -1101,7 +1101,10 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         let clean_referrer = referrer.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer);
 
         let mut current_dir = PathBuf::from(clean_referrer);
-        current_dir.pop();
+
+        if !current_dir.pop() {
+            current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        }
 
         while !current_dir.as_os_str().is_empty() {
             let package_json_path = current_dir.join("package.json");

@@ -132,7 +132,13 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     if (!result.output || result.output.length === 0)
       throw new Error('Failed to build robots module')
 
-    const code = result.output[0].code
+    const entryChunk = result.output.find(item => item.type === 'chunk' && item.isEntry)
+      || result.output.find(item => item.type === 'chunk')
+
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No chunk output found in robots build result')
+
+    const code = entryChunk.code
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     const module = await import(dataUrl)
 
