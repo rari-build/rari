@@ -88,6 +88,8 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
 
   const outputPath = path.join(outDir, 'robots.txt')
 
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+
   if (robotsFile.type === 'static') {
     await fs.copyFile(robotsFile.path, outputPath)
     return true
@@ -120,7 +122,21 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
         load(loadId) {
           if (loadId === virtualModuleId) {
             const ext = path.extname(robotsFile.path).slice(1)
-            const moduleType = ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx' ? ext : 'ts'
+            let moduleType: string
+
+            switch (ext) {
+              case 'ts':
+              case 'tsx':
+              case 'js':
+              case 'jsx':
+              case 'mjs':
+              case 'cjs':
+                moduleType = ext
+                break
+              default:
+                throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs`)
+            }
+
             return { code: sourceCode, moduleType }
           }
 
