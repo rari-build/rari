@@ -1109,12 +1109,13 @@ if (typeof window !== 'undefined') {{
                                     }
                                     acc
                                 });
-                                let value_str = v.as_str().unwrap_or_else(|| {
-                                    if let Some(n) = v.as_f64() {
-                                        return Box::leak(n.to_string().into_boxed_str());
-                                    }
-                                    ""
-                                });
+                                let value_str = if let Some(s) = v.as_str() {
+                                    s.to_string()
+                                } else if let Some(n) = v.as_f64() {
+                                    n.to_string()
+                                } else {
+                                    String::new()
+                                };
                                 format!("{}:{}", kebab_key, value_str)
                             })
                             .collect();
