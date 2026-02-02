@@ -241,6 +241,28 @@ impl RscHtmlRenderer {
         Ok(rows)
     }
 
+    fn looks_like_rsc_payload(value: &JsonValue) -> bool {
+        match value {
+            JsonValue::Array(arr) => arr.first().and_then(|v| v.as_str()) == Some("$"),
+            JsonValue::Object(obj) => {
+                obj.contains_key("Suspense")
+                    || obj.contains_key("Component")
+                    || obj.contains_key("Text")
+                    || obj.contains_key("Reference")
+                    || obj.contains_key("Promise")
+            }
+            _ => false,
+        }
+    }
+
+    fn is_rsc_payload(s: &str) -> bool {
+        if let Ok(value) = serde_json::from_str::<JsonValue>(s) {
+            Self::looks_like_rsc_payload(&value)
+        } else {
+            false
+        }
+    }
+
     fn parse_rsc_line(&self, line: &str) -> Result<RscRow, RariError> {
         let colon_pos = line.find(':').ok_or_else(|| {
             RariError::internal(format!("Invalid RSC line format: missing colon in '{}'", line))
@@ -436,7 +458,13 @@ impl RscHtmlRenderer {
                             })
                         } else if text.starts_with('[') || text.starts_with('{') {
                             match serde_json::from_str::<serde_json::Value>(text) {
-                                Ok(parsed) => parsed,
+                                Ok(parsed) => {
+                                    if Self::looks_like_rsc_payload(&parsed) {
+                                        parsed
+                                    } else {
+                                        serde_json::json!(text)
+                                    }
+                                }
                                 Err(_) => serde_json::json!(text),
                             }
                         } else {
@@ -444,7 +472,9 @@ impl RscHtmlRenderer {
                         }
                     }
                     RscElement::Reference(ref_str) => {
-                        serde_json::json!(ref_str)
+                        serde_json::json!({
+                            "Reference": ref_str
+                        })
                     }
                     RscElement::Suspense { fallback_ref, children_ref, boundary_id, props } => {
                         serde_json::json!({
@@ -864,11 +894,7 @@ if (typeof window !== 'undefined') {{
 
         if json_str.starts_with('"')
             && let Ok(serde_json::Value::String(s)) = serde_json::from_str(json_str)
-            && (s.contains(":[")
-                || s.contains(":\"")
-                || s.contains(":I")
-                || s.contains("[\"$\",\"")
-                || s.contains("&quot;$&quot;"))
+            && RscHtmlRenderer::is_rsc_payload(&s)
         {
             return Ok(Vec::new());
         }
@@ -935,7 +961,13 @@ if (typeof window !== 'undefined') {{
                 if let Some(colon_pos) = s.find(':')
                     && s[..colon_pos].chars().all(|c| c.is_ascii_digit())
                 {
-                    return Ok(String::new());
+                    let after_colon = &s[colon_pos + 1..];
+                    if !after_colon.is_empty()
+                        && (after_colon.starts_with('[') || after_colon.starts_with('{'))
+                        && serde_json::from_str::<serde_json::Value>(after_colon).is_ok()
+                    {
+                        return Ok(String::new());
+                    }
                 }
 
                 return Ok(Self::escape_html(s));
@@ -1111,10 +1143,25 @@ if (typeof window !== 'undefined') {{
                                 });
                                 let value_str = if let Some(s) = v.as_str() {
                                     s.to_string()
-                                } else if let Some(n) = v.as_f64() {
-                                    n.to_string()
+                                } else if let Some(b) = v.as_bool() {
+                                    if b { "true".to_string() } else { "false".to_string() }
+                                } else if let Some(i) = v.as_i64() {
+                                    i.to_string()
+                                } else if let Some(u) = v.as_u64() {
+                                    u.to_string()
+                                } else if let Some(f) = v.as_f64() {
+                                    if f.is_finite() {
+                                        format!("{:.10}", f)
+                                            .trim_end_matches('0')
+                                            .trim_end_matches('.')
+                                            .to_string()
+                                    } else {
+                                        f.to_string()
+                                    }
+                                } else if v.is_object() || v.is_array() {
+                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
                                 } else {
-                                    String::new()
+                                    v.to_string()
                                 };
                                 format!("{}:{}", kebab_key, value_str)
                             })

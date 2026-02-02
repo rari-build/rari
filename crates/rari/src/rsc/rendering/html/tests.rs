@@ -496,7 +496,7 @@ async fn test_render_to_html_complex_structure() {
     renderer.initialize().await.unwrap();
 
     let rsc_wire_format = r#"1:["$","h1",null,{"children":"Title"}]
-0:["$","div",null,{"className":"container","children":"$@1"}]"#;
+2:["$","div",null,{"className":"container","children":"$@1"}]"#;
 
     let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
 
