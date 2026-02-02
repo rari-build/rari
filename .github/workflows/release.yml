@@ -20,7 +20,7 @@ jobs:
             os: ubuntu-22.04
             name: rari-linux-x64
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
+            os: ubuntu-22.04-arm
             name: rari-linux-arm64
           - target: x86_64-apple-darwin
             os: macos-15-intel
@@ -49,7 +49,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev gcc-aarch64-linux-gnu
+          sudo apt-get install -y pkg-config libfontconfig1-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -99,12 +99,6 @@ jobs:
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          # Set up cross-compilation for ARM64 on Linux
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-            export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-          fi
           cargo build --release --target ${{ matrix.target }} --bin rari
 
       - name: Prepare binary (Unix)
@@ -227,7 +221,7 @@ jobs:
               ;;
           esac
 
-          cat > "${PACKAGE_DIR}/README.md" << EOF
+          cat > "${PACKAGE_DIR}/README.md" << 'EOF'
           # ${PACKAGE_NAME}
 
           > Platform-specific binary for rari on ${PLATFORM_NAME}
@@ -242,19 +236,19 @@ jobs:
 
           ## Installation
 
-          This package is automatically installed as an optional dependency when you install the main \`rari\` package:
+          This package is automatically installed as an optional dependency when you install the main `rari` package:
 
-          \`\`\`bash
+          ```bash
           npm install rari
-          \`\`\`
+          ```
 
-          You typically don't need to install this package directly. The main \`rari\` package will automatically download the correct binary for your platform.
+          You typically don't need to install this package directly. The main `rari` package will automatically download the correct binary for your platform.
 
           ## Usage
 
-          This package is used internally by the \`rari\` CLI. After installing \`rari\`, you can use it directly:
+          This package is used internally by the `rari` CLI. After installing `rari`, you can use it directly:
 
-          \`\`\`bash
+          ```bash
           # Development server
           npx rari dev
 
@@ -263,17 +257,17 @@ jobs:
 
           # Start production server
           npx rari start
-          \`\`\`
+          ```
 
           ### Quick Start
 
           Create a new rari application:
 
-          \`\`\`bash
+          ```bash
           npm create rari-app@latest my-app
           cd my-app
           npm run dev
-          \`\`\`
+          ```
 
           Visit [rari.build](https://rari.build) for complete documentation.
 
@@ -288,6 +282,13 @@ jobs:
 
           MIT License - see [LICENSE](https://github.com/rari-build/rari/blob/main/LICENSE) for details.
           EOF
+
+          # Replace variables in the README (using | as delimiter to avoid issues with slashes)
+          sed -i "s|\${PACKAGE_NAME}|${PACKAGE_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${PLATFORM_NAME}|${PLATFORM_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${OS_NAME}|${OS_NAME}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${ARCH}|${ARCH}|g" "${PACKAGE_DIR}/README.md"
+          sed -i "s|\${DESCRIPTION}|${DESCRIPTION}|g" "${PACKAGE_DIR}/README.md"
 
           echo "Generated README for ${PACKAGE_NAME}"
 
