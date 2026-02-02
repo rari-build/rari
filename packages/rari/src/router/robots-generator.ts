@@ -122,16 +122,22 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
         load(loadId) {
           if (loadId === virtualModuleId) {
             const ext = path.extname(robotsFile.path).slice(1)
-            let moduleType: string
+            let moduleType: 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty'
 
             switch (ext) {
               case 'ts':
+                moduleType = 'ts'
+                break
               case 'tsx':
+                moduleType = 'tsx'
+                break
               case 'js':
-              case 'jsx':
               case 'mjs':
               case 'cjs':
-                moduleType = ext
+                moduleType = 'js'
+                break
+              case 'jsx':
+                moduleType = 'jsx'
                 break
               default:
                 throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs`)
