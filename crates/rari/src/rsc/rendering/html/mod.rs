@@ -472,7 +472,7 @@ impl RscHtmlRenderer {
             })
             .collect();
 
-        let rows_array = serde_json::Value::Array(rows_json.clone());
+        let rows_array = serde_json::Value::Array(rows_json);
 
         let result =
             self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
@@ -873,7 +873,9 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        if json_str.starts_with("[[") || json_str.len() > 5000 {
+        const PAYLOAD_SIZE_LIMIT: usize = 5000;
+
+        if json_str.starts_with("[[") || json_str.len() > PAYLOAD_SIZE_LIMIT {
             return Ok(Vec::new());
         }
 

@@ -463,11 +463,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
         }
         else if (Array.isArray(rootElement[0])) {
-          const elements = rootElement.map((el: any) =>
-            Array.isArray(el) && el[0] === '$'
-              ? rscToReact(el, modules, undefined, symbols, rows)
-              : el,
-          )
+          const elements = rootElement
+            .map((el: any) =>
+              Array.isArray(el) && el[0] === '$'
+                ? rscToReact(el, modules, undefined, symbols, rows)
+                : el,
+            )
+            .filter((el: any) => {
+              return (
+                el == null
+                || typeof el === 'string'
+                || typeof el === 'number'
+                || typeof el === 'boolean'
+                || React.isValidElement(el)
+              )
+            })
           rootElement = elements.length === 1 ? elements[0] : elements
         }
       }

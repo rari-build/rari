@@ -350,9 +350,9 @@ globalThis.renderRscToHtml = function (rscRows) {
     const rendered = new Map()
     const moduleMap = new Map()
 
-    let lastRowId = -1
-    for (const row of rscRows)
-      lastRowId = row.id
+    const lastRowId = rscRows.length > 0
+      ? Math.max(...rscRows.map(r => r.id))
+      : -1
 
     for (const row of rscRows) {
       if (row.data && row.data.Text) {

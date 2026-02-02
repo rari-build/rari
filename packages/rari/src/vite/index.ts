@@ -1551,7 +1551,7 @@ const ${componentName} = registerClientReference(
         })
 
         const imports = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath)
+          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
           const componentName = `ClientComponent${index}`
 
           try {
@@ -1570,9 +1570,9 @@ const ${componentName} = registerClientReference(
         }).join('\n')
 
         const registrations = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath)
+          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
           const componentId = path.basename(componentPath, path.extname(componentPath))
-          const registrationPath = relativePath.startsWith('..') ? componentPath : relativePath
+          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
 
           return `
 globalThis['~clientComponents']["${registrationPath}"] = {
