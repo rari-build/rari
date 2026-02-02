@@ -42,7 +42,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Clone, Copy, Debug)]
 struct NotStreamingResponse;
@@ -309,7 +309,7 @@ impl Server {
                 .route("/src/{*path}", any(vite_src_proxy));
 
             if let Err(e) = check_vite_server_health().await {
-                error!("Vite server health check failed: {}", e);
+                debug!("Vite server not yet available: {}", e);
             }
         }
 

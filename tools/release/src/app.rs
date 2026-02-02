@@ -363,27 +363,24 @@ impl App {
                     self.publish_progress = 0.4;
                 }
                 PublishStep::GeneratingChangelog => {
-                    let is_binary_group = matches!(unit.name(), "rari-binaries");
+                    let unit_name = unit.name();
 
-                    if is_binary_group {
-                        if self.dry_run {
-                            self.status_messages
-                                .push("[DRY RUN] Skipping changelog for binaries...".to_string());
-                        } else {
-                            self.status_messages
-                                .push("Skipping changelog for binaries...".to_string());
-                        }
-                    } else {
+                    if unit_name == "rari" {
                         if self.dry_run {
                             self.status_messages
                                 .push("[DRY RUN] Would generate changelog...".to_string());
                         } else {
                             self.status_messages.push("Generating changelog...".to_string());
                             let project_root = PathBuf::from(".");
-                            let tag = format!("v{}", version);
+                            let tag = format!("{}@{}", unit_name, version);
                             npm::generate_changelog(&tag, &project_root).await?;
                         }
                         self.status_messages.push("* Generated changelog".to_string());
+                    } else if self.dry_run {
+                        self.status_messages
+                            .push("[DRY RUN] Skipping changelog generation...".to_string());
+                    } else {
+                        self.status_messages.push("Skipping changelog generation...".to_string());
                     }
 
                     self.publish_step = PublishStep::Committing;
@@ -391,7 +388,7 @@ impl App {
                 }
                 PublishStep::Committing => {
                     let message = format!("release: {}@{}", unit.name(), version);
-                    let tag = if matches!(unit.name(), "rari-binaries") {
+                    let tag = if unit.name() == "rari-binaries" {
                         format!("v{}", version)
                     } else {
                         format!("{}@{}", unit.name(), version)
@@ -533,11 +530,7 @@ impl App {
                     self.publish_step = PublishStep::Done;
                     self.publish_progress = 1.0;
 
-                    let tag = if matches!(unit.name(), "rari-binaries") {
-                        format!("v{}", version)
-                    } else {
-                        format!("{}@{}", unit.name(), version)
-                    };
+                    let tag = format!("{}@{}", unit.name(), version);
                     self.released_packages.push(ReleasedPackage {
                         name: unit.name().to_string(),
                         version: version.clone(),
@@ -643,9 +636,14 @@ impl App {
 }
 
 fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> String {
-    let title_text = format!("{}@{}", pkg.name, pkg.version);
+    let (title_text, tag_text) = if pkg.name == "rari-binaries" {
+        (format!("v{}", pkg.version), format!("v{}", pkg.version))
+    } else {
+        (format!("{}@{}", pkg.name, pkg.version), pkg.tag.clone())
+    };
+
     let title = urlencoding::encode(&title_text);
-    let tag = urlencoding::encode(&pkg.tag);
+    let tag = urlencoding::encode(&tag_text);
 
     let mut body = "## What's Changed\n\n".to_string();
 
@@ -659,7 +657,7 @@ fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> 
 
     body.push_str(&format!(
         "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-        owner, repo, pkg.tag, pkg.tag
+        owner, repo, tag_text, tag_text
     ));
 
     let body_encoded = urlencoding::encode(&body);

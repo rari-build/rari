@@ -1,4 +1,5 @@
 import type { Sitemap, SitemapImage, SitemapVideo } from '../types/metadata-route'
+import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
@@ -179,105 +180,127 @@ export async function findSitemapFiles(
   return sitemapFiles
 }
 
-async function executeSitemapModule(
-  modulePath: string,
-  id?: string,
-): Promise<Sitemap> {
-  const module = await import(`file://${modulePath}`)
-
-  if (typeof module.default === 'function') {
-    const result = id !== undefined
-      ? await module.default({ id: Promise.resolve(id) })
-      : await module.default()
-    return result
-  }
-
-  return module.default
-}
-
-async function buildSitemapModule(
-  sitemapPath: string,
-  outDir: string,
-  id?: string,
-): Promise<string> {
-  const esbuild = await import('esbuild')
-
-  const result = await esbuild.build({
-    entryPoints: [sitemapPath],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    write: false,
-    external: ['rari'],
-    target: 'node22',
-  })
-
-  if (!result.outputFiles || result.outputFiles.length === 0)
-    throw new Error('Failed to build sitemap module')
-
-  const code = result.outputFiles[0].text
-  const tempFileName = id !== undefined ? `_sitemap_${id}_temp.mjs` : '_sitemap_temp.mjs'
-  const tempFile = path.join(outDir, tempFileName)
-  await fs.writeFile(tempFile, code)
-
-  return tempFile
-}
-
 export async function generateSitemapFiles(options: SitemapGeneratorOptions): Promise<boolean> {
-  const { appDir, outDir, extensions } = options
+  const { appDir, extensions } = options
   const sitemapFiles = await findSitemapFiles(appDir, extensions)
 
   if (sitemapFiles.length === 0)
     return false
 
+  await fs.mkdir(options.outDir, { recursive: true })
+  const sitemapDir = path.join(options.outDir, 'sitemap')
+  await fs.mkdir(sitemapDir, { recursive: true })
+
   const sitemapFile = sitemapFiles[0]
 
   if (sitemapFile.type === 'static') {
-    const outputPath = path.join(outDir, 'sitemap.xml')
+    const outputPath = path.join(options.outDir, 'sitemap.xml')
     await fs.copyFile(sitemapFile.path, outputPath)
     return true
   }
 
   try {
-    const tempFile = await buildSitemapModule(sitemapFile.path, outDir)
+    const { build } = await import('rolldown')
+    const sourceCode = await fs.readFile(sitemapFile.path, 'utf-8')
+    const virtualModuleId = `\0virtual:sitemap`
 
-    try {
-      const module = await import(`file://${tempFile}`)
+    const result = await build({
+      input: virtualModuleId,
+      external: ['rari'],
+      platform: 'node',
+      write: false,
+      output: { format: 'esm', codeSplitting: false },
+      plugins: [{
+        name: 'virtual-sitemap',
+        resolveId(resolveId) {
+          if (resolveId === virtualModuleId)
+            return resolveId
+          if (resolveId.startsWith('.'))
+            return path.resolve(path.dirname(sitemapFile.path), resolveId)
 
-      if (typeof module.generateSitemaps === 'function') {
-        const sitemapIds = await module.generateSitemaps()
+          return null
+        },
+        load(loadId) {
+          if (loadId === virtualModuleId) {
+            const ext = path.extname(sitemapFile.path).slice(1)
 
-        for (const { id } of sitemapIds) {
-          const sitemapData = await executeSitemapModule(tempFile, String(id))
-          const content = generateSitemapXml(sitemapData)
-          const outputPath = path.join(outDir, `sitemap/${id}.xml`)
+            let moduleType: 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty'
 
-          await fs.mkdir(path.dirname(outputPath), { recursive: true })
-          await fs.writeFile(outputPath, content)
-        }
-      }
-      else {
-        const sitemapData = await executeSitemapModule(tempFile)
+            switch (ext) {
+              case 'ts':
+                moduleType = 'ts'
+                break
+              case 'tsx':
+                moduleType = 'tsx'
+                break
+              case 'js':
+              case 'mjs':
+              case 'cjs':
+                moduleType = 'js'
+                break
+              case 'jsx':
+                moduleType = 'jsx'
+                break
+              case 'json':
+                moduleType = 'json'
+                break
+              default:
+                throw new Error(
+                  `Unsupported sitemap file extension: ".${ext}". `
+                  + `Allowed extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs, .json`,
+                )
+            }
+
+            return { code: sourceCode, moduleType }
+          }
+
+          return null
+        },
+      }],
+    })
+
+    if (!result.output || result.output.length === 0)
+      throw new Error('Failed to build sitemap module')
+
+    const entryChunk = result.output.find(item => item.type === 'chunk' && item.isEntry)
+      || result.output.find(item => item.type === 'chunk')
+
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No chunk output found in sitemap build result')
+
+    const code = entryChunk.code
+    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    const module = await import(dataUrl)
+
+    if (typeof module.generateSitemaps === 'function') {
+      const sitemapIds = await module.generateSitemaps()
+
+      for (const { id } of sitemapIds) {
+        let sitemapData: Sitemap
+        if (typeof module.default === 'function')
+          sitemapData = await module.default({ id: String(id) })
+        else
+          sitemapData = module.default
+
         const content = generateSitemapXml(sitemapData)
-        const outputPath = path.join(outDir, 'sitemap.xml')
+        const outputPath = path.join(options.outDir, `sitemap/${id}.xml`)
+
         await fs.writeFile(outputPath, content)
       }
-
-      await fs.unlink(tempFile)
-      return true
     }
-    catch (execError) {
-      console.error('[rari] Failed to execute sitemap file:', execError)
-      try {
-        await fs.unlink(tempFile)
-      }
-      catch {}
-
-      return false
+    else {
+      const sitemapData = typeof module.default === 'function'
+        ? await module.default()
+        : module.default
+      const content = generateSitemapXml(sitemapData)
+      const outputPath = path.join(options.outDir, 'sitemap.xml')
+      await fs.writeFile(outputPath, content)
     }
+
+    return true
   }
-  catch (buildError) {
-    console.error('[rari] Failed to build sitemap file:', buildError)
+  catch (error) {
+    console.error('[rari] Failed to build/execute sitemap file:', error)
     return false
   }
 }

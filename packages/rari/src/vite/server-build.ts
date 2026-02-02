@@ -3,42 +3,7 @@ import type { ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBl
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { build } from 'esbuild'
-
-function isNodeBuiltin(moduleName: string): boolean {
-  const nodeBuiltins = [
-    'fs',
-    'path',
-    'os',
-    'crypto',
-    'util',
-    'stream',
-    'events',
-    'process',
-    'buffer',
-    'url',
-    'querystring',
-    'zlib',
-    'http',
-    'https',
-    'net',
-    'tls',
-    'child_process',
-    'cluster',
-    'worker_threads',
-    'assert',
-    'dns',
-    'readline',
-    'repl',
-    'string_decoder',
-    'timers',
-    'tty',
-    'v8',
-    'vm',
-    'perf_hooks',
-  ]
-  return nodeBuiltins.includes(moduleName)
-}
+import { build } from 'rolldown'
 
 interface ServerComponentManifest {
   components: Record<
@@ -358,11 +323,11 @@ export class ServerComponentBuilder {
   async getTransformedComponentsForDevelopment(): Promise<Array<{ id: string, code: string }>> {
     const components: Array<{ id: string, code: string }> = []
 
-    for (const [filePath, component] of this.serverComponents) {
+    for (const [filePath] of this.serverComponents) {
       const relativePath = path.relative(this.projectRoot, filePath)
       const componentId = this.getComponentId(relativePath)
 
-      const transformedCode = await this.buildComponentCodeOnly(filePath, componentId, component)
+      const transformedCode = await this.buildComponentCodeOnly(filePath)
 
       components.push({
         id: componentId,
@@ -370,11 +335,11 @@ export class ServerComponentBuilder {
       })
     }
 
-    for (const [filePath, action] of this.serverActions) {
+    for (const [filePath] of this.serverActions) {
       const relativePath = path.relative(this.projectRoot, filePath)
       const actionId = this.getComponentId(relativePath)
 
-      const transformedCode = await this.buildComponentCodeOnly(filePath, actionId, action)
+      const transformedCode = await this.buildComponentCodeOnly(filePath)
 
       components.push({
         id: actionId,
@@ -530,10 +495,326 @@ const ${importName} = (props) => {
     return inputPath.includes('/app/') || inputPath.includes('\\app\\')
   }
 
+  private createBuildPlugins(virtualModuleId: string, transformedCode: string, loader: 'tsx' | 'jsx' | 'ts' | 'js', inputPath: string, isPage = false) {
+    const resolveDir = path.dirname(inputPath)
+    const isProxyFile = path.basename(inputPath).match(/^proxy\.(?:tsx?|jsx?|mts|mjs)$/)
+    const self = this
+
+    const clientComponentRefs = new Map<string, string>()
+    const serverActionRefs = new Map<string, string>()
+
+    return [
+      {
+        name: 'virtual-module',
+        resolveId(id: string, importer: string | undefined) {
+          if (id === virtualModuleId)
+            return id
+
+          if (importer === virtualModuleId && (id.startsWith('./') || id.startsWith('../'))) {
+            const resolved = path.resolve(resolveDir, id)
+            const extensions = ['.ts', '.tsx', '.js', '.jsx', '']
+            for (const ext of extensions) {
+              const pathWithExt = resolved + ext
+              if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
+                return pathWithExt
+            }
+            for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+              const indexPath = path.join(resolved, `index${ext}`)
+              if (fs.existsSync(indexPath))
+                return indexPath
+            }
+
+            return resolved
+          }
+
+          return null
+        },
+        load(id: string) {
+          if (id === virtualModuleId) {
+            return {
+              code: transformedCode,
+              moduleType: loader,
+            }
+          }
+
+          return null
+        },
+      },
+      {
+        name: 'resolve-client-server-boundaries',
+        resolveId: (source: string, importer: string | undefined) => {
+          if (!importer || importer.includes('node_modules') || importer.includes('/packages/rari/dist'))
+            return null
+
+          if (source.startsWith('node:') || self.isNodeBuiltin(source)
+            || source === 'react' || source === 'react-dom'
+            || source === 'react/jsx-runtime' || source === 'react/jsx-dev-runtime') {
+            return null
+          }
+
+          let resolvedPath: string | null = null
+          const aliases = self.options.alias || {}
+
+          for (const [alias, replacement] of Object.entries(aliases)) {
+            if (source.startsWith(`${alias}/`) || source === alias) {
+              const relativePath = source.slice(alias.length)
+              const newPath = path.join(replacement, relativePath)
+              resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(self.projectRoot, newPath)
+              break
+            }
+          }
+
+          if (!resolvedPath && (source.startsWith('./') || source.startsWith('../'))) {
+            const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
+            resolvedPath = path.resolve(importerDir, source)
+          }
+
+          if (resolvedPath) {
+            const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+            for (const ext of extensions) {
+              const pathWithExt = resolvedPath + ext
+              if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                if (self.isClientComponent(pathWithExt)) {
+                  const componentId = path.relative(self.projectRoot, pathWithExt)
+                  clientComponentRefs.set(pathWithExt, componentId)
+                  return { id: `\0client-ref:${pathWithExt}` }
+                }
+
+                try {
+                  const content = fs.readFileSync(pathWithExt, 'utf-8')
+                  const lines = content.split('\n')
+                  for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
+                      continue
+                    if (trimmed === '\'use server\'' || trimmed === '"use server"'
+                      || trimmed === '\'use server\';' || trimmed === '"use server";') {
+                      const actionId = path.relative(self.projectRoot, pathWithExt)
+                      serverActionRefs.set(pathWithExt, actionId)
+                      return { id: `\0server-action:${pathWithExt}` }
+                    }
+                    if (trimmed)
+                      break
+                  }
+                }
+                catch (error) {
+                  console.error(`[rari] Failed to read file for server action detection: ${pathWithExt}`, error)
+                }
+                break
+              }
+            }
+          }
+
+          return null
+        },
+        load(id: string) {
+          if (id.startsWith('\0client-ref:')) {
+            const filePath = id.slice('\0client-ref:'.length)
+            const componentId = clientComponentRefs.get(filePath) || path.relative(self.projectRoot, filePath)
+
+            return {
+              code: `
+function registerClientReference(clientReference, id, exportName) {
+  const key = id + '#' + exportName;
+  const clientProxy = {};
+  Object.defineProperty(clientProxy, '$$typeof', {
+    value: Symbol.for('react.client.reference'),
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$$id', {
+    value: key,
+    enumerable: false
+  });
+  Object.defineProperty(clientProxy, '$$async', {
+    value: false,
+    enumerable: false
+  });
+  try {
+    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
+        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
+      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
+    }
+  } catch (error) {
+    console.error('[rari] Build: Failed to register client reference:', error);
+  }
+  return clientProxy;
+}
+
+export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
+`,
+              moduleType: 'js',
+            }
+          }
+
+          if (id.startsWith('\0server-action:')) {
+            const filePath = id.slice('\0server-action:'.length)
+
+            return {
+              code: `export * from ${JSON.stringify(filePath)};`,
+              moduleType: 'js',
+            }
+          }
+
+          return null
+        },
+      },
+      {
+        name: 'use-transformed-server-components',
+        resolveId: (source: string, importer: string | undefined) => {
+          if (!isPage)
+            return null
+
+          if (source.startsWith('file://')) {
+            const filePath = source.replace(/^file:\/\//, '')
+            if (fs.existsSync(filePath))
+              return { id: `\0transformed:${filePath}` }
+
+            return null
+          }
+
+          let resolvedPath: string | null = null
+          const aliases = self.options.alias || {}
+
+          for (const [alias, replacement] of Object.entries(aliases)) {
+            if (source.startsWith(`${alias}/`) || source === alias) {
+              const relativePath = source.slice(alias.length)
+              const newPath = path.join(replacement, relativePath)
+              resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(self.projectRoot, newPath)
+              break
+            }
+          }
+
+          const importerDir = importer?.startsWith('\0') ? resolveDir : (importer ? path.dirname(importer) : resolveDir)
+          if (!resolvedPath && (source.startsWith('./') || source.startsWith('../')))
+            resolvedPath = path.resolve(importerDir, source)
+
+          if (!resolvedPath)
+            return null
+
+          if (importerDir.includes('node_modules'))
+            return null
+
+          const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+          for (const ext of extensions) {
+            const pathWithExt = resolvedPath + ext
+            if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+              if (self.isClientComponent(pathWithExt))
+                return null
+
+              const srcDir = path.join(self.projectRoot, 'src')
+              if (!pathWithExt.startsWith(srcDir))
+                return null
+
+              const relativePath = path.relative(srcDir, pathWithExt)
+              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
+
+              if (fs.existsSync(distPath))
+                return { id: `\0transformed:${distPath}` }
+
+              break
+            }
+          }
+
+          return null
+        },
+        load(id: string) {
+          if (id.startsWith('\0transformed:')) {
+            const filePath = id.slice('\0transformed:'.length)
+            const contents = fs.readFileSync(filePath, 'utf-8')
+            return {
+              code: contents,
+              moduleType: 'js',
+            }
+          }
+
+          return null
+        },
+      },
+      {
+        name: 'resolve-aliases',
+        resolveId: (source: string) => {
+          if (source.startsWith('\0'))
+            return null
+
+          const aliases = self.options.alias || {}
+          for (const [alias, replacement] of Object.entries(aliases)) {
+            if (source.startsWith(`${alias}/`) || source === alias) {
+              const relativePath = source.slice(alias.length)
+              const resolvedPath = path.join(replacement, relativePath)
+              const absolutePath = path.isAbsolute(resolvedPath)
+                ? resolvedPath
+                : path.resolve(self.projectRoot, resolvedPath)
+
+              const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+              for (const ext of extensions) {
+                const pathWithExt = absolutePath + ext
+                if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile())
+                  return pathWithExt
+              }
+
+              for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+                const indexPath = path.join(absolutePath, `index${ext}`)
+                if (fs.existsSync(indexPath))
+                  return indexPath
+              }
+
+              return absolutePath
+            }
+          }
+
+          return null
+        },
+      },
+      {
+        name: 'resolve-rari-proxy',
+        resolveId: (source: string) => {
+          if (isProxyFile && source === 'rari') {
+            const rariResponsePath = path.resolve(self.projectRoot, 'node_modules/rari/dist/proxy/RariResponse.mjs')
+            if (fs.existsSync(rariResponsePath))
+              return rariResponsePath
+
+            const rariResponseSrcPath = path.resolve(self.projectRoot, 'node_modules/rari/src/proxy/RariResponse.ts')
+            if (fs.existsSync(rariResponseSrcPath))
+              return rariResponseSrcPath
+          }
+
+          return null
+        },
+      },
+      {
+        name: 'externalize-deps',
+        resolveId: (source: string) => {
+          if (source.startsWith('\0'))
+            return null
+
+          if (source.startsWith('node:') || self.isNodeBuiltin(source))
+            return { id: source, external: true }
+
+          const externalPackages = [
+            'react',
+            'react-dom',
+            'react/jsx-runtime',
+            'react/jsx-dev-runtime',
+            'rari/image',
+          ]
+
+          if (externalPackages.includes(source))
+            return { id: source, external: true }
+
+          if (source === 'rari' || source === 'rari/client')
+            return null
+
+          if (!source.startsWith('.') && !source.startsWith('/'))
+            return { id: source, external: true }
+
+          return null
+        },
+      },
+    ]
+  }
+
   private async buildComponentCodeOnly(
     inputPath: string,
-    _componentId: string,
-    _component: { dependencies: string[], hasNodeImports: boolean },
   ): Promise<string> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
     const clientTransformedCode = this.transformClientImports(
@@ -546,7 +827,7 @@ const ${importName} = (props) => {
       : clientTransformedCode
 
     const ext = path.extname(inputPath)
-    let loader: string
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
     if (ext === '.tsx')
       loader = 'tsx'
     else if (ext === '.ts')
@@ -556,208 +837,48 @@ const ${importName} = (props) => {
     else
       loader = 'js'
 
-    try {
-      const result = await build({
-        stdin: {
-          contents: transformedCode,
-          resolveDir: path.dirname(inputPath),
-          sourcefile: inputPath,
-          loader: loader as any,
-        },
-        bundle: true,
-        platform: 'node',
-        target: 'es2022',
+    const virtualModuleId = `\0virtual:${inputPath}`
+
+    const result = await build({
+      input: virtualModuleId,
+      platform: 'node',
+      write: false,
+      output: {
         format: 'esm',
+        minify: this.options.minify,
+      },
+      moduleTypes: {
+        [`.${loader}`]: loader,
+      },
+      resolve: {
         mainFields: ['module', 'main'],
-        conditions: ['import', 'module', 'default'],
-        jsx: 'transform',
-        jsxFactory: 'React.createElement',
-        jsxFragment: 'React.Fragment',
+        conditionNames: ['import', 'module', 'default'],
+        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+      },
+      transform: {
+        jsx: 'react',
         define: {
           'global': 'globalThis',
-          'process.env.NODE_ENV': '"production"',
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
           ...this.options.define,
         },
-        loader: {
-          '.ts': 'ts',
-          '.tsx': 'tsx',
-          '.js': 'js',
-          '.jsx': 'jsx',
-        },
-        resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
-        minify: false,
-        minifyWhitespace: true,
-        minifyIdentifiers: true,
-        minifySyntax: true,
-        sourcemap: false,
-        metafile: false,
-        write: false,
-        plugins: [
-          {
-            name: 'resolve-aliases',
-            setup: (build) => {
-              const self = this
-              const aliases = this.options.alias || {}
-              for (const [alias, replacement] of Object.entries(aliases)) {
-                const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                const filter = new RegExp(`^${escapedAlias}(/|$)`)
-                build.onResolve({ filter }, (args) => {
-                  const relativePath = args.path.slice(alias.length)
-                  const newPath = path.join(replacement, relativePath)
-                  const resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
+      },
+      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage),
+    })
 
-                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
-                  for (const ext of possibleExtensions) {
-                    const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (self.isClientComponent(pathWithExt))
-                        return { path: args.path, external: true }
+    if (!result.output || result.output.length === 0)
+      throw new Error('No output generated from Rolldown')
 
-                      try {
-                        const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        if (self.isServerAction(content))
-                          return { path: args.path, external: true }
-                      }
-                      catch {}
+    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No entry chunk found in Rolldown output')
 
-                      return { path: pathWithExt }
-                    }
-                  }
+    let code = entryChunk.code
 
-                  return { path: resolvedPath }
-                })
-              }
-            },
-          },
-          {
-            name: 'replace-react-imports',
-            setup(build) {
-              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
-                const fs = await import('node:fs/promises')
-                let contents = await fs.readFile(args.path, 'utf-8')
-                contents = contents.replace(
-                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
-                  '// React is available as globalThis.React',
-                )
-                contents = contents.replace(/React2/g, 'React')
-                return { contents, loader: 'js' }
-              })
-            },
-          },
-          {
-            name: 'hmr-auto-external',
-            setup: (build) => {
-              const self = this
-              build.onResolve({ filter: /.*/ }, async (args) => {
-                if (args.path.includes('../components/') || args.path.includes('./components/')) {
-                  const resolvedPath = path.resolve(args.resolveDir, args.path)
-                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
+    const timestamp = new Date().toISOString()
+    code = `// Built: ${timestamp}\n${code}`
 
-                  for (const ext of possibleExtensions) {
-                    const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (self.isClientComponent(pathWithExt))
-                        return { path: args.path, namespace: 'component-stub' }
-                    }
-                  }
-                }
-
-                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime')
-                  return { path: args.path, external: true }
-
-                if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
-                  return { path: args.path, external: true }
-
-                if (args.path === 'rari/image' || args.path.startsWith('rari/image/'))
-                  return { path: args.path, external: true }
-
-                if (args.path === 'rari/client')
-                  return null
-
-                if (args.path.startsWith('@/actions/') || args.path.includes('/actions/')) {
-                  const resolvedPath = path.resolve(args.resolveDir, args.path)
-                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
-
-                  for (const ext of possibleExtensions) {
-                    const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt)) {
-                      try {
-                        const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        if (content.includes('\'use server\'') || content.includes('"use server"'))
-                          return { path: args.path, external: true }
-                      }
-                      catch {}
-                      break
-                    }
-                  }
-                }
-
-                return null
-              })
-
-              build.onLoad({ filter: /.*/, namespace: 'component-stub' }, async (args) => {
-                const match = args.path.match(/\/components\/(\w+)/)
-                const componentName = match ? match[1] : 'Unknown'
-                return {
-                  contents: `// Component stub for ${componentName} - replaced by global reference`,
-                  loader: 'js',
-                }
-              })
-            },
-          },
-          {
-            name: 'resolve-server-functions',
-            setup(build) {
-              build.onResolve(
-                { filter: /^\.\.?\/.*(functions|actions)/ },
-                async (args) => {
-                  const resolvedPath = path.resolve(
-                    path.dirname(args.importer),
-                    args.path,
-                  )
-
-                  const possibleExtensions = [
-                    '.ts',
-                    '.js',
-                    '.tsx',
-                    '.jsx',
-                    '/index.ts',
-                    '/index.js',
-                  ]
-                  for (const ext of possibleExtensions) {
-                    const fullPath = resolvedPath + ext
-                    if (fs.existsSync(fullPath))
-                      return { path: fullPath }
-                  }
-
-                  return null
-                },
-              )
-            },
-          },
-        ],
-      })
-
-      if (result.outputFiles && result.outputFiles.length > 0) {
-        const outputFile = result.outputFiles[0]
-        const finalTransformedCode = outputFile.text
-
-        return finalTransformedCode
-      }
-
-      if (result.errors.length > 0) {
-        console.error('[rari] Build: ESBuild errors:', result.errors)
-        throw new Error(
-          `ESBuild compilation failed with ${result.errors.length} errors`,
-        )
-      }
-
-      throw new Error('No output generated from ESBuild')
-    }
-    catch (error) {
-      console.error(`[rari] Build: ESBuild failed for ${inputPath}:`, error)
-      throw error
-    }
+    return code
   }
 
   async buildServerComponents(): Promise<ServerComponentManifest> {
@@ -801,7 +922,7 @@ const ${importName} = (props) => {
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath, component)
+      await this.buildSingleComponent(filePath, fullBundlePath)
 
       const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
 
@@ -828,7 +949,7 @@ const ${importName} = (props) => {
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath, component)
+      await this.buildSingleComponent(filePath, fullBundlePath)
 
       const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
 
@@ -852,7 +973,7 @@ const ${importName} = (props) => {
       const bundleDir = path.dirname(fullBundlePath)
       await fs.promises.mkdir(bundleDir, { recursive: true })
 
-      await this.buildSingleComponent(filePath, fullBundlePath, action)
+      await this.buildSingleComponent(filePath, fullBundlePath)
 
       const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
 
@@ -914,7 +1035,6 @@ const ${importName} = (props) => {
   private async buildSingleComponent(
     inputPath: string,
     outputPath: string,
-    _component: { dependencies: string[], hasNodeImports: boolean },
     returnCode = false,
   ): Promise<string | void> {
     const originalCode = await fs.promises.readFile(inputPath, 'utf-8')
@@ -928,7 +1048,7 @@ const ${importName} = (props) => {
       : clientTransformedCode
 
     const ext = path.extname(inputPath)
-    let loader: string
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
     if (ext === '.tsx')
       loader = 'tsx'
     else if (ext === '.ts')
@@ -938,453 +1058,55 @@ const ${importName} = (props) => {
     else
       loader = 'js'
 
-    try {
-      const result = await build({
-        stdin: {
-          contents: transformedCode,
-          resolveDir: path.dirname(inputPath),
-          sourcefile: inputPath,
-          loader: loader as any,
-        },
-        bundle: true,
-        platform: 'node',
-        target: 'es2022',
+    const virtualModuleId = `\0virtual:${inputPath}`
+
+    const result = await build({
+      input: virtualModuleId,
+      platform: 'node',
+      write: false,
+      output: {
         format: 'esm',
-        outfile: outputPath,
+        minify: this.options.minify,
+      },
+      moduleTypes: {
+        [`.${loader}`]: loader,
+      },
+      resolve: {
         mainFields: ['module', 'main'],
-        conditions: ['import', 'module', 'default'],
-        jsx: 'transform',
-        jsxFactory: 'React.createElement',
-        jsxFragment: 'React.Fragment',
+        conditionNames: ['import', 'module', 'default'],
+        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+      },
+      transform: {
+        jsx: 'react',
         define: {
           'global': 'globalThis',
-          'process.env.NODE_ENV': '"production"',
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
           ...this.options.define,
         },
-        loader: {
-          '.ts': 'ts',
-          '.tsx': 'tsx',
-          '.js': 'js',
-          '.jsx': 'jsx',
-        },
-        resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
-        minify: this.options.minify,
-        minifyWhitespace: this.options.minify,
-        minifyIdentifiers: this.options.minify,
-        minifySyntax: this.options.minify,
-        sourcemap: false,
-        metafile: false,
-        write: false,
-        plugins: [
-          {
-            name: 'resolve-client-server-boundaries',
-            setup: (build) => {
-              build.onResolve({ filter: /.*/ }, async (args) => {
-                if (args.namespace !== 'file' && args.namespace !== '')
-                  return null
+      },
+      plugins: this.createBuildPlugins(virtualModuleId, transformedCode, loader, inputPath, isPage),
+    })
 
-                if (args.path.startsWith('node:') || isNodeBuiltin(args.path)
-                  || args.path === 'react' || args.path === 'react-dom'
-                  || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
-                  return null
-                }
+    if (!result.output || result.output.length === 0)
+      throw new Error('No output generated from Rolldown')
 
-                if (args.resolveDir.includes('node_modules') || args.resolveDir.includes('/packages/rari/dist'))
-                  return null
+    const entryChunk = result.output.find(chunk => chunk.type === 'chunk' && chunk.isEntry)
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No entry chunk found in Rolldown output')
 
-                let resolvedPath: string | null = null
+    let code = entryChunk.code
 
-                const aliases = this.options.alias || {}
-                for (const [alias, replacement] of Object.entries(aliases)) {
-                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
-                    const relativePath = args.path.slice(alias.length)
-                    const newPath = path.join(replacement, relativePath)
-                    resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
-                    break
-                  }
-                }
+    const timestamp = new Date().toISOString()
+    code = `// Built: ${timestamp}\n${code}`
 
-                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../')))
-                  resolvedPath = path.resolve(args.resolveDir, args.path)
+    await fs.promises.writeFile(outputPath, code, 'utf-8')
 
-                if (resolvedPath) {
-                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
-                  for (const ext of possibleExtensions) {
-                    const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (this.isClientComponent(pathWithExt)) {
-                        return {
-                          path: pathWithExt,
-                          namespace: 'client-component-reference',
-                        }
-                      }
+    const fd = await fs.promises.open(outputPath, 'r+')
+    await fd.sync()
+    await fd.close()
 
-                      try {
-                        const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        const lines = content.split('\n')
-
-                        for (const line of lines) {
-                          const trimmed = line.trim()
-                          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-                            continue
-                          if (trimmed === '\'use server\'' || trimmed === '"use server"'
-                            || trimmed === '\'use server\';' || trimmed === '"use server";') {
-                            return {
-                              path: pathWithExt,
-                              namespace: 'server-action-reference',
-                            }
-                          }
-                          if (trimmed)
-                            break
-                        }
-                      }
-                      catch {}
-                      break
-                    }
-                  }
-                }
-
-                return null
-              })
-
-              build.onLoad({ filter: /.*/, namespace: 'server-action-reference' }, (args) => {
-                const componentId = path.relative(this.projectRoot, args.path)
-                const contents = `export * from "./${componentId}";`
-
-                return {
-                  contents,
-                  loader: 'js',
-                  resolveDir: this.projectRoot,
-                }
-              })
-
-              build.onLoad({ filter: /.*/, namespace: 'client-component-reference' }, (args) => {
-                const componentId = path.relative(this.projectRoot, args.path)
-
-                const contents = `
-function registerClientReference(clientReference, id, exportName) {
-  const key = id + '#' + exportName;
-  const clientProxy = {};
-  Object.defineProperty(clientProxy, '$$typeof', {
-    value: Symbol.for('react.client.reference'),
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$id', {
-    value: key,
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$async', {
-    value: false,
-    enumerable: false
-  });
-  try {
-    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
-        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
-      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
-    }
-  } catch (error) {
-    console.error('[rari] Build: Failed to register client reference:', error);
-  }
-  return clientProxy;
-}
-
-export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
-`
-
-                return {
-                  contents,
-                  loader: 'js',
-                }
-              })
-            },
-          },
-          {
-            name: 'use-transformed-server-components',
-            setup: (build) => {
-              if (!isPage)
-                return
-
-              const self = this
-              const aliases = self.options.alias || {}
-
-              build.onResolve({ filter: /^file:\/\// }, (args) => {
-                const filePath = args.path.replace(/^file:\/\//, '')
-                if (fs.existsSync(filePath)) {
-                  return {
-                    path: filePath,
-                    namespace: 'transformed-server-component',
-                  }
-                }
-
-                return null
-              })
-
-              build.onResolve({ filter: /.*/ }, (args) => {
-                let resolvedPath: string | null = null
-
-                for (const [alias, replacement] of Object.entries(aliases)) {
-                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
-                    const relativePath = args.path.slice(alias.length)
-                    const newPath = path.join(replacement, relativePath)
-                    resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
-                    break
-                  }
-                }
-
-                if (!resolvedPath && (args.path.startsWith('./') || args.path.startsWith('../')))
-                  resolvedPath = path.resolve(args.resolveDir, args.path)
-
-                if (!resolvedPath)
-                  return null
-
-                if (args.resolveDir.includes('node_modules'))
-                  return null
-
-                const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
-                for (const ext of possibleExtensions) {
-                  const pathWithExt = resolvedPath + ext
-                  if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                    if (self.isClientComponent(pathWithExt))
-                      return null
-
-                    const srcDir = path.join(self.projectRoot, 'src')
-                    if (!pathWithExt.startsWith(srcDir))
-                      return null
-
-                    const relativePath = path.relative(srcDir, pathWithExt)
-                    const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
-
-                    if (fs.existsSync(distPath)) {
-                      return {
-                        path: distPath,
-                        namespace: 'transformed-server-component',
-                      }
-                    }
-
-                    break
-                  }
-                }
-
-                return null
-              })
-
-              build.onLoad({ filter: /.*/, namespace: 'transformed-server-component' }, (args) => {
-                const contents = fs.readFileSync(args.path, 'utf-8')
-                return {
-                  contents,
-                  loader: 'js',
-                  resolveDir: path.dirname(args.path),
-                }
-              })
-            },
-          },
-          {
-            name: 'resolve-aliases',
-            setup: (build) => {
-              const self = this
-              const aliases = this.options.alias || {}
-              for (const [alias, replacement] of Object.entries(aliases)) {
-                const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                const filter = new RegExp(`^${escapedAlias}(/|$)`)
-                build.onResolve({ filter }, (args) => {
-                  const relativePath = args.path.slice(alias.length)
-                  const newPath = path.join(replacement, relativePath)
-                  const resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(args.resolveDir, newPath)
-
-                  const possibleExtensions = ['', '.ts', '.tsx', '.js', '.jsx']
-                  for (const ext of possibleExtensions) {
-                    const pathWithExt = resolvedPath + ext
-                    if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-                      if (self.isClientComponent(pathWithExt)) {
-                        return {
-                          path: args.path,
-                          namespace: 'client-component-reference',
-                        }
-                      }
-
-                      try {
-                        const content = fs.readFileSync(pathWithExt, 'utf-8')
-                        if (self.isServerAction(content))
-                          return { path: args.path, external: true }
-                      }
-                      catch {}
-
-                      return { path: pathWithExt }
-                    }
-                  }
-
-                  return { path: resolvedPath }
-                })
-              }
-
-              build.onLoad({ filter: /.*/, namespace: 'client-component-reference' }, (args) => {
-                let componentId = args.path
-
-                for (const [alias, replacement] of Object.entries(aliases)) {
-                  if (args.path.startsWith(`${alias}/`) || args.path === alias) {
-                    const relativePath = args.path.slice(alias.length)
-                    const resolvedPath = path.isAbsolute(replacement)
-                      ? path.join(replacement, relativePath)
-                      : path.resolve(self.projectRoot, replacement, relativePath)
-
-                    componentId = path.relative(self.projectRoot, resolvedPath)
-                    break
-                  }
-                }
-
-                const contents = `
-function registerClientReference(clientReference, id, exportName) {
-  const key = id + '#' + exportName;
-  const clientProxy = {};
-  Object.defineProperty(clientProxy, '$$typeof', {
-    value: Symbol.for('react.client.reference'),
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$id', {
-    value: key,
-    enumerable: false
-  });
-  Object.defineProperty(clientProxy, '$$async', {
-    value: false,
-    enumerable: false
-  });
-  try {
-    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
-        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
-      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
-    }
-  } catch (error) {
-    console.error('[rari] Build: Failed to register client reference:', error);
-  }
-  return clientProxy;
-}
-
-export default registerClientReference(null, ${JSON.stringify(componentId)}, "default");
-`
-
-                return {
-                  contents,
-                  loader: 'js',
-                }
-              })
-            },
-          },
-          {
-            name: 'replace-react-imports',
-            setup(build) {
-              build.onLoad({ filter: /runtime-client.*\.js$/ }, async (args) => {
-                const fs = await import('node:fs/promises')
-                let contents = await fs.readFile(args.path, 'utf-8')
-                contents = contents.replace(
-                  /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?/g,
-                  '// React is available as globalThis.React',
-                )
-                contents = contents.replace(/React2/g, 'React')
-                return { contents, loader: 'js' }
-              })
-            },
-          },
-          {
-            name: 'auto-external',
-            setup(build) {
-              build.onResolve({ filter: /^[^./]/ }, async (args) => {
-                if (args.path === 'react' || args.path === 'react-dom' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime')
-                  return { path: args.path, external: true }
-
-                if (args.path.startsWith('node:') || isNodeBuiltin(args.path))
-                  return { path: args.path, external: true }
-
-                if (args.path === 'rari/image' || args.path.startsWith('rari/image/'))
-                  return { path: args.path, external: true }
-
-                if (args.path === 'rari/client')
-                  return null
-
-                return null
-              })
-            },
-          },
-          {
-            name: 'resolve-server-functions',
-            setup(build) {
-              build.onResolve(
-                { filter: /^\.\.?\/.*(functions|actions)/ },
-                async (args) => {
-                  const resolvedPath = path.resolve(
-                    path.dirname(args.importer),
-                    args.path,
-                  )
-
-                  const possibleExtensions = [
-                    '.ts',
-                    '.js',
-                    '.tsx',
-                    '.jsx',
-                    '/index.ts',
-                    '/index.js',
-                  ]
-                  for (const ext of possibleExtensions) {
-                    const fullPath = resolvedPath + ext
-                    if (fs.existsSync(fullPath))
-                      return { path: fullPath }
-                  }
-
-                  return null
-                },
-              )
-            },
-          },
-        ],
-      })
-
-      if (result.outputFiles && result.outputFiles.length > 0) {
-        const outputFile = result.outputFiles[0]
-        let code = outputFile.text
-
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-runtime['"];?\s*/g,
-          '// jsx/jsxs are available as globals\n',
-        )
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react\/jsx-dev-runtime['"];?\s*/g,
-          '// jsx/jsxs are available as globals\n',
-        )
-        code = code.replace(
-          /import\s+React\d*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]react['"];?\s*/g,
-          '// React is available as globalThis.React\n',
-        )
-        code = code.replace(
-          /import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g,
-          '// React is available as globalThis.React\n',
-        )
-
-        code = code.replace(
-          /import\s*(\{[^}]+\}|\w+)\s*from\s*["']([^"']+)["'];?/g,
-          (match) => {
-            return match
-          },
-        )
-
-        await fs.promises.writeFile(outputPath, code, 'utf-8')
-
-        if (returnCode)
-          return code
-      }
-
-      if (result.errors.length > 0) {
-        console.error('[rari] Build: ESBuild errors:', result.errors)
-        throw new Error(
-          `ESBuild compilation failed with ${result.errors.length} errors`,
-        )
-      }
-
-      if (result.warnings.length > 0)
-        console.warn('[rari] Build: ESBuild warnings:', result.warnings)
-    }
-    catch (error) {
-      console.error(`[rari] Build: ESBuild failed for ${inputPath}:`, error)
-      throw error
-    }
+    if (returnCode)
+      return code
   }
 
   private createSelfRegisteringModule(
@@ -1757,7 +1479,6 @@ function registerClientReference(clientReference, id, exportName) {
     const builtCode = await this.buildSingleComponent(
       filePath,
       fullBundlePath,
-      componentData,
       true,
     ) as string
 
@@ -1871,16 +1592,7 @@ function registerClientReference(clientReference, id, exportName) {
   }
 
   async getTransformedComponentCode(filePath: string): Promise<string> {
-    const relativePath = path.relative(this.projectRoot, filePath)
-    const componentId = this.getComponentId(relativePath)
-
-    const code = await fs.promises.readFile(filePath, 'utf-8')
-    const component = {
-      dependencies: this.extractDependencies(code),
-      hasNodeImports: this.hasNodeImports(code),
-    }
-
-    return await this.buildComponentCodeOnly(filePath, componentId, component)
+    return await this.buildComponentCodeOnly(filePath)
   }
 }
 

@@ -17,6 +17,7 @@ use deno_core::{
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
+use regex::Regex;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::fs;
@@ -438,6 +439,24 @@ export default {{}};
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
         };
 
+        let result = self.resolve_from_node_modules_with_dir(package_specifier, &start_dir);
+
+        if result.is_none() {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let cwd_canonical = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+            if cwd_canonical != start_dir {
+                return self.resolve_from_node_modules_with_dir(package_specifier, &cwd_canonical);
+            }
+        }
+
+        result
+    }
+
+    fn resolve_from_node_modules_with_dir(
+        &self,
+        package_specifier: &str,
+        start_dir: &Path,
+    ) -> Option<String> {
         if let Some(slash_pos) = package_specifier.find('/') {
             if package_specifier.starts_with('@') {
                 if let Some(second_slash_pos) = package_specifier[slash_pos + 1..].find('/') {
@@ -445,17 +464,17 @@ export default {{}};
                     let package_name = &package_specifier[..actual_slash_pos];
                     let subpath = &package_specifier[actual_slash_pos..];
 
-                    return self.resolve_subpath_export_from_dir(package_name, subpath, &start_dir);
+                    return self.resolve_subpath_export_from_dir(package_name, subpath, start_dir);
                 }
             } else {
                 let package_name = &package_specifier[..slash_pos];
                 let subpath = &package_specifier[slash_pos..];
 
-                return self.resolve_subpath_export_from_dir(package_name, subpath, &start_dir);
+                return self.resolve_subpath_export_from_dir(package_name, subpath, start_dir);
             }
         }
 
-        self.resolve_regular_package_from_dir(package_specifier, &start_dir)
+        self.resolve_regular_package_from_dir(package_specifier, start_dir)
     }
 
     fn is_npm_package_context(&self, referrer: &str) -> bool {
@@ -710,6 +729,136 @@ export const __esModule = true;
         None
     }
 
+    fn is_cjs_module(&self, content: &str, file_path: &str) -> bool {
+        static REQUIRE_REGEX: OnceLock<Regex> = OnceLock::new();
+        let require_regex = REQUIRE_REGEX.get_or_init(|| {
+            Regex::new(r#"require\s*\(\s*['"]"#).expect("Failed to compile require regex pattern")
+        });
+
+        let has_require = require_regex.is_match(content);
+        let has_module_exports = content.contains("module.exports");
+        let has_exports_dot = content.contains("exports.");
+        let is_cjs_extension = file_path.ends_with(".cjs");
+
+        let has_import = content.contains("import ") || content.contains("import{");
+        let has_export = content.contains("export ")
+            || content.contains("export{")
+            || content.contains("export default");
+
+        if has_export || (has_import && !has_require) {
+            return false;
+        }
+
+        if file_path.contains("node_modules")
+            && let Some(pkg_json_type) = self.get_package_type_for_file(file_path)
+        {
+            if pkg_json_type == "module" {
+                return false;
+            }
+            if pkg_json_type == "commonjs" {
+                return true;
+            }
+        }
+
+        has_require || has_module_exports || has_exports_dot || is_cjs_extension
+    }
+
+    fn get_package_type_for_file(&self, file_path: &str) -> Option<String> {
+        let path = PathBuf::from(file_path);
+        let mut current_dir = path.parent()?.to_path_buf();
+
+        while !current_dir.as_os_str().is_empty() {
+            if let Some(cached_type) = self.module_resolver.get_cached_package_type(&current_dir) {
+                return Some(cached_type);
+            }
+
+            let package_json_path = current_dir.join("package.json");
+            if package_json_path.exists() {
+                let package_type = if let Ok(content) = fs::read_to_string(&package_json_path)
+                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                    && let Some(type_field) = json.get("type").and_then(|v| v.as_str())
+                {
+                    type_field.to_string()
+                } else {
+                    "commonjs".to_string()
+                };
+
+                self.module_resolver.cache_package_type(current_dir, package_type.clone());
+                return Some(package_type);
+            }
+            if !current_dir.pop() {
+                break;
+            }
+        }
+        None
+    }
+
+    fn wrap_cjs_module(&self, content: &str, file_path: &str) -> String {
+        format!(
+            r#"
+// CJS-to-ESM wrapper for: {file_path}
+const __cjs_module__ = {{ exports: {{}} }};
+const __cjs_exports__ = __cjs_module__.exports;
+
+const __require__ = (id) => {{
+    if (typeof globalThis.__rari_require__ === 'function') {{
+        try {{
+            return globalThis.__rari_require__(id, '{file_path}');
+        }} catch (error) {{
+            throw new Error(`Cannot find module '${{id}}' from '{file_path}': ${{error.message}}`);
+        }}
+    }}
+
+    if (typeof import.meta?.resolve === 'function') {{
+        try {{
+            const resolved = import.meta.resolve(id);
+            throw new Error(`Module '${{id}}' resolved to ${{resolved}} but dynamic require is not fully supported. Use dynamic import() instead.`);
+        }} catch (e) {{
+            throw new Error(`Cannot find module '${{id}}' from '{file_path}'`);
+        }}
+    }}
+
+    throw new Error(`Cannot find module '${{id}}' from '{file_path}': require() is not available in this context`);
+}};
+
+(function(module, exports, require) {{
+{content}
+}})(__cjs_module__, __cjs_exports__, __require__);
+
+const __result__ = __cjs_module__.exports;
+
+export default __result__;
+
+const __exportProxy__ = new Proxy(__result__, {{
+    get(target, prop) {{
+        if (prop === Symbol.toStringTag) return 'Module';
+        if (prop === '__esModule') return true;
+        return target[prop];
+    }},
+    has(target, prop) {{
+        return prop in target;
+    }},
+    ownKeys(target) {{
+        return Reflect.ownKeys(target);
+    }},
+    getOwnPropertyDescriptor(target, prop) {{
+        const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (desc) {{
+            return {{ ...desc, enumerable: true, configurable: true }};
+        }}
+        return desc;
+    }}
+}});
+
+const __keys__ = Object.keys(__result__);
+
+export {{ __exportProxy__ as __cjsExports__, __keys__ }};
+"#,
+            file_path = file_path,
+            content = content
+        )
+    }
+
     fn handle_file_protocol_modules(
         &self,
         specifier_str: &str,
@@ -731,9 +880,17 @@ export const __esModule = true;
             drop(cache);
 
             if let Ok(content) = fs::read_to_string(file_path) {
+                let final_code = if file_path.contains("node_modules")
+                    && self.is_cjs_module(&content, file_path)
+                {
+                    self.wrap_cjs_module(&content, file_path)
+                } else {
+                    content
+                };
+
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
-                    ModuleSourceCode::String(content.into()),
+                    ModuleSourceCode::String(final_code.into()),
                     module_specifier,
                     None,
                 ))));
@@ -940,6 +1097,65 @@ export const __esModule = true;
         None
     }
 
+    fn resolve_subpath_import(&self, specifier: &str, referrer: &str) -> Option<String> {
+        let clean_referrer = referrer.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer);
+
+        let mut current_dir = PathBuf::from(clean_referrer);
+
+        if !current_dir.pop() {
+            current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        }
+
+        while !current_dir.as_os_str().is_empty() {
+            let package_json_path = current_dir.join("package.json");
+            if package_json_path.exists() {
+                if let Ok(content) = fs::read_to_string(&package_json_path)
+                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                    && let Some(imports) = json.get("imports").and_then(|v| v.as_object())
+                    && let Some(import_value) = imports.get(specifier)
+                    && let Some(resolved) = self.resolve_import_value(import_value, &current_dir)
+                {
+                    return Some(resolved);
+                }
+                break;
+            }
+
+            if !current_dir.pop() {
+                break;
+            }
+        }
+
+        None
+    }
+
+    fn resolve_import_value(
+        &self,
+        value: &serde_json::Value,
+        package_dir: &Path,
+    ) -> Option<String> {
+        match value {
+            serde_json::Value::String(path_str) => {
+                let clean_path = path_str.trim_start_matches("./");
+                let full_path = package_dir.join(clean_path);
+                if full_path.exists() {
+                    return Some(format!("file://{}", full_path.to_string_lossy()));
+                }
+            }
+            serde_json::Value::Object(obj) => {
+                let conditions = ["node", "import", "module", "default"];
+                for condition in &conditions {
+                    if let Some(nested_value) = obj.get(*condition)
+                        && let Some(result) = self.resolve_import_value(nested_value, package_dir)
+                    {
+                        return Some(result);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     #[allow(clippy::only_used_in_recursion)]
     fn resolve_export_value(
         &self,
@@ -1029,48 +1245,63 @@ export const __esModule = true;
             }
         }
 
-        if let Some(exports_obj) = exports.as_object()
-            && let Some(main_export) = exports_obj.get(".")
-        {
-            if let Some(path) = main_export.as_str() {
-                let clean_path = path.trim_start_matches("./");
-                let full_path = package_dir.join(clean_path);
-                if full_path.exists() {
-                    let file_url = format!("file://{}", full_path.to_string_lossy());
-                    return Some(file_url);
+        if let Some(exports_obj) = exports.as_object() {
+            if let Some(main_export) = exports_obj.get(".") {
+                if let Some(path) = main_export.as_str() {
+                    let clean_path = path.trim_start_matches("./");
+                    let full_path = package_dir.join(clean_path);
+                    if full_path.exists() {
+                        let file_url = format!("file://{}", full_path.to_string_lossy());
+                        return Some(file_url);
+                    }
                 }
-            }
 
-            if let Some(conditional) = main_export.as_object() {
-                let conditions = ["import", "module", "default"];
+                if let Some(conditional) = main_export.as_object() {
+                    let conditions = ["import", "module", "default"];
 
-                for condition in &conditions {
-                    if let Some(condition_value) = conditional.get(*condition) {
-                        if let Some(path) = condition_value.as_str() {
-                            let clean_path = path.trim_start_matches("./");
-                            let full_path = package_dir.join(clean_path);
-                            if full_path.exists() {
-                                let file_url = format!("file://{}", full_path.to_string_lossy());
-                                return Some(file_url);
-                            }
-                        } else if let Some(nested_conditional) = condition_value.as_object() {
-                            let nested_conditions = ["default", "module", "main"];
-                            for nested_condition in &nested_conditions {
-                                if let Some(path) = nested_conditional
-                                    .get(*nested_condition)
-                                    .and_then(|v| v.as_str())
-                                {
-                                    let clean_path = path.trim_start_matches("./");
-                                    let full_path = package_dir.join(clean_path);
+                    for condition in &conditions {
+                        if let Some(condition_value) = conditional.get(*condition) {
+                            if let Some(path) = condition_value.as_str() {
+                                let clean_path = path.trim_start_matches("./");
+                                let full_path = package_dir.join(clean_path);
+                                if full_path.exists() {
+                                    let file_url =
+                                        format!("file://{}", full_path.to_string_lossy());
+                                    return Some(file_url);
+                                }
+                            } else if let Some(nested_conditional) = condition_value.as_object() {
+                                let nested_conditions = ["import", "module", "default"];
+                                for nested_condition in &nested_conditions {
+                                    if let Some(path) = nested_conditional
+                                        .get(*nested_condition)
+                                        .and_then(|v| v.as_str())
+                                    {
+                                        let clean_path = path.trim_start_matches("./");
+                                        let full_path = package_dir.join(clean_path);
 
-                                    if full_path.exists() {
-                                        let file_url =
-                                            format!("file://{}", full_path.to_string_lossy());
+                                        if full_path.exists() {
+                                            let file_url =
+                                                format!("file://{}", full_path.to_string_lossy());
 
-                                        return Some(file_url);
+                                            return Some(file_url);
+                                        }
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            } else {
+                let conditions = ["import", "module", "default", "node"];
+                for condition in &conditions {
+                    if let Some(condition_value) = exports_obj.get(*condition)
+                        && let Some(path) = condition_value.as_str()
+                    {
+                        let clean_path = path.trim_start_matches("./");
+                        let full_path = package_dir.join(clean_path);
+                        if full_path.exists() {
+                            let file_url = format!("file://{}", full_path.to_string_lossy());
+                            return Some(file_url);
                         }
                     }
                 }
@@ -1143,6 +1374,12 @@ impl ModuleLoader for RariModuleLoader {
             let url = ModuleSpecifier::parse(specifier)
                 .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
             return Ok(url);
+        }
+
+        if specifier.starts_with('#')
+            && let Some(resolved) = self.resolve_subpath_import(specifier, referrer)
+        {
+            return self.resolve(&resolved, referrer, kind);
         }
 
         if specifier.starts_with("./") || specifier.starts_with("../") {

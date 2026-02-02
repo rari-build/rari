@@ -80,7 +80,7 @@ export default async function HomePage() {
               },
               {
                 title: 'Optimized Bundling',
-                description: 'Native-speed bundling with Rolldown and esbuild for maximum performance',
+                description: 'Native-speed bundling with Rolldown for maximum performance',
                 icon: 'rolldown',
               },
               {

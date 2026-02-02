@@ -254,15 +254,26 @@ async fn run_non_interactive(
         }
 
         if dry_run {
-            println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
-        } else if unit_name != "rari-binaries" {
+            if unit_name == "rari" {
+                println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
+            } else {
+                println!(
+                    "  {} Would skip changelog generation (non-rari unit)",
+                    "[DRY RUN]".yellow()
+                );
+            }
+        } else if unit_name == "rari" {
             println!("  {} Generating changelog...", "→".cyan());
             let project_root = std::path::PathBuf::from(".");
-            let tag = format!("v{}", new_version);
+            let tag = if unit_name == "rari-binaries" {
+                format!("v{}", new_version)
+            } else {
+                format!("{}@{}", unit_name, new_version)
+            };
             crate::npm::generate_changelog(&tag, &project_root).await?;
             println!("  {} Generated changelog", "✓".green());
         } else {
-            println!("  {} Skipping changelog for binaries", "ℹ".blue());
+            println!("  {} Skipping changelog generation", "ℹ".blue());
         }
 
         let message = format!("release: {}@{}", unit_name, new_version);
@@ -443,9 +454,14 @@ async fn run_non_interactive(
 }
 
 fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> String {
-    let title_text = format!("{}@{}", pkg.name, pkg.version);
+    let (title_text, tag_text) = if pkg.name == "rari-binaries" {
+        (format!("v{}", pkg.version), format!("v{}", pkg.version))
+    } else {
+        (format!("{}@{}", pkg.name, pkg.version), pkg.tag.clone())
+    };
+
     let title = urlencoding::encode(&title_text);
-    let tag = urlencoding::encode(&pkg.tag);
+    let tag = urlencoding::encode(&tag_text);
 
     let mut body = "## What's Changed\n\n".to_string();
 
@@ -459,7 +475,7 @@ fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> 
 
     body.push_str(&format!(
         "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-        owner, repo, pkg.tag, pkg.tag
+        owner, repo, tag_text, tag_text
     ));
 
     let body_encoded = urlencoding::encode(&body);

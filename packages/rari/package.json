@@ -90,7 +90,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "esbuild": "catalog:build"
+    "rolldown": "catalog:build"
   },
   "optionalDependencies": {
     "rari-darwin-arm64": "0.8.5",

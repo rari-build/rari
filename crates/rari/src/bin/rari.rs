@@ -136,15 +136,10 @@ async fn run_optimize_images(
         return Ok(());
     }
 
-    if dry_run {
-        tracing::info!("Running in dry-run mode (preview only, no writes)...");
-    } else {
-        tracing::info!("Pre-optimizing local images...");
-    }
-
     let optimizer = ImageOptimizer::new(image_config, &project_path);
 
     if dry_run {
+        tracing::info!("Running in dry-run mode (preview only, no writes)...");
         match optimizer.preoptimize_local_images_preview().await {
             Ok(count) => {
                 tracing::info!("[DRY RUN] Would pre-optimize {} image variants", count);
@@ -158,7 +153,9 @@ async fn run_optimize_images(
     } else {
         match optimizer.preoptimize_local_images().await {
             Ok(count) => {
-                tracing::info!("Successfully pre-optimized {} image variants", count);
+                if count > 0 {
+                    tracing::info!("Successfully pre-optimized {} image variants", count);
+                }
                 Ok(())
             }
             Err(e) => {

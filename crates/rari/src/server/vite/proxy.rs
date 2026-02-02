@@ -326,23 +326,43 @@ pub async fn check_vite_server_health() -> Result<(), RariError> {
     let client = Client::new();
     let health_url = format!("http://{}/vite-server/", config.vite_address());
 
-    match client.get(&health_url).send().await {
-        Ok(response) => {
-            if response.status().is_success() {
-                Ok(())
-            } else {
-                Err(RariError::network(format!(
-                    "Vite server returned status: {}",
-                    response.status()
-                )))
+    let mut last_error: Option<String> = None;
+    let mut last_status: Option<reqwest::StatusCode> = None;
+
+    for attempt in 1..=60 {
+        match client.get(&health_url).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    return Ok(());
+                } else {
+                    last_status = Some(response.status());
+                    last_error = None;
+                }
+            }
+            Err(e) => {
+                last_error = Some(e.to_string());
+                last_status = None;
             }
         }
-        Err(e) => Err(RariError::network(format!(
-            "Failed to connect to Vite server at {}: {}",
-            config.vite_address(),
-            e
-        ))),
+
+        if attempt < 60 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
     }
+
+    let error_detail = if let Some(status) = last_status {
+        format!("health check failed with status {}", status)
+    } else if let Some(error) = last_error {
+        format!("connection error: {}", error)
+    } else {
+        "health check failed".to_string()
+    };
+
+    Err(RariError::network(format!(
+        "Failed to connect to Vite server at {} after 60 attempts ({})",
+        config.vite_address(),
+        error_detail
+    )))
 }
 
 #[cfg(test)]

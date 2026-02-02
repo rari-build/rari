@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { transformSync } from 'esbuild'
+import { build } from 'rolldown'
 
 export interface ImageUsage {
   src: string
@@ -13,10 +13,10 @@ export interface ImageManifest {
   images: ImageUsage[]
 }
 
-export function scanForImageUsage(srcDir: string, additionalDirs: string[] = []): ImageManifest {
+export async function scanForImageUsage(srcDir: string, additionalDirs: string[] = []): Promise<ImageManifest> {
   const images = new Map<string, ImageUsage>()
 
-  function scanDirectory(dir: string) {
+  async function scanDirectory(dir: string) {
     if (!fs.existsSync(dir))
       return
 
@@ -28,7 +28,7 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
       if (entry.isDirectory()) {
         if (entry.name === 'node_modules' || entry.name === 'dist')
           continue
-        scanDirectory(fullPath)
+        await scanDirectory(fullPath)
       }
       else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
         try {
@@ -37,7 +37,7 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
           if (!content.includes('from \'rari/image\'') && !content.includes('from "rari/image"'))
             continue
 
-          extractImageUsages(content, fullPath, images)
+          await extractImageUsages(content, fullPath, images)
         }
         catch (error) {
           console.warn(`Failed to read or process file ${fullPath}:`, error)
@@ -46,11 +46,11 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
     }
   }
 
-  scanDirectory(srcDir)
+  await scanDirectory(srcDir)
 
   for (const dir of additionalDirs) {
     if (fs.existsSync(dir))
-      scanDirectory(dir)
+      await scanDirectory(dir)
   }
 
   return {
@@ -58,26 +58,62 @@ export function scanForImageUsage(srcDir: string, additionalDirs: string[] = [])
   }
 }
 
-function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
+async function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
   try {
-    let loader: 'tsx' | 'jsx' | 'ts'
+    let loader: 'tsx' | 'jsx' | 'ts' | 'js'
     if (filePath.endsWith('.tsx'))
       loader = 'tsx'
     else if (filePath.endsWith('.jsx'))
       loader = 'jsx'
-    else
+    else if (filePath.endsWith('.ts'))
       loader = 'ts'
 
-    const result = transformSync(content, {
-      loader,
-      format: 'esm',
-      target: 'esnext',
-      logLevel: 'silent',
-      jsx: 'transform',
-      jsxFactory: 'React.createElement',
+    else
+      loader = 'js'
+
+    const virtualModuleId = `\0virtual:${filePath}`
+
+    const result = await build({
+      input: virtualModuleId,
+      platform: 'browser',
+      write: false,
+      output: {
+        format: 'esm',
+      },
+      moduleTypes: {
+        [`.${loader}`]: loader,
+      },
+      transform: {
+        jsx: 'react',
+      },
+      plugins: [
+        {
+          name: 'virtual-module',
+          resolveId(id) {
+            if (id === virtualModuleId) {
+              return id
+            }
+
+            return null
+          },
+          load(id) {
+            if (id === virtualModuleId) {
+              return {
+                code: content,
+                moduleType: loader,
+              }
+            }
+
+            return null
+          },
+        },
+      ],
     })
 
-    const transformedCode = result.code
+    if (!result.output || result.output.length === 0)
+      throw new Error('Transform produced no output')
+
+    const transformedCode = result.output[0].code
 
     const imageIdentifiers = new Set<string>()
 

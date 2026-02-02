@@ -1,6 +1,7 @@
+import type { Robots } from '../types/metadata-route'
+import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { Robots } from '../types/metadata-route'
 
 export interface RobotsGeneratorOptions {
   appDir: string
@@ -13,13 +14,11 @@ export function generateRobotsTxt(robots: Robots): string {
   const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
 
   for (const rule of rules) {
-    let userAgents: string[]
-    if (Array.isArray(rule.userAgent))
-      userAgents = rule.userAgent
-    else if (rule.userAgent)
-      userAgents = [rule.userAgent]
-    else
-      userAgents = ['*']
+    const userAgents = Array.isArray(rule.userAgent)
+      ? rule.userAgent
+      : rule.userAgent
+        ? [rule.userAgent]
+        : ['*']
 
     for (const userAgent of userAgents) {
       lines.push(`User-Agent: ${userAgent}`)
@@ -89,56 +88,97 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
 
   const outputPath = path.join(outDir, 'robots.txt')
 
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+
   if (robotsFile.type === 'static') {
     await fs.copyFile(robotsFile.path, outputPath)
     return true
   }
 
   try {
-    const esbuild = await import('esbuild')
+    const { build } = await import('rolldown')
+    const sourceCode = await fs.readFile(robotsFile.path, 'utf-8')
+    const virtualModuleId = `\0virtual:robots`
 
-    const result = await esbuild.build({
-      entryPoints: [robotsFile.path],
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      write: false,
+    const result = await build({
+      input: virtualModuleId,
       external: ['rari'],
-      target: 'node22',
+      platform: 'node',
+      write: false,
+      output: {
+        format: 'esm',
+        codeSplitting: false,
+      },
+      plugins: [{
+        name: 'virtual-robots',
+        resolveId(resolveId) {
+          if (resolveId === virtualModuleId)
+            return resolveId
+          if (resolveId.startsWith('.'))
+            return path.resolve(path.dirname(robotsFile.path), resolveId)
+
+          return null
+        },
+        load(loadId) {
+          if (loadId === virtualModuleId) {
+            const ext = path.extname(robotsFile.path).slice(1)
+            let moduleType: 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty'
+
+            switch (ext) {
+              case 'ts':
+                moduleType = 'ts'
+                break
+              case 'tsx':
+                moduleType = 'tsx'
+                break
+              case 'js':
+              case 'mjs':
+              case 'cjs':
+                moduleType = 'js'
+                break
+              case 'jsx':
+                moduleType = 'jsx'
+                break
+              default:
+                throw new Error(`Unsupported robots file extension: .${ext}. Supported extensions are: .ts, .tsx, .js, .jsx, .mjs, .cjs`)
+            }
+
+            return { code: sourceCode, moduleType }
+          }
+
+          return null
+        },
+      }],
     })
 
-    if (result.outputFiles && result.outputFiles.length > 0) {
-      const code = result.outputFiles[0].text
-      const tempFile = path.join(outDir, '_robots_temp.mjs')
-      await fs.writeFile(tempFile, code)
+    if (!result.output || result.output.length === 0)
+      throw new Error('Failed to build robots module')
 
-      try {
-        const module = await import(`file://${tempFile}`)
-        const robotsData: Robots = typeof module.default === 'function'
-          ? module.default()
-          : module.default
+    const entryChunk = result.output.find(item => item.type === 'chunk' && item.isEntry)
+      || result.output.find(item => item.type === 'chunk')
 
-        const content = generateRobotsTxt(robotsData)
-        await fs.writeFile(outputPath, content)
-        await fs.unlink(tempFile)
+    if (!entryChunk || entryChunk.type !== 'chunk')
+      throw new Error('No chunk output found in robots build result')
 
-        return true
-      }
-      catch (execError) {
-        console.error('[rari] Failed to execute robots file:', execError)
-        try {
-          await fs.unlink(tempFile)
-        }
-        catch {}
+    const code = entryChunk.code
+    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    const module = await import(dataUrl)
 
-        return false
-      }
+    let robotsData: Robots
+    if (typeof module.default === 'function') {
+      const robotsResult = module.default()
+      robotsData = robotsResult instanceof Promise ? await robotsResult : robotsResult
     }
+    else {
+      robotsData = module.default
+    }
+
+    const content = generateRobotsTxt(robotsData)
+    await fs.writeFile(outputPath, content)
+    return true
   }
-  catch (buildError) {
-    console.error('[rari] Failed to build robots file:', buildError)
+  catch (error) {
+    console.error('[rari] Failed to build/execute robots file:', error)
     return false
   }
-
-  return false
 }
