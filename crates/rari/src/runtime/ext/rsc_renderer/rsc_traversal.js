@@ -207,7 +207,7 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
           continue
         }
 
-        if (((child.$$typeof === Symbol.for('react.transitional.element') || child.$$typeof === Symbol.for('react.transitional.element')) || child.$$typeof === Symbol.for('react.element')) && typeof child.type === 'function') {
+        if (child.$$typeof === Symbol.for('react.transitional.element') && typeof child.type === 'function') {
           try {
             const isAsyncMarker = child.type._isAsyncComponent && child.type._originalType
             const isAsync = isAsyncMarker
