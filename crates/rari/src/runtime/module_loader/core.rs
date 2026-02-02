@@ -731,8 +731,9 @@ export const __esModule = true;
 
     fn is_cjs_module(&self, content: &str, file_path: &str) -> bool {
         static REQUIRE_REGEX: OnceLock<Regex> = OnceLock::new();
-        let require_regex =
-            REQUIRE_REGEX.get_or_init(|| Regex::new(r#"require\s*\(\s*['"]"#).unwrap());
+        let require_regex = REQUIRE_REGEX.get_or_init(|| {
+            Regex::new(r#"require\s*\(\s*['"]"#).expect("Failed to compile require regex pattern")
+        });
 
         let has_require = require_regex.is_match(content);
         let has_module_exports = content.contains("module.exports");
