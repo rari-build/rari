@@ -49,7 +49,7 @@ catalogs:
       specifier: ^1.42.0
       version: 1.42.0
     rari:
-      specifier: ^0.8.6
+      specifier: ^0.8.5
       version: 0.8.6
   eslint:
     '@antfu/eslint-config':
