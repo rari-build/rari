@@ -236,19 +236,19 @@ jobs:
 
           ## Installation
 
-          This package is automatically installed as an optional dependency when you install the main \`rari\` package:
+          This package is automatically installed as an optional dependency when you install the main `rari` package:
 
-          \`\`\`bash
+          ```bash
           npm install rari
-          \`\`\`
+          ```
 
-          You typically don't need to install this package directly. The main \`rari\` package will automatically download the correct binary for your platform.
+          You typically don't need to install this package directly. The main `rari` package will automatically download the correct binary for your platform.
 
           ## Usage
 
-          This package is used internally by the \`rari\` CLI. After installing \`rari\`, you can use it directly:
+          This package is used internally by the `rari` CLI. After installing `rari`, you can use it directly:
 
-          \`\`\`bash
+          ```bash
           # Development server
           npx rari dev
 
@@ -257,17 +257,17 @@ jobs:
 
           # Start production server
           npx rari start
-          \`\`\`
+          ```
 
           ### Quick Start
 
           Create a new rari application:
 
-          \`\`\`bash
+          ```bash
           npm create rari-app@latest my-app
           cd my-app
           npm run dev
-          \`\`\`
+          ```
 
           Visit [rari.build](https://rari.build) for complete documentation.
 
