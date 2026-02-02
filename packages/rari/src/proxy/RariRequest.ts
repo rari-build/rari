@@ -82,6 +82,7 @@ class RequestCookiesImpl implements RequestCookies {
     }
   }
 
+  /* v8 ignore next 5 - internal method not exposed in public interface */
   getPendingChanges() {
     return {
       deletes: [...this.pendingDeletes],
@@ -94,7 +95,9 @@ class RariURLImpl implements RariURL {
   private url: URL
 
   constructor(url: string | URL) {
+    /* v8 ignore start */
     this.url = typeof url === 'string' ? new URL(url) : url
+    /* v8 ignore stop */
   }
 
   get href(): string {

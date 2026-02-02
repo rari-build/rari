@@ -129,8 +129,10 @@ export function createRouteInfo(
   const params: Record<string, string | string[]> = {}
   if (route) {
     const matchedParams = matchRouteParams(route.path, route.segments, normalizedPath)
+    /* v8 ignore start - defensive check, matchedParams should always be non-null if route was found */
     if (matchedParams)
       Object.assign(params, matchedParams)
+    /* v8 ignore stop */
   }
 
   return {

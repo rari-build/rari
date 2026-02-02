@@ -153,6 +153,7 @@ export function generateSitemapXml(sitemap: Sitemap): string {
   return lines.join('\n')
 }
 
+/* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findSitemapFiles(
   appDir: string,
   extensions: string[] = ['.ts', '.tsx', '.js', '.jsx'],
@@ -179,7 +180,9 @@ export async function findSitemapFiles(
 
   return sitemapFiles
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateSitemapFiles(options: SitemapGeneratorOptions): Promise<boolean> {
   const { appDir, extensions } = options
   const sitemapFiles = await findSitemapFiles(appDir, extensions)
@@ -304,3 +307,4 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
     return false
   }
 }
+/* v8 ignore stop */

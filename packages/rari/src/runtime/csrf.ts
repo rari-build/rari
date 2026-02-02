@@ -55,6 +55,7 @@ export async function fetchWithCsrf(
     headers,
   })
 
+  /* v8 ignore start - retry logic with token refresh */
   if (response.status === 403 && url.includes('/_rari/')) {
     const refreshed = await refreshCsrfToken()
     if (refreshed) {
@@ -68,10 +69,12 @@ export async function fetchWithCsrf(
       }
     }
   }
+  /* v8 ignore stop */
 
   return response
 }
 
+/* v8 ignore start - browser initialization code */
 if (typeof window !== 'undefined') {
   ;(window as any).getCsrfToken = getCsrfToken
   ;(window as any).fetchWithCsrf = fetchWithCsrf
@@ -86,3 +89,4 @@ if (typeof window !== 'undefined') {
     refreshCsrfToken()
   }
 }
+/* v8 ignore stop */

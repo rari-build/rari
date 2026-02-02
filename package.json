@@ -7,9 +7,12 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
-    "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/ packages/ web/ examples/",
-    "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ packages/ web/ examples/ --fix",
-    "lint:knip": "knip"
+    "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/ packages/ web/ examples/ test/",
+    "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ packages/ web/ examples/ test/ --fix",
+    "lint:knip": "knip",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",
@@ -18,12 +21,14 @@
     "@types/node": "catalog:",
     "@typescript-eslint/utils": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:",
     "eslint-plugin-oxlint": "catalog:eslint",
     "eslint-plugin-react-hooks": "catalog:eslint",
     "eslint-plugin-react-refresh": "catalog:eslint",
     "knip": "catalog:eslint",
-    "oxlint": "catalog:"
+    "oxlint": "catalog:",
+    "vitest": "catalog:test"
   }
 }

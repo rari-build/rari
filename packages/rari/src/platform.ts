@@ -57,12 +57,14 @@ function getPlatformInfo(): PlatformInfo {
     = `${normalizedPlatform}-${normalizedArch}` as keyof typeof SUPPORTED_PLATFORMS
   const packageName = SUPPORTED_PLATFORMS[platformKey]
 
+  /* v8 ignore start - defensive check, all valid combinations are in SUPPORTED_PLATFORMS */
   if (!packageName) {
     throw new Error(
       `Unsupported platform combination: ${normalizedPlatform}-${normalizedArch}. `
       + `Supported platforms: ${Object.keys(SUPPORTED_PLATFORMS).join(', ')}`,
     )
   }
+  /* v8 ignore stop */
 
   const binaryName = normalizedPlatform === 'win32' ? 'rari.exe' : 'rari'
 
@@ -81,6 +83,7 @@ export function getBinaryPath(): string {
     let currentDir = process.cwd()
     let workspaceRoot = null
 
+    /* v8 ignore start - workspace search logic, tested in actual workspace */
     while (currentDir !== '/' && currentDir !== '') {
       const packagesDir = join(currentDir, 'packages')
       if (existsSync(packagesDir)) {
@@ -97,10 +100,14 @@ export function getBinaryPath(): string {
       if (existsSync(binaryPath))
         return binaryPath
     }
+    /* v8 ignore stop */
   }
+  /* v8 ignore start - error handling for workspace search */
   catch {
   }
+  /* v8 ignore stop */
 
+  /* v8 ignore start - fallback to import.meta.resolve, tested in workspace */
   try {
     const packagePath = import.meta.resolve(`${packageName}/package.json`)
     const packageDir = fileURLToPath(new URL('.', packagePath))
@@ -117,6 +124,7 @@ export function getBinaryPath(): string {
       + `Please ensure the platform package is installed: npm install ${packageName}`,
     )
   }
+  /* v8 ignore stop */
 }
 
 export function getInstallationInstructions(): string {

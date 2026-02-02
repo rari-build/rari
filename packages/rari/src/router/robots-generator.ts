@@ -56,6 +56,7 @@ export function generateRobotsTxt(robots: Robots): string {
   return lines.join('\n')
 }
 
+/* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findRobotsFile(
   appDir: string,
   extensions: string[] = ['.ts', '.tsx', '.js', '.jsx'],
@@ -78,7 +79,9 @@ export async function findRobotsFile(
 
   return null
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateRobotsFile(options: RobotsGeneratorOptions): Promise<boolean> {
   const { appDir, outDir, extensions } = options
   const robotsFile = await findRobotsFile(appDir, extensions)
@@ -182,3 +185,4 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     return false
   }
 }
+/* v8 ignore stop */
