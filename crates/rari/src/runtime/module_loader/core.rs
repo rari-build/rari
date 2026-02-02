@@ -402,14 +402,108 @@ export default {{}};
         }
 
         let mut search_dir = current_dir.to_path_buf();
+
         loop {
             let node_modules_path = search_dir.join("node_modules").join(package_name);
             if node_modules_path.exists() {
                 return Some(node_modules_path);
             }
 
+            if Self::is_likely_workspace_root(&search_dir)
+                && let Some(found) =
+                    Self::find_package_in_workspace_siblings(&search_dir, package_name)
+            {
+                return Some(found);
+            }
+
             if !search_dir.pop() {
                 break;
+            }
+        }
+
+        None
+    }
+
+    fn is_likely_workspace_root(dir: &Path) -> bool {
+        if dir.join("pnpm-workspace.yaml").exists() || dir.join("pnpm-lock.yaml").exists() {
+            return true;
+        }
+        if let Ok(content) = std::fs::read_to_string(dir.join("package.json"))
+            && content.contains("\"workspaces\"")
+        {
+            return true;
+        }
+        if dir.join("Cargo.toml").exists()
+            && let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml"))
+            && content.contains("[workspace]")
+        {
+            return true;
+        }
+        false
+    }
+
+    fn find_package_in_workspace_siblings(
+        workspace_root: &Path,
+        package_name: &str,
+    ) -> Option<PathBuf> {
+        let entries = std::fs::read_dir(workspace_root).ok()?;
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if let Ok(metadata) = std::fs::symlink_metadata(&path)
+                && metadata.file_type().is_symlink()
+            {
+                continue;
+            }
+
+            if !path.is_dir() {
+                continue;
+            }
+
+            let dir_name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(name) => name,
+                None => continue,
+            };
+
+            if dir_name.starts_with('.')
+                || dir_name == "node_modules"
+                || dir_name == "dist"
+                || dir_name == "target"
+                || dir_name == "build"
+                || dir_name == "out"
+            {
+                continue;
+            }
+
+            let sibling_node_modules = path.join("node_modules").join(package_name);
+            if sibling_node_modules.exists() {
+                return Some(sibling_node_modules);
+            }
+
+            for container in &["packages", "apps"] {
+                let container_path = path.join(container);
+                if container_path.is_dir()
+                    && let Ok(nested_entries) = std::fs::read_dir(&container_path)
+                {
+                    for nested_entry in nested_entries.flatten() {
+                        let nested_path = nested_entry.path();
+
+                        if let Ok(metadata) = std::fs::symlink_metadata(&nested_path)
+                            && metadata.file_type().is_symlink()
+                        {
+                            continue;
+                        }
+
+                        if nested_path.is_dir() {
+                            let nested_node_modules =
+                                nested_path.join("node_modules").join(package_name);
+                            if nested_node_modules.exists() {
+                                return Some(nested_node_modules);
+                            }
+                        }
+                    }
+                }
             }
         }
 
