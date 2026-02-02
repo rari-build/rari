@@ -799,14 +799,16 @@ export const __esModule = true;
         } else {
             "."
         };
+        let file_dir_js = serde_json::to_string(file_dir).unwrap_or_else(|_| "\"\"".to_string());
+        let file_path_js = serde_json::to_string(file_path).unwrap_or_else(|_| "\"\"".to_string());
 
         format!(
             r#"
 // CJS-to-ESM wrapper for: {file_path}
 const __cjs_module__ = {{ exports: {{}} }};
 const __cjs_exports__ = __cjs_module__.exports;
-const __cjs_dirname__ = '{file_dir}';
-const __cjs_filename__ = '{file_path}';
+const __cjs_dirname__ = {file_dir_js};
+const __cjs_filename__ = {file_path_js};
 
 const __require__ = (id) => {{
     if (id.startsWith('./') || id.startsWith('../')) {{
@@ -815,8 +817,10 @@ const __require__ = (id) => {{
         for (const part of parts) {{
             if (part === '..') {{
                 const lastSlash = resolvedPath.lastIndexOf('/');
-                if (lastSlash > 0) {{
+                if (lastSlash >= 0) {{
                     resolvedPath = resolvedPath.substring(0, lastSlash);
+                }} else {{
+                    resolvedPath = '.';
                 }}
             }} else if (part !== '.' && part !== '') {{
                 resolvedPath = resolvedPath + '/' + part;
@@ -852,7 +856,11 @@ const __require__ = (id) => {{
                         for (const p of nestedParts) {{
                             if (p === '..') {{
                                 const ls = nestedResolved.lastIndexOf('/');
-                                if (ls > 0) nestedResolved = nestedResolved.substring(0, ls);
+                                if (ls >= 0) {{
+                                    nestedResolved = nestedResolved.substring(0, ls);
+                                }} else {{
+                                    nestedResolved = '.';
+                                }}
                             }} else if (p !== '.' && p !== '') {{
                                 nestedResolved = nestedResolved + '/' + p;
                             }}
@@ -879,18 +887,21 @@ const __require__ = (id) => {{
 
                 return nestedModule.exports;
             }} catch (e) {{
-                continue;
+                if (e instanceof Deno.errors.NotFound) {{
+                    continue;
+                }}
+                throw e;
             }}
         }}
 
-        throw new Error(`Cannot find module '${{id}}' from '{file_path}'`);
+        throw new Error(`Cannot find module '${{id}}' from '${{__cjs_filename__}}'`);
     }}
 
     if (id.startsWith('node:')) {{
         return {{ __esModule: true, default: {{}} }};
     }}
 
-    throw new Error(`Cannot find module '${{id}}' from '{file_path}': bare specifier requires are not supported in CJS wrapper`);
+    throw new Error(`Cannot find module '${{id}}' from '${{__cjs_filename__}}': bare specifier requires are not supported in CJS wrapper`);
 }};
 
 (function(module, exports, require, __filename, __dirname) {{
@@ -927,7 +938,8 @@ const __keys__ = Object.keys(__result__);
 export {{ __exportProxy__ as __cjsExports__, __keys__ }};
 "#,
             file_path = file_path,
-            file_dir = file_dir,
+            file_dir_js = file_dir_js,
+            file_path_js = file_path_js,
             content = content
         )
     }
