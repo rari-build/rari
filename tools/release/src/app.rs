@@ -364,16 +364,17 @@ impl App {
                 }
                 PublishStep::GeneratingChangelog => {
                     let unit_name = unit.name();
+                    let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
 
-                    if unit_name == "rari" {
+                    if generates_changelog {
                         if self.dry_run {
                             self.status_messages
                                 .push("[DRY RUN] Would generate changelog...".to_string());
                         } else {
                             self.status_messages.push("Generating changelog...".to_string());
-                            let project_root = PathBuf::from(".");
                             let tag = format!("{}@{}", unit_name, version);
-                            npm::generate_changelog(&tag, &project_root).await?;
+                            let package_path = unit.paths()[0];
+                            npm::generate_changelog(&tag, unit_name, package_path).await?;
                         }
                         self.status_messages.push("* Generated changelog".to_string());
                     } else if self.dry_run {
@@ -408,10 +409,13 @@ impl App {
                             git::add_and_commit(&message, paths[0]).await?;
                         }
 
+                        let generates_changelog = matches!(unit.name(), "rari" | "create-rari-app");
                         let mut files_to_add = Vec::new();
-                        let changelog_path = PathBuf::from("CHANGELOG.md");
-                        if changelog_path.exists() {
-                            files_to_add.push(changelog_path);
+                        if generates_changelog {
+                            let changelog_path = unit.paths()[0].join("CHANGELOG.md");
+                            if changelog_path.exists() {
+                                files_to_add.push(changelog_path);
+                            }
                         }
                         let lockfile_path = PathBuf::from("pnpm-lock.yaml");
                         if lockfile_path.exists() {

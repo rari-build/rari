@@ -253,24 +253,21 @@ async fn run_non_interactive(
             println!("  {} Updated version", "✓".green());
         }
 
+        let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
         if dry_run {
-            if unit_name == "rari" {
+            if generates_changelog {
                 println!("  {} Would generate changelog...", "[DRY RUN]".yellow());
             } else {
                 println!(
-                    "  {} Would skip changelog generation (non-rari unit)",
+                    "  {} Would skip changelog generation (binary packages)",
                     "[DRY RUN]".yellow()
                 );
             }
-        } else if unit_name == "rari" {
+        } else if generates_changelog {
             println!("  {} Generating changelog...", "→".cyan());
-            let project_root = std::path::PathBuf::from(".");
-            let tag = if unit_name == "rari-binaries" {
-                format!("v{}", new_version)
-            } else {
-                format!("{}@{}", unit_name, new_version)
-            };
-            crate::npm::generate_changelog(&tag, &project_root).await?;
+            let tag = format!("{}@{}", unit_name, new_version);
+            let package_path = unit.paths()[0];
+            crate::npm::generate_changelog(&tag, unit_name, package_path).await?;
             println!("  {} Generated changelog", "✓".green());
         } else {
             println!("  {} Skipping changelog generation", "ℹ".blue());
@@ -295,10 +292,13 @@ async fn run_non_interactive(
                 crate::git::add_and_commit(&message, paths[0]).await?;
             }
 
+            let generates_changelog = matches!(unit_name, "rari" | "create-rari-app");
             let mut files_to_add = Vec::new();
-            let changelog_path = std::path::PathBuf::from("CHANGELOG.md");
-            if changelog_path.exists() {
-                files_to_add.push(changelog_path);
+            if generates_changelog {
+                let changelog_path = unit.paths()[0].join("CHANGELOG.md");
+                if changelog_path.exists() {
+                    files_to_add.push(changelog_path);
+                }
             }
             let lockfile_path = std::path::PathBuf::from("pnpm-lock.yaml");
             if lockfile_path.exists() {
