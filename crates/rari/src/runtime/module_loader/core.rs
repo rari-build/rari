@@ -402,7 +402,6 @@ export default {{}};
         }
 
         let mut search_dir = current_dir.to_path_buf();
-        let mut found_workspace_root = false;
 
         loop {
             let node_modules_path = search_dir.join("node_modules").join(package_name);
@@ -410,9 +409,7 @@ export default {{}};
                 return Some(node_modules_path);
             }
 
-            if !found_workspace_root && Self::is_likely_workspace_root(&search_dir) {
-                found_workspace_root = true;
-
+            if Self::is_likely_workspace_root(&search_dir) {
                 if let Some(found) =
                     Self::find_package_in_workspace_siblings(&search_dir, package_name)
                 {
@@ -432,8 +429,7 @@ export default {{}};
         if dir.join("pnpm-workspace.yaml").exists() || dir.join("pnpm-lock.yaml").exists() {
             return true;
         }
-        if (dir.join("package-lock.json").exists() || dir.join("yarn.lock").exists())
-            && let Ok(content) = std::fs::read_to_string(dir.join("package.json"))
+        if let Ok(content) = std::fs::read_to_string(dir.join("package.json"))
             && content.contains("\"workspaces\"")
         {
             return true;
