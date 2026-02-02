@@ -409,12 +409,11 @@ export default {{}};
                 return Some(node_modules_path);
             }
 
-            if Self::is_likely_workspace_root(&search_dir) {
-                if let Some(found) =
+            if Self::is_likely_workspace_root(&search_dir)
+                && let Some(found) =
                     Self::find_package_in_workspace_siblings(&search_dir, package_name)
-                {
-                    return Some(found);
-                }
+            {
+                return Some(found);
             }
 
             if !search_dir.pop() {
@@ -452,6 +451,12 @@ export default {{}};
         for entry in entries.flatten() {
             let path = entry.path();
 
+            if let Ok(metadata) = std::fs::symlink_metadata(&path)
+                && metadata.file_type().is_symlink()
+            {
+                continue;
+            }
+
             if !path.is_dir() {
                 continue;
             }
@@ -474,6 +479,31 @@ export default {{}};
             let sibling_node_modules = path.join("node_modules").join(package_name);
             if sibling_node_modules.exists() {
                 return Some(sibling_node_modules);
+            }
+
+            for container in &["packages", "apps"] {
+                let container_path = path.join(container);
+                if container_path.is_dir()
+                    && let Ok(nested_entries) = std::fs::read_dir(&container_path)
+                {
+                    for nested_entry in nested_entries.flatten() {
+                        let nested_path = nested_entry.path();
+
+                        if let Ok(metadata) = std::fs::symlink_metadata(&nested_path)
+                            && metadata.file_type().is_symlink()
+                        {
+                            continue;
+                        }
+
+                        if nested_path.is_dir() {
+                            let nested_node_modules =
+                                nested_path.join("node_modules").join(package_name);
+                            if nested_node_modules.exists() {
+                                return Some(nested_node_modules);
+                            }
+                        }
+                    }
+                }
             }
         }
 
