@@ -205,7 +205,7 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
       external: ['rari'],
       platform: 'node',
       write: false,
-      output: { format: 'esm' },
+      output: { format: 'esm', codeSplitting: false },
       plugins: [{
         name: 'virtual-sitemap',
         resolveId(resolveId) {
@@ -241,7 +241,7 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
       for (const { id } of sitemapIds) {
         let sitemapData: Sitemap
         if (typeof module.default === 'function')
-          sitemapData = await module.default({ id: Promise.resolve(String(id)) })
+          sitemapData = await module.default({ id: String(id) })
         else
           sitemapData = module.default
 

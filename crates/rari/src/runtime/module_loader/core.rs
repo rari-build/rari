@@ -17,6 +17,7 @@ use deno_core::{
 };
 use deno_error::JsErrorBox;
 use parking_lot::RwLock;
+use regex::Regex;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::fs;
@@ -442,8 +443,9 @@ export default {{}};
 
         if result.is_none() {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            if cwd != start_dir {
-                return self.resolve_from_node_modules_with_dir(package_specifier, &cwd);
+            let cwd_canonical = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+            if cwd_canonical != start_dir {
+                return self.resolve_from_node_modules_with_dir(package_specifier, &cwd_canonical);
             }
         }
 
@@ -728,11 +730,14 @@ export const __esModule = true;
     }
 
     fn is_cjs_module(&self, content: &str, file_path: &str) -> bool {
-        let has_require = content.contains("require(");
+        static REQUIRE_REGEX: OnceLock<Regex> = OnceLock::new();
+        let require_regex =
+            REQUIRE_REGEX.get_or_init(|| Regex::new(r#"require\s*\(\s*['"]"#).unwrap());
+
+        let has_require = require_regex.is_match(content);
         let has_module_exports = content.contains("module.exports");
         let has_exports_dot = content.contains("exports.");
-        let has_use_strict_cjs =
-            content.starts_with("'use strict'") || content.starts_with("\"use strict\"");
+        let is_cjs_extension = file_path.ends_with(".cjs");
 
         let has_import = content.contains("import ") || content.contains("import{");
         let has_export = content.contains("export ")
@@ -754,7 +759,7 @@ export const __esModule = true;
             }
         }
 
-        (has_require || has_module_exports || has_exports_dot) && has_use_strict_cjs
+        has_require || has_module_exports || has_exports_dot || is_cjs_extension
     }
 
     fn get_package_type_for_file(&self, file_path: &str) -> Option<String> {
@@ -787,7 +792,24 @@ const __cjs_module__ = {{ exports: {{}} }};
 const __cjs_exports__ = __cjs_module__.exports;
 
 const __require__ = (id) => {{
-    return {{}};
+    if (typeof globalThis.__rari_require__ === 'function') {{
+        try {{
+            return globalThis.__rari_require__(id, '{file_path}');
+        }} catch (error) {{
+            throw new Error(`Cannot find module '${{id}}' from '{file_path}': ${{error.message}}`);
+        }}
+    }}
+
+    if (typeof import.meta?.resolve === 'function') {{
+        try {{
+            const resolved = import.meta.resolve(id);
+            throw new Error(`Module '${{id}}' resolved to ${{resolved}} but dynamic require is not fully supported. Use dynamic import() instead.`);
+        }} catch (e) {{
+            throw new Error(`Cannot find module '${{id}}' from '{file_path}'`);
+        }}
+    }}
+
+    throw new Error(`Cannot find module '${{id}}' from '{file_path}': require() is not available in this context`);
 }};
 
 (function(module, exports, require) {{
@@ -795,9 +817,33 @@ const __require__ = (id) => {{
 }})(__cjs_module__, __cjs_exports__, __require__);
 
 const __result__ = __cjs_module__.exports;
+
 export default __result__;
 
+const __exportProxy__ = new Proxy(__result__, {{
+    get(target, prop) {{
+        if (prop === Symbol.toStringTag) return 'Module';
+        if (prop === '__esModule') return true;
+        return target[prop];
+    }},
+    has(target, prop) {{
+        return prop in target;
+    }},
+    ownKeys(target) {{
+        return Reflect.ownKeys(target);
+    }},
+    getOwnPropertyDescriptor(target, prop) {{
+        const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (desc) {{
+            return {{ ...desc, enumerable: true, configurable: true }};
+        }}
+        return desc;
+    }}
+}});
+
 const __keys__ = Object.keys(__result__);
+
+export {{ __exportProxy__ as __cjsExports__, __keys__ }};
 "#,
             file_path = file_path,
             content = content
