@@ -1,3 +1,13 @@
+## [rari@0.8.8] - 2026-02-02
+
+### 🐛 Bug Fixes
+
+- *(vite)* Handle absolute paths in client and server component resolution
+## [rari@0.8.7] - 2026-02-02
+
+### 💼 Other
+
+- Rari@0.8.7
 ## [rari@0.8.6] - 2026-02-02
 
 ### 🚀 Features
