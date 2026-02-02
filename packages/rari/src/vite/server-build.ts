@@ -575,7 +575,8 @@ const ${importName} = (props) => {
               const pathWithExt = resolvedPath + ext
               if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
                 if (self.isClientComponent(pathWithExt)) {
-                  const componentId = path.relative(self.projectRoot, pathWithExt)
+                  const relativePath = path.relative(self.projectRoot, pathWithExt)
+                  const componentId = relativePath.startsWith('..') ? pathWithExt : relativePath
                   clientComponentRefs.set(pathWithExt, componentId)
                   return { id: `\0client-ref:${pathWithExt}` }
                 }
@@ -589,7 +590,8 @@ const ${importName} = (props) => {
                       continue
                     if (trimmed === '\'use server\'' || trimmed === '"use server"'
                       || trimmed === '\'use server\';' || trimmed === '"use server";') {
-                      const actionId = path.relative(self.projectRoot, pathWithExt)
+                      const relActionPath = path.relative(self.projectRoot, pathWithExt)
+                      const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
                       serverActionRefs.set(pathWithExt, actionId)
                       return { id: `\0server-action:${pathWithExt}` }
                     }
@@ -610,7 +612,8 @@ const ${importName} = (props) => {
         load(id: string) {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
-            const componentId = clientComponentRefs.get(filePath) || path.relative(self.projectRoot, filePath)
+            const relativePath = path.relative(self.projectRoot, filePath)
+            const componentId = clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)
 
             return {
               code: `
