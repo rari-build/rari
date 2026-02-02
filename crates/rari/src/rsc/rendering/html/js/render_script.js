@@ -346,39 +346,48 @@ function escapeHtml(text) {
 }
 
 globalThis.renderRscToHtml = function (rscRows) {
-  const rendered = new Map()
-  const moduleMap = new Map()
+  try {
+    const rendered = new Map()
+    const moduleMap = new Map()
 
-  let lastRowId = -1
-  for (const row of rscRows)
-    lastRowId = row.id
+    let lastRowId = -1
+    for (const row of rscRows)
+      lastRowId = row.id
 
-  for (const row of rscRows) {
-    if (row.data && row.data.Text) {
-      const text = row.data.Text
-      if (text.startsWith('I[')) {
-        try {
-          const importData = JSON.parse(text.substring(1))
-          if (Array.isArray(importData) && importData.length >= 3) {
-            const [filePath, , exportName] = importData
-            const componentPath = `${filePath}#${exportName}`
-            const moduleRef = `$L${row.id}`
-            moduleMap.set(moduleRef, componentPath)
-            rendered.set(row.id, '')
+    for (const row of rscRows) {
+      if (row.data && row.data.Text) {
+        const text = row.data.Text
+        if (text.startsWith('I[')) {
+          try {
+            const importData = JSON.parse(text.substring(1))
+            if (Array.isArray(importData) && importData.length >= 3) {
+              const [filePath, , exportName] = importData
+              const componentPath = `${filePath}#${exportName}`
+              const moduleRef = `$L${row.id}`
+              moduleMap.set(moduleRef, componentPath)
+              rendered.set(row.id, '')
+            }
+          }
+          catch (e) {
+            console.error('[rari] renderRscToHtml: Error parsing import:', e)
           }
         }
-        catch {}
       }
     }
+
+    for (const row of rscRows) {
+      if (rendered.has(row.id))
+        continue
+
+      const html = renderElement(row.data, rendered, row.id, moduleMap)
+      rendered.set(row.id, html)
+    }
+
+    const result = rendered.get(lastRowId) || rendered.get(0) || ''
+    return result
   }
-
-  for (const row of rscRows) {
-    if (rendered.has(row.id))
-      continue
-
-    const html = renderElement(row.data, rendered, row.id, moduleMap)
-    rendered.set(row.id, html)
+  catch (e) {
+    console.error('[rari] renderRscToHtml: Fatal error:', e, e.stack)
+    return ''
   }
-
-  return rendered.get(lastRowId) || rendered.get(0) || ''
 }

@@ -427,23 +427,24 @@ impl RscHtmlRenderer {
             .map(|row| {
                 let data_json = match &row.data {
                     RscElement::Component { tag, key, props } => {
-                        serde_json::json!({
-                            "Component": {
-                                "tag": tag,
-                                "key": key,
-                                "props": props
-                            }
-                        })
+                        serde_json::json!(["$", tag, key.as_deref().unwrap_or(""), props])
                     }
                     RscElement::Text(text) => {
-                        serde_json::json!({
-                            "Text": text
-                        })
+                        if text.starts_with("I[") {
+                            serde_json::json!({
+                                "Text": text
+                            })
+                        } else if text.starts_with('[') || text.starts_with('{') {
+                            match serde_json::from_str::<serde_json::Value>(text) {
+                                Ok(parsed) => parsed,
+                                Err(_) => serde_json::json!(text),
+                            }
+                        } else {
+                            serde_json::json!(text)
+                        }
                     }
                     RscElement::Reference(ref_str) => {
-                        serde_json::json!({
-                            "Reference": ref_str
-                        })
+                        serde_json::json!(ref_str)
                     }
                     RscElement::Suspense { fallback_ref, children_ref, boundary_id, props } => {
                         serde_json::json!({
@@ -471,7 +472,8 @@ impl RscHtmlRenderer {
             })
             .collect();
 
-        let rows_array = serde_json::Value::Array(rows_json);
+        let rows_array = serde_json::Value::Array(rows_json.clone());
+
         let result =
             self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
                 |e| RariError::internal(format!("Failed to execute renderRscToHtml: {}", e)),
@@ -680,18 +682,15 @@ impl RscToHtmlConverter {
             RscChunkType::InitialShell => {
                 let html = if !self.shell_sent {
                     self.shell_sent = true;
-                    let mut output = self.generate_html_shell();
-                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
-                        Ok(rsc_html) => {
-                            output.extend(rsc_html);
+                    let output = self.generate_html_shell();
 
-                            output
-                        }
-                        Err(e) => {
-                            error!("Error parsing RSC in shell: {}", e);
-                            output
-                        }
+                    let rsc_line = String::from_utf8_lossy(&chunk.data);
+
+                    if !self.payload_embedding_disabled {
+                        self.rsc_wire_format.push(rsc_line.trim().to_string());
                     }
+
+                    output
                 } else {
                     match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
                         Ok(rsc_html) => rsc_html,
@@ -855,11 +854,26 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        if json_str.starts_with('I') || json_str.starts_with('S') {
+        if json_str.starts_with('I') || json_str.starts_with('S') || json_str.starts_with('E') {
             return Ok(Vec::new());
         }
 
         if json_str.starts_with('"') && json_str.contains("$S") {
+            return Ok(Vec::new());
+        }
+
+        if json_str.starts_with('"')
+            && let Ok(serde_json::Value::String(s)) = serde_json::from_str(json_str)
+            && (s.contains(":[")
+                || s.contains(":\"")
+                || s.contains(":I")
+                || s.contains("[\"$\",\"")
+                || s.contains("&quot;$&quot;"))
+        {
+            return Ok(Vec::new());
+        }
+
+        if json_str.starts_with("[[") || json_str.len() > 5000 {
             return Ok(Vec::new());
         }
 
@@ -910,6 +924,16 @@ if (typeof window !== 'undefined') {{
                         RariError::internal(format!("Invalid chunk reference: {}", s))
                     })?;
                     return Ok(s.to_string());
+                }
+
+                if s.starts_with('I') || s.starts_with('S') || s.starts_with('E') {
+                    return Ok(String::new());
+                }
+
+                if let Some(colon_pos) = s.find(':')
+                    && s[..colon_pos].chars().all(|c| c.is_ascii_digit())
+                {
+                    return Ok(String::new());
                 }
 
                 return Ok(Self::escape_html(s));
