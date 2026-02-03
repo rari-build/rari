@@ -1,6 +1,7 @@
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 // @ts-expect-error - react-dom/client types not available
 import * as ReactDOMClient from 'react-dom/client'
+import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
 interface ModuleData {
   id: string
@@ -61,6 +62,9 @@ if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] ==
   (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
 if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && !(window as unknown as WindowWithRari)['~rari'])
+    (window as unknown as WindowWithRari)['~rari'] = (globalThis as unknown as GlobalWithRari)['~rari']
+
   if (!(window as unknown as WindowWithRari)['~rari'].bufferedEvents)
     (window as unknown as WindowWithRari)['~rari'].bufferedEvents = []
 
@@ -291,30 +295,7 @@ export function registerClientComponent(componentFunction: any, id: string, expo
 }
 
 export function getClientComponent(id: string): any {
-  if ((globalThis as unknown as GlobalWithRari)['~clientComponents'][id]?.component)
-    return (globalThis as unknown as GlobalWithRari)['~clientComponents'][id].component
-
-  if (id.includes('#')) {
-    const [path, exportName] = id.split('#')
-
-    const componentId = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][path]
-    if (componentId && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId]) {
-      const componentInfo = (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId]
-      if (exportName === 'default' || !exportName)
-        return componentInfo.component
-    }
-
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentIdByNormalizedPath])
-      return (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentIdByNormalizedPath].component
-  }
-
-  const componentId = (globalThis as unknown as GlobalWithRari)['~clientComponentNames'][id]
-  if (componentId && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId])
-    return (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId].component
-
-  return null
+  return getClientComponentShared(id)
 }
 
 export function createClientModuleMap(): Record<string, any> {
@@ -457,7 +438,7 @@ class RscClient {
 
     response = await attempt()
     if (!response) {
-      await new Promise(r => setTimeout(r, 150))
+      await new Promise(r => setTimeout(r, this.config.retryDelay))
       response = await attempt()
     }
     if (!response)
@@ -1124,7 +1105,10 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
       if (typeof window !== 'undefined')
         window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
 
-      return () => window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
+      return () => {
+        if (typeof window !== 'undefined')
+          window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
+      }
     }, [])
 
     return createElement(Suspense, {

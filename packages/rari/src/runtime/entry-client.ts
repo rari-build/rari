@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
+import { getClientComponent } from './shared/get-client-component'
 import 'virtual:rsc-integration'
 
 interface GlobalWithRari {
@@ -91,32 +92,6 @@ function createSsrManifest(): any {
       },
     }),
   }
-}
-
-function getClientComponent(id: string): any {
-  if (getGlobalThis()['~clientComponents'][id]?.component)
-    return getGlobalThis()['~clientComponents'][id].component
-
-  if (id.includes('#')) {
-    const [path, exportName] = id.split('#')
-    const componentId = getGlobalThis()['~clientComponentPaths'][path]
-    if (componentId && getGlobalThis()['~clientComponents'][componentId]) {
-      const componentInfo = getGlobalThis()['~clientComponents'][componentId]
-      if (exportName === 'default' || !exportName)
-        return componentInfo.component
-    }
-
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = getGlobalThis()['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && getGlobalThis()['~clientComponents'][componentIdByNormalizedPath])
-      return getGlobalThis()['~clientComponents'][componentIdByNormalizedPath].component
-  }
-
-  const componentId = getGlobalThis()['~clientComponentNames'][id]
-  if (componentId && getGlobalThis()['~clientComponents'][componentId])
-    return getGlobalThis()['~clientComponents'][componentId].component
-
-  return null
 }
 
 if (typeof getRariGlobal() === 'undefined')
