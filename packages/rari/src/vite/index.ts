@@ -1559,6 +1559,30 @@ const ${componentName} = registerClientReference(
         const currentFilePath = fileURLToPath(currentFileUrl)
         const currentDir = path.dirname(currentFilePath)
 
+        let runtimeDir: string | null = null
+        const possibleRuntimeDirs = [
+          path.join(currentDir, 'runtime'),
+          path.join(currentDir, '../runtime'),
+          path.join(currentDir, '../src/runtime'),
+        ]
+
+        for (const dir of possibleRuntimeDirs) {
+          if (fs.existsSync(dir)) {
+            runtimeDir = dir
+            break
+          }
+        }
+
+        if (runtimeDir) {
+          const chunkPath = path.join(runtimeDir, id)
+          if (fs.existsSync(chunkPath))
+            return chunkPath
+
+          const altChunkPath = path.join(runtimeDir, '../dist', path.basename(id))
+          if (fs.existsSync(altChunkPath))
+            return altChunkPath
+        }
+
         const chunkPath = path.join(currentDir, id)
         if (fs.existsSync(chunkPath))
           return chunkPath
