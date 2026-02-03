@@ -22,7 +22,7 @@
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
     "@posthog/react": "catalog:analytics",
-    "@sentry/react": "catalog:",
+    "@sentry/react": "catalog:monitoring",
     "@shikijs/core": "catalog:mdx",
     "@shikijs/engine-oniguruma": "catalog:mdx",
     "@shikijs/langs": "catalog:mdx",
@@ -35,11 +35,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:tailwind",
-    "@types/node": "catalog:",
+    "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
-    "@typescript/native-preview": "catalog:",
-    "oxlint": "catalog:",
+    "@typescript/native-preview": "catalog:typescript",
+    "oxlint": "catalog:eslint",
     "rolldown-vite": "catalog:build",
     "tailwindcss": "catalog:tailwind"
   }

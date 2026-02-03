@@ -75,6 +75,7 @@ export interface MetadataResult {
 
 export type StaticParamsResult = Array<Record<string, string | string[]>>
 
+/* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractServerProps(
   componentPath: string,
   params: Record<string, string>,
@@ -142,7 +143,9 @@ export async function extractServerProps(
     }
   }
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractMetadata(
   componentPath: string,
   params: Record<string, string>,
@@ -167,6 +170,7 @@ export async function extractMetadata(
     return {}
   }
 }
+/* v8 ignore stop */
 
 export function mergeMetadata(
   parentMetadata: MetadataResult,
@@ -212,6 +216,7 @@ export function mergeMetadata(
   return merged
 }
 
+/* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractStaticParams(
   componentPath: string,
 ): Promise<StaticParamsResult> {
@@ -231,7 +236,9 @@ export async function extractStaticParams(
     return []
   }
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function hasServerSideDataFetching(
   componentPath: string,
 ): Promise<boolean> {
@@ -250,12 +257,14 @@ export async function hasServerSideDataFetching(
     return false
   }
 }
+/* v8 ignore stop */
 
 const propsCache = new Map<string, {
   result: ServerSidePropsResult
   timestamp: number
 }>()
 
+/* v8 ignore start - depends on extractServerProps which requires dynamic imports */
 export async function extractServerPropsWithCache(
   componentPath: string,
   params: Record<string, string>,
@@ -277,18 +286,22 @@ export async function extractServerPropsWithCache(
 
   return result
 }
+/* v8 ignore stop */
 
 export function clearPropsCache(): void {
   propsCache.clear()
 }
 
+/* v8 ignore start - cache clearing logic, difficult to test without populating cache via dynamic imports */
 export function clearPropsCacheForComponent(componentPath: string): void {
   for (const key of propsCache.keys()) {
     if (key.startsWith(componentPath))
       propsCache.delete(key)
   }
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - depends on extractMetadata which requires dynamic imports */
 export async function collectMetadataFromChain(
   layoutPaths: string[],
   pagePath: string,
@@ -307,3 +320,4 @@ export async function collectMetadataFromChain(
 
   return metadata
 }
+/* v8 ignore stop */

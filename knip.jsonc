@@ -53,10 +53,7 @@
       "ignore": [
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
-      // Tailwind dependencies used via Vite plugin
       "ignoreDependencies": [
-        "rolldown-vite",
-        "@tailwindcss/vite",
         "tailwindcss"
       ]
     },
@@ -71,9 +68,7 @@
       "ignore": [
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
-      // Tailwind dependencies used via Vite plugin
       "ignoreDependencies": [
-        "@tailwindcss/vite",
         "tailwindcss"
       ]
     }

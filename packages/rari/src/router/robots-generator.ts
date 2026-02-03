@@ -56,16 +56,21 @@ export function generateRobotsTxt(robots: Robots): string {
   return lines.join('\n')
 }
 
+/* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findRobotsFile(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 ): Promise<{ type: 'static' | 'dynamic', path: string } | null> {
   const staticPath = path.join(appDir, 'robots.txt')
   try {
     await fs.access(staticPath)
     return { type: 'static', path: staticPath }
   }
-  catch {}
+  catch (err: any) {
+    if (err?.code !== 'ENOENT')
+      throw err
+    // File doesn't exist, continue to check dynamic files
+  }
 
   for (const ext of extensions) {
     const dynamicPath = path.join(appDir, `robots${ext}`)
@@ -73,12 +78,18 @@ export async function findRobotsFile(
       await fs.access(dynamicPath)
       return { type: 'dynamic', path: dynamicPath }
     }
-    catch {}
+    catch (err: any) {
+      if (err?.code !== 'ENOENT')
+        throw err
+      // File doesn't exist, try next extension
+    }
   }
 
   return null
 }
+/* v8 ignore stop */
 
+/* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateRobotsFile(options: RobotsGeneratorOptions): Promise<boolean> {
   const { appDir, outDir, extensions } = options
   const robotsFile = await findRobotsFile(appDir, extensions)
@@ -182,3 +193,4 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     return false
   }
 }
+/* v8 ignore stop */

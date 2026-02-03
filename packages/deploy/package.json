@@ -21,12 +21,15 @@
       "import": "./dist/render.mjs"
     }
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "tsdown"
   },
   "devDependencies": {
     "@rari/logger": "workspace:*",
-    "@types/node": "catalog:default",
+    "@types/node": "catalog:typescript",
     "tsdown": "catalog:build"
   }
 }

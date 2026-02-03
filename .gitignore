@@ -4,3 +4,4 @@ node_modules/
 packages/*/bin/
 .pnpm-store/
 .cache/
+coverage/

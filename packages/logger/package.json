@@ -17,7 +17,7 @@
     "build": "tsdown"
   },
   "devDependencies": {
-    "@types/node": "catalog:default",
+    "@types/node": "catalog:typescript",
     "tsdown": "catalog:build"
   }
 }

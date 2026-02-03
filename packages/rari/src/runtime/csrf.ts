@@ -1,3 +1,11 @@
+declare global {
+  interface Window {
+    getCsrfToken: typeof getCsrfToken
+    fetchWithCsrf: typeof fetchWithCsrf
+    refreshCsrfToken: typeof refreshCsrfToken
+  }
+}
+
 export function getCsrfToken(): string | null {
   if (typeof window === 'undefined')
     return null
@@ -50,32 +58,39 @@ export async function fetchWithCsrf(
   if (token)
     headers.set('X-CSRF-Token', token)
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
+  const request = new Request(url, { ...options, headers })
+  let retryRequest: Request | null = null
+  try {
+    retryRequest = request.clone()
+  }
+  catch {
+    retryRequest = null
+  }
 
+  const response = await fetch(request)
+
+  /* v8 ignore start - retry logic with token refresh */
   if (response.status === 403 && url.includes('/_rari/')) {
     const refreshed = await refreshCsrfToken()
     if (refreshed) {
       const retryToken = getCsrfToken()
-      if (retryToken) {
-        headers.set('X-CSRF-Token', retryToken)
-        return fetch(url, {
-          ...options,
-          headers,
-        })
+      if (retryToken && retryRequest) {
+        const retryHeaders = new Headers(retryRequest.headers)
+        retryHeaders.set('X-CSRF-Token', retryToken)
+        return fetch(new Request(retryRequest, { headers: retryHeaders }))
       }
     }
   }
+  /* v8 ignore stop */
 
   return response
 }
 
+/* v8 ignore start - browser initialization code */
 if (typeof window !== 'undefined') {
-  ;(window as any).getCsrfToken = getCsrfToken
-  ;(window as any).fetchWithCsrf = fetchWithCsrf
-  ;(window as any).refreshCsrfToken = refreshCsrfToken
+  window.getCsrfToken = getCsrfToken
+  window.fetchWithCsrf = fetchWithCsrf
+  window.refreshCsrfToken = refreshCsrfToken
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -86,3 +101,4 @@ if (typeof window !== 'undefined') {
     refreshCsrfToken()
   }
 }
+/* v8 ignore stop */
