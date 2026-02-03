@@ -92,7 +92,7 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
       content = content.replace(
         /import\s*(\{[^}]+\})\s*from\s*["']\.\.\/([^"']+)["'];?/g,
-        'import $1 from "rari/$2";'
+        'import $1 from "rari/$2";',
       )
 
       return content
