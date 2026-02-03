@@ -25,7 +25,7 @@ const serverReferenceRegistry = new Map<string, ServerReferenceData>()
 let rustBridge: RustBridge | null = null
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari']?.bridge !== 'undefined')
-  rustBridge = (globalThis as unknown as GlobalWithRari)['~rari']!.bridge!
+  rustBridge = (globalThis as unknown as GlobalWithRari)['~rari']!.bridge
 
 export function registerClientReference(clientReference: any, id: string, exportName: string): any {
   const key = `${id}#${exportName}`

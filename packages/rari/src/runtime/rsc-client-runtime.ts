@@ -745,7 +745,7 @@ class RscClient {
   }
 
   parseRscResponse(rscPayload: string): any {
-    const lines = rscPayload.trim().split('\\n')
+    const lines = rscPayload.trim().split(/\r?\n/)
     const modules = new Map()
     const elements = new Map()
     const errors = []
