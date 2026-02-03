@@ -88,7 +88,14 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
   for (const filePath of possiblePaths) {
     try {
-      return await fs.promises.readFile(filePath, 'utf-8')
+      let content = await fs.promises.readFile(filePath, 'utf-8')
+
+      content = content.replace(
+        /import\s*(\{[^}]+\})\s*from\s*["']\.\.\/([^"']+)["'];?/g,
+        'import $1 from "rari/$2";'
+      )
+
+      return content
     }
     catch {}
   }

@@ -79,7 +79,8 @@
     "./vite": {
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
-    }
+    },
+    "./*.mjs": "./dist/*.mjs"
   },
   "types": "dist/index.d.mts",
   "bin": {
