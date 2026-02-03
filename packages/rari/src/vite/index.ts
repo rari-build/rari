@@ -90,13 +90,12 @@ async function loadRuntimeFile(filename: string): Promise<string> {
     try {
       let content = await fs.promises.readFile(filePath, 'utf-8')
 
-      content = content.replace(
-        /import\s+(?:(\*\s+as\s+\w+)|(\w+)|(\{[^}]+\})|(\w+\s*,\s*\{[^}]+\})|(\w+\s*,\s*\*\s+as\s+\w+))\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
-        (match, namespace, defaultImport, named, defaultAndNamed, defaultAndNamespace, modulePath) => {
-          const importSpecifier = namespace || defaultImport || named || defaultAndNamed || defaultAndNamespace
-          return `import ${importSpecifier} from "rari/${modulePath}";`
-        },
-      )
+      if (filePath.endsWith('.ts')) {
+        content = content.replace(
+          /import\s*(\{[^}]+\})\s*from\s*["']\.\.\/([^"']+)["'];?/g,
+          'import $1 from "rari/$2";',
+        )
+      }
 
       return content
     }
@@ -1507,7 +1506,7 @@ const ${componentName} = registerClientReference(
       })
     },
 
-    resolveId(id) {
+    resolveId(id, importer) {
       if (id === 'virtual:rsc-integration' || id === 'virtual:rsc-integration.ts')
         return 'virtual:rsc-integration.ts'
       if (id === 'virtual:rari-entry-client' || id === 'virtual:rari-entry-client.ts')
@@ -1524,6 +1523,20 @@ const ${componentName} = registerClientReference(
         return 'virtual:loading-component-registry.ts'
       if (id === 'react-server-dom-rari/server')
         return id
+
+      if (importer && importer.startsWith('virtual:') && id.startsWith('../')) {
+        const currentFileUrl = import.meta.url
+        const currentFilePath = fileURLToPath(currentFileUrl)
+        const currentDir = path.dirname(currentFilePath)
+
+        const chunkPath = path.join(currentDir, id)
+        if (fs.existsSync(chunkPath))
+          return chunkPath
+
+        const altChunkPath = path.join(currentDir, '../dist', path.basename(id))
+        if (fs.existsSync(altChunkPath))
+          return altChunkPath
+      }
 
       if (process.env.NODE_ENV === 'production') {
         try {
@@ -1701,6 +1714,9 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
       if (id === 'virtual:react-server-dom-rari-client.ts')
         return await loadRuntimeFile('react-server-dom-rari-client.mjs')
+
+      if (id.endsWith('.mjs') && fs.existsSync(id))
+        return fs.readFileSync(id, 'utf-8')
     },
 
     async handleHotUpdate({ file, server }) {
