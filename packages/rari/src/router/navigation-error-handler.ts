@@ -106,7 +106,7 @@ export function createNavigationError(
     return {
       type: 'parse-error',
       message: 'Failed to parse server response',
-      /* v8 ignore next - defensive check for non-Error SyntaxError */
+      /* v8 ignore next - defensive check for non-Error values from parse-related condition */
       originalError: error instanceof Error ? error : undefined,
       url,
       timestamp: Date.now(),

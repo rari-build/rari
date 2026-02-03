@@ -1,6 +1,6 @@
 import type { AppRouteManifest, RouteSegment } from '@rari/router/types'
 import { createRouteInfo, extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, normalizePath, parseRoutePath } from '@rari/router/navigation-utils'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 describe('parseRoutePath', () => {
   it('should parse a simple path', () => {
@@ -164,12 +164,19 @@ describe('matchRouteParams', () => {
 })
 
 describe('isExternalUrl', () => {
+  let originalWindow: any
+
   beforeEach(() => {
+    originalWindow = globalThis.window
     globalThis.window = {
       location: {
         origin: 'https://mysite.com',
       },
     } as any
+  })
+
+  afterEach(() => {
+    globalThis.window = originalWindow
   })
 
   it('should identify external URLs', () => {
@@ -199,12 +206,9 @@ describe('isExternalUrl', () => {
   })
 
   it('should handle error when window is not available', () => {
-    const originalWindow = globalThis.window
     delete (globalThis as any).window
 
     expect(isExternalUrl('https://example.com')).toBe(false)
-
-    globalThis.window = originalWindow
   })
 })
 
@@ -537,12 +541,19 @@ describe('createRouteInfo', () => {
 })
 
 describe('extractPathname', () => {
+  let originalWindow: any
+
   beforeEach(() => {
+    originalWindow = globalThis.window
     globalThis.window = {
       location: {
         origin: 'https://example.com',
       },
     } as any
+  })
+
+  afterEach(() => {
+    globalThis.window = originalWindow
   })
 
   it('should extract pathname from full URL', () => {
@@ -571,12 +582,9 @@ describe('extractPathname', () => {
   })
 
   it('should handle error when window.location throws', () => {
-    const originalWindow = globalThis.window
     delete (globalThis as any).window
 
     const result = extractPathname('https://example.com/test')
     expect(result).toBe('https://example.com/test')
-
-    globalThis.window = originalWindow
   })
 })

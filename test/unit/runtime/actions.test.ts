@@ -189,7 +189,15 @@ describe('actions', () => {
 
     beforeEach(() => {
       OriginalFormData = globalThis.FormData
-      mockFormData = new Map()
+      const internalMap = new Map()
+      mockFormData = {
+        entries() {
+          return internalMap.entries()
+        },
+        [Symbol.iterator]() {
+          return internalMap.entries()
+        },
+      }
 
       globalThis.FormData = function (_form: any) {
         return mockFormData

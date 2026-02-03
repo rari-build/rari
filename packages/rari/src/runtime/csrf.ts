@@ -50,22 +50,25 @@ export async function fetchWithCsrf(
   if (token)
     headers.set('X-CSRF-Token', token)
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
+  const request = new Request(url, { ...options, headers })
+  let retryRequest: Request | null = null
+  try {
+    retryRequest = request.clone()
+  }
+  catch {
+    retryRequest = null
+  }
+
+  const response = await fetch(request)
 
   /* v8 ignore start - retry logic with token refresh */
   if (response.status === 403 && url.includes('/_rari/')) {
     const refreshed = await refreshCsrfToken()
     if (refreshed) {
       const retryToken = getCsrfToken()
-      if (retryToken) {
+      if (retryToken && retryRequest) {
         headers.set('X-CSRF-Token', retryToken)
-        return fetch(url, {
-          ...options,
-          headers,
-        })
+        return fetch(new Request(retryRequest, { headers }))
       }
     }
   }

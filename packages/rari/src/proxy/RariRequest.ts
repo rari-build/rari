@@ -81,14 +81,6 @@ class RequestCookiesImpl implements RequestCookies {
       this.pendingDeletes.delete(name)
     }
   }
-
-  /* v8 ignore next 5 - internal method not exposed in public interface */
-  getPendingChanges() {
-    return {
-      deletes: [...this.pendingDeletes],
-      sets: [...this.pendingSets.values()],
-    }
-  }
 }
 
 class RariURLImpl implements RariURL {

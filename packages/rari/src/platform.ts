@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, parse } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
@@ -84,13 +84,17 @@ export function getBinaryPath(): string {
     let workspaceRoot = null
 
     /* v8 ignore start - workspace search logic, tested in actual workspace */
-    while (currentDir !== '/' && currentDir !== '') {
+    const rootDir = parse(currentDir).root
+    while (currentDir !== rootDir && currentDir !== '') {
       const packagesDir = join(currentDir, 'packages')
       if (existsSync(packagesDir)) {
         workspaceRoot = currentDir
         break
       }
-      currentDir = join(currentDir, '..')
+      const parentDir = dirname(currentDir)
+      if (parentDir === currentDir)
+        break
+      currentDir = parentDir
     }
 
     if (workspaceRoot) {

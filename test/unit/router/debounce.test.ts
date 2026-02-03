@@ -8,6 +8,7 @@ describe('debounce', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   describe('basic functionality', () => {

@@ -21,6 +21,9 @@
       "import": "./dist/render.mjs"
     }
   },
+  "engines": {
+    "node": ">=25.0.0"
+  },
   "scripts": {
     "build": "tsdown"
   },

@@ -50,7 +50,7 @@ export function createServerReference(
 
       if (!response.ok) {
         /* v8 ignore next - edge case when response.text() fails */
-        const errorText = await response.text().catch(/* v8 ignore next */() => response.statusText)
+        const errorText = await response.text().catch(() => response.statusText)
         console.error(`[rari] ServerAction: HTTP ${response.status} error:`, errorText)
         throw new Error(
           `Server action "${exportName}" failed with status ${response.status}: ${errorText}`,

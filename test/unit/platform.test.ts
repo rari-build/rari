@@ -144,18 +144,20 @@ describe('platform', () => {
   describe('getBinaryPath', () => {
     it('should find binary in workspace', () => {
       const path = getBinaryPath()
+      const expectedPlatform = `rari-${process.platform}-${process.arch}`
+      const expectedBinaryName = process.platform === 'win32' ? 'rari.exe' : 'rari'
 
       expect(typeof path).toBe('string')
-      expect(path).toContain('rari-darwin-arm64')
-      expect(path).toContain('/bin/rari')
+      expect(path).toContain(expectedPlatform)
+      expect(path).toContain(`${require('node:path').sep}bin${require('node:path').sep}${expectedBinaryName}`)
     })
 
     it('should return valid path that exists', () => {
       const path = getBinaryPath()
+      const expectedBinaryName = process.platform === 'win32' ? 'rari.exe' : 'rari'
 
-      expect(path.startsWith('/')).toBe(true)
-
-      expect(path.endsWith('rari') || path.endsWith('rari.exe')).toBe(true)
+      expect(require('node:path').isAbsolute(path)).toBe(true)
+      expect(path.endsWith(expectedBinaryName)).toBe(true)
     })
   })
 })

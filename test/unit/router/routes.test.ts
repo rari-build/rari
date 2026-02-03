@@ -549,44 +549,6 @@ describe('generateAppRouteManifest', () => {
     })
   })
 
-  describe('layout sorting edge cases', () => {
-    it('should sort root layout first', async () => {
-      vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['layout.tsx', 'dashboard'] as any)
-        .mockResolvedValueOnce(['layout.tsx'] as any)
-
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-      const manifest = await generateAppRouteManifest('/app')
-
-      expect(manifest.layouts[0].path).toBe('/')
-      expect(manifest.layouts[1].path).toBe('/dashboard')
-    })
-
-    it('should handle non-root layouts', async () => {
-      vi.mocked(fs.readdir)
-        .mockResolvedValueOnce(['a', 'b'] as any)
-        .mockResolvedValueOnce(['layout.tsx'] as any)
-        .mockResolvedValueOnce(['c'] as any)
-        .mockResolvedValueOnce(['layout.tsx'] as any)
-
-      vi.mocked(fs.stat)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-        .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-        .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-      const manifest = await generateAppRouteManifest('/app')
-
-      expect(manifest.layouts[0].path).toBe('/a')
-      expect(manifest.layouts[1].path).toBe('/b/c')
-    })
-  })
-
   describe('directory filtering', () => {
     it('should skip node_modules', async () => {
       vi.mocked(fs.readdir).mockResolvedValueOnce(['node_modules', 'page.tsx'] as any)
@@ -685,76 +647,5 @@ describe('generateAppRouteManifest', () => {
       expect(consoleSpy).toHaveBeenCalled()
       consoleSpy.mockRestore()
     })
-  })
-})
-
-describe('layout sorting edge cases', () => {
-  it('should sort root layout first', async () => {
-    vi.mocked(fs.readdir)
-      .mockResolvedValueOnce(['layout.tsx', 'dashboard'] as any)
-      .mockResolvedValueOnce(['layout.tsx'] as any)
-
-    vi.mocked(fs.stat)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-    const manifest = await generateAppRouteManifest('/app')
-
-    expect(manifest.layouts[0].path).toBe('/')
-    expect(manifest.layouts[1].path).toBe('/dashboard')
-  })
-
-  it('should sort non-root layout before root when reversed', async () => {
-    vi.mocked(fs.readdir)
-      .mockResolvedValueOnce(['dashboard', 'layout.tsx'] as any)
-      .mockResolvedValueOnce(['layout.tsx'] as any)
-
-    vi.mocked(fs.stat)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-    const manifest = await generateAppRouteManifest('/app')
-
-    expect(manifest.layouts[0].path).toBe('/')
-    expect(manifest.layouts[1].path).toBe('/dashboard')
-  })
-
-  it('should sort root layout first when comparing with non-root', async () => {
-    vi.mocked(fs.readdir)
-      .mockResolvedValueOnce(['users', 'layout.tsx'] as any)
-      .mockResolvedValueOnce(['layout.tsx'] as any)
-
-    vi.mocked(fs.stat)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-    const manifest = await generateAppRouteManifest('/app')
-
-    expect(manifest.layouts.length).toBe(2)
-    expect(manifest.layouts[0].path).toBe('/')
-    expect(manifest.layouts[1].path).toBe('/users')
-  })
-
-  it('should handle non-root layouts', async () => {
-    vi.mocked(fs.readdir)
-      .mockResolvedValueOnce(['a', 'b'] as any)
-      .mockResolvedValueOnce(['layout.tsx'] as any)
-      .mockResolvedValueOnce(['c'] as any)
-      .mockResolvedValueOnce(['layout.tsx'] as any)
-
-    vi.mocked(fs.stat)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-      .mockResolvedValueOnce({ isDirectory: () => true, isFile: () => false } as any)
-      .mockResolvedValueOnce({ isDirectory: () => false, isFile: () => true } as any)
-
-    const manifest = await generateAppRouteManifest('/app')
-
-    expect(manifest.layouts[0].path).toBe('/a')
-    expect(manifest.layouts[1].path).toBe('/b/c')
   })
 })

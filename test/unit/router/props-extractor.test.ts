@@ -48,17 +48,6 @@ describe('mergeMetadata', () => {
 
       expect(result.title).toBe('Child Title')
     })
-
-    it('should handle parent title as string with child string title', () => {
-      const parent: MetadataResult = {
-        title: 'Parent Title',
-      }
-      const child: MetadataResult = { title: 'Child Title' }
-
-      const result = mergeMetadata(parent, child)
-
-      expect(result.title).toBe('Child Title')
-    })
   })
 
   describe('cache functions', () => {

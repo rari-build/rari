@@ -187,6 +187,18 @@ describe('extractParams', () => {
 
       expect(params).toEqual({ filename: 'my-file.txt' })
     })
+
+    it('should handle trailing slash in path', () => {
+      const params = extractParams('/users/123/', '/users/:id')
+
+      expect(params).toEqual({ id: '123' })
+    })
+
+    it('should handle trailing slash in pattern', () => {
+      const params = extractParams('/users/123', '/users/:id/')
+
+      expect(params).toEqual({ id: '123' })
+    })
   })
 
   describe('complex patterns', () => {

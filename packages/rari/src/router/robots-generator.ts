@@ -66,7 +66,9 @@ export async function findRobotsFile(
     await fs.access(staticPath)
     return { type: 'static', path: staticPath }
   }
-  catch {}
+  catch {
+    // File doesn't exist, continue to check dynamic files
+  }
 
   for (const ext of extensions) {
     const dynamicPath = path.join(appDir, `robots${ext}`)
@@ -74,7 +76,9 @@ export async function findRobotsFile(
       await fs.access(dynamicPath)
       return { type: 'dynamic', path: dynamicPath }
     }
-    catch {}
+    catch {
+      // File doesn't exist, try next extension
+    }
   }
 
   return null

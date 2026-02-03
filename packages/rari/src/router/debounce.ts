@@ -103,7 +103,7 @@ export function debounce<T extends (...args: any[]) => any>(
     if (isInvoking) {
       if (timeoutId === null)
         return leadingEdge(lastCallTime)
-      /* v8 ignore start - edge case: isInvoking true with existing timeout and no maxWait */
+      /* v8 ignore start - edge case: isInvoking true with existing timeout and maxWait defined */
       if (maxWait !== undefined) {
         timeoutId = setTimeout(timerExpired, wait)
         return invokeFunc(lastCallTime)

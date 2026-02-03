@@ -11,6 +11,9 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     setupFiles: ['./test/setup.ts'],
     coverage: {
+      include: [
+        'packages/*/src/**/*.ts',
+      ],
       exclude: [
         'node_modules/',
         'test/',

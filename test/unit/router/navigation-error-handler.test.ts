@@ -235,16 +235,24 @@ describe('NavigationErrorHandler', () => {
   let handler: NavigationErrorHandler
   let onErrorSpy: ReturnType<typeof vi.fn<(error: any) => void>>
   let onRetrySpy: ReturnType<typeof vi.fn<(attempt: number, error: any) => void>>
+  let originalWindow: any
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
     onErrorSpy = vi.fn<(error: any) => void>()
     onRetrySpy = vi.fn<(attempt: number, error: any) => void>()
+    originalWindow = (globalThis as any).window
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    if (originalWindow === undefined) {
+      delete (globalThis as any).window
+    }
+    else {
+      (globalThis as any).window = originalWindow
+    }
   })
 
   describe('constructor', () => {
@@ -309,8 +317,6 @@ describe('NavigationErrorHandler', () => {
       expect(dispatchEventSpy).toHaveBeenCalled()
       const event = dispatchEventSpy.mock.calls[0][0]
       expect(event.type).toBe('rari:navigation-error')
-
-      delete (globalThis as any).window
     })
   })
 
