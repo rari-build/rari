@@ -1,52 +1,8 @@
+import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 // @ts-expect-error - react-dom/client types not available
 import * as ReactDOMClient from 'react-dom/client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
-
-interface ModuleData {
-  id: string
-  chunks: string[]
-  name: string
-}
-
-interface ComponentInfo {
-  id: string
-  path: string
-  type: string
-  component: any
-  registered: boolean
-}
-
-interface GlobalWithRari {
-  '~rari': {
-    isDevelopment?: boolean
-    AppRouterProvider?: any
-    ClientRouter?: any
-    getClientComponent?: (id: string) => any
-    hydrateClientComponents?: (boundaryId: string, content: any, boundaryElement: Element) => void
-    processBoundaryUpdate?: (boundaryId: string, rscRow: string, rowId: string) => void
-    boundaryModules?: Map<string, ModuleData>
-    bufferedRows?: string[]
-    streamComplete?: boolean
-    pendingBoundaryHydrations?: Map<string, any>
-    bufferedEvents?: any[]
-    serverComponents?: Set<string>
-    routeInfoCache?: Map<string, any>
-    bridge?: any
-  }
-  '~clientComponents': Record<string, ComponentInfo>
-  '~clientComponentPaths': Record<string, string>
-  '~clientComponentNames': Record<string, string>
-  '~rscRefreshCounters'?: Record<string, number>
-}
-
-interface WindowWithRari extends Window {
-  '~rari': GlobalWithRari['~rari']
-  '~clientComponents': GlobalWithRari['~clientComponents']
-  '~clientComponentPaths': GlobalWithRari['~clientComponentPaths']
-  '~clientComponentNames': GlobalWithRari['~clientComponentNames']
-  '~rscRefreshCounters'?: Record<string, number>
-}
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}

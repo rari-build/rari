@@ -1,3 +1,4 @@
+import type { GlobalWithRari, WindowWithRari } from './shared/types'
 // @ts-ignore - rari/client is resolved from the built package (circular reference)
 import { ClientRouter } from 'rari/client'
 import * as React from 'react'
@@ -10,26 +11,6 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
 import { getClientComponent } from './shared/get-client-component'
 import 'virtual:rsc-integration'
-
-interface GlobalWithRari {
-  '~rari': {
-    AppRouterProvider?: any
-    ClientRouter?: any
-    getClientComponent?: (id: string) => any
-    hydrateClientComponents?: (boundaryId: string, content: any, boundaryElement: Element) => void
-    boundaryModules?: Map<string, any>
-    bufferedRows?: string[]
-    streamComplete?: boolean
-    pendingBoundaryHydrations?: Map<string, any>
-  }
-  '~clientComponents': Record<string, any>
-  '~clientComponentPaths': Record<string, string>
-  '~clientComponentNames': Record<string, string>
-}
-
-interface WindowWithRari extends Window {
-  '~rari': GlobalWithRari['~rari']
-}
 
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']
