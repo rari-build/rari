@@ -76,21 +76,17 @@ describe('platform', () => {
   })
 
   describe('platform detection', () => {
-    it('should handle all supported platform combinations', () => {
-      const platforms = [
-        { platform: 'darwin', arch: 'x64', expected: 'rari-darwin-x64' },
-        { platform: 'darwin', arch: 'arm64', expected: 'rari-darwin-arm64' },
-        { platform: 'linux', arch: 'x64', expected: 'rari-linux-x64' },
-        { platform: 'linux', arch: 'arm64', expected: 'rari-linux-arm64' },
-        { platform: 'win32', arch: 'x64', expected: 'rari-win32-x64' },
-      ]
+    it.each([
+      { platform: 'darwin', arch: 'x64', expected: 'rari-darwin-x64' },
+      { platform: 'darwin', arch: 'arm64', expected: 'rari-darwin-arm64' },
+      { platform: 'linux', arch: 'x64', expected: 'rari-linux-x64' },
+      { platform: 'linux', arch: 'arm64', expected: 'rari-linux-arm64' },
+      { platform: 'win32', arch: 'x64', expected: 'rari-win32-x64' },
+    ])('should handle $platform-$arch', ({ platform, arch, expected }) => {
+      mockPlatform(platform as any, arch as any)
 
-      for (const { platform, arch, expected } of platforms) {
-        mockPlatform(platform as any, arch as any)
-
-        const instructions = getInstallationInstructions()
-        expect(instructions).toContain(expected)
-      }
+      const instructions = getInstallationInstructions()
+      expect(instructions).toContain(expected)
     })
   })
 
