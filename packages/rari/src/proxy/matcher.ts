@@ -77,8 +77,10 @@ function matchesConditions(
 /* v8 ignore stop */
 
 export function matchesPattern(pathname: string, pattern: string): boolean {
-  const regex = pathToRegex(pattern)
-  return regex.test(pathname)
+  const normalizedPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '')
+  const normalizedPattern = pattern === '/' ? '/' : pattern.replace(/\/+$/, '')
+  const regex = pathToRegex(normalizedPattern)
+  return regex.test(normalizedPath)
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */

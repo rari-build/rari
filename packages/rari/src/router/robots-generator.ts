@@ -66,7 +66,9 @@ export async function findRobotsFile(
     await fs.access(staticPath)
     return { type: 'static', path: staticPath }
   }
-  catch {
+  catch (err: any) {
+    if (err?.code !== 'ENOENT')
+      throw err
     // File doesn't exist, continue to check dynamic files
   }
 
@@ -76,7 +78,9 @@ export async function findRobotsFile(
       await fs.access(dynamicPath)
       return { type: 'dynamic', path: dynamicPath }
     }
-    catch {
+    catch (err: any) {
+      if (err?.code !== 'ENOENT')
+        throw err
       // File doesn't exist, try next extension
     }
   }

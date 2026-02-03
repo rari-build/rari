@@ -2,7 +2,15 @@ import { fetchWithCsrf, getCsrfToken, refreshCsrfToken } from '@rari/runtime/csr
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('csrf', () => {
+  let _origWindow: any
+  let _origDocument: any
+  let _origFetch: any
+
   beforeEach(() => {
+    _origWindow = globalThis.window
+    _origDocument = globalThis.document
+    _origFetch = globalThis.fetch
+
     globalThis.window = {} as any
     globalThis.document = {
       querySelector: vi.fn(),
@@ -20,9 +28,10 @@ describe('csrf', () => {
   })
 
   afterEach(() => {
+    globalThis.window = _origWindow
+    globalThis.document = _origDocument
+    globalThis.fetch = _origFetch
     vi.restoreAllMocks()
-    delete (globalThis as any).window
-    delete (globalThis as any).document
   })
 
   describe('getCsrfToken', () => {

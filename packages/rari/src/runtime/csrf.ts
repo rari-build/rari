@@ -75,8 +75,9 @@ export async function fetchWithCsrf(
     if (refreshed) {
       const retryToken = getCsrfToken()
       if (retryToken && retryRequest) {
-        headers.set('X-CSRF-Token', retryToken)
-        return fetch(new Request(retryRequest, { headers }))
+        const retryHeaders = new Headers(retryRequest.headers)
+        retryHeaders.set('X-CSRF-Token', retryToken)
+        return fetch(new Request(retryRequest, { headers: retryHeaders }))
       }
     }
   }
