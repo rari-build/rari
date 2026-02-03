@@ -1774,7 +1774,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       if (id === 'virtual:rsc-integration.ts') {
         const code = await loadRscClientRuntime()
         return code.replace(
-          /from(\s*)(['"])\.\/react-server-dom-rari-client\.mjs\2/g,
+          /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g,
           (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
         )
       }
