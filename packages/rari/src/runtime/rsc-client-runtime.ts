@@ -114,11 +114,19 @@ if (typeof window !== 'undefined') {
       }
 
       function rscToHtml(element: any): string {
+        const escapeHtml = (value: string) =>
+          value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+
         if (!element)
           return ''
 
         if (typeof element === 'string' || typeof element === 'number')
-          return String(element)
+          return escapeHtml(String(element))
 
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
@@ -142,10 +150,10 @@ if (typeof window !== 'undefined') {
                         return `${kebabKey}:${v}`
                       })
                       .join(';')
-                    attrs += ` style="${styleStr}"`
+                    attrs += ` style="${escapeHtml(styleStr)}"`
                   }
                   else if (typeof value === 'string') {
-                    attrs += ` ${attrName}="${value.replace(/"/g, '&quot;')}"`
+                    attrs += ` ${attrName}="${escapeHtml(value)}"`
                   }
                   else if (typeof value === 'boolean' && value) {
                     attrs += ` ${attrName}`
@@ -824,8 +832,8 @@ class RscClient {
       return elementData
 
     if (Array.isArray(elementData)) {
-      if (elementData.length >= 2 && elementData[0] === '$') {
-        const [type, key, props] = elementData
+      if (elementData.length >= 4 && elementData[0] === '$') {
+        const [, type, key, props] = elementData
 
         let actualType = type
 
