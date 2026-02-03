@@ -1791,9 +1791,11 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
           const isInProjectRoot = !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
           const isInNodeModules = realId.includes(`${path.sep}node_modules${path.sep}`)
 
-          if (isInProjectRoot || isInNodeModules) {
+          const isInRariPackage = realId.includes(`${path.sep}packages${path.sep}rari${path.sep}`)
+            || realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`)
+
+          if (isInProjectRoot || isInNodeModules || isInRariPackage)
             return fs.readFileSync(id, 'utf-8')
-          }
 
           console.warn(`[rari] Refusing to load .mjs file outside project root and node_modules: ${id}`)
           return null
