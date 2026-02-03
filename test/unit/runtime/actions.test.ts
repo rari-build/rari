@@ -332,6 +332,8 @@ describe('actions', () => {
   describe('createFormAction', () => {
     let mockForm: HTMLFormElement
     let mockInputs: any[]
+    let mockFormData: any
+    let OriginalFormData: any
 
     beforeEach(() => {
       mockInputs = []
@@ -351,6 +353,25 @@ describe('actions', () => {
         value: '',
         tagName: tag.toUpperCase(),
       }) as any)
+
+      OriginalFormData = globalThis.FormData
+      const internalMap = new Map()
+      mockFormData = {
+        entries() {
+          return internalMap.entries()
+        },
+        [Symbol.iterator]() {
+          return internalMap.entries()
+        },
+      }
+
+      globalThis.FormData = function (_form: any) {
+        return mockFormData
+      } as any
+    })
+
+    afterEach(() => {
+      globalThis.FormData = OriginalFormData
     })
 
     it('should return action URL and enhance function', () => {
@@ -431,14 +452,18 @@ describe('actions', () => {
       expect(mockForm.addEventListener).toHaveBeenCalledWith('submit', expect.any(Function))
     })
 
-    it('should pass options to enhanceFormWithAction', () => {
+    it('should pass options to enhanceFormWithAction', async () => {
       const action = vi.fn().mockResolvedValue('result')
       const onSuccess = vi.fn()
+      const mockEvent = { preventDefault: vi.fn() }
 
       const formAction = createFormAction('module-123', 'exportName', action)
       formAction.enhance(mockForm, { onSuccess })
 
-      expect(mockForm.addEventListener).toHaveBeenCalled()
+      const submitHandler = vi.mocked(mockForm.addEventListener).mock.calls[0][1] as any
+      await submitHandler(mockEvent)
+
+      expect(onSuccess).toHaveBeenCalledWith('result')
     })
   })
 })

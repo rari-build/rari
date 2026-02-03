@@ -1,3 +1,4 @@
+import nodePath from 'node:path'
 import process from 'node:process'
 import { getBinaryPath, getInstallationInstructions } from '@rari/platform'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -132,21 +133,21 @@ describe('platform', () => {
 
   describe('getBinaryPath', () => {
     it('should find binary in workspace', () => {
-      const path = getBinaryPath()
+      const binaryPath = getBinaryPath()
       const expectedPlatform = `rari-${process.platform}-${process.arch}`
       const expectedBinaryName = process.platform === 'win32' ? 'rari.exe' : 'rari'
 
-      expect(typeof path).toBe('string')
-      expect(path).toContain(expectedPlatform)
-      expect(path).toContain(`${require('node:path').sep}bin${require('node:path').sep}${expectedBinaryName}`)
+      expect(typeof binaryPath).toBe('string')
+      expect(binaryPath).toContain(expectedPlatform)
+      expect(binaryPath).toContain(`${nodePath.sep}bin${nodePath.sep}${expectedBinaryName}`)
     })
 
     it('should return valid path that exists', () => {
-      const path = getBinaryPath()
+      const binaryPath = getBinaryPath()
       const expectedBinaryName = process.platform === 'win32' ? 'rari.exe' : 'rari'
 
-      expect(require('node:path').isAbsolute(path)).toBe(true)
-      expect(path.endsWith(expectedBinaryName)).toBe(true)
+      expect(nodePath.isAbsolute(binaryPath)).toBe(true)
+      expect(binaryPath.endsWith(expectedBinaryName)).toBe(true)
     })
   })
 })
