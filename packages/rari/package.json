@@ -100,6 +100,8 @@
     "rari-win32-x64": "0.8.9"
   },
   "devDependencies": {
+    "@rari/deploy": "workspace:*",
+    "@rari/logger": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:react",
     "@typescript/native-preview": "catalog:",

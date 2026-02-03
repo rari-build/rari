@@ -223,6 +223,18 @@ importers:
 
   packages/deploy:
     devDependencies:
+      '@rari/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@types/node':
+        specifier: catalog:default
+        version: 25.2.0
+      tsdown:
+        specifier: catalog:build
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260202.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+
+  packages/logger:
+    devDependencies:
       '@types/node':
         specifier: catalog:default
         version: 25.2.0
@@ -242,6 +254,12 @@ importers:
         specifier: catalog:build
         version: 1.0.0-rc.2
     devDependencies:
+      '@rari/deploy':
+        specifier: workspace:*
+        version: link:../deploy
+      '@rari/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@types/node':
         specifier: 'catalog:'
         version: 25.2.0
