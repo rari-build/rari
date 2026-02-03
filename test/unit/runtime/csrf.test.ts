@@ -253,5 +253,45 @@ describe('csrf', () => {
       expect(request.headers.get('Custom-Header')).toBe('value')
       expect(request.headers.get('X-CSRF-Token')).toBe('token')
     })
+
+    it('should retry on 403 for /_rari/ URLs with refreshed token', async () => {
+      const oldToken = 'old-token-123'
+      const newToken = 'new-token-456'
+
+      const mockMeta = {
+        getAttribute: vi.fn()
+          .mockReturnValueOnce(oldToken)
+          .mockReturnValueOnce(newToken),
+        setAttribute: vi.fn(),
+      }
+      vi.mocked(document.querySelector).mockReturnValue(mockMeta as any)
+
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ token: newToken }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        } as any)
+
+      const response = await fetchWithCsrf('http://localhost:3000/_rari/api/test')
+
+      expect(fetch).toHaveBeenCalledTimes(3)
+
+      expect(vi.mocked(fetch).mock.calls[1][0]).toBe('/_rari/csrf-token')
+
+      expect(response.ok).toBe(true)
+      expect(response.status).toBe(200)
+
+      const retryRequest = vi.mocked(fetch).mock.calls[2][0] as Request
+      expect(retryRequest.headers.get('X-CSRF-Token')).toBe(newToken)
+    })
   })
 })

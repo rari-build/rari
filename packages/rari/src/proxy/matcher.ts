@@ -1,5 +1,10 @@
 import type { ProxyConfig, ProxyMatcher, RariRequest } from './types'
 
+function normalizePath(path: string): string {
+  const collapsed = path.replace(/\/+/g, '/')
+  return collapsed === '/' ? '/' : collapsed.replace(/\/+$/, '')
+}
+
 function pathToRegex(pattern: string): RegExp {
   let regexPattern = pattern
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
@@ -77,8 +82,8 @@ function matchesConditions(
 /* v8 ignore stop */
 
 export function matchesPattern(pathname: string, pattern: string): boolean {
-  const normalizedPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '')
-  const normalizedPattern = pattern === '/' ? '/' : pattern.replace(/\/+$/, '')
+  const normalizedPath = normalizePath(pathname)
+  const normalizedPattern = normalizePath(pattern)
   const regex = pathToRegex(normalizedPattern)
   return regex.test(normalizedPath)
 }
@@ -117,8 +122,8 @@ export function extractParams(
 ): Record<string, string> | null {
   const params: Record<string, string> = {}
 
-  const normalizedPath = pathname.replace(/\/+$/, '')
-  const normalizedPattern = pattern.replace(/\/+$/, '')
+  const normalizedPath = normalizePath(pathname)
+  const normalizedPattern = normalizePath(pattern)
 
   const paramNames: string[] = []
   let regexPattern = normalizedPattern
