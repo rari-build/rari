@@ -91,8 +91,11 @@ async function loadRuntimeFile(filename: string): Promise<string> {
       let content = await fs.promises.readFile(filePath, 'utf-8')
 
       content = content.replace(
-        /import\s*(\{[^}]+\})\s*from\s*["']\.\.\/([^"']+)["'];?/g,
-        'import $1 from "rari/$2";',
+        /import\s+(?:(\*\s+as\s+\w+)|(\w+)|(\{[^}]+\})|(\w+\s*,\s*\{[^}]+\})|(\w+\s*,\s*\*\s+as\s+\w+))\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+        (match, namespace, defaultImport, named, defaultAndNamed, defaultAndNamespace, modulePath) => {
+          const importSpecifier = namespace || defaultImport || named || defaultAndNamed || defaultAndNamespace
+          return `import ${importSpecifier} from "rari/${modulePath}";`
+        },
       )
 
       return content
@@ -1691,8 +1694,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       if (id === 'virtual:rsc-integration.ts') {
         const code = await loadRscClientRuntime()
         return code.replace(
-          /from"\.\/react-server-dom-rari-client\.mjs"/g,
-          'from"virtual:react-server-dom-rari-client.ts"',
+          /from(\s*)(['"])\.\/react-server-dom-rari-client\.mjs\2/g,
+          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
         )
       }
 

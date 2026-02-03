@@ -147,13 +147,13 @@ if (typeof window !== 'undefined') {
                     const styleStr = Object.entries(value)
                       .map(([k, v]) => {
                         const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
-                        return `${kebabKey}:${v}`
+                        return `${kebabKey}:${String(v)}`
                       })
                       .join(';')
                     attrs += ` style="${escapeHtml(styleStr)}"`
                   }
-                  else if (typeof value === 'string') {
-                    attrs += ` ${attrName}="${escapeHtml(value)}"`
+                  else if (typeof value === 'string' || typeof value === 'number') {
+                    attrs += ` ${attrName}="${escapeHtml(String(value))}"`
                   }
                   else if (typeof value === 'boolean' && value) {
                     attrs += ` ${attrName}`
