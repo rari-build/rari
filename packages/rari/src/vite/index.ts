@@ -81,8 +81,9 @@ async function loadRuntimeFile(filename: string): Promise<string> {
   const currentDir = path.dirname(currentFilePath)
 
   const possiblePaths = [
+    path.join(currentDir, 'runtime', filename),
     path.join(currentDir, '../runtime', filename),
-    path.join(currentDir, '../src/runtime', filename),
+    path.join(currentDir, '../src/runtime', filename.replace('.mjs', '.ts')),
   ]
 
   for (const filePath of possiblePaths) {
@@ -96,18 +97,18 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 }
 
 async function loadRscClientRuntime(): Promise<string> {
-  return loadRuntimeFile('rsc-client-runtime.js')
+  return loadRuntimeFile('rsc-client-runtime.mjs')
 }
 
 async function loadEntryClient(imports: string, registrations: string): Promise<string> {
-  const template = await loadRuntimeFile('entry-client.js')
+  const template = await loadRuntimeFile('entry-client.mjs')
   return template
-    .replace('// CLIENT_COMPONENT_IMPORTS_PLACEHOLDER', imports)
-    .replace('// CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER', registrations)
+    .replace('/*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */', imports)
+    .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
 }
 
 async function loadReactServerDomShim(): Promise<string> {
-  return loadRuntimeFile('react-server-dom-shim.js')
+  return loadRuntimeFile('react-server-dom-shim.mjs')
 }
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
@@ -1684,7 +1685,7 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         return await loadRscClientRuntime()
 
       if (id === 'virtual:react-server-dom-rari-client')
-        return await loadRuntimeFile('react-server-dom-rari-client.js')
+        return await loadRuntimeFile('react-server-dom-rari-client.mjs')
     },
 
     async handleHotUpdate({ file, server }) {

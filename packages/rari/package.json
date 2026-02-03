@@ -60,6 +60,22 @@
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
     },
+    "./runtime/entry-client": {
+      "types": "./dist/runtime/entry-client.d.mts",
+      "default": "./dist/runtime/entry-client.mjs"
+    },
+    "./runtime/react-server-dom-rari-client": {
+      "types": "./dist/runtime/react-server-dom-rari-client.d.mts",
+      "default": "./dist/runtime/react-server-dom-rari-client.mjs"
+    },
+    "./runtime/react-server-dom-shim": {
+      "types": "./dist/runtime/react-server-dom-shim.d.mts",
+      "default": "./dist/runtime/react-server-dom-shim.mjs"
+    },
+    "./runtime/rsc-client-runtime": {
+      "types": "./dist/runtime/rsc-client-runtime.d.mts",
+      "default": "./dist/runtime/rsc-client-runtime.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"

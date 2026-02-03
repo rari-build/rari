@@ -1,6 +1,23 @@
 import * as React from 'react'
 
-export async function createFromReadableStream(stream, options = {}) {
+interface ModuleData {
+  id: string
+  chunks: string[]
+  name: string
+}
+
+interface ParsedWireFormat {
+  modules: Map<string, ModuleData>
+  chunks: Map<string, any>
+  symbols: Map<string, string>
+  rootElement: any
+}
+
+interface CreateFromStreamOptions {
+  moduleMap?: Record<string, any>
+}
+
+export async function createFromReadableStream(stream: ReadableStream<Uint8Array>, options: CreateFromStreamOptions = {}): Promise<any> {
   const { moduleMap = {} } = options
 
   const reader = stream.getReader()
@@ -26,7 +43,7 @@ export async function createFromReadableStream(stream, options = {}) {
   return rscToReact(parsed.rootElement, parsed.modules, moduleMap, parsed.symbols, parsed.chunks)
 }
 
-export async function createFromFetch(fetchPromise, options = {}) {
+export async function createFromFetch(fetchPromise: Promise<Response>, options: CreateFromStreamOptions = {}): Promise<any> {
   const response = await fetchPromise
   const text = await response.text()
 
@@ -46,10 +63,10 @@ const TAG_DEBUG = 68 // 'D'
 const TAG_CONSOLE = 87 // 'W'
 const TAG_STREAM_CLOSE = 67 // 'C'
 
-function parseWireFormat(wireFormat) {
-  const modules = new Map()
-  const chunks = new Map()
-  const symbols = new Map()
+function parseWireFormat(wireFormat: string): ParsedWireFormat {
+  const modules = new Map<string, ModuleData>()
+  const chunks = new Map<string, any>()
+  const symbols = new Map<string, string>()
 
   let i = 0
   let rowState = ROW_ID
@@ -142,7 +159,7 @@ function parseWireFormat(wireFormat) {
   }
 }
 
-function processRow(id, tag, data, modules, chunks, symbols) {
+function processRow(id: number, tag: number, data: string, modules: Map<string, ModuleData>, chunks: Map<string, any>, symbols: Map<string, string>): void {
   const idStr = id.toString()
 
   try {
@@ -201,7 +218,7 @@ function processRow(id, tag, data, modules, chunks, symbols) {
   }
 }
 
-function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
+function rscToReact(rsc: any, wireModules: Map<string, ModuleData>, moduleMap: Record<string, any>, symbols: Map<string, string>, chunks: Map<string, any>): any {
   if (!rsc)
     return null
 
@@ -214,7 +231,7 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
         const referencedChunk = chunks?.get(rowId)
 
         if (!referencedChunk) {
-          const suspendPromise = new Promise(() => {})
+          const suspendPromise: any = new Promise(() => { })
 
           suspendPromise._rscLazyRef = rsc
 
@@ -287,15 +304,15 @@ function rscToReact(rsc, wireModules, moduleMap, symbols, chunks) {
   return rsc
 }
 
-function resolveClientComponent(componentName, wireModules, moduleMap) {
+function resolveClientComponent(componentName: string, wireModules: Map<string, ModuleData>, moduleMap: Record<string, any>): any {
   if (componentName === 'AppRouterProvider') {
-    const AppRouterProvider = globalThis['~rari']?.AppRouterProvider
+    const AppRouterProvider = (globalThis as any)['~rari']?.AppRouterProvider
     if (AppRouterProvider)
       return AppRouterProvider
   }
 
   if (componentName === 'ClientRouter') {
-    const ClientRouter = globalThis['~rari']?.ClientRouter
+    const ClientRouter = (globalThis as any)['~rari']?.ClientRouter
     if (ClientRouter)
       return ClientRouter
   }
@@ -304,7 +321,7 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
     const moduleRef = `$L${componentName}`
     const moduleInfo = wireModules.get(moduleRef)
     if (moduleInfo) {
-      const clientComponents = globalThis['~clientComponents'] || {}
+      const clientComponents = (globalThis as any)['~clientComponents'] || {}
       if (clientComponents[moduleInfo.id])
         return clientComponents[moduleInfo.id].component
     }
@@ -313,8 +330,8 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
   if (moduleMap[componentName])
     return moduleMap[componentName]
 
-  const clientComponents = globalThis['~clientComponents'] || {}
-  for (const [id, info] of Object.entries(clientComponents)) {
+  const clientComponents = (globalThis as any)['~clientComponents'] || {}
+  for (const [id, info] of Object.entries(clientComponents) as [string, any][]) {
     if (id.includes(componentName) || info.name === componentName)
       return info.component
   }
@@ -322,11 +339,11 @@ function resolveClientComponent(componentName, wireModules, moduleMap) {
   return null
 }
 
-function processProps(props, wireModules, moduleMap, symbols, chunks) {
+function processProps(props: any, wireModules: Map<string, ModuleData>, moduleMap: Record<string, any>, symbols: Map<string, string>, chunks: Map<string, any>): any {
   if (!props || typeof props !== 'object')
     return props
 
-  const processed = {}
+  const processed: Record<string, any> = {}
   for (const key in props) {
     if (Object.hasOwn(props, key)) {
       if (key.startsWith('~') || key === 'ref')
@@ -341,10 +358,10 @@ function processProps(props, wireModules, moduleMap, symbols, chunks) {
   return processed
 }
 
-export function encodeReply(value) {
+export function encodeReply(value: any): string {
   return JSON.stringify(value)
 }
 
-export function decodeReply(text) {
+export function decodeReply(text: string): any {
   return JSON.parse(text)
 }

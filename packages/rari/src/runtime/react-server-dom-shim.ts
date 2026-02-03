@@ -1,12 +1,37 @@
-const clientReferenceRegistry = new Map()
-const serverReferenceRegistry = new Map()
+interface ClientReferenceData {
+  id: string
+  exportName: string
+  chunks: string[]
+  name: string
+  async: boolean
+}
 
-let rustBridge = null
+interface ServerReferenceData {
+  id: string
+  exportName: string
+  bound: boolean
+}
 
-if (typeof globalThis['~rari']?.bridge !== 'undefined')
-  rustBridge = globalThis['~rari'].bridge
+interface RustBridge {
+  registerClientReference?: (key: string, id: string, exportName: string) => void
+  registerServerReference?: (key: string, id: string, exportName: string) => void
+}
 
-export function registerClientReference(clientReference, id, exportName) {
+interface GlobalWithRari {
+  '~rari'?: {
+    bridge?: RustBridge
+  }
+}
+
+const clientReferenceRegistry = new Map<string, ClientReferenceData>()
+const serverReferenceRegistry = new Map<string, ServerReferenceData>()
+
+let rustBridge: RustBridge | null = null
+
+if (typeof (globalThis as GlobalWithRari)['~rari']?.bridge !== 'undefined')
+  rustBridge = (globalThis as GlobalWithRari)['~rari']!.bridge!
+
+export function registerClientReference(clientReference: any, id: string, exportName: string): any {
   const key = `${id}#${exportName}`
   clientReferenceRegistry.set(key, {
     id,
@@ -42,9 +67,9 @@ export function registerClientReference(clientReference, id, exportName) {
   return clientReference
 }
 
-const clientComponentRegistry = new Map()
+const clientComponentRegistry = new Map<string, any>()
 
-export function registerClientComponent(componentFunction, id, exportName) {
+export function registerClientComponent(componentFunction: any, id: string, exportName: string): void {
   const key = `${id}#${exportName}`
   clientComponentRegistry.set(key, componentFunction)
   clientReferenceRegistry.set(key, {
@@ -56,11 +81,11 @@ export function registerClientComponent(componentFunction, id, exportName) {
   })
 }
 
-export function getClientComponent(id) {
+export function getClientComponent(id: string): any {
   return clientComponentRegistry.get(id)
 }
 
-export function registerServerReference(serverReference, id, exportName) {
+export function registerServerReference(serverReference: any, id: string, exportName: string): any {
   const key = `${id}#${exportName}`
   serverReferenceRegistry.set(key, {
     id,
@@ -94,7 +119,7 @@ export function registerServerReference(serverReference, id, exportName) {
   return serverReference
 }
 
-export function createClientModuleProxy(id) {
+export function createClientModuleProxy(id: string): any {
   return new Proxy({}, {
     get(_target, prop) {
       function clientProxy() {
@@ -113,8 +138,8 @@ export const __CLIENT_REFERENCE_REGISTRY__ = clientReferenceRegistry
 export const __SERVER_REFERENCE_REGISTRY__ = serverReferenceRegistry
 export const __CLIENT_COMPONENT_REGISTRY__ = clientComponentRegistry
 
-export function createClientModuleMap() {
-  const moduleMap = {}
+export function createClientModuleMap(): Record<string, any> {
+  const moduleMap: Record<string, any> = {}
 
   for (const [key, componentData] of clientReferenceRegistry) {
     const component = clientComponentRegistry.get(key)

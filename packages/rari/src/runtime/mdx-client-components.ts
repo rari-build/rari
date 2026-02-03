@@ -1,4 +1,4 @@
-import { registerClientComponent, registerClientReference } from './react-server-dom-shim.js'
+import { registerClientComponent, registerClientReference } from './react-server-dom-shim'
 
 export interface MDXClientComponentConfig {
   component: any
