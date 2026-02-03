@@ -4,14 +4,18 @@ import { getBinaryPath, getInstallationInstructions } from '@rari/platform'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 describe('platform', () => {
+  const mockPlatform = (platform: NodeJS.Platform, arch: NodeJS.Architecture) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    vi.spyOn(process, 'arch', 'get').mockReturnValue(arch)
+  }
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
   describe('getInstallationInstructions', () => {
     it('should return installation instructions for darwin-arm64', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64')
+      mockPlatform('darwin', 'arm64')
 
       const instructions = getInstallationInstructions()
 
@@ -23,8 +27,7 @@ describe('platform', () => {
     })
 
     it('should return installation instructions for darwin-x64', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('darwin', 'x64')
 
       const instructions = getInstallationInstructions()
 
@@ -32,8 +35,7 @@ describe('platform', () => {
     })
 
     it('should return installation instructions for linux-x64', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('linux', 'x64')
 
       const instructions = getInstallationInstructions()
 
@@ -41,8 +43,7 @@ describe('platform', () => {
     })
 
     it('should return installation instructions for linux-arm64', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64')
+      mockPlatform('linux', 'arm64')
 
       const instructions = getInstallationInstructions()
 
@@ -50,8 +51,7 @@ describe('platform', () => {
     })
 
     it('should return installation instructions for win32-x64', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('win32', 'x64')
 
       const instructions = getInstallationInstructions()
 
@@ -59,8 +59,7 @@ describe('platform', () => {
     })
 
     it('should throw error for unsupported platform', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('freebsd' as any)
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('freebsd' as any, 'x64')
 
       expect(() => getInstallationInstructions()).toThrow(
         'Unsupported platform: freebsd',
@@ -68,8 +67,7 @@ describe('platform', () => {
     })
 
     it('should throw error for unsupported architecture', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('ia32' as any)
+      mockPlatform('darwin', 'ia32' as any)
 
       expect(() => getInstallationInstructions()).toThrow(
         'Unsupported architecture: ia32',
@@ -88,8 +86,7 @@ describe('platform', () => {
       ]
 
       for (const { platform, arch, expected } of platforms) {
-        vi.spyOn(process, 'platform', 'get').mockReturnValue(platform as any)
-        vi.spyOn(process, 'arch', 'get').mockReturnValue(arch as any)
+        mockPlatform(platform as any, arch as any)
 
         const instructions = getInstallationInstructions()
         expect(instructions).toContain(expected)
@@ -99,8 +96,7 @@ describe('platform', () => {
 
   describe('error messages', () => {
     it('should provide helpful error message for unsupported platform', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('sunos' as any)
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('sunos' as any, 'x64')
 
       expect(() => getInstallationInstructions()).toThrow(
         /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/,
@@ -108,8 +104,7 @@ describe('platform', () => {
     })
 
     it('should provide helpful error message for unsupported architecture', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('s390x' as any)
+      mockPlatform('linux', 's390x' as any)
 
       expect(() => getInstallationInstructions()).toThrow(
         /Unsupported architecture: s390x.*rari supports x64 and ARM64/,
@@ -117,15 +112,13 @@ describe('platform', () => {
     })
 
     it('should mention supported platforms in error', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('aix' as any)
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
+      mockPlatform('aix' as any, 'x64')
 
       expect(() => getInstallationInstructions()).toThrow(/Linux, macOS, and Windows/)
     })
 
     it('should mention supported architectures in error', () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-      vi.spyOn(process, 'arch', 'get').mockReturnValue('ppc64' as any)
+      mockPlatform('darwin', 'ppc64' as any)
 
       expect(() => getInstallationInstructions()).toThrow(/x64 and ARM64/)
     })
