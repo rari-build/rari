@@ -1,22 +1,6 @@
-import { styleText } from 'node:util'
+export { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 
 export const MIN_SUPPORTED_NODE_MAJOR = 22
-
-export function logInfo(message: string) {
-  console.warn(`${styleText('blue', 'info')} ${message}`)
-}
-
-export function logSuccess(message: string) {
-  console.warn(`${styleText('green', '✓')} ${message}`)
-}
-
-export function logError(message: string) {
-  console.error(`${styleText('red', '✗')} ${message}`)
-}
-
-export function logWarn(message: string) {
-  console.warn(`${styleText('yellow', '⚠')} ${message}`)
-}
 
 export function isNodeVersionSufficient(versionRange: string, minMajor: number = MIN_SUPPORTED_NODE_MAJOR): boolean {
   const cleaned = versionRange.trim()

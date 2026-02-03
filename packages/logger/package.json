@@ -1,9 +1,9 @@
 {
-  "name": "@rari/deploy",
+  "name": "@rari/logger",
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "Deployment utilities for rari CLI tools",
+  "description": "Shared logger utilities for rari packages",
   "author": "Ryan Skinner",
   "license": "MIT",
   "homepage": "https://github.com/rari-build/rari#readme",
@@ -11,21 +11,12 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    },
-    "./railway": {
-      "types": "./dist/railway.d.mts",
-      "import": "./dist/railway.mjs"
-    },
-    "./render": {
-      "types": "./dist/render.d.mts",
-      "import": "./dist/render.mjs"
     }
   },
   "scripts": {
     "build": "tsdown"
   },
   "devDependencies": {
-    "@rari/logger": "workspace:*",
     "@types/node": "catalog:default",
     "tsdown": "catalog:build"
   }

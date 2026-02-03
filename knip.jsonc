@@ -25,9 +25,6 @@
         "src/runtime/react-server-dom-rari-client.js",
         "src/runtime/react-server-dom-shim.js",
         "src/runtime/rsc-client-runtime.js"
-      ],
-      "ignoreDependencies": [
-        "@rari/deploy" // Bundled via noExternal in tsdown config
       ]
     },
     "packages/create-rari-app": {

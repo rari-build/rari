@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { logError, logInfo, logSuccess, logWarn } from './logger'
+import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
 function loadEnvFile() {

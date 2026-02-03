@@ -17,5 +17,4 @@ export default defineConfig({
   format: 'esm',
   minify: true,
   external: ['lightningcss', 'postcss', 'rolldown-vite', '@oxc-project/types', 'rolldown', '@rolldown/pluginutils'],
-  noExternal: [/^@rari\/deploy(?:\/.*)?$/],
 })
