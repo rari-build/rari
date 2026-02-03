@@ -163,18 +163,15 @@ describe('csrf', () => {
         status: 200,
       } as any)
 
-      await fetchWithCsrf('/api/test')
+      await fetchWithCsrf('http://localhost:3000/api/test')
 
       expect(fetch).toHaveBeenCalledWith(
-        '/api/test',
-        expect.objectContaining({
-          headers: expect.any(Headers),
-        }),
+        expect.any(Request),
       )
 
       const callArgs = vi.mocked(fetch).mock.calls[0]
-      const headers = callArgs[1]?.headers as Headers
-      expect(headers.get('X-CSRF-Token')).toBe('existing-token')
+      const request = callArgs[0] as Request
+      expect(request.headers.get('X-CSRF-Token')).toBe('existing-token')
     })
 
     it('should refresh token if not present', async () => {
@@ -199,15 +196,10 @@ describe('csrf', () => {
           status: 200,
         } as any)
 
-      await fetchWithCsrf('/api/test')
+      await fetchWithCsrf('http://localhost:3000/api/test')
 
       expect(fetch).toHaveBeenCalledWith('/_rari/csrf-token')
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/test',
-        expect.objectContaining({
-          headers: expect.any(Headers),
-        }),
-      )
+      expect(fetch).toHaveBeenCalledWith(expect.any(Request))
     })
 
     it('should handle request without token when refresh fails', async () => {
@@ -222,11 +214,11 @@ describe('csrf', () => {
           status: 200,
         } as any)
 
-      await fetchWithCsrf('/api/test')
+      await fetchWithCsrf('http://localhost:3000/api/test')
 
       const callArgs = vi.mocked(fetch).mock.calls[1]
-      const headers = callArgs[1]?.headers as Headers
-      expect(headers.get('X-CSRF-Token')).toBeNull()
+      const request = callArgs[0] as Request
+      expect(request.headers.get('X-CSRF-Token')).toBeNull()
     })
 
     it('should preserve custom headers', async () => {
@@ -239,7 +231,7 @@ describe('csrf', () => {
         status: 200,
       } as any)
 
-      await fetchWithCsrf('/api/test', {
+      await fetchWithCsrf('http://localhost:3000/api/test', {
         headers: {
           'Content-Type': 'application/json',
           'Custom-Header': 'value',
@@ -247,10 +239,10 @@ describe('csrf', () => {
       })
 
       const callArgs = vi.mocked(fetch).mock.calls[0]
-      const headers = callArgs[1]?.headers as Headers
-      expect(headers.get('Content-Type')).toBe('application/json')
-      expect(headers.get('Custom-Header')).toBe('value')
-      expect(headers.get('X-CSRF-Token')).toBe('token')
+      const request = callArgs[0] as Request
+      expect(request.headers.get('Content-Type')).toBe('application/json')
+      expect(request.headers.get('Custom-Header')).toBe('value')
+      expect(request.headers.get('X-CSRF-Token')).toBe('token')
     })
   })
 })

@@ -59,7 +59,7 @@ export function generateRobotsTxt(robots: Robots): string {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findRobotsFile(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 ): Promise<{ type: 'static' | 'dynamic', path: string } | null> {
   const staticPath = path.join(appDir, 'robots.txt')
   try {

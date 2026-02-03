@@ -115,8 +115,11 @@ export function extractParams(
 ): Record<string, string> | null {
   const params: Record<string, string> = {}
 
+  const normalizedPath = pathname.replace(/\/+$/, '')
+  const normalizedPattern = pattern.replace(/\/+$/, '')
+
   const paramNames: string[] = []
-  let regexPattern = pattern
+  let regexPattern = normalizedPattern
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '___STAR___')
 
@@ -144,7 +147,7 @@ export function extractParams(
   regexPattern = `^${regexPattern}$`
 
   const regex = new RegExp(regexPattern)
-  const match = pathname.match(regex)
+  const match = normalizedPath.match(regex)
 
   if (!match)
     return null

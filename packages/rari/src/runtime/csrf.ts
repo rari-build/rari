@@ -1,3 +1,11 @@
+declare global {
+  interface Window {
+    getCsrfToken: typeof getCsrfToken
+    fetchWithCsrf: typeof fetchWithCsrf
+    refreshCsrfToken: typeof refreshCsrfToken
+  }
+}
+
 export function getCsrfToken(): string | null {
   if (typeof window === 'undefined')
     return null
@@ -79,9 +87,9 @@ export async function fetchWithCsrf(
 
 /* v8 ignore start - browser initialization code */
 if (typeof window !== 'undefined') {
-  ;(window as any).getCsrfToken = getCsrfToken
-  ;(window as any).fetchWithCsrf = fetchWithCsrf
-  ;(window as any).refreshCsrfToken = refreshCsrfToken
+  window.getCsrfToken = getCsrfToken
+  window.fetchWithCsrf = fetchWithCsrf
+  window.refreshCsrfToken = refreshCsrfToken
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
