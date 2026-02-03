@@ -78,7 +78,7 @@ test-rust-all: test-rust test-rust-doc
 
 # Run Node.js tests
 test-node: _ensure-node-deps
-    pnpm test
+    pnpm vitest --run
 
 # Run tests with coverage
 test-coverage:
