@@ -1,7 +1,7 @@
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
-// @ts-expect-error - react-dom/client types not available
 import * as ReactDOMClient from 'react-dom/client'
+import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
@@ -277,8 +277,8 @@ export function createClientModuleMap(): Record<string, any> {
   return moduleMap
 }
 
-let createFromFetch: any = ReactDOMClient.createFromFetch || null
-let createFromReadableStream: any = ReactDOMClient.createFromReadableStream || null
+let createFromFetch: typeof rariCreateFromFetch | null = rariCreateFromFetch
+let createFromReadableStream: typeof rariCreateFromReadableStream | null = rariCreateFromReadableStream
 let rscClientLoadPromise: Promise<any> | null = null
 
 async function loadRscClient(): Promise<any> {
@@ -287,8 +287,8 @@ async function loadRscClient(): Promise<any> {
 
   rscClientLoadPromise = (async () => {
     try {
-      createFromFetch = ReactDOMClient.createFromFetch
-      createFromReadableStream = ReactDOMClient.createFromReadableStream
+      createFromFetch = rariCreateFromFetch
+      createFromReadableStream = rariCreateFromReadableStream
 
       if (typeof createFromReadableStream !== 'function')
         createFromReadableStream = null

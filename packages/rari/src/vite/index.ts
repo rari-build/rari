@@ -1688,8 +1688,13 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
-      if (id === 'virtual:rsc-integration.ts')
-        return await loadRscClientRuntime()
+      if (id === 'virtual:rsc-integration.ts') {
+        const code = await loadRscClientRuntime()
+        return code.replace(
+          /from"\.\/react-server-dom-rari-client\.mjs"/g,
+          'from"virtual:react-server-dom-rari-client.ts"',
+        )
+      }
 
       if (id === 'virtual:react-server-dom-rari-client.ts')
         return await loadRuntimeFile('react-server-dom-rari-client.mjs')

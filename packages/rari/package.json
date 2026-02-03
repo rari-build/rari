@@ -121,6 +121,7 @@
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
     "oxlint": "catalog:eslint",
     "rolldown-vite": "catalog:build",

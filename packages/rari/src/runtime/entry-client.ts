@@ -3,7 +3,6 @@ import type { GlobalWithRari, WindowWithRari } from './shared/types'
 import { ClientRouter } from 'rari/client'
 import * as React from 'react'
 import { Suspense } from 'react'
-// @ts-expect-error - react-dom/client types not available
 import { createRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
