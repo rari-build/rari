@@ -8,9 +8,9 @@ import { createRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
-import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
+import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
 import { getClientComponent } from './shared/get-client-component'
-import 'virtual:rsc-integration'
+import 'virtual:rsc-integration.ts'
 
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']

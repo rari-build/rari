@@ -404,7 +404,7 @@ if (import.meta.hot) {
         .replace(/^components\//, '')
 
       let newCode
-        = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
+        = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
@@ -936,7 +936,7 @@ const ${componentName} = registerClientReference(
         if (needsReactImport && !hasReactImport)
           importsToAdd += `import React from 'react';\n`
         if (needsWrapperImport && !hasWrapperImport)
-          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`
+          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration.ts';\n`
         if (serverComponentReplacements.length > 0)
           importsToAdd += `${serverComponentReplacements.join('\n')}\n`
         if (importsToAdd)
@@ -1505,14 +1505,14 @@ const ${componentName} = registerClientReference(
     },
 
     resolveId(id) {
-      if (id === 'virtual:rsc-integration')
-        return id
-      if (id === 'virtual:rari-entry-client')
-        return id
-      if (id === 'virtual:react-server-dom-rari-client')
-        return id
-      if (id === 'virtual:app-router-provider')
-        return `${id}.tsx`
+      if (id === 'virtual:rsc-integration' || id === 'virtual:rsc-integration.ts')
+        return 'virtual:rsc-integration.ts'
+      if (id === 'virtual:rari-entry-client' || id === 'virtual:rari-entry-client.ts')
+        return 'virtual:rari-entry-client.ts'
+      if (id === 'virtual:react-server-dom-rari-client' || id === 'virtual:react-server-dom-rari-client.ts')
+        return 'virtual:react-server-dom-rari-client.ts'
+      if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
+        return 'virtual:app-router-provider.tsx'
       if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
         return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
@@ -1535,7 +1535,7 @@ const ${componentName} = registerClientReference(
     },
 
     async load(id) {
-      if (id === 'virtual:rari-entry-client') {
+      if (id === 'virtual:rari-entry-client.ts') {
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
 
@@ -1688,10 +1688,10 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
-      if (id === 'virtual:rsc-integration')
+      if (id === 'virtual:rsc-integration.ts')
         return await loadRscClientRuntime()
 
-      if (id === 'virtual:react-server-dom-rari-client')
+      if (id === 'virtual:react-server-dom-rari-client.ts')
         return await loadRuntimeFile('react-server-dom-rari-client.mjs')
     },
 

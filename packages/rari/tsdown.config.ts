@@ -28,8 +28,9 @@ export default defineConfig({
     'rolldown',
     '@rolldown/pluginutils',
     'virtual:app-router-provider',
-    'virtual:react-server-dom-rari-client',
-    'virtual:rsc-integration',
+    'virtual:app-router-provider.tsx',
+    'virtual:react-server-dom-rari-client.ts',
+    'virtual:rsc-integration.ts',
     'rari/client',
   ],
 })
