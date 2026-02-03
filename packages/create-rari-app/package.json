@@ -51,9 +51,9 @@
     "@clack/prompts": "catalog:cli"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@typescript/native-preview": "catalog:",
-    "oxlint": "catalog:",
+    "@types/node": "catalog:typescript",
+    "@typescript/native-preview": "catalog:typescript",
+    "oxlint": "catalog:eslint",
     "tsdown": "catalog:build"
   }
 }

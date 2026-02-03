@@ -102,10 +102,10 @@
   "devDependencies": {
     "@rari/deploy": "workspace:*",
     "@rari/logger": "workspace:*",
-    "@types/node": "catalog:",
+    "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
-    "@typescript/native-preview": "catalog:",
-    "oxlint": "catalog:",
+    "@typescript/native-preview": "catalog:typescript",
+    "oxlint": "catalog:eslint",
     "rolldown-vite": "catalog:build",
     "tsdown": "catalog:build"
   }

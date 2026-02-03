@@ -27,27 +27,6 @@ catalogs:
       specifier: ^0.11.0
       version: 0.11.0
   default:
-    '@e18e/eslint-plugin':
-      specifier: ^0.1.4
-      version: 0.1.4
-    '@sentry/react':
-      specifier: ^10.38.0
-      version: 10.38.0
-    '@types/node':
-      specifier: ^25.2.0
-      version: 25.2.0
-    '@typescript-eslint/utils':
-      specifier: ^8.54.0
-      version: 8.54.0
-    '@typescript/native-preview':
-      specifier: ^7.0.0-dev.20260202.1
-      version: 7.0.0-dev.20260202.1
-    eslint-plugin-de-morgan:
-      specifier: ^2.0.0
-      version: 2.0.0
-    oxlint:
-      specifier: ^1.43.0
-      version: 1.43.0
     rari:
       specifier: ^0.8.10
       version: 0.8.10
@@ -55,12 +34,21 @@ catalogs:
     '@antfu/eslint-config':
       specifier: ^7.2.0
       version: 7.2.0
+    '@e18e/eslint-plugin':
+      specifier: ^0.1.4
+      version: 0.1.4
     '@eslint-react/eslint-plugin':
       specifier: ^2.9.3
       version: 2.9.3
+    '@typescript-eslint/utils':
+      specifier: ^8.54.0
+      version: 8.54.0
     eslint:
       specifier: ^9.39.2
       version: 9.39.2
+    eslint-plugin-de-morgan:
+      specifier: ^2.0.0
+      version: 2.0.0
     eslint-plugin-oxlint:
       specifier: ^1.43.0
       version: 1.43.0
@@ -73,6 +61,9 @@ catalogs:
     knip:
       specifier: ^5.83.0
       version: 5.83.0
+    oxlint:
+      specifier: ^1.43.0
+      version: 1.43.0
   mdx:
     '@mdx-js/mdx':
       specifier: 3.1.1
@@ -89,6 +80,10 @@ catalogs:
     '@shikijs/themes':
       specifier: ^3.22.0
       version: 3.22.0
+  monitoring:
+    '@sentry/react':
+      specifier: ^10.38.0
+      version: 10.38.0
   react:
     '@types/react':
       specifier: ^19.2.10
@@ -116,6 +111,13 @@ catalogs:
     vitest:
       specifier: ^4.0.18
       version: 4.0.18
+  typescript:
+    '@types/node':
+      specifier: ^25.2.0
+      version: 25.2.0
+    '@typescript/native-preview':
+      specifier: ^7.0.0-dev.20260202.1
+      version: 7.0.0-dev.20260202.1
   utils:
     unist-util-visit:
       specifier: ^5.1.0
@@ -129,19 +131,19 @@ importers:
         specifier: catalog:eslint
         version: 7.2.0(@eslint-react/eslint-plugin@2.9.3(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@9.39.2(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
       '@e18e/eslint-plugin':
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 0.1.4(eslint@9.39.2(jiti@2.6.1))
       '@eslint-react/eslint-plugin':
         specifier: catalog:eslint
         version: 2.9.3(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       '@types/node':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 25.2.0
       '@typescript-eslint/utils':
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       '@typescript/native-preview':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 7.0.0-dev.20260202.1
       '@vitest/coverage-v8':
         specifier: catalog:testing
@@ -150,7 +152,7 @@ importers:
         specifier: catalog:eslint
         version: 9.39.2(jiti@2.6.1)
       eslint-plugin-de-morgan:
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 2.0.0(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-oxlint:
         specifier: catalog:eslint
@@ -165,7 +167,7 @@ importers:
         specifier: catalog:eslint
         version: 5.83.0(@types/node@25.2.0)(typescript@5.9.3)
       oxlint:
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 1.43.0
       vitest:
         specifier: catalog:testing
@@ -193,7 +195,7 @@ importers:
         specifier: catalog:react
         version: 19.2.3(@types/react@19.2.10)
       '@typescript/native-preview':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 7.0.0-dev.20260202.1
       rolldown-vite:
         specifier: catalog:build
@@ -209,13 +211,13 @@ importers:
         version: 0.11.0
     devDependencies:
       '@types/node':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 25.2.0
       '@typescript/native-preview':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 7.0.0-dev.20260202.1
       oxlint:
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 1.43.0
       tsdown:
         specifier: catalog:build
@@ -227,7 +229,7 @@ importers:
         specifier: workspace:*
         version: link:../logger
       '@types/node':
-        specifier: catalog:default
+        specifier: catalog:typescript
         version: 25.2.0
       tsdown:
         specifier: catalog:build
@@ -236,7 +238,7 @@ importers:
   packages/logger:
     devDependencies:
       '@types/node':
-        specifier: catalog:default
+        specifier: catalog:typescript
         version: 25.2.0
       tsdown:
         specifier: catalog:build
@@ -261,16 +263,16 @@ importers:
         specifier: workspace:*
         version: link:../logger
       '@types/node':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 25.2.0
       '@types/react':
         specifier: catalog:react
         version: 19.2.10
       '@typescript/native-preview':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 7.0.0-dev.20260202.1
       oxlint:
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 1.43.0
       rolldown-vite:
         specifier: catalog:build
@@ -314,7 +316,7 @@ importers:
         specifier: catalog:analytics
         version: 1.7.0(@types/react@19.2.10)(posthog-js@1.336.4)(react@19.2.4)
       '@sentry/react':
-        specifier: 'catalog:'
+        specifier: catalog:monitoring
         version: 10.38.0(react@19.2.4)
       '@shikijs/core':
         specifier: catalog:mdx
@@ -348,7 +350,7 @@ importers:
         specifier: catalog:tailwind
         version: 4.1.18(vite@7.2.7(@types/node@25.2.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
       '@types/node':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 25.2.0
       '@types/react':
         specifier: catalog:react
@@ -357,10 +359,10 @@ importers:
         specifier: catalog:react
         version: 19.2.3(@types/react@19.2.10)
       '@typescript/native-preview':
-        specifier: 'catalog:'
+        specifier: catalog:typescript
         version: 7.0.0-dev.20260202.1
       oxlint:
-        specifier: 'catalog:'
+        specifier: catalog:eslint
         version: 1.43.0
       rolldown-vite:
         specifier: catalog:build
@@ -5287,7 +5289,7 @@ snapshots:
 
   '@typescript-eslint/project-service@8.53.1(typescript@5.9.3)':
     dependencies:
-      '@typescript-eslint/tsconfig-utils': 8.53.1(typescript@5.9.3)
+      '@typescript-eslint/tsconfig-utils': 8.54.0(typescript@5.9.3)
       '@typescript-eslint/types': 8.54.0
       debug: 4.4.3
       typescript: 5.9.3
