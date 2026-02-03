@@ -420,9 +420,12 @@ export async function renderApp(): Promise<void> {
     rootElement.innerHTML = `
       <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
         <h2>Error Loading App</h2>
-        <p>${error instanceof Error ? error.message : String(error)}</p>
+        <p></p>
       </div>
     `
+    const errorP = rootElement.querySelector('p')
+    if (errorP)
+      errorP.textContent = error instanceof Error ? error.message : String(error)
   }
 }
 
