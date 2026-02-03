@@ -1,3 +1,25 @@
+## [rari@0.8.10] - 2026-02-03
+
+### 🚀 Features
+
+- *(rsc-renderer)* Improve error handling and RSC serialization format
+
+### 🐛 Bug Fixes
+
+- *(vite)* Remove redundant component path normalization
+
+### 🚜 Refactor
+
+- *(rsc-renderer)* Optimize RSC rendering and improve path handling
+
+### ⚙️ Miscellaneous Tasks
+
+- *(packages)* Remove @rari/colors package and migrate to native Node.js utilities
+## [rari@0.8.9] - 2026-02-02
+
+### 💼 Other
+
+- Rari@0.8.9
 ## [rari@0.8.8] - 2026-02-02
 
 ### 🐛 Bug Fixes
