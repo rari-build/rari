@@ -2,6 +2,8 @@ import { createFormAction, createServerReference, enhanceFormWithAction } from '
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('actions', () => {
+  const originalFetch = globalThis.fetch
+
   beforeEach(() => {
     globalThis.window = {
       location: {
@@ -30,6 +32,10 @@ describe('actions', () => {
     vi.restoreAllMocks()
     delete (globalThis as any).window
     delete (globalThis as any).document
+    if (originalFetch)
+      globalThis.fetch = originalFetch
+    else
+      delete (globalThis as any).fetch
   })
 
   describe('createServerReference', () => {

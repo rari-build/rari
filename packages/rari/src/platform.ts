@@ -106,10 +106,7 @@ export function getBinaryPath(): string {
     }
     /* v8 ignore stop */
   }
-  /* v8 ignore start - error handling for workspace search */
-  catch {
-  }
-  /* v8 ignore stop */
+  catch {}
 
   /* v8 ignore start - fallback to import.meta.resolve, tested in workspace */
   try {

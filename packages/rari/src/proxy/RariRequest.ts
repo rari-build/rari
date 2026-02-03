@@ -87,9 +87,7 @@ class RariURLImpl implements RariURL {
   private url: URL
 
   constructor(url: string | URL) {
-    /* v8 ignore start */
     this.url = typeof url === 'string' ? new URL(url) : url
-    /* v8 ignore stop */
   }
 
   get href(): string {

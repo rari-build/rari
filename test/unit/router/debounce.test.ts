@@ -64,6 +64,7 @@ describe('debounce', () => {
       vi.advanceTimersByTime(100)
 
       expect(func).toHaveBeenCalled()
+      expect(func.mock.results[0].value).toBe(42)
     })
 
     it('should reset timer on subsequent calls', () => {
