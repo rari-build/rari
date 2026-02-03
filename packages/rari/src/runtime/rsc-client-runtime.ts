@@ -47,33 +47,30 @@ interface WindowWithRari extends Window {
   '~rscRefreshCounters'?: Record<string, number>
 }
 
-declare let globalThis: GlobalWithRari
-declare let window: WindowWithRari
-
-if (typeof globalThis['~rari'] === 'undefined')
-  globalThis['~rari'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
 // eslint-disable-next-line node/prefer-global/process
-globalThis['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
+;(globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
-if (typeof globalThis['~clientComponents'] === 'undefined')
-  globalThis['~clientComponents'] = {}
-if (typeof globalThis['~clientComponentNames'] === 'undefined')
-  globalThis['~clientComponentNames'] = {}
-if (typeof globalThis['~clientComponentPaths'] === 'undefined')
-  globalThis['~clientComponentPaths'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
 if (typeof window !== 'undefined') {
-  if (!window['~rari'].bufferedEvents)
-    window['~rari'].bufferedEvents = []
+  if (!(window as unknown as WindowWithRari)['~rari'].bufferedEvents)
+    (window as unknown as WindowWithRari)['~rari'].bufferedEvents = []
 
-  if (!window['~rari'].boundaryModules)
-    window['~rari'].boundaryModules = new Map()
+  if (!(window as unknown as WindowWithRari)['~rari'].boundaryModules)
+    (window as unknown as WindowWithRari)['~rari'].boundaryModules = new Map()
 
-  if (!window['~rari'].pendingBoundaryHydrations)
-    window['~rari'].pendingBoundaryHydrations = new Map()
+  if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
+    (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 
-  globalThis['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
+  ;(globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
     if (!boundaryElement)
@@ -95,7 +92,7 @@ if (typeof window !== 'undefined') {
           if (Array.isArray(importData) && importData.length >= 3) {
             const [path, chunks, exportName] = importData
             const moduleKey = `$L${actualRowId}`
-            window['~rari'].boundaryModules?.set(moduleKey, {
+              ;(window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
               id: path,
               chunks: Array.isArray(chunks) ? chunks : [chunks],
               name: exportName || 'default',
@@ -142,14 +139,16 @@ if (typeof window !== 'undefined') {
       }
 
       if (containsClientComponents(content)) {
-        window['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
+        ;(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
           content,
           element: boundaryElement,
           rowId,
         })
 
-        if (globalThis['~rari'].hydrateClientComponents)
-          globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
+        if ((globalThis as unknown as GlobalWithRari)['~rari'].hydrateClientComponents) {
+          const hydrateFn = (globalThis as unknown as GlobalWithRari)['~rari'].hydrateClientComponents!
+          hydrateFn(boundaryId, content, boundaryElement)
+        }
 
         return
       }
@@ -228,18 +227,22 @@ if (typeof window !== 'undefined') {
     }))
   }
 
-  if (window['~rari'].bufferedEvents && window['~rari'].bufferedEvents.length > 0) {
-    window['~rari'].bufferedEvents.forEach((event) => {
+  const windowWithRari = window as unknown as WindowWithRari
+  const globalWithRari = globalThis as unknown as GlobalWithRari
+
+  if (windowWithRari['~rari'].bufferedEvents && windowWithRari['~rari'].bufferedEvents!.length > 0) {
+    windowWithRari['~rari'].bufferedEvents!.forEach((event) => {
       const { boundaryId, rscRow, rowId } = event
-      globalThis['~rari'].processBoundaryUpdate?.(boundaryId, rscRow, rowId)
+      globalWithRari['~rari'].processBoundaryUpdate?.(boundaryId, rscRow, rowId)
     })
-    window['~rari'].bufferedEvents = []
+    windowWithRari['~rari'].bufferedEvents = []
   }
 
   window.addEventListener('rari:boundary-update', (event) => {
     const { boundaryId, rscRow, rowId } = (event as CustomEvent).detail
-    if (globalThis['~rari'].processBoundaryUpdate)
-      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    if (globalWithRari['~rari'].processBoundaryUpdate) {
+      globalWithRari['~rari'].processBoundaryUpdate!(boundaryId, rscRow, rowId)
+    }
   })
 }
 
@@ -258,12 +261,12 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     registered: true,
   }
 
-  globalThis['~clientComponents'][componentId] = componentInfo
-  globalThis['~clientComponents'][id] = componentInfo
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
 
-  globalThis['~clientComponentPaths'][id] = componentId
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
-  globalThis['~clientComponentNames'][componentName] = componentId
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -288,35 +291,35 @@ export function registerClientComponent(componentFunction: any, id: string, expo
 }
 
 export function getClientComponent(id: string): any {
-  if (globalThis['~clientComponents'][id]?.component)
-    return globalThis['~clientComponents'][id].component
+  if ((globalThis as unknown as GlobalWithRari)['~clientComponents'][id]?.component)
+    return (globalThis as unknown as GlobalWithRari)['~clientComponents'][id].component
 
   if (id.includes('#')) {
     const [path, exportName] = id.split('#')
 
-    const componentId = globalThis['~clientComponentPaths'][path]
-    if (componentId && globalThis['~clientComponents'][componentId]) {
-      const componentInfo = globalThis['~clientComponents'][componentId]
+    const componentId = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][path]
+    if (componentId && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId]) {
+      const componentInfo = (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId]
       if (exportName === 'default' || !exportName)
         return componentInfo.component
     }
 
     const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
-      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
+    const componentIdByNormalizedPath = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][normalizedPath]
+    if (componentIdByNormalizedPath && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentIdByNormalizedPath])
+      return (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentIdByNormalizedPath].component
   }
 
-  const componentId = globalThis['~clientComponentNames'][id]
-  if (componentId && globalThis['~clientComponents'][componentId])
-    return globalThis['~clientComponents'][componentId].component
+  const componentId = (globalThis as unknown as GlobalWithRari)['~clientComponentNames'][id]
+  if (componentId && (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId])
+    return (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId].component
 
   return null
 }
 
 export function createClientModuleMap(): Record<string, any> {
   const moduleMap: Record<string, any> = {}
-  for (const [componentId, componentInfo] of Object.entries(globalThis['~clientComponents'])) {
+  for (const [componentId, componentInfo] of Object.entries((globalThis as unknown as GlobalWithRari)['~clientComponents'])) {
     moduleMap[componentId] = {
       id: componentId,
       chunks: [componentInfo.path],
@@ -391,7 +394,7 @@ class RscClient {
   }
 
   async fetchServerComponent(componentId: string, props: any = {}): Promise<any> {
-    const hmrCounter = (typeof window !== 'undefined' && window['~rscRefreshCounters'] && window['~rscRefreshCounters'][componentId]) || 0
+    const hmrCounter = (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rscRefreshCounters'] && (window as unknown as WindowWithRari)['~rscRefreshCounters']![componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey))
@@ -1090,10 +1093,12 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
   let globalRefreshCounter = 0
 
   if (typeof window !== 'undefined') {
-    window['~rscRefreshCounters'] = window['~rscRefreshCounters'] || {}
-    if (window['~rscRefreshCounters'][componentName] === undefined)
-      window['~rscRefreshCounters'][componentName] = 0
-    globalRefreshCounter = window['~rscRefreshCounters'][componentName]
+    const windowWithRari = window as unknown as WindowWithRari
+    windowWithRari['~rscRefreshCounters'] = windowWithRari['~rscRefreshCounters'] || {}
+    if (windowWithRari['~rscRefreshCounters']![componentName] === undefined) {
+      windowWithRari['~rscRefreshCounters']![componentName] = 0
+    }
+    globalRefreshCounter = windowWithRari['~rscRefreshCounters']![componentName]!
   }
 
   const ServerComponent = (props: any): any => {
@@ -1106,10 +1111,12 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
           rscClient.clearCache()
 
           if (typeof window !== 'undefined') {
-            if (!window['~rscRefreshCounters'])
-              window['~rscRefreshCounters'] = {}
-            window['~rscRefreshCounters'][componentName] = (window['~rscRefreshCounters'][componentName] || 0) + 1
-            setMountKey(window['~rscRefreshCounters'][componentName])
+            const windowWithRari = window as unknown as WindowWithRari
+            if (!windowWithRari['~rscRefreshCounters']) {
+              windowWithRari['~rscRefreshCounters'] = {}
+            }
+            windowWithRari['~rscRefreshCounters']![componentName] = (windowWithRari['~rscRefreshCounters']![componentName] || 0) + 1
+            setMountKey(windowWithRari['~rscRefreshCounters']![componentName])
           }
         }
       }
@@ -1146,8 +1153,8 @@ function isServerComponent(filePath: string): boolean {
     return false
 
   try {
-    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents)
-      return globalThis['~rari'].serverComponents.has(filePath)
+    if (typeof globalThis !== 'undefined' && (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents)
+      return (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.has(filePath)
 
     return false
   }
@@ -1161,8 +1168,8 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
-        globalThis['~rari'].serverComponents.add(data.filePath)
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
       }
     }
   })
@@ -1170,9 +1177,9 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
         data.serverComponents.forEach((path: string) => {
-          globalThis['~rari'].serverComponents?.add(path)
+          ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
         })
       }
     }
@@ -1425,8 +1432,10 @@ if (import.meta.hot) {
   }
 
   async function reloadAppRouterManifest(): Promise<void> {
-    if (typeof window !== 'undefined' && window['~rari']?.routeInfoCache)
-      window['~rari'].routeInfoCache.clear()
+    if (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rari']?.routeInfoCache) {
+      const windowWithRari = window as unknown as WindowWithRari
+      windowWithRari['~rari'].routeInfoCache!.clear()
+    }
   }
 
   async function invalidateRscCache(data: any): Promise<void> {

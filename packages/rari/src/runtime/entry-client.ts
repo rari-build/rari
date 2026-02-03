@@ -30,8 +30,17 @@ interface WindowWithRari extends Window {
   '~rari': GlobalWithRari['~rari']
 }
 
-declare let globalThis: GlobalWithRari
-declare let window: WindowWithRari
+function getRariGlobal(): GlobalWithRari['~rari'] {
+  return (globalThis as unknown as GlobalWithRari)['~rari']
+}
+
+function getGlobalThis(): GlobalWithRari {
+  return globalThis as unknown as GlobalWithRari
+}
+
+function getWindow(): WindowWithRari {
+  return window as unknown as WindowWithRari
+}
 
 function createSsrManifest(): any {
   return {
@@ -58,12 +67,12 @@ function createSsrManifest(): any {
                 const exportNameStr = String(exportName)
                 const componentKey = `${moduleIdStr}#${exportNameStr}`
 
-                if (globalThis['~clientComponents']?.[componentKey]) {
-                  return globalThis['~clientComponents'][componentKey].component
+                if (getGlobalThis()['~clientComponents']?.[componentKey]) {
+                  return getGlobalThis()['~clientComponents'][componentKey].component
                 }
 
-                if (globalThis['~clientComponents']?.[moduleIdStr]) {
-                  const component = globalThis['~clientComponents'][moduleIdStr].component
+                if (getGlobalThis()['~clientComponents']?.[moduleIdStr]) {
+                  const component = getGlobalThis()['~clientComponents'][moduleIdStr].component
                   return exportNameStr === 'default' ? component : component?.[exportNameStr]
                 }
 
@@ -85,54 +94,54 @@ function createSsrManifest(): any {
 }
 
 function getClientComponent(id: string): any {
-  if (globalThis['~clientComponents'][id]?.component)
-    return globalThis['~clientComponents'][id].component
+  if (getGlobalThis()['~clientComponents'][id]?.component)
+    return getGlobalThis()['~clientComponents'][id].component
 
   if (id.includes('#')) {
     const [path, exportName] = id.split('#')
-    const componentId = globalThis['~clientComponentPaths'][path]
-    if (componentId && globalThis['~clientComponents'][componentId]) {
-      const componentInfo = globalThis['~clientComponents'][componentId]
+    const componentId = getGlobalThis()['~clientComponentPaths'][path]
+    if (componentId && getGlobalThis()['~clientComponents'][componentId]) {
+      const componentInfo = getGlobalThis()['~clientComponents'][componentId]
       if (exportName === 'default' || !exportName)
         return componentInfo.component
     }
 
     const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
-      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
+    const componentIdByNormalizedPath = getGlobalThis()['~clientComponentPaths'][normalizedPath]
+    if (componentIdByNormalizedPath && getGlobalThis()['~clientComponents'][componentIdByNormalizedPath])
+      return getGlobalThis()['~clientComponents'][componentIdByNormalizedPath].component
   }
 
-  const componentId = globalThis['~clientComponentNames'][id]
-  if (componentId && globalThis['~clientComponents'][componentId])
-    return globalThis['~clientComponents'][componentId].component
+  const componentId = getGlobalThis()['~clientComponentNames'][id]
+  if (componentId && getGlobalThis()['~clientComponents'][componentId])
+    return getGlobalThis()['~clientComponents'][componentId].component
 
   return null
 }
 
-if (typeof globalThis['~rari'] === 'undefined')
-  globalThis['~rari'] = {}
+if (typeof getRariGlobal() === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
-globalThis['~rari'].AppRouterProvider = AppRouterProvider
-globalThis['~rari'].ClientRouter = ClientRouter
-globalThis['~rari'].getClientComponent = getClientComponent
+getRariGlobal().AppRouterProvider = AppRouterProvider
+getRariGlobal().ClientRouter = ClientRouter
+getRariGlobal().getClientComponent = getClientComponent
 
-if (typeof globalThis['~clientComponents'] === 'undefined')
-  globalThis['~clientComponents'] = {}
+if (typeof getGlobalThis()['~clientComponents'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
 
 /*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */
 
-if (typeof globalThis['~clientComponentPaths'] === 'undefined')
-  globalThis['~clientComponentPaths'] = {}
+if (typeof getGlobalThis()['~clientComponentPaths'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
 /*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */
 
 function setupPartialHydration(): void {
-  if (globalThis['~rari'].hydrateClientComponents)
+  if (getRariGlobal().hydrateClientComponents)
     return
 
-  globalThis['~rari'].hydrateClientComponents = function (_boundaryId: string, content: any, boundaryElement: Element): void {
-    const modules = window['~rari'].boundaryModules || new Map()
+  getRariGlobal().hydrateClientComponents = function (_boundaryId: string, content: any, boundaryElement: Element): void {
+    const modules = getWindow()['~rari'].boundaryModules || new Map()
 
     function rscToReactElement(element: any): any {
       if (!element)
@@ -160,10 +169,10 @@ function setupPartialHydration(): void {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
                 let clientComponent = null
 
-                if (globalThis['~clientComponents'][clientKey])
-                  clientComponent = globalThis['~clientComponents'][clientKey].component
-                else if (globalThis['~clientComponents'][mod.id])
-                  clientComponent = globalThis['~clientComponents'][mod.id].component
+                if (getGlobalThis()['~clientComponents'][clientKey])
+                  clientComponent = getGlobalThis()['~clientComponents'][clientKey].component
+                else if (getGlobalThis()['~clientComponents'][mod.id])
+                  clientComponent = getGlobalThis()['~clientComponents'][mod.id].component
 
                 if (clientComponent)
                   return React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
@@ -210,13 +219,13 @@ function setupPartialHydration(): void {
 }
 
 function processPendingBoundaryHydrations(): void {
-  const pending = window['~rari'].pendingBoundaryHydrations
+  const pending = getWindow()['~rari'].pendingBoundaryHydrations
   if (!pending || pending.size === 0)
     return
 
   for (const [boundaryId, data] of pending.entries()) {
-    if (globalThis['~rari'].hydrateClientComponents)
-      globalThis['~rari'].hydrateClientComponents(boundaryId, data.content, data.element)
+    if (getRariGlobal().hydrateClientComponents)
+      getRariGlobal().hydrateClientComponents!(boundaryId, data.content, data.element)
   }
 
   pending.clear()
@@ -233,7 +242,7 @@ export async function renderApp(): Promise<void> {
 
   const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
   const hasServerRenderedContent = rootElement.children.length > 0
-  const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+  const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
 
   setupPartialHydration()
 
@@ -270,8 +279,8 @@ export async function renderApp(): Promise<void> {
     const hasBoundaries = document.querySelectorAll('[data-boundary-id]').length > 0
 
     if (hasBoundaries) {
-      const hasPendingBoundaries = window['~rari'].pendingBoundaryHydrations
-        && window['~rari'].pendingBoundaryHydrations.size > 0
+      const hasPendingBoundaries = getWindow()['~rari'].pendingBoundaryHydrations
+        && getWindow()['~rari'].pendingBoundaryHydrations!.size > 0
 
       if (hasPendingBoundaries)
         processPendingBoundaryHydrations()
@@ -313,19 +322,19 @@ export async function renderApp(): Promise<void> {
       try {
         const payloadJson = payloadScript.textContent
 
-        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
-        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
+        const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
+        const isStreaming = getWindow()['~rari']?.streamComplete === undefined || hasBufferedRows
 
         if (isStreaming) {
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode(payloadJson))
 
-              if (window['~rari']?.bufferedRows) {
-                for (const row of window['~rari'].bufferedRows)
+              if (getWindow()['~rari']?.bufferedRows) {
+                for (const row of getWindow()['~rari'].bufferedRows!)
                   controller.enqueue(new TextEncoder().encode(`\n${row}`))
 
-                window['~rari'].bufferedRows = []
+                getWindow()['~rari'].bufferedRows = []
               }
 
               const handleStreamUpdate = (event: Event) => {
@@ -343,7 +352,7 @@ export async function renderApp(): Promise<void> {
               window.addEventListener('rari:rsc-row', handleStreamUpdate)
               window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-              if (window['~rari']?.streamComplete)
+              if (getWindow()['~rari']?.streamComplete)
                 handleStreamComplete()
             },
           })
@@ -374,11 +383,11 @@ export async function renderApp(): Promise<void> {
       try {
         const stream = new ReadableStream({
           start(controller) {
-            if (window['~rari']?.bufferedRows) {
-              for (const row of window['~rari'].bufferedRows)
+            if (getWindow()['~rari']?.bufferedRows) {
+              for (const row of getWindow()['~rari'].bufferedRows!)
                 controller.enqueue(new TextEncoder().encode(`${row}\n`))
 
-              window['~rari'].bufferedRows = []
+              getWindow()['~rari'].bufferedRows = []
             }
 
             const handleStreamUpdate = (event: Event) => {
@@ -396,7 +405,7 @@ export async function renderApp(): Promise<void> {
             window.addEventListener('rari:rsc-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-            if (window['~rari']?.streamComplete)
+            if (getWindow()['~rari']?.streamComplete)
               handleStreamComplete()
           },
         })
@@ -569,7 +578,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
         if (moduleInfo) {
-          const Component = globalThis['~clientComponents'][moduleInfo.id]?.component
+          const Component = getGlobalThis()['~clientComponents'][moduleInfo.id]?.component
           if (Component) {
             const childProps = {
               ...props,
