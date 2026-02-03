@@ -129,7 +129,11 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
       return content
     }
-    catch {}
+    catch (err: any) {
+      if (err.code !== 'ENOENT' && err.code !== 'EISDIR') {
+        console.warn(`[rari] Unexpected error reading ${filePath}:`, err)
+      }
+    }
   }
 
   throw new Error(`Could not find ${filename}. Tried: ${possiblePaths.join(', ')}`)
@@ -1582,6 +1586,15 @@ const ${componentName} = registerClientReference(
           if (fs.existsSync(altChunkPath))
             return altChunkPath
         }
+        else {
+          console.warn(
+            `[rari] Runtime directory not found, attempting fallback resolution for virtual import.\n`
+            + `  Importer: ${importer}\n`
+            + `  ID: ${id}\n`
+            + `  Current Dir: ${currentDir}\n`
+            + `  Hint: Runtime lookup failed, trying currentDir as fallback`,
+          )
+        }
 
         const chunkPath = path.join(currentDir, id)
         if (fs.existsSync(chunkPath))
@@ -1769,8 +1782,27 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
       if (id === 'virtual:react-server-dom-rari-client.ts')
         return await loadRuntimeFile('react-server-dom-rari-client.mjs')
 
-      if (id.endsWith('.mjs') && fs.existsSync(id))
-        return fs.readFileSync(id, 'utf-8')
+      if (id.endsWith('.mjs') && fs.existsSync(id)) {
+        try {
+          const projectRoot = options.projectRoot || process.cwd()
+          const realId = fs.realpathSync(id)
+          const relativeToRoot = path.relative(projectRoot, realId)
+
+          const isInProjectRoot = !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
+          const isInNodeModules = realId.includes(`${path.sep}node_modules${path.sep}`)
+
+          if (isInProjectRoot || isInNodeModules) {
+            return fs.readFileSync(id, 'utf-8')
+          }
+
+          console.warn(`[rari] Refusing to load .mjs file outside project root and node_modules: ${id}`)
+          return null
+        }
+        catch (err) {
+          console.warn(`[rari] Error validating .mjs file path: ${id}`, err)
+          return null
+        }
+      }
     },
 
     async handleHotUpdate({ file, server }) {
