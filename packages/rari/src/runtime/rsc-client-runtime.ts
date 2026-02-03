@@ -18,7 +18,7 @@ if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] ==
   (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
 if (typeof window !== 'undefined') {
-  if (typeof window !== 'undefined' && !(window as unknown as WindowWithRari)['~rari'])
+  if (!(window as unknown as WindowWithRari)['~rari'])
     (window as unknown as WindowWithRari)['~rari'] = (globalThis as unknown as GlobalWithRari)['~rari']
 
   if (!(window as unknown as WindowWithRari)['~rari'].bufferedEvents)

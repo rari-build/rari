@@ -63,11 +63,8 @@ export function registerClientReference(clientReference: any, id: string, export
   return clientReference
 }
 
-const clientComponentRegistry = new Map<string, any>()
-
 export function registerClientComponent(componentFunction: any, id: string, exportName: string): void {
   const key = `${id}#${exportName}`
-  clientComponentRegistry.set(key, componentFunction)
   clientReferenceRegistry.set(key, {
     id,
     exportName,
@@ -75,10 +72,6 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     name: exportName,
     async: false,
   })
-}
-
-export function getClientComponent(id: string): any {
-  return clientComponentRegistry.get(id)
 }
 
 export function registerServerReference(serverReference: any, id: string, exportName: string): any {
@@ -132,23 +125,3 @@ export function createClientModuleProxy(id: string): any {
 
 export const __CLIENT_REFERENCE_REGISTRY__ = clientReferenceRegistry
 export const __SERVER_REFERENCE_REGISTRY__ = serverReferenceRegistry
-export const __CLIENT_COMPONENT_REGISTRY__ = clientComponentRegistry
-
-export function createClientModuleMap(): Record<string, any> {
-  const moduleMap: Record<string, any> = {}
-
-  for (const [key, componentData] of clientReferenceRegistry) {
-    const component = clientComponentRegistry.get(key)
-    if (component) {
-      moduleMap[key] = {
-        id: componentData.id,
-        chunks: componentData.chunks,
-        name: componentData.name,
-        async: componentData.async,
-        default: component,
-      }
-    }
-  }
-
-  return moduleMap
-}
