@@ -21,7 +21,7 @@
     "@types/node": "catalog:",
     "@typescript-eslint/utils": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
+    "@vitest/coverage-v8": "catalog:test",
     "eslint": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:",
     "eslint-plugin-oxlint": "catalog:eslint",
