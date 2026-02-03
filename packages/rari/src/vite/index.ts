@@ -92,8 +92,38 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
       if (filePath.endsWith('.ts')) {
         content = content.replace(
-          /import\s*(\{[^}]+\})\s*from\s*["']\.\.\/([^"']+)["'];?/g,
-          'import $1 from "rari/$2";',
+          /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+type\s+(\w+)\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\{[^}]+\})\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\w+)\s+from\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+["']\.\.\/([^"']+)["'];?/g,
+          (match, modulePath) => `import "rari/${modulePath}";`,
         )
       }
 
