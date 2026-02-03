@@ -1,97 +1,104 @@
-/* eslint-disable no-undef */
+import type { GlobalWithRari, WindowWithRari } from './shared/types'
+// @ts-ignore - rari/client is resolved from the built package (circular reference)
 import { ClientRouter } from 'rari/client'
 import * as React from 'react'
 import { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
+// @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
-import { createFromReadableStream } from 'virtual:react-server-dom-rari-client'
-import 'virtual:rsc-integration'
+// @ts-expect-error - virtual module resolved by Vite
+import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
+import { getClientComponent } from './shared/get-client-component'
+import 'virtual:rsc-integration.ts'
 
-function createSsrManifest() {
+function getRariGlobal(): GlobalWithRari['~rari'] {
+  return (globalThis as unknown as GlobalWithRari)['~rari']
+}
+
+function getGlobalThis(): GlobalWithRari {
+  return globalThis as unknown as GlobalWithRari
+}
+
+function getWindow(): WindowWithRari {
+  return window as unknown as WindowWithRari
+}
+
+function createSsrManifest(): any {
   return {
     moduleMap: new Proxy({}, {
-      get(_target, moduleId) {
+      get(_target, moduleId: string | symbol) {
         return new Proxy({}, {
-          get(_moduleTarget, exportName) {
+          get(_moduleTarget, exportName: string | symbol) {
             return {
-              id: `${moduleId}#${exportName}`,
+              id: `${String(moduleId)}#${String(exportName)}`,
               chunks: [],
-              name: exportName,
+              name: String(exportName),
             }
           },
         })
       },
     }),
     moduleLoading: new Proxy({}, {
-      get(_target, moduleId) {
-        return {
-          async [exportName]() {
-            try {
-              const module = await import(/* @vite-ignore */ `/${moduleId}`)
-              return module[exportName] || module.default
+      get(_target, moduleId: string | symbol) {
+        return new Proxy({}, {
+          get(_moduleTarget, exportName: string | symbol) {
+            const fn = async () => {
+              try {
+                const moduleIdStr = String(moduleId)
+                const exportNameStr = String(exportName)
+                const componentKey = `${moduleIdStr}#${exportNameStr}`
+
+                if (getGlobalThis()['~clientComponents']?.[componentKey]) {
+                  return getGlobalThis()['~clientComponents'][componentKey].component
+                }
+
+                if (getGlobalThis()['~clientComponents']?.[moduleIdStr]) {
+                  const component = getGlobalThis()['~clientComponents'][moduleIdStr].component
+                  return exportNameStr === 'default' ? component : component?.[exportNameStr]
+                }
+
+                console.warn(`[rari] Module ${moduleIdStr}#${exportNameStr} not found in client components registry`)
+                return null
+              }
+              catch (error) {
+                console.error(`[rari] Failed to load ${String(moduleId)}#${String(exportName)}:`, error)
+                return null
+              }
             }
-            catch (error) {
-              console.error(`[rari] Failed to load ${moduleId}#${exportName}:`, error)
-              return null
-            }
+
+            return fn
           },
-        }[exportName]
+        })
       },
     }),
   }
 }
 
-function getClientComponent(id) {
-  if (globalThis['~clientComponents'][id]?.component)
-    return globalThis['~clientComponents'][id].component
+if (typeof getRariGlobal() === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
-  if (id.includes('#')) {
-    const [path, exportName] = id.split('#')
-    const componentId = globalThis['~clientComponentPaths'][path]
-    if (componentId && globalThis['~clientComponents'][componentId]) {
-      const componentInfo = globalThis['~clientComponents'][componentId]
-      if (exportName === 'default' || !exportName)
-        return componentInfo.component
-    }
+getRariGlobal().AppRouterProvider = AppRouterProvider
+getRariGlobal().ClientRouter = ClientRouter
+getRariGlobal().getClientComponent = getClientComponent
 
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
-      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
-  }
+if (typeof getGlobalThis()['~clientComponents'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
 
-  const componentId = globalThis['~clientComponentNames'][id]
-  if (componentId && globalThis['~clientComponents'][componentId])
-    return globalThis['~clientComponents'][componentId].component
+/*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */
 
-  return null
-}
+if (typeof getGlobalThis()['~clientComponentPaths'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
-if (typeof globalThis['~rari'] === 'undefined')
-  globalThis['~rari'] = {}
+/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */
 
-globalThis['~rari'].AppRouterProvider = AppRouterProvider
-globalThis['~rari'].ClientRouter = ClientRouter
-globalThis['~rari'].getClientComponent = getClientComponent
-
-// CLIENT_COMPONENT_IMPORTS_PLACEHOLDER
-
-if (typeof globalThis['~clientComponents'] === 'undefined')
-  globalThis['~clientComponents'] = {}
-
-if (typeof globalThis['~clientComponentPaths'] === 'undefined')
-  globalThis['~clientComponentPaths'] = {}
-
-// CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER
-
-function setupPartialHydration() {
-  if (globalThis['~rari'].hydrateClientComponents)
+function setupPartialHydration(): void {
+  if (getRariGlobal().hydrateClientComponents)
     return
 
-  globalThis['~rari'].hydrateClientComponents = function (_boundaryId, content, boundaryElement) {
-    const modules = window['~rari'].boundaryModules || new Map()
+  getRariGlobal().hydrateClientComponents = function (_boundaryId: string, content: any, boundaryElement: Element): void {
+    const modules = getWindow()['~rari'].boundaryModules || new Map()
 
-    function rscToReactElement(element) {
+    function rscToReactElement(element: any): any {
       if (!element)
         return null
 
@@ -117,10 +124,10 @@ function setupPartialHydration() {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
                 let clientComponent = null
 
-                if (globalThis['~clientComponents'][clientKey])
-                  clientComponent = globalThis['~clientComponents'][clientKey].component
-                else if (globalThis['~clientComponents'][mod.id])
-                  clientComponent = globalThis['~clientComponents'][mod.id].component
+                if (getGlobalThis()['~clientComponents'][clientKey])
+                  clientComponent = getGlobalThis()['~clientComponents'][clientKey].component
+                else if (getGlobalThis()['~clientComponents'][mod.id])
+                  clientComponent = getGlobalThis()['~clientComponents'][mod.id].component
 
                 if (clientComponent)
                   return React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
@@ -161,19 +168,19 @@ function setupPartialHydration() {
     }
     catch (error) {
       console.error('[rari] Failed to hydrate client components:', error)
-      console.error('[rari] Error stack:', error.stack)
+      console.error('[rari] Error stack:', (error as Error).stack)
     }
   }
 }
 
-function processPendingBoundaryHydrations() {
-  const pending = window['~rari'].pendingBoundaryHydrations
+function processPendingBoundaryHydrations(): void {
+  const pending = getWindow()['~rari'].pendingBoundaryHydrations
   if (!pending || pending.size === 0)
     return
 
   for (const [boundaryId, data] of pending.entries()) {
-    if (globalThis['~rari'].hydrateClientComponents)
-      globalThis['~rari'].hydrateClientComponents(boundaryId, data.content, data.element)
+    if (getRariGlobal().hydrateClientComponents)
+      getRariGlobal().hydrateClientComponents!(boundaryId, data.content, data.element)
   }
 
   pending.clear()
@@ -181,7 +188,7 @@ function processPendingBoundaryHydrations() {
 
 setupPartialHydration()
 
-export async function renderApp() {
+export async function renderApp(): Promise<void> {
   const rootElement = document.getElementById('root')
   if (!rootElement) {
     console.error('[rari] Root element not found')
@@ -190,7 +197,7 @@ export async function renderApp() {
 
   const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
   const hasServerRenderedContent = rootElement.children.length > 0
-  const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
+  const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
 
   setupPartialHydration()
 
@@ -227,8 +234,8 @@ export async function renderApp() {
     const hasBoundaries = document.querySelectorAll('[data-boundary-id]').length > 0
 
     if (hasBoundaries) {
-      const hasPendingBoundaries = window['~rari'].pendingBoundaryHydrations
-        && window['~rari'].pendingBoundaryHydrations.size > 0
+      const hasPendingBoundaries = getWindow()['~rari'].pendingBoundaryHydrations
+        && getWindow()['~rari'].pendingBoundaryHydrations!.size > 0
 
       if (hasPendingBoundaries)
         processPendingBoundaryHydrations()
@@ -270,24 +277,25 @@ export async function renderApp() {
       try {
         const payloadJson = payloadScript.textContent
 
-        const hasBufferedRows = window['~rari']?.bufferedRows && window['~rari'].bufferedRows.length > 0
-        const isStreaming = window['~rari']?.streamComplete === undefined || hasBufferedRows
+        const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
+        const isStreaming = getWindow()['~rari']?.streamComplete === undefined || hasBufferedRows
 
         if (isStreaming) {
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode(payloadJson))
 
-              if (window['~rari']?.bufferedRows) {
-                for (const row of window['~rari'].bufferedRows)
+              if (getWindow()['~rari']?.bufferedRows) {
+                for (const row of getWindow()['~rari'].bufferedRows!)
                   controller.enqueue(new TextEncoder().encode(`\n${row}`))
 
-                window['~rari'].bufferedRows = []
+                getWindow()['~rari'].bufferedRows = []
               }
 
-              const handleStreamUpdate = (event) => {
-                if (event.detail?.rscRow)
-                  controller.enqueue(new TextEncoder().encode(`\n${event.detail.rscRow}`))
+              const handleStreamUpdate = (event: Event) => {
+                const customEvent = event as CustomEvent
+                if (customEvent.detail?.rscRow)
+                  controller.enqueue(new TextEncoder().encode(`\n${customEvent.detail.rscRow}`))
               }
 
               const handleStreamComplete = () => {
@@ -299,7 +307,7 @@ export async function renderApp() {
               window.addEventListener('rari:rsc-row', handleStreamUpdate)
               window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-              if (window['~rari']?.streamComplete)
+              if (getWindow()['~rari']?.streamComplete)
                 handleStreamComplete()
             },
           })
@@ -330,16 +338,17 @@ export async function renderApp() {
       try {
         const stream = new ReadableStream({
           start(controller) {
-            if (window['~rari']?.bufferedRows) {
-              for (const row of window['~rari'].bufferedRows)
+            if (getWindow()['~rari']?.bufferedRows) {
+              for (const row of getWindow()['~rari'].bufferedRows!)
                 controller.enqueue(new TextEncoder().encode(`${row}\n`))
 
-              window['~rari'].bufferedRows = []
+              getWindow()['~rari'].bufferedRows = []
             }
 
-            const handleStreamUpdate = (event) => {
-              if (event.detail?.rscRow)
-                controller.enqueue(new TextEncoder().encode(`${event.detail.rscRow}\n`))
+            const handleStreamUpdate = (event: Event) => {
+              const customEvent = event as CustomEvent
+              if (customEvent.detail?.rscRow)
+                controller.enqueue(new TextEncoder().encode(`${customEvent.detail.rscRow}\n`))
             }
 
             const handleStreamComplete = () => {
@@ -351,7 +360,7 @@ export async function renderApp() {
             window.addEventListener('rari:rsc-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-            if (window['~rari']?.streamComplete)
+            if (getWindow()['~rari']?.streamComplete)
               handleStreamComplete()
           },
         })
@@ -398,6 +407,7 @@ export async function renderApp() {
 
     wrappedContent = React.createElement(
       ClientRouter,
+      // @ts-ignore - children passed as third argument; type checking varies based on build state
       { initialRoute: window.location.pathname },
       wrappedContent,
     )
@@ -410,13 +420,16 @@ export async function renderApp() {
     rootElement.innerHTML = `
       <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
         <h2>Error Loading App</h2>
-        <p>${error instanceof Error ? error.message : String(error)}</p>
+        <p></p>
       </div>
     `
+    const errorP = rootElement.querySelector('p')
+    if (errorP)
+      errorP.textContent = error instanceof Error ? error.message : String(error)
   }
 }
 
-function extractBodyContent(element, skipHeadInjection = false) {
+function extractBodyContent(element: any, skipHeadInjection = false): any {
   if (element && element.type === 'html' && element.props && element.props.children) {
     const children = Array.isArray(element.props.children)
       ? element.props.children
@@ -453,7 +466,7 @@ function extractBodyContent(element, skipHeadInjection = false) {
   return null
 }
 
-function injectHeadContent(headElement) {
+function injectHeadContent(headElement: any): void {
   const headChildren = Array.isArray(headElement.props.children)
     ? headElement.props.children
     : [headElement.props.children]
@@ -488,7 +501,7 @@ function injectHeadContent(headElement) {
   }
 }
 
-function rscToReact(rsc, modules, symbols) {
+function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, any>): any {
   if (!rsc)
     return null
 
@@ -523,7 +536,7 @@ function rscToReact(rsc, modules, symbols) {
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
         if (moduleInfo) {
-          const Component = globalThis['~clientComponents'][moduleInfo.id]?.component
+          const Component = getGlobalThis()['~clientComponents'][moduleInfo.id]?.component
           if (Component) {
             const childProps = {
               ...props,
@@ -552,11 +565,11 @@ function rscToReact(rsc, modules, symbols) {
   return rsc
 }
 
-function processProps(props, modules, symbols) {
+function processProps(props: any, modules: Map<string, any>, symbols: Map<string, any>): any {
   if (!props || typeof props !== 'object')
     return props
 
-  const processed = {}
+  const processed: Record<string, any> = {}
   for (const key in props) {
     if (Object.hasOwn(props, key)) {
       if (key.startsWith('$') || key === 'ref')

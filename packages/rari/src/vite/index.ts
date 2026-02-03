@@ -81,33 +81,77 @@ async function loadRuntimeFile(filename: string): Promise<string> {
   const currentDir = path.dirname(currentFilePath)
 
   const possiblePaths = [
+    path.join(currentDir, 'runtime', filename),
     path.join(currentDir, '../runtime', filename),
-    path.join(currentDir, '../src/runtime', filename),
+    path.join(currentDir, '../src/runtime', filename.replace('.mjs', '.ts')),
   ]
 
   for (const filePath of possiblePaths) {
     try {
-      return await fs.promises.readFile(filePath, 'utf-8')
+      let content = await fs.promises.readFile(filePath, 'utf-8')
+
+      if (filePath.endsWith('.ts')) {
+        content = content.replace(
+          /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+type\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
+        )
+
+        content = content.replace(
+          /import\s+["']\.\.?\/([^"']+)["'];?/g,
+          (match, modulePath) => `import "rari/${modulePath}";`,
+        )
+      }
+
+      return content
     }
-    catch {}
+    catch (err: any) {
+      if (err.code !== 'ENOENT' && err.code !== 'EISDIR') {
+        console.warn(`[rari] Unexpected error reading ${filePath}:`, err)
+      }
+    }
   }
 
   throw new Error(`Could not find ${filename}. Tried: ${possiblePaths.join(', ')}`)
 }
 
 async function loadRscClientRuntime(): Promise<string> {
-  return loadRuntimeFile('rsc-client-runtime.js')
+  return loadRuntimeFile('rsc-client-runtime.mjs')
 }
 
 async function loadEntryClient(imports: string, registrations: string): Promise<string> {
-  const template = await loadRuntimeFile('entry-client.js')
+  const template = await loadRuntimeFile('entry-client.mjs')
   return template
-    .replace('// CLIENT_COMPONENT_IMPORTS_PLACEHOLDER', imports)
-    .replace('// CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER', registrations)
+    .replace('/*! @preserve CLIENT_COMPONENT_IMPORTS_PLACEHOLDER */', imports)
+    .replace('/*! @preserve CLIENT_COMPONENT_REGISTRATIONS_PLACEHOLDER */', registrations)
 }
 
 async function loadReactServerDomShim(): Promise<string> {
-  return loadRuntimeFile('react-server-dom-shim.js')
+  return loadRuntimeFile('react-server-dom-shim.mjs')
 }
 
 async function writeImageConfig(projectRoot: string, options: RariOptions): Promise<void> {
@@ -396,7 +440,7 @@ if (import.meta.hot) {
         .replace(/^components\//, '')
 
       let newCode
-        = 'import { createServerComponentWrapper } from "virtual:rsc-integration";\n'
+        = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
 
       for (const name of exportedNames) {
         if (name === 'default')
@@ -928,7 +972,7 @@ const ${componentName} = registerClientReference(
         if (needsReactImport && !hasReactImport)
           importsToAdd += `import React from 'react';\n`
         if (needsWrapperImport && !hasWrapperImport)
-          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration';\n`
+          importsToAdd += `import { createServerComponentWrapper } from 'virtual:rsc-integration.ts';\n`
         if (serverComponentReplacements.length > 0)
           importsToAdd += `${serverComponentReplacements.join('\n')}\n`
         if (importsToAdd)
@@ -1496,15 +1540,15 @@ const ${componentName} = registerClientReference(
       })
     },
 
-    resolveId(id) {
-      if (id === 'virtual:rsc-integration')
-        return id
-      if (id === 'virtual:rari-entry-client')
-        return id
-      if (id === 'virtual:react-server-dom-rari-client')
-        return id
-      if (id === 'virtual:app-router-provider')
-        return `${id}.tsx`
+    resolveId(id, importer) {
+      if (id === 'virtual:rsc-integration' || id === 'virtual:rsc-integration.ts')
+        return 'virtual:rsc-integration.ts'
+      if (id === 'virtual:rari-entry-client' || id === 'virtual:rari-entry-client.ts')
+        return 'virtual:rari-entry-client.ts'
+      if (id === 'virtual:react-server-dom-rari-client' || id === 'virtual:react-server-dom-rari-client.ts')
+        return 'virtual:react-server-dom-rari-client.ts'
+      if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
+        return 'virtual:app-router-provider.tsx'
       if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
         return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
@@ -1513,6 +1557,53 @@ const ${componentName} = registerClientReference(
         return 'virtual:loading-component-registry.ts'
       if (id === 'react-server-dom-rari/server')
         return id
+
+      if (importer && importer.startsWith('virtual:') && id.startsWith('../')) {
+        const currentFileUrl = import.meta.url
+        const currentFilePath = fileURLToPath(currentFileUrl)
+        const currentDir = path.dirname(currentFilePath)
+
+        let runtimeDir: string | null = null
+        const possibleRuntimeDirs = [
+          path.join(currentDir, 'runtime'),
+          path.join(currentDir, '../runtime'),
+          path.join(currentDir, '../src/runtime'),
+        ]
+
+        for (const dir of possibleRuntimeDirs) {
+          if (fs.existsSync(dir)) {
+            runtimeDir = dir
+            break
+          }
+        }
+
+        if (runtimeDir) {
+          const chunkPath = path.join(runtimeDir, id)
+          if (fs.existsSync(chunkPath))
+            return chunkPath
+
+          const altChunkPath = path.join(runtimeDir, '../dist', path.basename(id))
+          if (fs.existsSync(altChunkPath))
+            return altChunkPath
+        }
+        else {
+          console.warn(
+            `[rari] Runtime directory not found, attempting fallback resolution for virtual import.\n`
+            + `  Importer: ${importer}\n`
+            + `  ID: ${id}\n`
+            + `  Current Dir: ${currentDir}\n`
+            + `  Hint: Runtime lookup failed, trying currentDir as fallback`,
+          )
+        }
+
+        const chunkPath = path.join(currentDir, id)
+        if (fs.existsSync(chunkPath))
+          return chunkPath
+
+        const altChunkPath = path.join(currentDir, '../dist', path.basename(id))
+        if (fs.existsSync(altChunkPath))
+          return altChunkPath
+      }
 
       if (process.env.NODE_ENV === 'production') {
         try {
@@ -1527,7 +1618,7 @@ const ${componentName} = registerClientReference(
     },
 
     async load(id) {
-      if (id === 'virtual:rari-entry-client') {
+      if (id === 'virtual:rari-entry-client.ts') {
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
 
@@ -1680,11 +1771,40 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
-      if (id === 'virtual:rsc-integration')
-        return await loadRscClientRuntime()
+      if (id === 'virtual:rsc-integration.ts') {
+        const code = await loadRscClientRuntime()
+        return code.replace(
+          /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g,
+          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
+        )
+      }
 
-      if (id === 'virtual:react-server-dom-rari-client')
-        return await loadRuntimeFile('react-server-dom-rari-client.js')
+      if (id === 'virtual:react-server-dom-rari-client.ts')
+        return await loadRuntimeFile('react-server-dom-rari-client.mjs')
+
+      if (id.endsWith('.mjs') && fs.existsSync(id)) {
+        try {
+          const projectRoot = options.projectRoot || process.cwd()
+          const realId = fs.realpathSync(id)
+          const relativeToRoot = path.relative(projectRoot, realId)
+
+          const isInProjectRoot = !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
+          const isInNodeModules = realId.includes(`${path.sep}node_modules${path.sep}`)
+
+          const isInRariPackage = realId.includes(`${path.sep}packages${path.sep}rari${path.sep}`)
+            || realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`)
+
+          if (isInProjectRoot || isInNodeModules || isInRariPackage)
+            return fs.readFileSync(id, 'utf-8')
+
+          console.warn(`[rari] Refusing to load .mjs file outside project root and node_modules: ${id}`)
+          return null
+        }
+        catch (err) {
+          console.warn(`[rari] Error validating .mjs file path: ${id}`, err)
+          return null
+        }
+      }
     },
 
     async handleHotUpdate({ file, server }) {

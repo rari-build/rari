@@ -1,30 +1,36 @@
+import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
+import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
+import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
-if (typeof globalThis['~rari'] === 'undefined')
-  globalThis['~rari'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
 // eslint-disable-next-line node/prefer-global/process
-globalThis['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
+;(globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
-if (typeof globalThis['~clientComponents'] === 'undefined')
-  globalThis['~clientComponents'] = {}
-if (typeof globalThis['~clientComponentNames'] === 'undefined')
-  globalThis['~clientComponentNames'] = {}
-if (typeof globalThis['~clientComponentPaths'] === 'undefined')
-  globalThis['~clientComponentPaths'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] = {}
+if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] === 'undefined')
+  (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] = {}
 
 if (typeof window !== 'undefined') {
-  if (!window['~rari'].bufferedEvents)
-    window['~rari'].bufferedEvents = []
+  if (!(window as unknown as WindowWithRari)['~rari'])
+    (window as unknown as WindowWithRari)['~rari'] = (globalThis as unknown as GlobalWithRari)['~rari']
 
-  if (!window['~rari'].boundaryModules)
-    window['~rari'].boundaryModules = new Map()
+  if (!(window as unknown as WindowWithRari)['~rari'].bufferedEvents)
+    (window as unknown as WindowWithRari)['~rari'].bufferedEvents = []
 
-  if (!window['~rari'].pendingBoundaryHydrations)
-    window['~rari'].pendingBoundaryHydrations = new Map()
+  if (!(window as unknown as WindowWithRari)['~rari'].boundaryModules)
+    (window as unknown as WindowWithRari)['~rari'].boundaryModules = new Map()
 
-  globalThis['~rari'].processBoundaryUpdate = function (boundaryId, rscRow, rowId) {
+  if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
+    (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
+
+  ;(globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
     if (!boundaryElement)
@@ -46,7 +52,7 @@ if (typeof window !== 'undefined') {
           if (Array.isArray(importData) && importData.length >= 3) {
             const [path, chunks, exportName] = importData
             const moduleKey = `$L${actualRowId}`
-            window['~rari'].boundaryModules.set(moduleKey, {
+              ;(window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
               id: path,
               chunks: Array.isArray(chunks) ? chunks : [chunks],
               name: exportName || 'default',
@@ -69,7 +75,7 @@ if (typeof window !== 'undefined') {
         return
       }
 
-      function containsClientComponents(element) {
+      function containsClientComponents(element: any): boolean {
         if (!element)
           return false
 
@@ -93,24 +99,34 @@ if (typeof window !== 'undefined') {
       }
 
       if (containsClientComponents(content)) {
-        window['~rari'].pendingBoundaryHydrations.set(boundaryId, {
+        ;(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
           content,
           element: boundaryElement,
           rowId,
         })
 
-        if (globalThis['~rari'].hydrateClientComponents)
-          globalThis['~rari'].hydrateClientComponents(boundaryId, content, boundaryElement)
+        if ((globalThis as unknown as GlobalWithRari)['~rari'].hydrateClientComponents) {
+          const hydrateFn = (globalThis as unknown as GlobalWithRari)['~rari'].hydrateClientComponents!
+          hydrateFn(boundaryId, content, boundaryElement)
+        }
 
         return
       }
 
-      function rscToHtml(element) {
+      function rscToHtml(element: any): string {
+        const escapeHtml = (value: string) =>
+          value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+
         if (!element)
           return ''
 
         if (typeof element === 'string' || typeof element === 'number')
-          return String(element)
+          return escapeHtml(String(element))
 
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
@@ -127,17 +143,17 @@ if (typeof window !== 'undefined') {
                 else if (key !== 'children' && key !== '~boundaryId') {
                   const attrName = key === 'className' ? 'class' : key
 
-                  if (key === 'style' && typeof value === 'object') {
+                  if (key === 'style' && typeof value === 'object' && value !== null) {
                     const styleStr = Object.entries(value)
                       .map(([k, v]) => {
                         const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
-                        return `${kebabKey}:${v}`
+                        return `${kebabKey}:${String(v)}`
                       })
                       .join(';')
-                    attrs += ` style="${styleStr}"`
+                    attrs += ` style="${escapeHtml(styleStr)}"`
                   }
-                  else if (typeof value === 'string') {
-                    attrs += ` ${attrName}="${value.replace(/"/g, '&quot;')}"`
+                  else if (typeof value === 'string' || typeof value === 'number') {
+                    attrs += ` ${attrName}="${escapeHtml(String(value))}"`
                   }
                   else if (typeof value === 'boolean' && value) {
                     attrs += ` ${attrName}`
@@ -179,22 +195,26 @@ if (typeof window !== 'undefined') {
     }))
   }
 
-  if (window['~rari'].bufferedEvents && window['~rari'].bufferedEvents.length > 0) {
-    window['~rari'].bufferedEvents.forEach((event) => {
+  const windowWithRari = window as unknown as WindowWithRari
+  const globalWithRari = globalThis as unknown as GlobalWithRari
+
+  if (windowWithRari['~rari'].bufferedEvents && windowWithRari['~rari'].bufferedEvents!.length > 0) {
+    windowWithRari['~rari'].bufferedEvents!.forEach((event) => {
       const { boundaryId, rscRow, rowId } = event
-      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+      globalWithRari['~rari'].processBoundaryUpdate?.(boundaryId, rscRow, rowId)
     })
-    window['~rari'].bufferedEvents = []
+    windowWithRari['~rari'].bufferedEvents = []
   }
 
   window.addEventListener('rari:boundary-update', (event) => {
-    const { boundaryId, rscRow, rowId } = event.detail
-    if (globalThis['~rari'].processBoundaryUpdate)
-      globalThis['~rari'].processBoundaryUpdate(boundaryId, rscRow, rowId)
+    const { boundaryId, rscRow, rowId } = (event as CustomEvent).detail
+    if (globalWithRari['~rari'].processBoundaryUpdate) {
+      globalWithRari['~rari'].processBoundaryUpdate!(boundaryId, rscRow, rowId)
+    }
   })
 }
 
-export function registerClientComponent(componentFunction, id, exportName) {
+export function registerClientComponent(componentFunction: any, id: string, exportName: string): void {
   const componentName = exportName === 'default'
     ? (componentFunction.name || id.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'DefaultComponent')
     : exportName
@@ -209,12 +229,12 @@ export function registerClientComponent(componentFunction, id, exportName) {
     registered: true,
   }
 
-  globalThis['~clientComponents'][componentId] = componentInfo
-  globalThis['~clientComponents'][id] = componentInfo
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
 
-  globalThis['~clientComponentPaths'][id] = componentId
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
-  globalThis['~clientComponentNames'][componentName] = componentId
+  ;(globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -238,36 +258,13 @@ export function registerClientComponent(componentFunction, id, exportName) {
   }
 }
 
-export function getClientComponent(id) {
-  if (globalThis['~clientComponents'][id]?.component)
-    return globalThis['~clientComponents'][id].component
-
-  if (id.includes('#')) {
-    const [path, exportName] = id.split('#')
-
-    const componentId = globalThis['~clientComponentPaths'][path]
-    if (componentId && globalThis['~clientComponents'][componentId]) {
-      const componentInfo = globalThis['~clientComponents'][componentId]
-      if (exportName === 'default' || !exportName)
-        return componentInfo.component
-    }
-
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = globalThis['~clientComponentPaths'][normalizedPath]
-    if (componentIdByNormalizedPath && globalThis['~clientComponents'][componentIdByNormalizedPath])
-      return globalThis['~clientComponents'][componentIdByNormalizedPath].component
-  }
-
-  const componentId = globalThis['~clientComponentNames'][id]
-  if (componentId && globalThis['~clientComponents'][componentId])
-    return globalThis['~clientComponents'][componentId].component
-
-  return null
+export function getClientComponent(id: string): any {
+  return getClientComponentShared(id)
 }
 
-export function createClientModuleMap() {
-  const moduleMap = {}
-  for (const [componentId, componentInfo] of Object.entries(globalThis['~clientComponents'])) {
+export function createClientModuleMap(): Record<string, any> {
+  const moduleMap: Record<string, any> = {}
+  for (const [componentId, componentInfo] of Object.entries((globalThis as unknown as GlobalWithRari)['~clientComponents'])) {
     moduleMap[componentId] = {
       id: componentId,
       chunks: [componentInfo.path],
@@ -280,18 +277,18 @@ export function createClientModuleMap() {
   return moduleMap
 }
 
-let createFromFetch = ReactDOMClient.createFromFetch || null
-let createFromReadableStream = ReactDOMClient.createFromReadableStream || null
-let rscClientLoadPromise = null
+let createFromFetch: typeof rariCreateFromFetch | null = rariCreateFromFetch
+let createFromReadableStream: typeof rariCreateFromReadableStream | null = rariCreateFromReadableStream
+let rscClientLoadPromise: Promise<any> | null = null
 
-async function loadRscClient() {
+async function loadRscClient(): Promise<any> {
   if (rscClientLoadPromise)
     return rscClientLoadPromise
 
   rscClientLoadPromise = (async () => {
     try {
-      createFromFetch = ReactDOMClient.createFromFetch
-      createFromReadableStream = ReactDOMClient.createFromReadableStream
+      createFromFetch = rariCreateFromFetch
+      createFromReadableStream = rariCreateFromReadableStream
 
       if (typeof createFromReadableStream !== 'function')
         createFromReadableStream = null
@@ -312,6 +309,15 @@ async function loadRscClient() {
 }
 
 class RscClient {
+  componentCache: Map<string, any>
+  moduleCache: Map<string, any>
+  inflightRequests: Map<string, Promise<any>>
+  config: {
+    maxRetries: number
+    retryDelay: number
+    timeout: number
+  }
+
   constructor() {
     this.componentCache = new Map()
     this.moduleCache = new Map()
@@ -323,17 +329,17 @@ class RscClient {
     }
   }
 
-  configure(config) {
+  configure(config: Partial<RscClient['config']>): void {
     this.config = { ...this.config, ...config }
   }
 
-  clearCache() {
+  clearCache(): void {
     this.componentCache.clear()
     this.moduleCache.clear()
   }
 
-  async fetchServerComponent(componentId, props = {}) {
-    const hmrCounter = (typeof window !== 'undefined' && window['~rscRefreshCounters'] && window['~rscRefreshCounters'][componentId]) || 0
+  async fetchServerComponent(componentId: string, props: any = {}): Promise<any> {
+    const hmrCounter = (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rscRefreshCounters'] && (window as unknown as WindowWithRari)['~rscRefreshCounters']![componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey))
@@ -355,7 +361,7 @@ class RscClient {
     }
   }
 
-  async fetchServerComponentStream(componentId, props = {}) {
+  async fetchServerComponentStream(componentId: string, props: any = {}): Promise<any> {
     await loadRscClient()
 
     const endpoints = (() => {
@@ -396,7 +402,7 @@ class RscClient {
 
     response = await attempt()
     if (!response) {
-      await new Promise(r => setTimeout(r, 150))
+      await new Promise(r => setTimeout(r, this.config.retryDelay))
       response = await attempt()
     }
     if (!response)
@@ -416,7 +422,7 @@ class RscClient {
     const modules = new Map()
     const boundaryRowMap = new Map()
 
-    const convertRscToReact = (element) => {
+    const convertRscToReact = (element: any): any => {
       if (!createElement) {
         console.error('React not available for RSC conversion')
         return null
@@ -507,10 +513,10 @@ class RscClient {
       return element
     }
 
-    let initialContent = null
+    let initialContent: any = null
     const boundaryUpdates = new Map()
     let buffered = ''
-    let streamingComponent = null
+    let streamingComponent: any = null
 
     const processStream = async () => {
       const newlineChar = String.fromCharCode(10)
@@ -526,7 +532,7 @@ class RscClient {
 
           const lines = buffered.split(newlineChar)
           const completeLines = lines.slice(0, -1)
-          buffered = lines.at(-1)
+          buffered = lines.at(-1) || ''
 
           for (const line of completeLines) {
             if (!line.trim())
@@ -618,17 +624,17 @@ class RscClient {
       }
     }
 
-    const StreamingWrapper = () => {
-      const [setRenderTrigger] = useState(0)
+    const StreamingWrapper = (): any => {
+      const [, setRenderTrigger] = useState(0)
 
       useEffect(() => {
         streamingComponent = {
-          updateBoundary: (boundaryId, resolvedContent) => {
+          updateBoundary: (boundaryId: string, resolvedContent: any) => {
             boundaryUpdates.set(boundaryId, resolvedContent)
-            setRenderTrigger(prev => prev + 1)
+            setRenderTrigger((prev: number) => prev + 1)
           },
           updateRoot: () => {
-            setRenderTrigger(prev => prev + 1)
+            setRenderTrigger((prev: number) => prev + 1)
           },
         }
 
@@ -637,23 +643,24 @@ class RscClient {
         }
       }, [])
 
-      const renderWithBoundaryUpdates = (element) => {
+      const renderWithBoundaryUpdates = (element: any): any => {
         if (!element)
           return null
 
         if (isValidElement(element)) {
-          const boundaryId = element.props?.['~boundaryId']
-          if (element.props && boundaryId) {
+          const props = element.props as any
+          const boundaryId = props?.['~boundaryId']
+          if (props && boundaryId) {
             const resolvedContent = boundaryUpdates.get(boundaryId)
             if (resolvedContent)
               return resolvedContent
           }
 
-          if (element.props && element.props.children) {
-            const updatedChildren = renderWithBoundaryUpdates(element.props.children)
-            if (updatedChildren !== element.props.children) {
+          if (props && props.children) {
+            const updatedChildren = renderWithBoundaryUpdates(props.children)
+            if (updatedChildren !== props.children) {
               // eslint-disable-next-line react/no-clone-element
-              return cloneElement(element, { ...element.props, children: updatedChildren })
+              return cloneElement(element, { ...props, children: updatedChildren } as any)
             }
           }
 
@@ -681,7 +688,7 @@ class RscClient {
     }
   }
 
-  buildRequestHeaders() {
+  buildRequestHeaders(): Record<string, string> {
     const headers = {
       'Accept': 'text/x-component',
       'Cache-Control': 'no-cache, no-transform',
@@ -690,7 +697,7 @@ class RscClient {
     return headers
   }
 
-  async fetchWithTimeout(url, options) {
+  async fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
 
@@ -708,7 +715,7 @@ class RscClient {
     }
   }
 
-  async processRscResponse(response) {
+  async processRscResponse(response: Response): Promise<any> {
     await loadRscClient()
 
     if (createFromFetch) {
@@ -731,14 +738,14 @@ class RscClient {
     }
   }
 
-  async processRscResponseManually(response) {
+  async processRscResponseManually(response: Response): Promise<any> {
     const rscPayload = await response.text()
     const result = this.parseRscResponse(rscPayload)
     return result
   }
 
-  parseRscResponse(rscPayload) {
-    const lines = rscPayload.trim().split('\\n')
+  parseRscResponse(rscPayload: string): any {
+    const lines = rscPayload.trim().split(/\r?\n/)
     const modules = new Map()
     const elements = new Map()
     const errors = []
@@ -794,7 +801,8 @@ class RscClient {
 
     let rootElement = null
 
-    const elementKeys = elements.keys().toSorted((a, b) => Number.parseInt(a) - Number.parseInt(b))
+    // @ts-expect-error - toSorted not available in this TypeScript version, but works at runtime
+    const elementKeys = elements.keys().toSorted((a: string, b: string) => Number.parseInt(a) - Number.parseInt(b))
     for (const key of elementKeys) {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
@@ -816,7 +824,7 @@ class RscClient {
     return this.reconstructElementFromRscData(rootElement, modules)
   }
 
-  reconstructElementFromRscData(elementData, modules) {
+  reconstructElementFromRscData(elementData: any, modules: Map<string, ModuleData>): any {
     if (elementData === null || elementData === undefined)
       return null
 
@@ -824,8 +832,8 @@ class RscClient {
       return elementData
 
     if (Array.isArray(elementData)) {
-      if (elementData.length >= 2 && elementData[0] === '$') {
-        const [type, key, props] = elementData
+      if (elementData.length >= 4 && elementData[0] === '$') {
+        const [, type, key, props] = elementData
 
         let actualType = type
 
@@ -835,7 +843,7 @@ class RscClient {
             actualType = clientComponent
           }
           else {
-            actualType = ({ children, ...restProps }) => createElement(
+            actualType = ({ children, ...restProps }: any) => createElement(
               'div',
               {
                 ...restProps,
@@ -856,30 +864,32 @@ class RscClient {
         else if (typeof type === 'string' && type.startsWith('$L')) {
           if (modules.has(type)) {
             const moduleData = modules.get(type)
-            const clientComponentKey = `${moduleData.id}#${moduleData.name}`
+            if (moduleData) {
+              const clientComponentKey = `${moduleData.id}#${moduleData.name}`
 
-            const clientComponent = getClientComponent(clientComponentKey)
+              const clientComponent = getClientComponent(clientComponentKey)
 
-            if (clientComponent) {
-              actualType = clientComponent
-            }
-            else {
-              actualType = ({ children, ...restProps }) => createElement(
-                'div',
-                {
-                  ...restProps,
-                  'data-client-component': type,
-                  'style': {
-                    border: '2px dashed #f00',
-                    padding: '8px',
-                    margin: '4px',
-                    backgroundColor: '#fff0f0',
+              if (clientComponent) {
+                actualType = clientComponent
+              }
+              else {
+                actualType = ({ children, ...restProps }: any) => createElement(
+                  'div',
+                  {
+                    ...restProps,
+                    'data-client-component': type,
+                    'style': {
+                      border: '2px dashed #f00',
+                      padding: '8px',
+                      margin: '4px',
+                      backgroundColor: '#fff0f0',
+                    },
                   },
-                },
-                createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${moduleData.name} (${moduleData.id})`,
-                ),
-                children,
-              )
+                  createElement('small', { style: { color: '#c00' } }, `Missing Client Component: ${moduleData.name} (${moduleData.id})`,
+                  ),
+                  children,
+                )
+              }
             }
           }
         }
@@ -899,11 +909,11 @@ class RscClient {
     return elementData
   }
 
-  processPropsRecursively(props, modules) {
+  processPropsRecursively(props: any, modules: Map<string, ModuleData>): any {
     if (!props || typeof props !== 'object')
       return props
 
-    const processed = {}
+    const processed: Record<string, any> = {}
 
     for (const [key, value] of Object.entries(props)) {
       if (key === 'children') {
@@ -945,7 +955,7 @@ class RscClient {
 
 const rscClient = new RscClient()
 
-function RscErrorComponent({ error, details }) {
+function RscErrorComponent({ error, details }: { error: string, details?: any }): any {
   return createElement('div', {
     className: 'rsc-error',
     style: {
@@ -964,7 +974,11 @@ function ServerComponentWrapper({
   componentId,
   props,
   fallback,
-}) {
+}: {
+  componentId: string
+  props: any
+  fallback?: any
+}): any {
   const [state, setState] = useState({ data: null, loading: true, error: null })
   const propsKey = JSON.stringify(props)
   const prevPropsKeyRef = useRef(propsKey)
@@ -1001,13 +1015,13 @@ function ServerComponentWrapper({
   if (error) {
     return createElement(RscErrorComponent, {
       error: 'Error loading component',
-      details: { message: error.message, componentId },
+      details: { message: (error as Error).message, componentId },
     })
   }
 
   if (data) {
     if (data['~isRscResponse']) {
-      return createElement(Suspense, { fallback: fallback || null }, data.readRoot(),
+      return createElement(Suspense, { fallback: fallback || null }, (data as any).readRoot(),
       )
     }
 
@@ -1020,35 +1034,45 @@ function ServerComponentWrapper({
   })
 }
 
-function createServerComponentWrapper(componentName) {
+function createServerComponentWrapper(componentName: string): (props: any) => any {
   let globalRefreshCounter = 0
 
   if (typeof window !== 'undefined') {
-    window['~rscRefreshCounters'] = window['~rscRefreshCounters'] || {}
-    if (window['~rscRefreshCounters'][componentName] === undefined)
-      window['~rscRefreshCounters'][componentName] = 0
-    globalRefreshCounter = window['~rscRefreshCounters'][componentName]
+    const windowWithRari = window as unknown as WindowWithRari
+    windowWithRari['~rscRefreshCounters'] = windowWithRari['~rscRefreshCounters'] || {}
+    if (windowWithRari['~rscRefreshCounters']![componentName] === undefined) {
+      windowWithRari['~rscRefreshCounters']![componentName] = 0
+    }
+    globalRefreshCounter = windowWithRari['~rscRefreshCounters']![componentName]!
   }
 
-  const ServerComponent = (props) => {
+  const ServerComponent = (props: any): any => {
     const [mountKey, setMountKey] = useState(globalRefreshCounter)
 
     useEffect(() => {
-      const handleRscInvalidate = (event) => {
-        const detail = event.detail
+      const handleRscInvalidate = (event: Event) => {
+        const detail = (event as CustomEvent).detail
         if (detail && detail.filePath && isServerComponent(detail.filePath)) {
           rscClient.clearCache()
 
-          if (typeof window !== 'undefined')
-            window['~rscRefreshCounters'][componentName] = (window['~rscRefreshCounters'][componentName] || 0) + 1
-          setMountKey(window['~rscRefreshCounters'][componentName])
+          if (typeof window !== 'undefined') {
+            const windowWithRari = window as unknown as WindowWithRari
+            if (!windowWithRari['~rscRefreshCounters']) {
+              windowWithRari['~rscRefreshCounters'] = {}
+            }
+            windowWithRari['~rscRefreshCounters']![componentName] = (windowWithRari['~rscRefreshCounters']![componentName] || 0) + 1
+            setMountKey(windowWithRari['~rscRefreshCounters']![componentName])
+          }
         }
       }
 
       if (typeof window !== 'undefined')
         window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
 
-      return () => window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
+      return () => {
+        if (typeof window !== 'undefined')
+          window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
+      }
     }, [])
 
     return createElement(Suspense, {
@@ -1063,22 +1087,22 @@ function createServerComponentWrapper(componentName) {
 
   ServerComponent.displayName = `ServerComponent(${componentName})`
 
-  return function (props) {
+  return function (props: any): any {
     return createElement(ServerComponent, props)
   }
 }
 
-export function fetchServerComponent(componentId, props) {
+export function fetchServerComponent(componentId: string, props: any): Promise<any> {
   return rscClient.fetchServerComponent(componentId, props)
 }
 
-function isServerComponent(filePath) {
+function isServerComponent(filePath: string): boolean {
   if (!filePath)
     return false
 
   try {
-    if (typeof globalThis !== 'undefined' && globalThis['~rari'].serverComponents)
-      return globalThis['~rari'].serverComponents.has(filePath)
+    if (typeof globalThis !== 'undefined' && (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents)
+      return (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.has(filePath)
 
     return false
   }
@@ -1092,8 +1116,8 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
-        globalThis['~rari'].serverComponents.add(data.filePath)
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
       }
     }
   })
@@ -1101,9 +1125,9 @@ if (import.meta.hot) {
   import.meta.hot.on('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        globalThis['~rari'].serverComponents = globalThis['~rari'].serverComponents || new Set()
-        data.serverComponents.forEach((path) => {
-          globalThis['~rari'].serverComponents.add(path)
+        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        data.serverComponents.forEach((path: string) => {
+          ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
         })
       }
     }
@@ -1161,7 +1185,7 @@ if (import.meta.hot) {
     }
   })
 
-  async function handleAppRouterUpdate(data) {
+  async function handleAppRouterUpdate(data: any): Promise<void> {
     const fileType = data.fileType
     const filePath = data.filePath
     const routePath = data.routePath
@@ -1220,7 +1244,7 @@ if (import.meta.hot) {
     await triggerAppRouterRerender({ routePath, affectedRoutes })
   }
 
-  function updateDocumentMetadata(metadata) {
+  function updateDocumentMetadata(metadata: any): void {
     if (typeof document === 'undefined')
       return
 
@@ -1238,7 +1262,7 @@ if (import.meta.hot) {
     }
   }
 
-  function clearCacheForRoutes(routes) {
+  function clearCacheForRoutes(routes: string[]): void {
     if (!routes || routes.length === 0) {
       rscClient.clearCache()
       return
@@ -1262,7 +1286,7 @@ if (import.meta.hot) {
       rscClient.componentCache.delete(key)
   }
 
-  async function invalidateAppRouterCache(data) {
+  async function invalidateAppRouterCache(data: any): Promise<void> {
     const routes = data.routes || []
     const fileType = data.fileType
     const filePath = data.filePath
@@ -1329,7 +1353,7 @@ if (import.meta.hot) {
     }
   }
 
-  async function triggerAppRouterRerender(data) {
+  async function triggerAppRouterRerender(data: any): Promise<void> {
     const routePath = data.routePath
     const affectedRoutes = data.affectedRoutes || [routePath]
 
@@ -1355,12 +1379,14 @@ if (import.meta.hot) {
     }
   }
 
-  async function reloadAppRouterManifest() {
-    if (typeof window !== 'undefined' && window['~rari']?.routeInfoCache)
-      window['~rari'].routeInfoCache.clear()
+  async function reloadAppRouterManifest(): Promise<void> {
+    if (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rari']?.routeInfoCache) {
+      const windowWithRari = window as unknown as WindowWithRari
+      windowWithRari['~rari'].routeInfoCache!.clear()
+    }
   }
 
-  async function invalidateRscCache(data) {
+  async function invalidateRscCache(data: any): Promise<void> {
     const filePath = data?.filePath || data
 
     rscClient.clearCache()
@@ -1375,12 +1401,15 @@ if (import.meta.hot) {
 }
 
 class HMRErrorOverlay {
+  overlay: HTMLElement | null
+  currentError: any
+
   constructor() {
     this.overlay = null
     this.currentError = null
   }
 
-  show(error) {
+  show(error: any): void {
     this.currentError = error
     if (this.overlay)
       this.updateOverlay(error)
@@ -1388,7 +1417,7 @@ class HMRErrorOverlay {
       this.createOverlay(error)
   }
 
-  hide() {
+  hide(): void {
     if (this.overlay) {
       this.overlay.remove()
       this.overlay = null
@@ -1396,18 +1425,18 @@ class HMRErrorOverlay {
     }
   }
 
-  isVisible() {
+  isVisible(): boolean {
     return this.overlay !== null
   }
 
-  createOverlay(error) {
+  createOverlay(error: any): void {
     this.overlay = document.createElement('div')
     this.overlay.id = 'rari-hmr-error-overlay'
     this.updateOverlay(error)
     document.body.appendChild(this.overlay)
   }
 
-  updateOverlay(error) {
+  updateOverlay(error: any): void {
     if (!this.overlay)
       return
 
@@ -1422,16 +1451,16 @@ class HMRErrorOverlay {
     this.overlay.innerHTML = `<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);"><div style="background: #1e1e1e; color: #e0e0e0; border-radius: 0.5rem; padding: 2rem; max-width: 50rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); border: 1px solid #ef4444;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"><div style="display: flex; align-items: center; gap: 0.75rem;"><svg style="width: 2rem; height: 2rem; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg><h1 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: #ef4444;">Build Error</h1></div><button onclick="document.getElementById('rari-hmr-error-overlay').remove()" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.25rem; transition: all 0.2s; font-size: 1.5rem; line-height: 1; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='#e0e0e0'" onmouseout="this.style.background='transparent'; this.style.color='#9ca3af'">×</button></div>${fileInfo}<div style="margin-bottom: 1.5rem;"><h2 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: #fca5a5;">Error Message:</h2><pre style="margin: 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 0.375rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #fca5a5;">${this.escapeHtml(error.message)}</pre></div>${stackTrace}<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #374151; display: flex; gap: 0.75rem; align-items: center;"><button onclick="window.location.reload()" style="padding: 0.625rem 1.25rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Reload Page</button><button onclick="document.getElementById('rari-hmr-error-overlay').remove()" style="padding: 0.625rem 1.25rem; background: #374151; color: #e0e0e0; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#374151'">Dismiss</button><span style="margin-left: auto; font-size: 0.75rem; color: #9ca3af;">${new Date(error.timestamp).toLocaleTimeString()}</span></div></div></div>`
   }
 
-  escapeHtml(text) {
+  escapeHtml(text: string): string {
     const div = document.createElement('div')
     div.textContent = text
     return div.innerHTML
   }
 }
 
-let hmrErrorOverlay = null
+let hmrErrorOverlay: HMRErrorOverlay | null = null
 
-function getErrorOverlay() {
+function getErrorOverlay(): HMRErrorOverlay {
   if (!hmrErrorOverlay)
     hmrErrorOverlay = new HMRErrorOverlay()
 
