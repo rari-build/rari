@@ -17,7 +17,7 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { href: '/docs', label: 'Docs', id: 'docs' },
+  { href: '/docs/getting-started', label: 'Docs', id: 'docs' },
   { href: '/blog', label: 'Blog', id: 'blog' },
   { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
@@ -160,7 +160,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
               const isDocs = item.id === 'docs'
               const isSponsor = item.id === 'sponsor'
               const isActive = isDocs
-                ? pathname === '/docs'
+                ? pathname === '/docs/getting-started'
                 : item.href === '/'
                   ? pathname === item.href
                   : pathname?.startsWith(item.href)

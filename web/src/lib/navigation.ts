@@ -30,7 +30,7 @@ export const docsNavigation: NavItem[] = [
 
 export function getBreadcrumbs(path: string): Array<{ label: string, href?: string }> {
   const breadcrumbs: Array<{ label: string, href?: string }> = [
-    { label: 'Docs', href: '/docs' },
+    { label: 'Docs', href: '/docs/getting-started' },
   ]
 
   function findPath(items: NavItem[], currentPath: Array<{ label: string, href?: string }>): boolean {
@@ -50,6 +50,6 @@ export function getBreadcrumbs(path: string): Array<{ label: string, href?: stri
     return false
   }
 
-  findPath(docsNavigation, [{ label: 'Docs', href: '/docs' }])
+  findPath(docsNavigation, [{ label: 'Docs', href: '/docs/getting-started' }])
   return breadcrumbs
 }

@@ -18,7 +18,7 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
       <ol className="flex items-center space-x-2 text-sm">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1
-          const isDocsLink = crumb.href === '/docs'
+          const isDocsLink = crumb.href === '/docs/getting-started'
           const shouldDisableDocsLink = isDocsLink && isGettingStarted
 
           return (
