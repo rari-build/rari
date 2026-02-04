@@ -1,3 +1,13 @@
+## [rari@0.8.12] - 2026-02-04
+
+### 🐛 Bug Fixes
+
+- *(proxy)* Improve module path resolution and runtime imports
+## [rari@0.8.11] - 2026-02-04
+
+### 💼 Other
+
+- Rari@0.8.11
 ## [0.8.10] - 2026-02-04
 
 ### 🚀 Features
