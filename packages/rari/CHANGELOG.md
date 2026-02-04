@@ -1,3 +1,46 @@
+## [0.8.10] - 2026-02-04
+
+### 🚀 Features
+
+- *(runtime)* Export RSC client runtime modules and migrate to TypeScript
+- *(vite)* Add wildcard export support and rewrite runtime imports
+- *(runtime)* Add react-dom types and migrate to virtual RSC client module
+
+### 🐛 Bug Fixes
+
+- Improve error handling and request header management
+- *(runtime)* Improve HTML escaping and RSC element parsing
+- *(runtime)* Remove unnecessary non-null assertions and improve line splitting
+- *(vite)* Add trailing comma to import replacement regex
+- *(vite)* Normalize virtual module imports with file extensions
+- *(runtime)* Improve error message handling in app rendering
+- *(runtime)* Improve attribute handling and import path resolution
+- *(vite)* Simplify import rewriting and improve virtual module resolution
+- *(vite)* Improve import rewriting with comprehensive pattern matching
+- *(vite)* Add runtime directory resolution for chunk imports
+- *(vite)* Improve error handling and add security validation for file resolution
+- *(vite)* Improve import path matching to support optional parent directory references
+- *(vite)* Add rari package detection for .mjs file resolution
+- *(vite)* Improve import path matching for react-server-dom-rari-client
+- *(router)* Move sitemap directory creation to after module validation
+- *(vite)* Skip TypeScript declaration files during directory scan
+
+### 🚜 Refactor
+
+- Extract logger utilities into shared package
+- Improve cross-platform compatibility and code clarity
+- Simplify code and improve test mocking patterns
+- Improve type safety and path normalization
+- *(proxy)* Extract path normalization logic and add csrf retry test
+- *(runtime)* Replace global type declarations with accessor functions
+- *(runtime)* Extract getClientComponent to shared utility
+- *(runtime)* Extract global type definitions to shared types module
+- *(runtime)* Remove unused client component registry and utilities
+
+### ⚙️ Miscellaneous Tasks
+
+- *(runtime)* Remove react-server-dom-shim type definitions
+- *(package)* Remove src directory from published files
 ## [rari@0.8.10] - 2026-02-03
 
 ### 🚀 Features
@@ -8,9 +51,17 @@
 
 - *(vite)* Remove redundant component path normalization
 
+### 💼 Other
+
+- Rari@0.8.10
+
 ### 🚜 Refactor
 
 - *(rsc-renderer)* Optimize RSC rendering and improve path handling
+
+### 🧪 Testing
+
+- Add comprehensive unit test suite with vitest
 
 ### ⚙️ Miscellaneous Tasks
 
