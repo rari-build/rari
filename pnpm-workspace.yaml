@@ -16,7 +16,7 @@ catalogs:
     rolldown-vite: ^7.3.1
     tsdown: ^0.20.1
   cli:
-    '@clack/prompts': ^0.11.0
+    '@clack/prompts': ^1.0.0
   default:
     rari: ^0.8.10
   eslint:
