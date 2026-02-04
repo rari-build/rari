@@ -28,7 +28,7 @@ catalogs:
       version: 1.0.0
   default:
     rari:
-      specifier: ^0.8.11
+      specifier: ^0.8.10
       version: 0.8.11
   eslint:
     '@antfu/eslint-config':
