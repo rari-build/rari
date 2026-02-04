@@ -1,7 +1,7 @@
 {
   "name": "rari-linux-arm64",
   "type": "module",
-  "version": "0.8.10",
+  "version": "0.8.11",
   "description": "Runtime Accelerated Rendering Infrastructure (Linux ARM64 binary)",
   "author": "Ryan Skinner",
   "license": "MIT",
