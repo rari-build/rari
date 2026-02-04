@@ -231,33 +231,41 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    let executor_code = tokio::fs::read_to_string(executor_path).await?;
+    let executor_absolute = if let Ok(canonical) = executor_path.canonicalize() {
+        canonical
+    } else {
+        std::env::current_dir()?.join(executor_path)
+    };
+    let executor_specifier = format!("file://{}", executor_absolute.display());
 
-    let executor_specifier = format!(
-        "file://{}",
-        executor_path.canonicalize().unwrap_or_else(|_| executor_path.to_path_buf()).display()
-    );
-
-    runtime.add_module_to_loader_only(&executor_specifier, executor_code).await?;
+    let rari_request_path = std::path::Path::new("node_modules/rari/dist/proxy/RariRequest.mjs");
+    let rari_request_absolute = if let Ok(canonical) = rari_request_path.canonicalize() {
+        canonical
+    } else {
+        std::env::current_dir()?.join(rari_request_path)
+    };
+    let rari_request_specifier = format!("file://{}", rari_request_absolute.display());
 
     let proxy_file_path = std::path::Path::new("dist/server/proxy.js");
-    let proxy_specifier = format!(
-        "file://{}",
-        proxy_file_path.canonicalize().unwrap_or_else(|_| proxy_file_path.to_path_buf()).display()
-    );
+    let proxy_absolute = if let Ok(canonical) = proxy_file_path.canonicalize() {
+        canonical
+    } else {
+        std::env::current_dir()?.join(proxy_file_path)
+    };
+    let proxy_specifier = format!("file://{}", proxy_absolute.display());
 
     let init_script = format!(
         r#"(async function() {{
             try {{
                 const {{ initializeProxyExecutor }} = await import("{}");
-                const success = await initializeProxyExecutor("{}");
+                const success = await initializeProxyExecutor("{}", "{}");
                 return {{ success }};
             }} catch (error) {{
                 console.error("[rari] Proxy: Failed to initialize:", error);
                 return {{ success: false, error: error.message }};
             }}
         }})()"#,
-        executor_specifier, proxy_specifier
+        executor_specifier, proxy_specifier, rari_request_specifier
     );
 
     match runtime.execute_script("initialize_proxy_executor".to_string(), init_script).await {

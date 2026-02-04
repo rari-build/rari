@@ -83,7 +83,6 @@ async function loadRuntimeFile(filename: string): Promise<string> {
   const possiblePaths = [
     path.join(currentDir, 'runtime', filename),
     path.join(currentDir, '../runtime', filename),
-    path.join(currentDir, '../src/runtime', filename.replace('.mjs', '.ts')),
   ]
 
   for (const filePath of possiblePaths) {
@@ -1553,8 +1552,6 @@ const ${componentName} = registerClientReference(
         return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
         return 'virtual:loading-error-boundary.tsx'
-      if (id === '../router/LoadingComponentRegistry' || id === '../router/LoadingComponentRegistry.ts')
-        return 'virtual:loading-component-registry.ts'
       if (id === 'react-server-dom-rari/server')
         return id
 
@@ -1567,7 +1564,6 @@ const ${componentName} = registerClientReference(
         const possibleRuntimeDirs = [
           path.join(currentDir, 'runtime'),
           path.join(currentDir, '../runtime'),
-          path.join(currentDir, '../src/runtime'),
         ]
 
         for (const dir of possibleRuntimeDirs) {
@@ -1713,9 +1709,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
       if (id === 'virtual:app-router-provider.tsx') {
         const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/src/runtime/AppRouterProvider.tsx'),
-          path.join(process.cwd(), 'src/runtime/AppRouterProvider.tsx'),
-          path.join(process.cwd(), 'node_modules/rari/src/runtime/AppRouterProvider.tsx'),
+          path.join(process.cwd(), 'packages/rari/dist/runtime/AppRouterProvider.mjs'),
+          path.join(process.cwd(), 'node_modules/rari/dist/runtime/AppRouterProvider.mjs'),
         ]
 
         for (const providerSourcePath of possiblePaths) {
@@ -1728,9 +1723,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
       if (id === 'virtual:default-loading-indicator.tsx') {
         const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/src/runtime/DefaultLoadingIndicator.tsx'),
-          path.join(process.cwd(), 'src/runtime/DefaultLoadingIndicator.tsx'),
-          path.join(process.cwd(), 'node_modules/rari/src/runtime/DefaultLoadingIndicator.tsx'),
+          path.join(process.cwd(), 'packages/rari/dist/runtime/DefaultLoadingIndicator.mjs'),
+          path.join(process.cwd(), 'node_modules/rari/dist/runtime/DefaultLoadingIndicator.mjs'),
         ]
 
         for (const sourcePath of possiblePaths) {
@@ -1743,9 +1737,8 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
 
       if (id === 'virtual:loading-error-boundary.tsx') {
         const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/src/runtime/LoadingErrorBoundary.tsx'),
-          path.join(process.cwd(), 'src/runtime/LoadingErrorBoundary.tsx'),
-          path.join(process.cwd(), 'node_modules/rari/src/runtime/LoadingErrorBoundary.tsx'),
+          path.join(process.cwd(), 'packages/rari/dist/runtime/LoadingErrorBoundary.mjs'),
+          path.join(process.cwd(), 'node_modules/rari/dist/runtime/LoadingErrorBoundary.mjs'),
         ]
 
         for (const sourcePath of possiblePaths) {
@@ -1754,21 +1747,6 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
         }
 
         return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
-      }
-
-      if (id === 'virtual:loading-component-registry.ts') {
-        const possiblePaths = [
-          path.join(process.cwd(), 'packages/rari/src/router/LoadingComponentRegistry.ts'),
-          path.join(process.cwd(), 'src/router/LoadingComponentRegistry.ts'),
-          path.join(process.cwd(), 'node_modules/rari/src/router/LoadingComponentRegistry.ts'),
-        ]
-
-        for (const sourcePath of possiblePaths) {
-          if (fs.existsSync(sourcePath))
-            return fs.readFileSync(sourcePath, 'utf-8')
-        }
-
-        return 'export class LoadingComponentRegistry { loadComponent() { return Promise.resolve(null); } }'
       }
 
       if (id === 'virtual:rsc-integration.ts') {

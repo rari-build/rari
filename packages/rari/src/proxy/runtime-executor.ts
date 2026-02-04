@@ -24,7 +24,7 @@ declare global {
   var __rariExecuteProxy: ((request: SimpleRequest) => Promise<SimpleProxyResult>) | undefined
 }
 
-export async function initializeProxyExecutor(proxyModulePath: string) {
+export async function initializeProxyExecutor(proxyModulePath: string, rariRequestPath: string) {
   try {
     const proxyModule = await import(proxyModulePath)
 
@@ -32,8 +32,7 @@ export async function initializeProxyExecutor(proxyModulePath: string) {
       console.error('[rari] Proxy: proxy function not found in module')
       return false
     }
-
-    const { RariRequest } = await import('./RariRequest.js')
+    const { RariRequest } = await import(rariRequestPath)
 
     globalThis.__rariExecuteProxy = async function (simpleRequest: SimpleRequest): Promise<SimpleProxyResult> {
       try {
