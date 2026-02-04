@@ -191,8 +191,6 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
     return false
 
   await fs.mkdir(options.outDir, { recursive: true })
-  const sitemapDir = path.join(options.outDir, 'sitemap')
-  await fs.mkdir(sitemapDir, { recursive: true })
 
   const sitemapFile = sitemapFiles[0]
 
@@ -277,6 +275,9 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
 
     if (typeof module.generateSitemaps === 'function') {
       const sitemapIds = await module.generateSitemaps()
+
+      const sitemapDir = path.join(options.outDir, 'sitemap')
+      await fs.mkdir(sitemapDir, { recursive: true })
 
       for (const { id } of sitemapIds) {
         let sitemapData: Sitemap

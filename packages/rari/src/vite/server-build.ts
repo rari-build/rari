@@ -1611,6 +1611,9 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
       if (/^(?:robots|sitemap)\.(?:tsx?|jsx?)$/.test(entry.name))
         continue
 
+      if (entry.name.endsWith('.d.ts'))
+        continue
+
       try {
         if (builder.isServerComponent(fullPath)) {
           builder.addServerComponent(fullPath)

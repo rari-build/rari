@@ -24,9 +24,9 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.2.0",
-    "@types/react": "^19.2.10",
+    "@types/react": "^19.2.11",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260203.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260204.1",
     "rolldown-vite": "^7.3.1",
     "tailwindcss": "^4.1.18"
   }
