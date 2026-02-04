@@ -1,5 +1,9 @@
 ## [create-rari-app@0.4.7] - 2026-02-03
 
+### 💼 Other
+
+- Create-rari-app@0.4.7
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(packages)* Remove @rari/colors package and migrate to native Node.js utilities
