@@ -11,10 +11,15 @@ use tracing::error;
 
 pub mod tests;
 
+const SELF_CLOSING_TAGS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
+];
+
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     let style_parts: Vec<String> = style_obj
         .iter()
-        .map(|(k, v)| {
+        .filter_map(|(k, v)| {
             let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
                 if c.is_uppercase() {
                     acc.push('-');
@@ -29,25 +34,30 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
                 acc
             });
             let value_str = if let Some(s) = v.as_str() {
-                s.to_string()
-            } else if let Some(b) = v.as_bool() {
-                if b { "true".to_string() } else { "false".to_string() }
+                Some(s.to_string())
+            } else if v.as_bool().is_some() {
+                None
             } else if let Some(u) = v.as_u64() {
-                u.to_string()
+                Some(u.to_string())
             } else if let Some(i) = v.as_i64() {
-                i.to_string()
+                Some(i.to_string())
             } else if let Some(f) = v.as_f64() {
                 if f.is_finite() {
-                    format!("{:.10}", f).trim_end_matches('0').trim_end_matches('.').to_string()
+                    Some(
+                        format!("{:.10}", f)
+                            .trim_end_matches('0')
+                            .trim_end_matches('.')
+                            .to_string(),
+                    )
                 } else {
-                    f.to_string()
+                    Some(f.to_string())
                 }
             } else if v.is_object() || v.is_array() {
-                serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
+                Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
             } else {
-                v.to_string()
+                Some(v.to_string())
             };
-            format!("{}:{}", kebab_key, value_str)
+            value_str.map(|val| format!("{}:{}", kebab_key, val))
         })
         .collect();
     style_parts.join(";")
@@ -600,7 +610,7 @@ impl RscHtmlRenderer {
             if tag.starts_with("$L") || tag.starts_with("$@") {
                 return Ok(format!(
                     r#"<div data-client-component="{}" style="display: contents;"></div>"#,
-                    tag.cow_replace('"', "&quot;").into_owned()
+                    Self::escape_html_attribute(tag)
                 ));
             }
 
@@ -674,10 +684,7 @@ impl RscHtmlRenderer {
                 }
             }
 
-            const SELF_CLOSING: &[&str] = &[
-                "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-                "param", "source", "track", "wbr",
-            ];
+            const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
             if SELF_CLOSING.contains(&tag) {
                 html.push_str(" />");
                 return Ok(html);
@@ -1385,7 +1392,7 @@ if (typeof window !== 'undefined') {{
                     continue;
                 }
 
-                if value.is_number() || value.is_boolean() {
+                if value.is_number() {
                     html.push_str(&format!(
                         " {}=\"{}\"",
                         attr_name,
@@ -1393,6 +1400,12 @@ if (typeof window !== 'undefined') {{
                     ));
                 }
             }
+        }
+
+        const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
+        if SELF_CLOSING.contains(&tag) {
+            html.push_str(" />");
+            return Ok(html);
         }
 
         html.push('>');
