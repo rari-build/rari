@@ -437,12 +437,8 @@ impl RscHtmlRenderer {
             row_cache.insert(row.id, html);
         }
 
-        let root_id = if row_cache.contains_key(&0) {
-            0
-        } else {
-            rsc_rows.first().map(|r| r.id).unwrap_or(0)
-        };
-        Ok(row_cache.get(&root_id).cloned().unwrap_or_default())
+        let last_row_id = rsc_rows.iter().map(|r| r.id).max().unwrap_or(0);
+        Ok(row_cache.get(&last_row_id).or_else(|| row_cache.get(&0)).cloned().unwrap_or_default())
     }
 
     async fn render_rsc_element(
