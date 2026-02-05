@@ -1,8 +1,17 @@
+## [rari@0.8.13] - 2026-02-05
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.8.12
 ## [rari@0.8.12] - 2026-02-04
 
 ### 🐛 Bug Fixes
 
 - *(proxy)* Improve module path resolution and runtime imports
+
+### 💼 Other
+
+- Rari@0.8.12
 ## [rari@0.8.11] - 2026-02-04
 
 ### 💼 Other
