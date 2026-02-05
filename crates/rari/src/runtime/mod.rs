@@ -1,7 +1,7 @@
 use crate::error::RariError;
 use cow_utils::CowUtils;
 use deno_error::JsErrorBox as JsError;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -13,6 +13,8 @@ pub mod module_reload;
 pub mod ops;
 pub mod runtime_factory;
 pub mod utils;
+
+mod metadata;
 
 pub type TokioRuntime = tokio::runtime::Handle;
 
@@ -122,7 +124,20 @@ impl JsExecutionRuntime {
             .cow_replace("PARAMS_PLACEHOLDER", &params_json)
             .into_owned();
 
-        self.execute_script("collect_metadata".to_string(), script).await
+        let metadata_list = self.execute_script("collect_metadata".to_string(), script).await?;
+
+        let metadata_array = metadata_list.as_array().ok_or_else(|| {
+            RariError::serialization("Expected metadata list to be an array".to_string())
+        })?;
+
+        let mut merged_metadata = json!({});
+        for metadata_item in metadata_array {
+            merged_metadata = metadata::merge_metadata(&merged_metadata, metadata_item);
+        }
+
+        metadata::finalize_metadata(&mut merged_metadata);
+
+        Ok(merged_metadata)
     }
 
     pub async fn execute_function(

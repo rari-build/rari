@@ -45,8 +45,6 @@ pub struct RscHtmlRenderer {
 }
 
 impl RscHtmlRenderer {
-    const RENDER_SCRIPT: &'static str = include_str!("js/render_script.js");
-
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
@@ -70,17 +68,6 @@ impl RscHtmlRenderer {
         }
 
         tags.join("\n")
-    }
-
-    pub async fn initialize(&self) -> Result<(), RariError> {
-        self.runtime
-            .execute_script("rsc_html_renderer_init".to_string(), Self::RENDER_SCRIPT.to_string())
-            .await
-            .map_err(|e| {
-                RariError::internal(format!("Failed to initialize RSC-to-HTML renderer: {}", e))
-            })?;
-
-        Ok(())
     }
 
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
@@ -443,83 +430,226 @@ impl RscHtmlRenderer {
         &self,
         rsc_rows: &[RscRow],
     ) -> Result<String, RariError> {
-        #[allow(clippy::disallowed_methods)]
-        let rows_json: Vec<serde_json::Value> = rsc_rows
-            .iter()
-            .map(|row| {
-                let data_json = match &row.data {
-                    RscElement::Component { tag, key, props } => {
-                        serde_json::json!(["$", tag, key.as_deref().unwrap_or(""), props])
-                    }
-                    RscElement::Text(text) => {
-                        if text.starts_with("I[") {
-                            serde_json::json!({
-                                "Text": text
-                            })
-                        } else if text.starts_with('[') || text.starts_with('{') {
-                            match serde_json::from_str::<serde_json::Value>(text) {
-                                Ok(parsed) => {
-                                    if Self::looks_like_rsc_payload(&parsed) {
-                                        parsed
-                                    } else {
-                                        serde_json::json!(text)
-                                    }
-                                }
-                                Err(_) => serde_json::json!(text),
-                            }
-                        } else {
-                            serde_json::json!(text)
-                        }
-                    }
-                    RscElement::Reference(ref_str) => {
-                        serde_json::json!({
-                            "Reference": ref_str
-                        })
-                    }
-                    RscElement::Suspense { fallback_ref, children_ref, boundary_id, props } => {
-                        serde_json::json!({
-                            "Suspense": {
-                                "fallback_ref": fallback_ref,
-                                "children_ref": children_ref,
-                                "boundary_id": boundary_id,
-                                "props": props
-                            }
-                        })
-                    }
-                    RscElement::Promise { promise_id } => {
-                        serde_json::json!({
-                            "Promise": {
-                                "promise_id": promise_id
-                            }
-                        })
-                    }
+        let mut row_cache: FxHashMap<u32, String> = FxHashMap::default();
+
+        for row in rsc_rows {
+            let html = self.render_rsc_element(&row.data, &row_cache).await?;
+            row_cache.insert(row.id, html);
+        }
+
+        let last_row_id = rsc_rows.iter().map(|r| r.id).max().unwrap_or(0);
+        Ok(row_cache.get(&last_row_id).or_else(|| row_cache.get(&0)).cloned().unwrap_or_default())
+    }
+
+    async fn render_rsc_element(
+        &self,
+        element: &RscElement,
+        row_cache: &FxHashMap<u32, String>,
+    ) -> Result<String, RariError> {
+        match element {
+            RscElement::Text(text) => {
+                if let Some(stripped) = text.strip_prefix("$L").or_else(|| text.strip_prefix("$@"))
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                {
+                    return Ok(row_cache.get(&row_id).cloned().unwrap_or_default());
+                }
+
+                if text.starts_with("I[") || text.starts_with("S") || text.starts_with("E[") {
+                    return Ok(String::new());
+                }
+
+                Ok(text
+                    .cow_replace('&', "&amp;")
+                    .cow_replace('<', "&lt;")
+                    .cow_replace('>', "&gt;")
+                    .cow_replace('"', "&quot;")
+                    .cow_replace('\'', "&#39;")
+                    .into_owned())
+            }
+
+            RscElement::Component { tag, key: _, props } => {
+                let props_value = serde_json::Value::Object(
+                    props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                );
+                self.render_component_to_html(tag, &props_value, row_cache).await
+            }
+
+            RscElement::Reference(ref_str) => {
+                if let Some(stripped) =
+                    ref_str.strip_prefix("$L").or_else(|| ref_str.strip_prefix("$@"))
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                {
+                    return Ok(row_cache.get(&row_id).cloned().unwrap_or_default());
+                }
+                Ok(String::new())
+            }
+
+            RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
+                if let Some(stripped) = children_ref.strip_prefix("$L")
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                    && let Some(html) = row_cache.get(&row_id)
+                    && !html.is_empty()
+                {
+                    return Ok(html.clone());
+                }
+
+                if let Some(stripped) = fallback_ref.strip_prefix("$L")
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                    && let Some(html) = row_cache.get(&row_id)
+                {
+                    return Ok(format!(
+                        r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
+                        boundary_id.cow_replace('"', "&quot;").into_owned(),
+                        html
+                    ));
+                }
+
+                Ok(String::new())
+            }
+
+            RscElement::Promise { promise_id: _ } => Ok(String::new()),
+        }
+    }
+
+    async fn render_component_to_html(
+        &self,
+        tag: &str,
+        props: &serde_json::Value,
+        row_cache: &FxHashMap<u32, String>,
+    ) -> Result<String, RariError> {
+        if tag.starts_with("$L") || tag.starts_with("$@") {
+            return Ok(format!(
+                r#"<div data-client-component="{}" style="display: contents;"></div>"#,
+                tag.cow_replace('"', "&quot;").into_owned()
+            ));
+        }
+
+        if tag == "react.suspense" || tag == "$0" {
+            if let Some(props_obj) = props.as_object() {
+                let children = props_obj.get("children");
+                if let Some(children) = children {
+                    return self.render_json_to_html(children, row_cache).await;
+                }
+            }
+            return Ok(String::new());
+        }
+
+        let mut html = String::with_capacity(256);
+        html.push('<');
+        html.push_str(tag);
+
+        if let Some(props_obj) = props.as_object() {
+            for (key, value) in props_obj {
+                if key == "children" || key == "key" || key == "ref" {
+                    continue;
+                }
+
+                if value.is_null() {
+                    continue;
+                }
+
+                let attr_name = match key.as_str() {
+                    "className" => "class",
+                    "htmlFor" => "for",
+                    _ => key.as_str(),
                 };
 
-                serde_json::json!({
-                    "id": row.id,
-                    "data": data_json
-                })
-            })
-            .collect();
+                if let Some(b) = value.as_bool() {
+                    if b {
+                        html.push(' ');
+                        html.push_str(attr_name);
+                    }
+                } else if let Some(s) = value.as_str() {
+                    html.push_str(&format!(
+                        r#" {}="{}""#,
+                        attr_name,
+                        s.cow_replace('&', "&amp;")
+                            .cow_replace('"', "&quot;")
+                            .cow_replace('<', "&lt;")
+                            .cow_replace('>', "&gt;")
+                            .into_owned()
+                    ));
+                } else if value.is_number() {
+                    html.push_str(&format!(r#" {}="{}""#, attr_name, value));
+                }
+            }
+        }
 
-        let rows_array = serde_json::Value::Array(rows_json);
+        const SELF_CLOSING: &[&str] = &["img", "br", "hr", "input", "meta", "link"];
+        if SELF_CLOSING.contains(&tag) {
+            html.push_str(" />");
+            return Ok(html);
+        }
 
-        let result =
-            self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
-                |e| RariError::internal(format!("Failed to execute renderRscToHtml: {}", e)),
-            )?;
+        html.push('>');
 
-        let html = result
-            .as_str()
-            .ok_or_else(|| {
-                RariError::internal(format!(
-                    "renderRscToHtml did not return a string: {:?}",
-                    result
-                ))
-            })?
-            .to_string();
+        if let Some(props_obj) = props.as_object()
+            && let Some(children) = props_obj.get("children")
+        {
+            let children_html = self.render_json_to_html(children, row_cache).await?;
+            html.push_str(&children_html);
+        }
+
+        html.push_str("</");
+        html.push_str(tag);
+        html.push('>');
 
         Ok(html)
+    }
+
+    fn render_json_to_html<'a>(
+        &'a self,
+        json: &'a serde_json::Value,
+        row_cache: &'a FxHashMap<u32, String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if json.is_null() {
+                return Ok(String::new());
+            }
+
+            if let Some(s) = json.as_str() {
+                if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                {
+                    return Ok(row_cache.get(&row_id).cloned().unwrap_or_default());
+                }
+                return Ok(s
+                    .cow_replace('&', "&amp;")
+                    .cow_replace('<', "&lt;")
+                    .cow_replace('>', "&gt;")
+                    .cow_replace('"', "&quot;")
+                    .cow_replace('\'', "&#39;")
+                    .into_owned());
+            }
+
+            if let Some(arr) = json.as_array() {
+                if arr.len() >= 4
+                    && arr[0].as_str() == Some("$")
+                    && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
+                {
+                    return self.render_component_to_html(tag, props, row_cache).await;
+                }
+
+                let mut html = String::with_capacity(arr.len() * 64);
+                for child in arr {
+                    html.push_str(&self.render_json_to_html(child, row_cache).await?);
+                }
+                return Ok(html);
+            }
+
+            if let Some(num) = json.as_i64() {
+                return Ok(num.to_string());
+            }
+            if let Some(num) = json.as_f64() {
+                return Ok(num.to_string());
+            }
+            if let Some(b) = json.as_bool() {
+                return Ok(b.to_string());
+            }
+
+            Ok(String::new())
+        })
     }
 
     pub async fn generate_boundary_update_html(

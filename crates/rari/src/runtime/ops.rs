@@ -209,12 +209,18 @@ pub fn create_error_operation(
 }
 
 pub fn get_streaming_ops() -> Vec<OpDecl> {
-    vec![op_send_chunk_to_rust(), op_internal_log()]
+    vec![op_send_chunk_to_rust(), op_internal_log(), op_sanitize_html()]
 }
 
 #[op2(fast)]
 pub fn op_internal_log(#[string] message: &str) {
     error!("[rari] {message}");
+}
+
+#[op2]
+#[string]
+pub fn op_sanitize_html(#[string] html: &str, #[string] component_id: &str) -> String {
+    crate::rsc::rendering::sanitizer::sanitize_component_output(html, component_id)
 }
 
 #[derive(Default)]
