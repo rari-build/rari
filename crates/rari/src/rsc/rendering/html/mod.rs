@@ -575,7 +575,7 @@ impl RscHtmlRenderer {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         return Ok(format!(
                             r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
-                            boundary_id.cow_replace('"', "&quot;").into_owned(),
+                            Self::escape_html_attribute(boundary_id),
                             html
                         ));
                     }
@@ -751,8 +751,8 @@ impl RscHtmlRenderer {
             if let Some(num) = json.as_f64() {
                 return Ok(num.to_string());
             }
-            if let Some(b) = json.as_bool() {
-                return Ok(b.to_string());
+            if json.is_boolean() {
+                return Ok(String::new());
             }
 
             Ok(String::new())
