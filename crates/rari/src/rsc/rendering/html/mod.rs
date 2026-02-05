@@ -627,6 +627,10 @@ impl RscHtmlRenderer {
                 return Ok(String::new());
             }
 
+            if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
+                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+            }
+
             let mut html = String::with_capacity(256);
             html.push('<');
             html.push_str(tag);
