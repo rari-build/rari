@@ -604,7 +604,10 @@ impl RscHtmlRenderer {
                 ));
             }
 
-            if tag == "react.suspense" || tag == "$0" {
+            let is_suspense_symbol = tag.starts_with('$')
+                && tag.len() > 1
+                && tag[1..].chars().all(|c| c.is_ascii_digit());
+            if tag == "react.suspense" || is_suspense_symbol {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
                     if let Some(children) = children {
