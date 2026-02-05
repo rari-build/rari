@@ -223,4 +223,32 @@ mod tests {
 
         assert_eq!(metadata["title"], "");
     }
+
+    #[test]
+    fn test_merge_metadata_child_not_object() {
+        let parent = json!({
+            "title": "Parent Title",
+            "description": "Parent Description"
+        });
+        let child = json!("not an object");
+
+        let result = merge_metadata(&parent, &child);
+
+        assert_eq!(result["title"], "Parent Title");
+        assert_eq!(result["description"], "Parent Description");
+    }
+
+    #[test]
+    fn test_merge_metadata_parent_not_object() {
+        let parent = json!("not an object");
+        let child = json!({
+            "title": "Child Title",
+            "description": "Child Description"
+        });
+
+        let result = merge_metadata(&parent, &child);
+
+        assert_eq!(result["title"], "Child Title");
+        assert_eq!(result["description"], "Child Description");
+    }
 }

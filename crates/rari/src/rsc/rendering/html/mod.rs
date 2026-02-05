@@ -11,6 +11,48 @@ use tracing::error;
 
 pub mod tests;
 
+fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
+    let style_parts: Vec<String> = style_obj
+        .iter()
+        .map(|(k, v)| {
+            let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                if c.is_uppercase() {
+                    acc.push('-');
+                    acc.push(
+                        c.to_lowercase()
+                            .next()
+                            .expect("to_lowercase() always returns at least one character"),
+                    );
+                } else {
+                    acc.push(c);
+                }
+                acc
+            });
+            let value_str = if let Some(s) = v.as_str() {
+                s.to_string()
+            } else if let Some(b) = v.as_bool() {
+                if b { "true".to_string() } else { "false".to_string() }
+            } else if let Some(i) = v.as_i64() {
+                i.to_string()
+            } else if let Some(u) = v.as_u64() {
+                u.to_string()
+            } else if let Some(f) = v.as_f64() {
+                if f.is_finite() {
+                    format!("{:.10}", f).trim_end_matches('0').trim_end_matches('.').to_string()
+                } else {
+                    f.to_string()
+                }
+            } else if v.is_object() || v.is_array() {
+                serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
+            } else {
+                v.to_string()
+            };
+            format!("{}:{}", kebab_key, value_str)
+        })
+        .collect();
+    style_parts.join(";")
+}
+
 #[derive(Debug)]
 pub struct BoundaryIdGenerator {
     counter: AtomicU32,
@@ -556,46 +598,7 @@ impl RscHtmlRenderer {
 
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
-                        let style_parts: Vec<String> = style_obj
-                            .iter()
-                            .map(|(k, v)| {
-                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
-                                    if c.is_uppercase() {
-                                        acc.push('-');
-                                        acc.push(c.to_lowercase().next().expect(
-                                            "to_lowercase() always returns at least one character",
-                                        ));
-                                    } else {
-                                        acc.push(c);
-                                    }
-                                    acc
-                                });
-                                let value_str = if let Some(s) = v.as_str() {
-                                    s.to_string()
-                                } else if let Some(b) = v.as_bool() {
-                                    if b { "true".to_string() } else { "false".to_string() }
-                                } else if let Some(i) = v.as_i64() {
-                                    i.to_string()
-                                } else if let Some(u) = v.as_u64() {
-                                    u.to_string()
-                                } else if let Some(f) = v.as_f64() {
-                                    if f.is_finite() {
-                                        format!("{:.10}", f)
-                                            .trim_end_matches('0')
-                                            .trim_end_matches('.')
-                                            .to_string()
-                                    } else {
-                                        f.to_string()
-                                    }
-                                } else if v.is_object() || v.is_array() {
-                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
-                                } else {
-                                    v.to_string()
-                                };
-                                format!("{}:{}", kebab_key, value_str)
-                            })
-                            .collect();
-                        let style_str = style_parts.join(";");
+                        let style_str = serialize_style_object(style_obj);
                         html.push_str(&format!(
                             r#" style="{}""#,
                             style_str
@@ -1312,46 +1315,7 @@ if (typeof window !== 'undefined') {{
 
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
-                        let style_parts: Vec<String> = style_obj
-                            .iter()
-                            .map(|(k, v)| {
-                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
-                                    if c.is_uppercase() {
-                                        acc.push('-');
-                                        acc.push(c.to_lowercase().next().expect(
-                                            "to_lowercase() always returns at least one character",
-                                        ));
-                                    } else {
-                                        acc.push(c);
-                                    }
-                                    acc
-                                });
-                                let value_str = if let Some(s) = v.as_str() {
-                                    s.to_string()
-                                } else if let Some(b) = v.as_bool() {
-                                    if b { "true".to_string() } else { "false".to_string() }
-                                } else if let Some(i) = v.as_i64() {
-                                    i.to_string()
-                                } else if let Some(u) = v.as_u64() {
-                                    u.to_string()
-                                } else if let Some(f) = v.as_f64() {
-                                    if f.is_finite() {
-                                        format!("{:.10}", f)
-                                            .trim_end_matches('0')
-                                            .trim_end_matches('.')
-                                            .to_string()
-                                    } else {
-                                        f.to_string()
-                                    }
-                                } else if v.is_object() || v.is_array() {
-                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
-                                } else {
-                                    v.to_string()
-                                };
-                                format!("{}:{}", kebab_key, value_str)
-                            })
-                            .collect();
-                        let style_str = style_parts.join(";");
+                        let style_str = serialize_style_object(style_obj);
                         html.push_str(&format!(
                             " style=\"{}\"",
                             Self::escape_attribute(&style_str)
