@@ -472,6 +472,10 @@ impl RscHtmlRenderer {
         &self,
         rsc_rows: &[RscRow],
     ) -> Result<String, RariError> {
+        if rsc_rows.is_empty() {
+            return Ok(String::new());
+        }
+
         let mut row_cache: FxHashMap<u32, String> = FxHashMap::default();
 
         for row in rsc_rows {
@@ -479,8 +483,13 @@ impl RscHtmlRenderer {
             row_cache.insert(row.id, html);
         }
 
-        let last_row_id = rsc_rows.iter().map(|r| r.id).max().unwrap_or(0);
-        Ok(row_cache.get(&last_row_id).or_else(|| row_cache.get(&0)).cloned().unwrap_or_default())
+        let root_row_id = if row_cache.contains_key(&0) {
+            0
+        } else {
+            rsc_rows.iter().map(|r| r.id).max().unwrap_or(0)
+        };
+
+        Ok(row_cache.get(&root_row_id).cloned().unwrap_or_default())
     }
 
     async fn render_rsc_element(

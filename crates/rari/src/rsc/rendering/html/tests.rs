@@ -883,7 +883,6 @@ async fn test_generate_boundary_update_html_with_special_characters() {
     assert!(html.contains("\\\""), "Should escape double quotes for JavaScript");
     assert!(html.contains("\\n"), "Should escape newlines for JavaScript");
 
-    // The script tag itself should be valid HTML
     assert!(html.starts_with("<script"), "Should be a script tag");
     assert!(html.contains("</script>"), "Should close script tag");
 
@@ -1030,4 +1029,109 @@ fn test_escape_js_string() {
     let escaped_backslash = RscHtmlRenderer::escape_js_string(text_with_backslash);
 
     assert!(escaped_backslash.contains("\\\\"), "Should escape backslashes");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_row_0_as_root() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"children":"Root Content"}]
+1:["$","span",null,{"children":"Other Content"}]
+2:["$","p",null,{"children":"More Content"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Root Content"), "Should render row 0 as root");
+    assert!(html.contains("<div"), "Should have div from row 0");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_max_row_fallback() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"1:["$","span",null,{"children":"First"}]
+2:["$","p",null,{"children":"Second"}]
+5:["$","div",null,{"children":"Last Content"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Last Content"), "Should render max row ID as root");
+    assert!(html.contains("<div"), "Should have div from row 5");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_empty_rows() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rows: Vec<RscRow> = vec![];
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert_eq!(html, "", "Should return empty string for empty rows");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_single_row() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"42:["$","div",null,{"children":"Single Row"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Single Row"), "Should render single row");
+    assert!(html.contains("<div"), "Should have div tag");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_row_0_preferred_over_max() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"children":"Row Zero"}]
+10:["$","span",null,{"children":"Row Ten"}]
+100:["$","p",null,{"children":"Row Hundred"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Row Zero"), "Should render row 0 as root");
+    assert!(html.contains("<div"), "Should have div from row 0");
+    assert!(!html.contains("Row Hundred"), "Should not render row 100 as root");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_backward_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"1:["$","span",null,{"children":"Child Content"}]
+0:["$","div",null,{"children":"$L1"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<div"), "Should have div from row 0");
+    assert!(html.contains("Child Content"), "Should resolve $L1 reference");
+    assert!(html.contains("<span"), "Should have span from row 1");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_consistent_with_streaming() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","main",null,{"children":"Main Content"}]
+1:["$","aside",null,{"children":"Sidebar"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<main"), "Should have main tag from row 0");
+    assert!(html.contains("Main Content"), "Should render row 0 content");
 }
