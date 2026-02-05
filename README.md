@@ -14,7 +14,7 @@
 
 **rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
 
-With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 8.7x higher throughput and 7.5x faster response times than Next.js.
+With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 46.5x higher throughput and 9.1x faster response times than Next.js.
 
 ## Features
 
@@ -58,11 +58,11 @@ Visit [rari.build/docs](https://rari.build/docs) for complete documentation, gui
 ## Why rari?
 
 ### Performance That Matters
-- **7.5x faster response times** - 0.35ms vs 2.64ms average response
-- **8.7x higher throughput** - 14,085 req/sec vs 1,624 req/sec under load
-- **8.7x faster latency under load** - 3.55ms vs 30.79ms average latency
-- **53% smaller bundles** - 266 KB vs 565 KB client JavaScript
-- **2.9x faster builds** - 1.41s vs 4.10s production builds
+- **9.1x faster response times** - 0.43ms vs 3.92ms average response
+- **46.5x higher throughput** - 74,662 req/sec vs 1,605 req/sec under load
+- **46.6x faster latency under load** - 0.67ms vs 31.17ms average latency
+- **53% smaller bundles** - 264 KB vs 562 KB client JavaScript
+- **3.7x faster builds** - 0.93s vs 3.47s production builds
 
 ### Developer Experience
 - **App Router** - File-based routing with automatic code splitting
@@ -78,28 +78,28 @@ rari delivers exceptional performance that significantly outperforms traditional
 
 ### Head-to-Head Comparison vs Next.js
 
-> Benchmarks last updated: January 26, 2026
+> Benchmarks last updated: February 5, 2026
 
 **Response Time (Single Request):**
 | Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Average** | **0.35ms** | 2.64ms | **7.5x faster** |
-| **P95** | 0.38ms | 3.44ms | **9.1x faster** |
-| **Bundle Size** | 266 KB | 565 KB | **53% smaller** |
+| **Average** | **0.43ms** | 3.92ms | **9.1x faster** |
+| **P95** | 0.67ms | 4.55ms | **6.8x faster** |
+| **Bundle Size** | 264 KB | 562 KB | **53% smaller** |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
 | Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Requests/sec** | **14,085** | 1,624 | **8.7x higher** |
-| **Avg Latency** | **3.55ms** | 30.79ms | **8.7x faster** |
-| **P95 Latency** | **5.78ms** | 38.43ms | **6.6x faster** |
+| **Requests/sec** | **74,662** | 1,605 | **46.5x higher** |
+| **Avg Latency** | **0.67ms** | 31.17ms | **46.6x faster** |
+| **P95 Latency** | **1.15ms** | 38.93ms | **33.9x faster** |
 | **Errors** | 0 | 0 | Stable |
 
 **Build Performance:**
 | Metric | rari | Next.js | Improvement |
 |--------|------|---------|-------------|
-| **Build Time** | **1.41s** | 4.10s | **2.9x faster** |
-| **Bundle Size** | 266 KB | 565 KB | **53% smaller** |
+| **Build Time** | **0.93s** | 3.47s | **3.7x faster** |
+| **Bundle Size** | 264 KB | 562 KB | **53% smaller** |
 
 All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and scripts.
 
