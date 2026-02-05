@@ -1,4 +1,13 @@
+## [rari@0.8.14] - 2026-02-05
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Add RariResponse to tsdown exports
 ## [rari@0.8.13] - 2026-02-05
+
+### 💼 Other
+
+- Rari@0.8.13
 
 ### ⚙️ Miscellaneous Tasks
 
