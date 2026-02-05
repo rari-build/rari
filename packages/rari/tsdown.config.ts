@@ -19,6 +19,7 @@ export default defineConfig({
     'runtime/LoadingErrorBoundary': 'src/runtime/LoadingErrorBoundary.tsx',
     'proxy/runtime-executor': 'src/proxy/runtime-executor.ts',
     'proxy/RariRequest': 'src/proxy/RariRequest.ts',
+    'proxy/RariResponse': 'src/proxy/RariResponse.ts',
   },
   dts: true,
   format: 'esm',
