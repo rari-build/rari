@@ -237,11 +237,6 @@ globalThis['~errors'].batch.push({{
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await?;
 
-        let route_renderer_script = include_str!("../layout/js/route_renderer.js");
-        self.runtime
-            .execute_script("route_renderer".to_string(), route_renderer_script.to_string())
-            .await?;
-
         self.initialized = true;
 
         Ok(())
