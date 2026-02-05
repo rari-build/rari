@@ -32,10 +32,10 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
                 s.to_string()
             } else if let Some(b) = v.as_bool() {
                 if b { "true".to_string() } else { "false".to_string() }
-            } else if let Some(i) = v.as_i64() {
-                i.to_string()
             } else if let Some(u) = v.as_u64() {
                 u.to_string()
+            } else if let Some(i) = v.as_i64() {
+                i.to_string()
             } else if let Some(f) = v.as_f64() {
                 if f.is_finite() {
                     format!("{:.10}", f).trim_end_matches('0').trim_end_matches('.').to_string()
