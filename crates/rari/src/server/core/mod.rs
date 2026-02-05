@@ -148,7 +148,6 @@ impl Server {
         let ssr_renderer = {
             let runtime = renderer.runtime.clone();
             let ssr = crate::rsc::RscHtmlRenderer::new(runtime);
-            ssr.initialize().await?;
             Arc::new(ssr)
         };
 

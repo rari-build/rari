@@ -11,6 +11,58 @@ use tracing::error;
 
 pub mod tests;
 
+const SELF_CLOSING_TAGS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
+];
+
+fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
+    let style_parts: Vec<String> = style_obj
+        .iter()
+        .filter_map(|(k, v)| {
+            let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                if c.is_uppercase() {
+                    acc.push('-');
+                    acc.push(
+                        c.to_lowercase()
+                            .next()
+                            .expect("to_lowercase() always returns at least one character"),
+                    );
+                } else {
+                    acc.push(c);
+                }
+                acc
+            });
+            let value_str = if let Some(s) = v.as_str() {
+                Some(s.to_string())
+            } else if v.as_bool().is_some() {
+                None
+            } else if let Some(u) = v.as_u64() {
+                Some(u.to_string())
+            } else if let Some(i) = v.as_i64() {
+                Some(i.to_string())
+            } else if let Some(f) = v.as_f64() {
+                if f.is_finite() {
+                    Some(
+                        format!("{:.10}", f)
+                            .trim_end_matches('0')
+                            .trim_end_matches('.')
+                            .to_string(),
+                    )
+                } else {
+                    Some(f.to_string())
+                }
+            } else if v.is_object() || v.is_array() {
+                Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
+            } else {
+                Some(v.to_string())
+            };
+            value_str.map(|val| format!("{}:{}", kebab_key, val))
+        })
+        .collect();
+    style_parts.join(";")
+}
+
 #[derive(Debug)]
 pub struct BoundaryIdGenerator {
     counter: AtomicU32,
@@ -45,8 +97,6 @@ pub struct RscHtmlRenderer {
 }
 
 impl RscHtmlRenderer {
-    const RENDER_SCRIPT: &'static str = include_str!("js/render_script.js");
-
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self { runtime, template_cache: parking_lot::Mutex::new(None) }
     }
@@ -70,17 +120,6 @@ impl RscHtmlRenderer {
         }
 
         tags.join("\n")
-    }
-
-    pub async fn initialize(&self) -> Result<(), RariError> {
-        self.runtime
-            .execute_script("rsc_html_renderer_init".to_string(), Self::RENDER_SCRIPT.to_string())
-            .await
-            .map_err(|e| {
-                RariError::internal(format!("Failed to initialize RSC-to-HTML renderer: {}", e))
-            })?;
-
-        Ok(())
     }
 
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
@@ -443,83 +482,292 @@ impl RscHtmlRenderer {
         &self,
         rsc_rows: &[RscRow],
     ) -> Result<String, RariError> {
-        #[allow(clippy::disallowed_methods)]
-        let rows_json: Vec<serde_json::Value> = rsc_rows
-            .iter()
-            .map(|row| {
-                let data_json = match &row.data {
-                    RscElement::Component { tag, key, props } => {
-                        serde_json::json!(["$", tag, key.as_deref().unwrap_or(""), props])
+        if rsc_rows.is_empty() {
+            return Ok(String::new());
+        }
+
+        let row_map: FxHashMap<u32, &RscElement> =
+            rsc_rows.iter().map(|r| (r.id, &r.data)).collect();
+        let mut row_cache: FxHashMap<u32, String> = FxHashMap::default();
+
+        let root_row_id = if row_map.contains_key(&0) {
+            0
+        } else {
+            rsc_rows.iter().map(|r| r.id).max().unwrap_or(0)
+        };
+
+        self.render_row(root_row_id, &row_map, &mut row_cache).await
+    }
+
+    fn render_row<'a>(
+        &'a self,
+        row_id: u32,
+        row_map: &'a FxHashMap<u32, &RscElement>,
+        row_cache: &'a mut FxHashMap<u32, String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if let Some(cached) = row_cache.get(&row_id) {
+                return Ok(cached.clone());
+            }
+
+            let element = row_map
+                .get(&row_id)
+                .ok_or_else(|| RariError::internal(format!("Missing row {}", row_id)))?;
+
+            let html = self.render_rsc_element(element, row_map, row_cache).await?;
+
+            row_cache.insert(row_id, html.clone());
+            Ok(html)
+        })
+    }
+
+    fn render_rsc_element<'a>(
+        &'a self,
+        element: &'a RscElement,
+        row_map: &'a FxHashMap<u32, &RscElement>,
+        row_cache: &'a mut FxHashMap<u32, String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            match element {
+                RscElement::Text(text) => {
+                    if let Some(stripped) =
+                        text.strip_prefix("$L").or_else(|| text.strip_prefix("$@"))
+                        && let Ok(row_id) = stripped.parse::<u32>()
+                    {
+                        return self.render_row(row_id, row_map, row_cache).await;
                     }
-                    RscElement::Text(text) => {
-                        if text.starts_with("I[") {
-                            serde_json::json!({
-                                "Text": text
-                            })
-                        } else if text.starts_with('[') || text.starts_with('{') {
-                            match serde_json::from_str::<serde_json::Value>(text) {
-                                Ok(parsed) => {
-                                    if Self::looks_like_rsc_payload(&parsed) {
-                                        parsed
-                                    } else {
-                                        serde_json::json!(text)
-                                    }
-                                }
-                                Err(_) => serde_json::json!(text),
-                            }
-                        } else {
-                            serde_json::json!(text)
+
+                    if text.starts_with("I[") || text.starts_with("S[") || text.starts_with("E[") {
+                        return Ok(String::new());
+                    }
+
+                    Ok(text
+                        .cow_replace('&', "&amp;")
+                        .cow_replace('<', "&lt;")
+                        .cow_replace('>', "&gt;")
+                        .cow_replace('"', "&quot;")
+                        .cow_replace('\'', "&#39;")
+                        .into_owned())
+                }
+
+                RscElement::Component { tag, key: _, props } => {
+                    let props_value = serde_json::Value::Object(
+                        props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                    );
+                    self.render_component_to_html(tag, &props_value, row_map, row_cache).await
+                }
+
+                RscElement::Reference(ref_str) => {
+                    if let Some(stripped) =
+                        ref_str.strip_prefix("$L").or_else(|| ref_str.strip_prefix("$@"))
+                        && let Ok(row_id) = stripped.parse::<u32>()
+                    {
+                        return self.render_row(row_id, row_map, row_cache).await;
+                    }
+                    Ok(String::new())
+                }
+
+                RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
+                    if let Some(stripped) = children_ref.strip_prefix("$L")
+                        && let Ok(row_id) = stripped.parse::<u32>()
+                    {
+                        let html = self.render_row(row_id, row_map, row_cache).await?;
+                        if !html.is_empty() {
+                            return Ok(html);
                         }
                     }
-                    RscElement::Reference(ref_str) => {
-                        serde_json::json!({
-                            "Reference": ref_str
-                        })
+
+                    if let Some(stripped) = fallback_ref.strip_prefix("$L")
+                        && let Ok(row_id) = stripped.parse::<u32>()
+                    {
+                        let html = self.render_row(row_id, row_map, row_cache).await?;
+                        return Ok(format!(
+                            r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
+                            Self::escape_html_attribute(boundary_id),
+                            html
+                        ));
                     }
-                    RscElement::Suspense { fallback_ref, children_ref, boundary_id, props } => {
-                        serde_json::json!({
-                            "Suspense": {
-                                "fallback_ref": fallback_ref,
-                                "children_ref": children_ref,
-                                "boundary_id": boundary_id,
-                                "props": props
-                            }
-                        })
+
+                    Ok(String::new())
+                }
+
+                RscElement::Promise { promise_id: _ } => Ok(String::new()),
+            }
+        })
+    }
+
+    fn render_component_to_html<'a>(
+        &'a self,
+        tag: &'a str,
+        props: &'a serde_json::Value,
+        row_map: &'a FxHashMap<u32, &RscElement>,
+        row_cache: &'a mut FxHashMap<u32, String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if tag.starts_with("$L") || tag.starts_with("$@") {
+                return Ok(format!(
+                    r#"<div data-client-component="{}" style="display: contents;"></div>"#,
+                    Self::escape_html_attribute(tag)
+                ));
+            }
+
+            let is_suspense_symbol = tag.starts_with('$')
+                && tag.len() > 1
+                && tag[1..].chars().all(|c| c.is_ascii_digit());
+            if tag == "react.suspense" || is_suspense_symbol {
+                if let Some(props_obj) = props.as_object() {
+                    let children = props_obj.get("children");
+                    if let Some(children) = children {
+                        return self.render_json_to_html(children, row_map, row_cache).await;
                     }
-                    RscElement::Promise { promise_id } => {
-                        serde_json::json!({
-                            "Promise": {
-                                "promise_id": promise_id
-                            }
-                        })
+                }
+                return Ok(String::new());
+            }
+
+            if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
+                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+            }
+
+            let mut html = String::with_capacity(256);
+            html.push('<');
+            html.push_str(tag);
+
+            if let Some(props_obj) = props.as_object() {
+                for (key, value) in props_obj {
+                    if key == "children" || key == "key" || key == "ref" {
+                        continue;
                     }
-                };
 
-                serde_json::json!({
-                    "id": row.id,
-                    "data": data_json
-                })
-            })
-            .collect();
+                    if value.is_null() {
+                        continue;
+                    }
 
-        let rows_array = serde_json::Value::Array(rows_json);
+                    let attr_name = match key.as_str() {
+                        "className" => "class",
+                        "htmlFor" => "for",
+                        _ => key.as_str(),
+                    };
 
-        let result =
-            self.runtime.execute_function("renderRscToHtml", vec![rows_array]).await.map_err(
-                |e| RariError::internal(format!("Failed to execute renderRscToHtml: {}", e)),
-            )?;
+                    if key == "style" && value.is_object() {
+                        if let Some(style_obj) = value.as_object() {
+                            let style_str = serialize_style_object(style_obj);
+                            html.push_str(&format!(
+                                r#" style="{}""#,
+                                style_str
+                                    .cow_replace('&', "&amp;")
+                                    .cow_replace('"', "&quot;")
+                                    .cow_replace('<', "&lt;")
+                                    .cow_replace('>', "&gt;")
+                                    .into_owned()
+                            ));
+                        }
+                        continue;
+                    }
 
-        let html = result
-            .as_str()
-            .ok_or_else(|| {
-                RariError::internal(format!(
-                    "renderRscToHtml did not return a string: {:?}",
-                    result
-                ))
-            })?
-            .to_string();
+                    if let Some(b) = value.as_bool() {
+                        if b {
+                            html.push(' ');
+                            html.push_str(attr_name);
+                        }
+                    } else if let Some(s) = value.as_str() {
+                        html.push_str(&format!(
+                            r#" {}="{}""#,
+                            attr_name,
+                            s.cow_replace('&', "&amp;")
+                                .cow_replace('"', "&quot;")
+                                .cow_replace('<', "&lt;")
+                                .cow_replace('>', "&gt;")
+                                .into_owned()
+                        ));
+                    } else if value.is_number() {
+                        html.push_str(&format!(r#" {}="{}""#, attr_name, value));
+                    }
+                }
+            }
 
-        Ok(html)
+            const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
+            if SELF_CLOSING.contains(&tag) {
+                html.push_str(" />");
+                return Ok(html);
+            }
+
+            html.push('>');
+
+            if let Some(props_obj) = props.as_object()
+                && let Some(children) = props_obj.get("children")
+            {
+                let children_html = self.render_json_to_html(children, row_map, row_cache).await?;
+                html.push_str(&children_html);
+            }
+
+            html.push_str("</");
+            html.push_str(tag);
+            html.push('>');
+
+            Ok(html)
+        })
+    }
+
+    fn render_json_to_html<'a>(
+        &'a self,
+        json: &'a serde_json::Value,
+        row_map: &'a FxHashMap<u32, &RscElement>,
+        row_cache: &'a mut FxHashMap<u32, String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            if json.is_null() {
+                return Ok(String::new());
+            }
+
+            if let Some(s) = json.as_str() {
+                if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
+                    && let Ok(row_id) = stripped.parse::<u32>()
+                {
+                    return self.render_row(row_id, row_map, row_cache).await;
+                }
+                return Ok(s
+                    .cow_replace('&', "&amp;")
+                    .cow_replace('<', "&lt;")
+                    .cow_replace('>', "&gt;")
+                    .cow_replace('"', "&quot;")
+                    .cow_replace('\'', "&#39;")
+                    .into_owned());
+            }
+
+            if let Some(arr) = json.as_array() {
+                if arr.len() >= 4
+                    && arr[0].as_str() == Some("$")
+                    && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
+                {
+                    return self.render_component_to_html(tag, props, row_map, row_cache).await;
+                }
+
+                let mut html = String::with_capacity(arr.len() * 64);
+                for child in arr {
+                    html.push_str(&self.render_json_to_html(child, row_map, row_cache).await?);
+                }
+                return Ok(html);
+            }
+
+            if let Some(num) = json.as_u64() {
+                return Ok(num.to_string());
+            }
+            if let Some(num) = json.as_i64() {
+                return Ok(num.to_string());
+            }
+            if let Some(num) = json.as_f64() {
+                return Ok(num.to_string());
+            }
+            if json.is_boolean() {
+                return Ok(String::new());
+            }
+
+            Ok(String::new())
+        })
     }
 
     pub async fn generate_boundary_update_html(
@@ -1127,46 +1375,7 @@ if (typeof window !== 'undefined') {{
 
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
-                        let style_parts: Vec<String> = style_obj
-                            .iter()
-                            .map(|(k, v)| {
-                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
-                                    if c.is_uppercase() {
-                                        acc.push('-');
-                                        acc.push(c.to_lowercase().next().expect(
-                                            "to_lowercase() always returns at least one character",
-                                        ));
-                                    } else {
-                                        acc.push(c);
-                                    }
-                                    acc
-                                });
-                                let value_str = if let Some(s) = v.as_str() {
-                                    s.to_string()
-                                } else if let Some(b) = v.as_bool() {
-                                    if b { "true".to_string() } else { "false".to_string() }
-                                } else if let Some(i) = v.as_i64() {
-                                    i.to_string()
-                                } else if let Some(u) = v.as_u64() {
-                                    u.to_string()
-                                } else if let Some(f) = v.as_f64() {
-                                    if f.is_finite() {
-                                        format!("{:.10}", f)
-                                            .trim_end_matches('0')
-                                            .trim_end_matches('.')
-                                            .to_string()
-                                    } else {
-                                        f.to_string()
-                                    }
-                                } else if v.is_object() || v.is_array() {
-                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
-                                } else {
-                                    v.to_string()
-                                };
-                                format!("{}:{}", kebab_key, value_str)
-                            })
-                            .collect();
-                        let style_str = style_parts.join(";");
+                        let style_str = serialize_style_object(style_obj);
                         html.push_str(&format!(
                             " style=\"{}\"",
                             Self::escape_attribute(&style_str)
@@ -1187,7 +1396,7 @@ if (typeof window !== 'undefined') {{
                     continue;
                 }
 
-                if value.is_number() || value.is_boolean() {
+                if value.is_number() {
                     html.push_str(&format!(
                         " {}=\"{}\"",
                         attr_name,
@@ -1195,6 +1404,12 @@ if (typeof window !== 'undefined') {{
                     ));
                 }
             }
+        }
+
+        const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
+        if SELF_CLOSING.contains(&tag) {
+            html.push_str(" />");
+            return Ok(html);
         }
 
         html.push('>');

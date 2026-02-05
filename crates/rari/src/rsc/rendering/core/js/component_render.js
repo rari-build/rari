@@ -25,26 +25,7 @@
     if (typeof html !== 'string')
       return html
 
-    const wrapperRegex = new RegExp(
-      `<div[^>]*?data-component-id=["']${componentId}["'][^>]*?>([\\s\\S]*?)<\\/div>`,
-      'i',
-    )
-    const match = html.match(wrapperRegex)
-
-    if (match) {
-      // Only focus on content specifically marked for this component
-      // This helps prevent cross-component contamination
-    }
-
-    const jsonCleanupPatterns = [
-      { pattern: /<pre>(\\\{[\\sS]*?\\\})<\/pre>/g, replacement: '' },
-      { pattern: /\\\{"id":.*?\\\}/g, replacement: '' },
-    ]
-
-    for (const { pattern, replacement } of jsonCleanupPatterns)
-      html = html.replace(pattern, replacement)
-
-    return html
+    return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
   const elementToRSC = (element, componentId) => {

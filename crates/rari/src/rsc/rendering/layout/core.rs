@@ -620,49 +620,37 @@ impl LayoutRenderer {
             return Ok(RenderResult::Streaming(stream));
         }
 
-        let page_props = utils::create_page_props(route_match, context)?;
-        let page_component_id = utils::create_component_id(&route_match.route.file_path);
-
-        #[allow(clippy::disallowed_methods)]
-        let layouts: Vec<serde_json::Value> = route_match
-            .layouts
-            .iter()
-            .map(|layout| {
-                serde_json::json!({
-                    "componentId": utils::create_component_id(&layout.file_path),
-                    "isRoot": layout.is_root
-                })
-            })
-            .collect();
-
-        let result = renderer
+        let promise_result = renderer
             .runtime
-            .execute_function(
-                "renderRouteToHtml",
-                vec![
-                    serde_json::Value::String(page_component_id.clone()),
-                    page_props.clone(),
-                    serde_json::Value::Array(layouts),
-                ],
-            )
+            .execute_script("compose_and_render_notfound".to_string(), composition_script)
             .await?;
 
-        if let Some(error) = result.get("error").and_then(|v| v.as_str())
-            && !error.is_empty()
-            && error != "null"
-        {
-            tracing::error!("JavaScript error: {}", error);
-            return Err(RariError::internal(format!("JavaScript error: {}", error)));
-        }
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
+            promise_result
+        } else {
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
+        };
 
-        let html = result
-            .get("html")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                tracing::error!("Failed to extract HTML from result: {:?}", result);
-                RariError::internal("No HTML in render result")
-            })?
-            .to_string();
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
+            tracing::error!("Failed to extract RSC data from result: {:?}", result);
+            RariError::internal("No RSC data in render result")
+        })?;
+
+        let rsc_wire_format = {
+            let mut serializer = renderer.serializer.lock();
+            serializer.reset_for_new_request();
+            serializer
+                .serialize_rsc_json(rsc_data)
+                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?
+        };
+
+        let html_renderer =
+            crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+        let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
+        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
 
         self.html_cache.insert(cache_key, html.clone());
 
@@ -791,131 +779,24 @@ impl LayoutRenderer {
                 .into_owned()
         };
 
-        let mut script = format!(
-            r#"
-            (async () => {{
-                const timings = {{}};
-                const startTotal = performance.now();
+        let pathname_json =
+            serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string());
 
-                const React = globalThis.React;
-                const ReactDOMServer = globalThis.ReactDOMServer;
+        let layouts: Vec<super::route_composer::LayoutInfo> = route_match
+            .layouts
+            .iter()
+            .map(|layout| super::route_composer::LayoutInfo {
+                component_id: utils::create_component_id(&layout.file_path),
+                is_root: layout.is_root,
+                file_path: layout.file_path.clone(),
+            })
+            .collect();
 
-                if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
-                globalThis['~suspense'].discoveredBoundaries = [];
-                globalThis['~suspense'].pendingPromises = [];
-                if (!globalThis['~render']) globalThis['~render'] = {{}};
-                globalThis['~render'].deferredAsyncComponents = [];
-
-                if (!globalThis['~react']) globalThis['~react'] = {{}};
-                if (!globalThis['~react'].originalCreateElement) {{
-                    globalThis['~react'].originalCreateElement = React.createElement;
-
-                    React.createElement = function(type, props, ...children) {{
-                        if (typeof type === 'function' &&
-                            (type.constructor.name === 'AsyncFunction' ||
-                             type.toString().trim().startsWith('async '))) {{
-
-                            const AsyncComponentMarker = function(props) {{
-                                return null;
-                            }};
-
-                            AsyncComponentMarker._isAsyncComponent = true;
-                            AsyncComponentMarker._originalType = type;
-                            AsyncComponentMarker.displayName = `AsyncWrapper(${{type.name || 'Anonymous'}})`;
-
-                            return globalThis['~react'].originalCreateElement(AsyncComponentMarker, props, ...children);
-                        }}
-
-                        return globalThis['~react'].originalCreateElement(type, props, ...children);
-                    }};
-                }}
-
-                const startPageRender = performance.now();
-                {}
-            "#,
-            page_render_script
+        let script = super::route_composer::RouteComposer::build_composition_script(
+            &page_render_script,
+            &layouts,
+            &pathname_json,
         );
-
-        let mut current_element = "pageElement".to_string();
-
-        for (i, layout) in route_match.layouts.iter().rev().enumerate() {
-            let layout_component_id = utils::create_component_id(&layout.file_path);
-            let layout_var = format!("layout{}", i);
-
-            script.push_str(&format!(
-                r#"
-                const startLayout{} = performance.now();
-                const LayoutComponent{} = globalThis["{}"];
-                if (!LayoutComponent{} || typeof LayoutComponent{} !== 'function') {{
-                    throw new Error('Layout component {} not found');
-                }}
-
-                const layoutResult{} = React.createElement(LayoutComponent{}, {{ children: {}, pathname: {} }});
-                const {} = (layoutResult{} && layoutResult{}.type === React.Fragment && layoutResult{}.props?.children !== undefined)
-                    ? layoutResult{}.props.children
-                    : layoutResult{};
-                timings.layout{} = performance.now() - startLayout{};
-                "#,
-                i,
-                i,
-                layout_component_id,
-                i,
-                i,
-                layout_component_id,
-                i,
-                i,
-                current_element,
-                serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string()),
-                layout_var,
-                i,
-                i,
-                i,
-                i,
-                i,
-                i,
-                i
-            ));
-
-            current_element = layout_var;
-        }
-
-        script.push_str("\n\n");
-        script.push_str("                const startRSC = performance.now();\n");
-        script.push_str(&format!("                const rscData = await globalThis.renderToRsc({}, globalThis['~rsc'].clientComponents || {{}});\n", current_element));
-        script.push_str(r#"                timings.rscConversion = performance.now() - startRSC;
-
-                timings.total = performance.now() - startTotal;
-
-                const deferredComponents = globalThis['~render']?.deferredAsyncComponents || [];
-                const hasAsync = deferredComponents.length > 0;
-                const deferredCount = deferredComponents.length;
-
-                const result = {
-                    rsc_data: rscData,
-                    boundaries: globalThis['~suspense']?.discoveredBoundaries || [],
-                    pending_promises: globalThis['~suspense']?.pendingPromises || [],
-                    has_suspense: (globalThis['~suspense']?.discoveredBoundaries && globalThis['~suspense'].discoveredBoundaries.length > 0) ||
-                                 (globalThis['~suspense']?.pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
-                    metadata: {
-                        hasAsync: hasAsync,
-                        deferredCount: deferredCount,
-                        executionTime: timings.total
-                    },
-                    timings: timings,
-                    success: true
-                };
-
-                try {
-                    const jsonString = JSON.stringify(result);
-                    const cleanResult = JSON.parse(jsonString);
-                    globalThis['~rsc'].renderResult = cleanResult;
-                    return cleanResult;
-                } catch (jsonError) {
-                    globalThis['~rsc'].renderResult = result;
-                    return result;
-                }
-            })()
-            "#);
 
         Ok(script)
     }

@@ -236,9 +236,6 @@ async fn test_render_rsc_to_html_integration() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    let init_result = renderer.initialize().await;
-    assert!(init_result.is_ok(), "Failed to initialize renderer: {:?}", init_result.err());
-
     let rsc_data = r#"0:["$","div",null,{"className":"container","children":"Hello World"}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
 
@@ -258,8 +255,6 @@ async fn test_render_nested_elements() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_data = r#"0:["$","div",null,{"children":["$","span",null,{"children":"Nested"}]}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
 
@@ -277,8 +272,6 @@ async fn test_html_escaping() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_data = r#"0:["$","div",null,{"children":"<script>alert('xss')</script>"}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
 
@@ -292,8 +285,6 @@ async fn test_html_escaping() {
 async fn test_render_with_attributes() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_data = r#"0:["$","input",null,{"type":"text","className":"form-control","placeholder":"Enter text"}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
@@ -471,8 +462,6 @@ async fn test_render_to_html_success() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Hello World"}]"#;
 
     let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
@@ -492,8 +481,6 @@ async fn test_render_to_html_success() {
 async fn test_render_to_html_complex_structure() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_wire_format = r#"1:["$","h1",null,{"children":"Title"}]
 2:["$","div",null,{"className":"container","children":"$@1"}]"#;
@@ -515,8 +502,6 @@ async fn test_render_to_html_with_timeout() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
     let mut config = crate::server::config::Config::new(crate::server::config::Mode::Development);
@@ -530,8 +515,6 @@ async fn test_render_to_html_with_timeout() {
 async fn test_render_to_html_no_timeout() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
@@ -547,8 +530,6 @@ async fn test_render_to_html_no_timeout() {
 async fn test_render_to_html_invalid_rsc_fallback() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_wire_format = "invalid:format:here";
 
@@ -569,8 +550,6 @@ async fn test_render_to_html_preserves_template_structure() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_wire_format = r#"0:["$","p",null,{"children":"Content"}]"#;
 
     let config = crate::server::config::Config::new(crate::server::config::Mode::Development);
@@ -590,8 +569,6 @@ async fn test_render_to_html_preserves_template_structure() {
 async fn test_render_to_html_caching_behavior() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
@@ -616,8 +593,6 @@ async fn test_render_to_html_ssr_disabled() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
     let mut config = crate::server::config::Config::new(crate::server::config::Mode::Development);
@@ -635,8 +610,6 @@ async fn test_render_to_html_respects_timeout_config() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
     let mut config = crate::server::config::Config::new(crate::server::config::Mode::Development);
@@ -650,8 +623,6 @@ async fn test_render_to_html_respects_timeout_config() {
 async fn test_render_to_html_production_vs_dev_mode() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let rsc_wire_format = r#"0:["$","div",null,{"children":"Test"}]"#;
 
@@ -863,8 +834,6 @@ async fn test_generate_boundary_update_html_simple() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let content_rsc = serde_json::json!(["$", "div", null, {"children": "Resolved Content"}]);
     let boundary_id = "boundary_123";
     let row_id = 42;
@@ -899,8 +868,6 @@ async fn test_generate_boundary_update_html_with_special_characters() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let content_rsc = serde_json::json!(["$", "div", null, {
         "children": "Content with 'quotes' and \"double\" and \n newlines"
     }]);
@@ -916,7 +883,6 @@ async fn test_generate_boundary_update_html_with_special_characters() {
     assert!(html.contains("\\\""), "Should escape double quotes for JavaScript");
     assert!(html.contains("\\n"), "Should escape newlines for JavaScript");
 
-    // The script tag itself should be valid HTML
     assert!(html.starts_with("<script"), "Should be a script tag");
     assert!(html.contains("</script>"), "Should close script tag");
 
@@ -927,8 +893,6 @@ async fn test_generate_boundary_update_html_with_special_characters() {
 async fn test_generate_boundary_update_html_with_nested_elements() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let content_rsc = serde_json::json!(["$", "div", null, {
         "className": "container",
@@ -961,8 +925,6 @@ async fn test_generate_boundary_update_html_with_nested_elements() {
 async fn test_generate_boundary_update_html_with_attributes() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let content_rsc = serde_json::json!(["$", "button", null, {
         "type": "button",
@@ -1002,8 +964,6 @@ async fn test_generate_boundary_update_html_boundary_id_escaping() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    renderer.initialize().await.unwrap();
-
     let content_rsc = serde_json::json!(["$", "div", null, {"children": "Content"}]);
     let boundary_id = "boundary_with_\"quotes\"_and_<tags>";
     let row_id = 1;
@@ -1024,8 +984,6 @@ async fn test_generate_boundary_update_html_boundary_id_escaping() {
 async fn test_generate_boundary_update_html_empty_content() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
-
-    renderer.initialize().await.unwrap();
 
     let content_rsc = serde_json::json!(["$", "div", null, {}]);
     let boundary_id = "boundary_empty";
@@ -1071,4 +1029,109 @@ fn test_escape_js_string() {
     let escaped_backslash = RscHtmlRenderer::escape_js_string(text_with_backslash);
 
     assert!(escaped_backslash.contains("\\\\"), "Should escape backslashes");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_row_0_as_root() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"children":"Root Content"}]
+1:["$","span",null,{"children":"Other Content"}]
+2:["$","p",null,{"children":"More Content"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Root Content"), "Should render row 0 as root");
+    assert!(html.contains("<div"), "Should have div from row 0");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_max_row_fallback() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"1:["$","span",null,{"children":"First"}]
+2:["$","p",null,{"children":"Second"}]
+5:["$","div",null,{"children":"Last Content"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Last Content"), "Should render max row ID as root");
+    assert!(html.contains("<div"), "Should have div from row 5");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_empty_rows() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rows: Vec<RscRow> = vec![];
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert_eq!(html, "", "Should return empty string for empty rows");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_single_row() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"42:["$","div",null,{"children":"Single Row"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Single Row"), "Should render single row");
+    assert!(html.contains("<div"), "Should have div tag");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_row_0_preferred_over_max() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"children":"Row Zero"}]
+10:["$","span",null,{"children":"Row Ten"}]
+100:["$","p",null,{"children":"Row Hundred"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Row Zero"), "Should render row 0 as root");
+    assert!(html.contains("<div"), "Should have div from row 0");
+    assert!(!html.contains("Row Hundred"), "Should not render row 100 as root");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_backward_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"1:["$","span",null,{"children":"Child Content"}]
+0:["$","div",null,{"children":"$L1"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<div"), "Should have div from row 0");
+    assert!(html.contains("Child Content"), "Should resolve $L1 reference");
+    assert!(html.contains("<span"), "Should have span from row 1");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_consistent_with_streaming() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","main",null,{"children":"Main Content"}]
+1:["$","aside",null,{"children":"Sidebar"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<main"), "Should have main tag from row 0");
+    assert!(html.contains("Main Content"), "Should render row 0 content");
 }
