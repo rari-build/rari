@@ -91,6 +91,10 @@ pub fn finalize_metadata(metadata: &mut Value) {
             obj.insert("title".to_string(), absolute.clone());
         } else if let Some(default) = title_obj.get("default") {
             obj.insert("title".to_string(), default.clone());
+        } else if let Some(template) = title_obj.get("template") {
+            obj.insert("title".to_string(), template.clone());
+        } else {
+            obj.insert("title".to_string(), Value::String(String::new()));
         }
     }
 }
@@ -194,5 +198,29 @@ mod tests {
         finalize_metadata(&mut metadata);
 
         assert_eq!(metadata["title"], "String Title");
+    }
+
+    #[test]
+    fn test_finalize_metadata_template_only() {
+        let mut metadata = json!({
+            "title": {
+                "template": "%s | My Site"
+            }
+        });
+
+        finalize_metadata(&mut metadata);
+
+        assert_eq!(metadata["title"], "%s | My Site");
+    }
+
+    #[test]
+    fn test_finalize_metadata_empty_object() {
+        let mut metadata = json!({
+            "title": {}
+        });
+
+        finalize_metadata(&mut metadata);
+
+        assert_eq!(metadata["title"], "");
     }
 }

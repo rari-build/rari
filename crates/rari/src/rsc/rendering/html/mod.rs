@@ -437,8 +437,12 @@ impl RscHtmlRenderer {
             row_cache.insert(row.id, html);
         }
 
-        let last_row_id = rsc_rows.iter().map(|r| r.id).max().unwrap_or(0);
-        Ok(row_cache.get(&last_row_id).or_else(|| row_cache.get(&0)).cloned().unwrap_or_default())
+        let root_id = if row_cache.contains_key(&0) {
+            0
+        } else {
+            rsc_rows.first().map(|r| r.id).unwrap_or(0)
+        };
+        Ok(row_cache.get(&root_id).cloned().unwrap_or_default())
     }
 
     async fn render_rsc_element(
@@ -454,7 +458,7 @@ impl RscHtmlRenderer {
                     return Ok(row_cache.get(&row_id).cloned().unwrap_or_default());
                 }
 
-                if text.starts_with("I[") || text.starts_with("S") || text.starts_with("E[") {
+                if text.starts_with("I[") || text.starts_with("S[") || text.starts_with("E[") {
                     return Ok(String::new());
                 }
 
@@ -553,6 +557,61 @@ impl RscHtmlRenderer {
                     "htmlFor" => "for",
                     _ => key.as_str(),
                 };
+
+                if key == "style" && value.is_object() {
+                    if let Some(style_obj) = value.as_object() {
+                        let style_parts: Vec<String> = style_obj
+                            .iter()
+                            .map(|(k, v)| {
+                                let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                                    if c.is_uppercase() {
+                                        acc.push('-');
+                                        acc.push(c.to_lowercase().next().expect(
+                                            "to_lowercase() always returns at least one character",
+                                        ));
+                                    } else {
+                                        acc.push(c);
+                                    }
+                                    acc
+                                });
+                                let value_str = if let Some(s) = v.as_str() {
+                                    s.to_string()
+                                } else if let Some(b) = v.as_bool() {
+                                    if b { "true".to_string() } else { "false".to_string() }
+                                } else if let Some(i) = v.as_i64() {
+                                    i.to_string()
+                                } else if let Some(u) = v.as_u64() {
+                                    u.to_string()
+                                } else if let Some(f) = v.as_f64() {
+                                    if f.is_finite() {
+                                        format!("{:.10}", f)
+                                            .trim_end_matches('0')
+                                            .trim_end_matches('.')
+                                            .to_string()
+                                    } else {
+                                        f.to_string()
+                                    }
+                                } else if v.is_object() || v.is_array() {
+                                    serde_json::to_string(v).unwrap_or_else(|_| String::from("{}"))
+                                } else {
+                                    v.to_string()
+                                };
+                                format!("{}:{}", kebab_key, value_str)
+                            })
+                            .collect();
+                        let style_str = style_parts.join(";");
+                        html.push_str(&format!(
+                            r#" style="{}""#,
+                            style_str
+                                .cow_replace('&', "&amp;")
+                                .cow_replace('"', "&quot;")
+                                .cow_replace('<', "&lt;")
+                                .cow_replace('>', "&gt;")
+                                .into_owned()
+                        ));
+                    }
+                    continue;
+                }
 
                 if let Some(b) = value.as_bool() {
                     if b {

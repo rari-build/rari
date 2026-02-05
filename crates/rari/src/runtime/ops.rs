@@ -219,8 +219,8 @@ pub fn op_internal_log(#[string] message: &str) {
 
 #[op2]
 #[string]
-pub fn op_sanitize_html(#[string] html: &str, #[string] component_id: &str) -> String {
-    crate::rsc::rendering::sanitizer::sanitize_component_output(html, component_id)
+pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> String {
+    crate::rsc::rendering::sanitizer::sanitize_component_output(html)
 }
 
 #[derive(Default)]
