@@ -696,6 +696,9 @@ impl RscHtmlRenderer {
                 return Ok(html);
             }
 
+            if let Some(num) = json.as_u64() {
+                return Ok(num.to_string());
+            }
             if let Some(num) = json.as_i64() {
                 return Ok(num.to_string());
             }
