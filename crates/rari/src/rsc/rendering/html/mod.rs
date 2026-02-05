@@ -642,7 +642,10 @@ impl RscHtmlRenderer {
             }
         }
 
-        const SELF_CLOSING: &[&str] = &["img", "br", "hr", "input", "meta", "link"];
+        const SELF_CLOSING: &[&str] = &[
+            "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
+            "source", "track", "wbr",
+        ];
         if SELF_CLOSING.contains(&tag) {
             html.push_str(" />");
             return Ok(html);
