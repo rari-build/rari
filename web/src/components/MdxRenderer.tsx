@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
@@ -32,6 +33,22 @@ function findContentFile(filePath: string): string | null {
   }
 
   return null
+}
+
+function PageHeaderWithFilePath({ filePath, ...props }: ComponentProps<typeof PageHeader> & { filePath: string }) {
+  return <PageHeader {...props} filePath={filePath} />
+}
+
+function createMdxComponents(filePath: string, mdxComponents: Record<string, any>) {
+  return {
+    ...mdxComponents,
+    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} />,
+    h2: (props: any) => <Heading level={2} {...props} />,
+    h3: (props: any) => <Heading level={3} {...props} />,
+    h4: (props: any) => <Heading level={4} {...props} />,
+    h5: (props: any) => <Heading level={5} {...props} />,
+    h6: (props: any) => <Heading level={6} {...props} />,
+  }
 }
 
 export default async function MdxRenderer({
@@ -73,15 +90,7 @@ export default async function MdxRenderer({
       ),
     )
 
-    const allComponents = {
-      ...mdxComponents,
-      PageHeader,
-      h2: (props: any) => <Heading level={2} {...props} />,
-      h3: (props: any) => <Heading level={3} {...props} />,
-      h4: (props: any) => <Heading level={4} {...props} />,
-      h5: (props: any) => <Heading level={5} {...props} />,
-      h6: (props: any) => <Heading level={6} {...props} />,
-    }
+    const allComponents = createMdxComponents(filePath, mdxComponents)
 
     return (
       <div

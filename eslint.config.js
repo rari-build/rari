@@ -24,6 +24,13 @@ export default antfu(
       'react-refresh/only-export-components': 'off',
     },
   },
+  // TODO: Remove this once @antfu/eslint-config fixes the upstream issue
+  // Related: https://github.com/antfu/eslint-config/pull/808
+  {
+    rules: {
+      'react/no-implicit-key': 'off',
+    },
+  },
   deMorgan.configs.recommended,
   e18e.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(`${import.meta.dirname}/.oxlintrc.json`),

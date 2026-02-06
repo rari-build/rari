@@ -1,28 +1,11 @@
+import { getRepoStars } from '@/lib/github-utils'
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
 
-interface GitHubRepo {
-  stargazers_count: number
-}
-
-async function fetchGitHubStars(): Promise<number | null> {
-  try {
-    const response = await fetch('https://api.github.com/repos/rari-build/rari')
-    if (!response.ok)
-      return null
-    const data: GitHubRepo = await response.json()
-    return data.stargazers_count
-  }
-  catch (error) {
-    console.error('Error fetching GitHub stars:', error)
-    return null
-  }
-}
-
 export default async function Footer() {
   const currentYear = new Date().getFullYear()
-  const stars = await fetchGitHubStars()
+  const stars = await getRepoStars()
 
   return (
     <footer className="w-full bg-[#0d1117] rounded-t-md">
