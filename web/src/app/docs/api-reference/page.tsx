@@ -7,7 +7,7 @@ export default async function ApiReferencePage() {
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
       <div className="prose prose-invert max-w-none">
         <Breadcrumbs pathname="/docs/api-reference" />
-        <PageHeader title="API Reference" lastUpdated="January 16, 2026" />
+        <PageHeader title="API Reference" pagePath="web/src/app/docs/api-reference/page.tsx" />
         <p className="text-lg text-gray-300 leading-relaxed">
           Complete API documentation for rari framework components, functions, and utilities.
         </p>

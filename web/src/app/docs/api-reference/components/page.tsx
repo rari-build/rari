@@ -8,7 +8,7 @@ export default async function ComponentsPage() {
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
       <div className="prose prose-invert max-w-none">
         <Breadcrumbs pathname="/docs/api-reference/components" />
-        <PageHeader title="Components" lastUpdated="January 16, 2026" />
+        <PageHeader title="Components" pagePath="web/src/app/docs/api-reference/components/page.tsx" />
         <p className="text-lg text-gray-300 leading-relaxed">
           Built-in React components for optimized images, dynamic metadata, and more.
         </p>
