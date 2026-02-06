@@ -1,12 +1,5 @@
-import 'ext:init_rsc_renderer/render_element_to_html.js'
 import 'ext:init_rsc_renderer/rsc_traversal.js'
 import 'ext:init_rsc_renderer/client_registry.js'
-
-if (typeof globalThis.renderElementToHtml === 'undefined') {
-  throw new TypeError(
-    'renderElementToHtml not initialized - render_element_to_html.js may have failed to load',
-  )
-}
 
 if (typeof globalThis.renderToRsc === 'undefined') {
   throw new TypeError(

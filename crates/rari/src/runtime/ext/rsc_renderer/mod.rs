@@ -8,7 +8,6 @@ extension!(
             esm = [
         dir "src/runtime/ext/rsc_renderer",
         "init_rsc_renderer.js",
-        "render_element_to_html.js",
         "rsc_traversal.js",
         "client_registry.js"
     ],
