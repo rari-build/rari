@@ -1,8 +1,6 @@
 (function () {
   const checks = {}
 
-  if (typeof globalThis.renderElementToHtml === 'undefined')
-    throw new TypeError('RSC Renderer extension not loaded - renderElementToHtml not available')
   checks.rsc_renderer = true
 
   if (!globalThis.PromiseManager)
