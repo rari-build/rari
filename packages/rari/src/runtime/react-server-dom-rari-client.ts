@@ -98,13 +98,15 @@ function parseWireFormat(wireFormat: string): ParsedWireFormat {
       }
 
       case ROW_TAG: {
-        if (charCode === TAG_MODULE_IMPORT
+        if (
+          charCode === TAG_MODULE_IMPORT
           || charCode === TAG_ERROR
           || charCode === TAG_TEXT
           || charCode === TAG_HINT
           || charCode === TAG_DEBUG
           || charCode === TAG_CONSOLE
-          || charCode === TAG_STREAM_CLOSE) {
+          || charCode === TAG_STREAM_CLOSE
+        ) {
           rowTag = charCode
           rowState = ROW_CHUNK_BY_NEWLINE
           i++

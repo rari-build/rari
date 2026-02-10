@@ -323,9 +323,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
           continue
 
         if (trimmed === `'${directive}'` || trimmed === `"${directive}"`
-          || trimmed === `'${directive}';` || trimmed === `"${directive}";`) {
-          return true
-        }
+          || trimmed === `'${directive}';` || trimmed === `"${directive}";`) { return true }
 
         break
       }

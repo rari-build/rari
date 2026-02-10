@@ -455,9 +455,7 @@ function extractBodyContent(element: any, skipHeadInjection = false): any {
         && typeof bodyChildren === 'object'
         && !Array.isArray(bodyChildren)
         && bodyChildren.type === 'div'
-        && bodyChildren.props?.id === 'root') {
-        return bodyChildren.props?.children || null
-      }
+        && bodyChildren.props?.id === 'root') { return bodyChildren.props?.children || null }
 
       return bodyChildren || null
     }

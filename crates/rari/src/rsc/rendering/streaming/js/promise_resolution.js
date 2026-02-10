@@ -39,9 +39,7 @@
           try {
             const value = error[key]
             if (value !== undefined && value !== null
-              && typeof value !== 'function' && typeof value !== 'symbol') {
-              additionalProps[key] = String(value)
-            }
+              && typeof value !== 'function' && typeof value !== 'symbol') { additionalProps[key] = String(value) }
           }
           catch {
           }

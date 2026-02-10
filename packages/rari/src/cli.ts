@@ -26,9 +26,7 @@ function loadEnvFile() {
         let cleanValue = value.trim()
 
         if ((cleanValue.startsWith('"') && cleanValue.endsWith('"'))
-          || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) {
-          cleanValue = cleanValue.slice(1, -1)
-        }
+          || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) { cleanValue = cleanValue.slice(1, -1) }
 
         if (!process.env[cleanKey])
           process.env[cleanKey] = cleanValue

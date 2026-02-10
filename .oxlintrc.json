@@ -370,7 +370,9 @@
             "prefer": "type-imports"
           }
         ],
-        "@typescript-eslint/no-import-type-side-effects": "error"
+        "@typescript-eslint/no-import-type-side-effects": "error",
+        "react/jsx-no-duplicate-props": "off",
+        "react/jsx-no-undef": "off"
       }
     },
     {
@@ -431,6 +433,15 @@
           }
         ]
       },
+      "plugins": [
+        "react"
+      ]
+    },
+    {
+      "files": [
+        "**/*.?([cm])ts",
+        "**/*.?([cm])tsx"
+      ],
       "plugins": [
         "react"
       ]

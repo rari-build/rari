@@ -153,13 +153,21 @@ export class ServerComponentBuilder {
         const trimmed = line.trim()
         if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
           continue
-        if (trimmed === '\'use client\'' || trimmed === '"use client"'
-          || trimmed === '\'use client\';' || trimmed === '"use client";') {
+        if (
+          trimmed === '\'use client\''
+          || trimmed === '"use client"'
+          || trimmed === '\'use client\';'
+          || trimmed === '"use client";'
+        ) {
           hasClientDirective = true
           break
         }
-        if (trimmed === '\'use server\'' || trimmed === '"use server"'
-          || trimmed === '\'use server\';' || trimmed === '"use server";') {
+        if (
+          trimmed === '\'use server\''
+          || trimmed === '"use server"'
+          || trimmed === '\'use server\';'
+          || trimmed === '"use server";'
+        ) {
           hasServerDirective = true
           break
         }
@@ -237,8 +245,12 @@ export class ServerComponentBuilder {
       const trimmed = line.trim()
       if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
         continue
-      if (trimmed === '\'use server\'' || trimmed === '"use server"'
-        || trimmed === '\'use server\';' || trimmed === '"use server";') {
+      if (
+        trimmed === '\'use server\''
+        || trimmed === '"use server"'
+        || trimmed === '\'use server\';'
+        || trimmed === '"use server";'
+      ) {
         return true
       }
 
@@ -546,9 +558,14 @@ const ${importName} = (props) => {
           if (!importer || importer.includes('node_modules') || importer.includes('/packages/rari/dist'))
             return null
 
-          if (source.startsWith('node:') || self.isNodeBuiltin(source)
-            || source === 'react' || source === 'react-dom'
-            || source === 'react/jsx-runtime' || source === 'react/jsx-dev-runtime') {
+          if (
+            source.startsWith('node:')
+            || self.isNodeBuiltin(source)
+            || source === 'react'
+            || source === 'react-dom'
+            || source === 'react/jsx-runtime'
+            || source === 'react/jsx-dev-runtime'
+          ) {
             return null
           }
 
@@ -588,8 +605,12 @@ const ${importName} = (props) => {
                     const trimmed = line.trim()
                     if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
                       continue
-                    if (trimmed === '\'use server\'' || trimmed === '"use server"'
-                      || trimmed === '\'use server\';' || trimmed === '"use server";') {
+                    if (
+                      trimmed === '\'use server\''
+                      || trimmed === '"use server"'
+                      || trimmed === '\'use server\';'
+                      || trimmed === '"use server";'
+                    ) {
                       const relActionPath = path.relative(self.projectRoot, pathWithExt)
                       const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
                       serverActionRefs.set(pathWithExt, actionId)
@@ -1461,13 +1482,13 @@ function registerClientReference(clientReference, id, exportName) {
     const fileStats = await fs.promises.stat(filePath)
     const fileTimestamp = fileStats.mtimeMs
 
-    if (cached
+    if (
+      cached
       && cached.timestamp >= fileTimestamp
-      && JSON.stringify(cached.dependencies) === JSON.stringify(dependencies)) {
+      && JSON.stringify(cached.dependencies) === JSON.stringify(dependencies)
+    ) {
       await fs.promises.writeFile(fullBundlePath, cached.code, 'utf-8')
-
       await this.updateManifestForComponent(componentId, filePath, relativeBundlePath)
-
       return {
         componentId,
         bundlePath: path.join(this.options.outDir, relativeBundlePath),
@@ -1626,8 +1647,12 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
             const trimmed = line.trim()
             if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
               continue
-            if (trimmed === '\'use server\'' || trimmed === '"use server"'
-              || trimmed === '\'use server\';' || trimmed === '"use server";') {
+            if (
+              trimmed === '\'use server\''
+              || trimmed === '"use server"'
+              || trimmed === '\'use server\';'
+              || trimmed === '"use server";'
+            ) {
               hasServerDirective = true
               break
             }

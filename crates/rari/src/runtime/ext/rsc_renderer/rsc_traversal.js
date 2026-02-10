@@ -370,8 +370,10 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     if (componentId && componentId !== null) {
       if (componentId.includes('#')) {
         const [filePath, exportName] = componentId.split('#')
-        if (typeof globalThis['~rari']?.bridge !== 'undefined'
-          && typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
+        if (
+          typeof globalThis['~rari']?.bridge !== 'undefined'
+          && typeof globalThis['~rari'].bridge.registerClientReference === 'function'
+        ) {
           try {
             globalThis['~rari'].bridge.registerClientReference(componentId, filePath, exportName)
           }
