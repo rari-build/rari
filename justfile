@@ -195,6 +195,10 @@ prepare-binaries-dev:
 taze: _ensure-node-deps
     pnpx taze -r -w
 
+# Update GitHub Actions to latest versions
+update-actions:
+    pnpx actions-up --yes --include-branches
+
 # Ensure pnpm dependencies are installed
 _ensure-node-deps:
     #!/usr/bin/env bash
