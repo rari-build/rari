@@ -94,7 +94,7 @@ tokio = { version = "1.49.0", features = [
   "net",
   "io-util",
 ] }
-async-compression = { version = "0.4.37", features = [
+async-compression = { version = "0.4.39", features = [
   "tokio",
   "zstd",
   "brotli",
@@ -109,7 +109,7 @@ rkyv = "0.8.14"
 
 # === HTTP Client & Server ===
 http = "1.4.0"
-reqwest = { version = "0.13.1", default-features = false, features = [
+reqwest = { version = "0.13.2", default-features = false, features = [
   "stream",
   "rustls",
   "blocking",
@@ -161,14 +161,14 @@ zeno = "0.3.3"
 wuff = "0.2.3"
 
 # === System Integration ===
-hyper-util = { version = "0.1.19", features = [
+hyper-util = { version = "0.1.20", features = [
   "tokio",
   "client-legacy",
 ] }
-libc = "0.2.180"
+libc = "0.2.181"
 nix = { version = "=0.27.1", features = [ "term" ] }
 sys_traits = "=0.1.22"
-sysinfo = "0.38.0"
+sysinfo = "0.38.1"
 
 # === Development Tools ===
 rustyline = "=13.0.0"
@@ -202,8 +202,8 @@ rustls = { version = "=0.23.28", default-features = false, features = [
 hmac = "0.12.1"
 sha2 = "0.10.9"
 hex = "0.4.3"
-rand = "0.9.2"
+rand = "0.10.0"
 
 [dev-dependencies]
-tracing-test = "0.2.5"
-tempfile = "3.24.0"
+tracing-test = "0.2.6"
+tempfile = "3.25.0"
