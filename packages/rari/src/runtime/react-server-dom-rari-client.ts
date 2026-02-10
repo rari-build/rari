@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { loadClientComponent } from './shared/get-client-component'
 import { preloadComponentsFromModules } from './shared/preload-components'
 import { ModuleData } from './shared/types'
 
@@ -342,18 +343,7 @@ function resolveClientComponent(componentName: string, wireModules: Map<string, 
           }
 
           if (componentInfo.loader && !componentInfo.loading) {
-            componentInfo.loading = true
-            componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-              componentInfo.component = module.default || module
-              componentInfo.registered = true
-              componentInfo.loading = false
-              return componentInfo.component
-            }).catch((error: Error) => {
-              componentInfo.loading = false
-              componentInfo.loadPromise = undefined
-              console.error(`[rari] Failed to load component ${moduleInfo.id}:`, error)
-            })
-            return null
+            return loadClientComponent(componentInfo, moduleInfo.id)
           }
 
           if (componentInfo.loading) {
@@ -376,21 +366,17 @@ function resolveClientComponent(componentName: string, wireModules: Map<string, 
 
   const clientComponents = (globalThis as any)['~clientComponents'] || {}
   for (const [id, info] of Object.entries(clientComponents) as [string, any][]) {
-    if (id.includes(componentName) || info.name === componentName) {
+    const isExactMatch = id === componentName
+    const isPathMatch = id.endsWith(`/${componentName}`) || id.endsWith(`\\${componentName}`)
+    const isExportMatch = id.endsWith(`#${componentName}`)
+    const isNameMatch = info.name === componentName
+
+    if (isExactMatch || isPathMatch || isExportMatch || isNameMatch) {
       if (info.component)
         return info.component
 
       if (info.loader && !info.loading) {
-        info.loading = true
-        info.loader().then((module: any) => {
-          info.component = module.default || module
-          info.registered = true
-          info.loading = false
-        }).catch((error: Error) => {
-          info.loading = false
-          console.error(`[rari] Failed to load component ${id}:`, error)
-        })
-        return null
+        return loadClientComponent(info, id)
       }
     }
   }

@@ -221,10 +221,35 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
+  const directiveCache = new Map<string, { hasUseServer: boolean, hasUseClient: boolean }>()
   let rustServerProcess: any = null
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+
+  function getModuleDirectives(id: string): { hasUseServer: boolean, hasUseClient: boolean } {
+    if (directiveCache.has(id))
+      return directiveCache.get(id)!
+
+    const result = { hasUseServer: false, hasUseClient: false }
+
+    if (!id.includes('/src/') || !/\.(?:tsx?|jsx?)$/.test(id)) {
+      directiveCache.set(id, result)
+      return result
+    }
+
+    try {
+      const code = fs.readFileSync(id, 'utf-8')
+      result.hasUseServer = code.includes('\'use server\'') || code.includes('"use server"')
+      result.hasUseClient = code.includes('\'use client\'') || code.includes('"use client"')
+      directiveCache.set(id, result)
+    }
+    catch {
+      directiveCache.set(id, result)
+    }
+
+    return result
+  }
 
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
@@ -779,30 +804,16 @@ if (import.meta.hot) {
           if (!output.chunkFileNames) {
             output.chunkFileNames = (chunkInfo) => {
               const hasServerAction = chunkInfo.moduleIds?.some((id: string) => {
-                if (id.includes('/src/') && /\.(?:tsx?|jsx?)$/.test(id)) {
-                  try {
-                    const code = fs.readFileSync(id, 'utf-8')
-                    return code.includes('\'use server\'') || code.includes('"use server"')
-                  }
-                  catch {}
-                }
-
-                return false
+                const directives = getModuleDirectives(id)
+                return directives.hasUseServer
               })
 
               if (hasServerAction)
                 return 'client/actions/[name]-[hash].js'
 
               const isClientComponent = chunkInfo.moduleIds?.some((id: string) => {
-                if (id.includes('/src/') && /\.(?:tsx?|jsx?)$/.test(id)) {
-                  try {
-                    const code = fs.readFileSync(id, 'utf-8')
-                    return code.includes('\'use client\'') || code.includes('"use client"')
-                  }
-                  catch {}
-                }
-
-                return false
+                const directives = getModuleDirectives(id)
+                return directives.hasUseClient
               })
 
               if (isClientComponent)

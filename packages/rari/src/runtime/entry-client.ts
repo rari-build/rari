@@ -64,11 +64,12 @@ function createSsrManifest(): any {
                   componentInfo.loading = true
                   try {
                     const module = await componentInfo.loader()
-                    const component = exportNameStr !== 'default' ? module[exportNameStr] : module
-                    componentInfo.component = component
+                    componentInfo.component = module.default || module
                     componentInfo.registered = true
                     componentInfo.loading = false
-                    return component
+                    return exportNameStr === 'default'
+                      ? componentInfo.component
+                      : componentInfo.component[exportNameStr]
                   }
                   catch (loadError) {
                     componentInfo.loading = false
@@ -163,15 +164,20 @@ function setupPartialHydration(): void {
                   }
                   else if (componentInfo.loader && !componentInfo.loading) {
                     componentInfo.loading = true
-                    componentInfo.loader().then((module: any) => {
+                    componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
                       componentInfo.component = module.default || module
                       componentInfo.registered = true
                       componentInfo.loading = false
+                      return componentInfo.component
                     }).catch((error: Error) => {
                       componentInfo.loading = false
                       console.error(`[rari] Failed to load component ${mod.id}:`, error)
+                      throw error
                     })
-                    return processedProps.children || null
+                  }
+
+                  if (componentInfo.loadPromise && !componentInfo.component) {
+                    React.use(componentInfo.loadPromise)
                   }
                 }
 
@@ -236,18 +242,13 @@ setupPartialHydration()
 
 async function preloadClientComponents(componentIds: Set<string>): Promise<void> {
   const loadPromises: Promise<any>[] = []
-
   for (const id of componentIds) {
     const promise = getClientComponentAsync(id)
-      .then((component) => {
-        return component
-      })
       .catch((error: Error) => {
         console.error(`[rari] Failed to preload component ${id}:`, error)
       })
     loadPromises.push(promise)
   }
-
   if (loadPromises.length > 0) {
     await Promise.all(loadPromises)
   }

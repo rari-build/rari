@@ -1,7 +1,7 @@
-import { ModuleData } from './types'
+import { GlobalWithRari, ModuleData } from './types'
 
 export async function preloadComponentsFromModules(modules: Map<string, ModuleData>): Promise<void> {
-  const clientComponents = (globalThis as any)['~clientComponents'] || {}
+  const clientComponents = (globalThis as unknown as GlobalWithRari)['~clientComponents'] || {}
   const loadPromises: Promise<any>[] = []
 
   for (const [, moduleData] of modules) {
@@ -24,6 +24,7 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
           })
           .catch((error: Error) => {
             componentInfo.loading = false
+            componentInfo.loadPromise = undefined
             console.error(`[rari] Failed to preload component ${key}:`, error)
           })
         loadPromises.push(promise)

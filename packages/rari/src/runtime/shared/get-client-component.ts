@@ -6,10 +6,25 @@ interface GlobalAccessor {
   '~clientComponentNames': Record<string, string>
 }
 
-interface LazyComponentInfo extends ComponentInfo {
-  loader?: () => Promise<any>
-  loading?: boolean
-  loadPromise?: Promise<any>
+type LazyComponentInfo = ComponentInfo
+
+function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
+  componentInfo.loading = true
+  componentInfo.loadPromise = componentInfo.loader!()
+    .then((module: any) => {
+      const component = module.default || module
+      componentInfo.component = component
+      componentInfo.registered = true
+      componentInfo.loading = false
+      return component
+    })
+    .catch((error: Error) => {
+      console.error(`[rari] Failed to load component ${componentInfo.id}:`, error)
+      componentInfo.loading = false
+      componentInfo.loadPromise = undefined
+      throw error
+    })
+  return componentInfo.loadPromise
 }
 
 async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportName?: string): Promise<any> {
@@ -27,23 +42,7 @@ async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportNam
   }
 
   if (componentInfo.loader) {
-    componentInfo.loading = true
-    componentInfo.loadPromise = componentInfo.loader()
-      .then((module: any) => {
-        const component = module.default || module
-        componentInfo.component = component
-        componentInfo.registered = true
-        componentInfo.loading = false
-        return component
-      })
-      .catch((error: Error) => {
-        console.error(`[rari] Failed to load component ${componentInfo.id}:`, error)
-        componentInfo.loading = false
-        componentInfo.loadPromise = undefined
-        throw error
-      })
-
-    const loadedComponent = await componentInfo.loadPromise
+    const loadedComponent = await executeLoader(componentInfo)
     return exportName && exportName !== 'default'
       ? loadedComponent[exportName]
       : loadedComponent
@@ -53,25 +52,32 @@ async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportNam
 }
 
 function triggerComponentLoad(componentInfo: LazyComponentInfo): void {
-  if (componentInfo.loading || componentInfo.component || componentInfo.loadPromise)
+  if (!componentInfo.loader || componentInfo.loading || componentInfo.component || componentInfo.loadPromise)
     return
 
-  componentInfo.loading = true
+  executeLoader(componentInfo)
+}
 
-  componentInfo.loadPromise = componentInfo.loader!()
-    .then((module: any) => {
-      const component = module.default || module
-      componentInfo.component = component
+export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: string): null {
+  if (componentInfo.component) {
+    return null
+  }
+
+  if (componentInfo.loader && !componentInfo.loading) {
+    componentInfo.loading = true
+    componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
+      componentInfo.component = module.default || module
       componentInfo.registered = true
       componentInfo.loading = false
-      return component
-    })
-    .catch((error: Error) => {
-      console.error(`[rari] Failed to load component ${componentInfo.id}:`, error)
+      return componentInfo.component
+    }).catch((error: Error) => {
       componentInfo.loading = false
       componentInfo.loadPromise = undefined
-      throw error
+      console.error(`[rari] Failed to load component ${moduleId}:`, error)
     })
+  }
+
+  return null
 }
 
 export function resolveClientComponent(
