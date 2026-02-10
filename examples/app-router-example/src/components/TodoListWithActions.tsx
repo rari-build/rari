@@ -1,7 +1,7 @@
 'use client'
 
 import type { Todo } from '@/actions/todo-actions'
-import { useEffect, useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import {
   clearCompleted,
   deleteTodo,
@@ -21,10 +21,13 @@ export default function TodoListWithActions({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+  const todosKey = initialTodos.map(t => t.id).join(',')
+
+  const prevKeyRef = useRef(todosKey)
+  if (prevKeyRef.current !== todosKey) {
     setTodos(initialTodos)
-  }, [initialTodos])
+    prevKeyRef.current = todosKey
+  }
 
   const completedCount = todos.filter(todo => todo.completed).length
   const activeCount = todos.length - completedCount
