@@ -296,7 +296,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       else if (/export\s+default\s+/.test(code))
         exportedNames.push('default')
 
-      const declarationExports = code.matchAll(/export\s+(?:const|let|var|function|class)\s+(\w+)/g)
+      const declarationExports = code.matchAll(/export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g)
       for (const match of declarationExports) {
         if (match[1])
           exportedNames.push(match[1])
@@ -750,6 +750,68 @@ if (import.meta.hot) {
             main: './index.html',
           }
         }
+
+        config.build.rolldownOptions.output = config.build.rolldownOptions.output || {}
+
+        const outputs = Array.isArray(config.build.rolldownOptions.output)
+          ? config.build.rolldownOptions.output
+          : [config.build.rolldownOptions.output]
+
+        for (const output of outputs) {
+          output.advancedChunks = output.advancedChunks || {}
+          output.advancedChunks.groups = output.advancedChunks.groups || []
+
+          output.advancedChunks.groups.push({
+            name(moduleId: string) {
+              if (moduleId.includes('node_modules')) {
+                if (moduleId.includes('node_modules/react-dom'))
+                  return 'react-dom'
+                if (moduleId.includes('node_modules/react'))
+                  return 'react'
+
+                return 'vendor'
+              }
+
+              return null
+            },
+          })
+
+          if (!output.chunkFileNames) {
+            output.chunkFileNames = (chunkInfo) => {
+              const hasServerAction = chunkInfo.moduleIds?.some((id: string) => {
+                if (id.includes('/src/') && /\.(?:tsx?|jsx?)$/.test(id)) {
+                  try {
+                    const code = fs.readFileSync(id, 'utf-8')
+                    return code.includes('\'use server\'') || code.includes('"use server"')
+                  }
+                  catch {}
+                }
+
+                return false
+              })
+
+              if (hasServerAction)
+                return 'client/actions/[name]-[hash].js'
+
+              const isClientComponent = chunkInfo.moduleIds?.some((id: string) => {
+                if (id.includes('/src/') && /\.(?:tsx?|jsx?)$/.test(id)) {
+                  try {
+                    const code = fs.readFileSync(id, 'utf-8')
+                    return code.includes('\'use client\'') || code.includes('"use client"')
+                  }
+                  catch {}
+                }
+
+                return false
+              })
+
+              if (isClientComponent)
+                return 'client/components/[name]-[hash].js'
+
+              return 'assets/[name]-[hash].js'
+            }
+          }
+        }
       }
 
       if (config.environments && config.environments.client) {
@@ -865,8 +927,17 @@ ${clientTransformedCode}`
       }
 
       const cachedType = componentTypeCache.get(id)
-      if (cachedType === 'server')
-        return transformServerModule(code, id)
+      if (cachedType === 'server') {
+        if (
+          environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
+        ) {
+          return transformServerModule(code, id)
+        }
+        else {
+          return transformClientModule(code, id)
+        }
+      }
       if (cachedType === 'client')
         return transformClientModuleForClient(code, id)
 
@@ -1612,6 +1683,22 @@ const ${componentName} = registerClientReference(
     },
 
     async load(id) {
+      if (/\.(?:tsx?|jsx?)$/.test(id)) {
+        const environment = (this as any).environment
+
+        if (environment && environment.name === 'client') {
+          try {
+            const code = fs.readFileSync(id, 'utf-8')
+            if (hasTopLevelDirective(code, 'use server')) {
+              return transformClientModule(code, id)
+            }
+          }
+          catch {
+            // File doesn't exist or can't be read
+          }
+        }
+      }
+
       if (id === 'virtual:rari-entry-client.ts') {
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
@@ -1635,41 +1722,39 @@ const ${componentName} = registerClientReference(
           }
         })
 
-        const imports = clientComponentsArray.map((componentPath, index) => {
+        const lazyLoaderRegistry = clientComponentsArray.map((componentPath) => {
           const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentName = `ClientComponent${index}`
+          const componentId = path.basename(componentPath, path.extname(componentPath))
+          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
 
+          let hasNamedExport = false
+          let namedExportName = ''
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
             const hasDefaultExport = /export\s+default\s+/.test(code)
             const namedExportMatch = code.match(/export\s+(?:function|const|class)\s+(\w+)/)
 
             if (!hasDefaultExport && namedExportMatch) {
-              const exportName = namedExportMatch[1]
-              return `import { ${exportName} as ${componentName} } from '/${relativePath}';`
+              hasNamedExport = true
+              namedExportName = namedExportMatch[1]
             }
           }
           catch {}
 
-          return `import ${componentName} from '/${relativePath}';`
-        }).join('\n')
+          const importStatement = hasNamedExport
+            ? `import('/${relativePath}').then(m => m.${namedExportName} || m.default || m)`
+            : `import('/${relativePath}').then(m => m.default || m)`
 
-        const registrations = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentId = path.basename(componentPath, path.extname(componentPath))
-          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
-
-          return `
-globalThis['~clientComponents']["${registrationPath}"] = {
-  id: "${componentId}",
-  path: "${registrationPath}",
-  type: "client",
-  component: ${`ClientComponent${index}`},
-  registered: true
-};
-globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${registrationPath}"];
-globalThis['~clientComponentPaths']["${registrationPath}"] = "${componentId}";`
-        }).join('\n')
+          return `  "${registrationPath}": {
+    id: "${componentId}",
+    path: "${registrationPath}",
+    type: "client",
+    loader: () => ${importStatement},
+    component: null,
+    loading: false,
+    registered: false
+  }`
+        }).join(',\n')
 
         const externalImports = externalClientComponents.map((ext, index) => {
           const componentNames = ext.exports.map(exp => `${exp} as External${index}_${exp}`).join(', ')
@@ -1696,7 +1781,19 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
           })
         }).join('\n')
 
-        const allImports = [imports, externalImports].filter(Boolean).join('\n')
+        const registrations = `
+const lazyComponentRegistry = {
+${lazyLoaderRegistry}
+};
+
+for (const [path, config] of Object.entries(lazyComponentRegistry)) {
+  globalThis['~clientComponents'][path] = config;
+  globalThis['~clientComponents'][config.id] = config;
+  globalThis['~clientComponentPaths'][path] = config.id;
+}
+`
+
+        const allImports = externalImports
         const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
 
         return await loadEntryClient(allImports, allRegistrations)
