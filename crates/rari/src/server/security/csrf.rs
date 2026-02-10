@@ -18,7 +18,7 @@ impl CsrfTokenManager {
     }
 
     pub fn new_with_random_secret() -> Self {
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
         let secret: Vec<u8> = (0..32).map(|_| rng.r#random()).collect();
         Self::new(secret)
