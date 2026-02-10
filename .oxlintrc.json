@@ -1,8 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": [
-    "node",
-    "jsdoc",
     "import",
     "unicorn"
   ],
@@ -245,18 +243,6 @@
       "error",
       "never"
     ],
-    "node/no-exports-assign": "error",
-    "node/no-new-require": "error",
-    "jsdoc/check-access": "warn",
-    "jsdoc/check-property-names": "warn",
-    "jsdoc/empty-tags": "warn",
-    "jsdoc/implements-on-classes": "warn",
-    "jsdoc/no-defaults": "warn",
-    "jsdoc/require-param-name": "warn",
-    "jsdoc/require-property": "warn",
-    "jsdoc/require-property-description": "warn",
-    "jsdoc/require-property-name": "warn",
-    "jsdoc/require-returns-description": "warn",
     "import/consistent-type-specifier-style": [
       "error",
       "prefer-top-level"
@@ -282,6 +268,51 @@
     "unicorn/throw-new-error": "error"
   },
   "overrides": [
+    {
+      "files": [
+        "**/*.?([cm])[jt]s?(x)"
+      ],
+      "rules": {
+        "node/no-exports-assign": "error",
+        "node/no-new-require": "error",
+        "jsdoc/check-access": "warn",
+        "jsdoc/check-property-names": "warn",
+        "jsdoc/empty-tags": "warn",
+        "jsdoc/implements-on-classes": "warn",
+        "jsdoc/no-defaults": "warn",
+        "jsdoc/require-param-name": "warn",
+        "jsdoc/require-property": "warn",
+        "jsdoc/require-property-description": "warn",
+        "jsdoc/require-property-name": "warn",
+        "jsdoc/require-returns-description": "warn",
+        "react/jsx-no-comment-textnodes": "warn",
+        "react/jsx-no-duplicate-props": "warn",
+        "react/no-array-index-key": "warn",
+        "react/no-direct-mutation-state": "error",
+        "react/no-redundant-should-component-update": "error",
+        "react/no-string-refs": "error",
+        "react-hooks/rules-of-hooks": "error",
+        "react-hooks/exhaustive-deps": "warn",
+        "react/only-export-components": [
+          "error",
+          {
+            "allowConstantExport": false,
+            "allowExportNames": []
+          }
+        ]
+      },
+      "plugins": [
+        "node"
+      ]
+    },
+    {
+      "files": [
+        "**/*.?([cm])[jt]s?(x)"
+      ],
+      "plugins": [
+        "jsdoc"
+      ]
+    },
     {
       "files": [
         "**/*.?([cm])ts",
@@ -414,31 +445,7 @@
     },
     {
       "files": [
-        "**/*.?([cm])[jt]s?(x)"
-      ],
-      "rules": {
-        "react/jsx-no-comment-textnodes": "warn",
-        "react/jsx-no-duplicate-props": "warn",
-        "react/no-array-index-key": "warn",
-        "react/no-direct-mutation-state": "error",
-        "react/no-redundant-should-component-update": "error",
-        "react/no-string-refs": "error",
-        "react-hooks/rules-of-hooks": "error",
-        "react-hooks/exhaustive-deps": "warn",
-        "react/only-export-components": [
-          "error",
-          {
-            "allowConstantExport": false,
-            "allowExportNames": []
-          }
-        ]
-      },
-      "plugins": [
-        "react"
-      ]
-    },
-    {
-      "files": [
+        "**/*.?([cm])[jt]s?(x)",
         "**/*.?([cm])ts",
         "**/*.?([cm])tsx"
       ],
