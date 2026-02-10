@@ -302,14 +302,6 @@ importers:
 
   packages/rari-darwin-arm64: {}
 
-  packages/rari-darwin-x64: {}
-
-  packages/rari-linux-arm64: {}
-
-  packages/rari-linux-x64: {}
-
-  packages/rari-win32-x64: {}
-
   web:
     dependencies:
       '@mdx-js/mdx':
