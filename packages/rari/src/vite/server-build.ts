@@ -84,6 +84,7 @@ export class ServerComponentBuilder {
   }>()
 
   private htmlOnlyImports = new Set<string>()
+  private fileImporters = new Map<string, Set<string>>()
 
   getComponentCount(): number {
     return this.serverComponents.size + this.serverActions.size
@@ -115,9 +116,9 @@ export class ServerComponentBuilder {
 
     try {
       const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-      const importRegex = /import\s+["']([^"']+)["']/g
+      const importRegex = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
       for (const match of htmlContent.matchAll(importRegex)) {
-        const importPath = match[1]
+        const importPath = match[1] || match[2]
         if (importPath.startsWith('/src/')) {
           const absolutePath = path.join(this.projectRoot, importPath.slice(1))
           this.htmlOnlyImports.add(absolutePath)
@@ -207,6 +208,94 @@ export class ServerComponentBuilder {
     catch {
       return false
     }
+  }
+
+  buildImportGraph(srcDir: string) {
+    this.fileImporters.clear()
+
+    const scanForImports = (dir: string) => {
+      if (!fs.existsSync(dir))
+        return
+
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules')
+            continue
+          scanForImports(fullPath)
+        }
+        else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+          try {
+            const code = fs.readFileSync(fullPath, 'utf-8')
+            const importRegex = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
+            let match
+
+            match = importRegex.exec(code)
+            while (match !== null) {
+              const importPath = match[1] || match[2] || match[3]
+              let resolvedPath: string | null = null
+
+              if (importPath.startsWith('./') || importPath.startsWith('../')) {
+                const importerDir = path.dirname(fullPath)
+                resolvedPath = path.resolve(importerDir, importPath)
+              }
+              else if (importPath.startsWith('@/')) {
+                const relativePath = importPath.slice(2)
+                resolvedPath = path.join(this.projectRoot, 'src', relativePath)
+              }
+
+              if (resolvedPath) {
+                const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
+                let foundPath: string | null = null
+
+                for (const ext of extensions) {
+                  const pathWithExt = resolvedPath + ext
+                  if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
+                    foundPath = pathWithExt
+                    break
+                  }
+                }
+
+                if (foundPath) {
+                  if (!this.fileImporters.has(foundPath))
+                    this.fileImporters.set(foundPath, new Set())
+
+                  this.fileImporters.get(foundPath)!.add(fullPath)
+                }
+              }
+
+              match = importRegex.exec(code)
+            }
+          }
+          catch (err) {
+            if ((err as any)?.code !== 'ENOENT')
+              console.warn('[rari] Unexpected error building import graph:', fullPath, err)
+          }
+        }
+      }
+    }
+
+    scanForImports(srcDir)
+  }
+
+  isOnlyImportedByClientComponents(filePath: string): boolean {
+    const importers = this.fileImporters.get(filePath)
+
+    if (!importers || importers.size === 0)
+      return false
+
+    for (const importer of importers) {
+      if (this.isClientComponent(importer))
+        continue
+
+      if (!this.isOnlyImportedByClientComponents(importer))
+        return false
+    }
+
+    return true
   }
 
   addServerComponent(filePath: string) {
@@ -1619,20 +1708,26 @@ function registerClientReference(clientReference, id, exportName) {
   }
 }
 
-export function scanDirectory(dir: string, builder: ServerComponentBuilder) {
+export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTopLevel = true) {
+  if (isTopLevel)
+    builder.buildImportGraph(dir)
+
   const entries = fs.readdirSync(dir, { withFileTypes: true })
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
 
     if (entry.isDirectory()) {
-      scanDirectory(fullPath, builder)
+      scanDirectory(fullPath, builder, false)
     }
     else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
       if (/^(?:robots|sitemap)\.(?:tsx?|jsx?)$/.test(entry.name))
         continue
 
       if (entry.name.endsWith('.d.ts'))
+        continue
+
+      if (builder.isOnlyImportedByClientComponents(fullPath))
         continue
 
       try {

@@ -8,7 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
-import { getClientComponent } from './shared/get-client-component'
+import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
 import 'virtual:rsc-integration.ts'
 
 function getRariGlobal(): GlobalWithRari['~rari'] {
@@ -48,13 +48,40 @@ function createSsrManifest(): any {
                 const exportNameStr = String(exportName)
                 const componentKey = `${moduleIdStr}#${exportNameStr}`
 
-                if (getGlobalThis()['~clientComponents']?.[componentKey]) {
+                if (getGlobalThis()['~clientComponents']?.[componentKey]?.component) {
                   return getGlobalThis()['~clientComponents'][componentKey].component
                 }
 
-                if (getGlobalThis()['~clientComponents']?.[moduleIdStr]) {
+                if (getGlobalThis()['~clientComponents']?.[moduleIdStr]?.component) {
                   const component = getGlobalThis()['~clientComponents'][moduleIdStr].component
                   return exportNameStr === 'default' ? component : component?.[exportNameStr]
+                }
+
+                const componentInfo = getGlobalThis()['~clientComponents']?.[componentKey]
+                  || getGlobalThis()['~clientComponents']?.[moduleIdStr]
+
+                if (componentInfo?.loader) {
+                  if (!componentInfo.loadPromise) {
+                    componentInfo.loading = true
+                    componentInfo.loadPromise = componentInfo.loader()
+                      .then((module: any) => {
+                        componentInfo.component = module.default || module
+                        componentInfo.registered = true
+                        componentInfo.loading = false
+                        return module
+                      })
+                      .catch((loadError) => {
+                        componentInfo.loading = false
+                        componentInfo.loadPromise = undefined
+                        console.error(`[rari] Failed to lazy load ${moduleIdStr}#${exportNameStr}:`, loadError)
+                        throw loadError
+                      })
+                  }
+                  const module = await componentInfo.loadPromise
+                  const resolved = module.default || module
+                  return exportNameStr === 'default'
+                    ? resolved
+                    : (resolved?.[exportNameStr] ?? resolved)
                 }
 
                 console.warn(`[rari] Module ${moduleIdStr}#${exportNameStr} not found in client components registry`)
@@ -80,6 +107,17 @@ if (typeof getRariGlobal() === 'undefined')
 getRariGlobal().AppRouterProvider = AppRouterProvider
 getRariGlobal().ClientRouter = ClientRouter
 getRariGlobal().getClientComponent = getClientComponent
+
+export async function preloadClientComponent(id: string): Promise<void> {
+  try {
+    await getClientComponentAsync(id)
+  }
+  catch (error) {
+    console.error(`[rari] Failed to preload component ${id}:`, error)
+  }
+}
+
+getRariGlobal().preloadClientComponent = preloadClientComponent
 
 if (typeof getGlobalThis()['~clientComponents'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
@@ -123,11 +161,32 @@ function setupPartialHydration(): void {
               if (mod) {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
                 let clientComponent = null
+                const componentInfo = getGlobalThis()['~clientComponents'][clientKey]
+                  || getGlobalThis()['~clientComponents'][mod.id]
 
-                if (getGlobalThis()['~clientComponents'][clientKey])
-                  clientComponent = getGlobalThis()['~clientComponents'][clientKey].component
-                else if (getGlobalThis()['~clientComponents'][mod.id])
-                  clientComponent = getGlobalThis()['~clientComponents'][mod.id].component
+                if (componentInfo) {
+                  if (componentInfo.component) {
+                    clientComponent = componentInfo.component
+                  }
+                  else if (componentInfo.loader && !componentInfo.loading) {
+                    componentInfo.loading = true
+                    componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
+                      componentInfo.component = module.default || module
+                      componentInfo.registered = true
+                      componentInfo.loading = false
+                      return componentInfo.component
+                    }).catch((error: Error) => {
+                      componentInfo.loading = false
+                      componentInfo.loadPromise = undefined
+                      console.error(`[rari] Failed to load component ${mod.id}:`, error)
+                      throw error
+                    })
+                  }
+
+                  if (componentInfo.loadPromise && !componentInfo.component) {
+                    React.use(componentInfo.loadPromise)
+                  }
+                }
 
                 if (clientComponent)
                   return React.createElement(clientComponent, key ? { ...processedProps, key } : processedProps)
@@ -188,6 +247,20 @@ function processPendingBoundaryHydrations(): void {
 
 setupPartialHydration()
 
+async function preloadClientComponents(componentIds: Set<string>): Promise<void> {
+  const loadPromises: Promise<any>[] = []
+  for (const id of componentIds) {
+    const promise = getClientComponentAsync(id)
+      .catch((error: Error) => {
+        console.error(`[rari] Failed to preload component ${id}:`, error)
+      })
+    loadPromises.push(promise)
+  }
+  if (loadPromises.length > 0) {
+    await Promise.all(loadPromises)
+  }
+}
+
 export async function renderApp(): Promise<void> {
   const rootElement = document.getElementById('root')
   if (!rootElement) {
@@ -204,6 +277,15 @@ export async function renderApp(): Promise<void> {
   if (hasServerRenderedContent && !payloadScript && !hasBufferedRows) {
     const clientComponentElements = document.querySelectorAll('[data-client-component]')
     if (clientComponentElements.length > 0) {
+      const componentIds = new Set<string>()
+      clientComponentElements.forEach((element) => {
+        const componentId = element.getAttribute('data-client-component')
+        if (componentId)
+          componentIds.add(componentId)
+      })
+
+      await preloadClientComponents(componentIds)
+
       clientComponentElements.forEach((element) => {
         const componentId = element.getAttribute('data-client-component')
         const propsJson = element.getAttribute('data-props')
@@ -534,13 +616,33 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
       if (typeof type === 'string' && type.startsWith('$L')) {
         const moduleInfo = modules.get(type)
         if (moduleInfo) {
-          const Component = getGlobalThis()['~clientComponents'][moduleInfo.id]?.component
-          if (Component) {
-            const childProps = {
-              ...props,
-              children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
+          const componentInfo = getGlobalThis()['~clientComponents'][moduleInfo.id]
+          if (componentInfo) {
+            if (componentInfo.component) {
+              const Component = componentInfo.component
+              const childProps = {
+                ...props,
+                children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
+              }
+              return React.createElement(Component, { key, ...childProps })
             }
-            return React.createElement(Component, { key, ...childProps })
+            else if (componentInfo.loader && !componentInfo.loading) {
+              componentInfo.loading = true
+              componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
+                componentInfo.component = module.default || module
+                componentInfo.registered = true
+                componentInfo.loading = false
+              }).catch((error: Error) => {
+                componentInfo.loading = false
+                componentInfo.loadPromise = undefined
+                console.error(`[rari] Failed to load component ${moduleInfo.id}:`, error)
+                throw error
+              })
+            }
+
+            if (componentInfo.loadPromise) {
+              React.use(componentInfo.loadPromise)
+            }
           }
         }
 

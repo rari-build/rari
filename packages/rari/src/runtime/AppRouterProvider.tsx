@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import { preloadComponentsFromModules } from './shared/preload-components'
 
 interface AppRouterProviderProps {
   children: React.ReactNode
@@ -345,7 +346,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return processed
   }
 
-  const parseRscWireFormat = (wireFormat: string, extractBoundaries = false) => {
+  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
       const modules = new Map()
@@ -444,6 +445,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
         }
       }
+
+      await preloadComponentsFromModules(modules)
 
       if (
         extractBoundaries
@@ -544,7 +547,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         let parsedPayload
         try {
-          parsedPayload = parseRscWireFormat(rscWireFormat, false)
+          parsedPayload = await parseRscWireFormat(rscWireFormat, false)
         }
         catch (parseError) {
           const error = parseError instanceof Error ? parseError : new Error(String(parseError))
@@ -608,7 +611,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       startTransition(async () => {
         try {
           if (detail.rscWireFormat) {
-            const parsedPayload = parseRscWireFormat(detail.rscWireFormat, false)
+            const parsedPayload = await parseRscWireFormat(detail.rscWireFormat, false)
             setRscPayload(parsedPayload)
             lastSuccessfulPayloadRef.current = detail.rscWireFormat
             resetFailureTracking()
@@ -718,7 +721,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
-    const handleRscRow = (event: Event) => {
+    const handleRscRow = async (event: Event) => {
       const customEvent = event as CustomEvent<{ rscRow: string }>
       const row = customEvent.detail.rscRow
 
@@ -732,7 +735,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       try {
         const wireFormat = streamingRowsRef.current.join('\n')
-        const parsedPayload = parseRscWireFormat(wireFormat, false)
+        const parsedPayload = await parseRscWireFormat(wireFormat, false)
         const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
 
         if (isInitialShell) {

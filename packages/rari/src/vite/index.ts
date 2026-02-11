@@ -199,7 +199,11 @@ function scanForClientComponents(srcDir: string, additionalDirs: string[] = []):
             clientComponents.add(fullPath)
           }
         }
-        catch {}
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error during file scan:', fullPath, err)
+          }
+        }
       }
     }
   }
@@ -221,10 +225,36 @@ export function defineRariOptions(config: RariOptions): RariOptions {
 export function rari(options: RariOptions = {}): Plugin[] {
   const componentTypeCache = new Map<string, 'client' | 'server' | 'unknown'>()
   const clientComponents = new Set<string>()
+  const directiveCache = new Map<string, { hasUseServer: boolean, hasUseClient: boolean }>()
   let rustServerProcess: any = null
 
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
+
+  function getModuleDirectives(id: string): { hasUseServer: boolean, hasUseClient: boolean } {
+    if (directiveCache.has(id))
+      return directiveCache.get(id)!
+
+    const result = { hasUseServer: false, hasUseClient: false }
+
+    const normalizedId = id.replace(/\\/g, '/')
+    if (!/\.(?:tsx?|jsx?)$/.test(normalizedId) || !normalizedId.includes('/src/')) {
+      directiveCache.set(id, result)
+      return result
+    }
+
+    try {
+      const code = fs.readFileSync(id, 'utf-8')
+      result.hasUseServer = code.includes('\'use server\'') || code.includes('"use server"')
+      result.hasUseClient = code.includes('\'use client\'') || code.includes('"use client"')
+      directiveCache.set(id, result)
+    }
+    catch {
+      directiveCache.set(id, result)
+    }
+
+    return result
+  }
 
   function isServerComponent(filePath: string): boolean {
     if (filePath.includes('node_modules') || (filePath.includes('/rari/dist/') || filePath.includes('\\rari\\dist\\')))
@@ -247,7 +277,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
           }
         }
       }
-      catch {}
+      catch (err) {
+        if ((err as any)?.code !== 'ENOENT') {
+          console.warn('[rari] Unexpected error reading index.html:', err)
+        }
+      }
     }
 
     let pathForFsOperations
@@ -296,7 +330,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
       else if (/export\s+default\s+/.test(code))
         exportedNames.push('default')
 
-      const declarationExports = code.matchAll(/export\s+(?:const|let|var|function|class)\s+(\w+)/g)
+      const declarationExports = code.matchAll(/export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g)
       for (const match of declarationExports) {
         if (match[1])
           exportedNames.push(match[1])
@@ -650,7 +684,11 @@ if (import.meta.hot) {
             })
           }
         }
-        catch {}
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error resolving react/jsx-dev-runtime:', err)
+          }
+        }
         if (!aliasFinds.has('react'))
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         if (!aliasFinds.has('react-dom/client')) {
@@ -666,7 +704,11 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch {}
+      catch (err) {
+        if ((err as any)?.code !== 'ENOENT') {
+          console.warn('[rari] Unexpected error configuring React aliases:', err)
+        }
+      }
 
       config.environments = config.environments || {}
 
@@ -748,6 +790,54 @@ if (import.meta.hot) {
         if (!config.build.rolldownOptions.input) {
           config.build.rolldownOptions.input = {
             main: './index.html',
+          }
+        }
+
+        config.build.rolldownOptions.output = config.build.rolldownOptions.output || {}
+
+        const outputs = Array.isArray(config.build.rolldownOptions.output)
+          ? config.build.rolldownOptions.output
+          : [config.build.rolldownOptions.output]
+
+        for (const output of outputs) {
+          output.advancedChunks = output.advancedChunks || {}
+          output.advancedChunks.groups = output.advancedChunks.groups || []
+
+          output.advancedChunks.groups.push({
+            name(moduleId: string) {
+              if (moduleId.includes('node_modules')) {
+                if (moduleId.includes('node_modules/react-dom'))
+                  return 'react-dom'
+                if (moduleId.includes('node_modules/react'))
+                  return 'react'
+
+                return 'vendor'
+              }
+
+              return null
+            },
+          })
+
+          if (!output.chunkFileNames) {
+            output.chunkFileNames = (chunkInfo) => {
+              const hasServerAction = chunkInfo.moduleIds?.some((id: string) => {
+                const directives = getModuleDirectives(id)
+                return directives.hasUseServer
+              })
+
+              if (hasServerAction)
+                return 'client/actions/[name]-[hash].js'
+
+              const isClientComponent = chunkInfo.moduleIds?.some((id: string) => {
+                const directives = getModuleDirectives(id)
+                return directives.hasUseClient
+              })
+
+              if (isClientComponent)
+                return 'client/components/[name]-[hash].js'
+
+              return 'assets/[name]-[hash].js'
+            }
           }
         }
       }
@@ -865,8 +955,17 @@ ${clientTransformedCode}`
       }
 
       const cachedType = componentTypeCache.get(id)
-      if (cachedType === 'server')
-        return transformServerModule(code, id)
+      if (cachedType === 'server') {
+        if (
+          environment
+          && (environment.name === 'rsc' || environment.name === 'ssr')
+        ) {
+          return transformServerModule(code, id)
+        }
+        else {
+          return transformClientModule(code, id)
+        }
+      }
       if (cachedType === 'client')
         return transformClientModuleForClient(code, id)
 
@@ -1605,13 +1704,33 @@ const ${componentName} = registerClientReference(
           if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath))
             return { id, external: true }
         }
-        catch {}
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error resolving server component:', id, err)
+          }
+        }
       }
 
       return null
     },
 
     async load(id) {
+      if (/\.(?:tsx?|jsx?)$/.test(id)) {
+        const environment = (this as any).environment
+
+        if (environment && environment.name === 'client') {
+          try {
+            const code = fs.readFileSync(id, 'utf-8')
+            if (hasTopLevelDirective(code, 'use server')) {
+              return transformClientModule(code, id)
+            }
+          }
+          catch {
+            // File doesn't exist or can't be read
+          }
+        }
+      }
+
       if (id === 'virtual:rari-entry-client.ts') {
         const srcDir = path.join(process.cwd(), 'src')
         const scannedClientComponents = scanForClientComponents(srcDir, Object.values(resolvedAlias))
@@ -1635,41 +1754,47 @@ const ${componentName} = registerClientReference(
           }
         })
 
-        const imports = clientComponentsArray.map((componentPath, index) => {
+        const lazyLoaderRegistry = clientComponentsArray.map((componentPath) => {
           const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentName = `ClientComponent${index}`
+          const componentId = relativePath.replace(/\.(tsx?|jsx?)$/, '')
+          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
 
+          let hasNamedExport = false
+          let namedExportName = ''
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
             const hasDefaultExport = /export\s+default\s+/.test(code)
             const namedExportMatch = code.match(/export\s+(?:function|const|class)\s+(\w+)/)
 
             if (!hasDefaultExport && namedExportMatch) {
-              const exportName = namedExportMatch[1]
-              return `import { ${exportName} as ${componentName} } from '/${relativePath}';`
+              hasNamedExport = true
+              namedExportName = namedExportMatch[1]
             }
           }
-          catch {}
+          catch (err) {
+            if ((err as any)?.code !== 'ENOENT') {
+              console.warn('[rari] Unexpected error reading component for export detection:', componentPath, err)
+            }
+          }
 
-          return `import ${componentName} from '/${relativePath}';`
-        }).join('\n')
+          const normalizedPath = registrationPath.replace(/\\/g, '/')
+          const importPath = normalizedPath.startsWith('/') || /^[A-Z]:\//i.test(normalizedPath)
+            ? normalizedPath
+            : `/${normalizedPath}`
+          const importStatement = hasNamedExport
+            ? `import(${JSON.stringify(importPath)}).then(m => m.${namedExportName} || m.default || m)`
+            : `import(${JSON.stringify(importPath)}).then(m => m.default || m)`
 
-        const registrations = clientComponentsArray.map((componentPath, index) => {
-          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentId = path.basename(componentPath, path.extname(componentPath))
-          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
-
-          return `
-globalThis['~clientComponents']["${registrationPath}"] = {
-  id: "${componentId}",
-  path: "${registrationPath}",
-  type: "client",
-  component: ${`ClientComponent${index}`},
-  registered: true
-};
-globalThis['~clientComponents']["${componentId}"] = globalThis['~clientComponents']["${registrationPath}"];
-globalThis['~clientComponentPaths']["${registrationPath}"] = "${componentId}";`
-        }).join('\n')
+          return `  "${registrationPath}": {
+    id: "${componentId}",
+    path: "${registrationPath}",
+    type: "client",
+    loader: () => ${importStatement},
+    component: null,
+    loading: false,
+    registered: false
+  }`
+        }).join(',\n')
 
         const externalImports = externalClientComponents.map((ext, index) => {
           const componentNames = ext.exports.map(exp => `${exp} as External${index}_${exp}`).join(', ')
@@ -1696,7 +1821,19 @@ globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
           })
         }).join('\n')
 
-        const allImports = [imports, externalImports].filter(Boolean).join('\n')
+        const registrations = `
+const lazyComponentRegistry = {
+${lazyLoaderRegistry}
+};
+
+for (const [path, config] of Object.entries(lazyComponentRegistry)) {
+  globalThis['~clientComponents'][path] = config;
+  globalThis['~clientComponents'][config.id] = config;
+  globalThis['~clientComponentPaths'][path] = config.id;
+}
+`
+
+        const allImports = externalImports
         const allRegistrations = [registrations, externalRegistrations].filter(Boolean).join('\n')
 
         return await loadEntryClient(allImports, allRegistrations)

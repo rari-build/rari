@@ -8,8 +8,11 @@ export interface ComponentInfo {
   id: string
   path: string
   type: string
-  component: any
+  component?: any
   registered: boolean
+  loader?: () => Promise<any>
+  loading?: boolean
+  loadPromise?: Promise<any>
 }
 
 export interface GlobalWithRari {
@@ -18,6 +21,7 @@ export interface GlobalWithRari {
     AppRouterProvider?: any
     ClientRouter?: any
     getClientComponent?: (id: string) => any
+    preloadClientComponent?: (id: string) => Promise<void>
     hydrateClientComponents?: (boundaryId: string, content: any, boundaryElement: Element) => void
     processBoundaryUpdate?: (boundaryId: string, rscRow: string, rowId: string) => void
     boundaryModules?: Map<string, ModuleData>

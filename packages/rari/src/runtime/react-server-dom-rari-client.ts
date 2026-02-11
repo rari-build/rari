@@ -1,10 +1,7 @@
 import * as React from 'react'
-
-interface ModuleData {
-  id: string
-  chunks: string[]
-  name: string
-}
+import { loadClientComponent } from './shared/get-client-component'
+import { preloadComponentsFromModules } from './shared/preload-components'
+import { ModuleData } from './shared/types'
 
 interface ParsedWireFormat {
   modules: Map<string, ModuleData>
@@ -40,6 +37,9 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
   const text = new TextDecoder().decode(combined)
 
   const parsed = parseWireFormat(text)
+
+  await preloadComponentsFromModules(parsed.modules)
+
   return rscToReact(parsed.rootElement, parsed.modules, moduleMap, parsed.symbols, parsed.chunks)
 }
 
@@ -48,6 +48,9 @@ export async function createFromFetch(fetchPromise: Promise<Response>, options: 
   const text = await response.text()
 
   const parsed = parseWireFormat(text)
+
+  await preloadComponentsFromModules(parsed.modules)
+
   return rscToReact(parsed.rootElement, parsed.modules, options.moduleMap || {}, parsed.symbols, parsed.chunks)
 }
 
@@ -324,8 +327,37 @@ function resolveClientComponent(componentName: string, wireModules: Map<string, 
     const moduleInfo = wireModules.get(moduleRef)
     if (moduleInfo) {
       const clientComponents = (globalThis as any)['~clientComponents'] || {}
-      if (clientComponents[moduleInfo.id])
-        return clientComponents[moduleInfo.id].component
+
+      const lookupKeys = [
+        moduleInfo.id,
+        `${moduleInfo.id}#${moduleInfo.name || 'default'}`,
+        moduleInfo.id.replace(/^src\//, ''),
+        moduleInfo.id.replace(/\\/g, '/'),
+      ]
+
+      for (const key of lookupKeys) {
+        const componentInfo = clientComponents[key]
+        if (componentInfo) {
+          if (componentInfo.component) {
+            return componentInfo.component
+          }
+
+          if (componentInfo.loader && !componentInfo.loading) {
+            return loadClientComponent(componentInfo, moduleInfo.id)
+          }
+
+          if (componentInfo.loading) {
+            return null
+          }
+        }
+      }
+
+      console.warn(`[rari] Component not found in registry:`, {
+        moduleId: moduleInfo.id,
+        moduleName: moduleInfo.name,
+        triedKeys: lookupKeys,
+        availableKeys: Object.keys(clientComponents).slice(0, 10),
+      })
     }
   }
 
@@ -334,8 +366,19 @@ function resolveClientComponent(componentName: string, wireModules: Map<string, 
 
   const clientComponents = (globalThis as any)['~clientComponents'] || {}
   for (const [id, info] of Object.entries(clientComponents) as [string, any][]) {
-    if (id.includes(componentName) || info.name === componentName)
-      return info.component
+    const isExactMatch = id === componentName
+    const isPathMatch = id.endsWith(`/${componentName}`) || id.endsWith(`\\${componentName}`)
+    const isExportMatch = id.endsWith(`#${componentName}`)
+    const isNameMatch = info.name === componentName
+
+    if (isExactMatch || isPathMatch || isExportMatch || isNameMatch) {
+      if (info.component)
+        return info.component
+
+      if (info.loader && !info.loading) {
+        return loadClientComponent(info, id)
+      }
+    }
   }
 
   return null
