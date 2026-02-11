@@ -59,6 +59,17 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 .output()
                 .await?;
 
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                anyhow::bail!(
+                    "Failed to get git log for rari-binaries (range: {}):\nstdout: {}\nstderr: {}",
+                    range,
+                    stdout,
+                    stderr
+                );
+            }
+
             Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
         } else {
             let path_str = package_path.display().to_string();
@@ -67,6 +78,18 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
                 .output()
                 .await?;
 
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                anyhow::bail!(
+                    "Failed to get git log for {} (range: {}):\nstdout: {}\nstderr: {}",
+                    package_name,
+                    range,
+                    stdout,
+                    stderr
+                );
+            }
+
             Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
         }
     } else {
@@ -74,7 +97,10 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
     }
 }
 
-pub async fn get_previous_tag(package_name: &str) -> Result<Option<String>> {
+pub async fn get_previous_tag(
+    package_name: &str,
+    current_tag: Option<&str>,
+) -> Result<Option<String>> {
     let tag_pattern = tag_pattern_for(package_name);
 
     let tag_output = Command::new("git")
@@ -88,7 +114,8 @@ pub async fn get_previous_tag(package_name: &str) -> Result<Option<String>> {
     }
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
-    Ok(tags.lines().next().map(String::from))
+
+    Ok(tags.lines().find(|tag| current_tag.is_none_or(|current| tag != &current)).map(String::from))
 }
 
 pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {

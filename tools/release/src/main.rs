@@ -217,7 +217,7 @@ async fn run_non_interactive(
 
         let first_path = unit.paths()[0];
         let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
-        let previous_tag = crate::git::get_previous_tag(unit_name).await?;
+        let previous_tag = crate::git::get_previous_tag(unit_name, None).await?;
         if !commits.is_empty() {
             println!("  {} Commits since last release:", "ℹ".blue().bold());
             for commit in commits.iter().take(5) {

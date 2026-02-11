@@ -126,7 +126,7 @@ impl App {
                     let first_path = unit.paths()[0];
                     self.recent_commits =
                         git::get_commits_since_tag(unit.name(), first_path).await?;
-                    self.previous_tag = git::get_previous_tag(unit.name()).await?;
+                    self.previous_tag = git::get_previous_tag(unit.name(), None).await?;
                     self.screen = Screen::VersionSelection { package_idx };
                     self.selected_version_idx = 0;
                 }
