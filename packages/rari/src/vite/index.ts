@@ -1753,8 +1753,8 @@ const ${componentName} = registerClientReference(
           catch {}
 
           const importStatement = hasNamedExport
-            ? `import('/${relativePath}').then(m => m.${namedExportName} || m.default || m)`
-            : `import('/${relativePath}').then(m => m.default || m)`
+            ? `import('/${registrationPath}').then(m => m.${namedExportName} || m.default || m)`
+            : `import('/${registrationPath}').then(m => m.default || m)`
 
           return `  "${registrationPath}": {
     id: "${componentId}",

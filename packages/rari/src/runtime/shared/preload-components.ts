@@ -16,7 +16,7 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
       const componentInfo = clientComponents[key]
       if (componentInfo?.loader && !componentInfo.component && !componentInfo.loading) {
         componentInfo.loading = true
-        const promise = componentInfo.loader()
+        componentInfo.loadPromise = componentInfo.loader()
           .then((module: any) => {
             componentInfo.component = module.default || module
             componentInfo.registered = true
@@ -27,7 +27,7 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
             componentInfo.loadPromise = undefined
             console.error(`[rari] Failed to preload component ${key}:`, error)
           })
-        loadPromises.push(promise)
+        loadPromises.push(componentInfo.loadPromise)
         break
       }
     }

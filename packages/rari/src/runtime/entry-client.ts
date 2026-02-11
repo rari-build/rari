@@ -621,14 +621,19 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
             else if (componentInfo.loader && !componentInfo.loading) {
               componentInfo.loading = true
-              componentInfo.loader().then((module: any) => {
+              componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
                 componentInfo.component = module.default || module
                 componentInfo.registered = true
                 componentInfo.loading = false
               }).catch((error: Error) => {
                 componentInfo.loading = false
+                componentInfo.loadPromise = undefined
                 console.error(`[rari] Failed to load component ${moduleInfo.id}:`, error)
               })
+            }
+
+            if (componentInfo.loadPromise) {
+              React.use(componentInfo.loadPromise)
             }
           }
         }
