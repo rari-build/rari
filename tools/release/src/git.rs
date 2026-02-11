@@ -32,6 +32,11 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
         .output()
         .await?;
 
+    if !tag_output.status.success() {
+        let stderr = String::from_utf8_lossy(&tag_output.stderr);
+        anyhow::bail!("Failed to list tags: {}", stderr);
+    }
+
     let tags = String::from_utf8_lossy(&tag_output.stdout);
     let latest_tag = tags.lines().next();
 
