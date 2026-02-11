@@ -167,6 +167,7 @@ impl Resolver {
             | MediaType::Mjs
             | MediaType::Html
             | MediaType::Sql
+            | MediaType::Markdown
             | MediaType::Dmts => false,
 
             MediaType::Cjs | MediaType::Cts | MediaType::Dcts => true,
