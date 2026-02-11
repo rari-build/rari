@@ -60,22 +60,28 @@ function createSsrManifest(): any {
                 const componentInfo = getGlobalThis()['~clientComponents']?.[componentKey]
                   || getGlobalThis()['~clientComponents']?.[moduleIdStr]
 
-                if (componentInfo?.loader && !componentInfo.loading) {
-                  componentInfo.loading = true
-                  try {
-                    const module = await componentInfo.loader()
-                    componentInfo.component = module.default || module
-                    componentInfo.registered = true
-                    componentInfo.loading = false
-                    return exportNameStr === 'default'
-                      ? componentInfo.component
-                      : componentInfo.component[exportNameStr]
+                if (componentInfo?.loader) {
+                  if (!componentInfo.loadPromise) {
+                    componentInfo.loading = true
+                    componentInfo.loadPromise = componentInfo.loader()
+                      .then((module: any) => {
+                        componentInfo.component = module.default || module
+                        componentInfo.registered = true
+                        componentInfo.loading = false
+                        return module
+                      })
+                      .catch((loadError) => {
+                        componentInfo.loading = false
+                        componentInfo.loadPromise = undefined
+                        console.error(`[rari] Failed to lazy load ${moduleIdStr}#${exportNameStr}:`, loadError)
+                        throw loadError
+                      })
                   }
-                  catch (loadError) {
-                    componentInfo.loading = false
-                    console.error(`[rari] Failed to lazy load ${moduleIdStr}#${exportNameStr}:`, loadError)
-                    throw loadError
-                  }
+                  const module = await componentInfo.loadPromise
+                  const resolved = module.default || module
+                  return exportNameStr === 'default'
+                    ? resolved
+                    : (resolved?.[exportNameStr] ?? resolved)
                 }
 
                 console.warn(`[rari] Module ${moduleIdStr}#${exportNameStr} not found in client components registry`)
@@ -171,6 +177,7 @@ function setupPartialHydration(): void {
                       return componentInfo.component
                     }).catch((error: Error) => {
                       componentInfo.loading = false
+                      componentInfo.loadPromise = undefined
                       console.error(`[rari] Failed to load component ${mod.id}:`, error)
                       throw error
                     })

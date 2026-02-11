@@ -199,7 +199,7 @@ function scanForClientComponents(srcDir: string, additionalDirs: string[] = []):
             clientComponents.add(fullPath)
           }
         }
-        catch {}
+        catch { }
       }
     }
   }
@@ -233,7 +233,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     const result = { hasUseServer: false, hasUseClient: false }
 
-    if (!id.includes('/src/') || !/\.(?:tsx?|jsx?)$/.test(id)) {
+    const normalizedId = id.replace(/\\/g, '/')
+    if (!/\.(?:tsx?|jsx?)$/.test(normalizedId) || !normalizedId.includes('/src/')) {
       directiveCache.set(id, result)
       return result
     }
@@ -272,7 +273,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
           }
         }
       }
-      catch {}
+      catch { }
     }
 
     let pathForFsOperations
@@ -675,7 +676,7 @@ if (import.meta.hot) {
             })
           }
         }
-        catch {}
+        catch { }
         if (!aliasFinds.has('react'))
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         if (!aliasFinds.has('react-dom/client')) {
@@ -691,7 +692,7 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch {}
+      catch { }
 
       config.environments = config.environments || {}
 
@@ -1687,7 +1688,7 @@ const ${componentName} = registerClientReference(
           if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath))
             return { id, external: true }
         }
-        catch {}
+        catch { }
       }
 
       return null
@@ -1735,7 +1736,7 @@ const ${componentName} = registerClientReference(
 
         const lazyLoaderRegistry = clientComponentsArray.map((componentPath) => {
           const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentId = path.basename(componentPath, path.extname(componentPath))
+          const componentId = relativePath.replace(/\.(tsx?|jsx?)$/, '')
           const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
 
           let hasNamedExport = false
@@ -1750,11 +1751,15 @@ const ${componentName} = registerClientReference(
               namedExportName = namedExportMatch[1]
             }
           }
-          catch {}
+          catch { }
 
+          const normalizedPath = registrationPath.replace(/\\/g, '/')
+          const importPath = normalizedPath.startsWith('/') || /^[A-Z]:\//i.test(normalizedPath)
+            ? normalizedPath
+            : `/${normalizedPath}`
           const importStatement = hasNamedExport
-            ? `import('/${registrationPath}').then(m => m.${namedExportName} || m.default || m)`
-            : `import('/${registrationPath}').then(m => m.default || m)`
+            ? `import(${JSON.stringify(importPath)}).then(m => m.${namedExportName} || m.default || m)`
+            : `import(${JSON.stringify(importPath)}).then(m => m.default || m)`
 
           return `  "${registrationPath}": {
     id: "${componentId}",
