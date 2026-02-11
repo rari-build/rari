@@ -2,6 +2,10 @@ use anyhow::Result;
 use std::path::Path;
 use tokio::process::Command;
 
+fn tag_pattern_for(package_name: &str) -> String {
+    if package_name == "rari-binaries" { "v*".to_string() } else { format!("{}@*", package_name) }
+}
+
 pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec<String>> {
     let output = Command::new("git")
         .args([
@@ -21,11 +25,10 @@ pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec
 }
 
 pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> Result<Vec<String>> {
-    let tag_pattern =
-        if package_name == "rari-binaries" { "v*" } else { &format!("{}@*", package_name) };
+    let tag_pattern = tag_pattern_for(package_name);
 
     let tag_output = Command::new("git")
-        .args(["tag", "-l", tag_pattern, "--sort=-version:refname"])
+        .args(["tag", "-l", &tag_pattern, "--sort=-version:refname"])
         .output()
         .await?;
 
@@ -67,13 +70,17 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
 }
 
 pub async fn get_previous_tag(package_name: &str) -> Result<Option<String>> {
-    let tag_pattern =
-        if package_name == "rari-binaries" { "v*" } else { &format!("{}@*", package_name) };
+    let tag_pattern = tag_pattern_for(package_name);
 
     let tag_output = Command::new("git")
-        .args(["tag", "-l", tag_pattern, "--sort=-version:refname"])
+        .args(["tag", "-l", &tag_pattern, "--sort=-version:refname"])
         .output()
         .await?;
+
+    if !tag_output.status.success() {
+        let stderr = String::from_utf8_lossy(&tag_output.stderr);
+        anyhow::bail!("Failed to list tags: {}", stderr);
+    }
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
     Ok(tags.lines().next().map(String::from))
