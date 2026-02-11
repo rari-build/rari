@@ -199,7 +199,11 @@ function scanForClientComponents(srcDir: string, additionalDirs: string[] = []):
             clientComponents.add(fullPath)
           }
         }
-        catch { }
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error during file scan:', fullPath, err)
+          }
+        }
       }
     }
   }
@@ -273,7 +277,11 @@ export function rari(options: RariOptions = {}): Plugin[] {
           }
         }
       }
-      catch { }
+      catch (err) {
+        if ((err as any)?.code !== 'ENOENT') {
+          console.warn('[rari] Unexpected error reading index.html:', err)
+        }
+      }
     }
 
     let pathForFsOperations
@@ -676,7 +684,11 @@ if (import.meta.hot) {
             })
           }
         }
-        catch { }
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error resolving react/jsx-dev-runtime:', err)
+          }
+        }
         if (!aliasFinds.has('react'))
           aliasesToAppend.push({ find: 'react', replacement: reactPath })
         if (!aliasFinds.has('react-dom/client')) {
@@ -692,7 +704,11 @@ if (import.meta.hot) {
           ]
         }
       }
-      catch { }
+      catch (err) {
+        if ((err as any)?.code !== 'ENOENT') {
+          console.warn('[rari] Unexpected error configuring React aliases:', err)
+        }
+      }
 
       config.environments = config.environments || {}
 
@@ -1688,7 +1704,11 @@ const ${componentName} = registerClientReference(
           if (fs.existsSync(resolvedPath) && isServerComponent(resolvedPath))
             return { id, external: true }
         }
-        catch { }
+        catch (err) {
+          if ((err as any)?.code !== 'ENOENT') {
+            console.warn('[rari] Unexpected error resolving server component:', id, err)
+          }
+        }
       }
 
       return null
@@ -1751,7 +1771,11 @@ const ${componentName} = registerClientReference(
               namedExportName = namedExportMatch[1]
             }
           }
-          catch { }
+          catch (err) {
+            if ((err as any)?.code !== 'ENOENT') {
+              console.warn('[rari] Unexpected error reading component for export detection:', componentPath, err)
+            }
+          }
 
           const normalizedPath = registrationPath.replace(/\\/g, '/')
           const importPath = normalizedPath.startsWith('/') || /^[A-Z]:\//i.test(normalizedPath)

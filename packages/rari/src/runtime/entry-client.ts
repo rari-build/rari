@@ -636,6 +636,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
                 componentInfo.loading = false
                 componentInfo.loadPromise = undefined
                 console.error(`[rari] Failed to load component ${moduleInfo.id}:`, error)
+                throw error
               })
             }
 
