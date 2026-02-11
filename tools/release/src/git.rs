@@ -2,6 +2,10 @@ use anyhow::Result;
 use std::path::Path;
 use tokio::process::Command;
 
+fn tag_pattern_for(package_name: &str) -> String {
+    if package_name == "rari-binaries" { "v*".to_string() } else { format!("{}@*", package_name) }
+}
+
 pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec<String>> {
     let output = Command::new("git")
         .args([
@@ -21,30 +25,97 @@ pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec
 }
 
 pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> Result<Vec<String>> {
+    let tag_pattern = tag_pattern_for(package_name);
+
     let tag_output = Command::new("git")
-        .args(["tag", "-l", &format!("{}@*", package_name), "--sort=-version:refname"])
+        .args(["tag", "-l", &tag_pattern, "--sort=-version:refname"])
         .output()
         .await?;
+
+    if !tag_output.status.success() {
+        let stderr = String::from_utf8_lossy(&tag_output.stderr);
+        anyhow::bail!("Failed to list tags: {}", stderr);
+    }
 
     let tags = String::from_utf8_lossy(&tag_output.stdout);
     let latest_tag = tags.lines().next();
 
     if let Some(tag) = latest_tag {
-        let output = Command::new("git")
-            .args([
-                "log",
-                &format!("{}..HEAD", tag),
-                "--oneline",
-                "--",
-                &package_path.display().to_string(),
-            ])
-            .output()
-            .await?;
+        let range = format!("{}..HEAD", tag);
 
-        Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        if package_name == "rari-binaries" {
+            let output = Command::new("git")
+                .args([
+                    "log",
+                    &range,
+                    "--oneline",
+                    "--grep=^release:",
+                    "--invert-grep",
+                    "--",
+                    "crates/",
+                    "Cargo.toml",
+                    "Cargo.lock",
+                ])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                anyhow::bail!(
+                    "Failed to get git log for rari-binaries (range: {}):\nstdout: {}\nstderr: {}",
+                    range,
+                    stdout,
+                    stderr
+                );
+            }
+
+            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        } else {
+            let path_str = package_path.display().to_string();
+            let output = Command::new("git")
+                .args(["log", &range, "--oneline", "--", &path_str])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                anyhow::bail!(
+                    "Failed to get git log for {} (range: {}):\nstdout: {}\nstderr: {}",
+                    package_name,
+                    range,
+                    stdout,
+                    stderr
+                );
+            }
+
+            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        }
     } else {
         get_recent_commits(package_path, 10).await
     }
+}
+
+pub async fn get_previous_tag(
+    package_name: &str,
+    current_tag: Option<&str>,
+) -> Result<Option<String>> {
+    let tag_pattern = tag_pattern_for(package_name);
+
+    let tag_output = Command::new("git")
+        .args(["tag", "-l", &tag_pattern, "--sort=-version:refname"])
+        .output()
+        .await?;
+
+    if !tag_output.status.success() {
+        let stderr = String::from_utf8_lossy(&tag_output.stderr);
+        anyhow::bail!("Failed to list tags: {}", stderr);
+    }
+
+    let tags = String::from_utf8_lossy(&tag_output.stdout);
+
+    Ok(tags.lines().find(|tag| current_tag.is_none_or(|current| tag != &current)).map(String::from))
 }
 
 pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {
