@@ -411,8 +411,12 @@ async fn run_non_interactive(
 
         match crate::git::get_repo_info().await {
             Ok((owner, repo)) => {
-                for pkg in &released_packages {
-                    let release_url = pkg.create_github_release_url(&owner, &repo);
+                let release_urls: Vec<_> = released_packages
+                    .iter()
+                    .map(|pkg| (pkg, pkg.create_github_release_url(&owner, &repo)))
+                    .collect();
+
+                for (pkg, release_url) in &release_urls {
                     println!();
                     println!("  {} {}@{}", "→".cyan(), pkg.name, pkg.version);
                     println!("    {}", release_url.dimmed());
@@ -428,10 +432,9 @@ async fn run_non_interactive(
                 if input.trim().eq_ignore_ascii_case("y")
                     || input.trim().eq_ignore_ascii_case("yes")
                 {
-                    for pkg in &released_packages {
-                        let release_url = pkg.create_github_release_url(&owner, &repo);
+                    for (pkg, release_url) in &release_urls {
                         println!("  {} Opening {}@{}...", "→".cyan(), pkg.name, pkg.version);
-                        if let Err(e) = open::that(&release_url) {
+                        if let Err(e) = open::that(release_url) {
                             println!("  {} Failed to open browser: {}", "✗".red(), e);
                             println!("  {} URL: {}", "ℹ".blue(), release_url);
                         }
