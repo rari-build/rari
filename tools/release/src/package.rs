@@ -230,3 +230,40 @@ impl ReleaseType {
         ]
     }
 }
+
+impl ReleasedPackage {
+    pub fn create_github_release_url(&self, owner: &str, repo: &str) -> String {
+        let (title_text, tag_text) = if self.name == "rari-binaries" {
+            (format!("v{}", self.version), format!("v{}", self.version))
+        } else {
+            (format!("{}@{}", self.name, self.version), self.tag.clone())
+        };
+
+        let title = urlencoding::encode(&title_text);
+        let tag = urlencoding::encode(&tag_text);
+
+        let mut body = "## What's Changed\n\n".to_string();
+
+        if !self.commits.is_empty() {
+            for commit in &self.commits {
+                body.push_str(&format!("- {}\n", commit));
+            }
+        } else {
+            body.push_str("See CHANGELOG.md for details.\n");
+        }
+
+        if let Some(prev_tag) = &self.previous_tag {
+            body.push_str(&format!(
+                "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+                owner, repo, prev_tag, tag_text
+            ));
+        }
+
+        let body_encoded = urlencoding::encode(&body);
+
+        format!(
+            "https://github.com/{}/{}/releases/new?tag={}&title={}&body={}",
+            owner, repo, tag, title, body_encoded
+        )
+    }
+}

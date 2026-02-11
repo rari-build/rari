@@ -13,7 +13,6 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use package::ReleasedPackage;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     env,
@@ -413,7 +412,7 @@ async fn run_non_interactive(
         match crate::git::get_repo_info().await {
             Ok((owner, repo)) => {
                 for pkg in &released_packages {
-                    let release_url = create_github_release_url(&owner, &repo, pkg);
+                    let release_url = pkg.create_github_release_url(&owner, &repo);
                     println!();
                     println!("  {} {}@{}", "→".cyan(), pkg.name, pkg.version);
                     println!("    {}", release_url.dimmed());
@@ -430,7 +429,7 @@ async fn run_non_interactive(
                     || input.trim().eq_ignore_ascii_case("yes")
                 {
                     for pkg in &released_packages {
-                        let release_url = create_github_release_url(&owner, &repo, pkg);
+                        let release_url = pkg.create_github_release_url(&owner, &repo);
                         println!("  {} Opening {}@{}...", "→".cyan(), pkg.name, pkg.version);
                         if let Err(e) = open::that(&release_url) {
                             println!("  {} Failed to open browser: {}", "✗".red(), e);
@@ -453,39 +452,4 @@ async fn run_non_interactive(
     }
 
     Ok(())
-}
-
-fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> String {
-    let (title_text, tag_text) = if pkg.name == "rari-binaries" {
-        (format!("v{}", pkg.version), format!("v{}", pkg.version))
-    } else {
-        (format!("{}@{}", pkg.name, pkg.version), pkg.tag.clone())
-    };
-
-    let title = urlencoding::encode(&title_text);
-    let tag = urlencoding::encode(&tag_text);
-
-    let mut body = "## What's Changed\n\n".to_string();
-
-    if !pkg.commits.is_empty() {
-        for commit in &pkg.commits {
-            body.push_str(&format!("- {}\n", commit));
-        }
-    } else {
-        body.push_str("See CHANGELOG.md for details.\n");
-    }
-
-    if let Some(prev_tag) = &pkg.previous_tag {
-        body.push_str(&format!(
-            "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-            owner, repo, prev_tag, tag_text
-        ));
-    }
-
-    let body_encoded = urlencoding::encode(&body);
-
-    format!(
-        "https://github.com/{}/{}/releases/new?tag={}&title={}&body={}",
-        owner, repo, tag, title, body_encoded
-    )
 }
