@@ -32,8 +32,8 @@ catalogs:
       version: 0.8.14
   eslint:
     '@antfu/eslint-config':
-      specifier: ^7.4.2
-      version: 7.4.2
+      specifier: ^7.4.3
+      version: 7.4.3
     '@e18e/eslint-plugin':
       specifier: ^0.1.4
       version: 0.1.4
@@ -129,7 +129,7 @@ importers:
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:eslint
-        version: 7.4.2(@eslint-react/eslint-plugin@2.12.4(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.0(eslint@10.0.0(jiti@2.6.1)))(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
+        version: 7.4.3(@eslint-react/eslint-plugin@2.12.4(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.0(eslint@10.0.0(jiti@2.6.1)))(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
       '@e18e/eslint-plugin':
         specifier: catalog:eslint
         version: 0.1.4(eslint@10.0.0(jiti@2.6.1))
@@ -368,8 +368,8 @@ importers:
 
 packages:
 
-  '@antfu/eslint-config@7.4.2':
-    resolution: {integrity: sha512-GVAY3cejS3dehZZQU75ewej2soND9Wtd7cMaXWIHsRvH01v+e83UP5rFDDSLaFPx6J2h3GrldrJJz+FyFE4e1Q==}
+  '@antfu/eslint-config@7.4.3':
+    resolution: {integrity: sha512-qHOG2408wBz21x191n0Mm9r2q/PqMYul+YE+DUBqZMtJYUn+bd+Dh3g8LIkyItMJR+Xs9f9TKXJehZLRYxJlHg==}
     hasBin: true
     peerDependencies:
       '@angular-eslint/eslint-plugin': ^21.1.0
@@ -2454,8 +2454,8 @@ packages:
     peerDependencies:
       eslint: '*'
 
-  eslint-plugin-antfu@3.2.0:
-    resolution: {integrity: sha512-JTvBcA+gc2hf1wz418dLYtt0GCE3ltrZuriA4KhP/nPbL8W6vZtcDlWUlUfghUTAAFpHh7gp+qN8BbK+jNifgg==}
+  eslint-plugin-antfu@3.2.1:
+    resolution: {integrity: sha512-QVSpLoUnUfKE9FjFG4FQ5/zu/O+u8ejk1bIA0sir3KF+tHfaHJ/8o/Mg/rWy2vRPj7TEZG/zvib6lHEU4aSJ4A==}
     peerDependencies:
       eslint: '*'
 
@@ -2586,8 +2586,8 @@ packages:
     peerDependencies:
       eslint: '>=9.38.0'
 
-  eslint-plugin-unicorn@62.0.0:
-    resolution: {integrity: sha512-HIlIkGLkvf29YEiS/ImuDZQbP12gWyx5i3C6XrRxMvVdqMroCI9qoVYCoIl17ChN+U89pn9sVwLxhIWj5nEc7g==}
+  eslint-plugin-unicorn@63.0.0:
+    resolution: {integrity: sha512-Iqecl9118uQEXYh7adylgEmGfkn5es3/mlQTLLkd4pXkIk9CTGrAbeUux+YljSa2ohXCBmQQ0+Ej1kZaFgcfkA==}
     engines: {node: ^20.10.0 || >=21.0.0}
     peerDependencies:
       eslint: '>=9.38.0'
@@ -4010,7 +4010,7 @@ packages:
 
 snapshots:
 
-  '@antfu/eslint-config@7.4.2(@eslint-react/eslint-plugin@2.12.4(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.0(eslint@10.0.0(jiti@2.6.1)))(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))':
+  '@antfu/eslint-config@7.4.3(@eslint-react/eslint-plugin@2.12.4(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.0(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.0(eslint@10.0.0(jiti@2.6.1)))(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))':
     dependencies:
       '@antfu/install-pkg': 1.1.0
       '@clack/prompts': 1.0.0
@@ -4026,7 +4026,7 @@ snapshots:
       eslint-config-flat-gitignore: 2.1.0(eslint@10.0.0(jiti@2.6.1))
       eslint-flat-config-utils: 3.0.1
       eslint-merge-processors: 2.0.0(eslint@10.0.0(jiti@2.6.1))
-      eslint-plugin-antfu: 3.2.0(eslint@10.0.0(jiti@2.6.1))
+      eslint-plugin-antfu: 3.2.1(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-command: 3.4.0(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-import-lite: 0.5.0(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-jsdoc: 62.5.4(eslint@10.0.0(jiti@2.6.1))
@@ -4037,7 +4037,7 @@ snapshots:
       eslint-plugin-pnpm: 1.5.0(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-regexp: 3.0.0(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-toml: 1.0.4(eslint@10.0.0(jiti@2.6.1))
-      eslint-plugin-unicorn: 62.0.0(eslint@10.0.0(jiti@2.6.1))
+      eslint-plugin-unicorn: 63.0.0(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-unused-imports: 4.4.1(@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-vue: 10.7.0(@stylistic/eslint-plugin@5.8.0(eslint@10.0.0(jiti@2.6.1)))(@typescript-eslint/parser@8.55.0(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3))(eslint@10.0.0(jiti@2.6.1))(vue-eslint-parser@10.2.0(eslint@10.0.0(jiti@2.6.1)))
       eslint-plugin-yml: 3.1.2(eslint@10.0.0(jiti@2.6.1))
@@ -5767,7 +5767,7 @@ snapshots:
     dependencies:
       eslint: 10.0.0(jiti@2.6.1)
 
-  eslint-plugin-antfu@3.2.0(eslint@10.0.0(jiti@2.6.1)):
+  eslint-plugin-antfu@3.2.1(eslint@10.0.0(jiti@2.6.1)):
     dependencies:
       eslint: 10.0.0(jiti@2.6.1)
 
@@ -6012,17 +6012,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-unicorn@62.0.0(eslint@10.0.0(jiti@2.6.1)):
+  eslint-plugin-unicorn@63.0.0(eslint@10.0.0(jiti@2.6.1)):
     dependencies:
       '@babel/helper-validator-identifier': 7.28.5
       '@eslint-community/eslint-utils': 4.9.1(eslint@10.0.0(jiti@2.6.1))
-      '@eslint/plugin-kit': 0.4.1
       change-case: 5.4.4
       ci-info: 4.3.1
       clean-regexp: 1.0.0
       core-js-compat: 3.48.0
       eslint: 10.0.0(jiti@2.6.1)
-      esquery: 1.7.0
       find-up-simple: 1.0.1
       globals: 16.5.0
       indent-string: 5.0.0
