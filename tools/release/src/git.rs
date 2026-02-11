@@ -21,8 +21,11 @@ pub async fn get_recent_commits(package_path: &Path, limit: usize) -> Result<Vec
 }
 
 pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> Result<Vec<String>> {
+    let tag_pattern =
+        if package_name == "rari-binaries" { "v*" } else { &format!("{}@*", package_name) };
+
     let tag_output = Command::new("git")
-        .args(["tag", "-l", &format!("{}@*", package_name), "--sort=-version:refname"])
+        .args(["tag", "-l", tag_pattern, "--sort=-version:refname"])
         .output()
         .await?;
 
@@ -30,21 +33,50 @@ pub async fn get_commits_since_tag(package_name: &str, package_path: &Path) -> R
     let latest_tag = tags.lines().next();
 
     if let Some(tag) = latest_tag {
-        let output = Command::new("git")
-            .args([
-                "log",
-                &format!("{}..HEAD", tag),
-                "--oneline",
-                "--",
-                &package_path.display().to_string(),
-            ])
-            .output()
-            .await?;
+        let range = format!("{}..HEAD", tag);
 
-        Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        if package_name == "rari-binaries" {
+            let output = Command::new("git")
+                .args([
+                    "log",
+                    &range,
+                    "--oneline",
+                    "--grep=^release:",
+                    "--invert-grep",
+                    "--",
+                    "crates/",
+                    "Cargo.toml",
+                    "Cargo.lock",
+                ])
+                .output()
+                .await?;
+
+            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        } else {
+            let path_str = package_path.display().to_string();
+            let output = Command::new("git")
+                .args(["log", &range, "--oneline", "--", &path_str])
+                .output()
+                .await?;
+
+            Ok(String::from_utf8_lossy(&output.stdout).lines().map(String::from).collect())
+        }
     } else {
         get_recent_commits(package_path, 10).await
     }
+}
+
+pub async fn get_previous_tag(package_name: &str) -> Result<Option<String>> {
+    let tag_pattern =
+        if package_name == "rari-binaries" { "v*" } else { &format!("{}@*", package_name) };
+
+    let tag_output = Command::new("git")
+        .args(["tag", "-l", tag_pattern, "--sort=-version:refname"])
+        .output()
+        .await?;
+
+    let tags = String::from_utf8_lossy(&tag_output.stdout);
+    Ok(tags.lines().next().map(String::from))
 }
 
 pub async fn add_and_commit(message: &str, cwd: &Path) -> Result<()> {

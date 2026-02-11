@@ -112,6 +112,7 @@ pub struct ReleasedPackage {
     pub version: String,
     pub tag: String,
     pub commits: Vec<String>,
+    pub previous_tag: Option<String>,
 }
 
 impl Package {

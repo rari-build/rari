@@ -46,6 +46,7 @@ pub struct App {
     pub selected_version_idx: usize,
     pub version_types: Vec<ReleaseType>,
     pub recent_commits: Vec<String>,
+    pub previous_tag: Option<String>,
     pub publish_step: PublishStep,
     pub publish_progress: f64,
     pub status_messages: Vec<String>,
@@ -94,6 +95,7 @@ impl App {
             selected_version_idx: 0,
             version_types: ReleaseType::all(),
             recent_commits: vec![],
+            previous_tag: None,
             publish_step: PublishStep::Building,
             publish_progress: 0.0,
             status_messages: vec![],
@@ -124,6 +126,7 @@ impl App {
                     let first_path = unit.paths()[0];
                     self.recent_commits =
                         git::get_commits_since_tag(unit.name(), first_path).await?;
+                    self.previous_tag = git::get_previous_tag(unit.name()).await?;
                     self.screen = Screen::VersionSelection { package_idx };
                     self.selected_version_idx = 0;
                 }
@@ -540,6 +543,7 @@ impl App {
                         version: version.clone(),
                         tag: tag.clone(),
                         commits: self.recent_commits.clone(),
+                        previous_tag: self.previous_tag.clone(),
                     });
 
                     let has_more_packages =
@@ -659,10 +663,12 @@ fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> 
         body.push_str("See CHANGELOG.md for details.\n");
     }
 
-    body.push_str(&format!(
-        "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-        owner, repo, tag_text, tag_text
-    ));
+    if let Some(prev_tag) = &pkg.previous_tag {
+        body.push_str(&format!(
+            "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+            owner, repo, prev_tag, tag_text
+        ));
+    }
 
     let body_encoded = urlencoding::encode(&body);
 

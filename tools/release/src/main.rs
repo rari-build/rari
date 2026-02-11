@@ -217,6 +217,7 @@ async fn run_non_interactive(
 
         let first_path = unit.paths()[0];
         let commits = crate::git::get_commits_since_tag(unit_name, first_path).await?;
+        let previous_tag = crate::git::get_previous_tag(unit_name).await?;
         if !commits.is_empty() {
             println!("  {} Commits since last release:", "ℹ".blue().bold());
             for commit in commits.iter().take(5) {
@@ -387,6 +388,7 @@ async fn run_non_interactive(
             version: new_version.clone(),
             tag: tag.clone(),
             commits: commits.clone(),
+            previous_tag,
         });
     }
 
@@ -473,10 +475,12 @@ fn create_github_release_url(owner: &str, repo: &str, pkg: &ReleasedPackage) -> 
         body.push_str("See CHANGELOG.md for details.\n");
     }
 
-    body.push_str(&format!(
-        "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
-        owner, repo, tag_text, tag_text
-    ));
+    if let Some(prev_tag) = &pkg.previous_tag {
+        body.push_str(&format!(
+            "\n**Full Changelog**: https://github.com/{}/{}/compare/{}...{}",
+            owner, repo, prev_tag, tag_text
+        ));
+    }
 
     let body_encoded = urlencoding::encode(&body);
 
