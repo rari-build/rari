@@ -1,4 +1,28 @@
+## [rari@0.9.0] - 2026-02-12
+
+### 🚀 Features
+
+- *(runtime)* Split client components from main bundle
+- *(vite)* Add import graph tracking for client-only component detection
+
+### 🐛 Bug Fixes
+
+- *(runtime)* Improve error handling in file operations and component loading
+
+### 🚜 Refactor
+
+- *(runtime)* Extract component loading logic and improve client component resolution
+- *(runtime)* Unify component loading promise handling
+- *(runtime)* Improve component loading and path normalization
+
+### 🎨 Styling
+
+- Format conditional statements and update linting rules
 ## [rari@0.8.14] - 2026-02-05
+
+### 💼 Other
+
+- Rari@0.8.14
 
 ### ⚙️ Miscellaneous Tasks
 
