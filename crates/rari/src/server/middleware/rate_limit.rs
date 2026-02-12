@@ -2,14 +2,14 @@ use axum::{body::Body, extract::ConnectInfo, http::Request, middleware::Next, re
 use governor::middleware::StateInformationMiddleware;
 use std::net::SocketAddr;
 use tower_governor::{
-    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor,
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
 };
 
 use crate::server::config::Config;
 
 pub fn create_rate_limit_layer(
     config: &Config,
-) -> Option<GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body>> {
+) -> Option<GovernorLayer<SmartIpKeyExtractor, StateInformationMiddleware, Body>> {
     if !config.rate_limit.enabled {
         return None;
     }
@@ -18,6 +18,7 @@ pub fn create_rate_limit_layer(
         .per_second(config.rate_limit.requests_per_second as u64)
         .burst_size(config.rate_limit.burst_size)
         .use_headers()
+        .key_extractor(SmartIpKeyExtractor)
         .finish()
         .expect("Failed to create rate limit configuration");
 
@@ -26,7 +27,7 @@ pub fn create_rate_limit_layer(
 
 pub fn create_strict_rate_limit_layer(
     requests_per_minute: Option<u32>,
-) -> GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body> {
+) -> GovernorLayer<SmartIpKeyExtractor, StateInformationMiddleware, Body> {
     let rpm = requests_per_minute.unwrap_or(10);
 
     let period_secs = if rpm > 0 { 60 / rpm } else { 60 };
@@ -38,6 +39,7 @@ pub fn create_strict_rate_limit_layer(
         .period(std::time::Duration::from_secs(period_secs as u64))
         .burst_size(burst_size)
         .use_headers()
+        .key_extractor(SmartIpKeyExtractor)
         .finish()
         .expect("Failed to create strict rate limit configuration");
 

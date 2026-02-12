@@ -78,9 +78,9 @@ impl EndpointRateLimiters {
     pub fn for_environment(is_production: bool) -> Self {
         if is_production {
             Self {
-                og_generation: Arc::new(IpRateLimiter::new(10, 60)),
-                csrf_token: Arc::new(IpRateLimiter::new(60, 60)),
-                image_optimization: Arc::new(IpRateLimiter::new(30, 60)),
+                og_generation: Arc::new(IpRateLimiter::new(100, 60)),
+                csrf_token: Arc::new(IpRateLimiter::new(300, 60)),
+                image_optimization: Arc::new(IpRateLimiter::new(200, 60)),
             }
         } else {
             Self {

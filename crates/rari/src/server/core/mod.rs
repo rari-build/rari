@@ -175,7 +175,9 @@ impl Server {
         };
 
         let endpoint_rate_limiters =
-            crate::server::security::ip_rate_limiter::EndpointRateLimiters::new();
+            crate::server::security::ip_rate_limiter::EndpointRateLimiters::for_environment(
+                config.is_production(),
+            );
         endpoint_rate_limiters.start_cleanup_tasks();
 
         let state = ServerState {

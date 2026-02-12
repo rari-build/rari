@@ -1,7 +1,8 @@
 use crate::server::ServerState;
+use crate::server::utils::ip_extractor::extract_client_ip;
 use axum::{
     extract::{ConnectInfo, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
 };
 use serde::Serialize;
@@ -15,6 +16,7 @@ pub struct CsrfTokenResponse {
 pub async fn get_csrf_token(
     State(state): State<ServerState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let Some(csrf_manager) = &state.csrf_manager else {
         return Ok((
@@ -25,7 +27,7 @@ pub async fn get_csrf_token(
             .into_response());
     };
 
-    let ip = addr.ip().to_string();
+    let ip = extract_client_ip(&headers, &addr);
 
     if let Err(retry_after) = state.endpoint_rate_limiters.csrf_token.check(&ip) {
         return Ok((

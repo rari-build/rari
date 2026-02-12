@@ -1,3 +1,4 @@
+use crate::server::utils::ip_extractor::extract_client_ip;
 use axum::{
     extract::{ConnectInfo, Request},
     http::StatusCode,
@@ -187,7 +188,7 @@ pub async fn spam_blocker_middleware(
 
     let path = req.uri().path();
     let user_agent = req.headers().get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("");
-    let ip = addr.ip().to_string();
+    let ip = extract_client_ip(req.headers(), &addr);
 
     if let Some(_reason) = spam_blocker.check_blocked(path, user_agent, &ip) {
         #[cfg(debug_assertions)]
