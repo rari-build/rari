@@ -33,10 +33,6 @@ export default defineConfig({
                     return 'posthog'
                   if (moduleId.includes('@sentry'))
                     return 'sentry'
-                  if (moduleId.includes('react-dom'))
-                    return 'react-dom'
-                  if (moduleId.includes('react'))
-                    return 'react'
 
                   return 'vendor'
                 }
