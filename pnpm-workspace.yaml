@@ -14,7 +14,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.7.1
-    posthog-js: ^1.345.3
+    posthog-js: ^1.345.5
   build:
     rolldown: 1.0.0-rc.2
     rolldown-vite: ^7.3.1
@@ -44,7 +44,7 @@ catalogs:
   monitoring:
     '@sentry/react': ^10.38.0
   react:
-    '@types/react': ^19.2.13
+    '@types/react': ^19.2.14
     '@types/react-dom': ^19.2.3
     react: ^19.2.4
     react-dom: ^19.2.4
@@ -56,7 +56,7 @@ catalogs:
     vitest: ^4.0.18
   typescript:
     '@types/node': ^25.2.3
-    '@typescript/native-preview': ^7.0.0-dev.20260210.1
+    '@typescript/native-preview': ^7.0.0-dev.20260211.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
