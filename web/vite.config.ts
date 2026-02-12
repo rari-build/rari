@@ -33,8 +33,6 @@ export default defineConfig({
                     return 'posthog'
                   if (moduleId.includes('@sentry'))
                     return 'sentry'
-
-                  return 'vendor'
                 }
 
                 return null
