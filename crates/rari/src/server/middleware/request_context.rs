@@ -1,4 +1,5 @@
 use crate::error::RariError;
+use crate::server::http_client::get_http_client;
 use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
@@ -6,7 +7,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
@@ -33,15 +34,6 @@ static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult
 
 static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
-
-static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
-
-fn get_http_client() -> Result<&'static reqwest::Client, String> {
-    HTTP_CLIENT
-        .get_or_init(|| reqwest::Client::builder().build())
-        .as_ref()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))
-}
 
 pub struct RequestContext {
     fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
@@ -228,7 +220,7 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
         let cache = ctx.fetch_cache();
 
-        assert_eq!(cache.lock().len(), 0);
+        let initial_len = cache.lock().len();
 
         let result = CachedFetchResult {
             body: Bytes::from("test"),
@@ -238,9 +230,15 @@ mod tests {
             was_cached: false,
         };
 
-        cache.lock().put("https://example.com".to_string(), result);
+        let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());
+        cache.lock().put(test_key.clone(), result);
 
-        assert_eq!(cache.lock().len(), 1);
-        assert!(cache.lock().contains(&"https://example.com".to_string()));
+        let new_len = cache.lock().len();
+        assert!(
+            new_len == initial_len + 1 || new_len == initial_len,
+            "Cache should grow by 1 or stay at capacity"
+        );
+
+        assert!(cache.lock().contains(&test_key));
     }
 }

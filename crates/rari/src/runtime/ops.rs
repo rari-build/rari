@@ -1,9 +1,9 @@
+use crate::server::http_client::get_http_client;
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -329,15 +329,6 @@ pub async fn op_fetch_with_cache(
             }
         }
     }
-}
-
-static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
-
-fn get_http_client() -> Result<&'static reqwest::Client, String> {
-    HTTP_CLIENT
-        .get_or_init(|| reqwest::Client::builder().build())
-        .as_ref()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
 async fn perform_simple_fetch(
