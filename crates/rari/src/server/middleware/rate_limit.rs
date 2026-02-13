@@ -45,7 +45,52 @@ pub fn create_strict_rate_limit_layer(
 }
 
 pub async fn rate_limit_logger(request: Request<Body>, next: Next) -> Response {
-    next.run(request).await
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+
+    let client_ip = request
+        .headers()
+        .get("x-real-ip")
+        .or_else(|| request.headers().get("x-forwarded-for"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let response = next.run(request).await;
+
+    let status = response.status();
+    if status == 429 {
+        let retry_after = response
+            .headers()
+            .get("retry-after")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("unknown");
+
+        tracing::warn!(
+            method = %method,
+            uri = %uri,
+            client_ip = %client_ip,
+            status = %status,
+            retry_after = %retry_after,
+            "Rate limit exceeded"
+        );
+    } else if response.headers().contains_key("x-ratelimit-remaining") {
+        let remaining = response
+            .headers()
+            .get("x-ratelimit-remaining")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("unknown");
+
+        tracing::debug!(
+            method = %method,
+            uri = %uri,
+            client_ip = %client_ip,
+            remaining = %remaining,
+            "Rate limit check"
+        );
+    }
+
+    response
 }
 
 #[cfg(test)]
@@ -96,17 +141,5 @@ mod tests {
         assert_eq!(config.requests_per_second, 1000);
         assert_eq!(config.burst_size, 2000);
         assert_eq!(config.revalidate_requests_per_minute, 20);
-    }
-
-    #[test]
-    fn test_strict_rate_limit_layer() {
-        let _layer = create_strict_rate_limit_layer(Some(10));
-        assert!(true);
-    }
-
-    #[test]
-    fn test_strict_rate_limit_layer_default() {
-        let _layer = create_strict_rate_limit_layer(None);
-        assert!(true);
     }
 }

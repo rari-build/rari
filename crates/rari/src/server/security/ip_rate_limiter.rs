@@ -58,19 +58,12 @@ impl IpRateLimiter {
         let now = Instant::now();
         let mut requests = self.requests.lock();
 
-        let keys_to_remove: Vec<String> = requests
-            .iter()
-            .filter_map(|(key, (_, window_start))| {
-                if now.duration_since(*window_start) >= self.window_duration * 2 {
-                    Some(key.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        for key in keys_to_remove {
-            requests.pop(&key);
+        while let Some((_, (_, window_start))) = requests.peek_lru() {
+            if now.duration_since(*window_start) >= self.window_duration * 2 {
+                requests.pop_lru();
+            } else {
+                break;
+            }
         }
     }
 
