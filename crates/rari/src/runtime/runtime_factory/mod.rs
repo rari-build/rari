@@ -1,4 +1,4 @@
-mod constants;
+pub mod constants;
 mod deno_runtime;
 mod executor;
 mod interface;

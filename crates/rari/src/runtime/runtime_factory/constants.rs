@@ -93,6 +93,113 @@ pub const PROMISE_EXTRACT_SCRIPT: &str = r#"
 })()
 "#;
 
+pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
+(function() {
+    if (typeof globalThis === 'undefined' || typeof globalThis.fetch !== 'function') {
+        return { installed: false, reason: 'fetch not available' };
+    }
+
+    const originalFetch = globalThis.fetch;
+    const requestDedupeMap = new Map();
+
+    function generateCacheKey(input, init) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method || 'GET';
+        const headers = JSON.stringify(init?.headers || {});
+        const body = init?.body ? String(init.body) : '';
+        return `${method}:${url}:${headers}:${body}`;
+    }
+
+    function shouldCache(init) {
+        if (init?.cache === 'no-store' || init?.cache === 'no-cache') {
+            return false;
+        }
+        if (init?.rari?.revalidate === false || init?.next?.revalidate === false) {
+            return false;
+        }
+        const method = init?.method?.toUpperCase() || 'GET';
+        if (method !== 'GET' && method !== 'HEAD') {
+            return false;
+        }
+        return true;
+    }
+
+    async function fetchWithRustCache(input, init) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const options = {};
+
+        if (init?.headers) {
+            const headers = new Headers(init.headers);
+            const headerPairs = [];
+            headers.forEach((value, key) => {
+                headerPairs.push(`${key}:${value}`);
+            });
+            if (headerPairs.length > 0) {
+                options.headers = headerPairs.join(',');
+            }
+        }
+
+        const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate;
+        if (typeof revalidate === 'number') {
+            options.timeout = String(revalidate * 1000);
+        }
+
+        try {
+            const result = await Deno.core.ops.op_fetch_with_cache(url, JSON.stringify(options));
+            if (!result.ok) {
+                throw new Error(result.error || 'Fetch failed');
+            }
+            return new Response(result.body, {
+                status: result.status,
+                statusText: result.status === 200 ? 'OK' : 'Error',
+            });
+        } catch (error) {
+            return originalFetch(input, init);
+        }
+    }
+
+    const cachedFetch = async function(input, init) {
+        if (!shouldCache(init)) {
+            return originalFetch(input, init);
+        }
+
+        const cacheKey = generateCacheKey(input, init);
+        const inFlight = requestDedupeMap.get(cacheKey);
+
+        if (inFlight) {
+            return inFlight;
+        }
+
+        const hasRustOp = typeof Deno?.core?.ops?.op_fetch_with_cache === 'function';
+
+        if (hasRustOp) {
+            const promise = fetchWithRustCache(input, init);
+            requestDedupeMap.set(cacheKey, promise);
+            try {
+                const response = await promise;
+                return response;
+            } finally {
+                requestDedupeMap.delete(cacheKey);
+            }
+        } else {
+            const promise = originalFetch(input, init);
+            requestDedupeMap.set(cacheKey, promise);
+            try {
+                const response = await promise;
+                return response;
+            } finally {
+                requestDedupeMap.delete(cacheKey);
+            }
+        }
+    };
+
+    globalThis.fetch = cachedFetch;
+    globalThis.__rariFetchCacheInstalled = true;
+
+    return { installed: true, hasRustOp: typeof Deno?.core?.ops?.op_fetch_with_cache === 'function' };
+})()
+"#;
+
 pub fn is_critical_error(error: &RariError) -> bool {
     let error_str = error.to_string();
     error_str.contains("assertion") || error_str.contains("panicked")

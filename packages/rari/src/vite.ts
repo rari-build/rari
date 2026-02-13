@@ -1,3 +1,5 @@
+import './fetch-cache'
+
 export type {
   ApiRouteHandlers,
   RouteContext,

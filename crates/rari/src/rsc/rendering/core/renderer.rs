@@ -237,6 +237,11 @@ globalThis['~errors'].batch.push({{
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await?;
 
+        use crate::runtime::runtime_factory::constants::FETCH_CACHE_INIT_SCRIPT;
+        self.runtime
+            .execute_script("init_fetch_cache".to_string(), FETCH_CACHE_INIT_SCRIPT.to_string())
+            .await?;
+
         self.initialized = true;
 
         Ok(())
