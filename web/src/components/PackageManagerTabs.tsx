@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import type { PackageManager } from '@/providers/PackageManagerProvider'
 import { highlightCommand } from '@/lib/highlight-command'
 import { useClipboard } from '@/lib/use-clipboard'
+import { usePackageManager } from '@/providers/PackageManagerProvider'
 import Bun from './icons/Bun'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
@@ -10,8 +11,6 @@ import Deno from './icons/Deno'
 import Npm from './icons/Npm'
 import Pnpm from './icons/Pnpm'
 import Yarn from './icons/Yarn'
-
-type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun' | 'deno'
 
 interface PackageManagerTabsProps {
   commands: {
@@ -32,7 +31,7 @@ const packageManagerIcons: Record<PackageManager, React.ComponentType<{ classNam
 }
 
 export default function PackageManagerTabs({ commands }: PackageManagerTabsProps) {
-  const [activeTab, setActiveTab] = useState<PackageManager>('pnpm')
+  const { packageManager: activeTab, setPackageManager: setActiveTab } = usePackageManager()
   const { copied, copyToClipboard } = useClipboard()
 
   return (
