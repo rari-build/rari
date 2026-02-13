@@ -34,7 +34,7 @@ export async function getLastCommitDate(filePath: string): Promise<string | null
 
     const response = await fetch(url, {
       headers: getGitHubHeaders(),
-      // rari: { revalidate: 3600 },
+      rari: { revalidate: 3600 },
     })
 
     if (!response.ok) {
@@ -70,7 +70,7 @@ async function getRepoInfo(): Promise<GitHubRepo | null> {
 
     const response = await fetch(url, {
       headers: getGitHubHeaders(),
-      // rari: { revalidate: 3600 },
+      rari: { revalidate: 3600 },
     })
 
     if (!response.ok) {
