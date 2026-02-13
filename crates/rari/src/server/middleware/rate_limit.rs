@@ -1,9 +1,16 @@
-use axum::{body::Body, http::Request, middleware::Next, response::Response};
+use axum::{
+    body::Body,
+    extract::ConnectInfo,
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::Response,
+};
 use governor::middleware::StateInformationMiddleware;
+use std::net::SocketAddr;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::server::config::Config;
-use crate::server::utils::ip_extractor::RariIpKeyExtractor;
+use crate::server::utils::ip_extractor::{RariIpKeyExtractor, extract_client_ip};
 
 pub fn create_rate_limit_layer(
     config: &Config,
@@ -44,22 +51,20 @@ pub fn create_strict_rate_limit_layer(
     GovernorLayer::new(governor_conf)
 }
 
-pub async fn rate_limit_logger(request: Request<Body>, next: Next) -> Response {
+pub async fn rate_limit_logger(
+    ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
     let method = request.method().clone();
     let uri = request.uri().clone();
 
-    let client_ip = request
-        .headers()
-        .get("x-real-ip")
-        .or_else(|| request.headers().get("x-forwarded-for"))
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let client_ip = extract_client_ip(request.headers(), &socket_addr);
 
     let response = next.run(request).await;
 
     let status = response.status();
-    if status == 429 {
+    if status == StatusCode::TOO_MANY_REQUESTS {
         let retry_after = response
             .headers()
             .get("retry-after")
