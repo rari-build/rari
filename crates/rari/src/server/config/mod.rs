@@ -118,9 +118,15 @@ impl Default for RateLimitConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpamBlockerConfig {
     pub enabled: bool,
+}
+
+impl Default for SpamBlockerConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

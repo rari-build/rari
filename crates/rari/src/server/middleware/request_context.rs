@@ -2,10 +2,13 @@ use crate::error::RariError;
 use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
+use lru::LruCache;
+use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use std::sync::{Arc, LazyLock};
+use std::num::NonZeroUsize;
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Instant;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -14,15 +17,32 @@ pub struct CachedFetchResult {
     pub status: u16,
     pub headers: HeaderMap,
     pub cached_at: Instant,
+    pub was_cached: bool,
 }
 type InFlightFetches =
-    Arc<DashMap<String, Arc<Mutex<Option<Result<CachedFetchResult, RariError>>>>>>;
+    Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
 
-static GLOBAL_FETCH_CACHE: LazyLock<Arc<DashMap<String, CachedFetchResult>>> =
+const MAX_CACHE_ENTRIES: usize = 1000;
+
+static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult>>>> =
+    LazyLock::new(|| {
+        Arc::new(Mutex::new(LruCache::new(
+            NonZeroUsize::new(MAX_CACHE_ENTRIES).expect("MAX_CACHE_ENTRIES must be non-zero"),
+        )))
+    });
+
+static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
 
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn get_http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT
+        .get_or_init(|| reqwest::Client::builder().build().expect("Failed to create HTTP client"))
+}
+
 pub struct RequestContext {
-    fetch_cache: Arc<DashMap<String, CachedFetchResult>>,
+    fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
     in_flight_fetches: InFlightFetches,
     request_id: String,
     start_time: Instant,
@@ -33,7 +53,7 @@ impl RequestContext {
     pub fn new(route_path: String) -> Self {
         Self {
             fetch_cache: GLOBAL_FETCH_CACHE.clone(),
-            in_flight_fetches: Arc::new(DashMap::new()),
+            in_flight_fetches: GLOBAL_IN_FLIGHT_FETCHES.clone(),
             request_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
             route_path,
@@ -56,15 +76,20 @@ impl RequestContext {
         self.start_time.elapsed()
     }
 
-    pub fn fetch_cache(&self) -> &Arc<DashMap<String, CachedFetchResult>> {
+    pub fn fetch_cache(&self) -> &Arc<Mutex<LruCache<String, CachedFetchResult>>> {
         &self.fetch_cache
     }
 
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
-        if options.is_empty() {
+        let cache_relevant_options: FxHashMap<_, _> = options
+            .iter()
+            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout"))
+            .collect();
+
+        if cache_relevant_options.is_empty() {
             url.to_string()
         } else {
-            let mut sorted_opts: Vec<_> = options.iter().collect();
+            let mut sorted_opts: Vec<_> = cache_relevant_options.iter().collect();
             sorted_opts.sort_by_key(|(k, _)| *k);
 
             let opts_str = sorted_opts
@@ -84,25 +109,29 @@ impl RequestContext {
     ) -> Result<CachedFetchResult, RariError> {
         let cache_key = Self::generate_cache_key(url, &options);
 
-        if let Some(cached) = self.fetch_cache.get(&cache_key) {
-            let ttl_seconds = options
-                .get("cacheTTLMs")
-                .and_then(|t| t.parse::<u64>().ok())
-                .map(|ms| ms / 1000)
-                .unwrap_or(60);
+        {
+            let mut cache = self.fetch_cache.lock();
+            if let Some(cached) = cache.get(&cache_key) {
+                let ttl_seconds = options
+                    .get("cacheTTLMs")
+                    .and_then(|t| t.parse::<u64>().ok())
+                    .map(|ms| ms.div_ceil(1000))
+                    .unwrap_or(60);
 
-            let elapsed = cached.cached_at.elapsed().as_secs();
+                let elapsed = cached.cached_at.elapsed().as_secs();
 
-            if elapsed < ttl_seconds {
-                return Ok(cached.value().clone());
+                if elapsed < ttl_seconds {
+                    let mut result = cached.clone();
+                    result.was_cached = true;
+                    return Ok(result);
+                }
+                cache.pop(&cache_key);
             }
-            drop(cached);
-            self.fetch_cache.remove(&cache_key);
         }
 
         let fetch_lock = {
             let entry = self.in_flight_fetches.entry(cache_key.clone());
-            entry.or_insert_with(|| Arc::new(Mutex::new(None))).clone()
+            entry.or_insert_with(|| Arc::new(TokioMutex::new(None))).clone()
         };
 
         let mut guard = fetch_lock.lock().await;
@@ -116,7 +145,8 @@ impl RequestContext {
         *guard = Some(fetch_result.clone());
 
         if let Ok(ref cached_result) = fetch_result {
-            self.fetch_cache.insert(cache_key.clone(), cached_result.clone());
+            let mut cache = self.fetch_cache.lock();
+            cache.put(cache_key.clone(), cached_result.clone());
         }
 
         drop(guard);
@@ -130,14 +160,14 @@ impl RequestContext {
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
-        let client = reqwest::Client::new();
+        let client = get_http_client();
         let mut request = client.get(url);
 
-        if let Some(headers_str) = options.get("headers") {
-            for header_pair in headers_str.split(',') {
-                if let Some((key, value)) = header_pair.split_once(':') {
-                    request = request.header(key.trim(), value.trim());
-                }
+        if let Some(headers_str) = options.get("headers")
+            && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
+        {
+            for (key, value) in pairs {
+                request = request.header(key.as_str(), value.as_str());
             }
         }
 
@@ -157,7 +187,13 @@ impl RequestContext {
             .await
             .map_err(|e| RariError::network(format!("Failed to read response body: {}", e)))?;
 
-        Ok(CachedFetchResult { body, status, headers, cached_at: Instant::now() })
+        Ok(CachedFetchResult {
+            body,
+            status,
+            headers,
+            cached_at: Instant::now(),
+            was_cached: false,
+        })
     }
 }
 
@@ -179,18 +215,19 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
         let cache = ctx.fetch_cache();
 
-        assert_eq!(cache.len(), 0);
+        assert_eq!(cache.lock().len(), 0);
 
         let result = CachedFetchResult {
             body: Bytes::from("test"),
             status: 200,
             headers: HeaderMap::new(),
             cached_at: Instant::now(),
+            was_cached: false,
         };
 
-        cache.insert("https://example.com".to_string(), result);
+        cache.lock().put("https://example.com".to_string(), result);
 
-        assert_eq!(cache.len(), 1);
-        assert!(cache.contains_key("https://example.com"));
+        assert_eq!(cache.lock().len(), 1);
+        assert!(cache.lock().contains(&"https://example.com".to_string()));
     }
 }

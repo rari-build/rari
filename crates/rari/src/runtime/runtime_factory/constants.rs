@@ -137,7 +137,8 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
         if (init?.cache === 'no-store' || init?.cache === 'no-cache') {
             return false;
         }
-        if (init?.rari?.revalidate === false || init?.next?.revalidate === false) {
+        const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate;
+        if (revalidate === false || revalidate === 0) {
             return false;
         }
         const method = init?.method?.toUpperCase() || 'GET';
@@ -183,12 +184,38 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
             }
 
             if (!responseHeaders.has('content-type')) {
-                if (url.includes('.json') || result.body.trim().startsWith('{') || result.body.trim().startsWith('[')) {
-                    responseHeaders.set('content-type', 'application/json');
-                } else if (url.includes('.html')) {
-                    responseHeaders.set('content-type', 'text/html');
-                } else {
-                    responseHeaders.set('content-type', 'text/plain');
+                let detectedType = 'text/plain';
+                let detectionMethod = 'default';
+
+                const urlPath = url.split('?')[0].split('#')[0];
+                const extensionMatch = urlPath.match(/\.([^./]+)$/);
+                const extension = extensionMatch ? extensionMatch[1].toLowerCase() : null;
+
+                if (extension === 'json') {
+                    detectedType = 'application/json';
+                    detectionMethod = 'extension';
+                } else if (extension === 'html' || extension === 'htm') {
+                    detectedType = 'text/html';
+                    detectionMethod = 'extension';
+                } else if (extension === 'xml') {
+                    detectedType = 'application/xml';
+                    detectionMethod = 'extension';
+                } else if (extension === 'txt') {
+                    detectedType = 'text/plain';
+                    detectionMethod = 'extension';
+                } else if (result.body && result.body.length > 0 && result.body.length < 10000) {
+                    const trimmed = result.body.trim();
+                    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                        detectedType = 'application/json';
+                        detectionMethod = 'body-sniff';
+                    }
+                }
+
+                responseHeaders.set('content-type', detectedType);
+
+                if (typeof console !== 'undefined' && console.debug) {
+                    console.debug(`[Fetch Cache] Content-Type fallback: ${detectedType} (${detectionMethod}) for ${url}`);
                 }
             }
 

@@ -229,6 +229,25 @@ pub struct FetchOpState {
         Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
 }
 
+fn http_status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        301 => "Moved Permanently",
+        302 => "Found",
+        304 => "Not Modified",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+        _ => "Unknown",
+    }
+}
+
 #[allow(clippy::disallowed_methods)]
 #[op2]
 #[serde]
@@ -255,37 +274,26 @@ pub async fn op_fetch_with_cache(
                 let mut headers_obj = serde_json::Map::new();
                 for (name, value) in result.headers.iter() {
                     if let Ok(value_str) = value.to_str() {
-                        headers_obj.insert(
-                            name.as_str().to_string(),
-                            serde_json::Value::String(value_str.to_string()),
-                        );
+                        let key = name.as_str().to_string();
+                        if let Some(existing) = headers_obj.get_mut(&key) {
+                            if let Some(s) = existing.as_str() {
+                                *existing =
+                                    serde_json::Value::String(format!("{}, {}", s, value_str));
+                            }
+                        } else {
+                            headers_obj
+                                .insert(key, serde_json::Value::String(value_str.to_string()));
+                        }
                     }
                 }
-
-                let status_text = match result.status {
-                    200 => "OK",
-                    201 => "Created",
-                    204 => "No Content",
-                    301 => "Moved Permanently",
-                    302 => "Found",
-                    304 => "Not Modified",
-                    400 => "Bad Request",
-                    401 => "Unauthorized",
-                    403 => "Forbidden",
-                    404 => "Not Found",
-                    500 => "Internal Server Error",
-                    502 => "Bad Gateway",
-                    503 => "Service Unavailable",
-                    _ => "Unknown",
-                };
 
                 Ok(serde_json::json!({
                     "ok": true,
                     "status": result.status,
-                    "statusText": status_text,
+                    "statusText": http_status_text(result.status),
                     "body": body_str,
                     "headers": headers_obj,
-                    "cached": true
+                    "cached": result.was_cached
                 }))
             }
             Err(e) => {
@@ -304,22 +312,7 @@ pub async fn op_fetch_with_cache(
             Ok((status, body)) => Ok(serde_json::json!({
                 "ok": (200..300).contains(&status),
                 "status": status,
-                "statusText": match status {
-                    200 => "OK",
-                    201 => "Created",
-                    204 => "No Content",
-                    301 => "Moved Permanently",
-                    302 => "Found",
-                    304 => "Not Modified",
-                    400 => "Bad Request",
-                    401 => "Unauthorized",
-                    403 => "Forbidden",
-                    404 => "Not Found",
-                    500 => "Internal Server Error",
-                    502 => "Bad Gateway",
-                    503 => "Service Unavailable",
-                    _ => "Unknown"
-                },
+                "statusText": http_status_text(status),
                 "body": body,
                 "headers": {},
                 "cached": false
@@ -354,11 +347,11 @@ async fn perform_simple_fetch(
     let client = get_http_client()?;
     let mut request = client.get(url);
 
-    if let Some(headers_str) = options.get("headers") {
-        for header_pair in headers_str.split(',') {
-            if let Some((key, value)) = header_pair.split_once(':') {
-                request = request.header(key.trim(), value.trim());
-            }
+    if let Some(headers_str) = options.get("headers")
+        && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
+    {
+        for (key, value) in pairs {
+            request = request.header(key.as_str(), value.as_str());
         }
     }
 
