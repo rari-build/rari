@@ -90,11 +90,11 @@ impl RequestContext {
                 .iter()
                 .map(|(k, v)| {
                     if k.as_str() == "headers" && v.len() > 100 {
-                        use std::collections::hash_map::DefaultHasher;
-                        use std::hash::{Hash, Hasher};
-                        let mut hasher = DefaultHasher::new();
-                        v.hash(&mut hasher);
-                        format!("{}=h:{:x}", k, hasher.finish())
+                        use sha2::{Digest, Sha256};
+                        let mut hasher = Sha256::new();
+                        hasher.update(v.as_bytes());
+                        let hash = hasher.finalize();
+                        format!("{}=h:{}", k, hex::encode(&hash[..8]))
                     } else {
                         format!("{}={}", k, v)
                     }
@@ -116,15 +116,12 @@ impl RequestContext {
         {
             let mut cache = self.fetch_cache.lock();
             if let Some(cached) = cache.get(&cache_key) {
-                let ttl_seconds = options
-                    .get("cacheTTLMs")
-                    .and_then(|t| t.parse::<u64>().ok())
-                    .map(|ms| ms.div_ceil(1000))
-                    .unwrap_or(60);
+                let ttl_ms =
+                    options.get("cacheTTLMs").and_then(|t| t.parse::<u64>().ok()).unwrap_or(60_000);
 
-                let elapsed = cached.cached_at.elapsed().as_secs();
+                let elapsed_ms = cached.cached_at.elapsed().as_millis();
 
-                if elapsed < ttl_seconds {
+                if elapsed_ms < ttl_ms as u128 {
                     let mut result = cached.clone();
                     result.was_cached = true;
                     return Ok(result);
@@ -144,6 +141,22 @@ impl RequestContext {
             return result.clone();
         }
 
+        struct CleanupGuard<'a> {
+            in_flight_fetches: &'a InFlightFetches,
+            cache_key: String,
+        }
+
+        impl<'a> Drop for CleanupGuard<'a> {
+            fn drop(&mut self) {
+                self.in_flight_fetches.remove(&self.cache_key);
+            }
+        }
+
+        let _cleanup = CleanupGuard {
+            in_flight_fetches: &self.in_flight_fetches,
+            cache_key: cache_key.clone(),
+        };
+
         let fetch_result = self.perform_fetch(url, &options).await;
 
         *guard = Some(fetch_result.clone());
@@ -154,7 +167,6 @@ impl RequestContext {
         }
 
         drop(guard);
-        self.in_flight_fetches.remove(&cache_key);
 
         fetch_result
     }

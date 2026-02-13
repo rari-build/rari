@@ -248,6 +248,23 @@ fn http_status_text(status: u16) -> &'static str {
     }
 }
 
+fn headers_to_json(headers: &axum::http::HeaderMap) -> serde_json::Map<String, serde_json::Value> {
+    let mut headers_obj = serde_json::Map::new();
+    for (name, value) in headers.iter() {
+        if let Ok(value_str) = value.to_str() {
+            let key = name.as_str().to_string();
+            if let Some(existing) = headers_obj.get_mut(&key) {
+                if let Some(s) = existing.as_str() {
+                    *existing = serde_json::Value::String(format!("{}, {}", s, value_str));
+                }
+            } else {
+                headers_obj.insert(key, serde_json::Value::String(value_str.to_string()));
+            }
+        }
+    }
+    headers_obj
+}
+
 #[allow(clippy::disallowed_methods)]
 #[op2]
 #[serde]
@@ -270,22 +287,7 @@ pub async fn op_fetch_with_cache(
         match ctx.fetch_with_cache(&url, options).await {
             Ok(result) => {
                 let body_str = String::from_utf8_lossy(&result.body).to_string();
-
-                let mut headers_obj = serde_json::Map::new();
-                for (name, value) in result.headers.iter() {
-                    if let Ok(value_str) = value.to_str() {
-                        let key = name.as_str().to_string();
-                        if let Some(existing) = headers_obj.get_mut(&key) {
-                            if let Some(s) = existing.as_str() {
-                                *existing =
-                                    serde_json::Value::String(format!("{}, {}", s, value_str));
-                            }
-                        } else {
-                            headers_obj
-                                .insert(key, serde_json::Value::String(value_str.to_string()));
-                        }
-                    }
-                }
+                let headers_obj = headers_to_json(&result.headers);
 
                 Ok(serde_json::json!({
                     "ok": true,
@@ -354,16 +356,7 @@ async fn perform_simple_fetch(
 
     let status = response.status().as_u16();
     let headers = response.headers().clone();
-
-    let mut headers_obj = serde_json::Map::new();
-    for (name, value) in headers.iter() {
-        if let Ok(value_str) = value.to_str() {
-            headers_obj.insert(
-                name.as_str().to_string(),
-                serde_json::Value::String(value_str.to_string()),
-            );
-        }
-    }
+    let headers_obj = headers_to_json(&headers);
 
     let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
 
