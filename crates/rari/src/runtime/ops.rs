@@ -309,12 +309,12 @@ pub async fn op_fetch_with_cache(
         }
     } else {
         match perform_simple_fetch(&url, &options).await {
-            Ok((status, body)) => Ok(serde_json::json!({
+            Ok((status, body, headers)) => Ok(serde_json::json!({
                 "ok": (200..300).contains(&status),
                 "status": status,
                 "statusText": http_status_text(status),
                 "body": body,
-                "headers": {},
+                "headers": headers,
                 "cached": false
             })),
             Err(e) => {
@@ -343,7 +343,7 @@ fn get_http_client() -> Result<&'static reqwest::Client, String> {
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
-) -> Result<(u16, String), String> {
+) -> Result<(u16, String, serde_json::Map<String, serde_json::Value>), String> {
     let client = get_http_client()?;
     let mut request = client.get(url);
 
@@ -362,9 +362,21 @@ async fn perform_simple_fetch(
     let response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
 
     let status = response.status().as_u16();
+    let headers = response.headers().clone();
+
+    let mut headers_obj = serde_json::Map::new();
+    for (name, value) in headers.iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers_obj.insert(
+                name.as_str().to_string(),
+                serde_json::Value::String(value_str.to_string()),
+            );
+        }
+    }
+
     let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
 
-    Ok((status, body))
+    Ok((status, body, headers_obj))
 }
 
 #[cfg(test)]

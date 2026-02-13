@@ -34,11 +34,13 @@ static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult
 static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
     LazyLock::new(|| Arc::new(DashMap::new()));
 
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
 
-fn get_http_client() -> &'static reqwest::Client {
+fn get_http_client() -> Result<&'static reqwest::Client, String> {
     HTTP_CLIENT
-        .get_or_init(|| reqwest::Client::builder().build().expect("Failed to create HTTP client"))
+        .get_or_init(|| reqwest::Client::builder().build())
+        .as_ref()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))
 }
 
 pub struct RequestContext {
@@ -94,7 +96,17 @@ impl RequestContext {
 
             let opts_str = sorted_opts
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| {
+                    if k.as_str() == "headers" && v.len() > 100 {
+                        use std::collections::hash_map::DefaultHasher;
+                        use std::hash::{Hash, Hasher};
+                        let mut hasher = DefaultHasher::new();
+                        v.hash(&mut hasher);
+                        format!("{}=h:{:x}", k, hasher.finish())
+                    } else {
+                        format!("{}={}", k, v)
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("&");
 
@@ -160,7 +172,8 @@ impl RequestContext {
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
-        let client = get_http_client();
+        let client = get_http_client()
+            .map_err(|e| RariError::network(format!("HTTP client initialization failed: {}", e)))?;
         let mut request = client.get(url);
 
         if let Some(headers_str) = options.get("headers")
