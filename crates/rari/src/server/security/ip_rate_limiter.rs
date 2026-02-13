@@ -1,14 +1,14 @@
-use parking_lot::RwLock;
-use rustc_hash::FxHashMap;
+use lru::LruCache;
+use parking_lot::Mutex;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub struct IpRateLimiter {
-    requests: Arc<RwLock<FxHashMap<String, (u32, Instant)>>>,
+    requests: Arc<Mutex<LruCache<String, (u32, Instant)>>>,
     max_requests: u32,
     window_duration: Duration,
-    max_tracked_ips: usize,
 }
 
 impl IpRateLimiter {
@@ -17,17 +17,22 @@ impl IpRateLimiter {
     }
 
     pub fn with_capacity(max_requests: u32, window_seconds: u64, max_tracked_ips: usize) -> Self {
+        let capacity =
+            NonZeroUsize::new(max_tracked_ips).expect("max_tracked_ips must be greater than zero");
         Self {
-            requests: Arc::new(RwLock::new(FxHashMap::default())),
+            requests: Arc::new(Mutex::new(LruCache::new(capacity))),
             max_requests,
             window_duration: Duration::from_secs(window_seconds),
-            max_tracked_ips,
         }
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.requests.lock().cap().get()
     }
 
     pub fn check(&self, ip: &str) -> Result<(), u64> {
         let now = Instant::now();
-        let mut requests = self.requests.write();
+        let mut requests = self.requests.lock();
 
         if let Some((count, window_start)) = requests.get_mut(ip) {
             let elapsed = now.duration_since(*window_start);
@@ -44,26 +49,29 @@ impl IpRateLimiter {
                 Ok(())
             }
         } else {
-            if requests.len() >= self.max_tracked_ips
-                && let Some(oldest_ip) = requests
-                    .iter()
-                    .min_by_key(|(_, (_, window_start))| window_start)
-                    .map(|(ip, _)| ip.clone())
-            {
-                requests.remove(&oldest_ip);
-            }
-
-            requests.insert(ip.to_string(), (1, now));
+            requests.put(ip.to_string(), (1, now));
             Ok(())
         }
     }
 
     pub fn cleanup(&self) {
         let now = Instant::now();
-        let mut requests = self.requests.write();
-        requests.retain(|_, (_, window_start)| {
-            now.duration_since(*window_start) < self.window_duration * 2
-        });
+        let mut requests = self.requests.lock();
+
+        let keys_to_remove: Vec<String> = requests
+            .iter()
+            .filter_map(|(key, (_, window_start))| {
+                if now.duration_since(*window_start) >= self.window_duration * 2 {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for key in keys_to_remove {
+            requests.pop(&key);
+        }
     }
 
     pub fn start_cleanup_task(self: Arc<Self>) {
@@ -165,7 +173,7 @@ mod tests {
 
         limiter.cleanup();
 
-        let requests = limiter.requests.read();
+        let requests = limiter.requests.lock();
         assert!(requests.is_empty());
     }
 
@@ -187,9 +195,9 @@ mod tests {
 
         assert!(limiter.check("192.168.1.4").is_ok());
 
-        let requests = limiter.requests.read();
+        let requests = limiter.requests.lock();
         assert_eq!(requests.len(), 3);
-        assert!(requests.contains_key("192.168.1.4"));
+        assert!(requests.contains(&"192.168.1.4".to_string()));
     }
 
     #[test]
@@ -204,11 +212,11 @@ mod tests {
 
         assert!(limiter.check("192.168.1.3").is_ok());
 
-        let requests = limiter.requests.read();
+        let requests = limiter.requests.lock();
         assert_eq!(requests.len(), 2);
-        assert!(!requests.contains_key("192.168.1.1"));
-        assert!(requests.contains_key("192.168.1.2"));
-        assert!(requests.contains_key("192.168.1.3"));
+        assert!(!requests.contains(&"192.168.1.1".to_string()));
+        assert!(requests.contains(&"192.168.1.2".to_string()));
+        assert!(requests.contains(&"192.168.1.3".to_string()));
     }
 
     #[test]
@@ -220,10 +228,10 @@ mod tests {
 
         assert!(limiter.check("192.168.1.1").is_ok());
 
-        let requests = limiter.requests.read();
+        let requests = limiter.requests.lock();
         assert_eq!(requests.len(), 2);
-        assert!(requests.contains_key("192.168.1.1"));
-        assert!(requests.contains_key("192.168.1.2"));
+        assert!(requests.contains(&"192.168.1.1".to_string()));
+        assert!(requests.contains(&"192.168.1.2".to_string()));
     }
 
     #[test]
@@ -235,25 +243,25 @@ mod tests {
             assert!(limiter.check(&ip).is_ok());
         }
 
-        let requests = limiter.requests.read();
-        assert!(requests.len() <= 100);
+        let requests = limiter.requests.lock();
+        assert_eq!(requests.len(), 100);
     }
 
     #[test]
     fn test_production_limits_have_reasonable_capacity() {
         let limiters = EndpointRateLimiters::for_environment(true);
 
-        assert_eq!(limiters.og_generation.max_tracked_ips, 10_000);
-        assert_eq!(limiters.csrf_token.max_tracked_ips, 10_000);
-        assert_eq!(limiters.image_optimization.max_tracked_ips, 10_000);
+        assert_eq!(limiters.og_generation.capacity(), 10_000);
+        assert_eq!(limiters.csrf_token.capacity(), 10_000);
+        assert_eq!(limiters.image_optimization.capacity(), 10_000);
     }
 
     #[test]
     fn test_development_limits_have_higher_capacity() {
         let limiters = EndpointRateLimiters::for_environment(false);
 
-        assert_eq!(limiters.og_generation.max_tracked_ips, 100_000);
-        assert_eq!(limiters.csrf_token.max_tracked_ips, 100_000);
-        assert_eq!(limiters.image_optimization.max_tracked_ips, 100_000);
+        assert_eq!(limiters.og_generation.capacity(), 100_000);
+        assert_eq!(limiters.csrf_token.capacity(), 100_000);
+        assert_eq!(limiters.image_optimization.capacity(), 100_000);
     }
 }

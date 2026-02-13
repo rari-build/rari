@@ -1,6 +1,5 @@
-use axum::{body::Body, extract::ConnectInfo, http::Request, middleware::Next, response::Response};
+use axum::{body::Body, http::Request, middleware::Next, response::Response};
 use governor::middleware::StateInformationMiddleware;
-use std::net::SocketAddr;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::server::config::Config;
@@ -45,11 +44,7 @@ pub fn create_strict_rate_limit_layer(
     GovernorLayer::new(governor_conf)
 }
 
-pub async fn rate_limit_logger(
-    ConnectInfo(_): ConnectInfo<SocketAddr>,
-    request: Request<Body>,
-    next: Next,
-) -> Response {
+pub async fn rate_limit_logger(request: Request<Body>, next: Next) -> Response {
     next.run(request).await
 }
 
