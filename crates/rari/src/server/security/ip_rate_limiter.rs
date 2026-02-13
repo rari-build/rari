@@ -1,27 +1,38 @@
-use parking_lot::RwLock;
-use rustc_hash::FxHashMap;
+use lru::LruCache;
+use parking_lot::Mutex;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub struct IpRateLimiter {
-    requests: Arc<RwLock<FxHashMap<String, (u32, Instant)>>>,
+    requests: Arc<Mutex<LruCache<String, (u32, Instant)>>>,
     max_requests: u32,
     window_duration: Duration,
 }
 
 impl IpRateLimiter {
     pub fn new(max_requests: u32, window_seconds: u64) -> Self {
+        Self::with_capacity(max_requests, window_seconds, 10_000)
+    }
+
+    pub fn with_capacity(max_requests: u32, window_seconds: u64, max_tracked_ips: usize) -> Self {
+        let capacity =
+            NonZeroUsize::new(max_tracked_ips).expect("max_tracked_ips must be greater than zero");
         Self {
-            requests: Arc::new(RwLock::new(FxHashMap::default())),
+            requests: Arc::new(Mutex::new(LruCache::new(capacity))),
             max_requests,
             window_duration: Duration::from_secs(window_seconds),
         }
     }
 
+    pub fn capacity(&self) -> usize {
+        self.requests.lock().cap().get()
+    }
+
     pub fn check(&self, ip: &str) -> Result<(), u64> {
         let now = Instant::now();
-        let mut requests = self.requests.write();
+        let mut requests = self.requests.lock();
 
         if let Some((count, window_start)) = requests.get_mut(ip) {
             let elapsed = now.duration_since(*window_start);
@@ -38,17 +49,22 @@ impl IpRateLimiter {
                 Ok(())
             }
         } else {
-            requests.insert(ip.to_string(), (1, now));
+            requests.put(ip.to_string(), (1, now));
             Ok(())
         }
     }
 
     pub fn cleanup(&self) {
         let now = Instant::now();
-        let mut requests = self.requests.write();
-        requests.retain(|_, (_, window_start)| {
-            now.duration_since(*window_start) < self.window_duration * 2
-        });
+        let mut requests = self.requests.lock();
+
+        while let Some((_, (_, window_start))) = requests.peek_lru() {
+            if now.duration_since(*window_start) >= self.window_duration * 2 {
+                requests.pop_lru();
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn start_cleanup_task(self: Arc<Self>) {
@@ -78,15 +94,15 @@ impl EndpointRateLimiters {
     pub fn for_environment(is_production: bool) -> Self {
         if is_production {
             Self {
-                og_generation: Arc::new(IpRateLimiter::new(10, 60)),
-                csrf_token: Arc::new(IpRateLimiter::new(60, 60)),
-                image_optimization: Arc::new(IpRateLimiter::new(30, 60)),
+                og_generation: Arc::new(IpRateLimiter::with_capacity(100, 60, 10_000)),
+                csrf_token: Arc::new(IpRateLimiter::with_capacity(300, 60, 10_000)),
+                image_optimization: Arc::new(IpRateLimiter::with_capacity(200, 60, 10_000)),
             }
         } else {
             Self {
-                og_generation: Arc::new(IpRateLimiter::new(1000, 60)),
-                csrf_token: Arc::new(IpRateLimiter::new(1000, 60)),
-                image_optimization: Arc::new(IpRateLimiter::new(1000, 60)),
+                og_generation: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
+                csrf_token: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
+                image_optimization: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
             }
         }
     }
@@ -150,7 +166,7 @@ mod tests {
 
         limiter.cleanup();
 
-        let requests = limiter.requests.read();
+        let requests = limiter.requests.lock();
         assert!(requests.is_empty());
     }
 
@@ -160,5 +176,85 @@ mod tests {
 
         assert!(limiters.og_generation.check("test").is_ok());
         assert!(limiters.csrf_token.check("test").is_ok());
+    }
+
+    #[test]
+    fn test_memory_cap_enforced() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 3);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        assert!(limiter.check("192.168.1.2").is_ok());
+        assert!(limiter.check("192.168.1.3").is_ok());
+
+        assert!(limiter.check("192.168.1.4").is_ok());
+
+        let requests = limiter.requests.lock();
+        assert_eq!(requests.len(), 3);
+        assert!(requests.contains(&"192.168.1.4".to_string()));
+    }
+
+    #[test]
+    fn test_memory_cap_evicts_oldest() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 2);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        std::thread::sleep(Duration::from_millis(10));
+
+        assert!(limiter.check("192.168.1.2").is_ok());
+        std::thread::sleep(Duration::from_millis(10));
+
+        assert!(limiter.check("192.168.1.3").is_ok());
+
+        let requests = limiter.requests.lock();
+        assert_eq!(requests.len(), 2);
+        assert!(!requests.contains(&"192.168.1.1".to_string()));
+        assert!(requests.contains(&"192.168.1.2".to_string()));
+        assert!(requests.contains(&"192.168.1.3".to_string()));
+    }
+
+    #[test]
+    fn test_memory_cap_existing_ip_not_evicted() {
+        let limiter = IpRateLimiter::with_capacity(5, 60, 2);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        assert!(limiter.check("192.168.1.2").is_ok());
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+
+        let requests = limiter.requests.lock();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.contains(&"192.168.1.1".to_string()));
+        assert!(requests.contains(&"192.168.1.2".to_string()));
+    }
+
+    #[test]
+    fn test_memory_cap_under_attack() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 100);
+
+        for i in 0..1000 {
+            let ip = format!("192.168.{}.{}", i / 256, i % 256);
+            assert!(limiter.check(&ip).is_ok());
+        }
+
+        let requests = limiter.requests.lock();
+        assert_eq!(requests.len(), 100);
+    }
+
+    #[test]
+    fn test_production_limits_have_reasonable_capacity() {
+        let limiters = EndpointRateLimiters::for_environment(true);
+
+        assert_eq!(limiters.og_generation.capacity(), 10_000);
+        assert_eq!(limiters.csrf_token.capacity(), 10_000);
+        assert_eq!(limiters.image_optimization.capacity(), 10_000);
+    }
+
+    #[test]
+    fn test_development_limits_have_higher_capacity() {
+        let limiters = EndpointRateLimiters::for_environment(false);
+
+        assert_eq!(limiters.og_generation.capacity(), 100_000);
+        assert_eq!(limiters.csrf_token.capacity(), 100_000);
+        assert_eq!(limiters.image_optimization.capacity(), 100_000);
     }
 }

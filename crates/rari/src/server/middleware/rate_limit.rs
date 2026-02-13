@@ -1,15 +1,20 @@
-use axum::{body::Body, extract::ConnectInfo, http::Request, middleware::Next, response::Response};
+use axum::{
+    body::Body,
+    extract::ConnectInfo,
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::Response,
+};
 use governor::middleware::StateInformationMiddleware;
 use std::net::SocketAddr;
-use tower_governor::{
-    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor,
-};
+use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::server::config::Config;
+use crate::server::utils::ip_extractor::{RariIpKeyExtractor, extract_client_ip};
 
 pub fn create_rate_limit_layer(
     config: &Config,
-) -> Option<GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body>> {
+) -> Option<GovernorLayer<RariIpKeyExtractor, StateInformationMiddleware, Body>> {
     if !config.rate_limit.enabled {
         return None;
     }
@@ -18,6 +23,7 @@ pub fn create_rate_limit_layer(
         .per_second(config.rate_limit.requests_per_second as u64)
         .burst_size(config.rate_limit.burst_size)
         .use_headers()
+        .key_extractor(RariIpKeyExtractor)
         .finish()
         .expect("Failed to create rate limit configuration");
 
@@ -26,7 +32,7 @@ pub fn create_rate_limit_layer(
 
 pub fn create_strict_rate_limit_layer(
     requests_per_minute: Option<u32>,
-) -> GovernorLayer<PeerIpKeyExtractor, StateInformationMiddleware, Body> {
+) -> GovernorLayer<RariIpKeyExtractor, StateInformationMiddleware, Body> {
     let rpm = requests_per_minute.unwrap_or(10);
 
     let period_secs = if rpm > 0 { 60 / rpm } else { 60 };
@@ -38,6 +44,7 @@ pub fn create_strict_rate_limit_layer(
         .period(std::time::Duration::from_secs(period_secs as u64))
         .burst_size(burst_size)
         .use_headers()
+        .key_extractor(RariIpKeyExtractor)
         .finish()
         .expect("Failed to create strict rate limit configuration");
 
@@ -45,11 +52,50 @@ pub fn create_strict_rate_limit_layer(
 }
 
 pub async fn rate_limit_logger(
-    ConnectInfo(_): ConnectInfo<SocketAddr>,
+    ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    next.run(request).await
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+
+    let client_ip = extract_client_ip(request.headers(), &socket_addr);
+
+    let response = next.run(request).await;
+
+    let status = response.status();
+    if status == StatusCode::TOO_MANY_REQUESTS {
+        let retry_after = response
+            .headers()
+            .get("retry-after")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("unknown");
+
+        tracing::warn!(
+            method = %method,
+            uri = %uri,
+            client_ip = %client_ip,
+            status = %status,
+            retry_after = %retry_after,
+            "Rate limit exceeded"
+        );
+    } else if response.headers().contains_key("x-ratelimit-remaining") {
+        let remaining = response
+            .headers()
+            .get("x-ratelimit-remaining")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("unknown");
+
+        tracing::debug!(
+            method = %method,
+            uri = %uri,
+            client_ip = %client_ip,
+            remaining = %remaining,
+            "Rate limit check"
+        );
+    }
+
+    response
 }
 
 #[cfg(test)]
@@ -100,17 +146,5 @@ mod tests {
         assert_eq!(config.requests_per_second, 1000);
         assert_eq!(config.burst_size, 2000);
         assert_eq!(config.revalidate_requests_per_minute, 20);
-    }
-
-    #[test]
-    fn test_strict_rate_limit_layer() {
-        let _layer = create_strict_rate_limit_layer(Some(10));
-        assert!(true);
-    }
-
-    #[test]
-    fn test_strict_rate_limit_layer_default() {
-        let _layer = create_strict_rate_limit_layer(None);
-        assert!(true);
     }
 }

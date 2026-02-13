@@ -1,7 +1,8 @@
 use crate::server::ServerState;
+use crate::server::utils::ip_extractor::extract_client_ip;
 use axum::{
     extract::{ConnectInfo, Path, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use std::net::SocketAddr;
@@ -9,6 +10,7 @@ use std::net::SocketAddr;
 pub async fn og_image_handler(
     State(state): State<ServerState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Path(route_path): Path<String>,
 ) -> Result<Response, StatusCode> {
     if let Some(og_generator) = &state.og_generator {
@@ -18,7 +20,7 @@ pub async fn og_image_handler(
             format!("/{}", route_path.trim_start_matches('/'))
         };
 
-        let ip = addr.ip().to_string();
+        let ip = extract_client_ip(&headers, &addr);
         if let Err(retry_after) = state.endpoint_rate_limiters.og_generation.check(&ip) {
             return Ok((
                 StatusCode::TOO_MANY_REQUESTS,
@@ -76,6 +78,7 @@ pub async fn og_image_handler(
 pub async fn og_image_handler_root(
     State(state): State<ServerState>,
     connect_info: ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    og_image_handler(State(state), connect_info, Path("/".to_string())).await
+    og_image_handler(State(state), connect_info, headers, Path("/".to_string())).await
 }
