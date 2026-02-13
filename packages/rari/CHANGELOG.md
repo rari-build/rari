@@ -1,3 +1,12 @@
+## [rari@0.9.1] - 2026-02-13
+
+### 🚀 Features
+
+- *(rari)* Implement fetch caching with request deduplication
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.9.1
 ## [rari@0.9.0] - 2026-02-12
 
 ### 🚀 Features
@@ -8,6 +17,10 @@
 ### 🐛 Bug Fixes
 
 - *(runtime)* Improve error handling in file operations and component loading
+
+### 💼 Other
+
+- Rari@0.9.0
 
 ### 🚜 Refactor
 
