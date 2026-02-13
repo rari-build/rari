@@ -118,6 +118,26 @@ We welcome contributions! Here's how you can help:
 - **GitHub** - [Star the repo](https://github.com/rari-build/rari)
 - **Documentation** - [rari.build/docs](https://rari.build/docs)
 
+## Sponsors
+
+rari is made possible by the support of these companies:
+
+<div>
+  <a href="https://get.neon.com/KDQudHN" target="_blank">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://neon.com/brand/neon-logo-dark-color.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://neon.com/brand/neon-logo-light-color.svg">
+      <img width="250px" alt="Neon - Serverless Postgres" src="https://neon.com/brand/neon-logo-dark-color.svg">
+    </picture>
+  </a>
+</div>
+
+**[Neon](https://get.neon.com/KDQudHN)** - Serverless Postgres. Autoscaling, branching, and scale to zero.
+
+---
+
+Interested in sponsoring rari? [Get in touch](https://github.com/rari-build/rari/discussions) or support us on [GitHub Sponsors](https://github.com/sponsors/skiniks).
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
