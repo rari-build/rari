@@ -13,7 +13,7 @@ interface NpmPackageInfo {
 async function fetchRariVersion(): Promise<string> {
   try {
     const response = await fetch('https://registry.npmjs.org/rari', {
-      rari: { revalidate: 3600 },
+      // rari: { revalidate: 3600 },
     })
     if (!response.ok)
       throw new Error(`Failed to fetch version: ${response.status}`)
