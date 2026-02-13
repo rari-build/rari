@@ -8,14 +8,20 @@ pub struct IpRateLimiter {
     requests: Arc<RwLock<FxHashMap<String, (u32, Instant)>>>,
     max_requests: u32,
     window_duration: Duration,
+    max_tracked_ips: usize,
 }
 
 impl IpRateLimiter {
     pub fn new(max_requests: u32, window_seconds: u64) -> Self {
+        Self::with_capacity(max_requests, window_seconds, 10_000)
+    }
+
+    pub fn with_capacity(max_requests: u32, window_seconds: u64, max_tracked_ips: usize) -> Self {
         Self {
             requests: Arc::new(RwLock::new(FxHashMap::default())),
             max_requests,
             window_duration: Duration::from_secs(window_seconds),
+            max_tracked_ips,
         }
     }
 
@@ -38,6 +44,15 @@ impl IpRateLimiter {
                 Ok(())
             }
         } else {
+            if requests.len() >= self.max_tracked_ips
+                && let Some(oldest_ip) = requests
+                    .iter()
+                    .min_by_key(|(_, (_, window_start))| window_start)
+                    .map(|(ip, _)| ip.clone())
+            {
+                requests.remove(&oldest_ip);
+            }
+
             requests.insert(ip.to_string(), (1, now));
             Ok(())
         }
@@ -78,15 +93,15 @@ impl EndpointRateLimiters {
     pub fn for_environment(is_production: bool) -> Self {
         if is_production {
             Self {
-                og_generation: Arc::new(IpRateLimiter::new(100, 60)),
-                csrf_token: Arc::new(IpRateLimiter::new(300, 60)),
-                image_optimization: Arc::new(IpRateLimiter::new(200, 60)),
+                og_generation: Arc::new(IpRateLimiter::with_capacity(100, 60, 10_000)),
+                csrf_token: Arc::new(IpRateLimiter::with_capacity(300, 60, 10_000)),
+                image_optimization: Arc::new(IpRateLimiter::with_capacity(200, 60, 10_000)),
             }
         } else {
             Self {
-                og_generation: Arc::new(IpRateLimiter::new(1000, 60)),
-                csrf_token: Arc::new(IpRateLimiter::new(1000, 60)),
-                image_optimization: Arc::new(IpRateLimiter::new(1000, 60)),
+                og_generation: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
+                csrf_token: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
+                image_optimization: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
             }
         }
     }
@@ -160,5 +175,85 @@ mod tests {
 
         assert!(limiters.og_generation.check("test").is_ok());
         assert!(limiters.csrf_token.check("test").is_ok());
+    }
+
+    #[test]
+    fn test_memory_cap_enforced() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 3);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        assert!(limiter.check("192.168.1.2").is_ok());
+        assert!(limiter.check("192.168.1.3").is_ok());
+
+        assert!(limiter.check("192.168.1.4").is_ok());
+
+        let requests = limiter.requests.read();
+        assert_eq!(requests.len(), 3);
+        assert!(requests.contains_key("192.168.1.4"));
+    }
+
+    #[test]
+    fn test_memory_cap_evicts_oldest() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 2);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        std::thread::sleep(Duration::from_millis(10));
+
+        assert!(limiter.check("192.168.1.2").is_ok());
+        std::thread::sleep(Duration::from_millis(10));
+
+        assert!(limiter.check("192.168.1.3").is_ok());
+
+        let requests = limiter.requests.read();
+        assert_eq!(requests.len(), 2);
+        assert!(!requests.contains_key("192.168.1.1"));
+        assert!(requests.contains_key("192.168.1.2"));
+        assert!(requests.contains_key("192.168.1.3"));
+    }
+
+    #[test]
+    fn test_memory_cap_existing_ip_not_evicted() {
+        let limiter = IpRateLimiter::with_capacity(5, 60, 2);
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+        assert!(limiter.check("192.168.1.2").is_ok());
+
+        assert!(limiter.check("192.168.1.1").is_ok());
+
+        let requests = limiter.requests.read();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.contains_key("192.168.1.1"));
+        assert!(requests.contains_key("192.168.1.2"));
+    }
+
+    #[test]
+    fn test_memory_cap_under_attack() {
+        let limiter = IpRateLimiter::with_capacity(10, 60, 100);
+
+        for i in 0..1000 {
+            let ip = format!("192.168.{}.{}", i / 256, i % 256);
+            assert!(limiter.check(&ip).is_ok());
+        }
+
+        let requests = limiter.requests.read();
+        assert!(requests.len() <= 100);
+    }
+
+    #[test]
+    fn test_production_limits_have_reasonable_capacity() {
+        let limiters = EndpointRateLimiters::for_environment(true);
+
+        assert_eq!(limiters.og_generation.max_tracked_ips, 10_000);
+        assert_eq!(limiters.csrf_token.max_tracked_ips, 10_000);
+        assert_eq!(limiters.image_optimization.max_tracked_ips, 10_000);
+    }
+
+    #[test]
+    fn test_development_limits_have_higher_capacity() {
+        let limiters = EndpointRateLimiters::for_environment(false);
+
+        assert_eq!(limiters.og_generation.max_tracked_ips, 100_000);
+        assert_eq!(limiters.csrf_token.max_tracked_ips, 100_000);
+        assert_eq!(limiters.image_optimization.max_tracked_ips, 100_000);
     }
 }
