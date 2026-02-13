@@ -105,9 +105,32 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
     function generateCacheKey(input, init) {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         const method = init?.method || 'GET';
-        const headers = JSON.stringify(init?.headers || {});
+
+        let headersStr = '{}';
+        if (init?.headers) {
+            const headerEntries = [];
+            const headers = init.headers;
+
+            if (typeof headers.entries === 'function') {
+                for (const [name, value] of headers.entries()) {
+                    headerEntries.push([name.toLowerCase(), value]);
+                }
+            } else if (typeof headers.forEach === 'function') {
+                headers.forEach((value, name) => {
+                    headerEntries.push([name.toLowerCase(), value]);
+                });
+            } else if (typeof headers === 'object') {
+                for (const [name, value] of Object.entries(headers)) {
+                    headerEntries.push([name.toLowerCase(), String(value)]);
+                }
+            }
+
+            headerEntries.sort((a, b) => a[0].localeCompare(b[0]));
+            headersStr = JSON.stringify(headerEntries);
+        }
+
         const body = init?.body ? String(init.body) : '';
-        return `${method}:${url}:${headers}:${body}`;
+        return `${method}:${url}:${headersStr}:${body}`;
     }
 
     function shouldCache(init) {
@@ -132,26 +155,47 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
             const headers = new Headers(init.headers);
             const headerPairs = [];
             headers.forEach((value, key) => {
-                headerPairs.push(`${key}:${value}`);
+                headerPairs.push([key, value]);
             });
             if (headerPairs.length > 0) {
-                options.headers = headerPairs.join(',');
+                options.headers = JSON.stringify(headerPairs);
             }
         }
 
         const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate;
         if (typeof revalidate === 'number') {
-            options.timeout = String(revalidate * 1000);
+            options.cacheTTLMs = String(revalidate * 1000);
         }
+
+        options.timeout = '5000';
 
         try {
             const result = await Deno.core.ops.op_fetch_with_cache(url, JSON.stringify(options));
             if (!result.ok) {
                 throw new Error(result.error || 'Fetch failed');
             }
+
+            const responseHeaders = new Headers();
+            if (result.headers && typeof result.headers === 'object') {
+                for (const [name, value] of Object.entries(result.headers)) {
+                    responseHeaders.set(name, value);
+                }
+            }
+
+            if (!responseHeaders.has('content-type')) {
+                if (url.includes('.json') || result.body.trim().startsWith('{') || result.body.trim().startsWith('[')) {
+                    responseHeaders.set('content-type', 'application/json');
+                } else if (url.includes('.html')) {
+                    responseHeaders.set('content-type', 'text/html');
+                } else {
+                    responseHeaders.set('content-type', 'text/plain');
+                }
+            }
+
             return new Response(result.body, {
                 status: result.status,
-                statusText: result.status === 200 ? 'OK' : 'Error',
+                statusText: result.statusText || 'OK',
+                headers: responseHeaders,
             });
         } catch (error) {
             return originalFetch(input, init);
@@ -167,7 +211,8 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
         const inFlight = requestDedupeMap.get(cacheKey);
 
         if (inFlight) {
-            return inFlight;
+            const response = await inFlight;
+            return response.clone();
         }
 
         const hasRustOp = typeof Deno?.core?.ops?.op_fetch_with_cache === 'function';
@@ -177,7 +222,7 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
             requestDedupeMap.set(cacheKey, promise);
             try {
                 const response = await promise;
-                return response;
+                return response.clone();
             } finally {
                 requestDedupeMap.delete(cacheKey);
             }
@@ -186,7 +231,7 @@ pub const FETCH_CACHE_INIT_SCRIPT: &str = r#"
             requestDedupeMap.set(cacheKey, promise);
             try {
                 const response = await promise;
-                return response;
+                return response.clone();
             } finally {
                 requestDedupeMap.delete(cacheKey);
             }

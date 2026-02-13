@@ -251,10 +251,40 @@ pub async fn op_fetch_with_cache(
         match ctx.fetch_with_cache(&url, options).await {
             Ok(result) => {
                 let body_str = String::from_utf8_lossy(&result.body).to_string();
+
+                let mut headers_obj = serde_json::Map::new();
+                for (name, value) in result.headers.iter() {
+                    if let Ok(value_str) = value.to_str() {
+                        headers_obj.insert(
+                            name.as_str().to_string(),
+                            serde_json::Value::String(value_str.to_string()),
+                        );
+                    }
+                }
+
+                let status_text = match result.status {
+                    200 => "OK",
+                    201 => "Created",
+                    204 => "No Content",
+                    301 => "Moved Permanently",
+                    302 => "Found",
+                    304 => "Not Modified",
+                    400 => "Bad Request",
+                    401 => "Unauthorized",
+                    403 => "Forbidden",
+                    404 => "Not Found",
+                    500 => "Internal Server Error",
+                    502 => "Bad Gateway",
+                    503 => "Service Unavailable",
+                    _ => "Unknown",
+                };
+
                 Ok(serde_json::json!({
                     "ok": true,
                     "status": result.status,
+                    "statusText": status_text,
                     "body": body_str,
+                    "headers": headers_obj,
                     "cached": true
                 }))
             }
@@ -263,6 +293,7 @@ pub async fn op_fetch_with_cache(
                 Ok(serde_json::json!({
                     "ok": false,
                     "status": 500,
+                    "statusText": "Internal Server Error",
                     "error": e.to_string(),
                     "cached": false
                 }))
@@ -273,7 +304,24 @@ pub async fn op_fetch_with_cache(
             Ok((status, body)) => Ok(serde_json::json!({
                 "ok": (200..300).contains(&status),
                 "status": status,
+                "statusText": match status {
+                    200 => "OK",
+                    201 => "Created",
+                    204 => "No Content",
+                    301 => "Moved Permanently",
+                    302 => "Found",
+                    304 => "Not Modified",
+                    400 => "Bad Request",
+                    401 => "Unauthorized",
+                    403 => "Forbidden",
+                    404 => "Not Found",
+                    500 => "Internal Server Error",
+                    502 => "Bad Gateway",
+                    503 => "Service Unavailable",
+                    _ => "Unknown"
+                },
                 "body": body,
+                "headers": {},
                 "cached": false
             })),
             Err(e) => {
@@ -281,6 +329,7 @@ pub async fn op_fetch_with_cache(
                 Ok(serde_json::json!({
                     "ok": false,
                     "status": 500,
+                    "statusText": "Internal Server Error",
                     "error": e,
                     "cached": false
                 }))

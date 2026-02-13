@@ -16,6 +16,7 @@ use crate::rsc::rendering::streaming::{RscStream, StreamingRenderer};
 use crate::rsc::utils::dependency_utils::{extract_dependencies, hash_string};
 use crate::rsc::wire_format::serializer::RscSerializer;
 use crate::runtime::JsExecutionRuntime;
+use crate::runtime::runtime_factory::FETCH_CACHE_INIT_SCRIPT;
 
 use super::constants::*;
 use super::types::{ResourceLimits, ResourceMetrics, ResourceTracker};
@@ -237,7 +238,6 @@ globalThis['~errors'].batch.push({{
             .execute_script("html_render".to_string(), html_render_script.to_string())
             .await?;
 
-        use crate::runtime::runtime_factory::constants::FETCH_CACHE_INIT_SCRIPT;
         self.runtime
             .execute_script("init_fetch_cache".to_string(), FETCH_CACHE_INIT_SCRIPT.to_string())
             .await?;

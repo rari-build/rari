@@ -3,7 +3,7 @@ use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -18,6 +18,9 @@ pub struct CachedFetchResult {
 type InFlightFetches =
     Arc<DashMap<String, Arc<Mutex<Option<Result<CachedFetchResult, RariError>>>>>>;
 
+static GLOBAL_FETCH_CACHE: LazyLock<Arc<DashMap<String, CachedFetchResult>>> =
+    LazyLock::new(|| Arc::new(DashMap::new()));
+
 pub struct RequestContext {
     fetch_cache: Arc<DashMap<String, CachedFetchResult>>,
     in_flight_fetches: InFlightFetches,
@@ -29,7 +32,7 @@ pub struct RequestContext {
 impl RequestContext {
     pub fn new(route_path: String) -> Self {
         Self {
-            fetch_cache: Arc::new(DashMap::new()),
+            fetch_cache: GLOBAL_FETCH_CACHE.clone(),
             in_flight_fetches: Arc::new(DashMap::new()),
             request_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
@@ -82,7 +85,19 @@ impl RequestContext {
         let cache_key = Self::generate_cache_key(url, &options);
 
         if let Some(cached) = self.fetch_cache.get(&cache_key) {
-            return Ok(cached.value().clone());
+            let ttl_seconds = options
+                .get("cacheTTLMs")
+                .and_then(|t| t.parse::<u64>().ok())
+                .map(|ms| ms / 1000)
+                .unwrap_or(60);
+
+            let elapsed = cached.cached_at.elapsed().as_secs();
+
+            if elapsed < ttl_seconds {
+                return Ok(cached.value().clone());
+            }
+            drop(cached);
+            self.fetch_cache.remove(&cache_key);
         }
 
         let fetch_lock = {

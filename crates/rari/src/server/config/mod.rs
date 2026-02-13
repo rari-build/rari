@@ -110,7 +110,7 @@ fn default_revalidate_rpm() -> u32 {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             requests_per_second: 100,
             burst_size: 200,
             revalidate_requests_per_minute: 10,
@@ -118,15 +118,9 @@ impl Default for RateLimitConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SpamBlockerConfig {
     pub enabled: bool,
-}
-
-impl Default for SpamBlockerConfig {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
