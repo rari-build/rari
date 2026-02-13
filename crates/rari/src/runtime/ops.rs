@@ -1,9 +1,9 @@
+use crate::server::http_client::get_http_client;
 use deno_core::{OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -229,6 +229,42 @@ pub struct FetchOpState {
         Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
 }
 
+fn http_status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        301 => "Moved Permanently",
+        302 => "Found",
+        304 => "Not Modified",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+        _ => "Unknown",
+    }
+}
+
+fn headers_to_json(headers: &axum::http::HeaderMap) -> serde_json::Map<String, serde_json::Value> {
+    let mut headers_obj = serde_json::Map::new();
+    for (name, value) in headers.iter() {
+        if let Ok(value_str) = value.to_str() {
+            let key = name.as_str().to_string();
+            if let Some(existing) = headers_obj.get_mut(&key) {
+                if let Some(s) = existing.as_str() {
+                    *existing = serde_json::Value::String(format!("{}, {}", s, value_str));
+                }
+            } else {
+                headers_obj.insert(key, serde_json::Value::String(value_str.to_string()));
+            }
+        }
+    }
+    headers_obj
+}
+
 #[allow(clippy::disallowed_methods)]
 #[op2]
 #[serde]
@@ -251,11 +287,15 @@ pub async fn op_fetch_with_cache(
         match ctx.fetch_with_cache(&url, options).await {
             Ok(result) => {
                 let body_str = String::from_utf8_lossy(&result.body).to_string();
+                let headers_obj = headers_to_json(&result.headers);
+
                 Ok(serde_json::json!({
                     "ok": true,
                     "status": result.status,
+                    "statusText": http_status_text(result.status),
                     "body": body_str,
-                    "cached": true
+                    "headers": headers_obj,
+                    "cached": result.was_cached
                 }))
             }
             Err(e) => {
@@ -263,6 +303,7 @@ pub async fn op_fetch_with_cache(
                 Ok(serde_json::json!({
                     "ok": false,
                     "status": 500,
+                    "statusText": "Internal Server Error",
                     "error": e.to_string(),
                     "cached": false
                 }))
@@ -270,10 +311,12 @@ pub async fn op_fetch_with_cache(
         }
     } else {
         match perform_simple_fetch(&url, &options).await {
-            Ok((status, body)) => Ok(serde_json::json!({
+            Ok((status, body, headers)) => Ok(serde_json::json!({
                 "ok": (200..300).contains(&status),
                 "status": status,
+                "statusText": http_status_text(status),
                 "body": body,
+                "headers": headers,
                 "cached": false
             })),
             Err(e) => {
@@ -281,6 +324,7 @@ pub async fn op_fetch_with_cache(
                 Ok(serde_json::json!({
                     "ok": false,
                     "status": 500,
+                    "statusText": "Internal Server Error",
                     "error": e,
                     "cached": false
                 }))
@@ -289,27 +333,18 @@ pub async fn op_fetch_with_cache(
     }
 }
 
-static HTTP_CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
-
-fn get_http_client() -> Result<&'static reqwest::Client, String> {
-    HTTP_CLIENT
-        .get_or_init(|| reqwest::Client::builder().build())
-        .as_ref()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))
-}
-
 async fn perform_simple_fetch(
     url: &str,
     options: &rustc_hash::FxHashMap<String, String>,
-) -> Result<(u16, String), String> {
+) -> Result<(u16, String, serde_json::Map<String, serde_json::Value>), String> {
     let client = get_http_client()?;
     let mut request = client.get(url);
 
-    if let Some(headers_str) = options.get("headers") {
-        for header_pair in headers_str.split(',') {
-            if let Some((key, value)) = header_pair.split_once(':') {
-                request = request.header(key.trim(), value.trim());
-            }
+    if let Some(headers_str) = options.get("headers")
+        && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
+    {
+        for (key, value) in pairs {
+            request = request.header(key.as_str(), value.as_str());
         }
     }
 
@@ -320,9 +355,12 @@ async fn perform_simple_fetch(
     let response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
 
     let status = response.status().as_u16();
+    let headers = response.headers().clone();
+    let headers_obj = headers_to_json(&headers);
+
     let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
 
-    Ok((status, body))
+    Ok((status, body, headers_obj))
 }
 
 #[cfg(test)]

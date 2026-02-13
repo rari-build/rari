@@ -110,7 +110,7 @@ fn default_revalidate_rpm() -> u32 {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             requests_per_second: 100,
             burst_size: 200,
             revalidate_requests_per_minute: 10,

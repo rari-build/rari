@@ -1,11 +1,15 @@
 use crate::error::RariError;
+use crate::server::http_client::get_http_client;
 use axum::http::HeaderMap;
 use bytes::Bytes;
 use dashmap::DashMap;
+use lru::LruCache;
+use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::num::NonZeroUsize;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -14,12 +18,25 @@ pub struct CachedFetchResult {
     pub status: u16,
     pub headers: HeaderMap,
     pub cached_at: Instant,
+    pub was_cached: bool,
 }
 type InFlightFetches =
-    Arc<DashMap<String, Arc<Mutex<Option<Result<CachedFetchResult, RariError>>>>>>;
+    Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
+
+const MAX_CACHE_ENTRIES: usize = 1000;
+
+static GLOBAL_FETCH_CACHE: LazyLock<Arc<Mutex<LruCache<String, CachedFetchResult>>>> =
+    LazyLock::new(|| {
+        Arc::new(Mutex::new(LruCache::new(
+            NonZeroUsize::new(MAX_CACHE_ENTRIES).expect("MAX_CACHE_ENTRIES must be non-zero"),
+        )))
+    });
+
+static GLOBAL_IN_FLIGHT_FETCHES: LazyLock<InFlightFetches> =
+    LazyLock::new(|| Arc::new(DashMap::new()));
 
 pub struct RequestContext {
-    fetch_cache: Arc<DashMap<String, CachedFetchResult>>,
+    fetch_cache: Arc<Mutex<LruCache<String, CachedFetchResult>>>,
     in_flight_fetches: InFlightFetches,
     request_id: String,
     start_time: Instant,
@@ -29,8 +46,8 @@ pub struct RequestContext {
 impl RequestContext {
     pub fn new(route_path: String) -> Self {
         Self {
-            fetch_cache: Arc::new(DashMap::new()),
-            in_flight_fetches: Arc::new(DashMap::new()),
+            fetch_cache: GLOBAL_FETCH_CACHE.clone(),
+            in_flight_fetches: GLOBAL_IN_FLIGHT_FETCHES.clone(),
             request_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
             route_path,
@@ -53,20 +70,35 @@ impl RequestContext {
         self.start_time.elapsed()
     }
 
-    pub fn fetch_cache(&self) -> &Arc<DashMap<String, CachedFetchResult>> {
+    pub fn fetch_cache(&self) -> &Arc<Mutex<LruCache<String, CachedFetchResult>>> {
         &self.fetch_cache
     }
 
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
-        if options.is_empty() {
+        let cache_relevant_options: FxHashMap<_, _> = options
+            .iter()
+            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout"))
+            .collect();
+
+        if cache_relevant_options.is_empty() {
             url.to_string()
         } else {
-            let mut sorted_opts: Vec<_> = options.iter().collect();
+            let mut sorted_opts: Vec<_> = cache_relevant_options.iter().collect();
             sorted_opts.sort_by_key(|(k, _)| *k);
 
             let opts_str = sorted_opts
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| {
+                    if k.as_str() == "headers" && v.len() > 100 {
+                        use sha2::{Digest, Sha256};
+                        let mut hasher = Sha256::new();
+                        hasher.update(v.as_bytes());
+                        let hash = hasher.finalize();
+                        format!("{}=h:{}", k, hex::encode(&hash[..8]))
+                    } else {
+                        format!("{}={}", k, v)
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("&");
 
@@ -81,13 +113,26 @@ impl RequestContext {
     ) -> Result<CachedFetchResult, RariError> {
         let cache_key = Self::generate_cache_key(url, &options);
 
-        if let Some(cached) = self.fetch_cache.get(&cache_key) {
-            return Ok(cached.value().clone());
+        {
+            let mut cache = self.fetch_cache.lock();
+            if let Some(cached) = cache.get(&cache_key) {
+                let ttl_ms =
+                    options.get("cacheTTLMs").and_then(|t| t.parse::<u64>().ok()).unwrap_or(60_000);
+
+                let elapsed_ms = cached.cached_at.elapsed().as_millis();
+
+                if elapsed_ms < ttl_ms as u128 {
+                    let mut result = cached.clone();
+                    result.was_cached = true;
+                    return Ok(result);
+                }
+                cache.pop(&cache_key);
+            }
         }
 
         let fetch_lock = {
             let entry = self.in_flight_fetches.entry(cache_key.clone());
-            entry.or_insert_with(|| Arc::new(Mutex::new(None))).clone()
+            entry.or_insert_with(|| Arc::new(TokioMutex::new(None))).clone()
         };
 
         let mut guard = fetch_lock.lock().await;
@@ -96,16 +141,32 @@ impl RequestContext {
             return result.clone();
         }
 
+        struct CleanupGuard<'a> {
+            in_flight_fetches: &'a InFlightFetches,
+            cache_key: String,
+        }
+
+        impl<'a> Drop for CleanupGuard<'a> {
+            fn drop(&mut self) {
+                self.in_flight_fetches.remove(&self.cache_key);
+            }
+        }
+
+        let _cleanup = CleanupGuard {
+            in_flight_fetches: &self.in_flight_fetches,
+            cache_key: cache_key.clone(),
+        };
+
         let fetch_result = self.perform_fetch(url, &options).await;
 
         *guard = Some(fetch_result.clone());
 
         if let Ok(ref cached_result) = fetch_result {
-            self.fetch_cache.insert(cache_key.clone(), cached_result.clone());
+            let mut cache = self.fetch_cache.lock();
+            cache.put(cache_key.clone(), cached_result.clone());
         }
 
         drop(guard);
-        self.in_flight_fetches.remove(&cache_key);
 
         fetch_result
     }
@@ -115,14 +176,15 @@ impl RequestContext {
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
-        let client = reqwest::Client::new();
+        let client = get_http_client()
+            .map_err(|e| RariError::network(format!("HTTP client initialization failed: {}", e)))?;
         let mut request = client.get(url);
 
-        if let Some(headers_str) = options.get("headers") {
-            for header_pair in headers_str.split(',') {
-                if let Some((key, value)) = header_pair.split_once(':') {
-                    request = request.header(key.trim(), value.trim());
-                }
+        if let Some(headers_str) = options.get("headers")
+            && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
+        {
+            for (key, value) in pairs {
+                request = request.header(key.as_str(), value.as_str());
             }
         }
 
@@ -142,7 +204,13 @@ impl RequestContext {
             .await
             .map_err(|e| RariError::network(format!("Failed to read response body: {}", e)))?;
 
-        Ok(CachedFetchResult { body, status, headers, cached_at: Instant::now() })
+        Ok(CachedFetchResult {
+            body,
+            status,
+            headers,
+            cached_at: Instant::now(),
+            was_cached: false,
+        })
     }
 }
 
@@ -164,18 +232,25 @@ mod tests {
         let ctx = RequestContext::new("/test".to_string());
         let cache = ctx.fetch_cache();
 
-        assert_eq!(cache.len(), 0);
+        let initial_len = cache.lock().len();
 
         let result = CachedFetchResult {
             body: Bytes::from("test"),
             status: 200,
             headers: HeaderMap::new(),
             cached_at: Instant::now(),
+            was_cached: false,
         };
 
-        cache.insert("https://example.com".to_string(), result);
+        let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());
+        cache.lock().put(test_key.clone(), result);
 
-        assert_eq!(cache.len(), 1);
-        assert!(cache.contains_key("https://example.com"));
+        let new_len = cache.lock().len();
+        assert!(
+            new_len == initial_len + 1 || new_len == initial_len,
+            "Cache should grow by 1 or stay at capacity"
+        );
+
+        assert!(cache.lock().contains(&test_key));
     }
 }
