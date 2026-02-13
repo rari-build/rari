@@ -1,7 +1,7 @@
 {
   "name": "rari-darwin-arm64",
   "type": "module",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Runtime Accelerated Rendering Infrastructure (macOS ARM64 binary)",
   "author": "Ryan Skinner",
   "license": "MIT",
