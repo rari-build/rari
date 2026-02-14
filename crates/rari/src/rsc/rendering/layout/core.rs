@@ -636,25 +636,6 @@ impl LayoutRenderer {
             return Ok(RenderResult::Streaming(stream));
         }
 
-        let promise_result = renderer
-            .runtime
-            .execute_script("compose_and_render_notfound".to_string(), composition_script)
-            .await?;
-
-        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
-            promise_result
-        } else {
-            renderer
-                .runtime
-                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
-                .await?
-        };
-
-        let rsc_data = result.get("rsc_data").ok_or_else(|| {
-            tracing::error!("Failed to extract RSC data from result: {:?}", result);
-            RariError::internal("No RSC data in render result")
-        })?;
-
         let rsc_wire_format = {
             let mut serializer = renderer.serializer.lock();
             serializer.reset_for_new_request();

@@ -624,4 +624,25 @@ mod tests {
         let config = CacheConfig::from_env(false);
         assert!(!config.enabled);
     }
+
+    #[test]
+    fn test_generate_cache_key_with_mode() {
+        let key = ResponseCache::generate_cache_key_with_mode("/blog/post", None, Some("rsc"));
+        assert_eq!(key, "/blog/post#:rsc");
+    }
+
+    #[test]
+    fn test_generate_cache_key_with_mode_and_params() {
+        let mut params = rustc_hash::FxHashMap::default();
+        params.insert("page".to_string(), "1".to_string());
+
+        let key = ResponseCache::generate_cache_key_with_mode("/blog", Some(&params), Some("rsc"));
+        assert_eq!(key, "/blog?page=1#:rsc");
+    }
+
+    #[test]
+    fn test_generate_cache_key_with_mode_none() {
+        let key = ResponseCache::generate_cache_key_with_mode("/blog/post", None, None);
+        assert_eq!(key, "/blog/post");
+    }
 }
