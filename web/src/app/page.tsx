@@ -81,7 +81,7 @@ export default async function HomePage() {
               {
                 title: 'node_modules Support',
                 description: 'Unlike most Rust-based JS runtimes, rari resolves packages from node_modules directly — no import maps or URL specifiers needed',
-                icon: 'rolldown',
+                icon: 'npm',
               },
               {
                 title: 'TypeScript First',
