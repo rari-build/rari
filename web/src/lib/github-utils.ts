@@ -94,7 +94,7 @@ export async function getRepoStars(): Promise<number | null> {
 }
 export async function getLatestCommitHash(): Promise<string | null> {
   try {
-    const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/commits?page=1&per_page=1`
+    const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/commits?path=web&page=1&per_page=1`
 
     const response = await fetch(url, {
       headers: getGitHubHeaders(),
