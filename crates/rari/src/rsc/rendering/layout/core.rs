@@ -41,6 +41,28 @@ impl LayoutRenderer {
         Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
+    async fn enable_streaming_and_inject_lazy_resolver(
+        renderer: &RscRenderer,
+        is_not_found: bool,
+    ) -> Result<(), RariError> {
+        if !is_not_found {
+            renderer
+                .runtime
+                .execute_script(
+                    "enable_streaming".to_string(),
+                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
+                )
+                .await?;
+
+            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
+            renderer
+                .runtime
+                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn check_page_not_found(
         &self,
         route_match: &AppRouteMatch,
@@ -164,21 +186,7 @@ impl LayoutRenderer {
 
         let is_not_found = route_match.not_found.is_some();
 
-        if !is_not_found {
-            renderer
-                .runtime
-                .execute_script(
-                    "enable_streaming".to_string(),
-                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
-                )
-                .await?;
-
-            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-            renderer
-                .runtime
-                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-                .await?;
-        }
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
 
         let promise_result = renderer
             .runtime
@@ -207,6 +215,8 @@ impl LayoutRenderer {
                     RariError::internal(format!("Failed to serialize RSC data: {}", e))
                 })?
             };
+
+            Self::validate_rsc_wire_format(&rsc_wire_format)?;
 
             return Ok(rsc_wire_format);
         }
@@ -393,21 +403,7 @@ impl LayoutRenderer {
 
         let is_not_found = route_match.not_found.is_some();
 
-        if !is_not_found {
-            renderer
-                .runtime
-                .execute_script(
-                    "enable_streaming".to_string(),
-                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
-                )
-                .await?;
-
-            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-            renderer
-                .runtime
-                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-                .await?;
-        }
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
 
         let promise_result = renderer
             .runtime
@@ -646,6 +642,7 @@ impl LayoutRenderer {
 
         let html_renderer =
             crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+        drop(renderer);
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
         let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
 
