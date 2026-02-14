@@ -341,7 +341,7 @@ export async function renderApp(): Promise<void> {
           },
         })
 
-        if (!response.ok)
+        if (!response.ok && response.status !== 404)
           throw new Error(`Failed to fetch RSC data: ${response.status}`)
 
         const stream = response.body

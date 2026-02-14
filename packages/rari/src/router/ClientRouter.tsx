@@ -360,7 +360,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
           signal: abortController.signal,
         })
 
-        if (!response.ok)
+        if (!response.ok && response.status !== 404)
           throw new Error(`Failed to fetch: ${response.status}`)
 
         const finalUrl = new URL(response.url)

@@ -41,6 +41,28 @@ impl LayoutRenderer {
         Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
     }
 
+    async fn enable_streaming_and_inject_lazy_resolver(
+        renderer: &RscRenderer,
+        is_not_found: bool,
+    ) -> Result<(), RariError> {
+        if !is_not_found {
+            renderer
+                .runtime
+                .execute_script(
+                    "enable_streaming".to_string(),
+                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
+                )
+                .await?;
+
+            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
+            renderer
+                .runtime
+                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn check_page_not_found(
         &self,
         route_match: &AppRouteMatch,
@@ -162,19 +184,9 @@ impl LayoutRenderer {
             error!("Failed to set request context: {}", e);
         }
 
-        renderer
-            .runtime
-            .execute_script(
-                "enable_streaming".to_string(),
-                "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
-            )
-            .await?;
+        let is_not_found = route_match.not_found.is_some();
 
-        let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-        renderer
-            .runtime
-            .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-            .await?;
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
 
         let promise_result = renderer
             .runtime
@@ -194,6 +206,20 @@ impl LayoutRenderer {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
             RariError::internal("No RSC data in render result")
         })?;
+
+        if is_not_found {
+            let rsc_wire_format = {
+                let mut serializer = renderer.serializer.lock();
+                serializer.reset_for_new_request();
+                serializer.serialize_rsc_json(rsc_data).map_err(|e| {
+                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
+                })?
+            };
+
+            Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+            return Ok(rsc_wire_format);
+        }
 
         let (mut rsc_wire_format, pending_promises) = {
             let mut serializer = renderer.serializer.lock();
@@ -377,21 +403,7 @@ impl LayoutRenderer {
 
         let is_not_found = route_match.not_found.is_some();
 
-        if !is_not_found {
-            renderer
-                .runtime
-                .execute_script(
-                    "enable_streaming".to_string(),
-                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
-                )
-                .await?;
-
-            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-            renderer
-                .runtime
-                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-                .await?;
-        }
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
 
         let promise_result = renderer
             .runtime
@@ -620,25 +632,6 @@ impl LayoutRenderer {
             return Ok(RenderResult::Streaming(stream));
         }
 
-        let promise_result = renderer
-            .runtime
-            .execute_script("compose_and_render_notfound".to_string(), composition_script)
-            .await?;
-
-        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
-            promise_result
-        } else {
-            renderer
-                .runtime
-                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
-                .await?
-        };
-
-        let rsc_data = result.get("rsc_data").ok_or_else(|| {
-            tracing::error!("Failed to extract RSC data from result: {:?}", result);
-            RariError::internal("No RSC data in render result")
-        })?;
-
         let rsc_wire_format = {
             let mut serializer = renderer.serializer.lock();
             serializer.reset_for_new_request();
@@ -649,6 +642,7 @@ impl LayoutRenderer {
 
         let html_renderer =
             crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+        drop(renderer);
         let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
         let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
 
@@ -758,9 +752,20 @@ impl LayoutRenderer {
             ))
         })?;
 
-        let page_component_id = utils::create_component_id(&route_match.route.file_path);
+        let page_file_path = if let Some(ref not_found) = route_match.not_found {
+            &not_found.file_path
+        } else {
+            &route_match.route.file_path
+        };
 
-        let page_render_script = if let Some(loading_id) = loading_component_id {
+        let page_component_id = utils::create_component_id(page_file_path);
+
+        let page_render_script = if route_match.not_found.is_some() {
+            JS_PAGE_RENDER_SIMPLE
+                .cow_replace("{page_component_id}", &page_component_id)
+                .cow_replace("{page_props_json}", "{}")
+                .into_owned()
+        } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
 
