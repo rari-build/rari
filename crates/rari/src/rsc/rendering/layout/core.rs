@@ -162,19 +162,23 @@ impl LayoutRenderer {
             error!("Failed to set request context: {}", e);
         }
 
-        renderer
-            .runtime
-            .execute_script(
-                "enable_streaming".to_string(),
-                "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
-            )
-            .await?;
+        let is_not_found = route_match.not_found.is_some();
 
-        let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-        renderer
-            .runtime
-            .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-            .await?;
+        if !is_not_found {
+            renderer
+                .runtime
+                .execute_script(
+                    "enable_streaming".to_string(),
+                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
+                )
+                .await?;
+
+            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
+            renderer
+                .runtime
+                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
+                .await?;
+        }
 
         let promise_result = renderer
             .runtime
@@ -194,6 +198,18 @@ impl LayoutRenderer {
             tracing::error!("Failed to extract RSC data from result: {:?}", result);
             RariError::internal("No RSC data in render result")
         })?;
+
+        if is_not_found {
+            let rsc_wire_format = {
+                let mut serializer = renderer.serializer.lock();
+                serializer.reset_for_new_request();
+                serializer.serialize_rsc_json(rsc_data).map_err(|e| {
+                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
+                })?
+            };
+
+            return Ok(rsc_wire_format);
+        }
 
         let (mut rsc_wire_format, pending_promises) = {
             let mut serializer = renderer.serializer.lock();
@@ -758,9 +774,20 @@ impl LayoutRenderer {
             ))
         })?;
 
-        let page_component_id = utils::create_component_id(&route_match.route.file_path);
+        let page_file_path = if let Some(ref not_found) = route_match.not_found {
+            &not_found.file_path
+        } else {
+            &route_match.route.file_path
+        };
 
-        let page_render_script = if let Some(loading_id) = loading_component_id {
+        let page_component_id = utils::create_component_id(page_file_path);
+
+        let page_render_script = if route_match.not_found.is_some() {
+            JS_PAGE_RENDER_SIMPLE
+                .cow_replace("{page_component_id}", &page_component_id)
+                .cow_replace("{page_props_json}", "{}")
+                .into_owned()
+        } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
 

@@ -142,23 +142,36 @@ impl ResponseCache {
         route: &str,
         params: Option<&rustc_hash::FxHashMap<String, String>>,
     ) -> String {
-        if let Some(params) = params {
+        Self::generate_cache_key_with_mode(route, params, None)
+    }
+
+    pub fn generate_cache_key_with_mode(
+        route: &str,
+        params: Option<&rustc_hash::FxHashMap<String, String>>,
+        render_mode: Option<&str>,
+    ) -> String {
+        let base = if let Some(params) = params {
             if params.is_empty() {
-                return route.to_string();
+                route.to_string()
+            } else {
+                let mut sorted_params: Vec<_> = params.iter().collect();
+                sorted_params.sort_by_key(|(k, _)| *k);
+
+                let params_str = sorted_params
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<_>>()
+                    .join("&");
+
+                format!("{}?{}", route, params_str)
             }
-
-            let mut sorted_params: Vec<_> = params.iter().collect();
-            sorted_params.sort_by_key(|(k, _)| *k);
-
-            let params_str = sorted_params
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("&");
-
-            format!("{}?{}", route, params_str)
         } else {
             route.to_string()
+        };
+
+        match render_mode {
+            Some(mode) => format!("{}#:{}", base, mode),
+            None => base,
         }
     }
 

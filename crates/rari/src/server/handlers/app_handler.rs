@@ -895,13 +895,14 @@ pub async fn handle_app_route(
                 )
                 .await;
             }
-            let cache_key = response_cache::ResponseCache::generate_cache_key(
+            let cache_key = response_cache::ResponseCache::generate_cache_key_with_mode(
                 path,
                 if query_params_for_cache.is_empty() {
                     None
                 } else {
                     Some(&query_params_for_cache)
                 },
+                Some("rsc"),
             );
 
             if let Some(cached) = state.response_cache.get(&cache_key).await {
