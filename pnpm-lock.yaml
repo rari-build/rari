@@ -80,6 +80,9 @@ catalogs:
     '@shikijs/themes':
       specifier: ^3.22.0
       version: 3.22.0
+    '@shikijs/types':
+      specifier: ^3.22.0
+      version: 3.22.0
   monitoring:
     '@sentry/react':
       specifier: ^10.38.0
@@ -323,6 +326,9 @@ importers:
         specifier: catalog:mdx
         version: 3.22.0
       '@shikijs/themes':
+        specifier: catalog:mdx
+        version: 3.22.0
+      '@shikijs/types':
         specifier: catalog:mdx
         version: 3.22.0
       posthog-js:

@@ -44,7 +44,7 @@ export default function TerminalBlock({ command, showHeader = true }: TerminalBl
 
         <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
           <code className="whitespace-pre wrap-break-word">
-            <span className="text-gray-500 select-none">$ </span>
+            <span className="text-gray-400 select-none">$ </span>
             {highlightCommand(command)}
           </code>
         </pre>

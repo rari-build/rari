@@ -172,7 +172,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   <div className="flex items-center">
                     {isDisabled
                       ? (
-                          <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-gray-500 cursor-not-allowed">
+                          <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-gray-400 cursor-not-allowed">
                             {item.label}
                           </div>
                         )
@@ -286,7 +286,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                                     <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                                                   )}
                                                   <span className="relative z-10 flex items-center">
-                                                    {!hasSubItems && <span className="mr-2 text-gray-500">•</span>}
+                                                    {!hasSubItems && <span className="mr-2 text-gray-400">•</span>}
                                                     {subItem.label}
                                                   </span>
                                                 </a>
@@ -330,7 +330,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                                     <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                                                   )}
                                                   <span className="relative z-10 flex items-center">
-                                                    <span className="mr-2 text-gray-500">•</span>
+                                                    <span className="mr-2 text-gray-400">•</span>
                                                     {nestedItem.label}
                                                   </span>
                                                 </a>

@@ -76,7 +76,7 @@ export default async function BlogIndexPage() {
                     href={`/blog/${post.slug}`}
                     className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
                   >
-                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
                       <time>{formatDate(post.date)}</time>
                     </div>
                     <h2 className="text-xl font-semibold text-[#f0f6fc] mb-3 group-hover:text-[#fd7e14] transition-colors">
@@ -93,7 +93,7 @@ export default async function BlogIndexPage() {
               <div className="flex flex-col items-center justify-center py-16 px-4">
                 <div className="text-center space-y-4 max-w-md">
                   <div className="w-16 h-16 mx-auto bg-[#161b22] border border-[#30363d] rounded-lg flex items-center justify-center">
-                    <News className="w-8 h-8 text-gray-500" />
+                    <News className="w-8 h-8 text-gray-400" />
                   </div>
                   <h2 className="text-2xl font-semibold text-[#f0f6fc]">No posts yet</h2>
                   <p className="text-gray-300">

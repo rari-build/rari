@@ -50,7 +50,7 @@ export default async function ApiReferencePage() {
               <p className="text-gray-300">
                 Server and client utilities for data fetching and routing.
               </p>
-              <span className="text-xs text-gray-500 mt-2 inline-block">Coming soon</span>
+              <span className="text-xs text-gray-400 mt-2 inline-block">Coming soon</span>
             </div>
 
             <div className="block p-6 bg-[#161b22] border border-[#30363d] rounded-lg opacity-50">
@@ -60,7 +60,7 @@ export default async function ApiReferencePage() {
               <p className="text-gray-300">
                 Vite plugin options and runtime configuration.
               </p>
-              <span className="text-xs text-gray-500 mt-2 inline-block">Coming soon</span>
+              <span className="text-xs text-gray-400 mt-2 inline-block">Coming soon</span>
             </div>
 
             <div className="block p-6 bg-[#161b22] border border-[#30363d] rounded-lg opacity-50">
@@ -70,7 +70,7 @@ export default async function ApiReferencePage() {
               <p className="text-gray-300">
                 TypeScript type definitions and interfaces.
               </p>
-              <span className="text-xs text-gray-500 mt-2 inline-block">Coming soon</span>
+              <span className="text-xs text-gray-400 mt-2 inline-block">Coming soon</span>
             </div>
           </div>
         </div>

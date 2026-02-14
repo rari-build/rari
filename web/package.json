@@ -27,6 +27,7 @@
     "@shikijs/engine-oniguruma": "catalog:mdx",
     "@shikijs/langs": "catalog:mdx",
     "@shikijs/themes": "catalog:mdx",
+    "@shikijs/types": "catalog:mdx",
     "posthog-js": "catalog:analytics",
     "rari": "catalog:",
     "react": "catalog:react",

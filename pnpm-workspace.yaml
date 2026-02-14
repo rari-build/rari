@@ -41,6 +41,7 @@ catalogs:
     '@shikijs/engine-oniguruma': ^3.22.0
     '@shikijs/langs': ^3.22.0
     '@shikijs/themes': ^3.22.0
+    '@shikijs/types': ^3.22.0
   monitoring:
     '@sentry/react': ^10.38.0
   react:

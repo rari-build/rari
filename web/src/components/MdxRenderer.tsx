@@ -62,17 +62,12 @@ export default async function MdxRenderer({
       return <NotFoundPage />
 
     const highlighter = await getHighlighter()
-    const remarkPlugins: any[] = []
-
-    if (highlighter) {
-      remarkPlugins.push([
+    const remarkPlugins: any[] = [
+      [
         remarkCodeBlock,
-        {
-          highlighter,
-          theme: SHIKI_THEME,
-        },
-      ])
-    }
+        { highlighter, theme: SHIKI_THEME },
+      ],
+    ]
 
     const { default: MDXContent } = await evaluate(content, {
       ...runtime,

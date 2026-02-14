@@ -79,10 +79,11 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
       const language = languageProp?.value || 'typescript'
 
       try {
-        const highlightedHtml = highlighter.codeToHtml(code.trim(), {
+        let highlightedHtml = highlighter.codeToHtml(code.trim(), {
           lang: language,
           theme,
         })
+        highlightedHtml = highlightedHtml.replace(/<pre([^>]*) style="[^"]*"/, '<pre$1')
         if (!node.attributes)
           node.attributes = []
         node.attributes.push({
