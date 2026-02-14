@@ -21,9 +21,8 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
   const [packageManager, setPackageManager] = useState<PackageManager>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('preferred-package-manager') as PackageManager | null
-      if (stored && PACKAGE_MANAGERS.includes(stored)) {
+      if (stored && PACKAGE_MANAGERS.includes(stored))
         return stored
-      }
     }
 
     return 'pnpm'
