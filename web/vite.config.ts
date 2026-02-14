@@ -6,11 +6,8 @@ import { defineConfig } from 'rolldown-vite'
 export default defineConfig({
   plugins: [
     rari({
-      rateLimit: {
-        enabled: false,
-      },
       spamBlocker: {
-        enabled: false,
+        enabled: true,
       },
       csp: {
         scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://us-assets.i.posthog.com', 'https://js.sentry-cdn.com'],
