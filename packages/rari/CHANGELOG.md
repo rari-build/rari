@@ -1,8 +1,21 @@
+## [rari@0.9.2] - 2026-02-14
+
+### 🚀 Features
+
+- *(rsc)* Fix 404 not-found route handling with streaming support
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.9.2
 ## [rari@0.9.1] - 2026-02-13
 
 ### 🚀 Features
 
 - *(rari)* Implement fetch caching with request deduplication
+
+### 💼 Other
+
+- Rari@0.9.1
 
 ### ⚙️ Miscellaneous Tasks
 
