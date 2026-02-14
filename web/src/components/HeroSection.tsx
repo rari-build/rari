@@ -16,17 +16,16 @@ export default function HeroSection() {
           </div>
 
           <p className="text-2xl lg:text-3xl font-semibold text-white mb-4 max-w-3xl mx-auto leading-tight">
-            Write JavaScript. Get Rust performance.
+            Zero to React Server Components in minutes.
           </p>
 
           <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-            The React framework with a
+            A React framework where the HTTP server, RSC renderer, and routing all run in a
             {' '}
             <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] font-semibold">
-              Rust-powered engine
+              Rust runtime with embedded V8
             </span>
-            {' '}
-            under the hood.
+            .
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -52,9 +51,9 @@ export default function HeroSection() {
 
         <div className="flex flex-wrap items-center justify-center gap-3">
           {[
-            { label: 'Write JavaScript', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
-            { label: 'Rust-Powered Engine', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
+            { label: 'Rust Runtime + V8', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
             { label: 'React Server Components', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
+            { label: 'Streaming & Suspense', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
             { label: 'Zero Config', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
           ].map((feature, i) => (
             <div

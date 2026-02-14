@@ -52,45 +52,45 @@ export default async function HomePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-5xl font-bold text-[#f0f6fc] mb-4">
-              Built for
+              Three layers,
               {' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">Speed</span>
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">one framework</span>
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Leverage the power of Rust for unprecedented performance in your React applications
+              A Rust runtime, a React Server Components framework, and a Rust-native build toolchain — working together so you just write React
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                title: 'Rust-Powered Performance',
-                description: 'Native speed with Rust compilation for blazing-fast builds and runtime',
+                title: 'Rust Runtime',
+                description: 'The HTTP server, RSC renderer, and router are written in Rust with an embedded V8 engine that executes your React components',
                 icon: 'rust',
               },
               {
-                title: 'Server Components',
-                description: 'Built-in support for React Server Components—ship less JavaScript to the client',
+                title: 'React Server Components',
+                description: 'Server components by default with streaming, Suspense boundary handling, and server action execution built into the runtime',
                 icon: 'react',
               },
               {
-                title: 'Zero Configuration',
-                description: 'Powered by Rolldown-Vite, the next-generation Rust-based bundler for lightning-fast builds',
+                title: 'Rolldown + Vite',
+                description: 'Bundled by Rolldown-Vite with zero config needed — just add the plugin to your vite.config.ts and go',
                 icon: 'vite',
               },
               {
-                title: 'Optimized Bundling',
-                description: 'Native-speed bundling with Rolldown for maximum performance',
+                title: 'node_modules Support',
+                description: 'Unlike most Rust-based JS runtimes, rari resolves packages from node_modules directly — no import maps or URL specifiers needed',
                 icon: 'rolldown',
               },
               {
-                title: 'Type Safety',
-                description: 'Full TypeScript support with comprehensive type definitions, powered by tsgo for 10x faster type checking',
+                title: 'TypeScript First',
+                description: 'Full type safety across the server/client boundary, with tsgo for faster type checking during development',
                 icon: 'typescript',
               },
               {
                 title: 'Developer Experience',
-                description: 'Instant HMR with Vite, detailed error messages, and native-speed tooling for a seamless workflow',
+                description: 'Instant HMR, detailed error overlays, and a project generator that gets you from zero to a running RSC app in seconds',
                 icon: 'code',
               },
             ].map((feature, i) => (
@@ -104,7 +104,7 @@ export default async function HomePage() {
 }
 
 export const metadata: Metadata = {
-  title: 'rari: Runtime Accelerated Rendering Infrastructure',
+  title: 'rari: React Server Components on a Rust Runtime',
   description:
-    'rari is a performance-first React framework powered by Rust. Build web applications with React Server Components, zero-config setup, and runtime-accelerated rendering infrastructure.',
+    'rari is a React Server Components framework with a Rust runtime. The HTTP server, RSC renderer, and routing run in Rust with embedded V8. Zero to RSC in minutes.',
 }

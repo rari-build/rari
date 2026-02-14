@@ -1,9 +1,9 @@
 export const title = 'Getting Started'
-export const description = 'Learn how to create your first rari application with React Server Components and Rust-powered performance.'
+export const description = 'Create your first rari application — a React Server Components framework running on a Rust runtime with embedded V8.'
 
 <PageHeader title="Getting Started with rari" />
 
-This guide will walk you through creating your first rari application from scratch. You'll learn the basics of React Server Components with rari's high-performance Rust runtime.
+This guide walks you through creating your first rari application. rari has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-Vite bundling, tsgo type checking). You write standard React — the runtime underneath is Rust instead of Node.
 
 ## Prerequisites
 
@@ -155,7 +155,7 @@ export default function Counter() {
 
 ## Using NPM Packages
 
-One of rari's superpowers is seamless NPM package integration. Let's add markdown support:
+rari's Rust runtime handles standard `node_modules` resolution — you can `import` from any npm package the same way you would in Node. This is worth calling out because most Rust-based JS runtimes (like Deno) use URL imports or npm specifiers instead. With rari, your existing `package.json` workflow just works.
 
 <PackageManagerTabs
   commands={{
@@ -238,7 +238,6 @@ export const metadata = {
 Your app will be available at `http://localhost:5173` (Vite default) with:
 - **Hot module reloading** for instant updates
 - **Error overlay** for debugging
-- **Fast Rust runtime** powering server components
 - **TypeScript support** out of the box
 
 ### Build for Production

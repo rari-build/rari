@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord)](https://discord.gg/GSh2Ak3b8Q)
 
-**rari** is a high-performance React Server Components framework powered by a Rust runtime. Built for performance, scalability, and developer experience.
+**rari** is a React Server Components framework running on a Rust runtime. It has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-Vite bundling, tsgo type checking). You write standard React — the runtime underneath is Rust instead of Node.
 
 With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 46.5x higher throughput and 9.1x faster response times than Next.js.
 
@@ -21,10 +21,10 @@ With proper app router support, true server-side rendering, and correct RSC sema
 - **App Router** - File-based routing with layouts, loading states, and error boundaries
 - **True Server-Side Rendering** - Pre-rendered HTML with instant hydration
 - **React Server Components** - Server components by default, client components when you need them
-- **Rust-powered runtime** - Persistent runtime for maximum performance
+- **Rust-powered runtime** - HTTP server, RSC renderer, and routing written in Rust with embedded V8
 - **Zero-config setup** - Works out of the box with pre-built binaries
 - **Hot module reloading** - Instant feedback during development
-- **Universal NPM package support** - Use any npm package seamlessly
+- **node_modules support** - Standard npm package resolution, unlike most Rust-based JS runtimes
 - **TypeScript-first** - Full type safety across server/client boundary
 - **Cross-platform** - Supports macOS, Linux, and Windows
 - **Streaming SSR** - Progressive rendering with Suspense boundaries
