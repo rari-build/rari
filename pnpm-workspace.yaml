@@ -26,7 +26,7 @@ catalogs:
   eslint:
     '@antfu/eslint-config': ^7.4.3
     '@e18e/eslint-plugin': ^0.1.4
-    '@eslint-react/eslint-plugin': ^2.12.4
+    '@eslint-react/eslint-plugin': ^2.13.0
     '@typescript-eslint/utils': ^8.55.0
     eslint: ^10.0.0
     eslint-plugin-de-morgan: ^2.0.0
@@ -57,7 +57,7 @@ catalogs:
     vitest: ^4.0.18
   typescript:
     '@types/node': ^25.2.3
-    '@typescript/native-preview': ^7.0.0-dev.20260213.1
+    '@typescript/native-preview': ^7.0.0-dev.20260214.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
