@@ -1,4 +1,4 @@
-import { getRepoStars } from '@/lib/github-utils'
+import { getLatestCommitHash, getRepoStars } from '@/lib/github-utils'
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'
@@ -6,6 +6,7 @@ import Github from './icons/Github'
 export default async function Footer() {
   const currentYear = new Date().getFullYear()
   const stars = await getRepoStars()
+  const commitHash = await getLatestCommitHash()
 
   return (
     <footer className="w-full bg-[#0d1117] rounded-t-md">
@@ -26,6 +27,21 @@ export default async function Footer() {
             {currentYear}
             {' '}
             Ryan Skinner
+            {commitHash && (
+              <>
+                {' '}
+                (
+                <a
+                  href={`https://github.com/rari-build/rari/commit/${commitHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline hover:text-gray-200 transition-colors"
+                >
+                  {commitHash}
+                </a>
+                )
+              </>
+            )}
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import process from 'node:process'
 
 interface GitHubCommit {
+  sha: string
   commit: {
     author: {
       date: string
@@ -90,4 +91,30 @@ async function getRepoInfo(): Promise<GitHubRepo | null> {
 export async function getRepoStars(): Promise<number | null> {
   const repoInfo = await getRepoInfo()
   return repoInfo?.stargazers_count ?? null
+}
+export async function getLatestCommitHash(): Promise<string | null> {
+  try {
+    const url = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/commits?page=1&per_page=1`
+
+    const response = await fetch(url, {
+      headers: getGitHubHeaders(),
+      rari: { revalidate: 3600 },
+    })
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch latest commit: ${response.status}`)
+      return null
+    }
+
+    const commits: GitHubCommit[] = await response.json()
+
+    if (commits.length === 0)
+      return null
+
+    return commits[0].sha?.substring(0, 8) ?? null
+  }
+  catch (error) {
+    console.error('Error fetching latest commit:', error)
+    return null
+  }
 }
