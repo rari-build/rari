@@ -98,7 +98,7 @@ This creates a `render.yaml` in your project root and updates your `package.json
     name: rari-app
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npx rari build
     startCommand: npm start
     healthCheckPath: /
     envVars:

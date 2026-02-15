@@ -19,7 +19,7 @@ Each directory in `src/app/` can contain these special files:
 | `route.ts` | API endpoint handler (cannot coexist with `page.tsx` in the same directory) |
 | `opengraph-image.tsx` | Dynamically generated Open Graph image for the route |
 
-All files support `.jsx` extensions as well.
+UI files also support `.jsx` extensions, and `route.ts` can be written as `route.js`.
 
 ## Pages
 
@@ -349,7 +349,7 @@ export const POST: RouteHandler = async (request) => {
 }
 `}</CodeBlock>
 
-<CodeBlock filename="src/app/api/users/[id]/route.ts" language="typescript">{`import type { RouteContext, RouteHandler } from 'rari'
+<CodeBlock filename="src/app/api/users/[id]/route.ts" language="typescript">{`import type { RouteHandler } from 'rari'
 
 export const GET: RouteHandler<{ id: string }> = async (request, context) => {
   // context is always provided for dynamic routes
