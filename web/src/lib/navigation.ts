@@ -9,16 +9,10 @@ export const docsNavigation: NavItem[] = [
     label: 'Getting Started',
     href: '/docs/getting-started',
     items: [
+      { label: 'Routing', href: '/docs/getting-started/routing' },
       { label: 'Metadata', href: '/docs/getting-started/metadata' },
+      { label: 'Deploying', href: '/docs/getting-started/deploying' },
     ],
-  },
-  {
-    label: 'Routing',
-    href: '/docs/routing',
-  },
-  {
-    label: 'Deploying',
-    href: '/docs/deploying',
   },
   {
     label: 'API Reference',
