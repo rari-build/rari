@@ -97,7 +97,6 @@ This creates a `render.yaml` in your project root and updates your `package.json
   - type: web
     name: rari-app
     runtime: node
-    env: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
@@ -165,7 +164,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["npx", "rari", "start"]
+CMD ["npm", "start"]
 `}</CodeBlock>
 
 rari binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.

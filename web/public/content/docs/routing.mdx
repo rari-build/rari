@@ -320,7 +320,7 @@ Use standard `<a>` tags for navigation. rari's client router intercepts link cli
 }
 `}</CodeBlock>
 
-Client-side navigation preserves layout state, avoids full page reloads, and streams only the content that changed.
+Client-side navigation preserves layout state, avoids full-page reloads, and streams only the content that changed.
 
 ## API Routes
 
@@ -352,6 +352,7 @@ export const POST: RouteHandler = async (request) => {
 <CodeBlock filename="src/app/api/users/[id]/route.ts" language="typescript">{`import type { RouteContext, RouteHandler } from 'rari'
 
 export const GET: RouteHandler<{ id: string }> = async (request, context) => {
+  // context is always provided for dynamic routes
   const { id } = context!.params
 
   const user = await fetchUser(id)
