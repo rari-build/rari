@@ -1,0 +1,176 @@
+export const title = 'Deploying'
+export const description = 'Build and deploy your rari application to Railway, Render, or any Node.js hosting platform.'
+
+<PageHeader title="Deploying" />
+
+rari applications run on a Rust server with an embedded V8 runtime. The deployment workflow is straightforward: build your app, then start the server.
+
+## Building for Production
+
+Run `rari build` to create a production build:
+
+<TerminalBlock command="rari build" />
+
+This cleans any previous `dist/` output, then runs three steps in sequence:
+
+1. Type checks your project with `tsgo`
+2. Bundles your application with Vite
+3. Pre-optimizes images referenced in your build
+
+The output goes to `dist/`. This directory and your `node_modules` are everything the server needs to run your app.
+
+## Starting the Server
+
+Run `rari start` to launch the production server:
+
+<TerminalBlock command="rari start" />
+
+The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway, Render), it automatically binds to `0.0.0.0` so the host can route external traffic to your app.
+
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | Server port | `3000` |
+| `RSC_PORT` | Alternative server port (fallback if `PORT` is not set) | `3000` |
+| `NODE_ENV` | Environment mode | `production` for `rari start`, `development` for `rari dev` |
+| `RUST_LOG` | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error` |
+
+`PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
+
+## Railway
+
+rari has built-in support for [Railway](https://railway.app). Run the deploy command to generate the configuration files:
+
+<TerminalBlock command="rari deploy railway" />
+
+This creates a `railway.toml` in your project root and updates your `package.json`:
+
+<CodeBlock filename="railway.toml" language="toml">{`[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+`}</CodeBlock>
+
+Your `package.json` gets these changes:
+
+- `scripts.start` is set to `rari start`
+- `engines.node` is set to `>=22.0.0` (required by rari)
+- `rari` is added to `dependencies` if not already present
+
+If you have an existing `start` script, it's backed up to `start:original`.
+
+### Deploying to Railway
+
+1. Push your code to GitHub
+2. Go to [railway.app](https://railway.app) and create a new project
+3. Select "Deploy from GitHub repo" and choose your repository
+4. Railway detects the configuration and deploys automatically
+5. Generate a domain under Settings → Networking
+
+rari auto-detects Railway via the `RAILWAY_ENVIRONMENT` environment variable and binds to `0.0.0.0` with the platform-assigned `PORT`.
+
+### System Dependencies
+
+rari's Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
+
+| Variable | Value |
+|---|---|
+| `RAILPACK_DEPLOY_APT_PACKAGES` | `libfontconfig1` |
+
+You can set this in the Railway dashboard under your service's Variables tab.
+
+## Render
+
+rari also has built-in support for [Render](https://render.com). Run the deploy command to generate the configuration files:
+
+<TerminalBlock command="rari deploy render" />
+
+This creates a `render.yaml` in your project root and updates your `package.json`:
+
+<CodeBlock filename="render.yaml" language="yaml">{`services:
+  - type: web
+    name: rari-app
+    runtime: node
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RUST_LOG
+        value: info
+`}</CodeBlock>
+
+The same `package.json` changes apply as with Railway — `scripts.start`, `engines.node`, and the `rari` dependency.
+
+### Deploying to Render
+
+1. Push your code to GitHub
+2. Go to [render.com](https://render.com) and create a new "Web Service"
+3. Connect your GitHub repository
+4. Render auto-detects the `render.yaml` configuration
+5. Click "Create Web Service"
+
+rari auto-detects Render via the `RENDER` environment variable and binds to `0.0.0.0` with the platform-assigned `PORT`.
+
+### System Dependencies
+
+rari's Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency — so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
+
+## Self-Hosting
+
+You can deploy rari to any platform that runs Node.js ≥ 22. The general steps:
+
+<CodeBlock language="bash">{`# Install dependencies
+npm install
+
+# Build for production
+rari build
+
+# Start the server
+PORT=8080 rari start
+`}</CodeBlock>
+
+The key requirements:
+
+- Node.js ≥ 22.0.0
+- The `rari` package in your dependencies (it includes the platform-specific Rust binary)
+- The `dist/` directory from `rari build`
+- `libfontconfig1` installed on the host (required by the Rust runtime for image and font rendering)
+- A `PORT` environment variable if your host expects a specific port
+
+For containerized deployments, a minimal Dockerfile:
+
+<CodeBlock filename="Dockerfile" language="dockerfile">{`FROM node:22-slim
+
+RUN apt-get update && apt-get install -y libfontconfig1 && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npx rari build
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+CMD ["npx", "rari", "start"]
+`}</CodeBlock>
+
+rari binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.
+
+## Related
+
+- [Getting Started](/docs/getting-started) — Create your first rari app
+- [Routing](/docs/routing) — File-based routing, layouts, and API routes

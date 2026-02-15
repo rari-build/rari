@@ -33,8 +33,11 @@ export async function getHighlighter(): Promise<HighlighterCore> {
       ],
       langs: [
         import('@shikijs/langs/bash'),
+        import('@shikijs/langs/dockerfile'),
+        import('@shikijs/langs/toml'),
         import('@shikijs/langs/tsx'),
         import('@shikijs/langs/typescript'),
+        import('@shikijs/langs/yaml'),
       ],
       engine: createOnigurumaEngine(import('@shikijs/engine-oniguruma/wasm-inlined')),
     })
