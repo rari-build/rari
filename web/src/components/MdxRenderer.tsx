@@ -5,6 +5,7 @@ import { cwd } from 'node:process'
 import { evaluate } from '@mdx-js/mdx'
 import { createMDXClientReferences } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
+import remarkGfm from 'remark-gfm'
 import NotFoundPage from '@/app/not-found'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import Heading from '@/components/Heading'
@@ -63,6 +64,7 @@ export default async function MdxRenderer({
 
     const highlighter = await getHighlighter()
     const remarkPlugins: any[] = [
+      remarkGfm,
       [
         remarkCodeBlock,
         { highlighter, theme: SHIKI_THEME },

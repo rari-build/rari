@@ -32,6 +32,7 @@
     "rari": "catalog:",
     "react": "catalog:react",
     "react-dom": "catalog:react",
+    "remark-gfm": "catalog:mdx",
     "unist-util-visit": "catalog:utils"
   },
   "devDependencies": {
