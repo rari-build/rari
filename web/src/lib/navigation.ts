@@ -13,6 +13,14 @@ export const docsNavigation: NavItem[] = [
     ],
   },
   {
+    label: 'Routing',
+    href: '/docs/routing',
+  },
+  {
+    label: 'Deploying',
+    href: '/docs/deploying',
+  },
+  {
     label: 'API Reference',
     href: '/docs/api-reference',
     items: [

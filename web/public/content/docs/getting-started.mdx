@@ -73,7 +73,7 @@ export default defineConfig({
 
 ## Your First App Router Page
 
-With the app router, your application structure is based on the `src/app/` directory. Let's create your first page.
+With the app router, your application structure is based on the `src/app/` directory. Let's create your first page. See [Routing](/docs/routing) for the full reference on file conventions, dynamic routes, and layouts.
 
 Create `src/app/layout.tsx` (root layout):
 
@@ -302,120 +302,6 @@ A typical rari project (created with `create-rari-app`) looks like this:
 └── .gitignore
 `}</CodeBlock>
 
-## App Router
-
-rari uses the app router pattern where your file structure in `src/app/` automatically determines your application routes. This makes organizing your application intuitive and scalable.
-
-### Basic Routes
-
-Routes are created by adding `page.tsx` files in the `src/app/` directory:
-
-- `src/app/page.tsx` → `/`
-- `src/app/about/page.tsx` → `/about`
-- `src/app/contact/page.tsx` → `/contact`
-
-<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
-
-export default function AboutPage({ params, searchParams }: PageProps) {
-  return (
-    <div>
-      <h1>About Us</h1>
-      <p>Welcome to our amazing application!</p>
-    </div>
-  )
-}
-
-export const metadata = {
-  title: 'About | My App',
-  description: 'Learn more about us',
-}
-`}</CodeBlock>
-
-### Dynamic Routes
-
-Use square brackets for dynamic route parameters:
-
-- `src/app/users/[id]/page.tsx` → `/users/123`
-- `src/app/blog/[slug]/page.tsx` → `/blog/my-post`
-
-<CodeBlock filename="src/app/users/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
-
-export default function UserPage({ params }: PageProps<{ id: string }>) {
-  const { id } = params
-
-  return (
-    <div>
-      <h1>User Profile</h1>
-      <p>User ID: {id}</p>
-    </div>
-  )
-}
-
-export async function generateMetadata({ params }: PageProps<{ id: string }>) {
-  return {
-    title: \`User \${params.id} | My App\`,
-    description: \`Profile page for user \${params.id}\`,
-  }
-}
-`}</CodeBlock>
-
-### Layouts
-
-Layouts wrap pages and can be nested. They persist across route changes:
-
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
-
-export default function RootLayout({ children }: LayoutProps) {
-  return (
-    <div>
-      <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-      </nav>
-      <main>{children}</main>
-    </div>
-  )
-}
-
-export const metadata = {
-  title: 'My App',
-  description: 'Built with rari',
-}
-`}</CodeBlock>
-
-<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
-
-export default function DashboardLayout({ children }: LayoutProps) {
-  return (
-    <div>
-      <aside>
-        <nav>
-          <a href="/dashboard">Overview</a>
-          <a href="/dashboard/analytics">Analytics</a>
-          <a href="/dashboard/settings">Settings</a>
-        </nav>
-      </aside>
-      <div>{children}</div>
-    </div>
-  )
-}
-`}</CodeBlock>
-
-### Navigation
-
-Use standard HTML links for navigation - the app router handles client-side navigation automatically:
-
-<CodeBlock language="tsx">{`export default function Navigation() {
-  return (
-    <nav>
-      <a href="/">Home</a>
-      <a href="/about">About</a>
-      <a href="/blog">Blog</a>
-    </nav>
-  )
-}
-`}</CodeBlock>
-
 ## Server vs Client Components
 
 ### Server Components (Default)
@@ -495,84 +381,10 @@ export default function UserForm() {
 }
 `}</CodeBlock>
 
-## Common Patterns
+## Next Steps
 
-### Loading Data in Pages
-
-<CodeBlock filename="src/app/users/[id]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
-
-export default async function UserProfile({ params }: PageProps<{ id: string }>) {
-  const { id } = params
-
-  // Fetch data on the server
-  const user = await fetch(\`https://api.example.com/users/\${id}\`)
-    .then(r => r.json())
-
-  return (
-    <div>
-      <h1>{user.name}</h1>
-      <p>{user.email}</p>
-      <p>Joined: {user.createdAt}</p>
-    </div>
-  )
-}
-
-export async function generateMetadata({ params }: PageProps<{ id: string }>) {
-  const user = await fetch(\`https://api.example.com/users/\${params.id}\`)
-    .then(r => r.json())
-
-  return {
-    title: \`\${user.name} | Users\`,
-    description: \`Profile page for \${user.name}\`,
-  }
-}
-`}</CodeBlock>
-
-### Combining Server and Client
-
-<CodeBlock filename="src/app/dashboard/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
-import ClientCounter from '@/components/ClientCounter'
-
-export default async function Dashboard({ params, searchParams }: PageProps) {
-  const stats = await getServerStats()
-
-  return (
-    <div>
-      <h1>Dashboard</h1>
-      <div>Server stats: {stats.totalUsers}</div>
-      <ClientCounter />
-    </div>
-  )
-}
-
-export const metadata = {
-  title: 'Dashboard | My App',
-  description: 'Your dashboard',
-}
-`}</CodeBlock>
-
-### Error Handling
-
-<CodeBlock language="tsx">{`export default async function DataComponent() {
-  let data
-  let error
-
-  try {
-    data = await fetchSomeData()
-  }
-  catch (err) {
-    error = err
-  }
-
-  if (error) {
-    return (
-      <div>
-        <h2>Something went wrong</h2>
-        <p>{error instanceof Error ? error.message : 'Unknown error'}</p>
-      </div>
-    )
-  }
-
-  return <div>{data.content}</div>
-}
-`}</CodeBlock>
+- [Routing](/docs/routing) — File conventions, dynamic routes, layouts, loading states, error boundaries, and API routes
+- [Deploying](/docs/deploying) — Build and deploy to Railway, Render, or any Node.js host
+- [Metadata](/docs/getting-started/metadata) — Page titles, descriptions, Open Graph, and Twitter cards
+- [Image Component](/docs/api-reference/components/image) — Automatic image optimization
+- [ImageResponse](/docs/api-reference/components/image-response) — Dynamic Open Graph image generation

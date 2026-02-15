@@ -1,0 +1,418 @@
+export const title = 'Routing'
+export const description = 'Learn how file-based routing works in rari — pages, layouts, dynamic segments, loading states, error boundaries, and not-found handling.'
+
+<PageHeader title="Routing" />
+
+rari uses file-based routing. Your file structure inside `src/app/` becomes your URL structure. Add a `page.tsx` and you have a route. Add a `layout.tsx` and it wraps every page beneath it. No router config, no manifest files.
+
+## File Conventions
+
+Each directory in `src/app/` can contain these special files:
+
+| File | Purpose |
+|---|---|
+| `page.tsx` | The UI for a route — makes the directory publicly accessible |
+| `layout.tsx` | Shared UI that wraps child routes and persists across navigation |
+| `loading.tsx` | Loading UI shown while the page is streaming (wraps the page in a Suspense boundary) |
+| `error.tsx` | Error UI shown when a page or layout throws (wraps the page in an error boundary) |
+| `not-found.tsx` | Fallback UI shown when no route matches the requested path |
+| `route.ts` | API endpoint handler (cannot coexist with `page.tsx` in the same directory) |
+| `opengraph-image.tsx` | Dynamically generated Open Graph image for the route |
+
+UI files also support `.jsx` extensions, and `route.ts` can be written as `route.js`.
+
+## Pages
+
+A `page.tsx` file makes a route publicly accessible. Without it, a directory is just used for layout nesting or organization.
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`export default function HomePage() {
+  return <h1>Home</h1>
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/about/page.tsx" language="tsx">{`export default function AboutPage() {
+  return <h1>About</h1>
+}
+`}</CodeBlock>
+
+This gives you:
+
+- `src/app/page.tsx` → `/`
+- `src/app/about/page.tsx` → `/about`
+- `src/app/blog/page.tsx` → `/blog`
+
+Pages are React Server Components by default. They can be `async` and fetch data directly:
+
+<CodeBlock filename="src/app/posts/page.tsx" language="tsx">{`export default async function PostsPage() {
+  const posts = await fetch('https://api.example.com/posts').then(r => r.json())
+
+  return (
+    <ul>
+      {posts.map((post: any) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  )
+}
+`}</CodeBlock>
+
+## Layouts
+
+A `layout.tsx` wraps all pages in its directory and below. Layouts persist across navigation — they don't re-render when you navigate between sibling routes.
+
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <body>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+        </nav>
+        <main>{children}</main>
+      </body>
+    </html>
+  )
+}
+`}</CodeBlock>
+
+### Nested Layouts
+
+Layouts in subdirectories wrap their own children and are themselves wrapped by the parent layout:
+
+<CodeBlock language="bash">{`src/app/
+├── layout.tsx          # Root layout (wraps everything)
+├── page.tsx            # /
+└── dashboard/
+    ├── layout.tsx      # Dashboard layout (wraps dashboard pages)
+    ├── page.tsx        # /dashboard
+    ├── analytics/
+    │   └── page.tsx    # /dashboard/analytics
+    └── settings/
+        └── page.tsx    # /dashboard/settings
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+
+export default function DashboardLayout({ children }: LayoutProps) {
+  return (
+    <div style={{ display: 'flex' }}>
+      <aside>
+        <nav>
+          <a href="/dashboard">Overview</a>
+          <a href="/dashboard/analytics">Analytics</a>
+          <a href="/dashboard/settings">Settings</a>
+        </nav>
+      </aside>
+      <section>{children}</section>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+When you visit `/dashboard/analytics`, the rendering tree is:
+
+<CodeBlock language="tsx">{`<RootLayout>          {/* src/app/layout.tsx */}
+  <DashboardLayout>   {/* src/app/dashboard/layout.tsx */}
+    <AnalyticsPage /> {/* src/app/dashboard/analytics/page.tsx */}
+  </DashboardLayout>
+</RootLayout>
+`}</CodeBlock>
+
+Navigating from `/dashboard/analytics` to `/dashboard/settings` only re-renders the page — both layouts stay mounted.
+
+### Layout Props
+
+Layouts receive `children` (required) and optionally `params` and `pathname`:
+
+<CodeBlock filename="src/app/users/[id]/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+
+export default function UserLayout({ children, params, pathname }: LayoutProps<{ id: string }>) {
+  return (
+    <div>
+      <p>Current path: {pathname}</p>
+      <p>User: {params?.id}</p>
+      {children}
+    </div>
+  )
+}
+`}</CodeBlock>
+
+## Dynamic Routes
+
+Use square brackets to create routes that match dynamic segments.
+
+### Single Dynamic Segment
+
+<CodeBlock language="bash">{`src/app/blog/[slug]/page.tsx  →  /blog/hello-world, /blog/my-post
+src/app/users/[id]/page.tsx   →  /users/123, /users/abc
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/blog/[slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+
+export default async function BlogPost({ params }: PageProps<{ slug: string }>) {
+  const post = await fetch(\`https://api.example.com/posts/\${params.slug}\`).then(r => r.json())
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.content}</p>
+    </article>
+  )
+}
+`}</CodeBlock>
+
+### Catch-All Segments
+
+Use `[...param]` to match one or more segments:
+
+<CodeBlock language="bash">{`src/app/docs/[...slug]/page.tsx
+  →  /docs/getting-started         (slug = ["getting-started"])
+  →  /docs/api/reference/image     (slug = ["api", "reference", "image"])
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/docs/[...slug]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+
+export default function DocsPage({ params }: PageProps<{ slug: string[] }>) {
+  const path = params.slug.join('/')
+
+  return <h1>Docs: {path}</h1>
+}
+`}</CodeBlock>
+
+Catch-all segments require at least one segment — `/docs` alone would not match.
+
+### Optional Catch-All Segments
+
+Use `[[...param]]` to also match the route without any segments:
+
+<CodeBlock language="bash">{`src/app/docs/[[...slug]]/page.tsx
+  →  /docs                          (slug = undefined)
+  →  /docs/getting-started          (slug = ["getting-started"])
+  →  /docs/api/reference/image      (slug = ["api", "reference", "image"])
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/docs/[[...slug]]/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+
+export default function DocsPage({ params }: PageProps<{ slug?: string[] }>) {
+  if (!params.slug) {
+    return <h1>Docs Home</h1>
+  }
+
+  return <h1>Docs: {params.slug.join('/')}</h1>
+}
+`}</CodeBlock>
+
+### Route Priority
+
+When multiple routes could match a path, rari uses this priority order:
+
+1. Static routes (`/about`) — exact matches first
+2. Dynamic routes (`/[id]`) — single-segment params
+3. Catch-all routes (`/[...slug]`) — greedy matches
+4. Optional catch-all routes (`/[[...slug]]`) — lowest priority
+
+## Loading States
+
+A `loading.tsx` file creates a loading UI that's shown immediately while the page content streams in. Under the hood, rari wraps your page in a React Suspense boundary and uses `loading.tsx` as the fallback.
+
+<CodeBlock language="bash">{`src/app/dashboard/
+├── loading.tsx    # Shown while page.tsx is loading
+└── page.tsx       # The actual page (async)
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/dashboard/loading.tsx" language="tsx">{`export default function DashboardLoading() {
+  return (
+    <div>
+      <p>Loading dashboard...</p>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/dashboard/page.tsx" language="tsx">{`export default async function DashboardPage() {
+  // This fetch might take a moment — loading.tsx is shown in the meantime
+  const stats = await fetch('https://api.example.com/stats').then(r => r.json())
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Total users: {stats.totalUsers}</p>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+The loading state appears instantly on navigation, giving users immediate feedback while the server streams the actual content. Streaming and Suspense boundary handling are built into the Rust runtime.
+
+## Error Handling
+
+An `error.tsx` file creates an error boundary that catches errors thrown by the page or its children. It receives the error and a `reset` function to retry rendering.
+
+<CodeBlock filename="src/app/dashboard/error.tsx" language="tsx">{`'use client'
+
+import type { ErrorProps } from 'rari'
+
+export default function DashboardError({ error, reset }: ErrorProps) {
+  return (
+    <div>
+      <h2>Something went wrong</h2>
+      <p>{error.message}</p>
+      <button onClick={reset} type="button">
+        Try again
+      </button>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+Error components must be client components (`'use client'`) because they handle interactive retry logic in the browser.
+
+### Error Boundary Nesting
+
+Error boundaries are scoped to their directory level. An error in `/dashboard/analytics/page.tsx` will be caught by the nearest `error.tsx` up the tree:
+
+<CodeBlock language="bash">{`src/app/
+├── error.tsx              # Catches errors from root pages
+├── dashboard/
+│   ├── error.tsx          # Catches errors from dashboard pages
+│   ├── page.tsx
+│   └── analytics/
+│       └── page.tsx       # Error here → caught by dashboard/error.tsx
+`}</CodeBlock>
+
+## Not Found
+
+A `not-found.tsx` file renders when no route matches the requested path. Place one at the root level to handle all unmatched routes:
+
+<CodeBlock filename="src/app/not-found.tsx" language="tsx">{`export default function NotFound() {
+  return (
+    <div>
+      <h1>404</h1>
+      <p>This page could not be found.</p>
+      <a href="/">Go home</a>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+You can also place `not-found.tsx` in subdirectories for more specific 404 pages:
+
+<CodeBlock language="bash">{`src/app/
+├── not-found.tsx          # Global 404
+└── blog/
+    └── not-found.tsx      # 404 for /blog/* routes
+`}</CodeBlock>
+
+## Navigation
+
+Use standard `<a>` tags for navigation. rari's client router intercepts link clicks and performs client-side navigation automatically — no special `<Link>` component needed:
+
+<CodeBlock language="tsx">{`export default function Navigation() {
+  return (
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
+    </nav>
+  )
+}
+`}</CodeBlock>
+
+Client-side navigation preserves layout state, avoids full-page reloads, and streams only the content that changed.
+
+## API Routes
+
+Create API endpoints by exporting HTTP method handlers from a `route.ts` file:
+
+<CodeBlock language="bash">{`src/app/api/
+└── users/
+    ├── route.ts       # /api/users
+    └── [id]/
+        └── route.ts   # /api/users/:id
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/api/users/route.ts" language="typescript">{`import type { RouteHandler } from 'rari'
+
+export const GET: RouteHandler = async (request) => {
+  const users = await fetchUsers()
+
+  return Response.json(users)
+}
+
+export const POST: RouteHandler = async (request) => {
+  const body = await request.json()
+  const user = await createUser(body)
+
+  return Response.json(user, { status: 201 })
+}
+`}</CodeBlock>
+
+<CodeBlock filename="src/app/api/users/[id]/route.ts" language="typescript">{`import type { RouteHandler } from 'rari'
+
+export const GET: RouteHandler<{ id: string }> = async (request, context) => {
+  // context is always provided for dynamic routes
+  const { id } = context!.params
+
+  const user = await fetchUser(id)
+  if (!user) {
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  return Response.json(user)
+}
+
+export const DELETE: RouteHandler<{ id: string }> = async (request, context) => {
+  const { id } = context!.params
+  await deleteUser(id)
+
+  return new Response(null, { status: 204 })
+}
+`}</CodeBlock>
+
+Supported methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`. CORS is handled automatically in development.
+
+## Project Structure Example
+
+A typical app showing all the file conventions together:
+
+<CodeBlock language="bash">{`src/app/
+├── layout.tsx              # Root layout
+├── page.tsx                # /
+├── loading.tsx             # Global loading state
+├── error.tsx               # Global error boundary
+├── not-found.tsx           # Global 404
+├── about/
+│   └── page.tsx            # /about
+├── blog/
+│   ├── layout.tsx          # Blog layout
+│   ├── page.tsx            # /blog
+│   └── [slug]/
+│       ├── page.tsx        # /blog/:slug
+│       ├── loading.tsx     # Loading state for blog posts
+│       └── opengraph-image.tsx  # Dynamic OG image
+├── dashboard/
+│   ├── layout.tsx          # Dashboard layout (sidebar nav)
+│   ├── page.tsx            # /dashboard
+│   ├── error.tsx           # Error boundary for dashboard
+│   ├── analytics/
+│   │   └── page.tsx        # /dashboard/analytics
+│   └── settings/
+│       └── page.tsx        # /dashboard/settings
+├── docs/
+│   └── [[...slug]]/
+│       └── page.tsx        # /docs, /docs/*, /docs/*/*
+└── api/
+    └── users/
+        ├── route.ts        # GET/POST /api/users
+        └── [id]/
+            └── route.ts    # GET/PUT/DELETE /api/users/:id
+`}</CodeBlock>
+
+## Related
+
+- [Getting Started](/docs/getting-started) — Create your first rari app
+- [Metadata](/docs/getting-started/metadata) — Configure page titles, descriptions, and social cards
+- [Image Component](/docs/api-reference/components/image) — Optimize images
+- [ImageResponse](/docs/api-reference/components/image-response) — Generate dynamic Open Graph images
