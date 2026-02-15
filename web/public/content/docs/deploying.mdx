@@ -35,6 +35,7 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 | `RSC_PORT` | Alternative server port (fallback if `PORT` is not set) | `3000` |
 | `NODE_ENV` | Environment mode | `production` for `rari start`, `development` for `rari dev` |
 | `RUST_LOG` | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error` |
+| `RARI_HOST` | Server bind address | `127.0.0.1` (`0.0.0.0` on Railway and Render) |
 
 `PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
 
