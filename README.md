@@ -11,6 +11,7 @@
 [![npm version](https://img.shields.io/npm/v/rari.svg)](https://www.npmjs.com/package/rari)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord)](https://discord.gg/GSh2Ak3b8Q)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/skiniks?style=flat&logo=githubsponsors&label=Sponsor&color=EA4AAA)](https://github.com/sponsors/skiniks)
 
 **rari** is a React Server Components framework running on a Rust runtime. It has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-Vite bundling, tsgo type checking). You write standard React — the runtime underneath is Rust instead of Node.
 
