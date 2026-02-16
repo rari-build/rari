@@ -1,15 +1,23 @@
 import type { Metadata } from 'rari'
+import type * as React from 'react'
+import type { SVGProps } from 'react'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
+import CheckIcon from '@/components/icons/CheckIcon'
 import Cloudflare from '@/components/icons/sponsors/Cloudflare'
 import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
 
+interface Benefit {
+  text: string
+  isStatement?: boolean
+}
+
 interface Tier {
   name: string
   price: number
   description: string
-  benefits: string[]
+  benefits: Benefit[]
   highlight?: boolean
 }
 
@@ -19,9 +27,9 @@ const recurringTiers: Tier[] = [
     price: 5,
     description: 'Support rari\'s development. Every contribution helps keep the framework fast, open, and free for everyone.',
     benefits: [
-      'Supporter badge in Discord',
-      'Monthly progress updates via email',
-      'This tier is purely to support the project if you believe in it!',
+      { text: 'Supporter badge in Discord' },
+      { text: 'Monthly progress updates via email' },
+      { text: 'This tier is purely to support the project if you believe in it!' },
     ],
   },
   {
@@ -29,10 +37,10 @@ const recurringTiers: Tier[] = [
     price: 25,
     description: 'For developers and teams evaluating rari. Get visibility for your support and help shape the roadmap.',
     benefits: [
-      'Everything in Supporter tier',
-      'Your name on rari.build/sponsors (Silver tier)',
-      'Vote on roadmap priorities (quarterly polls)',
-      'Priority response to bug reports (48hr SLA)',
+      { text: 'Everything in Supporter tier' },
+      { text: 'Your name on rari.build/sponsors (Silver tier)' },
+      { text: 'Vote on roadmap priorities (quarterly polls)' },
+      { text: 'Priority response to bug reports (48hr SLA)' },
     ],
   },
   {
@@ -40,11 +48,11 @@ const recurringTiers: Tier[] = [
     price: 100,
     description: 'Running rari in production or planning to? Get direct support to ensure your deployments stay fast and stable.',
     benefits: [
-      'Everything in Silver tier',
-      'Your logo on rari.build/sponsors (Gold tier)',
-      'Direct Discord access to me',
-      'Priority production issue support (24hr SLA)',
-      'Monthly office hours slot (30 min, by appointment)',
+      { text: 'Everything in Silver tier' },
+      { text: 'Your logo on rari.build/sponsors (Gold tier)' },
+      { text: 'Direct Discord access to me' },
+      { text: 'Priority production issue support (24hr SLA)' },
+      { text: 'Monthly office hours slot (30 min, by appointment)' },
     ],
     highlight: true,
   },
@@ -53,12 +61,12 @@ const recurringTiers: Tier[] = [
     price: 500,
     description: 'For companies betting on rari. Get dedicated support, roadmap influence, and co-marketing opportunities.',
     benefits: [
-      'Everything in Gold tier',
-      'Premium logo placement (Platinum tier - top of page + README)',
-      'Extended office hours (60 min/month instead of 30)',
-      'Migration consulting (2 hours/month included)',
-      'Your feature requests jump the queue',
-      'Optional case study feature on rari.build',
+      { text: 'Everything in Gold tier' },
+      { text: 'Premium logo placement (Platinum tier - top of page + README)' },
+      { text: 'Extended office hours (60 min/month instead of 30)' },
+      { text: 'Migration consulting (2 hours/month included)' },
+      { text: 'Your feature requests jump the queue' },
+      { text: 'Optional case study feature on rari.build' },
     ],
   },
   {
@@ -66,15 +74,15 @@ const recurringTiers: Tier[] = [
     price: 2500,
     description: 'For companies that need dedicated partnership, custom development, or want to significantly accelerate rari\'s growth.',
     benefits: [
-      'Everything in Platinum tier',
-      'Diamond tier placement (largest logos, top billing)',
-      'Dedicated Slack/Discord channel for your team',
-      'Weekly check-ins available',
-      'Custom feature development (aligned with roadmap)',
-      'Official "Technology Partner" designation',
-      'Joint conference speaking opportunities',
-      'First access to any commercial offerings',
-      'Let\'s build something together.',
+      { text: 'Everything in Platinum tier' },
+      { text: 'Diamond tier placement (largest logos, top billing)' },
+      { text: 'Dedicated Slack/Discord channel for your team' },
+      { text: 'Weekly check-ins available' },
+      { text: 'Custom feature development (aligned with roadmap)' },
+      { text: 'Official "Technology Partner" designation' },
+      { text: 'Joint conference speaking opportunities' },
+      { text: 'First access to any commercial offerings' },
+      { text: 'Let\'s build something together.', isStatement: true },
     ],
   },
 ]
@@ -85,8 +93,8 @@ const oneTimeTiers: Tier[] = [
     price: 50,
     description: 'Quick way to say thanks.',
     benefits: [
-      'Supporter badge in Discord',
-      'Shout out in the monthly update email',
+      { text: 'Supporter badge in Discord' },
+      { text: 'Shout out in the monthly update email' },
     ],
   },
   {
@@ -94,10 +102,52 @@ const oneTimeTiers: Tier[] = [
     price: 100,
     description: 'Kickstart development!',
     benefits: [
-      'Same benefits as Silver tier for one month',
-      'Your name on rari.build/sponsors',
-      'Priority support for 30 days',
+      { text: 'Same benefits as Silver tier for one month' },
+      { text: 'Your name on rari.build/sponsors' },
+      { text: 'Priority support for 30 days' },
     ],
+  },
+]
+
+interface InfrastructurePartner {
+  href: string
+  label: string
+  Icon: React.ComponentType<SVGProps<SVGSVGElement>>
+  color: string
+  secondaryColor?: string
+  description: string
+}
+
+const infrastructurePartners: InfrastructurePartner[] = [
+  {
+    href: 'https://get.neon.com/KDQudHN',
+    label: 'Neon - Serverless Postgres',
+    Icon: Neon,
+    color: '#34D59A',
+    description: 'Serverless Postgres hosting',
+  },
+  {
+    href: 'https://cloudflare.com',
+    label: 'Cloudflare - CDN & Infrastructure',
+    Icon: Cloudflare,
+    color: '#f48120',
+    secondaryColor: '#faad3f',
+    description: 'CDN, R2 storage & DDoS protection',
+  },
+  {
+    href: 'https://sanity.io',
+    label: 'Sanity - Content Platform',
+    Icon: Sanity,
+    color: '#F04939',
+    secondaryColor: '#F37368',
+    description: 'Content platform & CMS',
+  },
+  {
+    href: 'https://sentry.io',
+    label: 'Sentry - Error Monitoring',
+    Icon: Sentry,
+    color: '#362d59',
+    description: 'Error monitoring & observability',
   },
 ]
 
@@ -129,19 +179,14 @@ function TierCard({ tier }: { tier: Tier }) {
 
           <div className="flex-1">
             <div className="space-y-3">
-              {tier.benefits.map((benefit, i) => {
-                const isStatement = benefit === 'Let\'s build something together.'
-                return (
-                  <div key={i} className={`flex items-start gap-2 ${isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
-                    {!isStatement && (
-                      <svg className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                    <span className={`text-gray-300 text-sm ${isStatement ? 'italic text-center w-full' : ''}`}>{benefit}</span>
-                  </div>
-                )
-              })}
+              {tier.benefits.map((benefit, i) => (
+                <div key={i} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
+                  {!benefit.isStatement && (
+                    <CheckIcon className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" />
+                  )}
+                  <span className={`text-gray-300 text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}>{benefit.text}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -167,10 +212,8 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
             <div className="space-y-2">
               {tier.benefits.map((benefit, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-gray-300 text-sm">{benefit}</span>
+                  <CheckIcon className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" />
+                  <span className="text-gray-300 text-sm">{benefit.text}</span>
                 </div>
               ))}
             </div>
@@ -293,78 +336,37 @@ export default function SponsorsPage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <a
-              href="https://get.neon.com/KDQudHN"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Neon - Serverless Postgres"
-              className="relative group h-full overflow-hidden rounded-xl p-px block"
-            >
-              <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
-                <div className="absolute inset-0 bg-linear-to-br from-[#34D59A]/10 via-[#34D59A]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
-                <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                  <div className="transform group-hover:scale-105 transition-transform duration-300">
-                    <Neon className="h-10 w-auto" />
+            {infrastructurePartners.map((partner) => {
+              const { href, label, Icon, color, secondaryColor, description } = partner
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="relative group h-full overflow-hidden rounded-xl p-px block"
+                >
+                  <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
+                      style={{
+                        background: secondaryColor
+                          ? `linear-gradient(to bottom right, ${color}1a, ${secondaryColor}0d, transparent)`
+                          : `linear-gradient(to bottom right, ${color}1a, ${color}0d, transparent)`,
+                      }}
+                    >
+                    </div>
+                    <div className="relative z-10 flex flex-col items-center text-center gap-4">
+                      <div className="transform group-hover:scale-105 transition-transform duration-300">
+                        <Icon className="h-10 w-auto" />
+                      </div>
+                      <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">{description}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">Serverless Postgres hosting</p>
-                </div>
-              </div>
-            </a>
-
-            <a
-              href="https://cloudflare.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Cloudflare - CDN & Infrastructure"
-              className="relative group h-full overflow-hidden rounded-xl p-px block"
-            >
-              <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
-                <div className="absolute inset-0 bg-linear-to-br from-[#f48120]/10 via-[#faad3f]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
-                <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                  <div className="transform group-hover:scale-105 transition-transform duration-300">
-                    <Cloudflare className="h-10 w-auto" />
-                  </div>
-                  <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">CDN, R2 storage & DDoS protection</p>
-                </div>
-              </div>
-            </a>
-
-            <a
-              href="https://sanity.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Sanity - Content Platform"
-              className="relative group h-full overflow-hidden rounded-xl p-px block"
-            >
-              <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
-                <div className="absolute inset-0 bg-linear-to-br from-[#F04939]/10 via-[#F37368]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
-                <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                  <div className="transform group-hover:scale-105 transition-transform duration-300">
-                    <Sanity className="h-10 w-auto" />
-                  </div>
-                  <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">Content platform & CMS</p>
-                </div>
-              </div>
-            </a>
-
-            <a
-              href="https://sentry.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Sentry - Error Monitoring"
-              className="relative group h-full overflow-hidden rounded-xl p-px block"
-            >
-              <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
-                <div className="absolute inset-0 bg-linear-to-br from-[#362d59]/10 via-[#362d59]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
-                <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                  <div className="transform group-hover:scale-105 transition-transform duration-300">
-                    <Sentry className="h-10 w-auto" />
-                  </div>
-                  <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">Error monitoring & observability</p>
-                </div>
-              </div>
-            </a>
-
+                </a>
+              )
+            })}
           </div>
         </div>
       </div>

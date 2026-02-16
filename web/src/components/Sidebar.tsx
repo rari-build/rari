@@ -248,9 +248,9 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   {isEnterprise && isEnterpriseExpanded && hasItems && (
                     <div className="mt-1">
                       <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
-                        {item.items!.map((subItem, idx) => (
+                        {item.items!.map(subItem => (
                           <a
-                            key={idx}
+                            key={subItem.href}
                             href={subItem.href}
                             className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
                               ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'

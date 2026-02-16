@@ -2,7 +2,7 @@ import type { SVGProps } from 'react'
 
 export default function Cloudflare(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 101.4 33.5" {...props}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 101.4 33.5" aria-hidden="true" {...props}>
       <path fill="#fff" d="m94.7 10.6-5.6-1.3-1-.4-25.7.2v12.4l32.3.1Z"></path>
       <path
         fill="#f48120"
