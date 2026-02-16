@@ -338,7 +338,7 @@ export default function SponsorsPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {infrastructurePartners.map((partner) => {
               const { href, label, Icon, color, secondaryColor, description } = partner
               return (
@@ -386,7 +386,7 @@ export default function SponsorsPage() {
 
           <div className="space-y-8">
             <div>
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 text-center">Kickstart</h3>
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 text-center">Launch Partner</h3>
               <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
                 <div className="flex items-center justify-center">
                   <a

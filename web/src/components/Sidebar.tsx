@@ -46,6 +46,7 @@ function useResetOnPathnameChange<T>(initialValue: T, pathname: string): [T, Dis
   if (pathname !== lastPathnameRef.current) {
     lastPathnameRef.current = pathname
     if (value !== initialValue) {
+      setValue(initialValue)
       return [initialValue, setValue]
     }
   }
@@ -74,7 +75,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         sections[sectionKey] = manualToggles[sectionKey]
       }
       else {
-        let shouldExpand = true
+        let shouldExpand = false
         if (section.href && pathname?.startsWith(section.href)) {
           shouldExpand = true
         }
@@ -96,7 +97,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
             sections[itemKey] = manualToggles[itemKey]
           }
           else {
-            let shouldExpand = true
+            let shouldExpand = false
             if (item.href && pathname?.startsWith(item.href)) {
               shouldExpand = true
             }
