@@ -14,7 +14,28 @@ function hexWithAlpha(hex: string, alpha: string): string {
     return `${hex}${alpha}`
   }
 
-  return `rgba(0, 0, 0, 0.${alpha})`
+  const normalizedHex = hex.replace('#', '')
+  let r: number, g: number, b: number
+
+  if (normalizedHex.length === 3) {
+    r = Number.parseInt(normalizedHex[0] + normalizedHex[0], 16)
+    g = Number.parseInt(normalizedHex[1] + normalizedHex[1], 16)
+    b = Number.parseInt(normalizedHex[2] + normalizedHex[2], 16)
+  }
+  else if (normalizedHex.length === 6) {
+    r = Number.parseInt(normalizedHex.substring(0, 2), 16)
+    g = Number.parseInt(normalizedHex.substring(2, 4), 16)
+    b = Number.parseInt(normalizedHex.substring(4, 6), 16)
+  }
+  else {
+    r = 0
+    g = 0
+    b = 0
+  }
+
+  const numericAlpha = Number.parseInt(alpha, 16) / 255
+
+  return `rgba(${r}, ${g}, ${b}, ${numericAlpha})`
 }
 
 const neonPartner = {
