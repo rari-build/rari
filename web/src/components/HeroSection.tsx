@@ -19,7 +19,7 @@ export default function HeroSection() {
             Zero to React Server Components in minutes.
           </p>
 
-          <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed text-balance">
             A React framework where the HTTP server, RSC renderer, and routing all run in a
             {' '}
             <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c] font-semibold">
