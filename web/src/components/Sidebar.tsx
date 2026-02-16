@@ -1,5 +1,6 @@
 'use client'
 
+import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
@@ -38,26 +39,30 @@ function Chevron({ isOpen }: { isOpen: boolean }) {
   )
 }
 
+function useResetOnPathnameChange<T>(initialValue: T, pathname: string): [T, Dispatch<SetStateAction<T>>] {
+  const lastPathnameRef = useRef(pathname)
+  const [value, setValue] = useState(initialValue)
+
+  if (pathname !== lastPathnameRef.current) {
+    lastPathnameRef.current = pathname
+    if (value !== initialValue) {
+      return [initialValue, setValue]
+    }
+  }
+
+  return [value, setValue]
+}
+
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const isDocsPage = pathname?.startsWith('/docs')
   const isEnterprisePage = pathname?.startsWith('/enterprise')
-  const lastPathnameRef = useRef(pathname)
-  const pathnameChanged = pathname !== lastPathnameRef.current
 
-  useEffect(() => {
-    lastPathnameRef.current = pathname
-  }, [pathname])
+  const [manualToggles, setManualToggles] = useResetOnPathnameChange<Record<string, boolean>>({}, pathname)
+  const [manualDocsToggle, setManualDocsToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
+  const [manualEnterpriseToggle, setManualEnterpriseToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
 
-  const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
-  const [manualDocsToggle, setManualDocsToggle] = useState<boolean | undefined>(undefined)
-  const [manualEnterpriseToggle, setManualEnterpriseToggle] = useState<boolean | undefined>(undefined)
-
-  const activeManualToggles = pathnameChanged ? {} : manualToggles
-  const activeManualDocsToggle = pathnameChanged ? undefined : manualDocsToggle
-  const activeManualEnterpriseToggle = pathnameChanged ? undefined : manualEnterpriseToggle
-
-  const isDocsExpanded = activeManualDocsToggle !== undefined ? activeManualDocsToggle : isDocsPage
-  const isEnterpriseExpanded = activeManualEnterpriseToggle !== undefined ? activeManualEnterpriseToggle : isEnterprisePage
+  const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
+  const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : isEnterprisePage
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
@@ -65,8 +70,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     docsNavigation.forEach((section, idx) => {
       const sectionKey = `section-${idx}`
 
-      if (activeManualToggles[sectionKey] !== undefined) {
-        sections[sectionKey] = activeManualToggles[sectionKey]
+      if (manualToggles[sectionKey] !== undefined) {
+        sections[sectionKey] = manualToggles[sectionKey]
       }
       else {
         let shouldExpand = true
@@ -87,8 +92,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         section.items.forEach((item, itemIdx) => {
           const itemKey = `${sectionKey}-item-${itemIdx}`
 
-          if (activeManualToggles[itemKey] !== undefined) {
-            sections[itemKey] = activeManualToggles[itemKey]
+          if (manualToggles[itemKey] !== undefined) {
+            sections[itemKey] = manualToggles[itemKey]
           }
           else {
             let shouldExpand = true
@@ -109,7 +114,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     })
 
     return sections
-  }, [pathname, activeManualToggles])
+  }, [pathname, manualToggles])
 
   const toggleSection = (key: string) => {
     setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))

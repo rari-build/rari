@@ -9,6 +9,14 @@ import Sentry from '@/components/icons/sponsors/Sentry'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
+const neonPartner = {
+  href: 'https://get.neon.com/KDQudHN',
+  label: 'Neon - Serverless Postgres',
+  Icon: Neon,
+  color: '#34D59A',
+  description: 'Serverless Postgres hosting',
+}
+
 interface Benefit {
   text: string
   isStatement?: boolean
@@ -120,13 +128,7 @@ interface InfrastructurePartner {
 }
 
 const infrastructurePartners: InfrastructurePartner[] = [
-  {
-    href: 'https://get.neon.com/KDQudHN',
-    label: 'Neon - Serverless Postgres',
-    Icon: Neon,
-    color: '#34D59A',
-    description: 'Serverless Postgres hosting',
-  },
+  neonPartner,
   {
     href: 'https://cloudflare.com',
     label: 'Cloudflare - CDN & Infrastructure',
@@ -240,13 +242,13 @@ export default function SponsorsPage() {
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
           <div className="text-center">
-            <p className="text-4xl lg:text-6xl font-bold text-white mb-6 max-w-3xl mx-auto leading-tight">
+            <h1 className="text-4xl lg:text-6xl font-bold text-white mb-6 max-w-3xl mx-auto leading-tight">
               Partner with
               {' '}
               <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">
                 rari
               </span>
-            </p>
+            </h1>
 
             <p className="text-lg lg:text-xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
               Support rari's development while getting the tools and support your team needs.
@@ -388,13 +390,13 @@ export default function SponsorsPage() {
               <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
                 <div className="flex items-center justify-center">
                   <a
-                    href="https://get.neon.com/KDQudHN"
+                    href={neonPartner.href}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group relative"
-                    aria-label="Neon - Serverless Postgres"
+                    aria-label={neonPartner.label}
                   >
-                    <Neon className="relative h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
+                    <neonPartner.Icon className="relative h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
                   </a>
                 </div>
               </div>
