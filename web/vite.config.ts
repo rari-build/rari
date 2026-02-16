@@ -10,7 +10,7 @@ export default defineConfig({
         enabled: true,
       },
       csp: {
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://us-assets.i.posthog.com', 'https://js.sentry-cdn.com'],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://us-assets.i.posthog.com', 'https://js.sentry-cdn.com', 'https://static.cloudflareinsights.com'],
         connectSrc: ['\'self\'', 'ws:', 'wss:', 'https://us.i.posthog.com', 'https://us-assets.i.posthog.com', 'https://*.ingest.us.sentry.io'],
         workerSrc: ['\'self\'', 'blob:'],
       },
