@@ -27,4 +27,9 @@ export default antfu(
   deMorgan.configs.recommended,
   e18e.configs.recommended,
   ...oxlint.buildFromOxlintConfigFile(`${import.meta.dirname}/.oxlintrc.json`),
+  {
+    rules: {
+      'e18e/prefer-static-regex': 'off',
+    },
+  },
 )

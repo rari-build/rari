@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { docsNavigation } from '@/lib/navigation'
+import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
 import ChevronRight from './icons/ChevronRight'
 import Close from './icons/Close'
@@ -18,6 +18,14 @@ interface SidebarProps {
 
 const navigation = [
   { href: '/docs/getting-started', label: 'Docs', id: 'docs' },
+  {
+    href: '/enterprise',
+    label: 'Enterprise',
+    id: 'enterprise',
+    items: [
+      { href: '/enterprise/sponsors', label: 'Sponsors' },
+    ],
+  },
   { href: '/blog', label: 'Blog', id: 'blog' },
   { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
@@ -32,12 +40,15 @@ function Chevron({ isOpen }: { isOpen: boolean }) {
 
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const isDocsPage = pathname?.startsWith('/docs')
+  const isEnterprisePage = pathname?.startsWith('/enterprise')
   const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
   const [manualDocsToggle, setManualDocsToggle] = useState<boolean | undefined>(undefined)
+  const [manualEnterpriseToggle, setManualEnterpriseToggle] = useState<boolean | undefined>(undefined)
   const [lastPathname, setLastPathname] = useState(pathname)
 
   const currentManualToggles = pathname !== lastPathname ? {} : manualToggles
   const currentManualDocsToggle = pathname !== lastPathname ? undefined : manualDocsToggle
+  const currentManualEnterpriseToggle = pathname !== lastPathname ? undefined : manualEnterpriseToggle
 
   if (pathname !== lastPathname) {
     setLastPathname(pathname)
@@ -45,9 +56,12 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
       setManualToggles({})
     if (manualDocsToggle !== undefined)
       setManualDocsToggle(undefined)
+    if (manualEnterpriseToggle !== undefined)
+      setManualEnterpriseToggle(undefined)
   }
 
   const isDocsExpanded = currentManualDocsToggle !== undefined ? currentManualDocsToggle : isDocsPage
+  const isEnterpriseExpanded = currentManualEnterpriseToggle !== undefined ? currentManualEnterpriseToggle : isEnterprisePage
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
@@ -158,14 +172,18 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
           <ul className="space-y-1">
             {navigation.map((item) => {
               const isDocs = item.id === 'docs'
+              const isEnterprise = item.id === 'enterprise'
               const isSponsor = item.id === 'sponsor'
               const isActive = isDocs
                 ? pathname === '/docs/getting-started'
-                : item.href === '/'
+                : isEnterprise
                   ? pathname === item.href
-                  : pathname?.startsWith(item.href)
+                  : item.href === '/'
+                    ? pathname === item.href
+                    : pathname?.startsWith(item.href)
 
               const isDisabled = isDocs && pathname === '/docs/getting-started'
+              const hasItems = 'items' in item && item.items && item.items.length > 0
 
               return (
                 <li key={item.id}>
@@ -209,7 +227,48 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                         </span>
                       </button>
                     )}
+                    {isEnterprise && (
+                      <button
+                        type="button"
+                        onClick={() => setManualEnterpriseToggle(!isEnterpriseExpanded)}
+                        className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+                        aria-label={isEnterpriseExpanded ? 'Collapse enterprise section' : 'Expand enterprise section'}
+                        aria-expanded={isEnterpriseExpanded}
+                      >
+                        <Chevron isOpen={isEnterpriseExpanded} />
+                        <span className="sr-only">
+                          {isEnterpriseExpanded ? 'Collapse' : 'Expand'}
+                          {' '}
+                          enterprise section
+                        </span>
+                      </button>
+                    )}
                   </div>
+
+                  {isEnterprise && isEnterpriseExpanded && hasItems && (
+                    <div className="mt-1">
+                      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
+                        {item.items!.map((subItem, idx) => (
+                          <a
+                            key={idx}
+                            href={subItem.href}
+                            className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
+                              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+                              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                            }`}
+                          >
+                            {pathname !== subItem.href && (
+                              <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                            )}
+                            <span className="relative z-10 flex items-center">
+                              <span className="mr-2 text-gray-400">•</span>
+                              {subItem.label}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {isDocs && isDocsExpanded && (
                     <div className="mt-1">
