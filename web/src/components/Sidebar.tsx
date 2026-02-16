@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
 import ChevronRight from './icons/ChevronRight'
@@ -41,27 +41,23 @@ function Chevron({ isOpen }: { isOpen: boolean }) {
 export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const isDocsPage = pathname?.startsWith('/docs')
   const isEnterprisePage = pathname?.startsWith('/enterprise')
+  const lastPathnameRef = useRef(pathname)
+  const pathnameChanged = pathname !== lastPathnameRef.current
+
+  useEffect(() => {
+    lastPathnameRef.current = pathname
+  }, [pathname])
+
   const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
   const [manualDocsToggle, setManualDocsToggle] = useState<boolean | undefined>(undefined)
   const [manualEnterpriseToggle, setManualEnterpriseToggle] = useState<boolean | undefined>(undefined)
-  const [lastPathname, setLastPathname] = useState(pathname)
 
-  const currentManualToggles = pathname !== lastPathname ? {} : manualToggles
-  const currentManualDocsToggle = pathname !== lastPathname ? undefined : manualDocsToggle
-  const currentManualEnterpriseToggle = pathname !== lastPathname ? undefined : manualEnterpriseToggle
+  const activeManualToggles = pathnameChanged ? {} : manualToggles
+  const activeManualDocsToggle = pathnameChanged ? undefined : manualDocsToggle
+  const activeManualEnterpriseToggle = pathnameChanged ? undefined : manualEnterpriseToggle
 
-  if (pathname !== lastPathname) {
-    setLastPathname(pathname)
-    if (Object.keys(manualToggles).length > 0)
-      setManualToggles({})
-    if (manualDocsToggle !== undefined)
-      setManualDocsToggle(undefined)
-    if (manualEnterpriseToggle !== undefined)
-      setManualEnterpriseToggle(undefined)
-  }
-
-  const isDocsExpanded = currentManualDocsToggle !== undefined ? currentManualDocsToggle : isDocsPage
-  const isEnterpriseExpanded = currentManualEnterpriseToggle !== undefined ? currentManualEnterpriseToggle : isEnterprisePage
+  const isDocsExpanded = activeManualDocsToggle !== undefined ? activeManualDocsToggle : isDocsPage
+  const isEnterpriseExpanded = activeManualEnterpriseToggle !== undefined ? activeManualEnterpriseToggle : isEnterprisePage
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
@@ -69,8 +65,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     docsNavigation.forEach((section, idx) => {
       const sectionKey = `section-${idx}`
 
-      if (currentManualToggles[sectionKey] !== undefined) {
-        sections[sectionKey] = currentManualToggles[sectionKey]
+      if (activeManualToggles[sectionKey] !== undefined) {
+        sections[sectionKey] = activeManualToggles[sectionKey]
       }
       else {
         let shouldExpand = true
@@ -91,8 +87,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
         section.items.forEach((item, itemIdx) => {
           const itemKey = `${sectionKey}-item-${itemIdx}`
 
-          if (currentManualToggles[itemKey] !== undefined) {
-            sections[itemKey] = currentManualToggles[itemKey]
+          if (activeManualToggles[itemKey] !== undefined) {
+            sections[itemKey] = activeManualToggles[itemKey]
           }
           else {
             let shouldExpand = true
@@ -113,7 +109,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     })
 
     return sections
-  }, [pathname, currentManualToggles])
+  }, [pathname, activeManualToggles])
 
   const toggleSection = (key: string) => {
     setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))
@@ -178,9 +174,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                 ? pathname === '/docs/getting-started'
                 : isEnterprise
                   ? pathname === item.href
-                  : item.href === '/'
-                    ? pathname === item.href
-                    : pathname?.startsWith(item.href)
+                  : pathname === item.href || pathname?.startsWith(item.href)
 
               const isDisabled = isDocs && pathname === '/docs/getting-started'
               const hasItems = 'items' in item && item.items && item.items.length > 0

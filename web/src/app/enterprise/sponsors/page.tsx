@@ -1,12 +1,13 @@
 import type { Metadata } from 'rari'
-import type * as React from 'react'
-import type { SVGProps } from 'react'
+import type { ComponentType, SVGProps } from 'react'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
-import CheckIcon from '@/components/icons/CheckIcon'
+import Check from '@/components/icons/Check'
 import Cloudflare from '@/components/icons/sponsors/Cloudflare'
 import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
+
+const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
 interface Benefit {
   text: string
@@ -112,7 +113,7 @@ const oneTimeTiers: Tier[] = [
 interface InfrastructurePartner {
   href: string
   label: string
-  Icon: React.ComponentType<SVGProps<SVGSVGElement>>
+  Icon: ComponentType<SVGProps<SVGSVGElement>>
   color: string
   secondaryColor?: string
   description: string
@@ -154,7 +155,7 @@ const infrastructurePartners: InfrastructurePartner[] = [
 function TierCard({ tier }: { tier: Tier }) {
   return (
     <a
-      href="https://github.com/sponsors/skiniks"
+      href={SPONSOR_URL}
       target="_blank"
       rel="noopener noreferrer"
       className={`relative group h-full overflow-hidden rounded-xl p-px block ${tier.highlight ? 'md:scale-105' : ''}`}
@@ -182,7 +183,7 @@ function TierCard({ tier }: { tier: Tier }) {
               {tier.benefits.map((benefit, i) => (
                 <div key={i} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
                   {!benefit.isStatement && (
-                    <CheckIcon className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" />
+                    <Check className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" />
                   )}
                   <span className={`text-gray-300 text-sm ${benefit.isStatement ? 'italic text-center w-full' : ''}`}>{benefit.text}</span>
                 </div>
@@ -198,7 +199,7 @@ function TierCard({ tier }: { tier: Tier }) {
 function OneTimeTierCard({ tier }: { tier: Tier }) {
   return (
     <a
-      href="https://github.com/sponsors/skiniks"
+      href={SPONSOR_URL}
       target="_blank"
       rel="noopener noreferrer"
       className="relative group h-full overflow-hidden rounded-xl p-px block"
@@ -212,7 +213,7 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
             <div className="space-y-2">
               {tier.benefits.map((benefit, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <CheckIcon className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" />
                   <span className="text-gray-300 text-sm">{benefit.text}</span>
                 </div>
               ))}
@@ -254,7 +255,7 @@ export default function SponsorsPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
-                href="https://github.com/sponsors/skiniks"
+                href={SPONSOR_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
@@ -406,7 +407,7 @@ export default function SponsorsPage() {
                   Join Neon in supporting rari!
                 </p>
                 <a
-                  href="https://github.com/sponsors/skiniks"
+                  href={SPONSOR_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group relative px-8 py-4 bg-linear-to-r from-[#fd7e14] to-[#e8590c] text-gray-900 rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
