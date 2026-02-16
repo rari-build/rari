@@ -45,10 +45,8 @@ function useResetOnPathnameChange<T>(initialValue: T, pathname: string): [T, Dis
 
   if (pathname !== lastPathnameRef.current) {
     lastPathnameRef.current = pathname
-    if (value !== initialValue) {
-      setValue(initialValue)
-      return [initialValue, setValue]
-    }
+    setValue(initialValue)
+    return [initialValue, setValue]
   }
 
   return [value, setValue]

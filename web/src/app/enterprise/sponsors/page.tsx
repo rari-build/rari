@@ -9,6 +9,14 @@ import Sentry from '@/components/icons/sponsors/Sentry'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
+function hexWithAlpha(hex: string, alpha: string): string {
+  if (/^#[0-9A-F]{6}$/i.test(hex)) {
+    return `${hex}${alpha}`
+  }
+
+  return `rgba(0, 0, 0, 0.${alpha})`
+}
+
 const neonPartner = {
   href: 'https://get.neon.com/KDQudHN',
   label: 'Neon - Serverless Postgres',
@@ -355,8 +363,8 @@ export default function SponsorsPage() {
                       className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
                       style={{
                         background: secondaryColor
-                          ? `linear-gradient(to bottom right, ${color}1a, ${secondaryColor}0d, transparent)`
-                          : `linear-gradient(to bottom right, ${color}1a, ${color}0d, transparent)`,
+                          ? `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(secondaryColor, '0d')}, transparent)`
+                          : `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(color, '0d')}, transparent)`,
                       }}
                     >
                     </div>
