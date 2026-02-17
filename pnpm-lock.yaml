@@ -7,11 +7,11 @@ settings:
 catalogs:
   analytics:
     '@posthog/react':
-      specifier: ^1.7.1
-      version: 1.7.1
+      specifier: ^1.8.0
+      version: 1.8.0
     posthog-js:
-      specifier: ^1.347.2
-      version: 1.347.2
+      specifier: ^1.350.0
+      version: 1.350.0
   build:
     rolldown:
       specifier: 1.0.0-rc.2
@@ -122,8 +122,8 @@ catalogs:
       specifier: ^25.2.3
       version: 25.2.3
     '@typescript/native-preview':
-      specifier: ^7.0.0-dev.20260216.1
-      version: 7.0.0-dev.20260216.1
+      specifier: ^7.0.0-dev.20260217.1
+      version: 7.0.0-dev.20260217.1
   utils:
     unist-util-visit:
       specifier: ^5.1.0
@@ -150,7 +150,7 @@ importers:
         version: 8.56.0(eslint@10.0.0(jiti@2.6.1))(typescript@5.9.3)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260216.1
+        version: 7.0.0-dev.20260217.1
       '@vitest/coverage-v8':
         specifier: catalog:testing
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
@@ -202,7 +202,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260216.1
+        version: 7.0.0-dev.20260217.1
       rolldown-vite:
         specifier: catalog:build
         version: 7.3.1(@types/node@25.2.3)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.8.2)
@@ -221,13 +221,13 @@ importers:
         version: 25.2.3
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260216.1
+        version: 7.0.0-dev.20260217.1
       oxlint:
         specifier: catalog:eslint
         version: 1.48.0
       tsdown:
         specifier: catalog:build
-        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
 
   packages/deploy:
     devDependencies:
@@ -239,7 +239,7 @@ importers:
         version: 25.2.3
       tsdown:
         specifier: catalog:build
-        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
 
   packages/logger:
     devDependencies:
@@ -248,7 +248,7 @@ importers:
         version: 25.2.3
       tsdown:
         specifier: catalog:build
-        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
 
   packages/rari:
     dependencies:
@@ -279,7 +279,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260216.1
+        version: 7.0.0-dev.20260217.1
       oxlint:
         specifier: catalog:eslint
         version: 1.48.0
@@ -288,7 +288,7 @@ importers:
         version: 7.3.1(@types/node@25.2.3)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.8.2)
       tsdown:
         specifier: catalog:build
-        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
+        version: 0.20.3(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3)
     optionalDependencies:
       rari-darwin-arm64:
         specifier: 0.9.2
@@ -315,7 +315,7 @@ importers:
         version: 3.1.1
       '@posthog/react':
         specifier: catalog:analytics
-        version: 1.7.1(@types/react@19.2.14)(posthog-js@1.347.2)(react@19.2.4)
+        version: 1.8.0(@types/react@19.2.14)(posthog-js@1.350.0)(react@19.2.4)
       '@sentry/react':
         specifier: catalog:monitoring
         version: 10.39.0(react@19.2.4)
@@ -336,7 +336,7 @@ importers:
         version: 3.22.0
       posthog-js:
         specifier: catalog:analytics
-        version: 1.347.2
+        version: 1.350.0
       rari:
         specifier: 'catalog:'
         version: 0.9.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -367,7 +367,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260216.1
+        version: 7.0.0-dev.20260217.1
       oxlint:
         specifier: catalog:eslint
         version: 1.48.0
@@ -1368,11 +1368,11 @@ packages:
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@posthog/core@1.22.0':
-    resolution: {integrity: sha512-WkmOnq95aAOu6yk6r5LWr5cfXsQdpVbWDCwOxQwxSne8YV6GuZET1ziO5toSQXgrgbdcjrSz2/GopAfiL6iiAA==}
+  '@posthog/core@1.23.0':
+    resolution: {integrity: sha512-WXYL4+trl27iV8/Y+ESADOYDB7jBhbEj6q3AEQdn+9ygYG06Q3rZSdWk4ZVn8FdrD3mlq8fEqkUgRCekzp2W4g==}
 
-  '@posthog/react@1.7.1':
-    resolution: {integrity: sha512-x2u7zRjsCpZoZUuvaJRgKWMJWbCPmLO49iXjOx9PdgOB/v5jwphZTj9ZmFZWkXgobdjmqQvVtXaLTMxcb0537g==}
+  '@posthog/react@1.8.0':
+    resolution: {integrity: sha512-UEX3BAIXMrzN7r/JoVotMY9BSTfJ1umiQqfsU30X1OZAW59cO5cPf50YDj4XNhHTCZpiLqenmvJdtJLsx5Pn4Q==}
     peerDependencies:
       '@types/react': '>=16.8.0'
       posthog-js: '>=1.257.2'
@@ -1381,8 +1381,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@posthog/types@1.347.2':
-    resolution: {integrity: sha512-aT+r/7jXOzPmUHO6sutoWzczPcYIZyhmWt1f1OvY4zKC7Pwp/ZsJWKFTxjV02p0PZz96AE83eLTe7w7b6tjhIw==}
+  '@posthog/types@1.350.0':
+    resolution: {integrity: sha512-Z8s3xc70RByHDT9u/xB1lLYHFNmEgY7nveqY8hXRPK39+vKrhosrQQOjnURLKAdyi9fRgoLc0D2yL/qRBKTxvQ==}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -2117,43 +2117,43 @@ packages:
     resolution: {integrity: sha512-q+SL+b+05Ud6LbEE35qe4A99P+htKTKVbyiNEe45eCbJFyh/HVK9QXwlrbz+Q4L8SOW4roxSVwXYj4DMBT7Ieg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-ZcxlhZ4Scm1LFKeGXo7V+B4H1Mb27/uVBO1o7d060jRIpGRuCOxsELo7jgUY8UhhTXtSpLECHsmAj8EyERSi9w==}
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-Mj8Mh+aTaGWURK65VuMxyOBhy+9OfXCHCL63zJPr/PqTNKub+GgGpGYKfSlbDBkqkB8UgURlI2CDRUoyOfvufQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-hY+hondi5/2m0rNSIgRkOfmA6FIx+KKnjPd9R6hHHumQu00XXoYA/xcIq3SyV1sXtowkhN+hR3ZUp1y3Orb84A==}
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-txn4CJ7/zj+WcSdDL5nshs9he7M0DF5qZBU5glWAJP+uIZmRSyuxDoWZqtjrzmX+vs5IOzyKgYcDsBYFkjybwA==}
     cpu: [x64]
     os: [darwin]
 
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-L+3CgBVAjpYnWgulmTWOTp7IdbLjgOzLpppr2597i79KE5MV7UyC73UCdvK3GtAl1Huiss0HsWVBBEYRkLQsfw==}
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-aGCr3/g1ktJ+IRjLEWTdNmG3H2iwPWt9tBu7spRnIIvDcdlEHFf8NQ2Mwn3n54bVnXAN5nYxZmM7WEYYfNvD6w==}
     cpu: [arm64]
     os: [linux]
 
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-Q+HBF1rlwpV1Nh2AESwte0lEHNPYVvbRLPQzTrorvx3gvXdRzfO9tHa6JL8Y1BO2KmSZBKmT7U+0188icTPBSg==}
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-gw+O550PhazyzsAi/oq1xztMM1PWSXtxq38tN15e/dRh0BXOt0bDUoEgIzFD0L5OkmiOlEIknROqvAVNa4QH3g==}
     cpu: [arm]
     os: [linux]
 
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-qIaQFRL2s+fi3zbS0+fCgR1Nk7fXMnbLW7wsFpcwn3fpEYuMdiQY9pwE8SvJsw2M78xZlXL5L9l5CL8ti0cNZQ==}
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-KAE4W+5VVRagA+xI6AxCSMVx2zb+8t15lMcB1cH5rIU2ZpnYa8K2ZXpSRMZGKNIFzcg6tKF9RyZvh4zMwZDnkQ==}
     cpu: [x64]
     os: [linux]
 
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-Yu7OLyMng9A2GA0vlZ8WZuqAnI+WM55UaY1UwA03TJdcljk/AcEzb/99fEq5g0kPg3k2wwHiyMrCGxxu99+gXQ==}
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-KUYWl+0tYShKoFKp0BAxECmLClT7qnhN5UEW9tsSih9tDka//qnQcWFx452Rw3fiQCqXjkntgwFFXrrvltQMpQ==}
     cpu: [arm64]
     os: [win32]
 
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-Lc+E1UNGKioOtKHUm1CLFO3W2PFWdLpJ6j2uB52RH0zhb63p4CEGCsuDH36QvgsXLibviExeNUF5Dum0rNKT9g==}
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-bje8xm+b0q3OSCY01/MZdDBnVISURunL9rCAob8pAu8qtRMvKYGWUsYwTH+fXGUViPAmdlafFd2E82K9VJYmHA==}
     cpu: [x64]
     os: [win32]
 
-  '@typescript/native-preview@7.0.0-dev.20260216.1':
-    resolution: {integrity: sha512-Vhffqcro1Q3w1zRgZ0E1C5JOB+8CtwKjSsszYfpGkt0qvRtOBO227AcnQe1sEiX+VLZW3Iw1VGVMhc8hNhpRZw==}
+  '@typescript/native-preview@7.0.0-dev.20260217.1':
+    resolution: {integrity: sha512-czUniBl1MsempdDkeDwfKThhHkeQzyLxn2aVcsCTSk2Ys84M8yy2eRdUZQrufwLL1Etcz+bv3SvZbBMcnPk/Ig==}
     hasBin: true
 
   '@ungap/structured-clone@1.3.0':
@@ -3466,8 +3466,8 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.347.2:
-    resolution: {integrity: sha512-hDbsSU30gfNhC11cBYSPpwUYB4DglbCN2G8W8NPIR/KXhT03shmuxabra/uaoI4blkr8SSSpxwvYV4gGa3hXrA==}
+  posthog-js@1.350.0:
+    resolution: {integrity: sha512-Ab+dyQdlKUTrfUZ12+fvcBo75S4jw/3o2gMleDga21B1v9c15yybiX4S3JrX66uh5L1DYG1H8sxtd4BXIIodjQ==}
 
   preact@10.28.2:
     resolution: {integrity: sha512-lbteaWGzGHdlIuiJ0l2Jq454m6kcpI1zNje6d8MlGAFlYvP2GO4ibnat7P74Esfz4sPTdM6UxtTwh/d3pwM9JA==}
@@ -4895,18 +4895,18 @@ snapshots:
 
   '@pkgr/core@0.2.9': {}
 
-  '@posthog/core@1.22.0':
+  '@posthog/core@1.23.0':
     dependencies:
       cross-spawn: 7.0.6
 
-  '@posthog/react@1.7.1(@types/react@19.2.14)(posthog-js@1.347.2)(react@19.2.4)':
+  '@posthog/react@1.8.0(@types/react@19.2.14)(posthog-js@1.350.0)(react@19.2.4)':
     dependencies:
-      posthog-js: 1.347.2
+      posthog-js: 1.350.0
       react: 19.2.4
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@posthog/types@1.347.2': {}
+  '@posthog/types@1.350.0': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 
@@ -5483,36 +5483,36 @@ snapshots:
       '@typescript-eslint/types': 8.56.0
       eslint-visitor-keys: 5.0.0
 
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260216.1':
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260217.1':
     optional: true
 
-  '@typescript/native-preview@7.0.0-dev.20260216.1':
+  '@typescript/native-preview@7.0.0-dev.20260217.1':
     optionalDependencies:
-      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260216.1
-      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260216.1
+      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260217.1
+      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260217.1
 
   '@ungap/structured-clone@1.3.0': {}
 
@@ -7302,15 +7302,15 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.347.2:
+  posthog-js@1.350.0:
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.208.0
       '@opentelemetry/exporter-logs-otlp-http': 0.208.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/resources': 2.4.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-logs': 0.208.0(@opentelemetry/api@1.9.0)
-      '@posthog/core': 1.22.0
-      '@posthog/types': 1.347.2
+      '@posthog/core': 1.23.0
+      '@posthog/types': 1.350.0
       core-js: 3.47.0
       dompurify: 3.3.1
       fflate: 0.4.8
@@ -7482,7 +7482,7 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rolldown-plugin-dts@0.22.1(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(rolldown@1.0.0-rc.3)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.1(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(rolldown@1.0.0-rc.3)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.1
       '@babel/helper-validator-identifier': 8.0.0-rc.1
@@ -7495,7 +7495,7 @@ snapshots:
       obug: 2.1.1
       rolldown: 1.0.0-rc.3
     optionalDependencies:
-      '@typescript/native-preview': 7.0.0-dev.20260216.1
+      '@typescript/native-preview': 7.0.0-dev.20260217.1
       typescript: 5.9.3
     transitivePeerDependencies:
       - oxc-resolver
@@ -7723,7 +7723,7 @@ snapshots:
 
   ts-pattern@5.9.0: {}
 
-  tsdown@0.20.3(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3):
+  tsdown@0.20.3(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(synckit@0.11.12)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -7734,7 +7734,7 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: 1.0.0-rc.3
-      rolldown-plugin-dts: 0.22.1(@typescript/native-preview@7.0.0-dev.20260216.1)(oxc-resolver@11.16.4)(rolldown@1.0.0-rc.3)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.1(@typescript/native-preview@7.0.0-dev.20260217.1)(oxc-resolver@11.16.4)(rolldown@1.0.0-rc.3)(typescript@5.9.3)
       semver: 7.7.3
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
