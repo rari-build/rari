@@ -43,6 +43,7 @@ else {
       }
 
       const loadingFallback = LoadingComponent()
+
       pageElement = React.createElement(
         React.Suspense,
         { 'fallback': loadingFallback, '~boundaryId': promiseId },
