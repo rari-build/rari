@@ -1,3 +1,18 @@
+## [create-rari-app@0.4.11] - 2026-02-17
+
+### 🚀 Features
+
+- *(web)* Add enterprise page with sponsor showcase
+
+### 🚜 Refactor
+
+- Extract regex patterns to constants for reusability
+- Optimize regex patterns and simplify conditional logic
+## [create-rari-app@0.4.10] - 2026-02-14
+
+### 💼 Other
+
+- Create-rari-app@0.4.10
 ## [create-rari-app@0.4.9] - 2026-02-12
 
 ### 💼 Other
