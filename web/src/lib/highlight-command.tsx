@@ -1,3 +1,5 @@
+'use client'
+
 import type { JSX } from 'react'
 import { PACKAGE_NAME_REGEX, WHITESPACE_SPLIT_REGEX } from '@/lib/regex-constants'
 
