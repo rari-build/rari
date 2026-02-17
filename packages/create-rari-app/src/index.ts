@@ -19,7 +19,7 @@ import {
 
 const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
 const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
-const PROJECT_NAME_REGEX = /[@\w/-]+$/
+const PROJECT_NAME_REGEX = /^[@\w/-]+$/
 
 interface ProjectOptions {
   name: string

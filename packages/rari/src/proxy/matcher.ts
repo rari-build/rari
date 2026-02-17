@@ -19,13 +19,13 @@ function normalizePath(path: string): string {
 
 function pathToRegex(pattern: string): RegExp {
   let regexPattern = pattern
-    .replace(ESCAPE_CHARS_REGEX, '\\9bde6121-8a7b-438a-8cc5-d646ba72b781')
+    .replace(ESCAPE_CHARS_REGEX, '\\$&')
     .replace(ASTERISK_REGEX, '___STAR___')
 
-  regexPattern = regexPattern.replace(PARAM_REGEX, '([^/]+)')
   regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, '(.*)')
   regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, '(.+)')
   regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, '([^/]*)')
+  regexPattern = regexPattern.replace(PARAM_REGEX, '([^/]+)')
   regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
 
@@ -139,7 +139,7 @@ export function extractParams(
 
   const paramNames: string[] = []
   let regexPattern = normalizedPattern
-    .replace(ESCAPE_CHARS_REGEX, '\\9bde6121-8a7b-438a-8cc5-d646ba72b781')
+    .replace(ESCAPE_CHARS_REGEX, '\\$&')
     .replace(ASTERISK_REGEX, '___STAR___')
 
   regexPattern = regexPattern.replace(PARAM_REGEX, (_, name) => {

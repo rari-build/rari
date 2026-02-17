@@ -1,7 +1,7 @@
-export const TITLE_EXPORT_REGEX = /^export\s+const\s+title\s*=\s*['"](.+)['"]/m
-export const DESCRIPTION_EXPORT_REGEX = /^export\s+const\s+description\s*=\s*['"](.+)['"]/m
-export const DATE_EXPORT_REGEX = /^export\s+const\s+date\s*=\s*['"](.+)['"]/m
-export const AUTHOR_EXPORT_REGEX = /^export\s+const\s+author\s*=\s*['"](.+)['"]/m
+export const TITLE_EXPORT_REGEX = /^export\s+const\s+title\s*=\s*['"](.+?)['"]/m
+export const DESCRIPTION_EXPORT_REGEX = /^export\s+const\s+description\s*=\s*['"](.+?)['"]/m
+export const DATE_EXPORT_REGEX = /^export\s+const\s+date\s*=\s*['"](.+?)['"]/m
+export const AUTHOR_EXPORT_REGEX = /^export\s+const\s+author\s*=\s*['"](.+?)['"]/m
 export const HEADING_REGEX = /^#\s+(\S.*)$/m
 export const WHITESPACE_REGEX = /\s+/g
 export const NON_WORD_REGEX = /[^\w-]+/g

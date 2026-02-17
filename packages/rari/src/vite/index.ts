@@ -14,7 +14,6 @@ import {
   BACKSLASH_REGEX,
   COMPONENT_ID_REGEX,
   EXPORT_DEFAULT_REGEX,
-  EXPORT_DEFAULT_TEST_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
   SRC_PREFIX_REGEX,
@@ -1786,7 +1785,7 @@ const ${componentName} = registerClientReference(
           let namedExportName = ''
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            const hasDefaultExport = EXPORT_DEFAULT_TEST_REGEX.test(code)
+            const hasDefaultExport = EXPORT_DEFAULT_REGEX.test(code)
             const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
 
             if (!hasDefaultExport && namedExportMatch) {

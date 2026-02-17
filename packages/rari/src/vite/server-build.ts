@@ -22,7 +22,7 @@ const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENT_ID_REGEX = /\\/g
-const EXTENSION_REGEX = /\.(tsx?|\.jsx?)$/
+const EXTENSION_REGEX = /\.(tsx?|jsx?)$/
 const NON_WORD_CHARS_REGEX = /[^\w/-]/g
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
@@ -257,6 +257,7 @@ export class ServerComponentBuilder {
             const code = fs.readFileSync(fullPath, 'utf-8')
             let match
 
+            CODE_IMPORT_REGEX.lastIndex = 0
             match = CODE_IMPORT_REGEX.exec(code)
             while (match !== null) {
               const importPath = match[1] || match[2] || match[3]
@@ -378,6 +379,7 @@ export class ServerComponentBuilder {
     const dependencies: string[] = []
     let match
 
+    EXTRACT_DEPENDENCIES_REGEX.lastIndex = 0
     while (true) {
       match = EXTRACT_DEPENDENCIES_REGEX.exec(code)
       if (match === null)

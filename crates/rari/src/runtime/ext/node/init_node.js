@@ -1,7 +1,7 @@
 /* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
-const PATH_TRAILING_SLASH_REGEX = /\/$/g
+const PATH_TRAILING_SLASH_REGEX = /\/$/
 const PATH_START_SLASH_REGEX = /^\//
 const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
 const QUOTE_TRIM_REGEX = /(^")|("$)/g

@@ -18,10 +18,8 @@ function escapeHtml(text) {
 }
 
 function kebabCase(str) {
-  if (VENDOR_PREFIX_REGEX.test(str))
-    return `-${str.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()}`
-
-  return str.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()
+  const kebab = str.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()
+  return VENDOR_PREFIX_REGEX.test(str) ? `-${kebab}` : kebab
 }
 
 function isSelfClosing(tagName) {

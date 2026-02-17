@@ -1,7 +1,6 @@
 // oxlint-disable no-unused-expressions
 /* eslint-disable no-undef, style/object-curly-spacing */
-const LOADING_PATH_REGEX = /\/[^/]+$/g
-const LOADING_PATH_REPLACE_REGEX = /\/[^/]+$/
+const LOADING_PATH_REGEX = /\/[^/]+$/
 
 if (!globalThis['~render'])
   globalThis['~render'] = {}
@@ -208,7 +207,7 @@ globalThis['~render'].componentAsync = async function () {
 
         const loadingPaths = [
           componentPath.replace('/page', '/loading'),
-          componentPath.replace(LOADING_PATH_REPLACE_REGEX, '/loading'),
+          componentPath.replace(LOADING_PATH_REGEX, '/loading'),
           `${componentPath}-loading`,
           'app/loading',
         ]

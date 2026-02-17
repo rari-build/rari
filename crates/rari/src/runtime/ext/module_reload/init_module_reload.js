@@ -42,8 +42,8 @@ function getModuleFromCache(moduleSpecifier) {
   try {
     const componentId = moduleSpecifier
       .replace(PATH_EXTRACT_REGEX, '')
-      .replace(FILE_EXTENSION_REGEX, '')
       .replace(QUERY_STRING_REGEX, '')
+      .replace(FILE_EXTENSION_REGEX, '')
 
     if (globalThis[componentId]) {
       return {

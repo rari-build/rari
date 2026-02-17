@@ -156,7 +156,7 @@ if (typeof window !== 'undefined') {
                   if (key === 'style' && typeof value === 'object' && value !== null) {
                     const styleStr = Object.entries(value)
                       .map(([k, v]) => {
-                        const kebabKey = k.replace(CAMEL_CASE_REGEX, '-$1').toLowerCase()
+                        const kebabKey = k.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()
                         return `${kebabKey}:${String(v)}`
                       })
                       .join(';')
