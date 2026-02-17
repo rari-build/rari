@@ -960,12 +960,21 @@ impl RscToHtmlConverter {
             RscChunkType::InitialShell => {
                 let html = if !self.shell_sent {
                     self.shell_sent = true;
-                    let output = self.generate_html_shell();
+                    let mut output = self.generate_html_shell();
 
                     let rsc_line = String::from_utf8_lossy(&chunk.data);
 
                     if !self.payload_embedding_disabled {
                         self.rsc_wire_format.push(rsc_line.trim().to_string());
+                    }
+
+                    match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
+                        Ok(rsc_html) => {
+                            output.extend(rsc_html);
+                        }
+                        Err(e) => {
+                            error!("Error parsing initial RSC shell: {}", e);
+                        }
                     }
 
                     output
@@ -1147,7 +1156,7 @@ if (typeof window !== 'undefined') {{
             return Ok(Vec::new());
         }
 
-        const PAYLOAD_SIZE_LIMIT: usize = 5000;
+        const PAYLOAD_SIZE_LIMIT: usize = 50000;
 
         if json_str.starts_with("[[") || json_str.len() > PAYLOAD_SIZE_LIMIT {
             return Ok(Vec::new());
@@ -1280,8 +1289,13 @@ if (typeof window !== 'undefined') {{
     async fn render_client_component_placeholder(
         &self,
         _component_ref: &str,
-        _props: Option<&serde_json::Map<String, serde_json::Value>>,
+        props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if let Some(props) = props
+            && let Some(children) = props.get("children")
+        {
+            return self.rsc_element_to_html(children).await;
+        }
         Ok(String::new())
     }
 
@@ -1319,7 +1333,13 @@ if (typeof window !== 'undefined') {{
                 } else {
                     let rendered = self.rsc_element_to_html(child).await?;
                     if !rendered.is_empty() && rendered.trim() != "null" {
-                        Some(rendered)
+                        let is_unresolved_lazy = if let Some(s) = child.as_str() {
+                            s.starts_with("$L") && rendered.is_empty()
+                        } else {
+                            false
+                        };
+
+                        if is_unresolved_lazy { None } else { Some(rendered) }
                     } else {
                         None
                     }
