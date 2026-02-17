@@ -962,12 +962,6 @@ impl RscToHtmlConverter {
                     self.shell_sent = true;
                     let mut output = self.generate_html_shell();
 
-                    let rsc_line = String::from_utf8_lossy(&chunk.data);
-
-                    if !self.payload_embedding_disabled {
-                        self.rsc_wire_format.push(rsc_line.trim().to_string());
-                    }
-
                     match self.parse_and_render_rsc(&chunk.data, chunk.row_id).await {
                         Ok(rsc_html) => {
                             output.extend(rsc_html);
@@ -1333,13 +1327,7 @@ if (typeof window !== 'undefined') {{
                 } else {
                     let rendered = self.rsc_element_to_html(child).await?;
                     if !rendered.is_empty() && rendered.trim() != "null" {
-                        let is_unresolved_lazy = if let Some(s) = child.as_str() {
-                            s.starts_with("$L") && rendered.is_empty()
-                        } else {
-                            false
-                        };
-
-                        if is_unresolved_lazy { None } else { Some(rendered) }
+                        Some(rendered)
                     } else {
                         None
                     }
