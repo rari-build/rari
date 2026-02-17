@@ -8,5 +8,4 @@ export const NON_WORD_REGEX = /[^\w-]+/g
 export const MULTIPLE_DASHES_REGEX = /-{2,}/g
 export const PACKAGE_NAME_REGEX = /^[@\w.:/-]+$/
 export const HEX_REGEX = /^#[0-9A-F]{6}$/i
-export const TRAILING_SLASH_REGEX = /\/$/
 export const WHITESPACE_SPLIT_REGEX = /(\s+)/
