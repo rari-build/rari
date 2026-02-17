@@ -24,7 +24,6 @@ const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
 const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
 const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
-const NON_WORD_CHARS_REGEX = /[^\w/-]/g
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const EXPORT_LIST_REGEX = /^export\s*\{([^}]+)\};?\s*$/gm
@@ -577,11 +576,7 @@ const ${importName} = (props) => {
             continue
 
           const relativeFromRoot = path.relative(this.projectRoot, actualPath)
-          const componentId = relativeFromRoot
-            .replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
-            .replace(TS_JS_EXTENSION_REGEX, '')
-            .replace(NON_WORD_CHARS_REGEX, '_')
-            .replace(SRC_PREFIX_REGEX, '')
+          const componentId = this.getComponentId(relativeFromRoot)
 
           const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {

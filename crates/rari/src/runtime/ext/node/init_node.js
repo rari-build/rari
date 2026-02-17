@@ -237,11 +237,11 @@ const path = {
         break
     }
 
-    const upCount = fromParts.length - commonLength
-    const upPath = '../'.repeat(upCount)
-    const remainingPath = toParts.slice(commonLength).join('/')
+    const upSegments = Array.from({ length: fromParts.length - commonLength }).fill('..')
+    const remaining = toParts.slice(commonLength)
+    const result = [...upSegments, ...remaining].join('/')
 
-    return upPath + remainingPath || '.'
+    return result || '.'
   },
   isAbsolute: (path) => {
     return path.startsWith('/')
@@ -293,11 +293,11 @@ const path = {
           break
       }
 
-      const upCount = fromParts.length - commonLength
-      const upPath = '../'.repeat(upCount)
-      const remainingPath = toParts.slice(commonLength).join('/')
+      const upSegments = Array.from({ length: fromParts.length - commonLength }).fill('..')
+      const remaining = toParts.slice(commonLength)
+      const result = [...upSegments, ...remaining].join('/')
 
-      return upPath + remainingPath || '.'
+      return result || '.'
     },
     isAbsolute: (path) => {
       return path.startsWith('/')

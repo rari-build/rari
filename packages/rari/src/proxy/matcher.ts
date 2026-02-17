@@ -19,13 +19,16 @@ function normalizePath(path: string): string {
 
 function pathToRegex(pattern: string): RegExp {
   let regexPattern = pattern
-    .replace(ESCAPE_CHARS_REGEX, '\\$&')
-    .replace(ASTERISK_REGEX, '___STAR___')
 
   regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, '(.*)')
   regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, '(.+)')
   regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, '([^/]*)')
   regexPattern = regexPattern.replace(PARAM_REGEX, '([^/]+)')
+
+  regexPattern = regexPattern
+    .replace(ESCAPE_CHARS_REGEX, '\\$&')
+    .replace(ASTERISK_REGEX, '___STAR___')
+
   regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
 
@@ -139,8 +142,6 @@ export function extractParams(
 
   const paramNames: string[] = []
   let regexPattern = normalizedPattern
-    .replace(ESCAPE_CHARS_REGEX, '\\$&')
-    .replace(ASTERISK_REGEX, '___STAR___')
 
   /* v8 ignore start - advanced parameter patterns not commonly used */
   regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_, name) => {
@@ -161,6 +162,10 @@ export function extractParams(
     paramNames.push(name)
     return '([^/]+)'
   })
+
+  regexPattern = regexPattern
+    .replace(ESCAPE_CHARS_REGEX, '\\$&')
+    .replace(ASTERISK_REGEX, '___STAR___')
 
   regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
