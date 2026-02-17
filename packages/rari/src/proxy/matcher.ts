@@ -149,28 +149,30 @@ export function extractParams(
   const normalizedPath = normalizePath(pathname)
   const normalizedPattern = normalizePath(pattern)
 
-  const paramNames: string[] = []
+  const paramInfo: Array<{ name: string, pos: number }> = []
   let regexPattern = normalizedPattern
 
   /* v8 ignore start - advanced parameter patterns not commonly used */
-  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_match, name) => {
-    paramNames.push(name)
+  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_match, name, offset) => {
+    paramInfo.push({ name, pos: offset })
     return '___PARAM_DOTSTAR___'
   })
-  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_match, name) => {
-    paramNames.push(name)
+  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_match, name, offset) => {
+    paramInfo.push({ name, pos: offset })
     return '___PARAM_DOTPLUS___'
   })
-  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_match, name) => {
-    paramNames.push(name)
+  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_match, name, offset) => {
+    paramInfo.push({ name, pos: offset })
     return '___PARAM_OPT___'
   })
   /* v8 ignore stop */
 
-  regexPattern = regexPattern.replace(PARAM_REGEX, (_match, name) => {
-    paramNames.push(name)
+  regexPattern = regexPattern.replace(PARAM_REGEX, (_match, name, offset) => {
+    paramInfo.push({ name, pos: offset })
     return '___PARAM_SEG___'
   })
+
+  const paramNames = paramInfo.sort((a, b) => a.pos - b.pos).map(p => p.name)
 
   regexPattern = regexPattern.replace(ASTERISK_REGEX, '___STAR___')
   regexPattern = regexPattern.replace(ESCAPE_CHARS_REGEX, '\\$&')

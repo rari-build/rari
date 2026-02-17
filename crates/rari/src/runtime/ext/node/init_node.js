@@ -307,9 +307,6 @@ const path = {
   },
 }
 
-path.posix = { ...path }
-delete path.posix.posix
-
 const crypto = {
   createHash: (algorithm) => {
     if (globalThis.crypto?.subtle) {
