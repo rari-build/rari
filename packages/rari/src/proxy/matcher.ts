@@ -10,6 +10,10 @@ const PARAM_REGEX = /:(\w+)/g
 const PARAM_ASTERISK_REGEX = /:(\w+)\*/g
 const PARAM_PLUS_REGEX = /:(\w+)\+/g
 const PARAM_QUESTION_REGEX = /:(\w+)\?/g
+const PARAM_DOTSTAR_PLACEHOLDER_REGEX = /___PARAM_DOTSTAR___/g
+const PARAM_DOTPLUS_PLACEHOLDER_REGEX = /___PARAM_DOTPLUS___/g
+const PARAM_OPT_PLACEHOLDER_REGEX = /___PARAM_OPT___/g
+const PARAM_SEG_PLACEHOLDER_REGEX = /___PARAM_SEG___/g
 const STAR_PLACEHOLDER_REGEX = /___STAR___/g
 
 function normalizePath(path: string): string {
@@ -20,16 +24,21 @@ function normalizePath(path: string): string {
 function pathToRegex(pattern: string): RegExp {
   let regexPattern = pattern
 
-  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, '(.*)')
-  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, '(.+)')
-  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, '([^/]*)')
-  regexPattern = regexPattern.replace(PARAM_REGEX, '([^/]+)')
+  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, '___PARAM_DOTSTAR___')
+  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, '___PARAM_DOTPLUS___')
+  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, '___PARAM_OPT___')
+  regexPattern = regexPattern.replace(PARAM_REGEX, '___PARAM_SEG___')
+  regexPattern = regexPattern.replace(ASTERISK_REGEX, '___STAR___')
+
+  regexPattern = regexPattern.replace(ESCAPE_CHARS_REGEX, '\\$&')
 
   regexPattern = regexPattern
-    .replace(ESCAPE_CHARS_REGEX, '\\$&')
-    .replace(ASTERISK_REGEX, '___STAR___')
+    .replace(PARAM_DOTSTAR_PLACEHOLDER_REGEX, '(.*)')
+    .replace(PARAM_DOTPLUS_PLACEHOLDER_REGEX, '(.+)')
+    .replace(PARAM_OPT_PLACEHOLDER_REGEX, '([^/]*)')
+    .replace(PARAM_SEG_PLACEHOLDER_REGEX, '([^/]+)')
+    .replace(STAR_PLACEHOLDER_REGEX, '.*')
 
-  regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
 
   return new RegExp(regexPattern)
@@ -144,30 +153,35 @@ export function extractParams(
   let regexPattern = normalizedPattern
 
   /* v8 ignore start - advanced parameter patterns not commonly used */
-  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_match, name) => {
     paramNames.push(name)
-    return '(.*)'
+    return '___PARAM_DOTSTAR___'
   })
-  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_match, name) => {
     paramNames.push(name)
-    return '(.+)'
+    return '___PARAM_DOTPLUS___'
   })
-  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_match, name) => {
     paramNames.push(name)
-    return '([^/]*)'
+    return '___PARAM_OPT___'
   })
   /* v8 ignore stop */
 
-  regexPattern = regexPattern.replace(PARAM_REGEX, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_REGEX, (_match, name) => {
     paramNames.push(name)
-    return '([^/]+)'
+    return '___PARAM_SEG___'
   })
 
-  regexPattern = regexPattern
-    .replace(ESCAPE_CHARS_REGEX, '\\$&')
-    .replace(ASTERISK_REGEX, '___STAR___')
+  regexPattern = regexPattern.replace(ASTERISK_REGEX, '___STAR___')
+  regexPattern = regexPattern.replace(ESCAPE_CHARS_REGEX, '\\$&')
 
-  regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
+  regexPattern = regexPattern
+    .replace(PARAM_DOTSTAR_PLACEHOLDER_REGEX, '(.*)')
+    .replace(PARAM_DOTPLUS_PLACEHOLDER_REGEX, '(.+)')
+    .replace(PARAM_OPT_PLACEHOLDER_REGEX, '([^/]*)')
+    .replace(PARAM_SEG_PLACEHOLDER_REGEX, '([^/]+)')
+    .replace(STAR_PLACEHOLDER_REGEX, '.*')
+
   regexPattern = `^${regexPattern}$`
 
   const regex = new RegExp(regexPattern)

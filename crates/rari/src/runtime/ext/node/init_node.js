@@ -3,8 +3,8 @@ import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
 const PATH_TRAILING_SLASH_REGEX = /\/$/
 const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
-const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
-const QUOTE_TRIM_REGEX = /(^")|("$)/g
+const COMMAND_ARGS_REGEX = /(?:[^\s"']|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+/g
+const QUOTE_TRIM_REGEX = /^["']|["']$/g
 const FORMAT_SPECIFIER_REGEX = /%[sdj%]/g
 
 initializeDebugEnv('rari')
@@ -205,7 +205,7 @@ const path = {
       }
     }
 
-    return resolved.replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
+    return resolved.replace(MULTIPLE_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
   },
   dirname: (path) => {
     const parts = path.split('/')
@@ -261,7 +261,7 @@ const path = {
         }
       }
 
-      return resolved.replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
+      return resolved.replace(MULTIPLE_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
     },
     dirname: (path) => {
       const parts = path.split('/')
@@ -306,6 +306,9 @@ const path = {
     delimiter: ':',
   },
 }
+
+path.posix = { ...path }
+delete path.posix.posix
 
 const crypto = {
   createHash: (algorithm) => {
