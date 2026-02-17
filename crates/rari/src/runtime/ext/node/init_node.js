@@ -1,7 +1,6 @@
 /* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
-const PATH_SLASHES_REGEX = /\//g
 const PATH_TRAILING_SLASH_REGEX = /\/$/g
 const PATH_START_SLASH_REGEX = /^\//
 const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
@@ -193,7 +192,7 @@ const fs = {
 
 const path = {
   join: (...paths) => {
-    return paths.filter(Boolean).join('/').replace(PATH_SLASHES_REGEX, '/')
+    return paths.filter(Boolean).join('/')
   },
   resolve: (...paths) => {
     let resolved = ''
@@ -206,7 +205,7 @@ const path = {
       }
     }
 
-    return resolved.replace(PATH_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
+    return resolved.replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
   },
   dirname: (path) => {
     const parts = path.split('/')
@@ -234,7 +233,7 @@ const path = {
   sep: '/',
   delimiter: ':',
   posix: {
-    join: (...paths) => paths.filter(Boolean).join('/').replace(PATH_SLASHES_REGEX, '/'),
+    join: (...paths) => paths.filter(Boolean).join('/'),
     resolve: (...paths) => {
       let resolved = ''
       for (let i = paths.length - 1; i >= 0; i--) {
@@ -246,7 +245,7 @@ const path = {
         }
       }
 
-      return resolved.replace(PATH_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
+      return resolved.replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
     },
     dirname: (path) => {
       const parts = path.split('/')
