@@ -6,11 +6,12 @@ import Cloudflare from '@/components/icons/sponsors/Cloudflare'
 import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
+import { HEX_REGEX } from '@/lib/regex-constants'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
 function hexWithAlpha(hex: string, alpha: string): string {
-  if (/^#[0-9A-F]{6}$/i.test(hex)) {
+  if (HEX_REGEX.test(hex)) {
     return `${hex}${alpha}`
   }
 

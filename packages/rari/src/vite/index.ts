@@ -10,9 +10,46 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS, DEFAULT_IMAGE_SIZES, DEFAULT_MAX_CACHE_SIZE, DEFAULT_MINIMUM_CACHE_TTL, DEFAULT_QUALITY_LEVELS } from '../image/constants'
 import { rariProxy } from '../proxy/vite-plugin'
 import { rariRouter } from '../router/vite-plugin'
+import {
+  BACKSLASH_REGEX,
+  COMPONENT_ID_REGEX,
+  EXPORT_DEFAULT_REGEX,
+  EXPORT_DEFAULT_TEST_REGEX,
+  EXPORT_NAMED_DECLARATION_REGEX,
+  EXTENSION_REGEX,
+  SRC_PREFIX_REGEX,
+  TSX_EXT_REGEX,
+  WINDOWS_PATH_REGEX,
+} from '../shared/regex-constants'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin } from './server-build'
+
+const IMPORT_TYPE_SPECIFIER_REGEX = /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_TYPE_NAMESPACE_REGEX = /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_TYPE_DEFAULT_REGEX = /import\s+type\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_SPECIFIER_REGEX = /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_NAMESPACE_REGEX = /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g
+const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
+const HTML_IMPORT_REGEX = /import\s*(?:\(\s*)?["']([^"']+)["']\)?/g
+const NAMED_EXPORT_REGEX = /export\s*\{([^}]+)\}/g
+const AS_SPLIT_REGEX = /\s+as\s+/
+const EXPORT_DEFAULT_FUNCTION_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
+const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
+const EXPORT_DEFAULT_VALUE_REGEX = /export\s+default\s+([^;]+)/
+const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
+const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
+const IMPORT_REGEX = /import\s+["']([^"']+)["']/g
+const IMPORT_LINE_REGEX = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
+const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
+const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
+const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
+const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
+const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g
+const JSX_TEST_REGEX = /\bJSX\b/
+const COMPONENTS_PREFIX_REGEX = /^components\//
+const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 
 interface RouterPluginOptions {
   appDir?: string
@@ -91,37 +128,37 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
       if (filePath.endsWith('.ts')) {
         content = content.replace(
-          /import\s+type\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_TYPE_SPECIFIER_REGEX,
           (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+type\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_TYPE_NAMESPACE_REGEX,
           (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+type\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_TYPE_DEFAULT_REGEX,
           (match, specifier, modulePath) => `import type ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+(\{[^}]+\})\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_SPECIFIER_REGEX,
           (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+(\*\s+as\s+\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_NAMESPACE_REGEX,
           (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_DEFAULT_REGEX,
           (match, specifier, modulePath) => `import ${specifier} from "rari/${modulePath}";`,
         )
 
         content = content.replace(
-          /import\s+["']\.\.?\/([^"']+)["'];?/g,
+          IMPORT_SIDE_EFFECT_REGEX,
           (match, modulePath) => `import "rari/${modulePath}";`,
         )
       }
@@ -189,7 +226,7 @@ function scanForClientComponents(srcDir: string, additionalDirs: string[] = []):
           continue
         scanDirectory(fullPath)
       }
-      else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+      else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf8')
           if (
@@ -237,8 +274,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     const result = { hasUseServer: false, hasUseClient: false }
 
-    const normalizedId = id.replace(/\\/g, '/')
-    if (!/\.(?:tsx?|jsx?)$/.test(normalizedId) || !normalizedId.includes('/src/')) {
+    const normalizedId = id.replace(BACKSLASH_REGEX, '/')
+    if (!TSX_EXT_REGEX.test(normalizedId) || !normalizedId.includes('/src/')) {
       directiveCache.set(id, result)
       return result
     }
@@ -266,9 +303,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
     if (fs.existsSync(indexHtmlPath)) {
       try {
         const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-        const importRegex = /import\s*(?:\(\s*)?["']([^"']+)["']\)?/g
 
-        for (const match of htmlContent.matchAll(importRegex)) {
+        for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
           const importPath = match[1]
           if (importPath.startsWith('/src/')) {
             const absolutePath = path.join(projectRoot, importPath.slice(1))
@@ -313,24 +349,24 @@ export function rari(options: RariOptions = {}): Plugin[] {
   function parseExportedNames(code: string): string[] {
     try {
       const exportedNames: string[] = []
-      const namedExportMatch = code.matchAll(/export\s*\{([^}]+)\}/g)
+      const namedExportMatch = code.matchAll(NAMED_EXPORT_REGEX)
       for (const match of namedExportMatch) {
         const exports = match[1].split(',')
         for (const exp of exports) {
           const trimmed = exp.trim()
-          const parts = trimmed.split(/\s+as\s+/)
+          const parts = trimmed.split(AS_SPLIT_REGEX)
           const exportedName = parts.at(-1)?.trim()
           if (exportedName)
             exportedNames.push(exportedName)
         }
       }
 
-      if (/export\s+default\s+(?:function|class)\s+\w+/.test(code))
+      if (EXPORT_DEFAULT_FUNCTION_REGEX.test(code))
         exportedNames.push('default')
-      else if (/export\s+default\s+/.test(code))
+      else if (EXPORT_DEFAULT_REGEX.test(code))
         exportedNames.push('default')
 
-      const declarationExports = code.matchAll(/export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g)
+      const declarationExports = code.matchAll(EXPORT_DECLARATION_REGEX)
       for (const match of declarationExports) {
         if (match[1])
           exportedNames.push(match[1])
@@ -385,9 +421,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     for (const name of exportedNames) {
       if (name === 'default') {
-        const functionDeclRegex
-          = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
-        const functionDeclMatch = code.match(functionDeclRegex)
+        const functionDeclMatch = code.match(EXPORT_DEFAULT_FUNCTION_DECL_REGEX)
 
         if (functionDeclMatch) {
           const functionName = functionDeclMatch[1]
@@ -395,13 +429,12 @@ export function rari(options: RariOptions = {}): Plugin[] {
           newCode += `registerServerReference(${functionName}, ${JSON.stringify(id)}, ${JSON.stringify(name)});\n`
         }
         else {
-          const defaultExportRegex = /export\s+default\s+([^;]+)/
-          const match = code.match(defaultExportRegex)
+          const match = code.match(EXPORT_DEFAULT_VALUE_REGEX)
           if (match) {
             const exportedValue = match[1].trim()
             const tempVarName = '__default_export__'
             newCode = newCode.replace(
-              defaultExportRegex,
+              EXPORT_DEFAULT_VALUE_REGEX,
               `const ${tempVarName} = ${exportedValue};\nexport default ${tempVarName}`,
             )
             newCode += `\n// Register server reference for default export\n`
@@ -440,10 +473,10 @@ if (import.meta.hot) {
 
       const relativePath = path.relative(process.cwd(), id)
       const moduleId = relativePath
-        .replace(/\\/g, '/')
-        .replace(/\.(tsx?|jsx?)$/, '')
-        .replace(/[^\w/-]/g, '_')
-        .replace(/^src\//, '')
+        .replace(BACKSLASH_REGEX, '/')
+        .replace(TSX_EXT_REGEX, '')
+        .replace(COMPONENT_ID_REGEX, '_')
+        .replace(SRC_PREFIX_REGEX, '')
 
       let newCode = 'import { createServerReference } from "rari/runtime/actions";\n'
 
@@ -464,11 +497,11 @@ if (import.meta.hot) {
 
       const relativePath = path.relative(process.cwd(), id)
       const componentId = relativePath
-        .replace(/\\/g, '/')
-        .replace(/\.(tsx?|jsx?)$/, '')
-        .replace(/[^\w/-]/g, '_')
-        .replace(/^src\//, '')
-        .replace(/^components\//, '')
+        .replace(BACKSLASH_REGEX, '/')
+        .replace(TSX_EXT_REGEX, '')
+        .replace(COMPONENT_ID_REGEX, '_')
+        .replace(SRC_PREFIX_REGEX, '')
+        .replace(COMPONENTS_PREFIX_REGEX, '')
 
       let newCode
         = 'import { createServerComponentWrapper } from "virtual:rsc-integration.ts";\n'
@@ -522,7 +555,7 @@ if (import.meta.hot) {
     if (exportedNames.length === 0)
       return code
 
-    return code.replace(/^['"]use client['"];?\s*$/gm, '')
+    return code.replace(USE_CLIENT_DIRECTIVE_REGEX, '')
   }
 
   function resolveImportToFilePath(
@@ -563,7 +596,7 @@ if (import.meta.hot) {
 
   function getComponentName(importPath: string): string {
     const lastSegment = importPath.split('/').pop() || importPath
-    return lastSegment.replace(/\.[^.]*$/, '')
+    return lastSegment.replace(EXTENSION_REGEX, '')
   }
 
   const serverComponentBuilder: any = null
@@ -600,12 +633,11 @@ if (import.meta.hot) {
         if (fs.existsSync(indexHtmlPath)) {
           try {
             const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-            const importRegex = /import\s+["']([^"']+)["']/g
             const htmlImports: Array<{ path: string, name: string }> = []
 
-            for (const match of htmlContent.matchAll(importRegex)) {
+            for (const match of htmlContent.matchAll(IMPORT_REGEX)) {
               const importPath = match[1]
-              if (importPath.startsWith('/src/') && /\.(?:tsx?|jsx?)$/.test(importPath)) {
+              if (importPath.startsWith('/src/') && TSX_EXT_REGEX.test(importPath)) {
                 const relativePath = importPath.slice(1)
                 const filename = path.basename(relativePath, path.extname(relativePath))
                 htmlImports.push({ path: relativePath, name: filename })
@@ -875,7 +907,7 @@ if (import.meta.hot) {
     },
 
     transform(code, id) {
-      if (!/\.(?:tsx?|jsx?)$/.test(id))
+      if (!TSX_EXT_REGEX.test(id))
         return null
 
       const environment = (this as any).environment
@@ -884,12 +916,10 @@ if (import.meta.hot) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
-        const importRegex
-          = /^\s*import\s+(?:(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?|\{\s*(\w+(?:\s*,\s*\w+)*)\s*\})\s+from\s+['"]([./@][^'"]+)['"].*$/
         const lines = code.split('\n')
 
         for (const line of lines) {
-          const importMatch = line.match(importRegex)
+          const importMatch = line.match(IMPORT_LINE_REGEX)
           if (!importMatch)
             continue
 
@@ -978,11 +1008,8 @@ ${clientTransformedCode}`
       let needsWrapperImport = false
       const serverComponentReplacements: string[] = []
 
-      const importRegex
-        = /^\s*import\s+(\w+)(?:\s*,\s*\{\s*(?:(\w+(?:\s*,\s*\w+)*)\s*)?\})?\s+from\s+['"]([./@][^'"]+)['"].*$/
-
       for (const line of lines) {
-        const importMatch = line.match(importRegex)
+        const importMatch = line.match(IMPORT_LINE_REGEX)
         if (!importMatch)
           continue
 
@@ -1054,10 +1081,8 @@ const ${componentName} = registerClientReference(
       if (hasServerImports) {
         const hasReactImport
           = modifiedCode.includes('import React')
-            || modifiedCode.match(/import\s+\{[^}]*\}\s+from\s+['"]react['"]/)
-            || modifiedCode.match(
-              /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/,
-            )
+            || modifiedCode.match(REACT_IMPORT_REGEX)
+            || modifiedCode.match(REACT_IMPORT_WITH_DEFAULT_REGEX)
 
         const hasWrapperImport = modifiedCode.includes(
           'createServerComponentWrapper',
@@ -1074,9 +1099,7 @@ const ${componentName} = registerClientReference(
         if (importsToAdd)
           modifiedCode = importsToAdd + modifiedCode
         if (!modifiedCode.includes('Suspense')) {
-          const reactImportMatch = modifiedCode.match(
-            /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/,
-          )
+          const reactImportMatch = modifiedCode.match(REACT_IMPORT_MATCH_REGEX)
           if (reactImportMatch) {
             if (
               reactImportMatch[1]
@@ -1084,7 +1107,7 @@ const ${componentName} = registerClientReference(
             ) {
               modifiedCode = modifiedCode.replace(
                 reactImportMatch[0],
-                reactImportMatch[0].replace(/\{([^}]*)\}/, `{ Suspense, $1 }`),
+                reactImportMatch[0].replace(IMPORT_SPECIFIERS_REGEX, `{ Suspense, $1 }`),
               )
             }
             else if (!reactImportMatch[1]) {
@@ -1100,7 +1123,7 @@ const ${componentName} = registerClientReference(
         const hasJsx
           = modifiedCode.includes('</')
             || modifiedCode.includes('/>')
-            || /\bJSX\b/.test(modifiedCode)
+            || JSX_TEST_REGEX.test(modifiedCode)
 
         if (
           !modifiedCode.includes('\'use client\'')
@@ -1163,7 +1186,7 @@ const ${componentName} = registerClientReference(
                 if (entry.isDirectory()) {
                   collectServerComponents(fullPath)
                 }
-                else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+                else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
                   try {
                     if (isServerComponent(fullPath))
                       serverComponentPaths.push(fullPath)
@@ -1254,7 +1277,7 @@ const ${componentName} = registerClientReference(
             const relativePath = path.relative(process.cwd(), componentPath)
             const componentName = path
               .basename(componentPath)
-              .replace(/\.[^.]+$/, '')
+              .replace(EXTENSION_REGEX, '')
 
             try {
               await fetch(`${baseUrl}/_rari/register-client`, {
@@ -1556,10 +1579,10 @@ const ${componentName} = registerClientReference(
       })
 
       server.watcher.on('change', async (filePath) => {
-        if (/\.(?:tsx?|jsx?)$/.test(filePath))
+        if (TSX_EXT_REGEX.test(filePath))
           componentTypeCache.delete(filePath)
 
-        if (/\.(?:tsx?|jsx?)$/.test(filePath) && filePath.includes(srcDir)) {
+        if (TSX_EXT_REGEX.test(filePath) && filePath.includes(srcDir)) {
           if (isServerComponent(filePath)) {
             server.ws.send({
               type: 'custom',
@@ -1715,7 +1738,7 @@ const ${componentName} = registerClientReference(
     },
 
     async load(id) {
-      if (/\.(?:tsx?|jsx?)$/.test(id)) {
+      if (TSX_EXT_REGEX.test(id)) {
         const environment = (this as any).environment
 
         if (environment && environment.name === 'client') {
@@ -1755,16 +1778,16 @@ const ${componentName} = registerClientReference(
         })
 
         const lazyLoaderRegistry = clientComponentsArray.map((componentPath) => {
-          const relativePath = path.relative(process.cwd(), componentPath).replace(/\\/g, '/')
-          const componentId = relativePath.replace(/\.(tsx?|jsx?)$/, '')
-          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(/\\/g, '/') : relativePath
+          const relativePath = path.relative(process.cwd(), componentPath).replace(BACKSLASH_REGEX, '/')
+          const componentId = relativePath.replace(TSX_EXT_REGEX, '')
+          const registrationPath = relativePath.startsWith('..') ? componentPath.replace(BACKSLASH_REGEX, '/') : relativePath
 
           let hasNamedExport = false
           let namedExportName = ''
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            const hasDefaultExport = /export\s+default\s+/.test(code)
-            const namedExportMatch = code.match(/export\s+(?:function|const|class)\s+(\w+)/)
+            const hasDefaultExport = EXPORT_DEFAULT_TEST_REGEX.test(code)
+            const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
 
             if (!hasDefaultExport && namedExportMatch) {
               hasNamedExport = true
@@ -1777,8 +1800,8 @@ const ${componentName} = registerClientReference(
             }
           }
 
-          const normalizedPath = registrationPath.replace(/\\/g, '/')
-          const importPath = normalizedPath.startsWith('/') || /^[A-Z]:\//i.test(normalizedPath)
+          const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
+          const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
             ? normalizedPath
             : `/${normalizedPath}`
           const importStatement = hasNamedExport
@@ -1887,7 +1910,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       if (id === 'virtual:rsc-integration.ts') {
         const code = await loadRscClientRuntime()
         return code.replace(
-          /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g,
+          RSC_CLIENT_IMPORT_REGEX,
           (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
         )
       }
@@ -1921,7 +1944,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
     },
 
     async handleHotUpdate({ file, server }) {
-      const isReactFile = /\.(?:tsx?|jsx?)$/.test(file)
+      const isReactFile = TSX_EXT_REGEX.test(file)
 
       if (!isReactFile)
         return undefined
@@ -1984,10 +2007,9 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
     transformIndexHtml: {
       order: 'pre',
       handler(html) {
-        const importRegex = /import\s+["']([^"']+)["']/g
         const imports: string[] = []
 
-        for (const match of html.matchAll(importRegex)) {
+        for (const match of html.matchAll(IMPORT_PATH_REGEX)) {
           const importPath = match[1]
           if (importPath.startsWith('/src/'))
             imports.push(importPath)

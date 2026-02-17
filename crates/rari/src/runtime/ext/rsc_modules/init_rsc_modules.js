@@ -1,4 +1,8 @@
+/* eslint-disable e18e/prefer-static-regex */
 (function initializeRscModules() {
+  const EXPORT_FUNCTION_REGEX = /export\s+(async\s+)?function\s+(\w+)/g
+  const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
+
   if (!globalThis['~rsc'])
     globalThis['~rsc'] = {}
   if (!globalThis['~rsc'].modules)
@@ -56,7 +60,7 @@
   }
 
   globalThis.discoverModuleExports = function (code) {
-    const exportRegex = /export\s+(async\s+)?function\s+(\w+)/g
+    const exportRegex = EXPORT_FUNCTION_REGEX
     const exports = []
 
     const matches = code.matchAll(exportRegex)
@@ -90,7 +94,7 @@
   globalThis.createServerFunctionPromise = function (functionName, args = []) {
     const cacheKey = `${functionName}_${JSON.stringify(args)}`
     const promiseId = `server_fn_${functionName}_${btoa(JSON.stringify(args))
-      .replace(/[^a-z0-9]/gi, '')
+      .replace(NON_ALPHANUMERIC_REGEX, '')
       .slice(0, 10)}`
 
     if (globalThis.PromiseManager && globalThis.PromiseManager.getFunction) {

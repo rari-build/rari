@@ -1,24 +1,27 @@
+const HTML_ESCAPE_MAP = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  '\'': '&#039;',
+}
+const HTML_ESCAPE_REGEX = /[&<>"']/g
+const VENDOR_PREFIX_REGEX = /^(?:Webkit|Moz|Ms|O)[A-Z]/
+const CAMEL_CASE_REGEX = /([a-z])([A-Z])/g
+
 function escapeHtml(text) {
   if (text === null || text === undefined)
     return ''
 
   const str = String(text)
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    '\'': '&#039;',
-  }
-
-  return str.replace(/[&<>"']/g, m => map[m])
+  return str.replace(HTML_ESCAPE_REGEX, m => HTML_ESCAPE_MAP[m])
 }
 
 function kebabCase(str) {
-  if (/^(?:Webkit|Moz|Ms|O)[A-Z]/.test(str))
-    return `-${str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}`
+  if (VENDOR_PREFIX_REGEX.test(str))
+    return `-${str.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()}`
 
-  return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
+  return str.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()
 }
 
 function isSelfClosing(tagName) {

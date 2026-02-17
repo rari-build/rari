@@ -12,6 +12,7 @@ import type {
 } from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { BACKSLASH_REGEX, PATH_SEPARATOR_REGEX } from '../shared/regex-constants'
 
 export interface AppRouteGeneratorOptions {
   appDir: string
@@ -39,6 +40,9 @@ const SEGMENT_PATTERNS = {
   CATCH_ALL: /^\[\.\.\.([^\]]+)\]$/,
   OPTIONAL_CATCH_ALL: /^\[\[\.\.\.([^\]]+)\]\]$/,
 } as const
+
+const SIZE_EXPORT_REGEX = /export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/
+const CONTENT_TYPE_EXPORT_REGEX = /export\s+const\s+contentType\s*=\s*['"]([^'"]+)['"]/
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const
 
@@ -218,13 +222,13 @@ class AppRouteGenerator {
       try {
         const content = await fs.readFile(fullFilePath, 'utf-8')
 
-        const sizeMatch = content.match(/export\s+const\s+size\s*=\s*\{\s*width\s*:\s*(\d+)\s*,\s*height\s*:\s*(\d+)\s*[,}]/)
+        const sizeMatch = content.match(SIZE_EXPORT_REGEX)
         if (sizeMatch) {
           width = Number.parseInt(sizeMatch[1], 10)
           height = Number.parseInt(sizeMatch[2], 10)
         }
 
-        const contentTypeMatch = content.match(/export\s+const\s+contentType\s*=\s*['"]([^'"]+)['"]/)
+        const contentTypeMatch = content.match(CONTENT_TYPE_EXPORT_REGEX)
         if (contentTypeMatch)
           contentType = contentTypeMatch[1]
       }
@@ -260,7 +264,7 @@ class AppRouteGenerator {
     if (!filePath)
       return '/'
 
-    const normalized = filePath.replace(/\\/g, '/')
+    const normalized = filePath.replace(BACKSLASH_REGEX, '/')
 
     const segments = normalized.split('/').filter(Boolean)
     const routeSegments = segments.map((segment) => {
@@ -287,7 +291,7 @@ class AppRouteGenerator {
     if (!filePath)
       return []
 
-    const segments = filePath.split(/[/\\]/).filter(Boolean)
+    const segments = filePath.split(PATH_SEPARATOR_REGEX).filter(Boolean)
     return segments.map((segment) => {
       if (SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL.test(segment)) {
         const match = segment.match(SEGMENT_PATTERNS.OPTIONAL_CATCH_ALL)
@@ -333,7 +337,7 @@ class AppRouteGenerator {
     if (!filePath)
       return null
 
-    const parts = filePath.split(/[/\\]/).filter(Boolean)
+    const parts = filePath.split(PATH_SEPARATOR_REGEX).filter(Boolean)
     /* v8 ignore start - edge case: path with only separators */
     if (parts.length === 0)
       return null

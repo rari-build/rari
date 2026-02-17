@@ -2,7 +2,10 @@
 
 import * as React from 'react'
 import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
+
+const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 
 interface AppRouterProviderProps {
   children: React.ReactNode
@@ -169,7 +172,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (wireFormat === lastSuccessfulPayloadRef.current)
       return true
 
-    const timestampMatch = wireFormat.match(/"timestamp":(\d+)/)
+    const timestampMatch = wireFormat.match(TIMESTAMP_REGEX)
     if (timestampMatch) {
       const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
       const now = Date.now()
@@ -194,7 +197,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         let resolvedType = type
         if (typeof type === 'string' && type.startsWith('$') && symbols) {
           const symbolId = type.substring(1)
-          if (/^\d+$/.test(symbolId)) {
+          if (NUMERIC_REGEX.test(symbolId)) {
             const symbolName = symbols.get(type)
             if (symbolName) {
               if (symbolName === '$Sreact.suspense' || symbolName === 'react.suspense')

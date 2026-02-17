@@ -92,17 +92,20 @@ function getClientComponentId(componentType) {
   return info ? info.id : null
 }
 
+const PATH_SEPARATOR_REGEX = /[/\\]/
+const FILE_EXTENSION_REGEX = /\.(?:js|jsx|ts|tsx)$/
+
 function extractComponentNameFromPath(componentPath) {
   if (!componentPath || typeof componentPath !== 'string')
     return null
 
-  const pathParts = componentPath.split(/[/\\]/)
+  const pathParts = componentPath.split(PATH_SEPARATOR_REGEX)
   const fileName = pathParts.at(-1)
 
   if (!fileName)
     return null
 
-  const nameWithoutExt = fileName.replace(/\.(?:js|jsx|ts|tsx)$/, '')
+  const nameWithoutExt = fileName.replace(FILE_EXTENSION_REGEX, '')
 
   if (nameWithoutExt.toLowerCase() === 'index') {
     const parentDir = pathParts.at(-2)

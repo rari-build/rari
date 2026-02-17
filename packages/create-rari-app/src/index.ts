@@ -17,6 +17,10 @@ import {
   text,
 } from '@clack/prompts'
 
+const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
+const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
+const PROJECT_NAME_REGEX = /[@\w/-]+$/
+
 interface ProjectOptions {
   name: string
   template: string
@@ -49,7 +53,7 @@ async function main() {
       console.error(styleText('red', 'Error: Project name cannot contain spaces.'))
       process.exit(1)
     }
-    if (!/^[@\w/-]+$/.test(projectName)) {
+    if (!PROJECT_NAME_REGEX.test(projectName)) {
       console.error(styleText('red', 'Error: Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'))
       process.exit(1)
     }
@@ -63,7 +67,7 @@ async function main() {
           return 'Please enter a project name.'
         if (value.includes(' '))
           return 'Project name cannot contain spaces.'
-        if (!/^[@\w/-]+$/.test(value))
+        if (!PROJECT_NAME_REGEX.test(value))
           return 'Project name can only contain letters, numbers, hyphens, underscores, slashes, and @ symbol.'
       },
     })
@@ -198,8 +202,8 @@ async function copyTemplate(
       let content = await readFile(sourcePath, 'utf-8')
 
       content = content
-        .replace(/\{\{PROJECT_NAME\}\}/g, options.name)
-        .replace(/\{\{PACKAGE_MANAGER\}\}/g, options.packageManager)
+        .replace(TEMPLATE_PLACEHOLDER_REGEX, options.name)
+        .replace(PACKAGE_MANAGER_PLACEHOLDER_REGEX, options.packageManager)
 
       await mkdir(dirname(destPath), { recursive: true })
       await writeFile(destPath, content)

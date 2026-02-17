@@ -1,7 +1,8 @@
 import type { JSX } from 'react'
+import { PACKAGE_NAME_REGEX, WHITESPACE_SPLIT_REGEX } from '@/lib/regex-constants'
 
 export function highlightCommand(command: string): JSX.Element {
-  const parts = command.split(/(\s+)/)
+  const parts = command.split(WHITESPACE_SPLIT_REGEX)
 
   return (
     <>
@@ -14,7 +15,7 @@ export function highlightCommand(command: string): JSX.Element {
           return <span key={index} className="text-[#d2a8ff]">{part}</span>
         if (part.startsWith('-'))
           return <span key={index} className="text-[#ffa657]">{part}</span>
-        if (/^[@\w.:/-]+$/.test(part))
+        if (PACKAGE_NAME_REGEX.test(part))
           return <span key={index} className="text-[#a5d6ff]">{part}</span>
 
         return <span key={index}>{part}</span>

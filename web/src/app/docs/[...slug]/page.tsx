@@ -2,6 +2,11 @@ import type { PageProps } from 'rari'
 import { access, readFile } from 'node:fs/promises'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
+import {
+  DESCRIPTION_EXPORT_REGEX,
+  HEADING_REGEX,
+  TITLE_EXPORT_REGEX,
+} from '@/lib/regex-constants'
 
 const DEFAULT_METADATA = {
   title: 'rari Docs',
@@ -47,8 +52,8 @@ export async function generateMetadata({ params }: PageProps) {
 
   try {
     const content = await readFile(getDocsFilePath(slug), 'utf-8')
-    const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
-    const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
+    const titleMatch = content.match(TITLE_EXPORT_REGEX)
+    const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 
     if (titleMatch || descriptionMatch) {
       const pageTitle = titleMatch ? `${titleMatch[1]} / rari Docs` : DEFAULT_METADATA.title
@@ -64,7 +69,7 @@ export async function generateMetadata({ params }: PageProps) {
       }
     }
 
-    const headingMatch = content.match(/^#\s+(\S.*)$/m)
+    const headingMatch = content.match(HEADING_REGEX)
     if (headingMatch) {
       const pageTitle = `${headingMatch[1]} / rari Docs`
       return {

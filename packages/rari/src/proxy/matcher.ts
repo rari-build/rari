@@ -1,20 +1,32 @@
 import type { ProxyConfig, ProxyMatcher, RariRequest } from './types'
+import {
+  PATH_SLASHES_REGEX,
+  PATH_TRAILING_SLASH_REGEX,
+} from '../shared/regex-constants'
+
+const ESCAPE_CHARS_REGEX = /[.+?^${}()|[\]\\]/g
+const ASTERISK_REGEX = /\*/g
+const PARAM_REGEX = /:(\w+)/g
+const PARAM_ASTERISK_REGEX = /:(\w+)\*/g
+const PARAM_PLUS_REGEX = /:(\w+)\+/g
+const PARAM_QUESTION_REGEX = /:(\w+)\?/g
+const STAR_PLACEHOLDER_REGEX = /___STAR___/g
 
 function normalizePath(path: string): string {
-  const collapsed = path.replace(/\/+/g, '/')
-  return collapsed === '/' ? '/' : collapsed.replace(/\/+$/, '')
+  const collapsed = path.replace(PATH_SLASHES_REGEX, '/')
+  return collapsed === '/' ? '/' : collapsed.replace(PATH_TRAILING_SLASH_REGEX, '')
 }
 
 function pathToRegex(pattern: string): RegExp {
   let regexPattern = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '___STAR___')
+    .replace(ESCAPE_CHARS_REGEX, '\\9bde6121-8a7b-438a-8cc5-d646ba72b781')
+    .replace(ASTERISK_REGEX, '___STAR___')
 
-  regexPattern = regexPattern.replace(/:(\w+)/g, '([^/]+)')
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\*/g, '(.*)')
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\+/g, '(.+)')
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\?/g, '([^/]*)')
-  regexPattern = regexPattern.replace(/___STAR___/g, '.*')
+  regexPattern = regexPattern.replace(PARAM_REGEX, '([^/]+)')
+  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, '(.*)')
+  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, '(.+)')
+  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, '([^/]*)')
+  regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
 
   return new RegExp(regexPattern)
@@ -127,30 +139,30 @@ export function extractParams(
 
   const paramNames: string[] = []
   let regexPattern = normalizedPattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '___STAR___')
+    .replace(ESCAPE_CHARS_REGEX, '\\9bde6121-8a7b-438a-8cc5-d646ba72b781')
+    .replace(ASTERISK_REGEX, '___STAR___')
 
-  regexPattern = regexPattern.replace(/:(\w+)/g, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_REGEX, (_, name) => {
     paramNames.push(name)
     return '([^/]+)'
   })
 
   /* v8 ignore start - advanced parameter patterns not commonly used */
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\*/g, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_, name) => {
     paramNames.push(name)
     return '(.*)'
   })
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\+/g, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_PLUS_REGEX, (_, name) => {
     paramNames.push(name)
     return '(.+)'
   })
-  regexPattern = regexPattern.replace(/\\:(\w+)\\\?/g, (_, name) => {
+  regexPattern = regexPattern.replace(PARAM_QUESTION_REGEX, (_, name) => {
     paramNames.push(name)
     return '([^/]*)'
   })
   /* v8 ignore stop */
 
-  regexPattern = regexPattern.replace(/___STAR___/g, '.*')
+  regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
 
   const regex = new RegExp(regexPattern)

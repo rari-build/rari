@@ -1,4 +1,6 @@
 /* eslint-disable no-undef */
+const TSX_DEFAULT_REGEX = /\/([^/]+)\.tsx#/
+
 if (typeof globalThis !== 'undefined') {
   globalThis['~rsc'] = globalThis['~rsc'] || {}
   if (typeof globalThis['~rsc'].keyCounter === 'undefined')
@@ -651,7 +653,7 @@ function getClientComponentId(componentType, clientComponents) {
 
     let componentName = componentType
     if (componentType.includes('tsx#default')) {
-      const match = componentType.match(/\/([^/]+)\.tsx#/)
+      const match = componentType.match(TSX_DEFAULT_REGEX)
       if (match)
         componentName = match[1]
     }

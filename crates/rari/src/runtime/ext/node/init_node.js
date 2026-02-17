@@ -1,6 +1,13 @@
 /* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
+const PATH_SLASHES_REGEX = /\//g
+const PATH_TRAILING_SLASH_REGEX = /\/$/g
+const PATH_START_SLASH_REGEX = /^\//
+const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
+const QUOTE_TRIM_REGEX = /(^")|("$)/g
+const FORMAT_SPECIFIER_REGEX = /%[sdj%]/g
+
 initializeDebugEnv('rari')
 
 if (!globalThis.process) {
@@ -186,7 +193,7 @@ const fs = {
 
 const path = {
   join: (...paths) => {
-    return paths.filter(Boolean).join('/').replace(/\/+/g, '/')
+    return paths.filter(Boolean).join('/').replace(PATH_SLASHES_REGEX, '/')
   },
   resolve: (...paths) => {
     let resolved = ''
@@ -199,7 +206,7 @@ const path = {
       }
     }
 
-    return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
+    return resolved.replace(PATH_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
   },
   dirname: (path) => {
     const parts = path.split('/')
@@ -219,7 +226,7 @@ const path = {
     return dot > 0 ? base.slice(dot) : ''
   },
   relative: (from, to) => {
-    return to.replace(from, '').replace(/^\//, '')
+    return to.replace(from, '').replace(PATH_START_SLASH_REGEX, '')
   },
   isAbsolute: (path) => {
     return path.startsWith('/')
@@ -227,7 +234,7 @@ const path = {
   sep: '/',
   delimiter: ':',
   posix: {
-    join: (...paths) => paths.filter(Boolean).join('/').replace(/\/+/g, '/'),
+    join: (...paths) => paths.filter(Boolean).join('/').replace(PATH_SLASHES_REGEX, '/'),
     resolve: (...paths) => {
       let resolved = ''
       for (let i = paths.length - 1; i >= 0; i--) {
@@ -239,7 +246,7 @@ const path = {
         }
       }
 
-      return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
+      return resolved.replace(PATH_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
     },
     dirname: (path) => {
       const parts = path.split('/')
@@ -301,7 +308,7 @@ const util = {
   },
   format: (f, ...args) => {
     let index = 0
-    const str = String(f).replace(/%[sdj%]/g, (x) => {
+    const str = String(f).replace(FORMAT_SPECIFIER_REGEX, (x) => {
       if (index >= args.length)
         return x
       switch (x) {
@@ -600,9 +607,9 @@ const nodeModules = new Map([
           cb(new Error('Not supported'), '', '')
       },
       execSync: (cmd, options = {}) => {
-        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const parts = cmd.match(COMMAND_ARGS_REGEX) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(QUOTE_TRIM_REGEX, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
@@ -637,9 +644,9 @@ const nodeModules = new Map([
           cb(new Error('Not supported'), '', '')
       },
       execSync: (cmd, options = {}) => {
-        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const parts = cmd.match(COMMAND_ARGS_REGEX) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(QUOTE_TRIM_REGEX, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,

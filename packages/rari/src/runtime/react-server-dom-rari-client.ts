@@ -1,4 +1,9 @@
 import * as React from 'react'
+import {
+  BACKSLASH_REGEX,
+  NUMERIC_REGEX,
+  SRC_PREFIX_REGEX,
+} from '../shared/regex-constants'
 import { loadClientComponent } from './shared/get-client-component'
 import { preloadComponentsFromModules } from './shared/preload-components'
 import { ModuleData } from './shared/types'
@@ -261,7 +266,7 @@ function rscToReact(rsc: any, wireModules: Map<string, ModuleData>, moduleMap: R
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
 
-      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && /^\d+$/.test(type.slice(1))) {
+      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && NUMERIC_REGEX.test(type.slice(1))) {
         const symbolRowId = type.slice(1)
         const symbolRef = symbols?.get(symbolRowId)
         if (symbolRef && symbolRef.startsWith('$S')) {
@@ -331,8 +336,8 @@ function resolveClientComponent(componentName: string, wireModules: Map<string, 
       const lookupKeys = [
         moduleInfo.id,
         `${moduleInfo.id}#${moduleInfo.name || 'default'}`,
-        moduleInfo.id.replace(/^src\//, ''),
-        moduleInfo.id.replace(/\\/g, '/'),
+        moduleInfo.id.replace(SRC_PREFIX_REGEX, ''),
+        moduleInfo.id.replace(BACKSLASH_REGEX, '/'),
       ]
 
       for (const key of lookupKeys) {
