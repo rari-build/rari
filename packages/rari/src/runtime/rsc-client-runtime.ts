@@ -1,6 +1,16 @@
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
 import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
+import {
+  CAMEL_CASE_REGEX,
+  EXTENSION_REGEX,
+  HTML_AMPERSAND_REGEX,
+  HTML_APOS_REGEX,
+  HTML_GT_REGEX,
+  HTML_LT_REGEX,
+  HTML_QUOTE_REGEX,
+  NEWLINE_REGEX,
+} from '../shared/regex-constants'
 import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
@@ -116,11 +126,11 @@ if (typeof window !== 'undefined') {
       function rscToHtml(element: any): string {
         const escapeHtml = (value: string) =>
           value
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
+            .replace(HTML_AMPERSAND_REGEX, '&amp;')
+            .replace(HTML_LT_REGEX, '&lt;')
+            .replace(HTML_GT_REGEX, '&gt;')
+            .replace(HTML_QUOTE_REGEX, '&quot;')
+            .replace(HTML_APOS_REGEX, '&#39;')
 
         if (!element)
           return ''
@@ -146,7 +156,7 @@ if (typeof window !== 'undefined') {
                   if (key === 'style' && typeof value === 'object' && value !== null) {
                     const styleStr = Object.entries(value)
                       .map(([k, v]) => {
-                        const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+                        const kebabKey = k.replace(CAMEL_CASE_REGEX, '$1-$2').toLowerCase()
                         return `${kebabKey}:${String(v)}`
                       })
                       .join(';')
@@ -216,7 +226,7 @@ if (typeof window !== 'undefined') {
 
 export function registerClientComponent(componentFunction: any, id: string, exportName: string): void {
   const componentName = exportName === 'default'
-    ? (componentFunction.name || id.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'DefaultComponent')
+    ? (componentFunction.name || id.split('/').pop()?.replace(EXTENSION_REGEX, '') || 'DefaultComponent')
     : exportName
 
   const componentId = componentName
@@ -745,7 +755,7 @@ class RscClient {
   }
 
   parseRscResponse(rscPayload: string): any {
-    const lines = rscPayload.trim().split(/\r?\n/)
+    const lines = rscPayload.trim().split(NEWLINE_REGEX)
     const modules = new Map()
     const elements = new Map()
     const errors = []

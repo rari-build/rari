@@ -1,5 +1,7 @@
-/* eslint-disable no-undef */
+/* eslint-disable e18e/prefer-static-regex, no-undef */
 (async () => {
+  const FILE_URL_REGEX = /^file:\/\/.*\/app\//
+  const JS_EXTENSION_REGEX = /\.js$/
   const layoutPaths = LAYOUT_PATHS_PLACEHOLDER
   const pagePath = 'PAGE_PATH_PLACEHOLDER'
   const params = PARAMS_PLACEHOLDER
@@ -10,7 +12,7 @@
   async function extractMetadata(modulePath, params, searchParams) {
     try {
       if (typeof globalThis['~rsc'].modules !== 'undefined') {
-        const moduleKey = modulePath.replace(/^file:\/\/.*\/app\//, 'app/').replace(/\.js$/, '')
+        const moduleKey = modulePath.replace(FILE_URL_REGEX, 'app/').replace(JS_EXTENSION_REGEX, '')
         const module = globalThis['~rsc'].modules[moduleKey]
 
         if (module) {

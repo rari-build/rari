@@ -1,3 +1,4 @@
+import { EXTENSION_REGEX } from '../shared/regex-constants'
 import { registerClientComponent, registerClientReference } from './react-server-dom-shim'
 
 export interface MDXClientComponentConfig {
@@ -20,7 +21,7 @@ export function createMDXClientReference(
     if (!globalAny['~clientComponents'])
       globalAny['~clientComponents'] = {}
 
-    const componentId = id.replace(/\.[^.]+$/, '').split('/').pop() || exportName
+    const componentId = id.replace(EXTENSION_REGEX, '').split('/').pop() || exportName
 
     const componentEntry = {
       id: exportName === 'default' ? componentId : exportName,

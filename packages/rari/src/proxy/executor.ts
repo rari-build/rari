@@ -1,4 +1,5 @@
 import type { ProxyConfig, ProxyFunction, ProxyModule, ProxyResult } from './types'
+import { TSX_EXT_REGEX } from '../shared/regex-constants'
 import { shouldRunProxy } from './matcher'
 import { RariRequest } from './RariRequest'
 import { RariResponse } from './RariResponse'
@@ -160,7 +161,7 @@ export async function initializeProxyFromManifest(
       return null
 
     const executor = getProxyExecutor()
-    const proxyPath = manifest.proxyFile.replace(/\.(ts|tsx|mts)$/, '.js')
+    const proxyPath = manifest.proxyFile.replace(TSX_EXT_REGEX, '.js')
     await executor.loadProxy(proxyPath)
 
     return executor

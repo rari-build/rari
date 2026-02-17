@@ -1,5 +1,10 @@
 import type { JSX, ReactNode } from 'react'
 import LinkIcon from '@/components/icons/Link'
+import {
+  MULTIPLE_DASHES_REGEX,
+  NON_WORD_REGEX,
+  WHITESPACE_REGEX,
+} from '@/lib/regex-constants'
 
 interface HeadingProps {
   level: 1 | 2 | 3 | 4 | 5 | 6
@@ -12,9 +17,9 @@ function slugify(text: string): string {
     .toString()
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]+/g, '')
-    .replace(/-{2,}/g, '-')
+    .replace(WHITESPACE_REGEX, '-')
+    .replace(NON_WORD_REGEX, '')
+    .replace(MULTIPLE_DASHES_REGEX, '-')
 }
 
 function extractTextContent(children: ReactNode): string {

@@ -3,6 +3,11 @@ import process from 'node:process'
 import { getBinaryPath, getInstallationInstructions } from '@rari/platform'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const UNSUPPORTED_PLATFORM_REGEX = /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/
+const UNSUPPORTED_ARCH_REGEX = /Unsupported architecture: s390x.*rari supports x64 and ARM64/
+const SUPPORTED_PLATFORMS_REGEX = /Linux, macOS, and Windows/
+const SUPPORTED_ARCHS_REGEX = /x64 and ARM64/
+
 describe('platform', () => {
   const mockPlatform = (platform: NodeJS.Platform, arch: NodeJS.Architecture) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
@@ -94,29 +99,25 @@ describe('platform', () => {
     it('should provide helpful error message for unsupported platform', () => {
       mockPlatform('sunos' as any, 'x64')
 
-      expect(() => getInstallationInstructions()).toThrow(
-        /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/,
-      )
+      expect(() => getInstallationInstructions()).toThrow(UNSUPPORTED_PLATFORM_REGEX)
     })
 
     it('should provide helpful error message for unsupported architecture', () => {
       mockPlatform('linux', 's390x' as any)
 
-      expect(() => getInstallationInstructions()).toThrow(
-        /Unsupported architecture: s390x.*rari supports x64 and ARM64/,
-      )
+      expect(() => getInstallationInstructions()).toThrow(UNSUPPORTED_ARCH_REGEX)
     })
 
     it('should mention supported platforms in error', () => {
       mockPlatform('aix' as any, 'x64')
 
-      expect(() => getInstallationInstructions()).toThrow(/Linux, macOS, and Windows/)
+      expect(() => getInstallationInstructions()).toThrow(SUPPORTED_PLATFORMS_REGEX)
     })
 
     it('should mention supported architectures in error', () => {
       mockPlatform('darwin', 'ppc64' as any)
 
-      expect(() => getInstallationInstructions()).toThrow(/x64 and ARM64/)
+      expect(() => getInstallationInstructions()).toThrow(SUPPORTED_ARCHS_REGEX)
     })
   })
 

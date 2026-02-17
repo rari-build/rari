@@ -1,4 +1,13 @@
+/* eslint-disable e18e/prefer-static-regex */
 (function initializePromiseManager() {
+  const PROMISE_PATTERN_REGEX = /Promise\s*\{\s*<?(\w+)\(([^)]*)\)/i
+  const OBJECT_PROMISE_REGEX = /\[object promise\]/i
+  const PROMISE_THEN_REGEX = /Promise.*?then/i
+  const FUNC_CALL_REGEX = /(\w+)\(([^)]*)\)/
+  const WORD_BOUNDARY_REGEX = /\b(\w+)\b/
+  const NUMBERS_REGEX = /\d+/g
+  const SPECIAL_BRANCHES = { 1: 'object-promise', 2: 'promise-then' }
+
   if (!globalThis['~promises'])
     globalThis['~promises'] = {}
   if (!globalThis['~promises'].cache)
@@ -77,17 +86,17 @@
 
   globalThis['~promises'].parseFunction = function (promiseStr) {
     const patterns = [
-      /Promise\s*\{\s*<?(\w+)\(([^)]*)\)/i,
-      /\[object Promise\]/i,
-      /Promise.*?then/i,
-      /(\w+)\(([^)]*)\)/,
+      PROMISE_PATTERN_REGEX,
+      OBJECT_PROMISE_REGEX,
+      PROMISE_THEN_REGEX,
+      FUNC_CALL_REGEX,
     ]
 
     for (let i = 0; i < patterns.length; i++) {
       const pattern = patterns[i]
 
-      if (i === 1 && pattern.test(promiseStr)) {
-        const funcMatch = promiseStr.match(/(\w+)\(([^)]*)\)/)
+      if (SPECIAL_BRANCHES[i] && pattern.test(promiseStr)) {
+        const funcMatch = promiseStr.match(FUNC_CALL_REGEX)
         if (funcMatch) {
           return {
             name: funcMatch[1],
@@ -97,24 +106,7 @@
                   .map(arg => arg.trim())
                   .filter(arg => arg.length > 0)
               : [],
-            pattern: 'object-promise',
-          }
-        }
-        continue
-      }
-
-      if (i === 2 && pattern.test(promiseStr)) {
-        const funcMatch = promiseStr.match(/(\w+)\(([^)]*)\)/)
-        if (funcMatch) {
-          return {
-            name: funcMatch[1],
-            args: funcMatch[2]
-              ? funcMatch[2]
-                  .split(',')
-                  .map(arg => arg.trim())
-                  .filter(arg => arg.length > 0)
-              : [],
-            pattern: 'promise-then',
+            pattern: SPECIAL_BRANCHES[i],
           }
         }
         continue
@@ -132,9 +124,9 @@
       }
     }
 
-    const nameMatch = promiseStr.match(/\b(\w+)\b/)
+    const nameMatch = promiseStr.match(WORD_BOUNDARY_REGEX)
     if (nameMatch) {
-      const numbers = promiseStr.match(/\d+/g) || []
+      const numbers = promiseStr.match(NUMBERS_REGEX) || []
       return { name: nameMatch[1], args: numbers, partial: true, numbers }
     }
 

@@ -4,6 +4,31 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { build } from 'rolldown'
+import {
+  COMPONENT_ID_REGEX as COMPONENT_ID_SANITIZE_REGEX,
+  EXPORT_DEFAULT_AS_REGEX,
+  EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX,
+  EXPORT_DEFAULT_FUNCTION_REGEX,
+  EXPORT_DEFAULT_NAME_REGEX,
+  EXPORT_FUNCTION_REGEX,
+  FILE_PROTOCOL_REGEX,
+  SRC_PREFIX_REGEX,
+  TSX_EXT_REGEX,
+} from '../shared/regex-constants'
+
+const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
+const CODE_IMPORT_REGEX = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
+const EXTRACT_DEPENDENCIES_REGEX = /import(?:\s+(?:\w+|\{[^}]*\}|\*\s+as\s+\w+)(?:\s*,\s*(?:\w+|\{[^}]*\}|\*\s+as\s+\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
+const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
+const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
+const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
+const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
+const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
+const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
+const EXPORT_LIST_REGEX = /^export\s*\{([^}]+)\};?\s*$/gm
+const EXPORT_VAR_REGEX = /^export\s+(const|let|var)\s+(\w+)/gm
+const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 
 interface ServerComponentManifest {
   components: Record<
@@ -116,8 +141,7 @@ export class ServerComponentBuilder {
 
     try {
       const htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8')
-      const importRegex = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
-      for (const match of htmlContent.matchAll(importRegex)) {
+      for (const match of htmlContent.matchAll(HTML_IMPORT_REGEX)) {
         const importPath = match[1] || match[2]
         if (importPath.startsWith('/src/')) {
           const absolutePath = path.join(this.projectRoot, importPath.slice(1))
@@ -227,13 +251,13 @@ export class ServerComponentBuilder {
             continue
           scanForImports(fullPath)
         }
-        else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+        else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
           try {
             const code = fs.readFileSync(fullPath, 'utf-8')
-            const importRegex = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
             let match
 
-            match = importRegex.exec(code)
+            CODE_IMPORT_REGEX.lastIndex = 0
+            match = CODE_IMPORT_REGEX.exec(code)
             while (match !== null) {
               const importPath = match[1] || match[2] || match[3]
               let resolvedPath: string | null = null
@@ -267,7 +291,7 @@ export class ServerComponentBuilder {
                 }
               }
 
-              match = importRegex.exec(code)
+              match = CODE_IMPORT_REGEX.exec(code)
             }
           }
           catch (err) {
@@ -352,12 +376,11 @@ export class ServerComponentBuilder {
 
   private extractDependencies(code: string): string[] {
     const dependencies: string[] = []
-    const importRegex
-      = /import(?:\s+(?:\w+|\{[^}]*\}|\*\s+as\s+\w+)(?:\s*,\s*(?:\w+|\{[^}]*\}|\*\s+as\s+\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
     let match
 
+    EXTRACT_DEPENDENCIES_REGEX.lastIndex = 0
     while (true) {
-      match = importRegex.exec(code)
+      match = EXTRACT_DEPENDENCIES_REGEX.exec(code)
       if (match === null)
         break
 
@@ -452,10 +475,9 @@ export class ServerComponentBuilder {
   }
 
   private transformComponentImportsToGlobal(code: string): string {
-    const importRegex = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
     const replacements: Array<{ original: string, replacement: string }> = []
 
-    for (const match of code.matchAll(importRegex)) {
+    for (const match of code.matchAll(COMPONENT_IMPORT_REGEX)) {
       const [fullMatch, importName, importPath] = match
 
       if (!importPath.startsWith('.') && !importPath.startsWith('@') && !importPath.startsWith('~') && !importPath.startsWith('#'))
@@ -465,7 +487,7 @@ export class ServerComponentBuilder {
 
       if (importPath.startsWith('.')) {
         if (importPath.includes('/components/')) {
-          const componentMatch = importPath.match(/\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/)
+          const componentMatch = importPath.match(COMPONENTS_PATH_REGEX)
           if (componentMatch) {
             const componentName = componentMatch[1]
 
@@ -523,7 +545,7 @@ const ${importName} = (props) => {
       }
 
       if (resolvedPath) {
-        const componentMatch = resolvedPath.match(/[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/)
+        const componentMatch = resolvedPath.match(COMPONENTS_PATH_ALT_REGEX)
         if (componentMatch) {
           const componentName = componentMatch[1]
 
@@ -554,11 +576,7 @@ const ${importName} = (props) => {
             continue
 
           const relativeFromRoot = path.relative(this.projectRoot, actualPath)
-          const componentId = relativeFromRoot
-            .replace(/\\/g, '/')
-            .replace(/\.(tsx?|\.jsx?)$/, '')
-            .replace(/[^\w/-]/g, '_')
-            .replace(/^src\//, '')
+          const componentId = this.getComponentId(relativeFromRoot)
 
           const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
@@ -598,7 +616,7 @@ const ${importName} = (props) => {
 
   private createBuildPlugins(virtualModuleId: string, transformedCode: string, loader: 'tsx' | 'jsx' | 'ts' | 'js', inputPath: string, isPage = false) {
     const resolveDir = path.dirname(inputPath)
-    const isProxyFile = path.basename(inputPath).match(/^proxy\.(?:tsx?|jsx?|mts|mjs)$/)
+    const isProxyFile = PROXY_FILE_REGEX.test(path.basename(inputPath))
     const self = this
 
     const clientComponentRefs = new Map<string, string>()
@@ -778,7 +796,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             return null
 
           if (source.startsWith('file://')) {
-            const filePath = source.replace(/^file:\/\//, '')
+            const filePath = source.replace(FILE_PROTOCOL_REGEX, '')
             if (fs.existsSync(filePath))
               return { id: `\0transformed:${filePath}` }
 
@@ -819,7 +837,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 return null
 
               const relativePath = path.relative(srcDir, pathWithExt)
-              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(/\.(tsx?|jsx?)$/, '.js'))
+              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
 
               if (fs.existsSync(distPath))
                 return { id: `\0transformed:${distPath}` }
@@ -1235,7 +1253,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const namedExports: string[] = []
 
     transformedCode = transformedCode.replace(
-      /^export\s+default\s+function\s+(\w+)/gm,
+      EXPORT_DEFAULT_FUNCTION_REGEX,
       (match, name) => {
         defaultExportName = name
         return `function ${name}`
@@ -1243,7 +1261,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s+default\s+async\s+function\s+(\w+)/gm,
+      EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX,
       (match, name) => {
         defaultExportName = name
         return `async function ${name}`
@@ -1251,7 +1269,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s+default\s+(\w+);?\s*$/gm,
+      EXPORT_DEFAULT_NAME_REGEX,
       (match, name) => {
         defaultExportName = name
         return `// Default export: ${name}`
@@ -1259,7 +1277,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s*\{\s*(\w+)\s+as\s+default\s*\};?\s*$/gm,
+      EXPORT_DEFAULT_AS_REGEX,
       (match, name) => {
         defaultExportName = name
         return `// Default export: ${name}`
@@ -1267,7 +1285,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s*\{([^}]+)\};?\s*$/gm,
+      EXPORT_LIST_REGEX,
       (match, exports) => {
         const exportList = exports.split(',').map((exp: string) => exp.trim())
         const exportNames: string[] = []
@@ -1294,7 +1312,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s+(?:async\s+)?function\s+(\w+)/gm,
+      EXPORT_FUNCTION_REGEX,
       (match, name) => {
         namedExports.push(name)
         return match.replace('export ', '')
@@ -1302,7 +1320,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     )
 
     transformedCode = transformedCode.replace(
-      /^export\s+(const|let|var)\s+(\w+)/gm,
+      EXPORT_VAR_REGEX,
       (match, keyword, name) => {
         namedExports.push(name)
         return `${keyword} ${name}`
@@ -1392,8 +1410,6 @@ if (!globalThis["${componentId}"]) {
   private transformClientImports(code: string, inputPath: string): string {
     let transformedCode = code
 
-    const importRegex
-      = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
     let match
 
     const replacements: Array<{ original: string, replacement: string }> = []
@@ -1401,8 +1417,9 @@ if (!globalThis["${componentId}"]) {
 
     const externalClientComponents = ['rari/image']
 
+    CLIENT_IMPORT_REGEX.lastIndex = 0
     while (true) {
-      match = importRegex.exec(code)
+      match = CLIENT_IMPORT_REGEX.exec(code)
       if (match === null)
         break
 
@@ -1534,10 +1551,10 @@ function registerClientReference(clientReference, id, exportName) {
 
   private getComponentId(relativePath: string): string {
     return relativePath
-      .replace(/\\/g, '/')
-      .replace(/\.(tsx?|jsx?)$/, '')
-      .replace(/[^\w/-]/g, '_')
-      .replace(/^src\//, '')
+      .replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
+      .replace(TS_JS_EXTENSION_REGEX, '')
+      .replace(COMPONENT_ID_SANITIZE_REGEX, '_')
+      .replace(SRC_PREFIX_REGEX, '')
   }
 
   async rebuildComponent(filePath: string): Promise<ComponentRebuildResult> {
@@ -1720,8 +1737,8 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
     if (entry.isDirectory()) {
       scanDirectory(fullPath, builder, false)
     }
-    else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
-      if (/^(?:robots|sitemap)\.(?:tsx?|jsx?)$/.test(entry.name))
+    else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
+      if (SPECIAL_FILE_REGEX.test(entry.name))
         continue
 
       if (entry.name.endsWith('.d.ts'))
@@ -1864,8 +1881,8 @@ export function createServerBuildPlugin(
       if (!builder || !isDev)
         return
 
-      const relativePath = path.relative(projectRoot, file).replace(/\\/g, '/')
-      if (!relativePath.startsWith('src/') || !/\.(?:tsx?|jsx?)$/.test(relativePath))
+      const relativePath = path.relative(projectRoot, file).replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
+      if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath))
         return
 
       try {

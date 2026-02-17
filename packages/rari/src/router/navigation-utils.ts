@@ -1,8 +1,10 @@
 import type { RouteInfo } from './navigation-types'
 import type { AppRouteManifest, LayoutEntry, RouteSegment } from './types'
 
+const LEADING_TRAILING_SLASHES_REGEX = /(^\/+)|(\/+$)/g
+
 export function parseRoutePath(path: string): string[] {
-  const normalized = path.replace(/(^\/+)|(\/+$)/g, '')
+  const normalized = path.replace(LEADING_TRAILING_SLASHES_REGEX, '')
   return normalized ? normalized.split('/') : []
 }
 

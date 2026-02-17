@@ -2,6 +2,12 @@ import type { Plugin, ViteDevServer } from 'rolldown-vite'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { BACKSLASH_REGEX, QUOTE_REGEX, TSX_EXT_REGEX } from '../shared/regex-constants'
+
+const METADATA_EXPORT_REGEX = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
+const TITLE_REGEX = /title\s*:\s*['"]([^'"]+)['"]/
+const DESCRIPTION_REGEX = /description\s*:\s*['"]([^'"]+)['"]/
+const KEYWORDS_REGEX = /keywords\s*:\s*\[([\s\S]*?)\]/
 
 interface RariRouterPluginOptions {
   appDir?: string
@@ -32,7 +38,7 @@ interface AppRouterHMRData {
 
 function getAppRouterFileType(filePath: string): AppRouterFileType | null {
   const fileName = path.basename(filePath)
-  const nameWithoutExt = fileName.replace(/\.(tsx?|jsx?)$/, '')
+  const nameWithoutExt = fileName.replace(TSX_EXT_REGEX, '')
 
   switch (nameWithoutExt) {
     case 'page':
@@ -58,7 +64,7 @@ function filePathToRoutePath(filePath: string, appDir: string): string {
   if (!relativePath || relativePath === '.')
     return '/'
 
-  const normalized = relativePath.replace(/\\/g, '/')
+  const normalized = relativePath.replace(BACKSLASH_REGEX, '/')
   const segments = normalized.split('/').filter(Boolean)
 
   return `/${segments.join('/')}`
@@ -81,8 +87,7 @@ function getAffectedRoutes(
 
 function extractMetadata(fileContent: string): Record<string, any> | null {
   try {
-    const metadataRegex = /export\s+const\s+metadata\s*(?::\s*\w+\s*)?=\s*(\{[\s\S]*?\n\})/
-    const match = fileContent.match(metadataRegex)
+    const match = fileContent.match(METADATA_EXPORT_REGEX)
 
     if (!match)
       return null
@@ -91,20 +96,20 @@ function extractMetadata(fileContent: string): Record<string, any> | null {
 
     const metadata: Record<string, any> = {}
 
-    const titleMatch = metadataString.match(/title\s*:\s*['"]([^'"]+)['"]/)
+    const titleMatch = metadataString.match(TITLE_REGEX)
     if (titleMatch)
       metadata.title = titleMatch[1]
 
-    const descMatch = metadataString.match(/description\s*:\s*['"]([^'"]+)['"]/)
+    const descMatch = metadataString.match(DESCRIPTION_REGEX)
     if (descMatch)
       metadata.description = descMatch[1]
 
-    const keywordsMatch = metadataString.match(/keywords\s*:\s*\[([\s\S]*?)\]/)
+    const keywordsMatch = metadataString.match(KEYWORDS_REGEX)
     if (keywordsMatch) {
       const keywordsStr = keywordsMatch[1]
       const keywords = keywordsStr
         .split(',')
-        .map(k => k.trim().replace(/['"]/g, ''))
+        .map(k => k.trim().replace(QUOTE_REGEX, ''))
         .filter(Boolean)
       metadata.keywords = keywords
     }

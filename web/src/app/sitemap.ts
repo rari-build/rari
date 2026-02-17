@@ -2,6 +2,7 @@ import type { Sitemap } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
+import { DATE_EXPORT_REGEX } from '@/lib/regex-constants'
 
 const baseUrl = 'https://rari.build'
 
@@ -25,7 +26,7 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       mdxFiles.map(async (file) => {
         const slug = file.replace('.mdx', '')
         const content = await readFile(join(blogDir, file), 'utf-8')
-        const dateMatch = content.match(/^export\s+const\s+date\s*=\s*['"](.+)['"]/m)
+        const dateMatch = content.match(DATE_EXPORT_REGEX)
 
         return {
           slug,

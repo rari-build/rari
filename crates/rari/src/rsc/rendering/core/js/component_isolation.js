@@ -1,4 +1,6 @@
+/* eslint-disable e18e/prefer-static-regex */
 (async function initializeComponentIsolation() {
+  const FN_MATCH_REGEX = /(\w+)\s*\(/
   try {
     if (!globalThis['~components'])
       globalThis['~components'] = {}
@@ -24,7 +26,7 @@
       promiseMap.set(promise, result)
       promiseMap.set(String(promise), result)
 
-      const fnMatch = String(promise).match(/(\w+)\s*\(/)
+      const fnMatch = String(promise).match(FN_MATCH_REGEX)
       if (fnMatch && fnMatch[1])
         promiseMap.set(fnMatch[1], result)
 

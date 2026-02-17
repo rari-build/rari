@@ -1,4 +1,6 @@
+/* eslint-disable e18e/prefer-static-regex */
 (function () {
+  const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
   try {
     const componentId = '{component_id}'
     let clearedCount = 0
@@ -8,7 +10,7 @@
       clearedCount++
     }
 
-    const registrationKey = `Component_${componentId.replace(/[^a-z0-9]/gi, '_')}`
+    const registrationKey = `Component_${componentId.replace(NON_ALPHANUMERIC_REGEX, '_')}`
     if (globalThis[registrationKey]) {
       delete globalThis[registrationKey]
       clearedCount++

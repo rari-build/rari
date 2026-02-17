@@ -1,6 +1,12 @@
 /* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
+const PATH_TRAILING_SLASH_REGEX = /\/$/
+const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
+const COMMAND_ARGS_REGEX = /(?:[^\s"']|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+/g
+const QUOTE_TRIM_REGEX = /^["']|["']$/g
+const FORMAT_SPECIFIER_REGEX = /%[sdj%]/g
+
 initializeDebugEnv('rari')
 
 if (!globalThis.process) {
@@ -186,7 +192,7 @@ const fs = {
 
 const path = {
   join: (...paths) => {
-    return paths.filter(Boolean).join('/').replace(/\/+/g, '/')
+    return paths.filter(Boolean).join('/').replace(MULTIPLE_SLASHES_REGEX, '/')
   },
   resolve: (...paths) => {
     let resolved = ''
@@ -199,7 +205,7 @@ const path = {
       }
     }
 
-    return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
+    return resolved.replace(MULTIPLE_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
   },
   dirname: (path) => {
     const parts = path.split('/')
@@ -219,7 +225,23 @@ const path = {
     return dot > 0 ? base.slice(dot) : ''
   },
   relative: (from, to) => {
-    return to.replace(from, '').replace(/^\//, '')
+    const fromParts = from.split('/').filter(Boolean)
+    const toParts = to.split('/').filter(Boolean)
+
+    let commonLength = 0
+    const minLength = Math.min(fromParts.length, toParts.length)
+    for (let i = 0; i < minLength; i++) {
+      if (fromParts[i] === toParts[i])
+        commonLength++
+      else
+        break
+    }
+
+    const upSegments = Array.from({ length: fromParts.length - commonLength }).fill('..')
+    const remaining = toParts.slice(commonLength)
+    const result = [...upSegments, ...remaining].join('/')
+
+    return result || '.'
   },
   isAbsolute: (path) => {
     return path.startsWith('/')
@@ -227,7 +249,7 @@ const path = {
   sep: '/',
   delimiter: ':',
   posix: {
-    join: (...paths) => paths.filter(Boolean).join('/').replace(/\/+/g, '/'),
+    join: (...paths) => paths.filter(Boolean).join('/').replace(MULTIPLE_SLASHES_REGEX, '/'),
     resolve: (...paths) => {
       let resolved = ''
       for (let i = paths.length - 1; i >= 0; i--) {
@@ -239,7 +261,7 @@ const path = {
         }
       }
 
-      return resolved.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
+      return resolved.replace(MULTIPLE_SLASHES_REGEX, '/').replace(PATH_TRAILING_SLASH_REGEX, '') || '/'
     },
     dirname: (path) => {
       const parts = path.split('/')
@@ -257,6 +279,28 @@ const path = {
       const base = path.split('/').pop() || ''
       const dot = base.lastIndexOf('.')
       return dot > 0 ? base.slice(dot) : ''
+    },
+    relative: (from, to) => {
+      const fromParts = from.split('/').filter(Boolean)
+      const toParts = to.split('/').filter(Boolean)
+
+      let commonLength = 0
+      const minLength = Math.min(fromParts.length, toParts.length)
+      for (let i = 0; i < minLength; i++) {
+        if (fromParts[i] === toParts[i])
+          commonLength++
+        else
+          break
+      }
+
+      const upSegments = Array.from({ length: fromParts.length - commonLength }).fill('..')
+      const remaining = toParts.slice(commonLength)
+      const result = [...upSegments, ...remaining].join('/')
+
+      return result || '.'
+    },
+    isAbsolute: (path) => {
+      return path.startsWith('/')
     },
     sep: '/',
     delimiter: ':',
@@ -301,7 +345,9 @@ const util = {
   },
   format: (f, ...args) => {
     let index = 0
-    const str = String(f).replace(/%[sdj%]/g, (x) => {
+    const str = String(f).replace(FORMAT_SPECIFIER_REGEX, (x) => {
+      if (x === '%%')
+        return '%'
       if (index >= args.length)
         return x
       switch (x) {
@@ -600,9 +646,9 @@ const nodeModules = new Map([
           cb(new Error('Not supported'), '', '')
       },
       execSync: (cmd, options = {}) => {
-        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const parts = cmd.match(COMMAND_ARGS_REGEX) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(QUOTE_TRIM_REGEX, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,
@@ -637,9 +683,9 @@ const nodeModules = new Map([
           cb(new Error('Not supported'), '', '')
       },
       execSync: (cmd, options = {}) => {
-        const parts = cmd.match(/(?:[^\s"]|"[^"]*")+/g) || []
+        const parts = cmd.match(COMMAND_ARGS_REGEX) || []
         const command = parts[0]
-        const args = parts.slice(1).map(arg => arg.replace(/(^")|("$)/g, ''))
+        const args = parts.slice(1).map(arg => arg.replace(QUOTE_TRIM_REGEX, ''))
 
         const denoCmd = new Deno.Command(command, {
           args,

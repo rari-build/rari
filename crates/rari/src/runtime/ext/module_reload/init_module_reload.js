@@ -1,7 +1,12 @@
+const WINDOWS_PATH_REGEX = /^[A-Z]:\\/i
+const PATH_EXTRACT_REGEX = /^.*\//
+const FILE_EXTENSION_REGEX = /\.[jt]sx?$/
+const QUERY_STRING_REGEX = /\?.*$/
+
 function invalidateModuleCache(moduleSpecifier) {
   try {
     let specifier = moduleSpecifier
-    if (moduleSpecifier.startsWith('/') || /^[A-Z]:\\/i.test(moduleSpecifier)) {
+    if (moduleSpecifier.startsWith('/') || WINDOWS_PATH_REGEX.test(moduleSpecifier)) {
       if (!moduleSpecifier.startsWith('file://'))
         specifier = `file://${moduleSpecifier}`
     }
@@ -36,9 +41,9 @@ async function reloadModule(moduleSpecifier) {
 function getModuleFromCache(moduleSpecifier) {
   try {
     const componentId = moduleSpecifier
-      .replace(/^.*\//, '')
-      .replace(/\.[jt]sx?$/, '')
-      .replace(/\?.*$/, '')
+      .replace(PATH_EXTRACT_REGEX, '')
+      .replace(QUERY_STRING_REGEX, '')
+      .replace(FILE_EXTENSION_REGEX, '')
 
     if (globalThis[componentId]) {
       return {

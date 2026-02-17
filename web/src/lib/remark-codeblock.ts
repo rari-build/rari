@@ -1,5 +1,11 @@
 import { visit } from 'unist-util-visit'
 
+const BACKTICK_REGEX = /`([\s\S]*)`/
+const ESCAPED_BACKTICK_REGEX = /\\\\\\`/g
+const SINGLE_BACKTICK_REGEX = /\\`/g
+const ESCAPED_DOLLAR_REGEX = /\\\$/g
+const PRE_STYLE_REGEX = /<pre([^>]*) style="[^"]*"/g
+
 interface Position {
   start: { offset: number, line: number, column: number }
   end: { offset: number, line: number, column: number }
@@ -48,13 +54,13 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
               const end = child.position.end.offset
               const originalText = sourceText.substring(start, end)
 
-              const match = originalText.match(/`([\s\S]*)`/)
+              const match = originalText.match(BACKTICK_REGEX)
               if (match) {
                 let extracted = match[1]
 
-                extracted = extracted.replace(/\\\\\\`/g, '\u02CB')
-                extracted = extracted.replace(/\\`/g, '`')
-                extracted = extracted.replace(/\\\$/g, '$')
+                extracted = extracted.replace(ESCAPED_BACKTICK_REGEX, '\u02CB')
+                extracted = extracted.replace(SINGLE_BACKTICK_REGEX, '`')
+                extracted = extracted.replace(ESCAPED_DOLLAR_REGEX, '$')
 
                 text += extracted
               }
@@ -83,7 +89,7 @@ export function remarkCodeBlock(options: { highlighter: Highlighter, theme: stri
           lang: language,
           theme,
         })
-        highlightedHtml = highlightedHtml.replace(/<pre([^>]*) style="[^"]*"/, '<pre$1')
+        highlightedHtml = highlightedHtml.replace(PRE_STYLE_REGEX, '<pre$1')
         if (!node.attributes)
           node.attributes = []
         node.attributes.push({

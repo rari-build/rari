@@ -1,6 +1,23 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { build } from 'rolldown'
+import { TSX_EXT_REGEX } from '../shared/regex-constants'
+
+const DEFAULT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
+const NAMED_IMPORT_REGEX = /import\s+\{[^}]*\b(?:Image\s+as\s+(\w+)|Image)\b[^}]*\}\s+from\s+['"]rari\/image['"]/g
+const SRC_REGEX = /src:\s*["']([^"']+)["']/
+const ESCAPE_REGEX = /[.*+?^${}()|[\]\\]/g
+const WIDTH_REGEX = /width:\s*(\d+)/
+const QUALITY_REGEX = /quality:\s*(\d+)/
+const PRELOAD_TRUE_REGEX = /preload:\s*(true|!0)/
+const PRELOAD_FALSE_REGEX = /preload:\s*(false|!1)/
+const IMAGE_SELF_CLOSING_REGEX = /<Image\s([^/>]+)\/>/g
+const IMAGE_OPENING_REGEX = /<Image\s([^>]+)>/g
+const SRC_PROP_REGEX = /src=\{?["']([^"']+)["']\}?|src=\{([^}]+)\}/
+const WIDTH_PROP_REGEX = /width=\{?(\d+)\}?/
+const QUALITY_PROP_REGEX = /quality=\{?(\d+)\}?/
+const PRELOAD_PROP_REGEX = /preload(?:=\{?true\}?)?/
+const PRELOAD_FALSE_PROP_REGEX = /preload=\{?false\}?/
 
 export interface ImageUsage {
   src: string
@@ -30,7 +47,7 @@ export async function scanForImageUsage(srcDir: string, additionalDirs: string[]
           continue
         await scanDirectory(fullPath)
       }
-      else if (entry.isFile() && /\.(?:tsx?|jsx?)$/.test(entry.name)) {
+      else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf8')
 
@@ -117,12 +134,10 @@ async function extractImageUsages(content: string, filePath: string, images: Map
 
     const imageIdentifiers = new Set<string>()
 
-    const defaultImportRegex = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
-    for (const match of transformedCode.matchAll(defaultImportRegex))
+    for (const match of transformedCode.matchAll(DEFAULT_IMPORT_REGEX))
       imageIdentifiers.add(match[1])
 
-    const namedImportRegex = /import\s+\{[^}]*\b(?:Image\s+as\s+(\w+)|Image)\b[^}]*\}\s+from\s+['"]rari\/image['"]/g
-    for (const match of transformedCode.matchAll(namedImportRegex)) {
+    for (const match of transformedCode.matchAll(NAMED_IMPORT_REGEX)) {
       if (match[1])
         imageIdentifiers.add(match[1])
       else
@@ -133,13 +148,13 @@ async function extractImageUsages(content: string, filePath: string, images: Map
       return
 
     for (const identifier of imageIdentifiers) {
-      const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const escapedIdentifier = identifier.replace(ESCAPE_REGEX, '\\$&')
       const createElementRegex = new RegExp(`React\\.createElement\\(\\s*${escapedIdentifier}\\s*,\\s*\\{([^}]+)\\}`, 'g')
 
       for (const match of transformedCode.matchAll(createElementRegex)) {
         const propsString = match[1]
 
-        const srcMatch = propsString.match(/src:\s*["']([^"']+)["']/)
+        const srcMatch = propsString.match(SRC_REGEX)
         if (!srcMatch)
           continue
 
@@ -148,14 +163,14 @@ async function extractImageUsages(content: string, filePath: string, images: Map
         if (!src.startsWith('/') && !src.startsWith('http'))
           continue
 
-        const widthMatch = propsString.match(/width:\s*(\d+)/)
+        const widthMatch = propsString.match(WIDTH_REGEX)
         const width = widthMatch ? Number.parseInt(widthMatch[1], 10) : undefined
 
-        const qualityMatch = propsString.match(/quality:\s*(\d+)/)
+        const qualityMatch = propsString.match(QUALITY_REGEX)
         const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
 
-        const preloadMatch = propsString.match(/preload:\s*(true|!0)/)
-        const preloadFalseMatch = propsString.match(/preload:\s*(false|!1)/)
+        const preloadMatch = propsString.match(PRELOAD_TRUE_REGEX)
+        const preloadFalseMatch = propsString.match(PRELOAD_FALSE_REGEX)
         const preload = !!preloadMatch && !preloadFalseMatch
 
         const key = `${src}:${width || 'auto'}:${quality || 75}`
@@ -177,18 +192,15 @@ async function extractImageUsages(content: string, filePath: string, images: Map
 }
 
 function extractImageUsagesWithRegex(content: string, images: Map<string, ImageUsage>) {
-  const selfClosingRegex = /<Image\s([^/>]+)\/>/g
-  const openingRegex = /<Image\s([^>]+)>/g
-
-  for (const match of content.matchAll(selfClosingRegex))
+  for (const match of content.matchAll(IMAGE_SELF_CLOSING_REGEX))
     processImageProps(match[1], images)
 
-  for (const match of content.matchAll(openingRegex))
+  for (const match of content.matchAll(IMAGE_OPENING_REGEX))
     processImageProps(match[1], images)
 }
 
 function processImageProps(propsString: string, images: Map<string, ImageUsage>) {
-  const srcMatch = propsString.match(/src=\{?["']([^"']+)["']\}?|src=\{([^}]+)\}/)
+  const srcMatch = propsString.match(SRC_PROP_REGEX)
   if (!srcMatch)
     return
 
@@ -197,13 +209,13 @@ function processImageProps(propsString: string, images: Map<string, ImageUsage>)
   if (!src || src.includes('{') || (!src.startsWith('/') && !src.startsWith('http')))
     return
 
-  const widthMatch = propsString.match(/width=\{?(\d+)\}?/)
+  const widthMatch = propsString.match(WIDTH_PROP_REGEX)
   const width = widthMatch ? Number.parseInt(widthMatch[1], 10) : undefined
 
-  const qualityMatch = propsString.match(/quality=\{?(\d+)\}?/)
+  const qualityMatch = propsString.match(QUALITY_PROP_REGEX)
   const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : undefined
 
-  const preload = /preload(?:=\{?true\}?)?/.test(propsString) && !/preload=\{?false\}?/.test(propsString)
+  const preload = PRELOAD_PROP_REGEX.test(propsString) && !PRELOAD_FALSE_PROP_REGEX.test(propsString)
 
   const key = `${src}:${width || 'auto'}:${quality || 75}`
 

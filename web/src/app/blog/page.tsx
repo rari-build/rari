@@ -3,6 +3,12 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import News from '@/components/icons/News'
+import {
+  AUTHOR_EXPORT_REGEX,
+  DATE_EXPORT_REGEX,
+  DESCRIPTION_EXPORT_REGEX,
+  TITLE_EXPORT_REGEX,
+} from '@/lib/regex-constants'
 
 interface BlogPost {
   slug: string
@@ -23,10 +29,10 @@ async function getBlogPosts(): Promise<BlogPost[]> {
         const slug = file.replace('.mdx', '')
         const content = await readFile(join(blogDir, file), 'utf-8')
 
-        const titleMatch = content.match(/^export\s+const\s+title\s*=\s*['"](.+)['"]/m)
-        const descriptionMatch = content.match(/^export\s+const\s+description\s*=\s*['"](.+)['"]/m)
-        const dateMatch = content.match(/^export\s+const\s+date\s*=\s*['"](.+)['"]/m)
-        const authorMatch = content.match(/^export\s+const\s+author\s*=\s*['"](.+)['"]/m)
+        const titleMatch = content.match(TITLE_EXPORT_REGEX)
+        const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
+        const dateMatch = content.match(DATE_EXPORT_REGEX)
+        const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
 
         return {
           slug,

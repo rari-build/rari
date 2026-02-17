@@ -222,6 +222,13 @@ function renderHTMLElement(type, props, isStatic) {
   return `<${type}${attrs}>${childrenString}</${type}>`
 }
 
+const CAMEL_TO_KEBAB_REGEX = /([A-Z])/g
+const HTML_AMPERSAND_REGEX = /&/g
+const HTML_LT_REGEX = /</g
+const HTML_GT_REGEX = />/g
+const HTML_QUOTE_REGEX = /"/g
+const HTML_SINGLE_QUOTE_REGEX = /'/g
+
 function renderAttributes(attributes, _isStatic) {
   if (!attributes)
     return ''
@@ -245,7 +252,7 @@ function renderAttributes(attributes, _isStatic) {
       if (key === 'style' && typeof value === 'object') {
         const styleStr = Object.entries(value)
           .map(([k, v]) => {
-            const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+            const kebabKey = k.replace(CAMEL_TO_KEBAB_REGEX, '-$1').toLowerCase()
             return `${kebabKey}:${v}`
           })
           .join(';')
@@ -259,11 +266,11 @@ function renderAttributes(attributes, _isStatic) {
 
 function escapeHtml(text) {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .replace(HTML_AMPERSAND_REGEX, '&amp;')
+    .replace(HTML_LT_REGEX, '&lt;')
+    .replace(HTML_GT_REGEX, '&gt;')
+    .replace(HTML_QUOTE_REGEX, '&quot;')
+    .replace(HTML_SINGLE_QUOTE_REGEX, '&#39;')
 }
 
 if (!globalThis['~promises'])

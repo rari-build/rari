@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
+import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
 import 'virtual:rsc-integration.ts'
 
@@ -591,7 +592,8 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
   if (Array.isArray(rsc)) {
     if (rsc.length >= 4 && rsc[0] === '$') {
       const [, type, key, props] = rsc
-      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && /^\d+$/.test(type.slice(1))) {
+
+      if (typeof type === 'string' && type.startsWith('$') && type.length > 1 && NUMERIC_REGEX.test(type.slice(1))) {
         const symbolRowId = type.slice(1)
         const symbolRef = symbols?.get(symbolRowId)
         if (symbolRef && symbolRef.startsWith('$S')) {

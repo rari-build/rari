@@ -1,3 +1,4 @@
+import { BACKSLASH_REGEX, SRC_PREFIX_REGEX } from '../../shared/regex-constants'
 import { GlobalWithRari, ModuleData } from './types'
 
 export async function preloadComponentsFromModules(modules: Map<string, ModuleData>): Promise<void> {
@@ -8,8 +9,8 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
     const lookupKeys = [
       moduleData.id,
       `${moduleData.id}#${moduleData.name || 'default'}`,
-      moduleData.id.replace(/^src\//, ''),
-      moduleData.id.replace(/\\/g, '/'),
+      moduleData.id.replace(SRC_PREFIX_REGEX, ''),
+      moduleData.id.replace(BACKSLASH_REGEX, '/'),
     ]
 
     for (const key of lookupKeys) {

@@ -9,6 +9,8 @@ import { styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
 
+const ENV_LINE_REGEX = /^([^=]+)=(.*)$/
+
 function loadEnvFile() {
   const envPath = resolve(process.cwd(), '.env')
   if (existsSync(envPath)) {
@@ -19,7 +21,7 @@ function loadEnvFile() {
       if (!trimmed || trimmed.startsWith('#'))
         continue
 
-      const match = trimmed.match(/^([^=]+)=(.*)$/)
+      const match = trimmed.match(ENV_LINE_REGEX)
       if (match) {
         const [, key, value] = match
         const cleanKey = key.trim()

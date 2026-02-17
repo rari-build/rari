@@ -2,6 +2,13 @@ import type { Sitemap, SitemapImage, SitemapVideo } from '../types/metadata-rout
 import { Buffer } from 'node:buffer'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import {
+  XML_AMPERSAND_REGEX,
+  XML_APOS_REGEX,
+  XML_GT_REGEX,
+  XML_LT_REGEX,
+  XML_QUOTE_REGEX,
+} from '../shared/regex-constants'
 
 export interface SitemapGeneratorOptions {
   appDir: string
@@ -17,11 +24,11 @@ export interface SitemapFile {
 
 function escapeXml(str: string): string {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+    .replace(XML_AMPERSAND_REGEX, '&amp;')
+    .replace(XML_LT_REGEX, '&lt;')
+    .replace(XML_GT_REGEX, '&gt;')
+    .replace(XML_QUOTE_REGEX, '&quot;')
+    .replace(XML_APOS_REGEX, '&apos;')
 }
 
 function formatDate(date: string | Date): string {
