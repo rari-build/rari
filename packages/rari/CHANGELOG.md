@@ -1,8 +1,27 @@
+## [rari@0.9.3] - 2026-02-17
+
+### 🚜 Refactor
+
+- Extract regex patterns to constants for reusability
+- Optimize regex patterns and simplify conditional logic
+- Improve regex patterns and fix capture group references
+- Improve path handling and rename regex constants for clarity
+- Optimize path resolution and regex pattern ordering
+- Improve regex patterns and parameter handling
+- Improve parameter extraction and remove unused path alias
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.9.3
 ## [rari@0.9.2] - 2026-02-14
 
 ### 🚀 Features
 
 - *(rsc)* Fix 404 not-found route handling with streaming support
+
+### 💼 Other
+
+- Rari@0.9.2
 
 ### ⚙️ Miscellaneous Tasks
 
