@@ -34,7 +34,7 @@ const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
 const HTML_IMPORT_REGEX = /import\s*(?:\(\s*)?["']([^"']+)["']\)?/g
 const NAMED_EXPORT_REGEX = /export\s*\{([^}]+)\}/g
 const AS_SPLIT_REGEX = /\s+as\s+/
-const EXPORT_DEFAULT_FUNCTION_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
+const EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX = /export\s+default\s+(?:function|class)\s+\w+/
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
 const EXPORT_DEFAULT_VALUE_REGEX = /export\s+default\s+([^;]+)/
 const EXPORT_DECLARATION_REGEX = /export\s+(?:async\s+)?(?:const|let|var|function|class)\s+(\w+)/g
@@ -360,7 +360,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
         }
       }
 
-      if (EXPORT_DEFAULT_FUNCTION_REGEX.test(code))
+      if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code))
         exportedNames.push('default')
       else if (EXPORT_DEFAULT_REGEX.test(code))
         exportedNames.push('default')
@@ -1013,7 +1013,7 @@ ${clientTransformedCode}`
           continue
 
         const importedDefault = importMatch[1]
-        const importPath = importMatch[3]
+        const importPath = importMatch[4]
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 

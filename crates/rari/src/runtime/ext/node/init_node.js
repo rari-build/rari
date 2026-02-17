@@ -3,6 +3,7 @@ import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
 const PATH_TRAILING_SLASH_REGEX = /\/$/
 const PATH_START_SLASH_REGEX = /^\//
+const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
 const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
 const QUOTE_TRIM_REGEX = /(^")|("$)/g
 const FORMAT_SPECIFIER_REGEX = /%[sdj%]/g
@@ -192,7 +193,7 @@ const fs = {
 
 const path = {
   join: (...paths) => {
-    return paths.filter(Boolean).join('/')
+    return paths.filter(Boolean).join('/').replace(MULTIPLE_SLASHES_REGEX, '/')
   },
   resolve: (...paths) => {
     let resolved = ''
@@ -233,7 +234,7 @@ const path = {
   sep: '/',
   delimiter: ':',
   posix: {
-    join: (...paths) => paths.filter(Boolean).join('/'),
+    join: (...paths) => paths.filter(Boolean).join('/').replace(MULTIPLE_SLASHES_REGEX, '/'),
     resolve: (...paths) => {
       let resolved = ''
       for (let i = paths.length - 1; i >= 0; i--) {
@@ -322,6 +323,8 @@ const util = {
           catch {
             return '[Circular]'
           }
+        case '%%':
+          return '%'
         default:
           return x
       }

@@ -1,6 +1,6 @@
 /* eslint-disable e18e/prefer-static-regex */
 (function initializeRscModules() {
-  const EXPORT_FUNCTION_REGEX = /export\s+(async\s+)?function\s+(\w+)/g
+  const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
   const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
 
   if (!globalThis['~rsc'])
@@ -66,8 +66,8 @@
     const matches = code.matchAll(exportRegex)
 
     for (const match of matches) {
-      if (match[2])
-        exports.push(match[2])
+      if (match[1])
+        exports.push(match[1])
     }
 
     return exports

@@ -6,6 +6,7 @@
   const FUNC_CALL_REGEX = /(\w+)\(([^)]*)\)/
   const WORD_BOUNDARY_REGEX = /\b(\w+)\b/
   const NUMBERS_REGEX = /\d+/g
+  const SPECIAL_BRANCHES = { 1: 'object-promise', 2: 'promise-then' }
 
   if (!globalThis['~promises'])
     globalThis['~promises'] = {}
@@ -90,8 +91,6 @@
       PROMISE_THEN_REGEX,
       FUNC_CALL_REGEX,
     ]
-
-    const SPECIAL_BRANCHES = { 1: 'object-promise', 2: 'promise-then' }
 
     for (let i = 0; i < patterns.length; i++) {
       const pattern = patterns[i]

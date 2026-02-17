@@ -5,6 +5,7 @@ export const WINDOWS_PATH_REGEX = /^[A-Z]:\\/i
 export const BACKSLASH_REGEX = /\\/g
 export const PATH_SEPARATOR_REGEX = /[/\\]/
 export const PATH_SLASHES_REGEX = /\//g
+export const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
 export const PATH_TRAILING_SLASH_REGEX = /\/$/
 export const PATH_START_SLASH_REGEX = /^\//
 export const SRC_PREFIX_REGEX = /^src\//
@@ -48,7 +49,7 @@ export const EXPORT_DEFAULT_FUNCTION_REGEX = /^export\s+default\s+function\s+(\w
 export const EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX = /^export\s+default\s+async\s+function\s+(\w+)/gm
 export const EXPORT_DEFAULT_NAME_REGEX = /^export\s+default\s+(\w+);?\s*$/gm
 export const EXPORT_DEFAULT_AS_REGEX = /^export\s*\{\s*(\w+)\s+as\s+default\s*\};?\s*$/gm
-export const EXPORT_FUNCTION_REGEX = /export\s+(async\s+)?function\s+(\w+)/g
+export const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
 export const EXPORT_NAMED_DECLARATION_REGEX = /export\s+(?:function|const|class)\s+(\w+)/
 
 export const TITLE_EXPORT_REGEX = /^export\s+const\s+title\s*=\s*['"](.+?)['"]/m

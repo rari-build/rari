@@ -10,6 +10,7 @@ import {
   EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX,
   EXPORT_DEFAULT_FUNCTION_REGEX,
   EXPORT_DEFAULT_NAME_REGEX,
+  EXPORT_FUNCTION_REGEX,
   FILE_PROTOCOL_REGEX,
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
@@ -27,7 +28,6 @@ const NON_WORD_CHARS_REGEX = /[^\w/-]/g
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const EXPORT_LIST_REGEX = /^export\s*\{([^}]+)\};?\s*$/gm
-const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
 const EXPORT_VAR_REGEX = /^export\s+(const|let|var)\s+(\w+)/gm
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 
@@ -1422,6 +1422,7 @@ if (!globalThis["${componentId}"]) {
 
     const externalClientComponents = ['rari/image']
 
+    CLIENT_IMPORT_REGEX.lastIndex = 0
     while (true) {
       match = CLIENT_IMPORT_REGEX.exec(code)
       if (match === null)

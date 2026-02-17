@@ -1,6 +1,6 @@
 import type { ProxyConfig, ProxyMatcher, RariRequest } from './types'
 import {
-  PATH_SLASHES_REGEX,
+  MULTIPLE_SLASHES_REGEX,
   PATH_TRAILING_SLASH_REGEX,
 } from '../shared/regex-constants'
 
@@ -13,7 +13,7 @@ const PARAM_QUESTION_REGEX = /:(\w+)\?/g
 const STAR_PLACEHOLDER_REGEX = /___STAR___/g
 
 function normalizePath(path: string): string {
-  const collapsed = path.replace(PATH_SLASHES_REGEX, '/')
+  const collapsed = path.replace(MULTIPLE_SLASHES_REGEX, '/')
   return collapsed === '/' ? '/' : collapsed.replace(PATH_TRAILING_SLASH_REGEX, '')
 }
 
