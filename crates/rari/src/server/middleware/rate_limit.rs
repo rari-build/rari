@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn test_rate_limit_config_defaults() {
         let config = RateLimitConfig::default();
-        assert!(config.enabled);
+        assert!(!config.enabled);
         assert_eq!(config.requests_per_second, 100);
         assert_eq!(config.burst_size, 200);
         assert_eq!(config.revalidate_requests_per_minute, 10);
