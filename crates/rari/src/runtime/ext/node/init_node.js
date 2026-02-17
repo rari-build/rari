@@ -2,7 +2,6 @@
 import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
 
 const PATH_TRAILING_SLASH_REGEX = /\/$/
-const PATH_START_SLASH_REGEX = /^\//
 const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
 const COMMAND_ARGS_REGEX = /(?:[^\s"]|"[^"]*")+/g
 const QUOTE_TRIM_REGEX = /(^")|("$)/g
@@ -226,7 +225,23 @@ const path = {
     return dot > 0 ? base.slice(dot) : ''
   },
   relative: (from, to) => {
-    return to.replace(from, '').replace(PATH_START_SLASH_REGEX, '')
+    const fromParts = from.split('/').filter(Boolean)
+    const toParts = to.split('/').filter(Boolean)
+
+    let commonLength = 0
+    const minLength = Math.min(fromParts.length, toParts.length)
+    for (let i = 0; i < minLength; i++) {
+      if (fromParts[i] === toParts[i])
+        commonLength++
+      else
+        break
+    }
+
+    const upCount = fromParts.length - commonLength
+    const upPath = '../'.repeat(upCount)
+    const remainingPath = toParts.slice(commonLength).join('/')
+
+    return upPath + remainingPath || '.'
   },
   isAbsolute: (path) => {
     return path.startsWith('/')
@@ -264,6 +279,28 @@ const path = {
       const base = path.split('/').pop() || ''
       const dot = base.lastIndexOf('.')
       return dot > 0 ? base.slice(dot) : ''
+    },
+    relative: (from, to) => {
+      const fromParts = from.split('/').filter(Boolean)
+      const toParts = to.split('/').filter(Boolean)
+
+      let commonLength = 0
+      const minLength = Math.min(fromParts.length, toParts.length)
+      for (let i = 0; i < minLength; i++) {
+        if (fromParts[i] === toParts[i])
+          commonLength++
+        else
+          break
+      }
+
+      const upCount = fromParts.length - commonLength
+      const upPath = '../'.repeat(upCount)
+      const remainingPath = toParts.slice(commonLength).join('/')
+
+      return upPath + remainingPath || '.'
+    },
+    isAbsolute: (path) => {
+      return path.startsWith('/')
     },
     sep: '/',
     delimiter: ':',
@@ -309,6 +346,8 @@ const util = {
   format: (f, ...args) => {
     let index = 0
     const str = String(f).replace(FORMAT_SPECIFIER_REGEX, (x) => {
+      if (x === '%%')
+        return '%'
       if (index >= args.length)
         return x
       switch (x) {
@@ -323,8 +362,6 @@ const util = {
           catch {
             return '[Circular]'
           }
-        case '%%':
-          return '%'
         default:
           return x
       }

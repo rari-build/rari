@@ -22,8 +22,8 @@ const EXTRACT_DEPENDENCIES_REGEX = /import(?:\s+(?:\w+|\{[^}]*\}|\*\s+as\s+\w+)(
 const COMPONENT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g
 const CLIENT_IMPORT_REGEX = /import\s+(?:(\w+)|\{([^}]+)\})\s+from\s+['"]([^'"]+)['"];?\s*$/gm
 const PROXY_FILE_REGEX = /^proxy\.(?:tsx?|jsx?|mts|mjs)$/
-const COMPONENT_ID_REGEX = /\\/g
-const EXTENSION_REGEX = /\.(tsx?|jsx?)$/
+const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
+const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
 const NON_WORD_CHARS_REGEX = /[^\w/-]/g
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
@@ -578,8 +578,8 @@ const ${importName} = (props) => {
 
           const relativeFromRoot = path.relative(this.projectRoot, actualPath)
           const componentId = relativeFromRoot
-            .replace(COMPONENT_ID_REGEX, '/')
-            .replace(EXTENSION_REGEX, '')
+            .replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
+            .replace(TS_JS_EXTENSION_REGEX, '')
             .replace(NON_WORD_CHARS_REGEX, '_')
             .replace(SRC_PREFIX_REGEX, '')
 
@@ -842,7 +842,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
                 return null
 
               const relativePath = path.relative(srcDir, pathWithExt)
-              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(EXTENSION_REGEX, '.js'))
+              const distPath = path.join(self.options.outDir, self.options.rscDir, relativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
 
               if (fs.existsSync(distPath))
                 return { id: `\0transformed:${distPath}` }
@@ -1556,8 +1556,8 @@ function registerClientReference(clientReference, id, exportName) {
 
   private getComponentId(relativePath: string): string {
     return relativePath
-      .replace(COMPONENT_ID_REGEX, '/')
-      .replace(EXTENSION_REGEX, '')
+      .replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
+      .replace(TS_JS_EXTENSION_REGEX, '')
       .replace(COMPONENT_ID_SANITIZE_REGEX, '_')
       .replace(SRC_PREFIX_REGEX, '')
   }
@@ -1886,7 +1886,7 @@ export function createServerBuildPlugin(
       if (!builder || !isDev)
         return
 
-      const relativePath = path.relative(projectRoot, file).replace(COMPONENT_ID_REGEX, '/')
+      const relativePath = path.relative(projectRoot, file).replace(COMPONENT_PATH_BACKSLASH_REGEX, '/')
       if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath))
         return
 

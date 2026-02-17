@@ -142,11 +142,6 @@ export function extractParams(
     .replace(ESCAPE_CHARS_REGEX, '\\$&')
     .replace(ASTERISK_REGEX, '___STAR___')
 
-  regexPattern = regexPattern.replace(PARAM_REGEX, (_, name) => {
-    paramNames.push(name)
-    return '([^/]+)'
-  })
-
   /* v8 ignore start - advanced parameter patterns not commonly used */
   regexPattern = regexPattern.replace(PARAM_ASTERISK_REGEX, (_, name) => {
     paramNames.push(name)
@@ -161,6 +156,11 @@ export function extractParams(
     return '([^/]*)'
   })
   /* v8 ignore stop */
+
+  regexPattern = regexPattern.replace(PARAM_REGEX, (_, name) => {
+    paramNames.push(name)
+    return '([^/]+)'
+  })
 
   regexPattern = regexPattern.replace(STAR_PLACEHOLDER_REGEX, '.*')
   regexPattern = `^${regexPattern}$`
