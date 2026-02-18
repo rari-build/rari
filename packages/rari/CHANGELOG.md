@@ -1,4 +1,23 @@
+## [rari@0.10.0] - 2026-02-18
+
+### 🚀 Features
+
+- *(og)* Add SVG rendering support for open graph images
+
+### 🐛 Bug Fixes
+
+- *(og)* Improve SVG rendering precision and component handling
+- *(og)* Handle async components and rendering errors gracefully
+- *(og)* Return null for non-function component resolution
+
+### 🚜 Refactor
+
+- *(og)* Extract component resolution logic into dedicated method
 ## [rari@0.9.3] - 2026-02-17
+
+### 💼 Other
+
+- Rari@0.9.3
 
 ### 🚜 Refactor
 
