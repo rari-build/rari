@@ -10,6 +10,9 @@ export interface ImageResponseSize {
   height: number
 }
 
+const REACT_MEMO = Symbol.for('react.memo')
+const REACT_FORWARD_REF = Symbol.for('react.forward_ref')
+
 export class ImageResponse {
   private element: ReactElement
   private options: ImageResponseOptions
@@ -30,6 +33,40 @@ export class ImageResponse {
     }
   }
 
+  private resolveAndInvoke(type: any, props: any): any {
+    let resolved = type
+    while (resolved && typeof resolved === 'object') {
+      if (resolved.$$typeof === REACT_MEMO)
+        resolved = resolved.type
+      else if (resolved.$$typeof === REACT_FORWARD_REF)
+        resolved = resolved.render
+      else
+        break
+    }
+
+    if (typeof resolved !== 'function')
+      return resolved
+
+    try {
+      const rendered = resolved(props || {})
+      if (rendered && typeof rendered.then === 'function') {
+        console.warn(
+          `[ImageResponse] async/server component "${resolved?.name || resolved}" is not supported; skipping`,
+        )
+        return null
+      }
+
+      return this.serializeElement(rendered)
+    }
+    catch (err) {
+      console.error(
+        `[ImageResponse] failed to render component "${resolved?.name || resolved?.toString()}":`,
+        err,
+      )
+      return null
+    }
+  }
+
   private serializeElement(element: any): any {
     if (typeof element === 'string' || typeof element === 'number')
       return { type: 'text', value: String(element) }
@@ -37,64 +74,16 @@ export class ImageResponse {
     if (!element || !element.type)
       return null
 
-    if (typeof element.type === 'function') {
-      try {
-        const rendered = element.type(element.props || {})
-        if (rendered && typeof (rendered as any).then === 'function') {
-          console.warn(
-            `[ImageResponse] async/server component "${element.type?.name || element.type}" is not supported; skipping`,
-          )
-          return null
-        }
+    const { type, props = {} } = element
 
-        return this.serializeElement(rendered)
-      }
-      catch (err) {
-        console.error(
-          `[ImageResponse] failed to render component "${element.type?.name || element.type?.toString()}":`,
-          err,
-        )
-        return null
-      }
-    }
+    if (typeof type === 'function' || (type && typeof type === 'object' && type.$$typeof))
+      return this.resolveAndInvoke(type, props)
 
-    let resolvedType = element.type
-    if (resolvedType && typeof resolvedType === 'object') {
-      const REACT_MEMO = Symbol.for('react.memo')
-      const REACT_FORWARD_REF = Symbol.for('react.forward_ref')
-      if ((resolvedType as any).$$typeof === REACT_MEMO)
-        resolvedType = (resolvedType as any).type
-      else if ((resolvedType as any).$$typeof === REACT_FORWARD_REF)
-        resolvedType = (resolvedType as any).render
-    }
-
-    if (typeof resolvedType === 'function') {
-      try {
-        const rendered = resolvedType(element.props || {})
-        if (rendered && typeof (rendered as any).then === 'function') {
-          console.warn(
-            `[ImageResponse] async/server component "${resolvedType?.name || resolvedType}" is not supported; skipping`,
-          )
-          return null
-        }
-
-        return this.serializeElement(rendered)
-      }
-      catch (err) {
-        console.error(
-          `[ImageResponse] failed to render component "${resolvedType?.name || resolvedType?.toString()}":`,
-          err,
-        )
-        return null
-      }
-    }
-
-    const props = element.props || {}
     const children = this.serializeChildren(props.children)
 
     return {
       type: 'element',
-      elementType: resolvedType,
+      elementType: type,
       props: this.serializeProps(props),
       children,
     }
