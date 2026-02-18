@@ -16,15 +16,6 @@
       ],
       "project": [
         "src/**/*.{ts,tsx,js,jsx}"
-      ],
-      // Runtime files that are dynamically loaded and result in false positives
-      "ignore": [
-        "src/runtime/AppRouterProvider.tsx",
-        "src/runtime/entry-client.js",
-        "src/runtime/LoadingErrorBoundary.tsx",
-        "src/runtime/react-server-dom-rari-client.js",
-        "src/runtime/react-server-dom-shim.js",
-        "src/runtime/rsc-client-runtime.js"
       ]
     },
     "packages/create-rari-app": {

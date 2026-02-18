@@ -14,7 +14,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.8.0
-    posthog-js: ^1.350.0
+    posthog-js: ^1.351.1
   build:
     rolldown: 1.0.0-rc.2
     rolldown-vite: ^7.3.1
@@ -33,7 +33,7 @@ catalogs:
     eslint-plugin-oxlint: ^1.48.0
     eslint-plugin-react-hooks: ^7.0.1
     eslint-plugin-react-refresh: ^0.5.0
-    knip: ^5.83.1
+    knip: ^5.84.1
     oxlint: ^1.48.0
   mdx:
     '@mdx-js/mdx': 3.1.1
@@ -51,14 +51,14 @@ catalogs:
     react: ^19.2.4
     react-dom: ^19.2.4
   tailwind:
-    '@tailwindcss/vite': ^4.1.18
-    tailwindcss: ^4.1.18
+    '@tailwindcss/vite': ^4.2.0
+    tailwindcss: ^4.2.0
   testing:
     '@vitest/coverage-v8': 4.0.18
     vitest: ^4.0.18
   typescript:
     '@types/node': ^25.2.3
-    '@typescript/native-preview': ^7.0.0-dev.20260217.1
+    '@typescript/native-preview': ^7.0.0-dev.20260218.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
