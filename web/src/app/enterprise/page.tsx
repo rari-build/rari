@@ -1,7 +1,7 @@
 import type { Metadata } from 'rari'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 
-export default function EnterprisePage() {
+export default async function EnterprisePage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="relative overflow-hidden w-full min-h-[70vh] flex items-center">

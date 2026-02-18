@@ -6,6 +6,7 @@ import Cloudflare from '@/components/icons/sponsors/Cloudflare'
 import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
+import Socket from '@/components/icons/sponsors/Socket'
 import { HEX_REGEX } from '@/lib/regex-constants'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
@@ -182,6 +183,14 @@ const infrastructurePartners: InfrastructurePartner[] = [
     color: '#362d59',
     description: 'Error monitoring & observability',
   },
+  {
+    href: 'https://socket.dev',
+    label: 'Socket - Security Platform',
+    Icon: Socket,
+    color: '#ff00aa',
+    secondaryColor: '#8c50ff',
+    description: 'Supply chain security & monitoring',
+  },
 ]
 
 function TierCard({ tier }: { tier: Tier }) {
@@ -263,7 +272,7 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
   )
 }
 
-export default function SponsorsPage() {
+export default async function SponsorsPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="relative overflow-hidden w-full flex items-center">
@@ -368,7 +377,7 @@ export default function SponsorsPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 [&>*:nth-child(5)]:lg:col-start-2 [&>*:nth-child(5)]:lg:col-end-4 [&>*:nth-child(5)]:justify-self-center [&>*:nth-child(5)]:lg:max-w-[250px]">
             {infrastructurePartners.map((partner) => {
               const { href, label, Icon, color, secondaryColor, description } = partner
               return (
@@ -378,7 +387,7 @@ export default function SponsorsPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="relative group h-full overflow-hidden rounded-xl p-px block"
+                  className="relative group h-full overflow-hidden rounded-xl p-px block w-full"
                 >
                   <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
                     <div
