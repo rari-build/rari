@@ -30,6 +30,8 @@ mod kv;
 mod module_reload;
 mod napi;
 mod node;
+mod node_crypto;
+mod node_sqlite;
 mod promise_manager;
 mod rari;
 mod react;
@@ -100,6 +102,8 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(webgpu::extensions(is_snapshot));
     extensions.extend(cron::extensions(is_snapshot));
     extensions.extend(napi::extensions(is_snapshot));
+    extensions.extend(node_crypto::extensions(is_snapshot));
+    extensions.extend(node_sqlite::extensions(is_snapshot));
     extensions.extend(node::extensions(options.node_resolver.clone(), is_snapshot));
     extensions.push(deno_bundle_runtime::deno_bundle_runtime::init(None));
     extensions.extend(runtime::extensions(options, None, is_snapshot));
