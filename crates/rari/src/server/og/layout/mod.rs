@@ -2,6 +2,7 @@ pub mod style;
 
 use super::resources::fonts::FontContext;
 use super::types::{JsxChild, JsxElement};
+use crate::server::og::rendering::is_svg_element;
 use parley::{FontContext as ParleyFontContext, LayoutContext, TextStyle};
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -92,6 +93,14 @@ impl LayoutEngine {
         let taffy_style = self.style_to_taffy(&style);
 
         let node_data = NodeData { element: element.clone(), style: style.clone(), has_text };
+
+        if is_svg_element(&element.element_type) {
+            let node = self
+                .taffy
+                .new_leaf_with_context(taffy_style, node_data)
+                .map_err(|e| format!("Failed to create SVG leaf node: {:?}", e))?;
+            return Ok(node);
+        }
 
         let mut child_nodes = Vec::new();
         for child in &element.children {
@@ -399,6 +408,39 @@ fn measure_node(
 
     if node_data.element.element_type == "img" {
         return measure_image(node_data, known_dimensions, available_space);
+    }
+
+    if is_svg_element(&node_data.element.element_type) {
+        let w = node_data
+            .element
+            .props
+            .get("width")
+            .and_then(|v| {
+                v.as_str()
+                    .and_then(|s| s.parse::<f32>().ok())
+                    .or_else(|| v.as_f64().map(|n| n as f32))
+            })
+            .or_else(|| {
+                node_data.style.get("width").and_then(|s| s.trim_end_matches("px").parse().ok())
+            })
+            .unwrap_or(0.0);
+        let h = node_data
+            .element
+            .props
+            .get("height")
+            .and_then(|v| {
+                v.as_str()
+                    .and_then(|s| s.parse::<f32>().ok())
+                    .or_else(|| v.as_f64().map(|n| n as f32))
+            })
+            .or_else(|| {
+                node_data.style.get("height").and_then(|s| s.trim_end_matches("px").parse().ok())
+            })
+            .unwrap_or(0.0);
+        return Size {
+            width: known_dimensions.width.unwrap_or(w),
+            height: known_dimensions.height.unwrap_or(h),
+        };
     }
 
     if !node_data.has_text {

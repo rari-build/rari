@@ -1,6 +1,7 @@
 import type { PageProps } from 'rari'
 import { readFile } from 'node:fs/promises'
 import { ImageResponse } from 'rari/og'
+import Rari from '@/components/icons/Rari'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
 import { DESCRIPTION_EXPORT_REGEX, TITLE_EXPORT_REGEX } from '@/lib/regex-constants'
 
@@ -52,42 +53,15 @@ export default async function Image({ params }: PageProps) {
             marginBottom: '40px',
           }}
         >
-          <div
-            style={{
-              width: '60px',
-              height: '60px',
-              background: 'linear-gradient(to bottom right, #fd7e14, #e8590c)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '20px',
-            }}
-          >
-            <span
-              style={{
-                fontSize: 36,
-                fontWeight: 'bold',
-                color: 'white',
-              }}
-            >
-              R
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 48,
-              fontWeight: 'bold',
-              color: '#f0f6fc',
-            }}
-          >
-            rari
-          </div>
+          <Rari
+            width={120}
+            height={40}
+            style={{ marginRight: '20px' }}
+          />
           <div
             style={{
               fontSize: 36,
               color: '#8b949e',
-              marginLeft: '20px',
             }}
           >
             / docs
