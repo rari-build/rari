@@ -1,4 +1,5 @@
 import { ImageResponse } from 'rari/og'
+import Rari from '@/components/icons/Rari'
 
 export default function Image() {
   return new ImageResponse(
@@ -22,45 +23,11 @@ export default function Image() {
           padding: '80px',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '60px',
-          }}
-        >
-          <div
-            style={{
-              width: '120px',
-              height: '120px',
-              background: 'linear-gradient(to bottom right, #fd7e14, #e8590c)',
-              borderRadius: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '40px',
-            }}
-          >
-            <span
-              style={{
-                fontSize: 72,
-                fontWeight: 'bold',
-                color: 'white',
-              }}
-            >
-              R
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 140,
-              fontWeight: 'bold',
-              color: '#f0f6fc',
-            }}
-          >
-            rari
-          </div>
-        </div>
+        <Rari
+          width={360}
+          height={120}
+          style={{ marginBottom: '60px' }}
+        />
 
         <div
           style={{

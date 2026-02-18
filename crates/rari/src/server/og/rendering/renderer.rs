@@ -51,6 +51,9 @@ impl ImageRenderer {
             "img" => {
                 self.render_image(layout, image)?;
             }
+            "svg" => {
+                self.render_svg(layout, image)?;
+            }
             _ => {
                 if self.has_text_content(&layout.element) {
                     self.render_text(layout, image)?;

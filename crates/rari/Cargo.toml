@@ -161,6 +161,7 @@ parley = "0.7.0"
 swash = "0.2.6"
 zeno = "0.3.3"
 wuff = "0.2.3"
+resvg = "0.47.0"
 
 # === System Integration ===
 hyper-util = { version = "0.1.20", features = [

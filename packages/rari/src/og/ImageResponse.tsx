@@ -37,16 +37,22 @@ export class ImageResponse {
     if (!element || !element.type)
       return null
 
-    const type = typeof element.type === 'string'
-      ? element.type
-      : element.type.name || 'div'
+    if (typeof element.type === 'function') {
+      try {
+        const rendered = element.type(element.props || {})
+        return this.serializeElement(rendered)
+      }
+      catch {
+        return null
+      }
+    }
 
     const props = element.props || {}
     const children = this.serializeChildren(props.children)
 
     return {
       type: 'element',
-      elementType: type,
+      elementType: element.type,
       props: this.serializeProps(props),
       children,
     }
