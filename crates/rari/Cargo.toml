@@ -76,7 +76,7 @@ deno_node_crypto = "0.2.0"
 deno_node_sqlite = "0.2.0"
 deno_resolver = "0.63.0"
 node_resolver = "0.70.0"
-num-bigint-dig = "0.8.2"
+num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
 deno_ffi = "0.219.0"
@@ -186,7 +186,7 @@ winapi = { version = "0.3.9", features = [
   "consoleapi",
   "minwindef",
 ] }
-windows-sys = { version = "0.59.0", features = [
+windows-sys = { version = "=0.59.0", features = [
   "Win32_Networking",
   "Win32_Networking_WinSock",
   "Win32_System_SystemInformation",
