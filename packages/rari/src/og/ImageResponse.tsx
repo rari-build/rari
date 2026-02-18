@@ -68,6 +68,27 @@ export class ImageResponse {
         resolvedType = (resolvedType as any).render
     }
 
+    if (typeof resolvedType === 'function') {
+      try {
+        const rendered = resolvedType(element.props || {})
+        if (rendered && typeof (rendered as any).then === 'function') {
+          console.warn(
+            `[ImageResponse] async/server component "${resolvedType?.name || resolvedType}" is not supported; skipping`,
+          )
+          return null
+        }
+
+        return this.serializeElement(rendered)
+      }
+      catch (err) {
+        console.error(
+          `[ImageResponse] failed to render component "${resolvedType?.name || resolvedType?.toString()}":`,
+          err,
+        )
+        return null
+      }
+    }
+
     const props = element.props || {}
     const children = this.serializeChildren(props.children)
 
