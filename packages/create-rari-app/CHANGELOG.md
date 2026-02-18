@@ -4,6 +4,10 @@
 
 - *(web)* Add enterprise page with sponsor showcase
 
+### 💼 Other
+
+- Create-rari-app@0.4.11
+
 ### 🚜 Refactor
 
 - Extract regex patterns to constants for reusability
