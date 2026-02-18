@@ -24,7 +24,7 @@ export default function Image() {
         }}
       >
         <Rari
-          width={280}
+          width={279}
           height={93}
           style={{ marginBottom: '60px' }}
         />

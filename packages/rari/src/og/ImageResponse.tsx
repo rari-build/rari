@@ -40,11 +40,32 @@ export class ImageResponse {
     if (typeof element.type === 'function') {
       try {
         const rendered = element.type(element.props || {})
+        if (rendered && typeof (rendered as any).then === 'function') {
+          console.warn(
+            `[ImageResponse] async/server component "${element.type?.name || element.type}" is not supported; skipping`,
+          )
+          return null
+        }
+
         return this.serializeElement(rendered)
       }
-      catch {
+      catch (err) {
+        console.error(
+          `[ImageResponse] failed to render component "${element.type?.name || element.type?.toString()}":`,
+          err,
+        )
         return null
       }
+    }
+
+    let resolvedType = element.type
+    if (resolvedType && typeof resolvedType === 'object') {
+      const REACT_MEMO = Symbol.for('react.memo')
+      const REACT_FORWARD_REF = Symbol.for('react.forward_ref')
+      if ((resolvedType as any).$$typeof === REACT_MEMO)
+        resolvedType = (resolvedType as any).type
+      else if ((resolvedType as any).$$typeof === REACT_FORWARD_REF)
+        resolvedType = (resolvedType as any).render
     }
 
     const props = element.props || {}
@@ -52,7 +73,7 @@ export class ImageResponse {
 
     return {
       type: 'element',
-      elementType: element.type,
+      elementType: resolvedType,
       props: this.serializeProps(props),
       children,
     }

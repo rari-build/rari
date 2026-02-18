@@ -41,8 +41,8 @@ impl ImageRenderer {
         layout: &ComputedLayout,
         image: &mut RgbaImage,
     ) -> Result<(), String> {
-        let width = layout.width as u32;
-        let height = layout.height as u32;
+        let width = layout.width.round() as u32;
+        let height = layout.height.round() as u32;
 
         if width == 0 || height == 0 {
             return Ok(());
@@ -73,8 +73,8 @@ impl ImageRenderer {
 
         resvg::render(&tree, transform, &mut pixmap.as_mut());
 
-        let x_start = layout.x as u32;
-        let y_start = layout.y as u32;
+        let x_start = layout.x.round() as u32;
+        let y_start = layout.y.round() as u32;
         let data = pixmap.data();
 
         for py in 0..height {
@@ -237,7 +237,18 @@ fn camel_to_kebab(s: &str) -> String {
         "wordSpacing" => "word-spacing".to_string(),
         "writingMode" => "writing-mode".to_string(),
 
-        _ => s.to_string(),
+        _ => {
+            let mut out = String::with_capacity(s.len() + 4);
+            for ch in s.chars() {
+                if ch.is_uppercase() && !out.is_empty() {
+                    out.push('-');
+                    out.push(ch.to_lowercase().next().unwrap_or(ch));
+                } else {
+                    out.push(ch);
+                }
+            }
+            out
+        }
     }
 }
 
