@@ -45,7 +45,7 @@ export class ImageResponse {
     }
 
     if (typeof resolved !== 'function')
-      return resolved
+      return null
 
     try {
       const rendered = resolved(props || {})
