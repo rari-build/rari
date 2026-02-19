@@ -18,7 +18,7 @@ if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
 // eslint-disable-next-line node/prefer-global/process
-;(globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
+; (globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
@@ -40,7 +40,7 @@ if (typeof window !== 'undefined') {
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 
-  ;(globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
+  ; (globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
     if (!boundaryElement)
@@ -62,7 +62,7 @@ if (typeof window !== 'undefined') {
           if (Array.isArray(importData) && importData.length >= 3) {
             const [path, chunks, exportName] = importData
             const moduleKey = `$L${actualRowId}`
-              ;(window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
+                  ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
               id: path,
               chunks: Array.isArray(chunks) ? chunks : [chunks],
               name: exportName || 'default',
@@ -109,7 +109,7 @@ if (typeof window !== 'undefined') {
       }
 
       if (containsClientComponents(content)) {
-        ;(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
+        ; (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
           content,
           element: boundaryElement,
           rowId,
@@ -239,12 +239,12 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     registered: true,
   }
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
+    ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -381,7 +381,7 @@ class RscClient {
         if (isLocalHost)
           list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
       }
-      catch {}
+      catch { }
 
       return list
     })()
@@ -1127,6 +1127,10 @@ if (import.meta.hot) {
   const bufferedEvents: Array<{ event: string, data: any }> = []
   const handlers = new Map<string, (data: any) => void | Promise<void>>()
 
+  function resolveRariServerUrl(): string {
+    return import.meta.env.RARI_SERVER_URL || window.location.origin
+  }
+
   function registerHandler(event: string, handler: (data: any) => void | Promise<void>) {
     handlers.set(event, handler)
     import.meta.hot!.on(event, async (data) => {
@@ -1146,8 +1150,8 @@ if (import.meta.hot) {
   registerHandler('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
       }
     }
   })
@@ -1155,9 +1159,9 @@ if (import.meta.hot) {
   registerHandler('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
         data.serverComponents.forEach((path: string) => {
-          ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
+          ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
         })
       }
     }
@@ -1231,7 +1235,7 @@ if (import.meta.hot) {
       updateDocumentMetadata(metadata)
 
     try {
-      const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
+      const rariServerUrl = resolveRariServerUrl()
       const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       const reloadResponse = await fetch(reloadUrl, {
@@ -1338,7 +1342,7 @@ if (import.meta.hot) {
 
     if (componentId || filePath) {
       try {
-        const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
+        const rariServerUrl = resolveRariServerUrl()
 
         const invalidateUrl = `${rariServerUrl}/_rari/hmr`
 
@@ -1422,7 +1426,7 @@ if (import.meta.hot) {
   }
 
   if (bufferedEvents.length > 0) {
-    ;(async () => {
+    void (async () => {
       try {
         while (bufferedEvents.length > 0) {
           const eventsToReplay = [...bufferedEvents]
