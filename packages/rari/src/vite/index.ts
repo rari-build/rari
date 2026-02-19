@@ -1991,9 +1991,8 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       const isNotFoundFile = file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')
       const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
 
-      if (isAppRouterFile && isSpecialRouteFile) {
+      if (isAppRouterFile && isSpecialRouteFile)
         return undefined
-      }
 
       if (componentType === 'client')
         return

@@ -1254,7 +1254,7 @@ if (import.meta.hot) {
 
       const result = await reloadResponse.json()
 
-      if (result.success === false || result.reloaded === false) {
+      if (result.success !== true && result.reloaded !== true) {
         const errorMsg = `Component reload unsuccessful: ${result.error || 'unknown error'}`
         console.error('[rari] HMR:', errorMsg, result)
         throw new Error(errorMsg)
