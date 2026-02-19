@@ -405,14 +405,132 @@ impl JsExecutionRuntime {
             RariError::io(error_msg)
         })?;
 
-        let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
-        match self.execute_script(script_name, component_code).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let error_msg =
-                    format!("Failed to execute component code for {}: {}", component_id, e);
+        self.load_component_code(component_id, component_code).await
+    }
+
+    pub async fn load_component_code(
+        &self,
+        component_id: &str,
+        component_code: String,
+    ) -> Result<(), RariError> {
+        let is_esm = component_code.contains("export ")
+            || component_code.contains("export{")
+            || component_code.contains("export {")
+            || component_code.contains("export\n")
+            || component_code.contains("export\r");
+
+        if is_esm {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
+
+            let hmr_specifier =
+                format!("file:///rari_hmr/server/{}.js?v={}", component_id, timestamp);
+
+            if let Err(e) = self.clear_module_loader_caches(component_id).await {
+                tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
+            }
+
+            self.add_module_to_loader_only(&hmr_specifier, component_code.clone()).await.map_err(
+                |e| {
+                    let error_msg = format!(
+                        "Failed to add component module to loader for {}: {}",
+                        component_id, e
+                    );
+                    tracing::error!("{}", error_msg);
+                    RariError::js_execution(error_msg)
+                },
+            )?;
+
+            let module_id = self.load_es_module(&hmr_specifier).await.map_err(|e| {
+                let error_msg = format!("Failed to load ES module for {}: {}", component_id, e);
                 tracing::error!("{}", error_msg);
-                Err(RariError::js_execution(error_msg))
+                RariError::js_execution(error_msg)
+            })?;
+
+            self.evaluate_module(module_id).await.map_err(|e| {
+                let error_msg = format!("Failed to evaluate ES module for {}: {}", component_id, e);
+                tracing::error!("{}", error_msg);
+                RariError::js_execution(error_msg)
+            })?;
+
+            let registration_script = format!(
+                r#"(async function() {{
+                    try {{
+                        const moduleNamespace = await import("{}");
+                        const componentId = "{}";
+
+                        if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
+                        if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
+                        globalThis['~rsc'].modules[componentId] = moduleNamespace;
+
+                        if (moduleNamespace.default) {{
+                            globalThis[componentId] = moduleNamespace.default;
+                        }} else {{
+                            const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
+                            if (exports.length > 0) {{
+                                globalThis[componentId] = exports[0];
+                            }}
+                        }}
+
+                        for (const [key, value] of Object.entries(moduleNamespace)) {{
+                            if (key !== 'default' && typeof value === 'function') {{
+                                globalThis[key] = value;
+                            }}
+                        }}
+
+                        return {{ success: true }};
+                    }} catch (error) {{
+                        console.error('[rari] Failed to register component {}:', error);
+                        return {{ success: false, error: error.message }};
+                    }}
+                }})()"#,
+                hmr_specifier, component_id, component_id
+            );
+
+            let result = self
+                .execute_script(
+                    format!("register_component_{}.js", component_id.cow_replace('/', "_")),
+                    registration_script,
+                )
+                .await
+                .map_err(|e| {
+                    let error_msg = format!(
+                        "Failed to register component {} to globalThis: {}",
+                        component_id, e
+                    );
+                    tracing::error!("{}", error_msg);
+                    RariError::js_execution(error_msg)
+                })?;
+
+            if let Some(success) = result.get("success").and_then(|v| v.as_bool())
+                && !success
+            {
+                let error_msg =
+                    result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                tracing::error!(
+                    "Component registration failed for {}: {}",
+                    component_id,
+                    error_msg
+                );
+                return Err(RariError::js_execution(format!(
+                    "Component registration failed for {}: {}",
+                    component_id, error_msg
+                )));
+            }
+
+            Ok(())
+        } else {
+            let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
+            match self.execute_script(script_name, component_code).await {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let error_msg =
+                        format!("Failed to execute component code for {}: {}", component_id, e);
+                    tracing::error!("{}", error_msg);
+                    Err(RariError::js_execution(error_msg))
+                }
             }
         }
     }

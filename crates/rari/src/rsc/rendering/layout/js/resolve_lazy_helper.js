@@ -1,5 +1,24 @@
 if (!globalThis.__RARI_RESOLVE_LAZY__) {
+  if (!globalThis.__RARI_RESOLVED_PROMISES__)
+    globalThis.__RARI_RESOLVED_PROMISES__ = new Map()
+
+  globalThis.__RARI_CLEAR_RESOLVED_CACHE__ = function (promiseId) {
+    if (promiseId) {
+      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+    }
+    else {
+      globalThis.__RARI_RESOLVED_PROMISES__.clear()
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.clear()
+    }
+  }
+
   globalThis.__RARI_RESOLVE_LAZY__ = async function (promiseId) {
+    if (globalThis.__RARI_RESOLVED_PROMISES__.has(promiseId))
+      return globalThis.__RARI_RESOLVED_PROMISES__.get(promiseId)
+
     try {
       if (!globalThis.__RARI_PENDING_PROMISES__)
         throw new Error('No pending promises found')
@@ -10,9 +29,12 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
 
       let result
       try {
-        if (promiseOrDeferred.isDeferred) {
+        if (promiseOrDeferred.isDeferred && typeof promiseOrDeferred.component === 'function') {
           const promise = promiseOrDeferred.component(promiseOrDeferred.props)
           result = await promise
+        }
+        else if (promiseOrDeferred.promise) {
+          result = await promiseOrDeferred.promise
         }
         else {
           result = await promiseOrDeferred
@@ -23,26 +45,33 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
         throw new Error(`Promise rejected: ${promiseError.message || String(promiseError)}`)
       }
 
-      globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
-
       if (typeof globalThis.renderToRsc === 'function') {
         try {
           const clientComponents = globalThis['~clientComponents'] || globalThis['~rsc']?.clientComponents || {}
           const rscData = await globalThis.renderToRsc(result, clientComponents)
-          return {
+
+          const response = {
             success: true,
             data: rscData,
           }
+
+          globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
+
+          return response
         }
         catch (renderError) {
           throw new Error(`Failed to render to RSC: ${renderError.message || String(renderError)}`)
         }
       }
       else {
-        return {
+        const response = {
           success: true,
           data: result,
         }
+
+        globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
+
+        return response
       }
     }
     catch (error) {

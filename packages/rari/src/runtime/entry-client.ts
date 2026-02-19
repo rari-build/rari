@@ -336,10 +336,19 @@ export async function renderApp(): Promise<void> {
     if (needsInitialFetch) {
       try {
         const currentPath = window.location.pathname + window.location.search
-        const response = await fetch(currentPath, {
+
+        const rscServerUrl = window.location.origin.includes(':5173')
+          ? 'http://localhost:3000'
+          : window.location.origin
+        const fetchUrl = rscServerUrl + currentPath
+
+        const response = await fetch(fetchUrl, {
           headers: {
-            Accept: 'text/x-component',
+            'Accept': 'text/x-component',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
           },
+          cache: 'no-store',
         })
 
         if (!response.ok && response.status !== 404)
@@ -349,10 +358,19 @@ export async function renderApp(): Promise<void> {
 
         const ssrManifest = createSsrManifest()
 
-        element = await createFromReadableStream(stream, ssrManifest)
+        try {
+          element = await createFromReadableStream(stream, ssrManifest)
+        }
+        catch (streamError) {
+          if (streamError && typeof streamError === 'object' && streamError instanceof Promise)
+            element = null
+          else
+            throw streamError
+        }
       }
       catch (e) {
         console.error('[rari] Failed to fetch initial RSC data:', e)
+        console.error('[rari] Error stack:', (e as Error).stack)
         element = null
       }
     }
@@ -501,7 +519,7 @@ export async function renderApp(): Promise<void> {
   catch (error) {
     console.error('[rari] Error rendering app:', error)
     rootElement.innerHTML = `
-      <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
+          <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
         <h2>Error Loading App</h2>
         <p></p>
       </div>

@@ -234,6 +234,10 @@ export class HMRCoordinator {
         const errorText = await response.text()
         throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
+
+      const result = await response.json()
+      if (!result.success)
+        throw new Error(result.message || result.error || 'Component reload failed')
     }
     catch (error) {
       console.error(`[rari] HMR: Failed to notify Rust server:`, error)

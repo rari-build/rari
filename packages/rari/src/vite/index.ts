@@ -1965,16 +1965,6 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
 
       if (isAppRouterFile && isSpecialRouteFile) {
-        let fileType = 'page'
-        if (isLayoutFile)
-          fileType = 'layout'
-        else if (isLoadingFile)
-          fileType = 'loading'
-        else if (isErrorFile)
-          fileType = 'error'
-        else if (isNotFoundFile)
-          fileType = 'not-found'
-
         if (serverComponentBuilder && componentType === 'server') {
           try {
             await (serverComponentBuilder as any).rebuildComponent(file)
@@ -1984,13 +1974,17 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
           }
         }
 
-        server.hot.send('rari:app-router-updated', {
-          type: 'rari-hmr',
+        server.hot.send('rari:app-router-file-updated', {
           filePath: file,
-          fileType,
+          fileType: isPageFile ? 'page' : isLayoutFile ? 'layout' : isLoadingFile ? 'loading' : isErrorFile ? 'error' : 'not-found',
+          timestamp: Date.now(),
         })
 
-        return undefined
+        const mod = server.moduleGraph.getModuleById(file)
+        if (mod)
+          return [mod]
+
+        return []
       }
 
       if (componentType === 'client')

@@ -1123,7 +1123,22 @@ function isServerComponent(filePath: string): boolean {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.on('rari:register-server-component', (data) => {
+  let hmrListenersReady = false
+  const bufferedEvents: Array<{ event: string, data: any }> = []
+  const handlers = new Map<string, (data: any) => void | Promise<void>>()
+
+  function registerHandler(event: string, handler: (data: any) => void | Promise<void>) {
+    handlers.set(event, handler)
+    import.meta.hot!.on(event, async (data) => {
+      if (!hmrListenersReady) {
+        bufferedEvents.push({ event, data })
+        return
+      }
+      await handler(data)
+    })
+  }
+
+  registerHandler('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
         ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
@@ -1132,7 +1147,7 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('rari:server-components-registry', (data) => {
+  registerHandler('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
         ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
@@ -1143,12 +1158,12 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('vite:beforeFullReload', async (data) => {
+  registerHandler('vite:beforeFullReload', async (data) => {
     if (data?.path && isServerComponent(data.path))
       await invalidateRscCache({ filePath: data.path, forceReload: true })
   })
 
-  import.meta.hot.on('rari:server-component-updated', async (data) => {
+  registerHandler('rari:server-component-updated', async (data) => {
     const componentId = data?.id || data?.componentId
     const timestamp = data?.t || data?.timestamp
 
@@ -1170,9 +1185,12 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('rari:app-router-updated', async (data) => {
+  registerHandler('rari:app-router-updated', async (data) => {
     try {
       if (!data)
+        return
+
+      if (!data.routePath && !data.affectedRoutes)
         return
 
       await handleAppRouterUpdate(data)
@@ -1182,7 +1200,21 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('rari:server-action-updated', async (data) => {
+  registerHandler('rari:app-router-file-updated', async (data) => {
+    try {
+      if (!data || !data.filePath)
+        return
+
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      window.location.reload()
+    }
+    catch (error) {
+      console.error('[rari] HMR: App router file update failed:', error)
+    }
+  })
+
+  registerHandler('rari:server-action-updated', async (data) => {
     if (data?.filePath) {
       rscClient.clearCache()
 
@@ -1208,7 +1240,9 @@ if (import.meta.hot) {
       updateDocumentMetadata(metadata)
 
     try {
-      const rariServerUrl = window.location.origin
+      const rariServerUrl = window.location.origin.includes(':5173')
+        ? 'http://localhost:3000'
+        : window.location.origin
       const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       const reloadResponse = await fetch(reloadUrl, {
@@ -1222,10 +1256,19 @@ if (import.meta.hot) {
         }),
       })
 
-      if (!reloadResponse.ok)
+      if (!reloadResponse.ok) {
         console.error('[rari] HMR: Component reload failed:', reloadResponse.status)
+      }
+      else {
+        const result = await reloadResponse.json()
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+        if (result.success === false || result.reloaded === false) {
+          console.warn('[rari] HMR: Component reload had issues, waiting longer...')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500))
     }
     catch (error) {
       console.error('[rari] HMR: Failed to reload component:', error)
@@ -1322,8 +1365,12 @@ if (import.meta.hot) {
           }),
         })
 
-        if (!invalidateResponse.ok)
+        if (!invalidateResponse.ok) {
           console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status)
+        }
+        else {
+          await invalidateResponse.text()
+        }
       }
       catch (error) {
         console.error('[rari] HMR: Failed to call server invalidation endpoint:', error)
@@ -1337,29 +1384,6 @@ if (import.meta.hot) {
         detail: { routes, fileType },
       })
       window.dispatchEvent(event)
-
-      const currentPath = window.location.pathname
-      if (routes.includes(currentPath) || routes.includes('/')) {
-        try {
-          const rariServerUrl = window.location.origin.includes(':5173')
-            ? 'http://localhost:3000'
-            : window.location.origin
-          const url = rariServerUrl + currentPath + window.location.search
-
-          const response = await fetch(url, {
-            headers: {
-              Accept: 'text/x-component',
-            },
-            cache: 'no-cache',
-          })
-
-          if (!response.ok)
-            console.error('[rari] HMR: Failed to re-fetch route:', response.status)
-        }
-        catch (error) {
-          console.error('[rari] HMR: Failed to re-fetch route:', error)
-        }
-      }
     }
   }
 
@@ -1407,6 +1431,22 @@ if (import.meta.hot) {
       })
       window.dispatchEvent(event)
     }
+  }
+
+  hmrListenersReady = true
+
+  if (bufferedEvents.length > 0) {
+    const eventsToReplay = [...bufferedEvents]
+    bufferedEvents.length = 0
+
+    void (async () => {
+      for (const { event, data } of eventsToReplay) {
+        const handler = handlers.get(event)
+        if (handler) {
+          await handler(data)
+        }
+      }
+    })()
   }
 }
 

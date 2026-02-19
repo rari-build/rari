@@ -16,6 +16,9 @@ if (!globalThis.renderToRsc) {
     }
 
     if (element && typeof element === 'object') {
+      if (element.__rari_lazy === true)
+        return element
+
       const uniqueKey = element.key || `element-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
       if (element.type) {

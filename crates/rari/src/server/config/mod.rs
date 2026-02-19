@@ -307,6 +307,14 @@ impl Config {
                 pretty_print: mode == Mode::Development,
                 ..default_config.rsc_html
             },
+            caching: CacheControlConfig {
+                server_components: if mode == Mode::Production {
+                    "public, max-age=31536000, stale-while-revalidate=86400".to_string()
+                } else {
+                    "no-cache, no-store, must-revalidate".to_string()
+                },
+                ..default_config.caching
+            },
             ..default_config
         }
     }
@@ -585,6 +593,10 @@ impl Config {
             }
         } else {
             tracing::debug!("No dist/server/config.json found, using defaults");
+        }
+
+        if config.mode == Mode::Development {
+            config.caching.server_components = "no-cache, no-store, must-revalidate".to_string();
         }
 
         Ok(config)
@@ -983,5 +995,40 @@ mod tests {
             !config.caching.routes.contains_key("/invalid-type"),
             "Non-string cache-control value should be rejected"
         );
+    }
+}
+
+#[test]
+fn test_dev_mode_cache_control() {
+    let dev_config = Config::new(Mode::Development);
+    assert_eq!(
+        dev_config.caching.server_components, "no-cache, no-store, must-revalidate",
+        "Development mode should use no-cache for server components"
+    );
+
+    let prod_config = Config::new(Mode::Production);
+    assert_eq!(
+        prod_config.caching.server_components,
+        "public, max-age=31536000, stale-while-revalidate=86400",
+        "Production mode should use long cache for server components"
+    );
+}
+
+#[test]
+fn test_from_env_applies_dev_cache_control() {
+    unsafe {
+        std::env::set_var("RARI_MODE", "development");
+    }
+
+    let config = Config::from_env().expect("Failed to create config from environment");
+
+    assert_eq!(config.mode, Mode::Development);
+    assert_eq!(
+        config.caching.server_components, "no-cache, no-store, must-revalidate",
+        "from_env should apply dev cache-control when mode is Development"
+    );
+
+    unsafe {
+        std::env::remove_var("RARI_MODE");
     }
 }
