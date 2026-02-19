@@ -16,6 +16,7 @@ import {
   EXPORT_DEFAULT_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
+  HTTP_PROTOCOL_REGEX,
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
@@ -642,7 +643,8 @@ if (import.meta.hot) {
           const host = process.env.RARI_HOST.startsWith('http')
             ? process.env.RARI_HOST
             : `http://${process.env.RARI_HOST}`
-          serverUrl = host.includes(':') ? host : `${host}:${rariServerPort}`
+          const hostnamePart = host.replace(HTTP_PROTOCOL_REGEX, '')
+          serverUrl = hostnamePart.includes(':') ? host : `${host}:${rariServerPort}`
         }
         else {
           serverUrl = `http://localhost:${rariServerPort}`

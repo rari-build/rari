@@ -1134,7 +1134,12 @@ if (import.meta.hot) {
         bufferedEvents.push({ event, data })
         return
       }
-      await handler(data)
+      try {
+        await handler(data)
+      }
+      catch (error) {
+        console.error(`[rari] HMR: Error in handler for '${event}':`, error)
+      }
     })
   }
 
@@ -1241,7 +1246,8 @@ if (import.meta.hot) {
       })
 
       if (!reloadResponse.ok) {
-        const errorMsg = `Component reload failed with status ${reloadResponse.status}`
+        const responseBody = await reloadResponse.text()
+        const errorMsg = `Component reload failed with status ${reloadResponse.status}: ${responseBody}`
         console.error('[rari] HMR:', errorMsg)
         throw new Error(errorMsg)
       }
@@ -1253,8 +1259,6 @@ if (import.meta.hot) {
         console.error('[rari] HMR:', errorMsg, result)
         throw new Error(errorMsg)
       }
-
-      await new Promise(resolve => setTimeout(resolve, 500))
     }
     catch (error) {
       console.error('[rari] HMR: Failed to reload component:', error)
@@ -1350,12 +1354,10 @@ if (import.meta.hot) {
           }),
         })
 
+        const responseBody = await invalidateResponse.text()
+
         if (!invalidateResponse.ok) {
-          await invalidateResponse.text()
-          console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status)
-        }
-        else {
-          await invalidateResponse.text()
+          console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status, responseBody)
         }
       }
       catch (error) {

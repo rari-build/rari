@@ -356,15 +356,7 @@ export async function renderApp(): Promise<void> {
 
         const ssrManifest = createSsrManifest()
 
-        try {
-          element = await createFromReadableStream(stream, ssrManifest)
-        }
-        catch (streamError) {
-          if (streamError instanceof Promise) {
-            console.warn('[rari] Suspense signal detected during stream processing, rethrowing')
-          }
-          throw streamError
-        }
+        element = await createFromReadableStream(stream, ssrManifest)
       }
       catch (e) {
         if (e instanceof Promise)
@@ -546,7 +538,7 @@ export async function renderApp(): Promise<void> {
   catch (error) {
     console.error('[rari] Error rendering app:', error)
     rootElement.innerHTML = `
-          <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
+      <div style="padding: 20px; background: #fee; border: 2px solid #f00; margin: 20px;">
         <h2>Error Loading App</h2>
         <p></p>
       </div>

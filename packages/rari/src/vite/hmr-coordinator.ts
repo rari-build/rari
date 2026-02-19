@@ -220,10 +220,10 @@ export class HMRCoordinator {
       }
 
       const responseText = await response.text()
-      let result: ServerResponse
+
+      let parsed: unknown
       try {
-        const parsed: unknown = JSON.parse(responseText)
-        result = parsed as ServerResponse
+        parsed = JSON.parse(responseText)
       }
       catch (parseError) {
         throw new Error(
@@ -232,12 +232,14 @@ export class HMRCoordinator {
         )
       }
 
-      if (!result || typeof result !== 'object') {
+      if (!parsed || typeof parsed !== 'object') {
         throw new Error(
-          `Invalid server response (status ${response.status}): expected object, got ${typeof result}. `
+          `Invalid server response (status ${response.status}): expected object, got ${typeof parsed}. `
           + `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
         )
       }
+
+      const result = parsed as ServerResponse
 
       if (!result.success) {
         throw new Error(result.message || result.error || 'Component reload failed')
