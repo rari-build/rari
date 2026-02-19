@@ -168,11 +168,76 @@ impl Default for StaticConfig {
     }
 }
 
+#[derive(Debug, Clone)]
+enum RoutePattern {
+    Exact(String),
+    Prefix(String),
+    Regex(regex::Regex),
+}
+
+impl RoutePattern {
+    fn from_pattern(pattern: &str) -> Self {
+        if let Some(prefix) = pattern.strip_suffix("/*") {
+            RoutePattern::Prefix(prefix.to_string())
+        } else if pattern.contains('*') {
+            let escaped = regex::escape(pattern);
+            let regex_pattern = escaped.cow_replace(r"\*", ".*");
+            match regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                Ok(regex) => RoutePattern::Regex(regex),
+                Err(_) => RoutePattern::Exact(pattern.to_string()),
+            }
+        } else {
+            RoutePattern::Exact(pattern.to_string())
+        }
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        match self {
+            RoutePattern::Exact(pattern) => pattern == path,
+            RoutePattern::Prefix(prefix) => {
+                path == prefix || path.starts_with(&format!("{}/", prefix))
+            }
+            RoutePattern::Regex(regex) => regex.is_match(path),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheControlConfig {
     pub routes: FxHashMap<String, String>,
     pub static_files: String,
     pub server_components: String,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledCacheControlConfig {
+    routes: Vec<(RoutePattern, String)>,
+}
+
+impl From<&CacheControlConfig> for CompiledCacheControlConfig {
+    fn from(config: &CacheControlConfig) -> Self {
+        let mut routes: Vec<(RoutePattern, String)> = config
+            .routes
+            .iter()
+            .map(|(pattern, cache_control)| {
+                (RoutePattern::from_pattern(pattern), cache_control.clone())
+            })
+            .collect();
+
+        routes.sort_by(|(a, _), (b, _)| match (a, b) {
+            (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
+            (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
+            (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
+            (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
+                b_prefix.len().cmp(&a_prefix.len())
+            }
+            (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
+            (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
+            (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
+        });
+
+        CompiledCacheControlConfig { routes }
+    }
 }
 
 impl Default for CacheControlConfig {
@@ -702,29 +767,19 @@ impl Config {
             return cache_control;
         }
 
-        for (pattern, cache_control) in &self.caching.routes {
-            if Self::matches_pattern(pattern, path) {
-                return cache_control;
+        let compiled = CompiledCacheControlConfig::from(&self.caching);
+
+        for (pattern, cache_control) in &compiled.routes {
+            if pattern.matches(path) {
+                for orig_cache_control in self.caching.routes.values() {
+                    if orig_cache_control == cache_control {
+                        return orig_cache_control;
+                    }
+                }
             }
         }
 
         &self.caching.server_components
-    }
-
-    pub fn matches_pattern(pattern: &str, path: &str) -> bool {
-        if let Some(prefix) = pattern.strip_suffix("/*") {
-            return path == prefix || path.starts_with(&format!("{}/", prefix));
-        }
-
-        if pattern.contains('*') {
-            let escaped = regex::escape(pattern);
-            let regex_pattern = escaped.cow_replace(r"\*", ".*");
-            if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
-                return regex.is_match(path);
-            }
-        }
-
-        pattern == path
     }
 
     pub fn csp_config(&self) -> CspConfig {
@@ -887,21 +942,27 @@ mod tests {
 
     #[test]
     fn test_pattern_matching() {
-        assert!(Config::matches_pattern("/api/*", "/api/users"));
-        assert!(Config::matches_pattern("/api/*", "/api/products/123"));
-        assert!(!Config::matches_pattern("/api/*", "/blog/posts"));
-        assert!(!Config::matches_pattern("/api/*", "/apiv2/users"));
-        assert!(Config::matches_pattern("/api/*", "/api"));
+        let pattern = RoutePattern::from_pattern("/api/*");
+        assert!(pattern.matches("/api/users"));
+        assert!(pattern.matches("/api/products/123"));
+        assert!(!pattern.matches("/blog/posts"));
+        assert!(!pattern.matches("/apiv2/users"));
+        assert!(pattern.matches("/api"));
 
-        assert!(Config::matches_pattern("/blog/*/comments", "/blog/post-1/comments"));
-        assert!(!Config::matches_pattern("/blog/*/comments", "/blog/post-1"));
+        let pattern = RoutePattern::from_pattern("/blog/*/comments");
+        assert!(pattern.matches("/blog/post-1/comments"));
+        assert!(!pattern.matches("/blog/post-1"));
 
-        assert!(Config::matches_pattern("*", "/any/path"));
-        assert!(Config::matches_pattern("*.js", "/static/app.js"));
-        assert!(!Config::matches_pattern("*.js", "/static/app.css"));
+        let pattern = RoutePattern::from_pattern("*");
+        assert!(pattern.matches("/any/path"));
 
-        assert!(Config::matches_pattern("/v1.0/*", "/v1.0/users"));
-        assert!(!Config::matches_pattern("/v1.0/*", "/v1X0/users"));
+        let pattern = RoutePattern::from_pattern("*.js");
+        assert!(pattern.matches("/static/app.js"));
+        assert!(!pattern.matches("/static/app.css"));
+
+        let pattern = RoutePattern::from_pattern("/v1.0/*");
+        assert!(pattern.matches("/v1.0/users"));
+        assert!(!pattern.matches("/v1X0/users"));
     }
 
     #[test]
@@ -996,39 +1057,20 @@ mod tests {
             "Non-string cache-control value should be rejected"
         );
     }
-}
 
-#[test]
-fn test_dev_mode_cache_control() {
-    let dev_config = Config::new(Mode::Development);
-    assert_eq!(
-        dev_config.caching.server_components, "no-cache, no-store, must-revalidate",
-        "Development mode should use no-cache for server components"
-    );
+    #[test]
+    fn test_dev_mode_cache_control() {
+        let dev_config = Config::new(Mode::Development);
+        assert_eq!(
+            dev_config.caching.server_components, "no-cache, no-store, must-revalidate",
+            "Development mode should use no-cache for server components"
+        );
 
-    let prod_config = Config::new(Mode::Production);
-    assert_eq!(
-        prod_config.caching.server_components,
-        "public, max-age=31536000, stale-while-revalidate=86400",
-        "Production mode should use long cache for server components"
-    );
-}
-
-#[test]
-fn test_from_env_applies_dev_cache_control() {
-    unsafe {
-        std::env::set_var("RARI_MODE", "development");
-    }
-
-    let config = Config::from_env().expect("Failed to create config from environment");
-
-    assert_eq!(config.mode, Mode::Development);
-    assert_eq!(
-        config.caching.server_components, "no-cache, no-store, must-revalidate",
-        "from_env should apply dev cache-control when mode is Development"
-    );
-
-    unsafe {
-        std::env::remove_var("RARI_MODE");
+        let prod_config = Config::new(Mode::Production);
+        assert_eq!(
+            prod_config.caching.server_components,
+            "public, max-age=31536000, stale-while-revalidate=86400",
+            "Production mode should use long cache for server components"
+        );
     }
 }

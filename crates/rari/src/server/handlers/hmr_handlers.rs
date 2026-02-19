@@ -72,6 +72,20 @@ pub async fn handle_hmr_action(
     }
 }
 
+async fn invalidate_component_cache(
+    cache: &crate::server::cache::response_cache::ResponseCache,
+    component_id: &str,
+) {
+    let cache_key_prefix = format!("/_rari/stream/{}", component_id);
+
+    let all_keys = cache.get_all_keys();
+    for key in all_keys {
+        if key.starts_with(&cache_key_prefix) {
+            cache.invalidate(&key).await;
+        }
+    }
+}
+
 async fn handle_register(state: ServerState, file_path: String) -> Result<Json<Value>, StatusCode> {
     use crate::server::utils::path_validation::{
         normalize_component_path, validate_component_path,
@@ -194,33 +208,23 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
 
     #[allow(clippy::disallowed_methods)]
     let response = if reloaded {
-        let cache_key_prefix = format!("/_rari/stream/{}", component_id);
-        state.response_cache.invalidate(&cache_key_prefix).await;
+        invalidate_component_cache(&state.response_cache, &component_id).await;
 
-        let all_keys = state.response_cache.get_all_keys();
-        for key in all_keys {
-            if key.starts_with(&cache_key_prefix) {
-                state.response_cache.invalidate(&key).await;
-            }
-        }
-
-        let route_cache_patterns = vec![
-            format!("/?"),
-            format!("/"),
+        let route_cache_patterns: Vec<String> = vec![
             file_path.replace("src/app/", "/").replace("/page.tsx", ""),
             file_path.replace("src/app/", "/").replace("/page.ts", ""),
-        ];
-
+        ]
+        .into_iter()
+        .filter(|p| p.len() > 1)
+        .collect();
         for pattern in route_cache_patterns {
             let all_keys = state.response_cache.get_all_keys();
             for key in all_keys {
-                if key.starts_with(&pattern) || key.contains(&pattern) {
+                if key.starts_with(&pattern) {
                     state.response_cache.invalidate(&key).await;
                 }
             }
         }
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         serde_json::json!({
             "success": true,
@@ -545,7 +549,7 @@ async fn handle_reload_component(
 
     let load_result = {
         let renderer = state.renderer.lock().await;
-        renderer.runtime.load_component_code(&component_id, bundle_code.clone()).await
+        renderer.runtime.load_component_code(&component_id, &bundle_code).await
     };
 
     match load_result {
@@ -569,15 +573,7 @@ async fn handle_reload_component(
                 registry.mark_component_initially_loaded(&component_id);
             }
 
-            let cache_key_prefix = format!("/_rari/stream/{}", component_id);
-            state.response_cache.invalidate(&cache_key_prefix).await;
-
-            let all_keys = state.response_cache.get_all_keys();
-            for key in all_keys {
-                if key.starts_with(&cache_key_prefix) {
-                    state.response_cache.invalidate(&key).await;
-                }
-            }
+            invalidate_component_cache(&state.response_cache, &component_id).await;
 
             #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({

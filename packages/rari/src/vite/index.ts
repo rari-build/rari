@@ -601,7 +601,6 @@ if (import.meta.hot) {
     return lastSegment.replace(EXTENSION_REGEX, '')
   }
 
-  const serverComponentBuilder: any = null
   let rustServerReady = false
 
   async function checkRustServerHealth(): Promise<boolean> {
@@ -628,6 +627,14 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      const rariServerPort = process.env.SERVER_PORT
+        ? Number(process.env.SERVER_PORT)
+        : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+      const serverUrl = `http://localhost:${rariServerPort}`
+
+      config.define = config.define || {}
+      config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
+
       if (command === 'build') {
         const projectRoot = options.projectRoot || process.cwd()
         const indexHtmlPath = path.join(projectRoot, 'index.html')
@@ -1166,6 +1173,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             rateLimit: options.rateLimit,
             spamBlocker: options.spamBlocker,
+            cacheControl: options.cacheControl,
           })
 
           serverComponentBuilder = builder
@@ -1421,6 +1429,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             rateLimit: options.rateLimit,
             spamBlocker: options.spamBlocker,
+            cacheControl: options.cacheControl,
           })
 
           builder.addServerComponent(filePath)
@@ -1965,26 +1974,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
 
       if (isAppRouterFile && isSpecialRouteFile) {
-        if (serverComponentBuilder && componentType === 'server') {
-          try {
-            await (serverComponentBuilder as any).rebuildComponent(file)
-          }
-          catch (error) {
-            console.error(`[rari] HMR: Failed to rebuild ${file}:`, error)
-          }
-        }
-
-        server.hot.send('rari:app-router-file-updated', {
-          filePath: file,
-          fileType: isPageFile ? 'page' : isLayoutFile ? 'layout' : isLoadingFile ? 'loading' : isErrorFile ? 'error' : 'not-found',
-          timestamp: Date.now(),
-        })
-
-        const mod = server.moduleGraph.getModuleById(file)
-        if (mod)
-          return [mod]
-
-        return []
+        return undefined
       }
 
       if (componentType === 'client')

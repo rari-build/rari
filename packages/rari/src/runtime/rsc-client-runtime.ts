@@ -1200,20 +1200,6 @@ if (import.meta.hot) {
     }
   })
 
-  registerHandler('rari:app-router-file-updated', async (data) => {
-    try {
-      if (!data || !data.filePath)
-        return
-
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      window.location.reload()
-    }
-    catch (error) {
-      console.error('[rari] HMR: App router file update failed:', error)
-    }
-  })
-
   registerHandler('rari:server-action-updated', async (data) => {
     if (data?.filePath) {
       rscClient.clearCache()
@@ -1240,9 +1226,7 @@ if (import.meta.hot) {
       updateDocumentMetadata(metadata)
 
     try {
-      const rariServerUrl = window.location.origin.includes(':5173')
-        ? 'http://localhost:3000'
-        : window.location.origin
+      const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
       const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       const reloadResponse = await fetch(reloadUrl, {
@@ -1257,21 +1241,24 @@ if (import.meta.hot) {
       })
 
       if (!reloadResponse.ok) {
-        console.error('[rari] HMR: Component reload failed:', reloadResponse.status)
+        const errorMsg = `Component reload failed with status ${reloadResponse.status}`
+        console.error('[rari] HMR:', errorMsg)
+        throw new Error(errorMsg)
       }
-      else {
-        const result = await reloadResponse.json()
 
-        if (result.success === false || result.reloaded === false) {
-          console.warn('[rari] HMR: Component reload had issues, waiting longer...')
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        }
+      const result = await reloadResponse.json()
+
+      if (result.success === false || result.reloaded === false) {
+        const errorMsg = `Component reload unsuccessful: ${result.error || 'unknown error'}`
+        console.error('[rari] HMR:', errorMsg, result)
+        throw new Error(errorMsg)
       }
 
       await new Promise(resolve => setTimeout(resolve, 500))
     }
     catch (error) {
       console.error('[rari] HMR: Failed to reload component:', error)
+      return
     }
 
     let routes = [routePath]
@@ -1347,9 +1334,7 @@ if (import.meta.hot) {
 
     if (componentId || filePath) {
       try {
-        const rariServerUrl = window.location.origin.includes(':5173')
-          ? 'http://localhost:3000'
-          : window.location.origin
+        const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
 
         const invalidateUrl = `${rariServerUrl}/_rari/hmr`
 
@@ -1433,20 +1418,34 @@ if (import.meta.hot) {
     }
   }
 
-  hmrListenersReady = true
-
   if (bufferedEvents.length > 0) {
     const eventsToReplay = [...bufferedEvents]
     bufferedEvents.length = 0
 
-    void (async () => {
-      for (const { event, data } of eventsToReplay) {
-        const handler = handlers.get(event)
-        if (handler) {
-          await handler(data)
+    ;(async () => {
+      try {
+        for (const { event, data } of eventsToReplay) {
+          const handler = handlers.get(event)
+          if (handler) {
+            try {
+              await handler(data)
+            }
+            catch (error) {
+              console.error(`[rari] HMR: Error replaying buffered event '${event}':`, error)
+            }
+          }
         }
       }
+      catch (error) {
+        console.error('[rari] HMR: Error during event replay:', error)
+      }
+      finally {
+        hmrListenersReady = true
+      }
     })()
+  }
+  else {
+    hmrListenersReady = true
   }
 }
 

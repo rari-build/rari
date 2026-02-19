@@ -337,16 +337,14 @@ export async function renderApp(): Promise<void> {
       try {
         const currentPath = window.location.pathname + window.location.search
 
-        const rscServerUrl = window.location.origin.includes(':5173')
-          ? 'http://localhost:3000'
+        const rscServerUrl = import.meta.env.DEV && window.location.port === '5173'
+          ? `http://localhost:${import.meta.env.VITE_RSC_PORT ?? 3000}`
           : window.location.origin
         const fetchUrl = rscServerUrl + currentPath
 
         const response = await fetch(fetchUrl, {
           headers: {
-            'Accept': 'text/x-component',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
+            Accept: 'text/x-component',
           },
           cache: 'no-store',
         })
@@ -362,15 +360,34 @@ export async function renderApp(): Promise<void> {
           element = await createFromReadableStream(stream, ssrManifest)
         }
         catch (streamError) {
-          if (streamError && typeof streamError === 'object' && streamError instanceof Promise)
-            element = null
-          else
+          if (streamError instanceof Promise) {
+            console.warn('[rari] Suspense signal detected during stream processing, rethrowing')
             throw streamError
+          }
+          throw streamError
         }
       }
       catch (e) {
         console.error('[rari] Failed to fetch initial RSC data:', e)
-        console.error('[rari] Error stack:', (e as Error).stack)
+
+        if (e instanceof Error && e.stack) {
+          console.error('[rari] Error stack:', e.stack)
+        }
+        else if (typeof e === 'string') {
+          console.error('[rari] Error details:', e)
+        }
+        else if (e && typeof e === 'object') {
+          try {
+            console.error('[rari] Error details:', JSON.stringify(e, null, 2))
+          }
+          catch {
+            console.error('[rari] Error details:', String(e))
+          }
+        }
+        else {
+          console.error('[rari] Error details:', String(e))
+        }
+
         element = null
       }
     }

@@ -514,9 +514,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const fetchPromise = (async () => {
       try {
-        const rariServerUrl = window.location.origin.includes(':5173')
-          ? 'http://localhost:3000'
-          : window.location.origin
+        const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
 
         const url = rariServerUrl + pathToFetch + window.location.search
 

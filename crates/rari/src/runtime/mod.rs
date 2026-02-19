@@ -1,8 +1,9 @@
 use crate::error::RariError;
 use cow_utils::CowUtils;
 use deno_error::JsErrorBox as JsError;
+use regex::Regex;
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -27,6 +28,22 @@ impl Default for JsExecutionRuntime {
     fn default() -> Self {
         Self::new(None)
     }
+}
+
+fn escape_js_string(s: &str) -> String {
+    s.cow_replace('\\', "\\\\")
+        .cow_replace('"', r#"\""#)
+        .cow_replace('\n', "\\n")
+        .cow_replace('\r', "\\r")
+        .into_owned()
+}
+
+fn is_esm_code(code: &str) -> bool {
+    static ESM_REGEX: OnceLock<Regex> = OnceLock::new();
+    let regex = ESM_REGEX
+        .get_or_init(|| Regex::new(r"(?m)^\s*export[\s{]").expect("Valid ESM detection regex"));
+
+    regex.is_match(code)
 }
 
 impl JsExecutionRuntime {
@@ -320,12 +337,7 @@ impl JsExecutionRuntime {
     }
 
     pub async fn invalidate_component(&self, component_id: &str) -> Result<(), RariError> {
-        let escaped_component_id = component_id
-            .cow_replace('\\', "\\\\")
-            .cow_replace('"', r#"\""#)
-            .cow_replace('\n', "\\n")
-            .cow_replace('\r', "\\r")
-            .into_owned();
+        let escaped_component_id = escape_js_string(component_id);
 
         let script = format!(
             r#"
@@ -405,19 +417,15 @@ impl JsExecutionRuntime {
             RariError::io(error_msg)
         })?;
 
-        self.load_component_code(component_id, component_code).await
+        self.load_component_code(component_id, &component_code).await
     }
 
     pub async fn load_component_code(
         &self,
         component_id: &str,
-        component_code: String,
+        component_code: &str,
     ) -> Result<(), RariError> {
-        let is_esm = component_code.contains("export ")
-            || component_code.contains("export{")
-            || component_code.contains("export {")
-            || component_code.contains("export\n")
-            || component_code.contains("export\r");
+        let is_esm = is_esm_code(component_code);
 
         if is_esm {
             let timestamp = std::time::SystemTime::now()
@@ -432,16 +440,16 @@ impl JsExecutionRuntime {
                 tracing::warn!("Failed to clear module loader caches for {}: {}", component_id, e);
             }
 
-            self.add_module_to_loader_only(&hmr_specifier, component_code.clone()).await.map_err(
-                |e| {
+            self.add_module_to_loader_only(&hmr_specifier, component_code.to_string())
+                .await
+                .map_err(|e| {
                     let error_msg = format!(
                         "Failed to add component module to loader for {}: {}",
                         component_id, e
                     );
                     tracing::error!("{}", error_msg);
                     RariError::js_execution(error_msg)
-                },
-            )?;
+                })?;
 
             let module_id = self.load_es_module(&hmr_specifier).await.map_err(|e| {
                 let error_msg = format!("Failed to load ES module for {}: {}", component_id, e);
@@ -455,6 +463,9 @@ impl JsExecutionRuntime {
                 RariError::js_execution(error_msg)
             })?;
 
+            let escaped_component_id = escape_js_string(component_id);
+            let escaped_hmr_specifier = escape_js_string(&hmr_specifier);
+
             let registration_script = format!(
                 r#"(async function() {{
                     try {{
@@ -463,6 +474,8 @@ impl JsExecutionRuntime {
 
                         if (!globalThis['~rsc']) globalThis['~rsc'] = {{}};
                         if (!globalThis['~rsc'].modules) globalThis['~rsc'].modules = {{}};
+                        if (!globalThis['~rsc'].functions) globalThis['~rsc'].functions = {{}};
+
                         globalThis['~rsc'].modules[componentId] = moduleNamespace;
 
                         if (moduleNamespace.default) {{
@@ -474,10 +487,15 @@ impl JsExecutionRuntime {
                             }}
                         }}
 
+                        const namedExports = {{}};
                         for (const [key, value] of Object.entries(moduleNamespace)) {{
                             if (key !== 'default' && typeof value === 'function') {{
-                                globalThis[key] = value;
+                                namedExports[key] = value;
                             }}
+                        }}
+
+                        if (Object.keys(namedExports).length > 0) {{
+                            globalThis['~rsc'].functions[componentId] = namedExports;
                         }}
 
                         return {{ success: true }};
@@ -486,7 +504,7 @@ impl JsExecutionRuntime {
                         return {{ success: false, error: error.message }};
                     }}
                 }})()"#,
-                hmr_specifier, component_id, component_id
+                escaped_hmr_specifier, escaped_component_id, escaped_component_id
             );
 
             let result = self
@@ -504,9 +522,9 @@ impl JsExecutionRuntime {
                     RariError::js_execution(error_msg)
                 })?;
 
-            if let Some(success) = result.get("success").and_then(|v| v.as_bool())
-                && !success
-            {
+            let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if !success {
                 let error_msg =
                     result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
                 tracing::error!(
@@ -523,7 +541,7 @@ impl JsExecutionRuntime {
             Ok(())
         } else {
             let script_name = format!("load_component_{}", component_id.cow_replace('/', "_"));
-            match self.execute_script(script_name, component_code).await {
+            match self.execute_script(script_name, component_code.to_string()).await {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     let error_msg =
