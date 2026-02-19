@@ -216,7 +216,7 @@ export class HMRCoordinator {
         success: boolean
         message?: string
         error?: string
-        data?: any
+        data?: unknown
       }
 
       const responseText = await response.text()

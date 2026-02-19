@@ -338,7 +338,7 @@ export async function renderApp(): Promise<void> {
         const currentPath = window.location.pathname + window.location.search
 
         const rscServerUrl = import.meta.env.DEV
-          ? `http://localhost:${import.meta.env.VITE_RSC_PORT || '3000'}`
+          ? (import.meta.env.RARI_SERVER_URL || `http://localhost:${import.meta.env.VITE_RSC_PORT || '3000'}`)
           : window.location.origin
         const fetchUrl = rscServerUrl + currentPath
 

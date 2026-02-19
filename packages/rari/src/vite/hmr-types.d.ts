@@ -3,7 +3,7 @@
 interface ImportMetaEnv {
   readonly RARI_SERVER_URL?: string
   readonly VITE_RSC_PORT?: string
-  readonly DEV?: boolean
+  readonly DEV: boolean
 }
 
 interface ImportMetaHot {

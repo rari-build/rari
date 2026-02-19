@@ -1190,7 +1190,7 @@ if (import.meta.hot) {
       if (!data)
         return
 
-      if (!data.routePath && !data.affectedRoutes)
+      if (!data.routePath && (!data.affectedRoutes || data.affectedRoutes.length === 0))
         return
 
       await handleAppRouterUpdate(data)
@@ -1351,6 +1351,7 @@ if (import.meta.hot) {
         })
 
         if (!invalidateResponse.ok) {
+          await invalidateResponse.text()
           console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status)
         }
         else {

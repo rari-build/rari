@@ -633,7 +633,21 @@ if (import.meta.hot) {
         const rariServerPort = process.env.SERVER_PORT
           ? Number(process.env.SERVER_PORT)
           : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-        const serverUrl = process.env.RARI_SERVER_URL || `http://localhost:${rariServerPort}`
+
+        let serverUrl: string
+        if (process.env.RARI_SERVER_URL) {
+          serverUrl = process.env.RARI_SERVER_URL
+        }
+        else if (process.env.RARI_HOST) {
+          const host = process.env.RARI_HOST.startsWith('http')
+            ? process.env.RARI_HOST
+            : `http://${process.env.RARI_HOST}`
+          serverUrl = host.includes(':') ? host : `${host}:${rariServerPort}`
+        }
+        else {
+          serverUrl = `http://localhost:${rariServerPort}`
+        }
+
         config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
       }
 
