@@ -14,6 +14,15 @@ import {
 import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
+function resolveRariServerUrl(): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
+    return import.meta.env.RARI_SERVER_URL
+  if (typeof window !== 'undefined')
+    return window.location.origin
+
+  return 'http://localhost:3000'
+}
+
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
@@ -378,8 +387,11 @@ class RscClient {
       const list = ['/_rari/stream']
       try {
         const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        if (isLocalHost)
-          list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
+        if (isLocalHost) {
+          const serverUrl = resolveRariServerUrl()
+          if (serverUrl)
+            list.push(`${serverUrl}/_rari/stream`)
+        }
       }
       catch { }
 
@@ -1127,10 +1139,6 @@ if (import.meta.hot) {
   const bufferedEvents: Array<{ event: string, data: any }> = []
   const handlers = new Map<string, (data: any) => void | Promise<void>>()
 
-  function resolveRariServerUrl(): string {
-    return import.meta.env.RARI_SERVER_URL || window.location.origin
-  }
-
   function registerHandler(event: string, handler: (data: any) => void | Promise<void>) {
     handlers.set(event, handler)
     import.meta.hot!.on(event, async (data) => {
@@ -1257,6 +1265,12 @@ if (import.meta.hot) {
       }
 
       const result = await reloadResponse.json()
+
+      if (result == null || typeof result !== 'object') {
+        const errorMsg = 'Invalid reload response: null or non-object'
+        console.error('[rari] HMR:', errorMsg, result)
+        throw new Error(errorMsg)
+      }
 
       if (result.success !== true && result.reloaded !== true) {
         const errorMsg = `Component reload unsuccessful: ${result.error || 'unknown error'}`
