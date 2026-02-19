@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
-import { NUMERIC_REGEX } from '../shared/regex-constants'
+import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
@@ -514,7 +514,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const fetchPromise = (async () => {
       try {
-        const rariServerUrl = import.meta.env.RARI_SERVER_URL || window.location.origin
+        const rariServerUrl = (import.meta.env.RARI_SERVER_URL || window.location.origin).replace(PATH_TRAILING_SLASH_REGEX, '')
 
         const url = rariServerUrl + pathToFetch + window.location.search
 

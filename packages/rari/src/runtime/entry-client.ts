@@ -337,8 +337,8 @@ export async function renderApp(): Promise<void> {
       try {
         const currentPath = window.location.pathname + window.location.search
 
-        const rscServerUrl = import.meta.env.DEV && window.location.port === '5173'
-          ? `http://localhost:${import.meta.env.VITE_RSC_PORT ?? 3000}`
+        const rscServerUrl = import.meta.env.DEV
+          ? `http://localhost:${import.meta.env.VITE_RSC_PORT || '3000'}`
           : window.location.origin
         const fetchUrl = rscServerUrl + currentPath
 
@@ -362,23 +362,33 @@ export async function renderApp(): Promise<void> {
         catch (streamError) {
           if (streamError instanceof Promise) {
             console.warn('[rari] Suspense signal detected during stream processing, rethrowing')
-            throw streamError
           }
           throw streamError
         }
       }
       catch (e) {
+        if (e instanceof Promise)
+          throw e
+
         console.error('[rari] Failed to fetch initial RSC data:', e)
 
-        if (e instanceof Error && e.stack) {
-          console.error('[rari] Error stack:', e.stack)
+        if (e instanceof Error) {
+          console.error('[rari] Error name:', e.name)
+          console.error('[rari] Error message:', e.message)
+          if (e.stack) {
+            console.error('[rari] Error stack:', e.stack)
+          }
         }
         else if (typeof e === 'string') {
           console.error('[rari] Error details:', e)
         }
         else if (e && typeof e === 'object') {
           try {
-            console.error('[rari] Error details:', JSON.stringify(e, null, 2))
+            const errorDetails: any = {}
+            for (const key of Object.getOwnPropertyNames(e)) {
+              errorDetails[key] = (e as any)[key]
+            }
+            console.error('[rari] Error details:', JSON.stringify(errorDetails, null, 2))
           }
           catch {
             console.error('[rari] Error details:', String(e))

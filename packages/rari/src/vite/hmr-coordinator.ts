@@ -212,10 +212,18 @@ export class HMRCoordinator {
         throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
+      interface ServerResponse {
+        success: boolean
+        message?: string
+        error?: string
+        data?: any
+      }
+
       const responseText = await response.text()
-      let result: any
+      let result: ServerResponse
       try {
-        result = JSON.parse(responseText)
+        const parsed: unknown = JSON.parse(responseText)
+        result = parsed as ServerResponse
       }
       catch (parseError) {
         throw new Error(

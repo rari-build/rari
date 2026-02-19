@@ -562,15 +562,27 @@ async fn handle_reload_component(
 
                 let dependencies =
                     crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
-                let _ = registry.register_component(
+
+                match registry.register_component(
                     &component_id,
                     &bundle_code,
                     bundle_code.clone(),
                     dependencies.into_iter().collect(),
-                );
-
-                registry.mark_component_loaded(&component_id);
-                registry.mark_component_initially_loaded(&component_id);
+                ) {
+                    Ok(()) => {
+                        registry.mark_component_loaded(&component_id);
+                        registry.mark_component_initially_loaded(&component_id);
+                    }
+                    Err(e) => {
+                        error!("Failed to register component {}: {}", component_id, e);
+                        registry.remove_component(&component_id);
+                        #[allow(clippy::disallowed_methods)]
+                        return Ok(Json(serde_json::json!({
+                            "success": false,
+                            "message": format!("Failed to register component: {}", e)
+                        })));
+                    }
+                }
             }
 
             invalidate_component_cache(&state.response_cache, &component_id).await;

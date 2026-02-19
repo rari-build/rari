@@ -83,6 +83,10 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
       return await inflightPromise
     }
     catch (error) {
+      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+
       if (!error.message || !error.message.includes('Promise not found'))
         console.error('[rari] Error resolving lazy promise:', error)
 

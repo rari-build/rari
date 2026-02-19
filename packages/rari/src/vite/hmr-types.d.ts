@@ -1,5 +1,11 @@
 /// <reference types="rolldown-vite/client" />
 
+interface ImportMetaEnv {
+  readonly RARI_SERVER_URL?: string
+  readonly VITE_RSC_PORT?: string
+  readonly DEV?: boolean
+}
+
 interface ImportMetaHot {
   on: <T = any>(event: string, callback: (data: T) => void) => void
   off: <T = any>(event: string, callback: (data: T) => void) => void
@@ -13,4 +19,5 @@ interface ImportMetaHot {
 
 interface ImportMeta {
   readonly hot?: ImportMetaHot
+  readonly env: ImportMetaEnv
 }

@@ -627,13 +627,15 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
-      const rariServerPort = process.env.SERVER_PORT
-        ? Number(process.env.SERVER_PORT)
-        : Number(process.env.PORT || process.env.RSC_PORT || 3000)
-      const serverUrl = `http://localhost:${rariServerPort}`
-
       config.define = config.define || {}
-      config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
+
+      if (command === 'serve' || process.env.RARI_SERVER_URL || process.env.RARI_HOST) {
+        const rariServerPort = process.env.SERVER_PORT
+          ? Number(process.env.SERVER_PORT)
+          : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+        const serverUrl = process.env.RARI_SERVER_URL || `http://localhost:${rariServerPort}`
+        config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
+      }
 
       if (command === 'build') {
         const projectRoot = options.projectRoot || process.cwd()

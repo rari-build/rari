@@ -1419,19 +1419,21 @@ if (import.meta.hot) {
   }
 
   if (bufferedEvents.length > 0) {
-    const eventsToReplay = [...bufferedEvents]
-    bufferedEvents.length = 0
-
     ;(async () => {
       try {
-        for (const { event, data } of eventsToReplay) {
-          const handler = handlers.get(event)
-          if (handler) {
-            try {
-              await handler(data)
-            }
-            catch (error) {
-              console.error(`[rari] HMR: Error replaying buffered event '${event}':`, error)
+        while (bufferedEvents.length > 0) {
+          const eventsToReplay = [...bufferedEvents]
+          bufferedEvents.length = 0
+
+          for (const { event, data } of eventsToReplay) {
+            const handler = handlers.get(event)
+            if (handler) {
+              try {
+                await handler(data)
+              }
+              catch (error) {
+                console.error(`[rari] HMR: Error replaying buffered event '${event}':`, error)
+              }
             }
           }
         }
