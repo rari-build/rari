@@ -1,4 +1,5 @@
 use cow_utils::CowUtils;
+use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -555,7 +556,15 @@ impl Config {
             {
                 for (route, cache_value) in routes {
                     if let Some(cache_str) = cache_value.as_str() {
-                        config.caching.routes.insert(route.clone(), cache_str.to_string());
+                        if HeaderValue::from_str(cache_str).is_ok() {
+                            config.caching.routes.insert(route.clone(), cache_str.to_string());
+                        } else {
+                            tracing::warn!(
+                                "Invalid cache-control value for route {}: {}",
+                                route,
+                                cache_str
+                            );
+                        }
                     }
                 }
             }
