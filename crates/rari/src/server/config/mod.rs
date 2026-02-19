@@ -312,6 +312,10 @@ impl Config {
     }
 
     pub fn from_env() -> Result<Self, ConfigError> {
+        Self::from_env_with_base(None)
+    }
+
+    pub fn from_env_with_base(base: Option<&std::path::Path>) -> Result<Self, ConfigError> {
         let mut config = Self::default();
 
         if let Ok(mode_str) = std::env::var("RARI_MODE") {
@@ -462,7 +466,12 @@ impl Config {
                 })?;
         }
 
-        if let Ok(server_config_json) = std::fs::read_to_string("dist/server/config.json") {
+        let config_path = match base {
+            Some(b) => b.join("dist/server/config.json"),
+            None => PathBuf::from("dist/server/config.json"),
+        };
+
+        if let Ok(server_config_json) = std::fs::read_to_string(&config_path) {
             let config_data = match serde_json::from_str::<serde_json::Value>(&server_config_json) {
                 Ok(data) => data,
                 Err(e) => {
@@ -692,11 +701,12 @@ impl Config {
 
     pub fn matches_pattern(pattern: &str, path: &str) -> bool {
         if let Some(prefix) = pattern.strip_suffix("/*") {
-            return path.starts_with(prefix);
+            return path == prefix || path.starts_with(&format!("{}/", prefix));
         }
 
         if pattern.contains('*') {
-            let regex_pattern = pattern.cow_replace("*", ".*").cow_replace("/", "\\/").into_owned();
+            let escaped = regex::escape(pattern);
+            let regex_pattern = escaped.cow_replace(r"\*", ".*");
             if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
                 return regex.is_match(path);
             }
@@ -868,6 +878,8 @@ mod tests {
         assert!(Config::matches_pattern("/api/*", "/api/users"));
         assert!(Config::matches_pattern("/api/*", "/api/products/123"));
         assert!(!Config::matches_pattern("/api/*", "/blog/posts"));
+        assert!(!Config::matches_pattern("/api/*", "/apiv2/users"));
+        assert!(Config::matches_pattern("/api/*", "/api"));
 
         assert!(Config::matches_pattern("/blog/*/comments", "/blog/post-1/comments"));
         assert!(!Config::matches_pattern("/blog/*/comments", "/blog/post-1"));
@@ -875,6 +887,9 @@ mod tests {
         assert!(Config::matches_pattern("*", "/any/path"));
         assert!(Config::matches_pattern("*.js", "/static/app.js"));
         assert!(!Config::matches_pattern("*.js", "/static/app.css"));
+
+        assert!(Config::matches_pattern("/v1.0/*", "/v1.0/users"));
+        assert!(!Config::matches_pattern("/v1.0/*", "/v1X0/users"));
     }
 
     #[test]
@@ -948,12 +963,7 @@ mod tests {
         let mut file = std::fs::File::create(&config_path).unwrap();
         file.write_all(config_json.to_string().as_bytes()).unwrap();
 
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&temp_dir).unwrap();
-
-        let result = Config::from_env();
-
-        std::env::set_current_dir(&original_dir).unwrap();
+        let result = Config::from_env_with_base(Some(&temp_dir));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
 
