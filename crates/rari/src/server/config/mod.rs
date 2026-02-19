@@ -560,11 +560,17 @@ impl Config {
                             config.caching.routes.insert(route.clone(), cache_str.to_string());
                         } else {
                             tracing::warn!(
-                                "Invalid cache-control value for route {}: {}",
+                                "Invalid cache-control header value for route '{}': '{}' (contains invalid characters)",
                                 route,
                                 cache_str
                             );
                         }
+                    } else {
+                        tracing::warn!(
+                            "Invalid cache-control value type for route '{}': expected string, got {:?}",
+                            route,
+                            cache_value
+                        );
                     }
                 }
             }
@@ -918,5 +924,54 @@ mod tests {
         assert_eq!(streaming_config.enabled, deserialized.enabled);
         assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
         assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
+    }
+
+    #[test]
+    fn test_config_from_env_cache_control_validation() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join(format!("rari_test_{}", std::process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        std::fs::create_dir_all(&dist_server_dir).unwrap();
+
+        let config_json = serde_json::json!({
+            "cacheControl": {
+                "routes": {
+                    "/valid": "public, max-age=3600",
+                    "/invalid-newline": "public\nmax-age=3600",
+                    "/invalid-type": 12345
+                }
+            }
+        });
+
+        let config_path = dist_server_dir.join("config.json");
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(config_json.to_string().as_bytes()).unwrap();
+
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&temp_dir).unwrap();
+
+        let result = Config::from_env();
+
+        std::env::set_current_dir(&original_dir).unwrap();
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let config = result.unwrap();
+
+        assert!(
+            config.caching.routes.contains_key("/valid"),
+            "Valid cache-control route should be accepted"
+        );
+        assert_eq!(config.caching.routes.get("/valid").unwrap(), "public, max-age=3600");
+
+        assert!(
+            !config.caching.routes.contains_key("/invalid-newline"),
+            "Cache-control with newline should be rejected by HeaderValue::from_str"
+        );
+        assert!(
+            !config.caching.routes.contains_key("/invalid-type"),
+            "Non-string cache-control value should be rejected"
+        );
     }
 }
