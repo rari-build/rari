@@ -4,7 +4,6 @@ use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
 use crate::server::cache::response_cache;
 use crate::server::config::Config;
-use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
 };
@@ -327,7 +326,7 @@ pub async fn render_rsc_navigation_streaming(
 }
 
 async fn render_rsc_streaming_response(
-    _state: Arc<ServerState>,
+    state: Arc<ServerState>,
     _route_match: crate::server::routing::AppRouteMatch,
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     mut rsc_stream: crate::rsc::rendering::streaming::stream::RscStream,
@@ -357,13 +356,14 @@ async fn render_rsc_streaming_response(
     let compressed_stream = compress_stream(rsc_wire_stream, encoding);
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
         .status(status_code)
         .header("content-type", "text/x-component")
         .header("transfer-encoding", "chunked")
         .header("x-render-mode", "streaming")
-        .header("cache-control", "no-cache")
+        .header("cache-control", cache_control)
         .header("x-content-type-options", "nosniff");
 
     if let Some(encoding_header) = encoding.as_header_value() {
@@ -571,13 +571,14 @@ async fn render_streaming_response(
     let compressed_stream = compress_stream(html_stream, encoding);
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    let cache_control = state.config.get_cache_control_for_route(&context.pathname);
 
     let mut response_builder = Response::builder()
         .status(status_code)
         .header("content-type", "text/html; charset=utf-8")
         .header("transfer-encoding", "chunked")
         .header("x-content-type-options", "nosniff")
-        .header("cache-control", "no-cache");
+        .header("cache-control", cache_control);
 
     if let Some(encoding_header) = encoding.as_header_value() {
         response_builder = response_builder.header("content-encoding", encoding_header);
@@ -1256,41 +1257,16 @@ pub async fn handle_app_route(
                 .header("etag", &etag)
                 .header("x-cache", "MISS");
 
-            let page_configs = state.page_cache_configs.read().await;
-            let mut cache_control_value = None;
+            let cache_control_value = state.config.get_cache_control_for_route(path);
             let mut response_headers = axum::http::HeaderMap::new();
 
-            if let Some(page_cache_config) =
-                CacheLoader::find_matching_cache_config(&page_configs, path)
-            {
-                for (key, value) in page_cache_config {
-                    let header_name = key.cow_to_lowercase();
-                    response_builder = response_builder.header(header_name.as_ref(), value);
-
-                    if header_name == "cache-control" {
-                        cache_control_value = Some(value.clone());
-                    }
-
-                    if let Ok(header_name) =
-                        axum::http::HeaderName::from_bytes(header_name.as_bytes())
-                        && let Ok(header_value) = axum::http::HeaderValue::from_str(value)
-                    {
-                        response_headers.insert(header_name, header_value);
-                    }
-                }
+            response_builder = response_builder.header("cache-control", cache_control_value);
+            if let Ok(header_value) = axum::http::HeaderValue::from_str(cache_control_value) {
+                response_headers.insert(axum::http::header::CACHE_CONTROL, header_value);
             }
 
-            let cache_policy = if let Some(cc) = cache_control_value.as_deref() {
-                response_cache::RouteCachePolicy::from_cache_control(cc, path)
-            } else {
-                let mut policy = response_cache::RouteCachePolicy {
-                    ttl: state.response_cache.config.default_ttl,
-                    ..Default::default()
-                };
-                policy.tags.push(path.to_string());
-
-                policy
-            };
+            let cache_policy =
+                response_cache::RouteCachePolicy::from_cache_control(cache_control_value, path);
 
             if cache_policy.enabled {
                 let cached_response = response_cache::CachedResponse {

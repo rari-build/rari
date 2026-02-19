@@ -549,6 +549,16 @@ impl Config {
             {
                 config.spam_blocker.enabled = enabled;
             }
+
+            if let Some(cache_control_data) = config_data.get("cacheControl")
+                && let Some(routes) = cache_control_data.get("routes").and_then(|v| v.as_object())
+            {
+                for (route, cache_value) in routes {
+                    if let Some(cache_str) = cache_value.as_str() {
+                        config.caching.routes.insert(route.clone(), cache_str.to_string());
+                    }
+                }
+            }
         } else {
             tracing::debug!("No dist/server/config.json found, using defaults");
         }

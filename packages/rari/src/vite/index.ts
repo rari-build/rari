@@ -98,6 +98,9 @@ interface RariOptions {
   spamBlocker?: {
     enabled?: boolean
   }
+  cacheControl?: {
+    routes: Record<string, string>
+  }
 }
 
 const DEFAULT_IMAGE_CONFIG = {
@@ -2041,6 +2044,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
     csp: options.csp,
     rateLimit: options.rateLimit,
     spamBlocker: options.spamBlocker,
+    cacheControl: options.cacheControl,
   })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]

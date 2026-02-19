@@ -1,6 +1,5 @@
 use crate::server::ServerState;
 use crate::server::config::Config;
-use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::utils::http_utils::get_content_type;
 use axum::{
     body::Body,
@@ -8,10 +7,9 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use cow_utils::CowUtils;
 use tracing::error;
 
-pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, StatusCode> {
+pub async fn root_handler(State(_state): State<ServerState>) -> Result<Response, StatusCode> {
     let config = match Config::get() {
         Some(config) => config,
         None => {
@@ -24,17 +22,10 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
     if index_path.exists() {
         match std::fs::read_to_string(&index_path) {
             Ok(content) => {
-                let mut response_builder = Response::builder().header("content-type", "text/html");
-
-                let page_configs = state.page_cache_configs.read().await;
-                if let Some(page_cache_config) =
-                    CacheLoader::find_matching_cache_config(&page_configs, "/")
-                {
-                    for (key, value) in page_cache_config {
-                        response_builder =
-                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
-                    }
-                }
+                let cache_control = config.get_cache_control_for_route("/");
+                let response_builder = Response::builder()
+                    .header("content-type", "text/html")
+                    .header("cache-control", cache_control);
 
                 return Ok(response_builder
                     .body(Body::from(content))
@@ -50,7 +41,7 @@ pub async fn root_handler(State(state): State<ServerState>) -> Result<Response, 
 }
 
 pub async fn static_or_spa_handler(
-    State(state): State<ServerState>,
+    State(_state): State<ServerState>,
     Path(path): Path<String>,
 ) -> Result<Response, StatusCode> {
     use crate::server::utils::path_validation::validate_safe_path;
@@ -105,17 +96,10 @@ pub async fn static_or_spa_handler(
     if index_path.exists() {
         match std::fs::read_to_string(&index_path) {
             Ok(content) => {
-                let mut response_builder = Response::builder().header("content-type", "text/html");
-
-                let page_configs = state.page_cache_configs.read().await;
-                if let Some(page_cache_config) =
-                    CacheLoader::find_matching_cache_config(&page_configs, route_path)
-                {
-                    for (key, value) in page_cache_config {
-                        response_builder =
-                            response_builder.header(key.cow_to_lowercase().as_ref(), value);
-                    }
-                }
+                let cache_control = config.get_cache_control_for_route(route_path);
+                let response_builder = Response::builder()
+                    .header("content-type", "text/html")
+                    .header("cache-control", cache_control);
 
                 return Ok(response_builder
                     .body(Body::from(content))

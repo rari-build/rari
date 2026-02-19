@@ -1,5 +1,5 @@
 import type { Plugin } from 'rolldown-vite'
-import type { ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
+import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -61,6 +61,7 @@ export interface ServerBuildOptions {
   csp?: ServerCSPConfig
   rateLimit?: ServerRateLimitConfig
   spamBlocker?: ServerSpamBlockerConfig
+  cacheControl?: ServerCacheControlConfig
 }
 
 export interface ComponentRebuildResult {
@@ -70,11 +71,12 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'define' | 'serverConfigPath'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'cacheControl' | 'define' | 'serverConfigPath'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
   rateLimit?: ServerBuildOptions['rateLimit']
   spamBlocker?: ServerBuildOptions['spamBlocker']
+  cacheControl?: ServerBuildOptions['cacheControl']
   define?: ServerBuildOptions['define']
 }
 
@@ -129,6 +131,7 @@ export class ServerComponentBuilder {
       csp: options.csp,
       rateLimit: options.rateLimit,
       spamBlocker: options.spamBlocker,
+      cacheControl: options.cacheControl,
     }
 
     this.parseHtmlImports()
@@ -1136,6 +1139,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       serverConfig.rateLimit = this.options.rateLimit
     if (this.options.spamBlocker)
       serverConfig.spamBlocker = this.options.spamBlocker
+    if (this.options.cacheControl)
+      serverConfig.cacheControl = this.options.cacheControl
 
     const serverConfigPath = path.join(
       this.options.outDir,
