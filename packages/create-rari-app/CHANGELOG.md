@@ -1,3 +1,8 @@
+## [create-rari-app@0.4.12] - 2026-02-18
+
+### 💼 Other
+
+- Create-rari-app@0.4.12
 ## [create-rari-app@0.4.11] - 2026-02-17
 
 ### 🚀 Features
