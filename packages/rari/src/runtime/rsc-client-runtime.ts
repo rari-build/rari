@@ -14,11 +14,20 @@ import {
 import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
 
+function resolveRariServerUrl(): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
+    return import.meta.env.RARI_SERVER_URL
+  if (typeof window !== 'undefined')
+    return window.location.origin
+
+  return 'http://localhost:3000'
+}
+
 if (typeof (globalThis as unknown as GlobalWithRari)['~rari'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~rari'] = {}
 
 // eslint-disable-next-line node/prefer-global/process
-;(globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
+; (globalThis as unknown as GlobalWithRari)['~rari'].isDevelopment = process.env.NODE_ENV !== 'production'
 
 if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined')
   (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
@@ -40,7 +49,7 @@ if (typeof window !== 'undefined') {
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
 
-  ;(globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
+  ; (globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
     if (!boundaryElement)
@@ -62,7 +71,7 @@ if (typeof window !== 'undefined') {
           if (Array.isArray(importData) && importData.length >= 3) {
             const [path, chunks, exportName] = importData
             const moduleKey = `$L${actualRowId}`
-              ;(window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
+                  ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
               id: path,
               chunks: Array.isArray(chunks) ? chunks : [chunks],
               name: exportName || 'default',
@@ -109,7 +118,7 @@ if (typeof window !== 'undefined') {
       }
 
       if (containsClientComponents(content)) {
-        ;(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
+        ; (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations?.set(boundaryId, {
           content,
           element: boundaryElement,
           rowId,
@@ -239,12 +248,12 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     registered: true,
   }
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
+    ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
-  ;(globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponentNames'][componentName] = componentId
 
   if (componentFunction) {
     componentFunction['~isClientComponent'] = true
@@ -378,10 +387,13 @@ class RscClient {
       const list = ['/_rari/stream']
       try {
         const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        if (isLocalHost)
-          list.push('http://127.0.0.1:3000/_rari/stream', 'http://localhost:3000/_rari/stream')
+        if (isLocalHost) {
+          const serverUrl = resolveRariServerUrl()
+          if (serverUrl)
+            list.push(`${serverUrl}/_rari/stream`)
+        }
       }
-      catch {}
+      catch { }
 
       return list
     })()
@@ -1123,32 +1135,52 @@ function isServerComponent(filePath: string): boolean {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.on('rari:register-server-component', (data) => {
+  let hmrListenersReady = false
+  const bufferedEvents: Array<{ event: string, data: any }> = []
+  const handlers = new Map<string, (data: any) => void | Promise<void>>()
+
+  function registerHandler(event: string, handler: (data: any) => void | Promise<void>) {
+    handlers.set(event, handler)
+    import.meta.hot!.on(event, async (data) => {
+      if (!hmrListenersReady) {
+        bufferedEvents.push({ event, data })
+        return
+      }
+      try {
+        await handler(data)
+      }
+      catch (error) {
+        console.error(`[rari] HMR: Error in handler for '${event}':`, error)
+      }
+    })
+  }
+
+  registerHandler('rari:register-server-component', (data) => {
     if (data?.filePath) {
       if (typeof globalThis !== 'undefined') {
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents!.add(data.filePath)
       }
     }
   })
 
-  import.meta.hot.on('rari:server-components-registry', (data) => {
+  registerHandler('rari:server-components-registry', (data) => {
     if (data?.serverComponents && Array.isArray(data.serverComponents)) {
       if (typeof globalThis !== 'undefined') {
-        ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
+        ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents = (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents || new Set()
         data.serverComponents.forEach((path: string) => {
-          ;(globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
+          ; (globalThis as unknown as GlobalWithRari)['~rari'].serverComponents?.add(path)
         })
       }
     }
   })
 
-  import.meta.hot.on('vite:beforeFullReload', async (data) => {
+  registerHandler('vite:beforeFullReload', async (data) => {
     if (data?.path && isServerComponent(data.path))
       await invalidateRscCache({ filePath: data.path, forceReload: true })
   })
 
-  import.meta.hot.on('rari:server-component-updated', async (data) => {
+  registerHandler('rari:server-component-updated', async (data) => {
     const componentId = data?.id || data?.componentId
     const timestamp = data?.t || data?.timestamp
 
@@ -1170,9 +1202,12 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('rari:app-router-updated', async (data) => {
+  registerHandler('rari:app-router-updated', async (data) => {
     try {
       if (!data)
+        return
+
+      if (!data.routePath && (!data.affectedRoutes || data.affectedRoutes.length === 0))
         return
 
       await handleAppRouterUpdate(data)
@@ -1182,7 +1217,7 @@ if (import.meta.hot) {
     }
   })
 
-  import.meta.hot.on('rari:server-action-updated', async (data) => {
+  registerHandler('rari:server-action-updated', async (data) => {
     if (data?.filePath) {
       rscClient.clearCache()
 
@@ -1208,7 +1243,7 @@ if (import.meta.hot) {
       updateDocumentMetadata(metadata)
 
     try {
-      const rariServerUrl = window.location.origin
+      const rariServerUrl = resolveRariServerUrl()
       const reloadUrl = `${rariServerUrl}/_rari/hmr`
 
       const reloadResponse = await fetch(reloadUrl, {
@@ -1222,13 +1257,30 @@ if (import.meta.hot) {
         }),
       })
 
-      if (!reloadResponse.ok)
-        console.error('[rari] HMR: Component reload failed:', reloadResponse.status)
+      if (!reloadResponse.ok) {
+        const responseBody = await reloadResponse.text()
+        const errorMsg = `Component reload failed with status ${reloadResponse.status}: ${responseBody}`
+        console.error('[rari] HMR:', errorMsg)
+        throw new Error(errorMsg)
+      }
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      const result = await reloadResponse.json()
+
+      if (result == null || typeof result !== 'object') {
+        const errorMsg = 'Invalid reload response: null or non-object'
+        console.error('[rari] HMR:', errorMsg, result)
+        throw new Error(errorMsg)
+      }
+
+      if (result.success !== true && result.reloaded !== true) {
+        const errorMsg = `Component reload unsuccessful: ${result.error || 'unknown error'}`
+        console.error('[rari] HMR:', errorMsg, result)
+        throw new Error(errorMsg)
+      }
     }
     catch (error) {
       console.error('[rari] HMR: Failed to reload component:', error)
+      return
     }
 
     let routes = [routePath]
@@ -1304,9 +1356,7 @@ if (import.meta.hot) {
 
     if (componentId || filePath) {
       try {
-        const rariServerUrl = window.location.origin.includes(':5173')
-          ? 'http://localhost:3000'
-          : window.location.origin
+        const rariServerUrl = resolveRariServerUrl()
 
         const invalidateUrl = `${rariServerUrl}/_rari/hmr`
 
@@ -1322,8 +1372,11 @@ if (import.meta.hot) {
           }),
         })
 
-        if (!invalidateResponse.ok)
-          console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status)
+        const responseBody = await invalidateResponse.text()
+
+        if (!invalidateResponse.ok) {
+          console.error('[rari] HMR: Server cache invalidation failed:', invalidateResponse.status, responseBody)
+        }
       }
       catch (error) {
         console.error('[rari] HMR: Failed to call server invalidation endpoint:', error)
@@ -1337,29 +1390,6 @@ if (import.meta.hot) {
         detail: { routes, fileType },
       })
       window.dispatchEvent(event)
-
-      const currentPath = window.location.pathname
-      if (routes.includes(currentPath) || routes.includes('/')) {
-        try {
-          const rariServerUrl = window.location.origin.includes(':5173')
-            ? 'http://localhost:3000'
-            : window.location.origin
-          const url = rariServerUrl + currentPath + window.location.search
-
-          const response = await fetch(url, {
-            headers: {
-              Accept: 'text/x-component',
-            },
-            cache: 'no-cache',
-          })
-
-          if (!response.ok)
-            console.error('[rari] HMR: Failed to re-fetch route:', response.status)
-        }
-        catch (error) {
-          console.error('[rari] HMR: Failed to re-fetch route:', error)
-        }
-      }
     }
   }
 
@@ -1407,6 +1437,38 @@ if (import.meta.hot) {
       })
       window.dispatchEvent(event)
     }
+  }
+
+  if (bufferedEvents.length > 0) {
+    void (async () => {
+      try {
+        while (bufferedEvents.length > 0) {
+          const eventsToReplay = [...bufferedEvents]
+          bufferedEvents.length = 0
+
+          for (const { event, data } of eventsToReplay) {
+            const handler = handlers.get(event)
+            if (handler) {
+              try {
+                await handler(data)
+              }
+              catch (error) {
+                console.error(`[rari] HMR: Error replaying buffered event '${event}':`, error)
+              }
+            }
+          }
+        }
+      }
+      catch (error) {
+        console.error('[rari] HMR: Error during event replay:', error)
+      }
+      finally {
+        hmrListenersReady = true
+      }
+    })()
+  }
+  else {
+    hmrListenersReady = true
   }
 }
 

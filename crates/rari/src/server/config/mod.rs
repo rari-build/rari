@@ -1,4 +1,5 @@
 use cow_utils::CowUtils;
+use http::HeaderValue;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -167,11 +168,76 @@ impl Default for StaticConfig {
     }
 }
 
+#[derive(Debug, Clone)]
+enum RoutePattern {
+    Exact(String),
+    Prefix(String),
+    Regex(regex::Regex),
+}
+
+impl RoutePattern {
+    fn from_pattern(pattern: &str) -> Self {
+        if let Some(prefix) = pattern.strip_suffix("/*") {
+            RoutePattern::Prefix(prefix.to_string())
+        } else if pattern.contains('*') {
+            let escaped = regex::escape(pattern);
+            let regex_pattern = escaped.cow_replace(r"\*", ".*");
+            match regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                Ok(regex) => RoutePattern::Regex(regex),
+                Err(_) => RoutePattern::Exact(pattern.to_string()),
+            }
+        } else {
+            RoutePattern::Exact(pattern.to_string())
+        }
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        match self {
+            RoutePattern::Exact(pattern) => pattern == path,
+            RoutePattern::Prefix(prefix) => {
+                path == prefix || path.starts_with(&format!("{}/", prefix))
+            }
+            RoutePattern::Regex(regex) => regex.is_match(path),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheControlConfig {
     pub routes: FxHashMap<String, String>,
     pub static_files: String,
     pub server_components: String,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledCacheControlConfig {
+    routes: Vec<(RoutePattern, String)>,
+}
+
+impl From<&CacheControlConfig> for CompiledCacheControlConfig {
+    fn from(config: &CacheControlConfig) -> Self {
+        let mut routes: Vec<(RoutePattern, String)> = config
+            .routes
+            .iter()
+            .map(|(pattern, cache_control)| {
+                (RoutePattern::from_pattern(pattern), cache_control.clone())
+            })
+            .collect();
+
+        routes.sort_by(|(a, _), (b, _)| match (a, b) {
+            (RoutePattern::Exact(_), RoutePattern::Exact(_)) => std::cmp::Ordering::Equal,
+            (RoutePattern::Exact(_), _) => std::cmp::Ordering::Less,
+            (_, RoutePattern::Exact(_)) => std::cmp::Ordering::Greater,
+            (RoutePattern::Prefix(a_prefix), RoutePattern::Prefix(b_prefix)) => {
+                b_prefix.len().cmp(&a_prefix.len())
+            }
+            (RoutePattern::Prefix(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Less,
+            (RoutePattern::Regex(_), RoutePattern::Prefix(_)) => std::cmp::Ordering::Greater,
+            (RoutePattern::Regex(_), RoutePattern::Regex(_)) => std::cmp::Ordering::Equal,
+        });
+
+        CompiledCacheControlConfig { routes }
+    }
 }
 
 impl Default for CacheControlConfig {
@@ -306,11 +372,23 @@ impl Config {
                 pretty_print: mode == Mode::Development,
                 ..default_config.rsc_html
             },
+            caching: CacheControlConfig {
+                server_components: if mode == Mode::Production {
+                    "public, max-age=31536000, stale-while-revalidate=86400".to_string()
+                } else {
+                    "no-cache, no-store, must-revalidate".to_string()
+                },
+                ..default_config.caching
+            },
             ..default_config
         }
     }
 
     pub fn from_env() -> Result<Self, ConfigError> {
+        Self::from_env_with_base(None)
+    }
+
+    pub fn from_env_with_base(base: Option<&std::path::Path>) -> Result<Self, ConfigError> {
         let mut config = Self::default();
 
         if let Ok(mode_str) = std::env::var("RARI_MODE") {
@@ -461,7 +539,12 @@ impl Config {
                 })?;
         }
 
-        if let Ok(server_config_json) = std::fs::read_to_string("dist/server/config.json") {
+        let config_path = match base {
+            Some(b) => b.join("dist/server/config.json"),
+            None => PathBuf::from("dist/server/config.json"),
+        };
+
+        if let Ok(server_config_json) = std::fs::read_to_string(&config_path) {
             let config_data = match serde_json::from_str::<serde_json::Value>(&server_config_json) {
                 Ok(data) => data,
                 Err(e) => {
@@ -549,8 +632,36 @@ impl Config {
             {
                 config.spam_blocker.enabled = enabled;
             }
+
+            if let Some(cache_control_data) = config_data.get("cacheControl")
+                && let Some(routes) = cache_control_data.get("routes").and_then(|v| v.as_object())
+            {
+                for (route, cache_value) in routes {
+                    if let Some(cache_str) = cache_value.as_str() {
+                        if HeaderValue::from_str(cache_str).is_ok() {
+                            config.caching.routes.insert(route.clone(), cache_str.to_string());
+                        } else {
+                            tracing::warn!(
+                                "Invalid cache-control header value for route '{}': '{}' (contains invalid characters)",
+                                route,
+                                cache_str
+                            );
+                        }
+                    } else {
+                        tracing::warn!(
+                            "Invalid cache-control value type for route '{}': expected string, got {:?}",
+                            route,
+                            cache_value
+                        );
+                    }
+                }
+            }
         } else {
             tracing::debug!("No dist/server/config.json found, using defaults");
+        }
+
+        if config.mode == Mode::Development {
+            config.caching.server_components = "no-cache, no-store, must-revalidate".to_string();
         }
 
         Ok(config)
@@ -656,28 +767,19 @@ impl Config {
             return cache_control;
         }
 
-        for (pattern, cache_control) in &self.caching.routes {
-            if Self::matches_pattern(pattern, path) {
-                return cache_control;
+        let compiled = CompiledCacheControlConfig::from(&self.caching);
+
+        for (pattern, cache_control) in &compiled.routes {
+            if pattern.matches(path) {
+                for orig_cache_control in self.caching.routes.values() {
+                    if orig_cache_control == cache_control {
+                        return orig_cache_control;
+                    }
+                }
             }
         }
 
         &self.caching.server_components
-    }
-
-    pub fn matches_pattern(pattern: &str, path: &str) -> bool {
-        if let Some(prefix) = pattern.strip_suffix("/*") {
-            return path.starts_with(prefix);
-        }
-
-        if pattern.contains('*') {
-            let regex_pattern = pattern.cow_replace("*", ".*").cow_replace("/", "\\/").into_owned();
-            if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
-                return regex.is_match(path);
-            }
-        }
-
-        pattern == path
     }
 
     pub fn csp_config(&self) -> CspConfig {
@@ -840,16 +942,27 @@ mod tests {
 
     #[test]
     fn test_pattern_matching() {
-        assert!(Config::matches_pattern("/api/*", "/api/users"));
-        assert!(Config::matches_pattern("/api/*", "/api/products/123"));
-        assert!(!Config::matches_pattern("/api/*", "/blog/posts"));
+        let pattern = RoutePattern::from_pattern("/api/*");
+        assert!(pattern.matches("/api/users"));
+        assert!(pattern.matches("/api/products/123"));
+        assert!(!pattern.matches("/blog/posts"));
+        assert!(!pattern.matches("/apiv2/users"));
+        assert!(pattern.matches("/api"));
 
-        assert!(Config::matches_pattern("/blog/*/comments", "/blog/post-1/comments"));
-        assert!(!Config::matches_pattern("/blog/*/comments", "/blog/post-1"));
+        let pattern = RoutePattern::from_pattern("/blog/*/comments");
+        assert!(pattern.matches("/blog/post-1/comments"));
+        assert!(!pattern.matches("/blog/post-1"));
 
-        assert!(Config::matches_pattern("*", "/any/path"));
-        assert!(Config::matches_pattern("*.js", "/static/app.js"));
-        assert!(!Config::matches_pattern("*.js", "/static/app.css"));
+        let pattern = RoutePattern::from_pattern("*");
+        assert!(pattern.matches("/any/path"));
+
+        let pattern = RoutePattern::from_pattern("*.js");
+        assert!(pattern.matches("/static/app.js"));
+        assert!(!pattern.matches("/static/app.css"));
+
+        let pattern = RoutePattern::from_pattern("/v1.0/*");
+        assert!(pattern.matches("/v1.0/users"));
+        assert!(!pattern.matches("/v1X0/users"));
     }
 
     #[test]
@@ -899,5 +1012,65 @@ mod tests {
         assert_eq!(streaming_config.enabled, deserialized.enabled);
         assert_eq!(streaming_config.buffer_size, deserialized.buffer_size);
         assert_eq!(streaming_config.resolution_timeout_ms, deserialized.resolution_timeout_ms);
+    }
+
+    #[test]
+    fn test_config_from_env_cache_control_validation() {
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join(format!("rari_test_{}", std::process::id()));
+        let dist_server_dir = temp_dir.join("dist").join("server");
+        std::fs::create_dir_all(&dist_server_dir).unwrap();
+
+        let config_json = serde_json::json!({
+            "cacheControl": {
+                "routes": {
+                    "/valid": "public, max-age=3600",
+                    "/invalid-newline": "public\nmax-age=3600",
+                    "/invalid-type": 12345
+                }
+            }
+        });
+
+        let config_path = dist_server_dir.join("config.json");
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(config_json.to_string().as_bytes()).unwrap();
+
+        let result = Config::from_env_with_base(Some(&temp_dir));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let config = result.unwrap();
+
+        assert!(
+            config.caching.routes.contains_key("/valid"),
+            "Valid cache-control route should be accepted"
+        );
+        assert_eq!(config.caching.routes.get("/valid").unwrap(), "public, max-age=3600");
+
+        assert!(
+            !config.caching.routes.contains_key("/invalid-newline"),
+            "Cache-control with newline should be rejected by HeaderValue::from_str"
+        );
+        assert!(
+            !config.caching.routes.contains_key("/invalid-type"),
+            "Non-string cache-control value should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_dev_mode_cache_control() {
+        let dev_config = Config::new(Mode::Development);
+        assert_eq!(
+            dev_config.caching.server_components, "no-cache, no-store, must-revalidate",
+            "Development mode should use no-cache for server components"
+        );
+
+        let prod_config = Config::new(Mode::Production);
+        assert_eq!(
+            prod_config.caching.server_components,
+            "public, max-age=31536000, stale-while-revalidate=86400",
+            "Production mode should use long cache for server components"
+        );
     }
 }

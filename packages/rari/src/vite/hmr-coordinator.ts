@@ -41,18 +41,12 @@ export class HMRCoordinator {
     server: ViteDevServer,
   ): Promise<void> {
     const relativePath = path.relative(process.cwd(), filePath)
-    const startTime = Date.now()
-
-    this.queueLog('info', `Client component changed: ${relativePath}`)
 
     try {
       const module = server.moduleGraph.getModuleById(filePath)
 
       if (module) {
         server.moduleGraph.invalidateModule(module)
-
-        const duration = Date.now() - startTime
-        this.queueLog('success', `Client component updated: ${relativePath} (${duration}ms)`)
 
         this.errorHandler.reset()
       }
@@ -89,16 +83,6 @@ export class HMRCoordinator {
 
       if (filesToProcess.length === 0)
         return
-
-      const startTime = Date.now()
-
-      if (filesToProcess.length === 1) {
-        const relativePath = path.relative(process.cwd(), filesToProcess[0])
-        this.queueLog('info', `Rebuilding server component: ${relativePath}`)
-      }
-      else {
-        this.queueLog('info', `Rebuilding ${filesToProcess.length} server components in batch`)
-      }
 
       const results = await Promise.allSettled(
         filesToProcess.map(async (file) => {
@@ -151,8 +135,6 @@ export class HMRCoordinator {
         }
       })
 
-      const duration = Date.now() - startTime
-
       if (successful.length > 0) {
         const timestamp = Date.now()
 
@@ -162,11 +144,6 @@ export class HMRCoordinator {
             t: timestamp,
           })
         })
-
-        if (successful.length === 1)
-          this.queueLog('success', `Server component updated: ${successful[0].relativePath} (${duration}ms)`)
-        else
-          this.queueLog('success', `${successful.length} server components updated (${duration}ms)`)
 
         this.errorHandler.reset()
 
@@ -233,6 +210,39 @@ export class HMRCoordinator {
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      interface ServerResponse {
+        success: boolean
+        message?: string
+        error?: string
+        data?: unknown
+      }
+
+      const responseText = await response.text()
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(responseText)
+      }
+      catch (parseError) {
+        throw new Error(
+          `Failed to parse server response (status ${response.status}): ${parseError instanceof Error ? parseError.message : String(parseError)}. `
+          + `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
+        )
+      }
+
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error(
+          `Invalid server response (status ${response.status}): expected object, got ${typeof parsed}. `
+          + `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
+        )
+      }
+
+      const result = parsed as ServerResponse
+
+      if (!result.success) {
+        throw new Error(result.message || result.error || 'Component reload failed')
       }
     }
     catch (error) {

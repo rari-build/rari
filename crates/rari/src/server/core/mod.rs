@@ -202,7 +202,6 @@ impl Server {
 
         if config.is_production() {
             CacheLoader::load_page_cache_configs(&state).await?;
-            CacheLoader::load_vite_cache_config(&state).await?;
         }
 
         let mut config = config;

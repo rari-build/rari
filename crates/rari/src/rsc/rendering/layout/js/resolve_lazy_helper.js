@@ -1,5 +1,24 @@
 if (!globalThis.__RARI_RESOLVE_LAZY__) {
+  if (!globalThis.__RARI_RESOLVED_PROMISES__)
+    globalThis.__RARI_RESOLVED_PROMISES__ = new Map()
+
+  globalThis.__RARI_CLEAR_RESOLVED_CACHE__ = function (promiseId) {
+    if (promiseId) {
+      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+    }
+    else {
+      globalThis.__RARI_RESOLVED_PROMISES__.clear()
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.clear()
+    }
+  }
+
   globalThis.__RARI_RESOLVE_LAZY__ = async function (promiseId) {
+    if (globalThis.__RARI_RESOLVED_PROMISES__.has(promiseId))
+      return globalThis.__RARI_RESOLVED_PROMISES__.get(promiseId)
+
     try {
       if (!globalThis.__RARI_PENDING_PROMISES__)
         throw new Error('No pending promises found')
@@ -8,44 +27,66 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
       if (!promiseOrDeferred)
         throw new Error(`Promise not found: ${promiseId}`)
 
-      let result
-      try {
-        if (promiseOrDeferred.isDeferred) {
-          const promise = promiseOrDeferred.component(promiseOrDeferred.props)
-          result = await promise
-        }
-        else {
-          result = await promiseOrDeferred
-        }
-      }
-      catch (promiseError) {
-        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
-        throw new Error(`Promise rejected: ${promiseError.message || String(promiseError)}`)
-      }
-
-      globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
-
-      if (typeof globalThis.renderToRsc === 'function') {
+      const inflightPromise = (async () => {
+        let result
         try {
-          const clientComponents = globalThis['~clientComponents'] || globalThis['~rsc']?.clientComponents || {}
-          const rscData = await globalThis.renderToRsc(result, clientComponents)
-          return {
-            success: true,
-            data: rscData,
+          if (promiseOrDeferred.isDeferred && typeof promiseOrDeferred.component === 'function') {
+            const promise = promiseOrDeferred.component(promiseOrDeferred.props)
+            result = await promise
+          }
+          else if (promiseOrDeferred.promise) {
+            result = await promiseOrDeferred.promise
+          }
+          else {
+            result = await promiseOrDeferred
           }
         }
-        catch (renderError) {
-          throw new Error(`Failed to render to RSC: ${renderError.message || String(renderError)}`)
+        catch (promiseError) {
+          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+          throw new Error(`Promise rejected: ${promiseError.message || String(promiseError)}`)
         }
-      }
-      else {
-        return {
-          success: true,
-          data: result,
+
+        if (typeof globalThis.renderToRsc === 'function') {
+          try {
+            const clientComponents = globalThis['~clientComponents'] || globalThis['~rsc']?.clientComponents || {}
+            const rscData = await globalThis.renderToRsc(result, clientComponents)
+
+            const response = {
+              success: true,
+              data: rscData,
+            }
+
+            globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
+            globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+
+            return response
+          }
+          catch (renderError) {
+            throw new Error(`Failed to render to RSC: ${renderError.message || String(renderError)}`)
+          }
         }
-      }
+        else {
+          const response = {
+            success: true,
+            data: result,
+          }
+
+          globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
+          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+
+          return response
+        }
+      })()
+
+      globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, inflightPromise)
+
+      return await inflightPromise
     }
     catch (error) {
+      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
+      if (globalThis.__RARI_PENDING_PROMISES__)
+        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+
       if (!error.message || !error.message.includes('Promise not found'))
         console.error('[rari] Error resolving lazy promise:', error)
 

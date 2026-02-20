@@ -16,6 +16,7 @@ import {
   EXPORT_DEFAULT_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
+  HTTP_PROTOCOL_REGEX,
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
@@ -97,6 +98,9 @@ interface RariOptions {
   }
   spamBlocker?: {
     enabled?: boolean
+  }
+  cacheControl?: {
+    routes: Record<string, string>
   }
 }
 
@@ -598,7 +602,6 @@ if (import.meta.hot) {
     return lastSegment.replace(EXTENSION_REGEX, '')
   }
 
-  const serverComponentBuilder: any = null
   let rustServerReady = false
 
   async function checkRustServerHealth(): Promise<boolean> {
@@ -625,6 +628,31 @@ if (import.meta.hot) {
     name: 'rari',
 
     config(config: UserConfig, { command }) {
+      config.define = config.define || {}
+
+      if (command === 'serve' || process.env.RARI_SERVER_URL || process.env.RARI_HOST) {
+        const rariServerPort = process.env.SERVER_PORT
+          ? Number(process.env.SERVER_PORT)
+          : Number(process.env.PORT || process.env.RSC_PORT || 3000)
+
+        let serverUrl: string
+        if (process.env.RARI_SERVER_URL) {
+          serverUrl = process.env.RARI_SERVER_URL
+        }
+        else if (process.env.RARI_HOST) {
+          const host = process.env.RARI_HOST.startsWith('http')
+            ? process.env.RARI_HOST
+            : `http://${process.env.RARI_HOST}`
+          const hostnamePart = host.replace(HTTP_PROTOCOL_REGEX, '')
+          serverUrl = hostnamePart.includes(':') ? host : `${host}:${rariServerPort}`
+        }
+        else {
+          serverUrl = `http://localhost:${rariServerPort}`
+        }
+
+        config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(serverUrl)
+      }
+
       if (command === 'build') {
         const projectRoot = options.projectRoot || process.cwd()
         const indexHtmlPath = path.join(projectRoot, 'index.html')
@@ -1163,6 +1191,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             rateLimit: options.rateLimit,
             spamBlocker: options.spamBlocker,
+            cacheControl: options.cacheControl,
           })
 
           serverComponentBuilder = builder
@@ -1418,6 +1447,7 @@ const ${componentName} = registerClientReference(
             csp: options.csp,
             rateLimit: options.rateLimit,
             spamBlocker: options.spamBlocker,
+            cacheControl: options.cacheControl,
           })
 
           builder.addServerComponent(filePath)
@@ -1961,34 +1991,8 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
       const isNotFoundFile = file.endsWith('not-found.tsx') || file.endsWith('not-found.jsx')
       const isSpecialRouteFile = isPageFile || isLayoutFile || isLoadingFile || isErrorFile || isNotFoundFile
 
-      if (isAppRouterFile && isSpecialRouteFile) {
-        let fileType = 'page'
-        if (isLayoutFile)
-          fileType = 'layout'
-        else if (isLoadingFile)
-          fileType = 'loading'
-        else if (isErrorFile)
-          fileType = 'error'
-        else if (isNotFoundFile)
-          fileType = 'not-found'
-
-        if (serverComponentBuilder && componentType === 'server') {
-          try {
-            await (serverComponentBuilder as any).rebuildComponent(file)
-          }
-          catch (error) {
-            console.error(`[rari] HMR: Failed to rebuild ${file}:`, error)
-          }
-        }
-
-        server.hot.send('rari:app-router-updated', {
-          type: 'rari-hmr',
-          filePath: file,
-          fileType,
-        })
-
+      if (isAppRouterFile && isSpecialRouteFile)
         return undefined
-      }
 
       if (componentType === 'client')
         return
@@ -2041,6 +2045,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
     csp: options.csp,
     rateLimit: options.rateLimit,
     spamBlocker: options.spamBlocker,
+    cacheControl: options.cacheControl,
   })
 
   const plugins: Plugin[] = [mainPlugin, serverBuildPlugin]

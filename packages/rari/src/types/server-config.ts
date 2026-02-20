@@ -19,8 +19,13 @@ export interface ServerSpamBlockerConfig {
   enabled?: boolean
 }
 
+export interface ServerCacheControlConfig {
+  routes: Record<string, string>
+}
+
 export interface ServerConfig {
   csp?: ServerCSPConfig
   rateLimit?: ServerRateLimitConfig
   spamBlocker?: ServerSpamBlockerConfig
+  cacheControl?: ServerCacheControlConfig
 }

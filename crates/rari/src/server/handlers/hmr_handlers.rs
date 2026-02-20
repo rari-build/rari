@@ -72,6 +72,20 @@ pub async fn handle_hmr_action(
     }
 }
 
+async fn invalidate_component_cache(
+    cache: &crate::server::cache::response_cache::ResponseCache,
+    component_id: &str,
+) {
+    let cache_key_prefix = format!("/_rari/stream/{}", component_id);
+
+    let all_keys = cache.get_all_keys();
+    for key in all_keys {
+        if key.starts_with(&cache_key_prefix) {
+            cache.invalidate(&key).await;
+        }
+    }
+}
+
 async fn handle_register(state: ServerState, file_path: String) -> Result<Json<Value>, StatusCode> {
     use crate::server::utils::path_validation::{
         normalize_component_path, validate_component_path,
@@ -100,8 +114,24 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
 
     {
         let renderer = state.renderer.lock().await;
-        let mut registry = renderer.component_registry.lock();
-        registry.mark_module_stale(&component_id);
+        {
+            let mut registry = renderer.component_registry.lock();
+            registry.mark_module_stale(&component_id);
+        }
+
+        let clear_cache_script = r#"
+            if (typeof globalThis.__RARI_CLEAR_RESOLVED_CACHE__ === 'function') {
+                globalThis.__RARI_CLEAR_RESOLVED_CACHE__();
+            }
+        "#;
+
+        if let Err(e) = renderer
+            .runtime
+            .execute_script("clear_resolved_cache".to_string(), clear_cache_script.to_string())
+            .await
+        {
+            error!("Failed to clear resolved cache: {}", e);
+        }
     }
 
     let reload_result = reload_component_from_dist(&state, &file_path, &component_id).await;
@@ -178,6 +208,24 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
 
     #[allow(clippy::disallowed_methods)]
     let response = if reloaded {
+        invalidate_component_cache(&state.response_cache, &component_id).await;
+
+        let route_cache_patterns: Vec<String> = vec![
+            file_path.replace("src/app/", "/").replace("/page.tsx", ""),
+            file_path.replace("src/app/", "/").replace("/page.ts", ""),
+        ]
+        .into_iter()
+        .filter(|p| p.len() > 1)
+        .collect();
+        for pattern in route_cache_patterns {
+            let all_keys = state.response_cache.get_all_keys();
+            for key in all_keys {
+                if key.starts_with(&pattern) {
+                    state.response_cache.invalidate(&key).await;
+                }
+            }
+        }
+
         serde_json::json!({
             "success": true,
             "file_path": file_path,
@@ -465,34 +513,31 @@ async fn handle_reload_component(
         }
     };
 
-    let bundle_code = match tokio::fs::read_to_string(&bundle_full_path).await {
-        Ok(code) => code,
-        Err(e) => {
-            error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
-            #[allow(clippy::disallowed_methods)]
-            return Ok(Json(serde_json::json!({
-                "success": false,
-                "message": format!("Failed to read bundle: {}", e)
-            })));
+    let mut bundle_code = String::new();
+    let mut last_error = None;
+    for attempt in 0..3 {
+        match tokio::fs::read_to_string(&bundle_full_path).await {
+            Ok(code) => {
+                bundle_code = code;
+                last_error = None;
+                break;
+            }
+            Err(e) => {
+                last_error = Some(e);
+                if attempt < 2 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                }
+            }
         }
-    };
+    }
 
-    {
-        let renderer = state.renderer.lock().await;
-        let mut registry = renderer.component_registry.lock();
-
-        registry.remove_component(&component_id);
-
-        let dependencies = crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
-        let _ = registry.register_component(
-            &component_id,
-            &bundle_code,
-            bundle_code.clone(),
-            dependencies.into_iter().collect(),
-        );
-
-        registry.mark_component_loaded(&component_id);
-        registry.mark_component_initially_loaded(&component_id);
+    if let Some(e) = last_error {
+        error!("Failed to read bundle file {}: {}", bundle_full_path.display(), e);
+        #[allow(clippy::disallowed_methods)]
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "message": format!("Failed to read bundle: {}", e)
+        })));
     }
 
     if let Err(e) = {
@@ -504,12 +549,44 @@ async fn handle_reload_component(
 
     let load_result = {
         let renderer = state.renderer.lock().await;
-        renderer.runtime.load_component(&component_id, &bundle_full_path).await
+        renderer.runtime.load_component_code(&component_id, &bundle_code).await
     };
 
     match load_result {
-        Ok(()) =>
-        {
+        Ok(()) => {
+            {
+                let renderer = state.renderer.lock().await;
+                let mut registry = renderer.component_registry.lock();
+
+                registry.remove_component(&component_id);
+
+                let dependencies =
+                    crate::rsc::utils::dependency_utils::extract_dependencies(&bundle_code);
+
+                match registry.register_component(
+                    &component_id,
+                    &bundle_code,
+                    bundle_code.clone(),
+                    dependencies.into_iter().collect(),
+                ) {
+                    Ok(()) => {
+                        registry.mark_component_loaded(&component_id);
+                        registry.mark_component_initially_loaded(&component_id);
+                    }
+                    Err(e) => {
+                        error!("Failed to register component {}: {}", component_id, e);
+                        registry.remove_component(&component_id);
+                        #[allow(clippy::disallowed_methods)]
+                        return Ok(Json(serde_json::json!({
+                            "success": false,
+                            "message": format!("Failed to register component: {}", e)
+                        })));
+                    }
+                }
+            }
+
+            invalidate_component_cache(&state.response_cache, &component_id).await;
+
             #[allow(clippy::disallowed_methods)]
             Ok(Json(serde_json::json!({
                 "success": true,

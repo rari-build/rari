@@ -152,31 +152,4 @@ impl CacheLoader {
 
         false
     }
-
-    pub async fn load_vite_cache_config(state: &ServerState) -> Result<(), RariError> {
-        let cache_config_path = std::path::Path::new("dist/cache-config.json");
-
-        if !cache_config_path.exists() {
-            return Ok(());
-        }
-
-        if let Ok(content) = std::fs::read_to_string(cache_config_path)
-            && let Ok(config_json) = serde_json::from_str::<serde_json::Value>(&content)
-            && let Some(routes) = config_json.get("routes").and_then(|r| r.as_object())
-        {
-            let mut page_configs = state.page_cache_configs.write().await;
-
-            for (route, cache_control) in routes {
-                if let Some(cache_str) = cache_control.as_str()
-                    && !page_configs.contains_key(route)
-                {
-                    let mut cache_config = FxHashMap::default();
-                    cache_config.insert("cache-control".to_string(), cache_str.to_string());
-                    page_configs.insert(route.clone(), cache_config);
-                }
-            }
-        }
-
-        Ok(())
-    }
 }

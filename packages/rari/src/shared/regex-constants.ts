@@ -10,6 +10,7 @@ export const PATH_TRAILING_SLASH_REGEX = /\/$/
 export const PATH_START_SLASH_REGEX = /^\//
 export const SRC_PREFIX_REGEX = /^src\//
 export const FILE_PROTOCOL_REGEX = /^file:\/\//
+export const HTTP_PROTOCOL_REGEX = /^https?:\/\//
 
 export const HTML_ESCAPE_REGEXES = {
   AMPERSAND: /&/g,

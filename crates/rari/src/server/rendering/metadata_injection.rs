@@ -47,6 +47,23 @@ pub fn inject_metadata(
     if let Some(head_end) = result.find("</head>") {
         let mut meta_tags = String::new();
 
+        if !result.contains(r#"<meta charset"#) {
+            meta_tags.push_str(
+                r#"    <meta charset="UTF-8" />
+"#,
+            );
+        }
+
+        if !result.contains(r#"<meta name="viewport""#) {
+            let viewport_content =
+                metadata.viewport.as_deref().unwrap_or("width=device-width, initial-scale=1.0");
+            meta_tags.push_str(&format!(
+                r#"    <meta name="viewport" content="{}" />
+"#,
+                escape_html(viewport_content)
+            ));
+        }
+
         if let Some(title) = &metadata.title
             && !result.contains("<title>")
         {
@@ -62,16 +79,6 @@ pub fn inject_metadata(
                 r#"    <meta name="keywords" content="{}" />
 "#,
                 keywords_str
-            ));
-        }
-
-        if let Some(viewport) = &metadata.viewport
-            && !result.contains(r#"<meta name="viewport""#)
-        {
-            meta_tags.push_str(&format!(
-                r#"    <meta name="viewport" content="{}" />
-"#,
-                escape_html(viewport)
             ));
         }
 
@@ -618,5 +625,106 @@ mod tests {
         assert!(
             result.contains(r#"Description with &quot;quotes&quot; and &#x27;apostrophes&#x27;"#)
         );
+    }
+
+    #[test]
+    fn test_inject_default_meta_tags() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert!(result.contains(r#"<meta charset="UTF-8" />"#));
+        assert!(result.contains(
+            r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
+        ));
+    }
+
+    #[test]
+    fn test_no_duplicate_meta_tags() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert_eq!(result.matches(r#"<meta charset"#).count(), 1);
+        assert_eq!(result.matches(r#"<meta name="viewport""#).count(), 1);
+    }
+
+    #[test]
+    fn test_custom_viewport_overrides_default() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body></body>
+</html>"#;
+
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: None,
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: Some("width=1024, initial-scale=1.0".to_string()),
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+        };
+
+        let result = inject_metadata(html, &metadata, None);
+
+        assert!(
+            result.contains(r#"<meta name="viewport" content="width=1024, initial-scale=1.0" />"#)
+        );
+        assert!(!result.contains(
+            r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
+        ));
     }
 }
