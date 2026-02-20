@@ -45,15 +45,6 @@ impl LayoutRenderer {
         renderer: &RscRenderer,
         is_not_found: bool,
     ) -> Result<(), RariError> {
-        renderer
-            .runtime
-            .execute_script(
-                "clear_resolved_cache".to_string(),
-                "if (typeof globalThis.__RARI_CLEAR_RESOLVED_CACHE__ === 'function') { globalThis.__RARI_CLEAR_RESOLVED_CACHE__(); }".to_string(),
-            )
-            .await
-            .unwrap_or_default();
-
         if !is_not_found {
             renderer
                 .runtime

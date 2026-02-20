@@ -25,15 +25,17 @@ else {
       if (!globalThis.__RARI_PENDING_PROMISES__)
         globalThis.__RARI_PENDING_PROMISES__ = new Map()
 
-      const promiseId = '{page_component_id}_promise'
+      if (!globalThis.__RARI_PROMISE_COUNTER__)
+        globalThis.__RARI_PROMISE_COUNTER__ = 0
+      globalThis.__RARI_PROMISE_COUNTER__++
 
-      if (!globalThis.__RARI_PENDING_PROMISES__.has(promiseId)) {
-        globalThis.__RARI_PENDING_PROMISES__.set(promiseId, {
-          component: PageComponent,
-          props: pageProps,
-          isDeferred: true,
-        })
-      }
+      const promiseId = `{page_component_id}_promise_${globalThis.__RARI_PROMISE_COUNTER__}`
+
+      globalThis.__RARI_PENDING_PROMISES__.set(promiseId, {
+        component: PageComponent,
+        props: pageProps,
+        isDeferred: true,
+      })
 
       const lazyMarker = {
         __rari_lazy: true,
