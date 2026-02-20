@@ -1,3 +1,22 @@
+## [rari@0.10.1] - 2026-02-20
+
+### 🚀 Features
+
+- *(caching)* Consolidate cache control configuration into server config
+- *(rsc)* Add promise caching and improve lazy component resolution for HMR
+- *(rsc)* Implement promise caching and improve lazy component resolution
+- *(hmr)* Improve error handling and promise cleanup in HMR and RSC runtime
+- *(hmr)* Improve server URL resolution and add type safety
+- *(hmr)* Improve error handling and response parsing in HMR runtime
+- *(rsc-client-runtime)* Improve server URL resolution and add response validation
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Improve response validation logic in HMR reload handler
+
+### 🎨 Styling
+
+- *(rsc-client-runtime)* Improve code formatting and extract server URL resolution
 ## [rari@0.10.0] - 2026-02-18
 
 ### 🚀 Features
@@ -9,6 +28,10 @@
 - *(og)* Improve SVG rendering precision and component handling
 - *(og)* Handle async components and rendering errors gracefully
 - *(og)* Return null for non-function component resolution
+
+### 💼 Other
+
+- Rari@0.10.0
 
 ### 🚜 Refactor
 
