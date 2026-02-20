@@ -174,6 +174,7 @@
     "no-throw-literal": "error",
     "no-undef": "error",
     "no-unexpected-multiline": "error",
+    "no-unmodified-loop-condition": "error",
     "no-unneeded-ternary": [
       "error",
       {
@@ -198,6 +199,14 @@
         "caughtErrors": "none",
         "ignoreRestSiblings": true,
         "vars": "all"
+      }
+    ],
+    "no-use-before-define": [
+      "error",
+      {
+        "classes": false,
+        "functions": false,
+        "variables": true
       }
     ],
     "no-useless-call": "error",
@@ -275,6 +284,7 @@
       "rules": {
         "node/no-exports-assign": "error",
         "node/no-new-require": "error",
+        "node/no-path-concat": "error",
         "jsdoc/check-access": "warn",
         "jsdoc/check-property-names": "warn",
         "jsdoc/empty-tags": "warn",
@@ -284,32 +294,10 @@
         "jsdoc/require-property": "warn",
         "jsdoc/require-property-description": "warn",
         "jsdoc/require-property-name": "warn",
-        "jsdoc/require-returns-description": "warn",
-        "react/jsx-no-comment-textnodes": "warn",
-        "react/jsx-no-duplicate-props": "warn",
-        "react/no-array-index-key": "warn",
-        "react/no-direct-mutation-state": "error",
-        "react/no-redundant-should-component-update": "error",
-        "react/no-string-refs": "error",
-        "react-hooks/rules-of-hooks": "error",
-        "react-hooks/exhaustive-deps": "warn",
-        "react/only-export-components": [
-          "error",
-          {
-            "allowConstantExport": false,
-            "allowExportNames": []
-          }
-        ]
+        "jsdoc/require-returns-description": "warn"
       },
       "plugins": [
-        "node"
-      ]
-    },
-    {
-      "files": [
-        "**/*.?([cm])[jt]s?(x)"
-      ],
-      "plugins": [
+        "node",
         "jsdoc"
       ]
     },
@@ -364,6 +352,7 @@
         "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/no-extra-non-null-assertion": "error",
         "@typescript-eslint/no-extraneous-class": "off",
+        "@typescript-eslint/no-invalid-void-type": "off",
         "@typescript-eslint/no-misused-new": "error",
         "@typescript-eslint/no-namespace": "error",
         "@typescript-eslint/no-non-null-asserted-nullish-coalescing": "error",
@@ -389,6 +378,15 @@
         "@typescript-eslint/prefer-literal-enum-member": "error",
         "@typescript-eslint/prefer-namespace-keyword": "error",
         "@typescript-eslint/triple-slash-reference": "off",
+        "@typescript-eslint/unified-signatures": "off",
+        "no-use-before-define": [
+          "error",
+          {
+            "classes": false,
+            "functions": false,
+            "variables": true
+          }
+        ],
         "@typescript-eslint/consistent-type-definitions": [
           "error",
           "interface"
@@ -401,16 +399,8 @@
             "prefer": "type-imports"
           }
         ],
-        "@typescript-eslint/no-import-type-side-effects": "error",
-        "react/jsx-no-duplicate-props": "off",
-        "react/jsx-no-undef": "off"
-      }
-    },
-    {
-      "files": [
-        "**/*.?([cm])ts",
-        "**/*.?([cm])tsx"
-      ],
+        "@typescript-eslint/no-import-type-side-effects": "error"
+      },
       "plugins": [
         "typescript"
       ]
@@ -445,10 +435,38 @@
     },
     {
       "files": [
-        "**/*.?([cm])[jt]s?(x)",
+        "**/*.?([cm])[jt]s?(x)"
+      ],
+      "rules": {
+        "react/jsx-no-comment-textnodes": "warn",
+        "react/jsx-no-duplicate-props": "warn",
+        "react/no-array-index-key": "warn",
+        "react/no-direct-mutation-state": "error",
+        "react/no-redundant-should-component-update": "error",
+        "react/no-string-refs": "error",
+        "react-hooks/rules-of-hooks": "error",
+        "react-hooks/exhaustive-deps": "warn",
+        "react/only-export-components": [
+          "error",
+          {
+            "allowConstantExport": false,
+            "allowExportNames": []
+          }
+        ]
+      },
+      "plugins": [
+        "react"
+      ]
+    },
+    {
+      "files": [
         "**/*.?([cm])ts",
         "**/*.?([cm])tsx"
       ],
+      "rules": {
+        "react/jsx-no-duplicate-props": "off",
+        "react/jsx-no-undef": "off"
+      },
       "plugins": [
         "react"
       ]
@@ -471,7 +489,8 @@
         "@typescript-eslint/no-namespace": "off",
         "@typescript-eslint/no-require-imports": "off",
         "unicode-bom": "off",
-        "no-redeclare": "off"
+        "no-redeclare": "off",
+        "no-use-before-define": "off"
       },
       "plugins": [
         "typescript"
