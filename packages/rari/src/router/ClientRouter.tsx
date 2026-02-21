@@ -197,6 +197,7 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 export interface ClientRouterProps {
   children: React.ReactNode
   initialRoute: string
+  staleWindowMs?: number
 }
 
 interface NavigationState {
@@ -220,7 +221,7 @@ interface HistoryState {
   key: string
 }
 
-export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
+export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }: ClientRouterProps) {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute: normalizePath(initialRoute),
     navigationId: 0,
@@ -248,6 +249,9 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   const statePreserverRef = useRef<StatePreserver>(new StatePreserver({
     maxHistorySize: 50,
   }))
+
+  const lastHiddenAtRef = useRef<number | null>(null)
+  const staleWindowMsRef = useRef<number>(staleWindowMs)
 
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
@@ -565,12 +569,15 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
   processNavigationQueueRef.current = processNavigationQueue
 
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
+
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
   if (!debouncedNavigateRef.current) {
     debouncedNavigateRef.current = debounce(
       (pathname: string, options: NavigationOptions) => {
-        navigate(pathname, options)
+        navigateRef.current(pathname, options)
       },
       NAVIGATION_DEBOUNCE_MS,
       {
@@ -580,8 +587,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       },
     )
   }
-
-  const debouncedNavigate = debouncedNavigateRef.current
 
   const handleLinkClick = (event: MouseEvent) => {
     if (event.button !== 0)
@@ -628,18 +633,21 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
     const pathname = extractPathname(href)
 
-    debouncedNavigate(pathname, { replace: false })
+    if (debouncedNavigateRef.current)
+      debouncedNavigateRef.current(pathname, { replace: false })
   }
 
   const handlePopState = (event: PopStateEvent) => {
     const pathname = window.location.pathname
     const historyState = event.state as HistoryState | null
 
-    navigate(pathname, {
-      replace: true,
-      scroll: false,
-      historyKey: historyState?.key,
-    })
+    if (navigateRef.current) {
+      navigateRef.current(pathname, {
+        replace: true,
+        scroll: false,
+        historyKey: historyState?.key,
+      })
+    }
   }
 
   const handleRetry = () => {
@@ -713,14 +721,44 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
       window.removeEventListener('popstate', handlePopState)
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [])
 
+  useEffect(() => {
+    staleWindowMsRef.current = staleWindowMs
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        lastHiddenAtRef.current = Date.now()
+      }
+      else {
+        if (lastHiddenAtRef.current !== null) {
+          const hiddenDuration = Date.now() - lastHiddenAtRef.current
+          if (hiddenDuration > staleWindowMsRef.current) {
+            routeInfoCache.clear()
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [staleWindowMs])
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
       isMountedRef.current = false
 
       cancelNavigation()
       cancelAllPendingNavigations()
 
-      if (debouncedNavigate.cancel)
-        debouncedNavigate.cancel()
+      if (debouncedNavigateRef.current?.cancel)
+        debouncedNavigateRef.current.cancel()
     }
   }, [])
 

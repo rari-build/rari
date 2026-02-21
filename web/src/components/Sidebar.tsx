@@ -60,6 +60,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const [manualDocsToggle, setManualDocsToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
   const [manualEnterpriseToggle, setManualEnterpriseToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
 
+  const mobileToggleRef = useRef<HTMLInputElement>(null)
+
   const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
   const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : isEnterprisePage
 
@@ -120,14 +122,14 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   }
 
   useEffect(() => {
-    const checkbox = document.getElementById('mobile-menu-toggle') as HTMLInputElement
-    if (checkbox)
-      checkbox.checked = false
+    if (mobileToggleRef.current) {
+      mobileToggleRef.current.checked = false
+    }
   }, [pathname])
 
   return (
     <>
-      <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" />
+      <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" ref={mobileToggleRef} />
 
       <label
         htmlFor="mobile-menu-toggle"

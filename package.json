@@ -12,12 +12,18 @@
     "lint:knip": "knip",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:mobile": "playwright test --project \"Mobile Chrome\"",
+    "test:e2e:smoke": "playwright test smoke.spec.ts",
+    "test:e2e:debug": "playwright test --debug"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",
     "@e18e/eslint-plugin": "catalog:eslint",
     "@eslint-react/eslint-plugin": "catalog:eslint",
+    "@playwright/test": "catalog:testing",
     "@types/node": "catalog:typescript",
     "@typescript-eslint/utils": "catalog:eslint",
     "@typescript/native-preview": "catalog:typescript",
