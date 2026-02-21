@@ -37,9 +37,11 @@ class RouteInfoCache {
       body: JSON.stringify(request),
     })
 
+    const text = await response.text()
+
     if (!response.ok) {
       try {
-        const error: RouteInfoError = await response.json()
+        const error: RouteInfoError = JSON.parse(text)
         throw new Error(error.error || 'Failed to fetch route info')
       }
       catch {
@@ -48,17 +50,11 @@ class RouteInfoCache {
     }
 
     try {
-      return await response.json()
+      return JSON.parse(text)
     }
     catch (error) {
-      try {
-        const text = await response.text()
-        return JSON.parse(text)
-      }
-      catch (parseError) {
-        console.error('[RouteInfo] Failed to parse response:', { error, parseError, path })
-        throw new Error('Failed to parse route info response')
-      }
+      console.error('[RouteInfo] Failed to parse response:', { error, text, path })
+      throw new Error('Failed to parse route info response')
     }
   }
 
