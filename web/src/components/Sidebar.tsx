@@ -1,7 +1,7 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
 import ChevronRight from './icons/ChevronRight'
@@ -118,12 +118,6 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const toggleSection = (key: string) => {
     setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))
   }
-
-  useEffect(() => {
-    const checkbox = document.getElementById('mobile-menu-toggle') as HTMLInputElement
-    if (checkbox)
-      checkbox.checked = false
-  }, [pathname])
 
   return (
     <>

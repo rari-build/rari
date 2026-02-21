@@ -581,8 +581,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     )
   }
 
-  const debouncedNavigate = debouncedNavigateRef.current
-
   const handleLinkClick = (event: MouseEvent) => {
     if (event.button !== 0)
       return
@@ -628,7 +626,8 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
     const pathname = extractPathname(href)
 
-    debouncedNavigate(pathname, { replace: false })
+    if (debouncedNavigateRef.current)
+      debouncedNavigateRef.current(pathname, { replace: false })
   }
 
   const handlePopState = (event: PopStateEvent) => {
@@ -703,24 +702,31 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
   }
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden)
+        routeInfoCache.clear()
+    }
+
     document.addEventListener('click', handleLinkClick)
     window.addEventListener('popstate', handlePopState)
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       document.removeEventListener('click', handleLinkClick)
       window.removeEventListener('popstate', handlePopState)
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
 
       isMountedRef.current = false
 
       cancelNavigation()
       cancelAllPendingNavigations()
 
-      if (debouncedNavigate.cancel)
-        debouncedNavigate.cancel()
+      if (debouncedNavigateRef.current?.cancel)
+        debouncedNavigateRef.current.cancel()
     }
   }, [])
 
