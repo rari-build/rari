@@ -1,7 +1,8 @@
+/* eslint-disable react/no-use-context, react/no-context-provider */
 'use client'
 
 import type { ReactNode } from 'react'
-import { createContext, use, useCallback, useState } from 'react'
+import { createContext, useCallback, useContext, useState } from 'react'
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun' | 'deno'
 
@@ -12,10 +13,7 @@ interface PackageManagerContextType {
   setPackageManager: (pm: PackageManager) => void
 }
 
-const PackageManagerContext = createContext<PackageManagerContextType>({
-  packageManager: 'pnpm',
-  setPackageManager: () => {},
-})
+const PackageManagerContext = createContext<PackageManagerContextType | null>(null)
 
 export function PackageManagerProvider({ children }: { children: ReactNode }) {
   const [packageManager, setPackageManager] = useState<PackageManager>(() => {
@@ -34,12 +32,18 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <PackageManagerContext value={{ packageManager, setPackageManager: handleSetPackageManager }}>
+    <PackageManagerContext.Provider value={{ packageManager, setPackageManager: handleSetPackageManager }}>
       {children}
-    </PackageManagerContext>
+    </PackageManagerContext.Provider>
   )
 }
 
 export function usePackageManager() {
-  return use(PackageManagerContext)
+  const context = useContext(PackageManagerContext)
+
+  if (!context) {
+    throw new Error('usePackageManager must be used within a PackageManagerProvider')
+  }
+
+  return context
 }
