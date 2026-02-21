@@ -784,14 +784,14 @@ impl RscHtmlRenderer {
     window['~rari'].bufferedRows.push('{}');
 
     if (window['~rari'].processBoundaryUpdate) {{
-        window['~rari'].processBoundaryUpdate('{}', '{}', {});
+        window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
     }}
 
     window.dispatchEvent(new CustomEvent('rari:boundary-update', {{
         detail: {{
             boundaryId: '{}',
             rscRow: '{}',
-            rowId: {}
+            rowId: '{}'
         }}
     }}));
 }})();
@@ -828,25 +828,6 @@ impl RscHtmlRenderer {
             .cow_replace('\r', "\\r")
             .cow_replace('\t', "\\t")
             .into_owned()
-    }
-
-    pub fn generate_boundary_error_html(
-        boundary_id: &str,
-        error_message: &str,
-        row_id: u32,
-    ) -> String {
-        let error_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
-window['~rari'] && window['~rari'].processBoundaryError('{}', '{}', {});
-</script>"#,
-            Self::escape_html_attribute(boundary_id),
-            row_id,
-            Self::escape_js_string(boundary_id),
-            Self::escape_js_string(error_message),
-            row_id
-        );
-
-        error_script
     }
 }
 
@@ -1473,12 +1454,12 @@ if (typeof window !== 'undefined') {{
   window['~rari'].bufferedRows.push('{}');
 
   if(window['~rari'].processBoundaryUpdate){{
-    window['~rari'].processBoundaryUpdate('{}', '{}', {});
+    window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
   }} else {{
     window['~rari'].bufferedEvents.push({{
       boundaryId: '{}',
       rscRow: '{}',
-      rowId: {}
+      rowId: '{}'
     }});
   }}
 }})();

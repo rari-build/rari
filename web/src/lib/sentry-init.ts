@@ -3,23 +3,52 @@ if (typeof window !== 'undefined') {
 
   if (dsn) {
     import('@sentry/react').then((Sentry) => {
-      Sentry.init({
-        dsn,
-        sendDefaultPii: true,
-        tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
-        environment: import.meta.env.DEV ? 'development' : 'production',
-        integrations: [
-          Sentry.browserTracingIntegration(),
-          Sentry.replayIntegration({
-            maskAllText: false,
-            blockAllMedia: false,
-          }),
-        ],
-        replaysSessionSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
-        replaysOnErrorSampleRate: 1.0,
-      })
+      try {
+        Sentry.init({
+          dsn,
+          sendDefaultPii: true,
+          tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          environment: import.meta.env.DEV ? 'development' : 'production',
+          integrations: [
+            Sentry.browserTracingIntegration(),
+            Sentry.replayIntegration({
+              maskAllText: false,
+              blockAllMedia: false,
+            }),
+          ],
+          replaysSessionSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
+          replaysOnErrorSampleRate: 1.0,
+          beforeSend(event, hint) {
+            const error = hint.originalException
+            if (error instanceof Error) {
+              if (error.message === 'Illegal invocation') {
+                const stack = error.stack || ''
+                if (stack.includes('sentry') || stack.includes('Proxy')) {
+                  console.warn('[Sentry] Skipping error caused by browser extension interference')
+                  return null
+                }
+              }
 
-      ;(window as any).Sentry = Sentry
+              if (error.message.includes('Unexpected non-whitespace character after JSON')) {
+                const stack = error.stack || ''
+                if (stack.includes('parseRscWireFormat') || stack.includes('AppRouter')) {
+                  console.warn('[Sentry] Skipping RSC parsing error (likely userscript corruption)')
+                  return null
+                }
+              }
+            }
+
+            return event
+          },
+        })
+
+        ;(window as any).Sentry = Sentry
+      }
+      catch (error) {
+        console.warn('[Sentry] Failed to initialize:', error)
+      }
+    }).catch((error) => {
+      console.warn('[Sentry] Failed to load:', error)
     })
   }
 }

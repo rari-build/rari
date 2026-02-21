@@ -6,6 +6,7 @@ import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-consta
 import { preloadComponentsFromModules } from './shared/preload-components'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
+const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 
 interface AppRouterProviderProps {
   children: React.ReactNode
@@ -349,6 +350,70 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return processed
   }
 
+  const sanitizeJsonString = (input: string, type: 'array' | 'object'): string | null => {
+    try {
+      const openChar = type === 'array' ? '[' : '{'
+      const closeChar = type === 'array' ? ']' : '}'
+
+      let depth = 0
+      let jsonEnd = -1
+      let inString = false
+      let escapeNext = false
+
+      for (let i = 0; i < input.length; i++) {
+        const char = input[i]
+
+        if (escapeNext) {
+          escapeNext = false
+          continue
+        }
+
+        if (char === '\\') {
+          escapeNext = true
+          continue
+        }
+
+        if (char === '"' && !escapeNext) {
+          inString = !inString
+          continue
+        }
+
+        if (inString)
+          continue
+
+        if (char === openChar) {
+          depth++
+        }
+        else if (char === closeChar) {
+          depth--
+          if (depth === 0) {
+            jsonEnd = i + 1
+            break
+          }
+        }
+      }
+
+      if (jsonEnd === -1)
+        return null
+
+      const validJson = input.substring(0, jsonEnd)
+
+      const afterJson = input.substring(jsonEnd).trim()
+      if (afterJson.length > 0 && !TRAILING_SEMICOLON_REGEX.test(afterJson)) {
+        console.warn('[rari] Sanitized corrupted JSON (possible userscript injection):', {
+          extracted: validJson.substring(0, 100),
+          discarded: afterJson.substring(0, 50),
+        })
+      }
+
+      return validJson
+    }
+    catch (error) {
+      console.error('[rari] Failed to sanitize JSON:', error)
+      return null
+    }
+  }
+
   const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
@@ -366,12 +431,22 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       let currentLayoutStartLine: number | null = null
 
       for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const line = lines[lineIndex]
+        const line = lines[lineIndex].trim()
+
+        if (!line)
+          continue
+
         const colonIndex = line.indexOf(':')
         if (colonIndex === -1)
           continue
 
         const rowId = line.substring(0, colonIndex)
+
+        if (!NUMERIC_REGEX.test(rowId)) {
+          console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
+          continue
+        }
+
         const content = line.substring(colonIndex + 1)
 
         try {
@@ -382,7 +457,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
 
           if (content.startsWith('I[')) {
-            const importData = JSON.parse(content.substring(1))
+            const jsonContent = content.substring(1)
+            const sanitized = sanitizeJsonString(jsonContent, 'array')
+
+            if (!sanitized) {
+              console.warn('[rari] AppRouter: Could not sanitize import line, skipping:', line.substring(0, 80))
+              continue
+            }
+
+            const importData = JSON.parse(sanitized)
             if (Array.isArray(importData) && importData.length >= 3) {
               const [path, chunks, exportName] = importData
               modules.set(`$L${rowId}`, {
