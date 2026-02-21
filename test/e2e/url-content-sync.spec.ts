@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test'
 import { MOBILE_DEVICES, TIMEOUTS, URL_PATTERNS } from './shared/constants'
 import { backgroundApp, backgroundForegroundCycle, foregroundApp } from './shared/mobile-helpers'
 
+const DOCS_API_REFERENCE_PATTERN = /\/docs\/api-reference/
+
 test.describe('URL-Content Synchronization', () => {
   test.use(MOBILE_DEVICES.IPHONE)
 
@@ -15,8 +17,8 @@ test.describe('URL-Content Synchronization', () => {
     expect(initialUrl).toContain('/docs/getting-started')
     expect(initialH1).toBeTruthy()
 
-    await page.goto('/docs/api-reference')
-    await page.waitForLoadState('networkidle')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForURL(DOCS_API_REFERENCE_PATTERN)
 
     const newUrl = page.url()
     const newH1 = await page.locator('h1').first().textContent()
@@ -40,8 +42,8 @@ test.describe('URL-Content Synchronization', () => {
     await foregroundApp(page)
     await page.waitForTimeout(TIMEOUTS.MEDIUM_WAIT)
 
-    await page.goto('/docs/api-reference')
-    await page.waitForLoadState('networkidle')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForURL(DOCS_API_REFERENCE_PATTERN)
 
     const newUrl = page.url()
     const newH1 = await page.locator('h1').first().textContent()
@@ -61,7 +63,7 @@ test.describe('URL-Content Synchronization', () => {
       { url: '/', expectedInUrl: '/' },
     ]
 
-    const h1Texts: string[] = []
+    const h1Texts: (string | null)[] = []
 
     for (const pageInfo of pages) {
       await page.goto(pageInfo.url)
@@ -74,10 +76,11 @@ test.describe('URL-Content Synchronization', () => {
 
       expect(h1Text).toBeTruthy()
 
-      h1Texts.push(h1Text || '')
+      h1Texts.push(h1Text)
     }
 
-    const uniqueH1s = new Set(h1Texts)
+    const nonNullH1s = h1Texts.filter(text => text !== null)
+    const uniqueH1s = new Set(nonNullH1s)
 
     expect(uniqueH1s.size).toBeGreaterThanOrEqual(4)
   })
@@ -88,16 +91,16 @@ test.describe('URL-Content Synchronization', () => {
 
     const startTime = Date.now()
 
-    await page.goto('/docs/api-reference')
+    await page.locator('a[href="/docs/api-reference"]').click()
 
-    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE, { timeout: 5000 })
+    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE, { timeout: 1000 })
 
-    await expect(page.locator('h1')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 1000 })
 
     const endTime = Date.now()
     const duration = endTime - startTime
 
-    expect(duration).toBeLessThan(5000)
+    expect(duration).toBeLessThan(1000)
 
     const h1Text = await page.locator('h1').first().textContent()
     expect(h1Text).toBeTruthy()
@@ -111,8 +114,8 @@ test.describe('URL-Content Synchronization', () => {
 
     await backgroundForegroundCycle(page, TIMEOUTS.SHORT_WAIT)
 
-    await page.goto('/docs/api-reference')
-    await page.waitForLoadState('networkidle')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForURL(DOCS_API_REFERENCE_PATTERN)
 
     const apiReferenceH1 = await page.locator('h1').first().textContent()
 
@@ -124,12 +127,12 @@ test.describe('URL-Content Synchronization', () => {
 
   test('Rapid URL changes result in correct final content', async ({ page }) => {
     await page.goto('/docs/getting-started')
-    await page.waitForTimeout(100)
+    await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/api-reference')
-    await page.waitForTimeout(100)
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForTimeout(TIMEOUTS.SHORT_WAIT)
 
-    await page.goto('/blog')
+    await page.locator('a[href="/blog"]').click()
 
     await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.NAVIGATION })
 

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 export async function backgroundApp(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -50,17 +51,17 @@ export async function hasRouteCache(page: Page): Promise<boolean> {
 }
 
 export async function openMobileMenu(page: Page): Promise<void> {
-  const { expect } = await import('@playwright/test')
   const menuButton = page.locator('label[aria-label="Open navigation menu"]')
   await menuButton.click()
-  await expect(await isMobileMenuOpen(page)).toBeTruthy()
+  const toggle = page.locator('#mobile-menu-toggle')
+  await expect(toggle).toBeChecked()
 }
 
 export async function closeMobileMenu(page: Page): Promise<void> {
-  const { expect } = await import('@playwright/test')
   const closeButton = page.locator('label[aria-label="Close navigation menu"]')
   await closeButton.click()
-  await expect(await isMobileMenuOpen(page)).toBeFalsy()
+  const toggle = page.locator('#mobile-menu-toggle')
+  await expect(toggle).not.toBeChecked()
 }
 
 export async function isMobileMenuOpen(page: Page): Promise<boolean> {

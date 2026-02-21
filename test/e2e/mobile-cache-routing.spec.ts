@@ -3,7 +3,11 @@ import { MOBILE_DEVICES, TIMEOUTS, URL_PATTERNS } from './shared/constants'
 import { backgroundApp, backgroundForegroundCycle, foregroundApp, getRouteCacheSize, hasRouteCache } from './shared/mobile-helpers'
 
 test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
-  test.use(MOBILE_DEVICES.IPHONE)
+  test.use({
+    ...MOBILE_DEVICES.IPHONE,
+    isMobile: true,
+    hasTouch: true,
+  })
 
   test('Navigate between docs pages multiple times', async ({ page }) => {
     await page.goto('/docs/getting-started')
@@ -76,10 +80,12 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
   test('Cache survives multiple navigations', async ({ page }) => {
     const requests: string[] = []
 
-    page.on('request', (request) => {
+    const docsRequestHandler = (request: any) => {
       if (request.url().includes('/docs/'))
         requests.push(request.url())
-    })
+    }
+
+    page.on('request', docsRequestHandler)
 
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
@@ -96,6 +102,8 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     expect(requests.length).toBeLessThanOrEqual(initialRequestCount)
 
     await expect(page.locator('h1')).toBeVisible()
+
+    page.off('request', docsRequestHandler)
   })
 
   test('RouteInfoCache clears on visibility change', async ({ page }) => {
@@ -105,7 +113,9 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     const hasCacheBefore = await hasRouteCache(page)
     expect(hasCacheBefore).toBe(true)
 
-    await backgroundForegroundCycle(page, TIMEOUTS.SHORT_WAIT)
+    await backgroundApp(page)
+    await page.waitForTimeout(31000)
+    await foregroundApp(page)
 
     const cacheSize = await getRouteCacheSize(page)
 
@@ -151,7 +161,8 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.waitForURL(URL_PATTERNS.HOME)
 
-    await page.goto('/docs/api-reference')
+    await page.goto('/docs/api-reference', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE)
 
     await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.NAVIGATION })
     await expect(page).toHaveURL(URL_PATTERNS.DOCS_API_REFERENCE)
@@ -243,7 +254,9 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     const cacheStillExists = await hasRouteCache(page)
     expect(cacheStillExists).toBe(true)
 
-    await backgroundForegroundCycle(page, TIMEOUTS.SHORT_WAIT)
+    await backgroundApp(page)
+    await page.waitForTimeout(31000)
+    await foregroundApp(page)
 
     const cacheSizeAfterClear = await getRouteCacheSize(page)
 

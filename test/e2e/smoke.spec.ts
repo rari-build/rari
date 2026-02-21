@@ -76,7 +76,8 @@ test.describe('Mobile Smoke Tests', () => {
     await page.goto('/docs/getting-started')
     await expect(page.locator('h1')).toBeVisible()
 
-    await page.goto('/docs/api-reference')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await expect(page).toHaveURL(URL_PATTERNS.DOCS_API_REFERENCE)
     await expect(page.locator('h1')).toBeVisible()
 
     await page.goBack()

@@ -1,11 +1,11 @@
 export const URL_PATTERNS = {
   HOME: /\/$/,
   DOCS_GETTING_STARTED: /\/docs\/getting-started$/,
-  DOCS_API_REFERENCE: /\/docs\/api-reference/,
-  DOCS_ROUTING: /\/docs\/getting-started\/routing/,
-  DOCS_DATA_FETCHING: /\/docs\/getting-started\/data-fetching/,
-  BLOG: /\/blog/,
-  ENTERPRISE: /\/enterprise/,
+  DOCS_API_REFERENCE: /\/docs\/api-reference$/,
+  DOCS_ROUTING: /\/docs\/getting-started\/routing$/,
+  DOCS_DATA_FETCHING: /\/docs\/getting-started\/data-fetching$/,
+  BLOG: /\/blog$/,
+  ENTERPRISE: /\/enterprise$/,
 } as const
 
 export const MOBILE_DEVICES = {

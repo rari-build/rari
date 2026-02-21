@@ -197,6 +197,7 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
 export interface ClientRouterProps {
   children: React.ReactNode
   initialRoute: string
+  staleWindowMs?: number
 }
 
 interface NavigationState {
@@ -220,7 +221,7 @@ interface HistoryState {
   key: string
 }
 
-export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
+export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }: ClientRouterProps) {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute: normalizePath(initialRoute),
     navigationId: 0,
@@ -253,7 +254,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
-  const STALE_WINDOW_MS = 30_000
+  const STALE_WINDOW_MS = staleWindowMs
 
   const generateHistoryKey = (): string => {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -640,11 +641,13 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     const pathname = window.location.pathname
     const historyState = event.state as HistoryState | null
 
-    navigate(pathname, {
-      replace: true,
-      scroll: false,
-      historyKey: historyState?.key,
-    })
+    if (navigateRef.current) {
+      navigateRef.current(pathname, {
+        replace: true,
+        scroll: false,
+        historyKey: historyState?.key,
+      })
+    }
   }
 
   const handleRetry = () => {
