@@ -1,3 +1,4 @@
+import type { Request as PlaywrightRequest } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { MOBILE_DEVICES, TIMEOUTS, URL_PATTERNS } from './shared/constants'
 import { backgroundApp, backgroundForegroundCycle, foregroundApp, getRouteCacheSize, hasRouteCache } from './shared/mobile-helpers'
@@ -80,7 +81,7 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
   test('Cache survives multiple navigations', async ({ page }) => {
     const requests: string[] = []
 
-    const docsRequestHandler = (request: any) => {
+    const docsRequestHandler = (request: PlaywrightRequest) => {
       if (request.url().includes('/docs/'))
         requests.push(request.url())
     }

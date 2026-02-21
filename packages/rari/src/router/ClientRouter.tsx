@@ -570,10 +570,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   processNavigationQueueRef.current = processNavigationQueue
 
   const navigateRef = useRef(navigate)
-
-  useEffect(() => {
-    navigateRef.current = navigate
-  }, [navigate])
+  navigateRef.current = navigate
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
@@ -742,7 +739,13 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [staleWindowMs])
 
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
       isMountedRef.current = false
 
       cancelNavigation()
@@ -751,7 +754,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       if (debouncedNavigateRef.current?.cancel)
         debouncedNavigateRef.current.cancel()
     }
-  }, [staleWindowMs])
+  }, [])
 
   return (
     <>

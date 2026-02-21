@@ -39,7 +39,7 @@ test.describe('URL-Content Synchronization', () => {
     const initialH1 = await page.locator('h1').first().textContent()
 
     await backgroundApp(page)
-    await page.waitForTimeout(TIMEOUTS.LONG_WAIT / 2)
+    await page.waitForTimeout(TIMEOUTS.SHORT_WAIT)
 
     await foregroundApp(page)
     await page.waitForTimeout(TIMEOUTS.MEDIUM_WAIT)
@@ -101,9 +101,9 @@ test.describe('URL-Content Synchronization', () => {
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
+    const startTime = Date.now()
     await page.locator('a[href="/docs/api-reference"]').click()
 
-    const startTime = Date.now()
     await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE)
     const endTime = Date.now()
     const duration = endTime - startTime
@@ -159,7 +159,8 @@ test.describe('URL-Content Synchronization', () => {
     await page.waitForLoadState('networkidle')
     const gettingStartedH1 = await page.locator('h1').first().textContent()
 
-    await page.goto('/docs/api-reference')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE)
     await page.waitForLoadState('networkidle')
     const apiReferenceH1 = await page.locator('h1').first().textContent()
 
@@ -183,7 +184,8 @@ test.describe('URL-Content Synchronization', () => {
       await backgroundForegroundCycle(page, TIMEOUTS.SHORT_WAIT)
     }
 
-    await page.goto('/docs/api-reference')
+    await page.locator('a[href="/docs/api-reference"]').click()
+    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE)
     await page.waitForLoadState('networkidle')
 
     const url = page.url()
