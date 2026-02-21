@@ -36,6 +36,14 @@ if (typeof window !== 'undefined') {
                   return null
                 }
               }
+
+              if (error.message === 'Load failed') {
+                const stack = error.stack || ''
+                if (stack.includes('fetchRouteInfo') || stack.includes('route-info')) {
+                  console.warn('[Sentry] Skipping Safari iOS response.json() error (handled with fallback)')
+                  return null
+                }
+              }
             }
 
             if (typeof error === 'string') {
