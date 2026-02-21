@@ -251,10 +251,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }))
 
   const lastHiddenAtRef = useRef<number | null>(null)
+  const staleWindowMsRef = useRef<number>(staleWindowMs)
 
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
-  const STALE_WINDOW_MS = staleWindowMs
 
   const generateHistoryKey = (): string => {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -570,7 +570,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   processNavigationQueueRef.current = processNavigationQueue
 
   const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
+
+  useEffect(() => {
+    navigateRef.current = navigate
+  }, [navigate])
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
@@ -711,6 +714,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }
 
   useEffect(() => {
+    staleWindowMsRef.current = staleWindowMs
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         lastHiddenAtRef.current = Date.now()
@@ -718,7 +723,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       else {
         if (lastHiddenAtRef.current !== null) {
           const hiddenDuration = Date.now() - lastHiddenAtRef.current
-          if (hiddenDuration > STALE_WINDOW_MS) {
+          if (hiddenDuration > staleWindowMsRef.current) {
             routeInfoCache.clear()
           }
         }
@@ -746,7 +751,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       if (debouncedNavigateRef.current?.cancel)
         debouncedNavigateRef.current.cancel()
     }
-  }, [])
+  }, [staleWindowMs])
 
   return (
     <>

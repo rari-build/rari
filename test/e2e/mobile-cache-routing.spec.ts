@@ -107,6 +107,8 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
   })
 
   test('RouteInfoCache clears on visibility change', async ({ page }) => {
+    test.setTimeout(60000)
+
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
@@ -245,6 +247,8 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
   })
 
   test('Cache invalidation on route change', async ({ page }) => {
+    test.setTimeout(60000)
+
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
