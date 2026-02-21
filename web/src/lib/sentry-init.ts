@@ -38,14 +38,6 @@ if (typeof window !== 'undefined') {
                   return null
                 }
               }
-
-              if (error.message === 'Load failed') {
-                const stack = error.stack || ''
-                if (stack.includes('fetchRouteInfo') || stack.includes('route-info')) {
-                  console.warn('[Sentry] Skipping Safari iOS response.json() error (handled with fallback)')
-                  return null
-                }
-              }
             }
 
             if (typeof error === 'string') {
@@ -59,7 +51,9 @@ if (typeof window !== 'undefined') {
           },
         })
 
-        ;(window as any).Sentry = Sentry
+        if (import.meta.env.DEV) {
+          ;(window as any).Sentry = Sentry
+        }
       }
       catch (error) {
         console.warn('[Sentry] Failed to initialize:', error)

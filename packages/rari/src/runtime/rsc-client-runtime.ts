@@ -1584,7 +1584,7 @@ class HMRErrorOverlay {
 
     const errorPre = document.createElement('pre')
     errorPre.style.cssText = 'margin: 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 0.375rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #fca5a5;'
-    errorPre.textContent = error.message
+    errorPre.textContent = error.message ?? 'An error occurred'
 
     errorSection.appendChild(errorTitle)
     errorSection.appendChild(errorPre)
@@ -1634,7 +1634,8 @@ class HMRErrorOverlay {
 
     const timestamp = document.createElement('span')
     timestamp.style.cssText = 'margin-left: auto; font-size: 0.75rem; color: #9ca3af;'
-    timestamp.textContent = new Date(error.timestamp).toLocaleTimeString()
+    const timestampDate = new Date(error.timestamp)
+    timestamp.textContent = !Number.isNaN(timestampDate.valueOf()) ? timestampDate.toLocaleTimeString() : ''
 
     footer.appendChild(reloadButton)
     footer.appendChild(dismissButton)

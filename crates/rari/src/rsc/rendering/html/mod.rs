@@ -803,10 +803,10 @@ impl RscHtmlRenderer {
             Self::escape_js_string(&rsc_row),
             Self::escape_js_string(boundary_id),
             Self::escape_js_string(&rsc_row),
-            row_id,
+            Self::escape_js_string(&row_id.to_string()),
             Self::escape_js_string(boundary_id),
             Self::escape_js_string(&rsc_row),
-            row_id
+            Self::escape_js_string(&row_id.to_string())
         );
 
         Ok(update_script)
@@ -923,13 +923,7 @@ impl RscToHtmlConverter {
                     return Ok(Vec::new());
                 }
 
-                let escaped_row = rsc_line
-                    .trim()
-                    .cow_replace('\\', "\\\\")
-                    .cow_replace('\'', "\\'")
-                    .cow_replace('\n', "\\n")
-                    .cow_replace("</script>", "<\\/script>")
-                    .into_owned();
+                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1415,12 +1409,7 @@ if (typeof window !== 'undefined') {{
             Some(id) => id.clone(),
             None => {
                 error!("Boundary update chunk missing boundary_id");
-                let escaped_row = rsc_line
-                    .trim()
-                    .cow_replace('\\', "\\\\")
-                    .cow_replace('\'', "\\'")
-                    .cow_replace('\n', "\\n")
-                    .into_owned();
+                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1439,13 +1428,7 @@ if (typeof window !== 'undefined') {{
         let row_id = chunk.row_id;
         let _content_json = parts[1];
 
-        let escaped_row = rsc_line
-            .trim()
-            .cow_replace('\\', "\\\\")
-            .cow_replace('\'', "\\'")
-            .cow_replace('\n', "\\n")
-            .cow_replace("</script>", "<\\/script>")
-            .into_owned();
+        let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
 
         let script = format!(
             r#"<script data-boundary-id="{}" data-row-id="{}">
@@ -1472,10 +1455,10 @@ if (typeof window !== 'undefined') {{
             escaped_row,
             RscHtmlRenderer::escape_js_string(&boundary_id),
             escaped_row,
-            row_id,
+            RscHtmlRenderer::escape_js_string(&row_id.to_string()),
             RscHtmlRenderer::escape_js_string(&boundary_id),
             escaped_row,
-            row_id
+            RscHtmlRenderer::escape_js_string(&row_id.to_string())
         );
 
         Ok(script.into_bytes())

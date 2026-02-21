@@ -37,17 +37,20 @@ class RouteInfoCache {
       body: JSON.stringify(request),
     })
 
-    const clonedResponse = response.clone()
-
     if (!response.ok) {
       let error: RouteInfoError | null = null
       try {
         error = await response.json()
       }
-      catch {
-      }
-      throw new Error(error?.error || `Failed to fetch route info: ${response.status} ${response.statusText}`)
+      catch {}
+
+      if (error?.error)
+        throw new Error(error.error)
+
+      throw new Error(`Failed to fetch route info: ${response.status} ${response.statusText}`)
     }
+
+    const clonedResponse = response.clone()
 
     try {
       return await response.json()

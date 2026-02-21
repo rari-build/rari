@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useState } from 'react'
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun' | 'deno'
 
-const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun', 'deno'] as const
+const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun', 'deno']
 
 interface PackageManagerContextType {
   packageManager: PackageManager
