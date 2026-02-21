@@ -1,6 +1,6 @@
+use crate::rsc::rendering::html::escape_html;
 use crate::rsc::rendering::layout::types::PageMetadata;
 use crate::server::image::ImageOptimizer;
-use cow_utils::CowUtils;
 
 pub fn inject_metadata(
     html: &str,
@@ -47,6 +47,15 @@ pub fn inject_metadata(
     if let Some(head_start) = result.find("<head")
         && let Some(head_open_end) = result[head_start..].find('>')
     {
+        let byte_after_head = result.as_bytes().get(head_start + 5);
+        if let Some(&b) = byte_after_head {
+            if b != b'>' && !b.is_ascii_whitespace() {
+                return result;
+            }
+        } else {
+            return result;
+        }
+
         let insert_pos = head_start + head_open_end + 1;
         let mut critical_tags = String::new();
 
@@ -416,15 +425,6 @@ pub fn inject_metadata(
     result
 }
 
-fn escape_html(s: &str) -> String {
-    s.cow_replace('&', "&amp;")
-        .cow_replace('<', "&lt;")
-        .cow_replace('>', "&gt;")
-        .cow_replace('"', "&quot;")
-        .cow_replace('\'', "&#x27;")
-        .into_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -636,9 +636,9 @@ mod tests {
 
         let result = inject_metadata(html, &metadata, None);
 
-        assert!(result.contains("Test &amp; &lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"));
+        assert!(result.contains("Test &amp; &lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"));
         assert!(
-            result.contains(r#"Description with &quot;quotes&quot; and &#x27;apostrophes&#x27;"#)
+            result.contains(r#"Description with &quot;quotes&quot; and &#39;apostrophes&#39;"#)
         );
     }
 
@@ -673,6 +673,17 @@ mod tests {
         assert!(result.contains(
             r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
         ));
+
+        let charset_pos =
+            result.find(r#"<meta charset="UTF-8" />"#).expect("charset meta tag should be present");
+        let viewport_pos = result
+            .find(r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#)
+            .expect("viewport meta tag should be present");
+        let title_pos = result.find("<title>").expect("title tag should be present");
+
+        assert!(charset_pos < title_pos, "charset meta tag should appear before title");
+        assert!(viewport_pos < title_pos, "viewport meta tag should appear before title");
+        assert!(charset_pos < viewport_pos, "charset should appear before viewport");
     }
 
     #[test]
@@ -742,4 +753,36 @@ mod tests {
             r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
         ));
     }
+}
+
+#[test]
+fn test_no_injection_into_header_tag() {
+    let html = r#"<!DOCTYPE html>
+<html>
+<header>
+    <title>This is not a head tag</title>
+</header>
+<body></body>
+</html>"#;
+
+    let metadata = PageMetadata {
+        title: Some("Test".to_string()),
+        description: Some("Test description".to_string()),
+        keywords: None,
+        open_graph: None,
+        twitter: None,
+        robots: None,
+        viewport: None,
+        canonical: None,
+        icons: None,
+        manifest: None,
+        theme_color: None,
+        apple_web_app: None,
+    };
+
+    let result = inject_metadata(html, &metadata, None);
+
+    assert!(!result.contains(r#"<meta charset="UTF-8" />"#));
+    assert!(!result.contains(r#"<meta name="viewport""#));
+    assert!(result.contains("<title>Test</title>"));
 }

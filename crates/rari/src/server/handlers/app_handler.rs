@@ -1126,7 +1126,7 @@ pub async fn handle_app_route(
                 }
             };
 
-            let (html_with_assets, etag) = match render_result {
+            let (final_html, etag) = match render_result {
                 crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
                     let html_with_assets =
                         match inject_assets_into_html(&html_content, &state.config).await {
@@ -1271,7 +1271,7 @@ pub async fn handle_app_route(
 
             if cache_policy.enabled {
                 let cached_response = response_cache::CachedResponse {
-                    body: bytes::Bytes::from(html_with_assets.clone()),
+                    body: bytes::Bytes::from(final_html.clone()),
                     headers: response_headers,
                     metadata: response_cache::CacheMetadata {
                         cached_at: std::time::Instant::now(),
@@ -1284,7 +1284,7 @@ pub async fn handle_app_route(
                 state.response_cache.set(cache_key, cached_response).await;
             }
 
-            Ok(response_builder.body(Body::from(html_with_assets)).expect("Valid HTML response"))
+            Ok(response_builder.body(Body::from(final_html)).expect("Valid HTML response"))
         }
     }
 }

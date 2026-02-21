@@ -16,6 +16,15 @@ const SELF_CLOSING_TAGS: &[&str] = &[
     "track", "wbr",
 ];
 
+pub fn escape_html(text: &str) -> String {
+    text.cow_replace('&', "&amp;")
+        .cow_replace('<', "&lt;")
+        .cow_replace('>', "&gt;")
+        .cow_replace('"', "&quot;")
+        .cow_replace('\'', "&#39;")
+        .into_owned()
+}
+
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     let style_parts: Vec<String> = style_obj
         .iter()
@@ -1166,15 +1175,6 @@ if (typeof window !== 'undefined') {{
         Ok(html.into_bytes())
     }
 
-    fn escape_html(text: &str) -> String {
-        text.cow_replace('&', "&amp;")
-            .cow_replace('<', "&lt;")
-            .cow_replace('>', "&gt;")
-            .cow_replace('"', "&quot;")
-            .cow_replace('\'', "&#39;")
-            .into_owned()
-    }
-
     fn escape_attribute(text: &str) -> String {
         text.cow_replace('&', "&amp;")
             .cow_replace('"', "&quot;")
@@ -1221,7 +1221,7 @@ if (typeof window !== 'undefined') {{
                     }
                 }
 
-                return Ok(Self::escape_html(s));
+                return Ok(escape_html(s));
             }
 
             if let Some(arr) = element.as_array() {
@@ -1542,7 +1542,7 @@ if (typeof window !== 'undefined') {{
                 r#"<div class="rari-error" style="color: red; border: 1px solid red; padding: 10px; border-radius: 4px; background-color: #fff5f5;">
                 <strong>Error loading content:</strong> {}
             </div>"#,
-                Self::escape_html(&error_message)
+                escape_html(&error_message)
             );
 
             let content_id = format!("S:{}", react_boundary_id.trim_start_matches("B:"));
