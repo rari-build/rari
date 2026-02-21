@@ -38,6 +38,13 @@ if (typeof window !== 'undefined') {
               }
             }
 
+            if (typeof error === 'string') {
+              if (error.includes('Object Not Found Matching Id:') && error.includes('MethodName:')) {
+                console.warn('[Sentry] Skipping bot-related promise rejection')
+                return null
+              }
+            }
+
             return event
           },
         })
