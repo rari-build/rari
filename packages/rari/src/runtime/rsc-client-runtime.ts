@@ -1475,10 +1475,12 @@ if (import.meta.hot) {
 class HMRErrorOverlay {
   overlay: HTMLElement | null
   currentError: any
+  private escapeKeyHandler: ((e: KeyboardEvent) => void) | null
 
   constructor() {
     this.overlay = null
     this.currentError = null
+    this.escapeKeyHandler = null
   }
 
   show(error: any): void {
@@ -1495,6 +1497,10 @@ class HMRErrorOverlay {
       this.overlay = null
       this.currentError = null
     }
+    if (this.escapeKeyHandler) {
+      document.removeEventListener('keydown', this.escapeKeyHandler)
+      this.escapeKeyHandler = null
+    }
   }
 
   isVisible(): boolean {
@@ -1506,6 +1512,12 @@ class HMRErrorOverlay {
     this.overlay.id = 'rari-hmr-error-overlay'
     this.updateOverlay(error)
     document.body.appendChild(this.overlay)
+
+    this.escapeKeyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape')
+        this.hide()
+    }
+    document.addEventListener('keydown', this.escapeKeyHandler)
   }
 
   updateOverlay(error: any): void {
@@ -1551,6 +1563,7 @@ class HMRErrorOverlay {
     const closeButton = document.createElement('button')
     closeButton.style.cssText = 'background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.25rem; transition: all 0.2s; font-size: 1.5rem; line-height: 1; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;'
     closeButton.textContent = '×'
+    closeButton.setAttribute('aria-label', 'Close overlay')
     closeButton.onclick = () => this.hide()
     closeButton.onmouseover = () => {
       closeButton.style.background = 'rgba(255,255,255,0.1)'

@@ -828,6 +828,9 @@ impl RscHtmlRenderer {
             .cow_replace('\r', "\\r")
             .cow_replace('\t', "\\t")
             .cow_replace("</", "<\\/")
+            .cow_replace('\u{2028}', "\\u2028")
+            .cow_replace('\u{2029}', "\\u2029")
+            .cow_replace('\0', "\\0")
             .into_owned()
     }
 }
@@ -1062,7 +1065,7 @@ impl RscToHtmlConverter {
 
         let rsc_script = if !rsc_payload.is_empty() {
             format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/rsc-payload">{}</script>
 "#,
                 escaped_payload
             )
