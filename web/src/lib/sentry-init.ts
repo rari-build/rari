@@ -1,7 +1,7 @@
 if (typeof window !== 'undefined') {
   const dsn = import.meta.env.VITE_SENTRY_DSN
 
-  const EXTENSION_PATTERN = /chrome-extension:\/\/|safari-extension:|edge-extension:|extensions::/
+  const EXTENSION_PATTERN = /chrome-extension:\/\/|moz-extension:\/\/|safari-extension:|edge-extension:|extensions::/
 
   if (dsn) {
     import('@sentry/react').then((Sentry) => {

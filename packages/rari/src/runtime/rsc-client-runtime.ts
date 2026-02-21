@@ -1560,6 +1560,14 @@ class HMRErrorOverlay {
       closeButton.style.background = 'transparent'
       closeButton.style.color = '#9ca3af'
     }
+    closeButton.onfocus = () => {
+      closeButton.style.background = 'rgba(255,255,255,0.1)'
+      closeButton.style.color = '#e0e0e0'
+    }
+    closeButton.onblur = () => {
+      closeButton.style.background = 'transparent'
+      closeButton.style.color = '#9ca3af'
+    }
 
     header.appendChild(headerLeft)
     header.appendChild(closeButton)
@@ -1620,6 +1628,12 @@ class HMRErrorOverlay {
     reloadButton.onmouseout = () => {
       reloadButton.style.background = '#ef4444'
     }
+    reloadButton.onfocus = () => {
+      reloadButton.style.background = '#dc2626'
+    }
+    reloadButton.onblur = () => {
+      reloadButton.style.background = '#ef4444'
+    }
 
     const dismissButton = document.createElement('button')
     dismissButton.style.cssText = 'padding: 0.625rem 1.25rem; background: #374151; color: #e0e0e0; border: none; border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: all 0.2s;'
@@ -1629,6 +1643,12 @@ class HMRErrorOverlay {
       dismissButton.style.background = '#4b5563'
     }
     dismissButton.onmouseout = () => {
+      dismissButton.style.background = '#374151'
+    }
+    dismissButton.onfocus = () => {
+      dismissButton.style.background = '#4b5563'
+    }
+    dismissButton.onblur = () => {
       dismissButton.style.background = '#374151'
     }
 

@@ -1058,7 +1058,7 @@ impl RscToHtmlConverter {
 
         let rsc_payload = self.rsc_wire_format.join("\n");
 
-        let escaped_payload = rsc_payload.cow_replace("</script>", "<\\/script>");
+        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
 
         let rsc_script = if !rsc_payload.is_empty() {
             format!(
