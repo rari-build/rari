@@ -282,8 +282,11 @@ pub fn inject_metadata(
                     IconValue::Detailed(icon_list) => {
                         for icon in icon_list {
                             let rel = icon.rel.as_deref().unwrap_or("icon");
-                            let mut attrs =
-                                format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                            let mut attrs = format!(
+                                r#"rel="{}" href="{}""#,
+                                escape_html(rel),
+                                escape_html(&icon.url)
+                            );
                             if let Some(icon_type) = &icon.icon_type {
                                 attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
                             }
@@ -317,8 +320,11 @@ pub fn inject_metadata(
                     IconValue::Detailed(apple_list) => {
                         for icon in apple_list {
                             let rel = icon.rel.as_deref().unwrap_or("apple-touch-icon");
-                            let mut attrs =
-                                format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                            let mut attrs = format!(
+                                r#"rel="{}" href="{}""#,
+                                escape_html(rel),
+                                escape_html(&icon.url)
+                            );
                             if let Some(sizes) = &icon.sizes {
                                 attrs.push_str(&format!(r#" sizes="{}""#, escape_html(sizes)));
                             }
@@ -330,7 +336,8 @@ pub fn inject_metadata(
             if let Some(other_list) = &icons.other {
                 for icon in other_list {
                     let rel = icon.rel.as_deref().unwrap_or("icon");
-                    let mut attrs = format!(r#"rel="{}" href="{}""#, rel, escape_html(&icon.url));
+                    let mut attrs =
+                        format!(r#"rel="{}" href="{}""#, escape_html(rel), escape_html(&icon.url));
                     if let Some(icon_type) = &icon.icon_type {
                         attrs.push_str(&format!(r#" type="{}""#, escape_html(icon_type)));
                     }
@@ -753,11 +760,10 @@ mod tests {
             r#"<meta name="viewport" content="width=device-width, initial-scale=1.0" />"#
         ));
     }
-}
 
-#[test]
-fn test_no_injection_into_header_tag() {
-    let html = r#"<!DOCTYPE html>
+    #[test]
+    fn test_no_injection_into_header_tag() {
+        let html = r#"<!DOCTYPE html>
 <html>
 <header>
     <title>This is not a head tag</title>
@@ -765,24 +771,25 @@ fn test_no_injection_into_header_tag() {
 <body></body>
 </html>"#;
 
-    let metadata = PageMetadata {
-        title: Some("Test".to_string()),
-        description: Some("Test description".to_string()),
-        keywords: None,
-        open_graph: None,
-        twitter: None,
-        robots: None,
-        viewport: None,
-        canonical: None,
-        icons: None,
-        manifest: None,
-        theme_color: None,
-        apple_web_app: None,
-    };
+        let metadata = PageMetadata {
+            title: Some("Test".to_string()),
+            description: Some("Test description".to_string()),
+            keywords: None,
+            open_graph: None,
+            twitter: None,
+            robots: None,
+            viewport: None,
+            canonical: None,
+            icons: None,
+            manifest: None,
+            theme_color: None,
+            apple_web_app: None,
+        };
 
-    let result = inject_metadata(html, &metadata, None);
+        let result = inject_metadata(html, &metadata, None);
 
-    assert!(!result.contains(r#"<meta charset="UTF-8" />"#));
-    assert!(!result.contains(r#"<meta name="viewport""#));
-    assert!(result.contains("<title>Test</title>"));
+        assert!(!result.contains(r#"<meta charset="UTF-8" />"#));
+        assert!(!result.contains(r#"<meta name="viewport""#));
+        assert!(result.contains("<title>Test</title>"));
+    }
 }

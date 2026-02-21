@@ -552,13 +552,7 @@ impl RscHtmlRenderer {
                         return Ok(String::new());
                     }
 
-                    Ok(text
-                        .cow_replace('&', "&amp;")
-                        .cow_replace('<', "&lt;")
-                        .cow_replace('>', "&gt;")
-                        .cow_replace('"', "&quot;")
-                        .cow_replace('\'', "&#39;")
-                        .into_owned())
+                    Ok(escape_html(text))
                 }
 
                 RscElement::Component { tag, key: _, props } => {
@@ -738,13 +732,7 @@ impl RscHtmlRenderer {
                 {
                     return self.render_row(row_id, row_map, row_cache).await;
                 }
-                return Ok(s
-                    .cow_replace('&', "&amp;")
-                    .cow_replace('<', "&lt;")
-                    .cow_replace('>', "&gt;")
-                    .cow_replace('"', "&quot;")
-                    .cow_replace('\'', "&#39;")
-                    .into_owned());
+                return Ok(escape_html(s));
             }
 
             if let Some(arr) = json.as_array() {
