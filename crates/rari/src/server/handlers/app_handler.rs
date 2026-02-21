@@ -401,17 +401,17 @@ pub async fn render_synchronous(
     {
         Ok(render_result) => match render_result {
             crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
-                let html_with_metadata =
-                    wrap_html_with_metadata(html_content, context.metadata.as_ref(), &state);
-
-                let final_html =
-                    match inject_assets_into_html(&html_with_metadata, &state.config).await {
+                let html_with_assets =
+                    match inject_assets_into_html(&html_content, &state.config).await {
                         Ok(html) => html,
                         Err(e) => {
                             error!("Failed to inject assets into HTML: {}", e);
-                            html_with_metadata
+                            html_content
                         }
                     };
+
+                let final_html =
+                    wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
                 let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
@@ -626,17 +626,16 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            let html_with_metadata =
-                wrap_html_with_metadata(html, context.metadata.as_ref(), &state);
-
-            let final_html = match inject_assets_into_html(&html_with_metadata, &state.config).await
-            {
+            let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
                     error!("Failed to inject assets into HTML: {}", e);
-                    html_with_metadata
+                    html
                 }
             };
+
+            let final_html =
+                wrap_html_with_metadata(html_with_assets, context.metadata.as_ref(), &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
@@ -1129,22 +1128,24 @@ pub async fn handle_app_route(
 
             let (html_with_assets, etag) = match render_result {
                 crate::rsc::rendering::layout::RenderResult::Static(html_content) => {
-                    let html_with_metadata =
-                        wrap_html_with_metadata(html_content, context.metadata.as_ref(), &state);
-
                     let html_with_assets =
-                        match inject_assets_into_html(&html_with_metadata, &state.config).await {
+                        match inject_assets_into_html(&html_content, &state.config).await {
                             Ok(html) => html,
                             Err(e) => {
                                 error!("Failed to inject assets into HTML: {}", e);
-                                html_with_metadata
+                                html_content
                             }
                         };
 
-                    let etag =
-                        response_cache::ResponseCache::generate_etag(html_with_assets.as_bytes());
+                    let final_html = wrap_html_with_metadata(
+                        html_with_assets,
+                        context.metadata.as_ref(),
+                        &state,
+                    );
 
-                    (html_with_assets, etag)
+                    let etag = response_cache::ResponseCache::generate_etag(final_html.as_bytes());
+
+                    (final_html, etag)
                 }
                 crate::rsc::rendering::layout::RenderResult::Streaming(stream) => {
                     let asset_links = extract_asset_links_from_index_html().await;

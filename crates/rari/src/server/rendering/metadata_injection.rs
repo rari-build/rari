@@ -44,22 +44,25 @@ pub fn inject_metadata(
         }
     }
 
-    if let Some(head_end) = result.find("</head>") {
-        let mut meta_tags = String::new();
+    if let Some(head_start) = result.find("<head")
+        && let Some(head_open_end) = result[head_start..].find('>')
+    {
+        let insert_pos = head_start + head_open_end + 1;
+        let mut critical_tags = String::new();
 
         if !result.contains(r#"<meta charset"#) {
-            meta_tags.push_str(
-                r#"    <meta charset="UTF-8" />
-"#,
+            critical_tags.push_str(
+                r#"
+    <meta charset="UTF-8" />"#,
             );
         }
 
         if !result.contains(r#"<meta name="viewport""#) {
             let viewport_content =
                 metadata.viewport.as_deref().unwrap_or("width=device-width, initial-scale=1.0");
-            meta_tags.push_str(&format!(
-                r#"    <meta name="viewport" content="{}" />
-"#,
+            critical_tags.push_str(&format!(
+                r#"
+    <meta name="viewport" content="{}" />"#,
                 escape_html(viewport_content)
             ));
         }
@@ -67,8 +70,20 @@ pub fn inject_metadata(
         if let Some(title) = &metadata.title
             && !result.contains("<title>")
         {
-            meta_tags.push_str(&format!("    <title>{}</title>\n", escape_html(title)));
+            critical_tags.push_str(&format!(
+                r#"
+    <title>{}</title>"#,
+                escape_html(title)
+            ));
         }
+
+        if !critical_tags.is_empty() {
+            result.insert_str(insert_pos, &critical_tags);
+        }
+    }
+
+    if let Some(head_end) = result.find("</head>") {
+        let mut meta_tags = String::new();
 
         if let Some(keywords) = &metadata.keywords
             && !keywords.is_empty()
