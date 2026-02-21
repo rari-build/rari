@@ -711,6 +711,20 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }
 
   useEffect(() => {
+    document.addEventListener('click', handleLinkClick)
+    window.addEventListener('popstate', handlePopState)
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('pageshow', handlePageShow)
+
+    return () => {
+      document.removeEventListener('click', handleLinkClick)
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [])
+
+  useEffect(() => {
     staleWindowMsRef.current = staleWindowMs
 
     const handleVisibilityChange = () => {
@@ -727,17 +741,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       }
     }
 
-    document.addEventListener('click', handleLinkClick)
-    window.addEventListener('popstate', handlePopState)
-    window.addEventListener('pagehide', handlePageHide)
-    window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      document.removeEventListener('click', handleLinkClick)
-      window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('pagehide', handlePageHide)
-      window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [staleWindowMs])

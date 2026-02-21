@@ -25,4 +25,5 @@ export const TIMEOUTS = {
   SHORT_WAIT: 100,
   MEDIUM_WAIT: 500,
   LONG_WAIT: 2000,
+  STALE_WINDOW: 30000,
 } as const

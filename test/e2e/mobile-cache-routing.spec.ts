@@ -117,7 +117,7 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     expect(hasCacheBefore).toBe(true)
 
     await backgroundApp(page)
-    await page.waitForTimeout(31000)
+    await page.waitForTimeout(TIMEOUTS.STALE_WINDOW + 1000)
     await foregroundApp(page)
 
     const cacheSize = await getRouteCacheSize(page)
@@ -260,7 +260,7 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     expect(cacheStillExists).toBe(true)
 
     await backgroundApp(page)
-    await page.waitForTimeout(31000)
+    await page.waitForTimeout(TIMEOUTS.STALE_WINDOW + 1000)
     await foregroundApp(page)
 
     const cacheSizeAfterClear = await getRouteCacheSize(page)
@@ -289,6 +289,6 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
 
     const cacheSize = await getRouteCacheSize(page)
 
-    expect(cacheSize).toBeLessThan(20)
+    expect(cacheSize).toBeLessThan(10)
   })
 })

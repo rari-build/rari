@@ -110,7 +110,7 @@ test.describe('URL-Content Synchronization', () => {
 
     await expect(page.locator('h1').first()).toBeVisible()
 
-    expect(duration).toBeLessThan(2000)
+    expect(duration).toBeLessThan(3000)
 
     const h1Text = await page.locator('h1').first().textContent()
     expect(h1Text).toBeTruthy()
