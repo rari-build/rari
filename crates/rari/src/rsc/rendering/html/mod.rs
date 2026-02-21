@@ -827,6 +827,7 @@ impl RscHtmlRenderer {
             .cow_replace('\n', "\\n")
             .cow_replace('\r', "\\r")
             .cow_replace('\t', "\\t")
+            .cow_replace("</", "<\\/")
             .into_owned()
     }
 }
@@ -927,6 +928,7 @@ impl RscToHtmlConverter {
                     .cow_replace('\\', "\\\\")
                     .cow_replace('\'', "\\'")
                     .cow_replace('\n', "\\n")
+                    .cow_replace("</script>", "<\\/script>")
                     .into_owned();
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
@@ -1442,6 +1444,7 @@ if (typeof window !== 'undefined') {{
             .cow_replace('\\', "\\\\")
             .cow_replace('\'', "\\'")
             .cow_replace('\n', "\\n")
+            .cow_replace("</script>", "<\\/script>")
             .into_owned();
 
         let script = format!(

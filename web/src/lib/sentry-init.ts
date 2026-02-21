@@ -1,12 +1,14 @@
 if (typeof window !== 'undefined') {
   const dsn = import.meta.env.VITE_SENTRY_DSN
 
+  const EXTENSION_PATTERN = /chrome-extension:\/\/|safari-extension:|edge-extension:|extensions::/
+
   if (dsn) {
     import('@sentry/react').then((Sentry) => {
       try {
         Sentry.init({
           dsn,
-          sendDefaultPii: true,
+          sendDefaultPii: false,
           tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
           environment: import.meta.env.DEV ? 'development' : 'production',
           integrations: [
@@ -23,7 +25,7 @@ if (typeof window !== 'undefined') {
             if (error instanceof Error) {
               if (error.message === 'Illegal invocation') {
                 const stack = error.stack || ''
-                if (stack.includes('sentry') || stack.includes('Proxy')) {
+                if (stack.includes('sentry') || EXTENSION_PATTERN.test(stack)) {
                   console.warn('[Sentry] Skipping error caused by browser extension interference')
                   return null
                 }

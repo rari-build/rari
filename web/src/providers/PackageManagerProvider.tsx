@@ -18,9 +18,14 @@ const PackageManagerContext = createContext<PackageManagerContextType | null>(nu
 export function PackageManagerProvider({ children }: { children: ReactNode }) {
   const [packageManager, setPackageManager] = useState<PackageManager>(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('preferred-package-manager') as PackageManager | null
-      if (stored && PACKAGE_MANAGERS.includes(stored))
-        return stored
+      try {
+        const stored = localStorage.getItem('preferred-package-manager') as PackageManager | null
+        if (stored && PACKAGE_MANAGERS.includes(stored))
+          return stored
+      }
+      catch {
+        // localStorage access failed, fall back to default
+      }
     }
 
     return 'pnpm'
@@ -28,7 +33,12 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
 
   const handleSetPackageManager = useCallback((pm: PackageManager) => {
     setPackageManager(pm)
-    localStorage.setItem('preferred-package-manager', pm)
+    try {
+      localStorage.setItem('preferred-package-manager', pm)
+    }
+    catch {
+      // localStorage write failed, but state is still updated
+    }
   }, [])
 
   return (
