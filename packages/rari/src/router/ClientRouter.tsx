@@ -249,8 +249,11 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
     maxHistorySize: 50,
   }))
 
+  const lastHiddenAtRef = useRef<number | null>(null)
+
   const NAVIGATION_DEBOUNCE_MS = 50
   const NAVIGATION_MAX_WAIT_MS = 200
+  const STALE_WINDOW_MS = 30_000
 
   const generateHistoryKey = (): string => {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -565,12 +568,15 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
   processNavigationQueueRef.current = processNavigationQueue
 
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
+
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
   if (!debouncedNavigateRef.current) {
     debouncedNavigateRef.current = debounce(
       (pathname: string, options: NavigationOptions) => {
-        navigate(pathname, options)
+        navigateRef.current(pathname, options)
       },
       NAVIGATION_DEBOUNCE_MS,
       {
@@ -703,8 +709,17 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps) {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden)
-        routeInfoCache.clear()
+      if (document.hidden) {
+        lastHiddenAtRef.current = Date.now()
+      }
+      else {
+        if (lastHiddenAtRef.current !== null) {
+          const hiddenDuration = Date.now() - lastHiddenAtRef.current
+          if (hiddenDuration > STALE_WINDOW_MS) {
+            routeInfoCache.clear()
+          }
+        }
+      }
     }
 
     document.addEventListener('click', handleLinkClick)

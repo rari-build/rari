@@ -17,7 +17,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm --filter web start',
+    command: 'pnpm --filter web build && pnpm --filter web start',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
@@ -29,7 +29,7 @@ export default defineConfig({
       use: {
         ...devices['Pixel 5'],
         launchOptions: {
-          slowMo: process.env.SLOW_MO ? 100 : 0,
+          slowMo: process.env.SLOW_MO ? Number(process.env.SLOW_MO) || 0 : 0,
         },
       },
     },

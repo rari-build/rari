@@ -1,7 +1,7 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
 import ChevronRight from './icons/ChevronRight'
@@ -59,6 +59,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const [manualToggles, setManualToggles] = useResetOnPathnameChange<Record<string, boolean>>({}, pathname)
   const [manualDocsToggle, setManualDocsToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
   const [manualEnterpriseToggle, setManualEnterpriseToggle] = useResetOnPathnameChange<boolean | undefined>(undefined, pathname)
+
+  const mobileToggleRef = useRef<HTMLInputElement>(null)
 
   const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
   const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : isEnterprisePage
@@ -119,9 +121,15 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
     setManualToggles(prev => ({ ...prev, [key]: !expandedSections[key] }))
   }
 
+  useEffect(() => {
+    if (mobileToggleRef.current) {
+      mobileToggleRef.current.checked = false
+    }
+  }, [pathname])
+
   return (
     <>
-      <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" />
+      <input type="checkbox" id="mobile-menu-toggle" className="peer hidden" ref={mobileToggleRef} />
 
       <label
         htmlFor="mobile-menu-toggle"

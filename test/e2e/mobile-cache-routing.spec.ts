@@ -84,12 +84,16 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
+    const initialRequestCount = requests.length
+
     await page.goto('/blog')
     await page.waitForLoadState('networkidle')
 
     requests.length = 0
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
+
+    expect(requests.length).toBeLessThanOrEqual(initialRequestCount)
 
     await expect(page.locator('h1')).toBeVisible()
   })
@@ -132,20 +136,20 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
   })
 
   test('Rapid navigation with cache', async ({ page }) => {
-    await page.goto('/docs/getting-started')
-    await page.waitForTimeout(200)
+    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.DOCS_GETTING_STARTED)
 
-    await page.goto('/docs/api-reference')
-    await page.waitForTimeout(200)
+    await page.goto('/docs/api-reference', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.DOCS_API_REFERENCE)
 
-    await page.goto('/blog')
-    await page.waitForTimeout(200)
+    await page.goto('/blog', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.BLOG)
 
-    await page.goto('/docs/getting-started')
-    await page.waitForTimeout(200)
+    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.DOCS_GETTING_STARTED)
 
-    await page.goto('/')
-    await page.waitForTimeout(200)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(URL_PATTERNS.HOME)
 
     await page.goto('/docs/api-reference')
 
@@ -246,7 +250,7 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
     expect(cacheSizeAfterClear).toBe(0)
   })
 
-  test('No memory leaks after extensive navigation', async ({ page }) => {
+  test('Cache size stays reasonable after navigation', async ({ page }) => {
     const routes = [
       '/docs/getting-started',
       '/docs/api-reference',
@@ -267,6 +271,6 @@ test.describe('Mobile Cache & Routing - Comprehensive Tests', () => {
 
     const cacheSize = await getRouteCacheSize(page)
 
-    expect(cacheSize).toBeLessThan(100)
+    expect(cacheSize).toBeLessThan(20)
   })
 })

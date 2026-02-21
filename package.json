@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:mobile": "playwright test --project='Mobile Chrome'",
+    "test:e2e:mobile": "playwright test --project \"Mobile Chrome\"",
     "test:e2e:smoke": "playwright test smoke.spec.ts",
     "test:e2e:debug": "playwright test --debug"
   },

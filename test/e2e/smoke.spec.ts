@@ -42,7 +42,11 @@ test.describe('Smoke Tests', () => {
 })
 
 test.describe('Mobile Smoke Tests', () => {
-  test.use(MOBILE_DEVICES.IPHONE)
+  test.use({
+    ...MOBILE_DEVICES.IPHONE,
+    isMobile: true,
+    hasTouch: true,
+  })
 
   test('mobile homepage loads', async ({ page }) => {
     await page.goto('/')

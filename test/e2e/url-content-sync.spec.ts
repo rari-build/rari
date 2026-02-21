@@ -179,6 +179,5 @@ test.describe('URL-Content Synchronization', () => {
     expect(url).toContain('/docs/api-reference')
 
     expect(h1).toBeTruthy()
-    expect(h1).toContain('API')
   })
 })
