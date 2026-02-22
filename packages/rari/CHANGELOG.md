@@ -1,3 +1,31 @@
+## [rari@0.10.2] - 2026-02-22
+
+### 🐛 Bug Fixes
+
+- *(router)* Ensure stale window and navigate refs update correctly with dependency changes
+- *(router)* Refactor effect dependencies and improve test reliability
+- *(router)* Separate event listener registration from stale window effect
+- *(rsc,router,sentry)* Sanitize JSON parsing and secure boundary updates
+- *(router,sentry)* Improve JSON parsing resilience and error handling
+- *(router)* Improve JSON parsing resilience in route info client
+- *(rendering,router,runtime,sentry)* Improve security and error handling
+- *(rendering,router,runtime,sentry)* Enhance security and error handling
+- *(rendering,rsc-client,sentry)* Enhance security and accessibility
+- *(rendering,rsc-client,sentry)* Enhance security and sanitization
+
+### 🚜 Refactor
+
+- *(rsc)* Replace innerHTML with DOM API in HMR error overlay
+
+### 🧪 Testing
+
+- *(e2e)* Add Playwright end-to-end testing suite
+- *(e2e)* Improve mobile routing cache tests and visibility handling
+- *(e2e)* Enhance mobile routing and cache stability with configurable stale window
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.10.2
 ## [rari@0.10.1] - 2026-02-20
 
 ### 🚀 Features
@@ -13,6 +41,10 @@
 ### 🐛 Bug Fixes
 
 - *(rsc)* Improve response validation logic in HMR reload handler
+
+### 💼 Other
+
+- Rari@0.10.1
 
 ### 🎨 Styling
 
