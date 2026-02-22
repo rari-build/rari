@@ -38,11 +38,33 @@ class RouteInfoCache {
     })
 
     if (!response.ok) {
-      const error: RouteInfoError = await response.json()
-      throw new Error(error.error || 'Failed to fetch route info')
+      let error: RouteInfoError | null = null
+      try {
+        error = await response.json()
+      }
+      catch {}
+
+      if (error?.error)
+        throw new Error(error.error)
+
+      throw new Error(`Failed to fetch route info: ${response.status} ${response.statusText}`)
     }
 
-    return response.json()
+    const clonedResponse = response.clone()
+
+    try {
+      return await response.json()
+    }
+    catch (error) {
+      try {
+        const text = await clonedResponse.text()
+        return JSON.parse(text)
+      }
+      catch (parseError) {
+        console.error('[RouteInfo] Failed to parse response:', { error, parseError, path })
+        throw new Error('Failed to parse route info response')
+      }
+    }
   }
 
   clear(): void {

@@ -784,14 +784,14 @@ impl RscHtmlRenderer {
     window['~rari'].bufferedRows.push('{}');
 
     if (window['~rari'].processBoundaryUpdate) {{
-        window['~rari'].processBoundaryUpdate('{}', '{}', {});
+        window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
     }}
 
     window.dispatchEvent(new CustomEvent('rari:boundary-update', {{
         detail: {{
             boundaryId: '{}',
             rscRow: '{}',
-            rowId: {}
+            rowId: '{}'
         }}
     }}));
 }})();
@@ -803,10 +803,10 @@ impl RscHtmlRenderer {
             Self::escape_js_string(&rsc_row),
             Self::escape_js_string(boundary_id),
             Self::escape_js_string(&rsc_row),
-            row_id,
+            Self::escape_js_string(&row_id.to_string()),
             Self::escape_js_string(boundary_id),
             Self::escape_js_string(&rsc_row),
-            row_id
+            Self::escape_js_string(&row_id.to_string())
         );
 
         Ok(update_script)
@@ -827,26 +827,11 @@ impl RscHtmlRenderer {
             .cow_replace('\n', "\\n")
             .cow_replace('\r', "\\r")
             .cow_replace('\t', "\\t")
+            .cow_replace("</", "<\\/")
+            .cow_replace('\u{2028}', "\\u2028")
+            .cow_replace('\u{2029}', "\\u2029")
+            .cow_replace('\0', "\\0")
             .into_owned()
-    }
-
-    pub fn generate_boundary_error_html(
-        boundary_id: &str,
-        error_message: &str,
-        row_id: u32,
-    ) -> String {
-        let error_script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
-window['~rari'] && window['~rari'].processBoundaryError('{}', '{}', {});
-</script>"#,
-            Self::escape_html_attribute(boundary_id),
-            row_id,
-            Self::escape_js_string(boundary_id),
-            Self::escape_js_string(error_message),
-            row_id
-        );
-
-        error_script
     }
 }
 
@@ -941,12 +926,7 @@ impl RscToHtmlConverter {
                     return Ok(Vec::new());
                 }
 
-                let escaped_row = rsc_line
-                    .trim()
-                    .cow_replace('\\', "\\\\")
-                    .cow_replace('\'', "\\'")
-                    .cow_replace('\n', "\\n")
-                    .into_owned();
+                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1081,11 +1061,11 @@ impl RscToHtmlConverter {
 
         let rsc_payload = self.rsc_wire_format.join("\n");
 
-        let escaped_payload = rsc_payload.cow_replace("</script>", "<\\/script>");
+        let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
 
         let rsc_script = if !rsc_payload.is_empty() {
             format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/rsc-payload">{}</script>
 "#,
                 escaped_payload
             )
@@ -1432,12 +1412,7 @@ if (typeof window !== 'undefined') {{
             Some(id) => id.clone(),
             None => {
                 error!("Boundary update chunk missing boundary_id");
-                let escaped_row = rsc_line
-                    .trim()
-                    .cow_replace('\\', "\\\\")
-                    .cow_replace('\'', "\\'")
-                    .cow_replace('\n', "\\n")
-                    .into_owned();
+                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1456,12 +1431,7 @@ if (typeof window !== 'undefined') {{
         let row_id = chunk.row_id;
         let _content_json = parts[1];
 
-        let escaped_row = rsc_line
-            .trim()
-            .cow_replace('\\', "\\\\")
-            .cow_replace('\'', "\\'")
-            .cow_replace('\n', "\\n")
-            .into_owned();
+        let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
 
         let script = format!(
             r#"<script data-boundary-id="{}" data-row-id="{}">
@@ -1473,12 +1443,12 @@ if (typeof window !== 'undefined') {{
   window['~rari'].bufferedRows.push('{}');
 
   if(window['~rari'].processBoundaryUpdate){{
-    window['~rari'].processBoundaryUpdate('{}', '{}', {});
+    window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
   }} else {{
     window['~rari'].bufferedEvents.push({{
       boundaryId: '{}',
       rscRow: '{}',
-      rowId: {}
+      rowId: '{}'
     }});
   }}
 }})();
@@ -1488,10 +1458,10 @@ if (typeof window !== 'undefined') {{
             escaped_row,
             RscHtmlRenderer::escape_js_string(&boundary_id),
             escaped_row,
-            row_id,
+            RscHtmlRenderer::escape_js_string(&row_id.to_string()),
             RscHtmlRenderer::escape_js_string(&boundary_id),
             escaped_row,
-            row_id
+            RscHtmlRenderer::escape_js_string(&row_id.to_string())
         );
 
         Ok(script.into_bytes())
