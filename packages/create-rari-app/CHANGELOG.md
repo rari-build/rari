@@ -1,3 +1,13 @@
+## [create-rari-app@0.4.14] - 2026-02-22
+
+### 🧪 Testing
+
+- *(e2e)* Add Playwright end-to-end testing suite
+## [create-rari-app@0.4.13] - 2026-02-20
+
+### 💼 Other
+
+- Create-rari-app@0.4.13
 ## [create-rari-app@0.4.12] - 2026-02-18
 
 ### 💼 Other
