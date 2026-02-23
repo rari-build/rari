@@ -570,7 +570,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   processNavigationQueueRef.current = processNavigationQueue
 
   const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
+
+  useEffect(() => {
+    navigateRef.current = navigate
+  })
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
