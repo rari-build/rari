@@ -1,3 +1,9 @@
+## [rari@0.10.4] - 2026-02-23
+
+### 🚀 Features
+
+- *(http-headers)* Add Vary header to all response types
+- *(http-headers)* Add Vary header to cached responses and fix fragment symbol scope
 ## [rari@0.10.3] - 2026-02-23
 
 ### 🐛 Bug Fixes
@@ -6,6 +12,10 @@
 - *(router)* Use useLayoutEffect for navigate ref synchronization
 - *(router)* Move ref assignments into useLayoutEffect with cleanup
 - *(router)* Add null safety to navigateRef and cleanup on unmount
+
+### 💼 Other
+
+- Rari@0.10.3
 ## [rari@0.10.2] - 2026-02-22
 
 ### 🐛 Bug Fixes
