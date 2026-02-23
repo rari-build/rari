@@ -567,7 +567,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     await navigate(lastNavigation.path, lastNavigation.options)
   }
 
-  const navigateRef = useRef(navigate)
+  const navigateRef = useRef<typeof navigate | null>(navigate)
 
   useLayoutEffect(() => {
     processNavigationQueueRef.current = processNavigationQueue
@@ -575,6 +575,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
     return () => {
       processNavigationQueueRef.current = null
+      navigateRef.current = null
     }
   })
 
@@ -583,7 +584,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   if (!debouncedNavigateRef.current) {
     debouncedNavigateRef.current = debounce(
       (pathname: string, options: NavigationOptions) => {
-        navigateRef.current(pathname, options)
+        navigateRef.current?.(pathname, options)
       },
       NAVIGATION_DEBOUNCE_MS,
       {
