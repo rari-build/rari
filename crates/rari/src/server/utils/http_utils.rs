@@ -31,6 +31,9 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
     {
         for value in vary_str.split(',') {
             let trimmed = value.trim();
+            if trimmed == "*" {
+                return "*".to_string();
+            }
             if !trimmed.is_empty() {
                 let normalized = trimmed.cow_to_ascii_lowercase().into_owned();
                 if seen.insert(normalized) {
