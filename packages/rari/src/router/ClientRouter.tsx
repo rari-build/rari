@@ -4,7 +4,7 @@ import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
 import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './navigation-error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
@@ -571,7 +571,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   const navigateRef = useRef(navigate)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     navigateRef.current = navigate
   })
 
