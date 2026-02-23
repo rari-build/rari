@@ -1,6 +1,7 @@
 use crate::server::utils::component_utils::{
     get_dist_path_for_component, wrap_server_action_module,
 };
+use crate::server::utils::http_utils::merge_vary_with_accept;
 use crate::server::{RegisterClientRequest, RegisterRequest, RenderRequest, ServerState};
 use axum::{
     body::Body,
@@ -37,13 +38,18 @@ pub async fn stream_component(
     };
 
     if let Some(cached) = state.response_cache.get(&cache_key).await {
+        let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
+
         let mut response_builder = Response::builder()
             .status(StatusCode::OK)
             .header("content-type", RSC_CONTENT_TYPE)
+            .header("vary", merged_vary)
             .header("x-cache", "HIT");
 
         for (key, value) in cached.headers.iter() {
-            response_builder = response_builder.header(key, value);
+            if key.as_str() != "vary" {
+                response_builder = response_builder.header(key, value);
+            }
         }
 
         return Ok(response_builder
@@ -67,6 +73,7 @@ pub async fn stream_component(
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
+                .header("vary", "Accept")
                 .header("x-cache", "MISS")
                 .body(Body::from_stream(byte_stream))
                 .expect("Valid RSC response"))

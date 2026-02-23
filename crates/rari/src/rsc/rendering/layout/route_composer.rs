@@ -52,6 +52,8 @@ impl RouteComposer {
                     }};
                 }}
 
+                const fragmentSymbol = Symbol.for('react.fragment');
+
                 const startPageRender = performance.now();
                 {}
             "#,
@@ -95,8 +97,8 @@ impl RouteComposer {
                 }}
 
                 const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
-                const {layout_var} = (layoutResult{index} && layoutResult{index}.type === React.Fragment && layoutResult{index}.props?.children !== undefined)
-                    ? layoutResult{index}.props.children
+                const {layout_var} = (layoutResult{index} && layoutResult{index}.type === fragmentSymbol)
+                    ? React.createElement(fragmentSymbol, null, layoutResult{index}.props?.children)
                     : layoutResult{index};
                 timings.layout{index} = performance.now() - startLayout{index};
                 "#,

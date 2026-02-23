@@ -10,7 +10,9 @@ use crate::server::rendering::html_utils::{
 use crate::server::rendering::metadata_injection::inject_metadata;
 use crate::server::rendering::streaming_response::StreamingHtmlResponse;
 use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::utils::http_utils::{extract_headers, extract_search_params, get_content_type};
+use crate::server::utils::http_utils::{
+    extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
+};
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -302,7 +304,8 @@ pub async fn render_rsc_navigation_streaming(
 
                     let mut response_builder = Response::builder()
                         .status(status_code)
-                        .header("content-type", "text/x-component");
+                        .header("content-type", "text/x-component")
+                        .header("vary", "Accept");
 
                     if let Some(ref metadata) = context.metadata
                         && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -364,6 +367,7 @@ async fn render_rsc_streaming_response(
         .header("transfer-encoding", "chunked")
         .header("x-render-mode", "streaming")
         .header("cache-control", cache_control)
+        .header("vary", "Accept")
         .header("x-content-type-options", "nosniff");
 
     if let Some(encoding_header) = encoding.as_header_value() {
@@ -419,6 +423,7 @@ pub async fn render_synchronous(
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("x-render-mode", "synchronous")
+                    .header("vary", "Accept")
                     .body(Body::from(final_html))
                     .expect("Valid HTML response"))
             }
@@ -578,7 +583,8 @@ async fn render_streaming_response(
         .header("content-type", "text/html; charset=utf-8")
         .header("transfer-encoding", "chunked")
         .header("x-content-type-options", "nosniff")
-        .header("cache-control", cache_control);
+        .header("cache-control", cache_control)
+        .header("vary", "Accept");
 
     if let Some(encoding_header) = encoding.as_header_value() {
         response_builder = response_builder.header("content-encoding", encoding_header);
@@ -643,6 +649,7 @@ pub async fn render_streaming_with_layout(
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
+                .header("vary", "Accept")
                 .body(Body::from(final_html))
                 .expect("Valid HTML response"));
         }
@@ -679,6 +686,7 @@ pub async fn render_fallback_html(
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "text/html; charset=utf-8")
+                .header("vary", "Accept")
                 .body(Body::from(html))
                 .expect("Valid HTML response"));
         }
@@ -699,6 +707,7 @@ pub async fn render_fallback_html(
             return Ok(Response::builder()
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
+                .header("vary", "Accept")
                 .body(Body::from(final_html))
                 .expect("Valid HTML response"));
         }
@@ -730,6 +739,7 @@ pub async fn render_fallback_html(
         return Ok(Response::builder()
             .status(status_code)
             .header("content-type", "text/html; charset=utf-8")
+            .header("vary", "Accept")
             .body(Body::from(html_shell))
             .expect("Valid HTML response"));
     }
@@ -757,6 +767,7 @@ pub async fn render_fallback_html(
     Ok(Response::builder()
         .status(status_code)
         .header("content-type", "text/html; charset=utf-8")
+        .header("vary", "Accept")
         .body(Body::from(error_html))
         .expect("Valid HTML response"))
 }
@@ -912,13 +923,18 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
+                let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
+
                 let mut response_builder = Response::builder()
                     .status(status_code)
                     .header("content-type", "text/x-component")
+                    .header("vary", merged_vary)
                     .header("x-cache", "HIT");
 
                 for (key, value) in cached.headers.iter() {
-                    response_builder = response_builder.header(key, value);
+                    if key.as_str() != "vary" {
+                        response_builder = response_builder.header(key, value);
+                    }
                 }
 
                 return Ok(response_builder
@@ -947,6 +963,7 @@ pub async fn handle_app_route(
                     let mut response_builder = Response::builder()
                         .status(status_code)
                         .header("content-type", "text/x-component")
+                        .header("vary", "Accept")
                         .header("x-cache", "MISS");
 
                     let mut cache_headers = axum::http::HeaderMap::new();
@@ -1007,9 +1024,12 @@ pub async fn handle_app_route(
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
                     && cached_etag == client_etag
                 {
+                    let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
+
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("etag", cached_etag)
+                        .header("vary", merged_vary)
                         .body(Body::empty())
                         .expect("Valid 304 response"));
                 }
@@ -1020,9 +1040,12 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
+                let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
+
                 let mut response_builder = Response::builder()
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
+                    .header("vary", merged_vary)
                     .header("x-cache", "HIT");
 
                 if let Some(etag) = &cached.metadata.etag {
@@ -1030,7 +1053,9 @@ pub async fn handle_app_route(
                 }
 
                 for (key, value) in cached.headers.iter() {
-                    response_builder = response_builder.header(key, value);
+                    if key.as_str() != "vary" {
+                        response_builder = response_builder.header(key, value);
+                    }
                 }
 
                 return Ok(response_builder
@@ -1095,14 +1120,19 @@ pub async fn handle_app_route(
 
                         state.response_cache.set(cache_key.clone(), cached_response).await;
 
+                        let merged_vary = merge_vary_with_accept(parts.headers.get("vary"));
+
                         let mut response_builder = Response::builder().status(parts.status);
 
                         for (key, value) in parts.headers.iter() {
-                            response_builder = response_builder.header(key, value);
+                            if key.as_str() != "vary" {
+                                response_builder = response_builder.header(key, value);
+                            }
                         }
 
                         return Ok(response_builder
                             .header("etag", etag)
+                            .header("vary", merged_vary)
                             .header("x-cache", "MISS")
                             .body(Body::from(body_bytes))
                             .expect("Valid response"));
@@ -1256,6 +1286,7 @@ pub async fn handle_app_route(
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("etag", &etag)
+                .header("vary", "Accept")
                 .header("x-cache", "MISS");
 
             let cache_control_value = state.config.get_cache_control_for_route(path);
