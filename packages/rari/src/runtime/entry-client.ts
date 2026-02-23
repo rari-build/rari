@@ -10,6 +10,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
+// @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
 function getRariGlobal(): GlobalWithRari['~rari'] {

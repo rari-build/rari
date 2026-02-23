@@ -40,6 +40,7 @@ pub async fn stream_component(
         let mut response_builder = Response::builder()
             .status(StatusCode::OK)
             .header("content-type", RSC_CONTENT_TYPE)
+            .header("vary", "Accept")
             .header("x-cache", "HIT");
 
         for (key, value) in cached.headers.iter() {
@@ -67,6 +68,7 @@ pub async fn stream_component(
             Ok(Response::builder()
                 .header("content-type", RSC_CONTENT_TYPE)
                 .header("cache-control", cache_control)
+                .header("vary", "Accept")
                 .header("x-cache", "MISS")
                 .body(Body::from_stream(byte_stream))
                 .expect("Valid RSC response"))

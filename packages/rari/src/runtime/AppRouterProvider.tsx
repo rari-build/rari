@@ -888,6 +888,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))
     contentToRender = contentToRender[0]
+  else if (Array.isArray(contentToRender) && contentToRender.length > 0 && contentToRender.every(React.isValidElement))
+    contentToRender = React.createElement(React.Fragment, null, ...contentToRender)
 
   if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
     console.error('[rari] AppRouter: Invalid content to render:', contentToRender)
