@@ -923,13 +923,13 @@ pub async fn handle_app_route(
 
                 let mut vary_values = vec!["Accept".to_string()];
 
-                if let Some(cached_vary) = cached.headers.get("vary") {
-                    if let Ok(vary_str) = cached_vary.to_str() {
-                        for value in vary_str.split(',') {
-                            let trimmed = value.trim();
-                            if !trimmed.is_empty() && trimmed != "Accept" {
-                                vary_values.push(trimmed.to_string());
-                            }
+                if let Some(cached_vary) = cached.headers.get("vary")
+                    && let Ok(vary_str) = cached_vary.to_str()
+                {
+                    for value in vary_str.split(',') {
+                        let trimmed = value.trim();
+                        if !trimmed.is_empty() && trimmed != "Accept" {
+                            vary_values.push(trimmed.to_string());
                         }
                     }
                 }
@@ -1053,13 +1053,13 @@ pub async fn handle_app_route(
 
                 let mut vary_values = vec!["Accept".to_string()];
 
-                if let Some(cached_vary) = cached.headers.get("vary") {
-                    if let Ok(vary_str) = cached_vary.to_str() {
-                        for value in vary_str.split(',') {
-                            let trimmed = value.trim();
-                            if !trimmed.is_empty() && trimmed != "Accept" {
-                                vary_values.push(trimmed.to_string());
-                            }
+                if let Some(cached_vary) = cached.headers.get("vary")
+                    && let Ok(vary_str) = cached_vary.to_str()
+                {
+                    for value in vary_str.split(',') {
+                        let trimmed = value.trim();
+                        if !trimmed.is_empty() && trimmed != "Accept" {
+                            vary_values.push(trimmed.to_string());
                         }
                     }
                 }
