@@ -10,7 +10,9 @@ use crate::server::rendering::html_utils::{
 use crate::server::rendering::metadata_injection::inject_metadata;
 use crate::server::rendering::streaming_response::StreamingHtmlResponse;
 use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::utils::http_utils::{extract_headers, extract_search_params, get_content_type};
+use crate::server::utils::http_utils::{
+    extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
+};
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -921,22 +923,7 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
-                let mut vary_values = vec!["Accept".to_string()];
-
-                if let Some(cached_vary) = cached.headers.get("vary")
-                    && let Ok(vary_str) = cached_vary.to_str()
-                {
-                    for value in vary_str.split(',') {
-                        let trimmed = value.trim();
-                        if !trimmed.is_empty() && trimmed != "Accept" {
-                            vary_values.push(trimmed.to_string());
-                        }
-                    }
-                }
-
-                vary_values.sort();
-                vary_values.dedup();
-                let merged_vary = vary_values.join(", ");
+                let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
                 let mut response_builder = Response::builder()
                     .status(status_code)
@@ -1051,22 +1038,7 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
-                let mut vary_values = vec!["Accept".to_string()];
-
-                if let Some(cached_vary) = cached.headers.get("vary")
-                    && let Ok(vary_str) = cached_vary.to_str()
-                {
-                    for value in vary_str.split(',') {
-                        let trimmed = value.trim();
-                        if !trimmed.is_empty() && trimmed != "Accept" {
-                            vary_values.push(trimmed.to_string());
-                        }
-                    }
-                }
-
-                vary_values.sort();
-                vary_values.dedup();
-                let merged_vary = vary_values.join(", ");
+                let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
                 let mut response_builder = Response::builder()
                     .status(status_code)
@@ -1146,15 +1118,19 @@ pub async fn handle_app_route(
 
                         state.response_cache.set(cache_key.clone(), cached_response).await;
 
+                        let merged_vary = merge_vary_with_accept(parts.headers.get("vary"));
+
                         let mut response_builder = Response::builder().status(parts.status);
 
                         for (key, value) in parts.headers.iter() {
-                            response_builder = response_builder.header(key, value);
+                            if key.as_str() != "vary" {
+                                response_builder = response_builder.header(key, value);
+                            }
                         }
 
                         return Ok(response_builder
                             .header("etag", etag)
-                            .header("vary", "Accept")
+                            .header("vary", merged_vary)
                             .header("x-cache", "MISS")
                             .body(Body::from(body_bytes))
                             .expect("Valid response"));

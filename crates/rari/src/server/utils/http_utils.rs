@@ -1,5 +1,6 @@
 use axum::http::HeaderValue;
-use rustc_hash::FxHashMap;
+use cow_utils::CowUtils;
+use rustc_hash::{FxHashMap, FxHashSet};
 use sysinfo::{Pid, System};
 
 pub fn extract_search_params(
@@ -16,6 +17,32 @@ pub fn extract_headers(headers: &axum::http::HeaderMap) -> FxHashMap<String, Str
         }
     }
     header_map
+}
+
+pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
+    let mut seen = FxHashSet::default();
+    let mut vary_values = Vec::new();
+
+    seen.insert("accept".to_string());
+    vary_values.push("Accept".to_string());
+
+    if let Some(vary_header) = existing_vary
+        && let Ok(vary_str) = vary_header.to_str()
+    {
+        for value in vary_str.split(',') {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                let normalized = trimmed.cow_to_ascii_lowercase().into_owned();
+                if seen.insert(normalized) {
+                    vary_values.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    vary_values.sort_by_key(|a| a.cow_to_ascii_lowercase().into_owned());
+
+    vary_values.join(", ")
 }
 
 pub fn get_content_type(path: &str) -> &'static str {
