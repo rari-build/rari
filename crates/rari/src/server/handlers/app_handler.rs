@@ -921,10 +921,27 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
+                let mut vary_values = vec!["Accept".to_string()];
+
+                if let Some(cached_vary) = cached.headers.get("vary") {
+                    if let Ok(vary_str) = cached_vary.to_str() {
+                        for value in vary_str.split(',') {
+                            let trimmed = value.trim();
+                            if !trimmed.is_empty() && trimmed != "Accept" {
+                                vary_values.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+
+                vary_values.sort();
+                vary_values.dedup();
+                let merged_vary = vary_values.join(", ");
+
                 let mut response_builder = Response::builder()
                     .status(status_code)
                     .header("content-type", "text/x-component")
-                    .header("vary", "Accept")
+                    .header("vary", merged_vary)
                     .header("x-cache", "HIT");
 
                 for (key, value) in cached.headers.iter() {
@@ -1034,10 +1051,27 @@ pub async fn handle_app_route(
                     StatusCode::OK
                 };
 
+                let mut vary_values = vec!["Accept".to_string()];
+
+                if let Some(cached_vary) = cached.headers.get("vary") {
+                    if let Ok(vary_str) = cached_vary.to_str() {
+                        for value in vary_str.split(',') {
+                            let trimmed = value.trim();
+                            if !trimmed.is_empty() && trimmed != "Accept" {
+                                vary_values.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+
+                vary_values.sort();
+                vary_values.dedup();
+                let merged_vary = vary_values.join(", ");
+
                 let mut response_builder = Response::builder()
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
-                    .header("vary", "Accept")
+                    .header("vary", merged_vary)
                     .header("x-cache", "HIT");
 
                 if let Some(etag) = &cached.metadata.etag {

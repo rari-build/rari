@@ -37,10 +37,27 @@ pub async fn stream_component(
     };
 
     if let Some(cached) = state.response_cache.get(&cache_key).await {
+        let mut vary_values = vec!["Accept".to_string()];
+
+        if let Some(cached_vary) = cached.headers.get("vary") {
+            if let Ok(vary_str) = cached_vary.to_str() {
+                for value in vary_str.split(',') {
+                    let trimmed = value.trim();
+                    if !trimmed.is_empty() && trimmed != "Accept" {
+                        vary_values.push(trimmed.to_string());
+                    }
+                }
+            }
+        }
+
+        vary_values.sort();
+        vary_values.dedup();
+        let merged_vary = vary_values.join(", ");
+
         let mut response_builder = Response::builder()
             .status(StatusCode::OK)
             .header("content-type", RSC_CONTENT_TYPE)
-            .header("vary", "Accept")
+            .header("vary", merged_vary)
             .header("x-cache", "HIT");
 
         for (key, value) in cached.headers.iter() {
