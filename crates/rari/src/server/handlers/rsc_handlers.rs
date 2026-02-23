@@ -44,7 +44,9 @@ pub async fn stream_component(
             .header("x-cache", "HIT");
 
         for (key, value) in cached.headers.iter() {
-            response_builder = response_builder.header(key, value);
+            if key.as_str() != "vary" {
+                response_builder = response_builder.header(key, value);
+            }
         }
 
         return Ok(response_builder

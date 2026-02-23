@@ -928,7 +928,9 @@ pub async fn handle_app_route(
                     .header("x-cache", "HIT");
 
                 for (key, value) in cached.headers.iter() {
-                    response_builder = response_builder.header(key, value);
+                    if key.as_str() != "vary" {
+                        response_builder = response_builder.header(key, value);
+                    }
                 }
 
                 return Ok(response_builder
@@ -1021,6 +1023,7 @@ pub async fn handle_app_route(
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("etag", cached_etag)
+                        .header("vary", "Accept")
                         .body(Body::empty())
                         .expect("Valid 304 response"));
                 }
@@ -1042,7 +1045,9 @@ pub async fn handle_app_route(
                 }
 
                 for (key, value) in cached.headers.iter() {
-                    response_builder = response_builder.header(key, value);
+                    if key.as_str() != "vary" {
+                        response_builder = response_builder.header(key, value);
+                    }
                 }
 
                 return Ok(response_builder

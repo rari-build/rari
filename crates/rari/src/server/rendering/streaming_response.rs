@@ -60,6 +60,7 @@ impl IntoResponse for StreamingHtmlResponse {
             .header("transfer-encoding", "chunked")
             .header("x-content-type-options", "nosniff")
             .header("cache-control", "no-cache")
+            .header("vary", "Accept")
             .body(Body::from_stream(stream))
             .expect("Failed to build streaming response")
     }

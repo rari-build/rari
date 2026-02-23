@@ -888,7 +888,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))
     contentToRender = contentToRender[0]
-  else if (Array.isArray(contentToRender) && contentToRender.length > 0 && contentToRender.every(React.isValidElement))
+  else if (Array.isArray(contentToRender) && contentToRender.length > 0 && contentToRender.every(item => React.isValidElement(item) || item == null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'))
     contentToRender = React.createElement(React.Fragment, null, ...contentToRender)
 
   if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
