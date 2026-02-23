@@ -1024,10 +1024,12 @@ pub async fn handle_app_route(
                 if let (Some(cached_etag), Some(client_etag)) = (&cached.metadata.etag, client_etag)
                     && cached_etag == client_etag
                 {
+                    let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
+
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("etag", cached_etag)
-                        .header("vary", "Accept")
+                        .header("vary", merged_vary)
                         .body(Body::empty())
                         .expect("Valid 304 response"));
                 }

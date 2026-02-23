@@ -40,7 +40,7 @@ pub fn merge_vary_with_accept(existing_vary: Option<&HeaderValue>) -> String {
         }
     }
 
-    vary_values.sort_by_key(|a| a.cow_to_ascii_lowercase().into_owned());
+    vary_values.sort_by_cached_key(|a| a.cow_to_ascii_lowercase().into_owned());
 
     vary_values.join(", ")
 }
