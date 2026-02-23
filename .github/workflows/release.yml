@@ -42,10 +42,6 @@ jobs:
           toolchain: nightly-2026-02-21
           targets: ${{ matrix.target }}
 
-      - name: Install additional Rust targets
-        run: |
-          rustup target add ${{ matrix.target }}
-
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
         run: |
