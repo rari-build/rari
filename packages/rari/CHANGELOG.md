@@ -1,3 +1,11 @@
+## [rari@0.10.3] - 2026-02-23
+
+### 🐛 Bug Fixes
+
+- *(rendering,router)* Correct script type and stabilize navigation ref
+- *(router)* Use useLayoutEffect for navigate ref synchronization
+- *(router)* Move ref assignments into useLayoutEffect with cleanup
+- *(router)* Add null safety to navigateRef and cleanup on unmount
 ## [rari@0.10.2] - 2026-02-22
 
 ### 🐛 Bug Fixes
@@ -12,6 +20,10 @@
 - *(rendering,router,runtime,sentry)* Enhance security and error handling
 - *(rendering,rsc-client,sentry)* Enhance security and accessibility
 - *(rendering,rsc-client,sentry)* Enhance security and sanitization
+
+### 💼 Other
+
+- Rari@0.10.2
 
 ### 🚜 Refactor
 
