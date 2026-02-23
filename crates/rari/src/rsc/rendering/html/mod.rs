@@ -1065,7 +1065,7 @@ impl RscToHtmlConverter {
 
         let rsc_script = if !rsc_payload.is_empty() {
             format!(
-                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/rsc-payload">{}</script>
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>
 "#,
                 escaped_payload
             )

@@ -4,7 +4,7 @@ import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
 import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './navigation-error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
@@ -567,17 +567,24 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     await navigate(lastNavigation.path, lastNavigation.options)
   }
 
-  processNavigationQueueRef.current = processNavigationQueue
+  const navigateRef = useRef<typeof navigate | null>(navigate)
 
-  const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
+  useLayoutEffect(() => {
+    processNavigationQueueRef.current = processNavigationQueue
+    navigateRef.current = navigate
+
+    return () => {
+      processNavigationQueueRef.current = null
+      navigateRef.current = null
+    }
+  })
 
   const debouncedNavigateRef = useRef<ReturnType<typeof debounce> | null>(null)
 
   if (!debouncedNavigateRef.current) {
     debouncedNavigateRef.current = debounce(
       (pathname: string, options: NavigationOptions) => {
-        navigateRef.current(pathname, options)
+        navigateRef.current?.(pathname, options)
       },
       NAVIGATION_DEBOUNCE_MS,
       {
