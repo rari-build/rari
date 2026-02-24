@@ -28,8 +28,8 @@ catalogs:
       version: 1.0.1
   default:
     rari:
-      specifier: ^0.10.4
-      version: 0.10.4
+      specifier: ^0.10.5
+      version: 0.10.5
   eslint:
     '@antfu/eslint-config':
       specifier: ^7.4.3
@@ -345,7 +345,7 @@ importers:
         version: 1.352.1
       rari:
         specifier: 'catalog:'
-        version: 0.10.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 0.10.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: catalog:react
         version: 19.2.4
@@ -3651,8 +3651,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  rari@0.10.4:
-    resolution: {integrity: sha512-cZpj39EKEz642TVf2hnZ6a4BrRDEj2XPyp2oWXSQhJldjJaG59FOsywPgJqOC560f0+F9pnwmVFCSJ/5x9D72A==}
+  rari@0.10.5:
+    resolution: {integrity: sha512-XEXMgmEhB7y1rBUAzdadYzMzGOAW3VeIiviWpY6V1F8odhBIKYRNzMVHNen/19i0SArOZI1j+eLYdaio6B37oA==}
     engines: {node: '>=22.0.0'}
     hasBin: true
     peerDependencies:
@@ -7564,7 +7564,7 @@ snapshots:
   rari-win32-x64@0.10.4:
     optional: true
 
-  rari@0.10.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  rari@0.10.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
