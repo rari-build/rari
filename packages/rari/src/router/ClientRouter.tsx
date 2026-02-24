@@ -691,7 +691,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       window.history.replaceState(
         initialHistoryState,
         '',
-        window.location.pathname + window.location.search,
+        window.location.pathname + window.location.search + window.location.hash,
       )
     }
   }, [])

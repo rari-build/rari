@@ -851,6 +851,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
   }, [onNavigate])
 
+  useEffect(() => {
+    if (window.location.hash && rscPayload) {
+      const hash = window.location.hash.slice(1)
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const element = document.getElementById(hash)
+          if (element) {
+            element.scrollIntoView({ behavior: 'instant', block: 'start' })
+          }
+        })
+      })
+    }
+  }, [rscPayload])
+
   const handleManualRefresh = () => {
     window.location.reload()
   }
