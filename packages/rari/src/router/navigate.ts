@@ -1,4 +1,5 @@
 import type { NavigationOptions } from './navigation-types'
+import process from 'node:process'
 
 let navigateFunction: ((href: string, options?: NavigationOptions) => Promise<void>) | null = null
 
@@ -12,6 +13,13 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
     return
   }
 
+  if (navigateFunction && (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production')) {
+    console.warn('[rari] Router: registerNavigate called multiple times, overwriting existing navigate function', {
+      previous: navigateFunction,
+      new: fn,
+    })
+  }
+
   navigateFunction = fn
 
   window.dispatchEvent(new CustomEvent('rari:register-navigate', {
@@ -20,8 +28,10 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
 }
 
 export async function navigate(href: string, options?: NavigationOptions): Promise<void> {
-  if (typeof window === 'undefined')
-    throw new Error('[rari] Router cannot navigate in non-browser environment')
+  if (typeof window === 'undefined') {
+    console.warn('[rari] Router cannot navigate in non-browser environment')
+    return Promise.resolve()
+  }
 
   if (!navigateFunction) {
     console.warn('[rari] Router not initialized, falling back to window.location')

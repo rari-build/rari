@@ -405,6 +405,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         const renderMode = response.headers.get('x-render-mode')
         const isStreaming = renderMode === 'streaming'
 
+        const extractedParams = routeInfo?.segments
+          ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
+          : {}
+
         if (isStreaming && response.body) {
           const reader = response.body.getReader()
           const decoder = new TextDecoder()
@@ -443,10 +447,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
               }))
             }
 
-            const extractedParams = routeInfo?.segments
-              ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
-              : {}
-
             window.dispatchEvent(new CustomEvent('rari:navigate', {
               detail: {
                 from: fromRoute,
@@ -469,10 +469,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         }
         else {
           const rscWireFormat = await response.text()
-
-          const extractedParams = routeInfo?.segments
-            ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
-            : {}
 
           window.dispatchEvent(new CustomEvent('rari:navigate', {
             detail: {
