@@ -67,10 +67,16 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       navigateRef.current = customEvent.detail.navigate
     }
 
+    const handleDeregisterNavigate = () => {
+      navigateRef.current = null
+    }
+
     window.addEventListener('rari:register-navigate', handleRegisterNavigate)
+    window.addEventListener('rari:deregister-navigate', handleDeregisterNavigate)
 
     return () => {
       window.removeEventListener('rari:register-navigate', handleRegisterNavigate)
+      window.removeEventListener('rari:deregister-navigate', handleDeregisterNavigate)
     }
   }, [])
 

@@ -1,5 +1,4 @@
 import type { NavigationOptions } from './navigation-types'
-import process from 'node:process'
 
 let navigateFunction: ((href: string, options?: NavigationOptions) => Promise<void>) | null = null
 
@@ -13,6 +12,7 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
     return
   }
 
+  // eslint-disable-next-line node/prefer-global/process
   if (navigateFunction && (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production')) {
     console.warn('[rari] Router: registerNavigate called multiple times, overwriting existing navigate function', {
       previous: navigateFunction,
@@ -26,11 +26,21 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
     detail: { navigate: fn },
   }))
 }
+export function deregisterNavigate(): void {
+  if (typeof window === 'undefined') {
+    console.warn('[rari] Router cannot deregister navigate in non-browser environment')
+    return
+  }
+
+  navigateFunction = null
+
+  window.dispatchEvent(new CustomEvent('rari:deregister-navigate'))
+}
 
 export async function navigate(href: string, options?: NavigationOptions): Promise<void> {
   if (typeof window === 'undefined') {
     console.warn('[rari] Router cannot navigate in non-browser environment')
-    return Promise.resolve()
+    return
   }
 
   if (!navigateFunction) {

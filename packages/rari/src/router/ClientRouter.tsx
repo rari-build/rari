@@ -6,7 +6,7 @@ import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
-import { registerNavigate } from './navigate'
+import { deregisterNavigate, registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
 import { extractPathname, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
@@ -776,6 +776,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     return () => {
       isMountedRef.current = false
 
+      deregisterNavigate()
       cancelNavigation()
       cancelAllPendingNavigations()
 
