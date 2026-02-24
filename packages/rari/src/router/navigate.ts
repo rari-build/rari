@@ -26,6 +26,7 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
     detail: { navigate: fn },
   }))
 }
+
 export function deregisterNavigate(): void {
   if (typeof window === 'undefined') {
     console.warn('[rari] Router cannot deregister navigate in non-browser environment')
