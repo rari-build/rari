@@ -26,13 +26,16 @@ if (!globalThis.renderToRsc) {
           const props = element.props || {}
           const actualChildren = element.children || props.children
 
-          if (!actualChildren)
+          if (actualChildren == null)
             return null
 
           if (Array.isArray(actualChildren)) {
             const results = []
             for (const child of actualChildren)
               results.push(await globalThis.renderToRsc(child, clientComponents))
+
+            if (results.length === 0)
+              return null
 
             return results.length === 1 ? results[0] : results
           }
