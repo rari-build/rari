@@ -1,9 +1,18 @@
+## [rari@0.10.5] - 2026-02-24
+
+### 🐛 Bug Fixes
+
+- *(AppRouterProvider)* Remove redundant cache control headers
 ## [rari@0.10.4] - 2026-02-23
 
 ### 🚀 Features
 
 - *(http-headers)* Add Vary header to all response types
 - *(http-headers)* Add Vary header to cached responses and fix fragment symbol scope
+
+### 💼 Other
+
+- Rari@0.10.4
 ## [rari@0.10.3] - 2026-02-23
 
 ### 🐛 Bug Fixes
