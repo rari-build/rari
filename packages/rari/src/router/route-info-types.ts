@@ -8,6 +8,11 @@ export interface RouteInfoResponse {
   loading: string | null
   isDynamic: boolean
   params?: string[]
+  segments?: Array<{
+    type: 'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'
+    value: string
+    param?: string
+  }>
 }
 
 export interface RouteInfoError {

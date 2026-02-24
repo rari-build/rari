@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     'index': 'src/index.ts',
     'client': 'src/client.ts',
+    'router': 'src/router.ts',
     'vite': 'src/vite.ts',
     'cli': 'src/cli.ts',
     'platform': 'src/platform.ts',
@@ -36,5 +37,6 @@ export default defineConfig({
     'virtual:react-server-dom-rari-client.ts',
     'virtual:rsc-integration.ts',
     'rari/client',
+    'rari/router',
   ],
 })

@@ -82,6 +82,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
   const consecutiveFailuresRef = useRef<number>(0)
   const [hmrError, setHmrError] = useState<HMRFailure | null>(null)
+  const shouldScrollToHashRef = useRef<boolean>(
+    typeof window !== 'undefined' && window.location.hash.length > 0,
+  )
   const MAX_RETRIES = 3
 
   const saveFormState = () => {
@@ -683,6 +686,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       currentNavigationIdRef.current = detail.navigationId
       streamingRowsRef.current = null
+      shouldScrollToHashRef.current = true
 
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -735,7 +739,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             handleFallbackReload()
         }
         finally {
-          if (!detail.options?.historyKey) {
+          const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0
+          if (!detail.options?.historyKey && !hasHash) {
             requestAnimationFrame(() => {
               if (detail.options?.scroll !== false)
                 window.scrollTo(0, 0)
@@ -850,6 +855,25 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       window.removeEventListener('rari:rsc-row', handleRscRow)
     }
   }, [onNavigate])
+
+  useEffect(() => {
+    if (typeof window === 'undefined')
+      return
+
+    if (window.location.hash && rscPayload && shouldScrollToHashRef.current) {
+      const hash = window.location.hash.slice(1)
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const element = document.getElementById(hash)
+          if (element) {
+            element.scrollIntoView({ behavior: 'instant', block: 'start' })
+            shouldScrollToHashRef.current = false
+          }
+        })
+      })
+    }
+  }, [rscPayload])
 
   const handleManualRefresh = () => {
     window.location.reload()

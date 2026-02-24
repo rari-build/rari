@@ -1,6 +1,8 @@
 import type { GlobalWithRari, WindowWithRari } from './shared/types'
 // @ts-ignore - rari/client is resolved from the built package (circular reference)
 import { ClientRouter } from 'rari/client'
+// @ts-ignore - rari/router is resolved from the built package (circular reference)
+import { RouterProvider } from 'rari/router'
 import * as React from 'react'
 import { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -540,6 +542,12 @@ export async function renderApp(): Promise<void> {
       ClientRouter,
       // @ts-ignore - children passed as third argument; type checking varies based on build state
       { initialRoute: window.location.pathname },
+      wrappedContent,
+    )
+
+    wrappedContent = React.createElement(
+      RouterProvider,
+      { initialPathname: window.location.pathname },
       wrappedContent,
     )
 

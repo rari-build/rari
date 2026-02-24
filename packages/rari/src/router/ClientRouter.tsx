@@ -6,8 +6,9 @@ import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
+import { deregisterNavigate, registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
-import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
+import { extractPathname, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { routeInfoCache } from './route-info-client'
 import { StatePreserver } from './StatePreserver'
@@ -404,6 +405,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         const renderMode = response.headers.get('x-render-mode')
         const isStreaming = renderMode === 'streaming'
 
+        const extractedParams = routeInfo?.segments
+          ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
+          : {}
+
         if (isStreaming && response.body) {
           const reader = response.body.getReader()
           const decoder = new TextDecoder()
@@ -448,7 +453,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
                 to: actualTargetPath,
                 navigationId,
                 options,
-                routeInfo,
+                routeInfo: {
+                  ...routeInfo,
+                  extractedParams,
+                },
                 abortSignal: abortController.signal,
                 isStreaming: true,
               },
@@ -468,7 +476,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
               to: actualTargetPath,
               navigationId,
               options,
-              routeInfo,
+              routeInfo: {
+                ...routeInfo,
+                extractedParams,
+              },
               abortSignal: abortController.signal,
               rscWireFormat,
             },
@@ -691,7 +702,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       window.history.replaceState(
         initialHistoryState,
         '',
-        window.location.pathname + window.location.search,
+        window.location.pathname + window.location.search + window.location.hash,
       )
     }
   }, [])
@@ -758,9 +769,14 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   useEffect(() => {
     isMountedRef.current = true
 
+    registerNavigate((href, options) => {
+      return navigateRef.current?.(href, options) ?? Promise.resolve()
+    })
+
     return () => {
       isMountedRef.current = false
 
+      deregisterNavigate()
       cancelNavigation()
       cancelAllPendingNavigations()
 

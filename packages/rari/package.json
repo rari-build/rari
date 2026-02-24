@@ -56,6 +56,10 @@
       "default": "./dist/og/index.mjs"
     },
     "./package.json": "./package.json",
+    "./router": {
+      "types": "./dist/router.d.mts",
+      "default": "./dist/router.mjs"
+    },
     "./runtime/actions": {
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"
