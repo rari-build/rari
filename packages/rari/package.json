@@ -109,11 +109,11 @@
     "rolldown": "catalog:build"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.10.4",
-    "rari-darwin-x64": "0.10.4",
-    "rari-linux-arm64": "0.10.4",
-    "rari-linux-x64": "0.10.4",
-    "rari-win32-x64": "0.10.4"
+    "rari-darwin-arm64": "0.10.7",
+    "rari-darwin-x64": "0.10.7",
+    "rari-linux-arm64": "0.10.7",
+    "rari-linux-x64": "0.10.7",
+    "rari-win32-x64": "0.10.7"
   },
   "devDependencies": {
     "@rari/deploy": "workspace:*",
