@@ -131,7 +131,8 @@ export function Image({
       document.head.appendChild(link)
 
       return () => {
-        document.head.removeChild(link)
+        if (link.parentNode === document.head)
+          document.head.removeChild(link)
       }
     }
   }, [shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized])

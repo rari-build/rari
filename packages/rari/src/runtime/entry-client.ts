@@ -301,9 +301,12 @@ export async function renderApp(): Promise<void> {
             return
 
           const props = propsJson ? JSON.parse(propsJson) : {}
-          element.innerHTML = ''
-          const root = createRoot(element)
-          root.render(React.createElement(Component, props))
+
+          requestAnimationFrame(() => {
+            element.innerHTML = ''
+            const root = createRoot(element)
+            root.render(React.createElement(Component, props))
+          })
         }
         catch (error) {
           console.error(`[rari] Failed to hydrate client component ${componentId}:`, error)

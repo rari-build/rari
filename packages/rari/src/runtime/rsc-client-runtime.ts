@@ -196,22 +196,26 @@ if (typeof window !== 'undefined') {
       const htmlContent = rscToHtml(content)
 
       if (htmlContent) {
-        boundaryElement.innerHTML = htmlContent
-        boundaryElement.classList.add('rari-boundary-resolved')
+        requestAnimationFrame(() => {
+          if (document.contains(boundaryElement)) {
+            boundaryElement.innerHTML = htmlContent
+            boundaryElement.classList.add('rari-boundary-resolved')
+
+            window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+              detail: {
+                boundaryId,
+                rscRow,
+                rowId,
+                element: boundaryElement,
+              },
+            }))
+          }
+        })
       }
     }
     catch (e) {
       console.error('[rari] Error processing boundary update:', e)
     }
-
-    window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
-      detail: {
-        boundaryId,
-        rscRow,
-        rowId,
-        element: boundaryElement,
-      },
-    }))
   }
 
   const windowWithRari = window as unknown as WindowWithRari
@@ -1524,9 +1528,7 @@ class HMRErrorOverlay {
     if (!this.overlay)
       return
 
-    while (this.overlay.firstChild) {
-      this.overlay.removeChild(this.overlay.firstChild)
-    }
+    this.overlay.replaceChildren()
 
     const container = document.createElement('div')
     container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);'
