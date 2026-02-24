@@ -401,7 +401,7 @@ export default async function SponsorsPage() {
                     </div>
                     <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-[120px]">
                       <div className="transform group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                        <Icon className={`${label.includes('Sanity') ? 'h-auto w-full max-w-[300px]' : 'h-10 w-auto'}`} />
+                        <Icon className={`${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`} />
                       </div>
                       <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">{description}</p>
                     </div>
