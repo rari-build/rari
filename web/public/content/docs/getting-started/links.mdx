@@ -41,7 +41,10 @@ This gives you instant navigation with no full-page reloads, while keeping your 
 
 Layouts don't re-render during navigation. If you have a sidebar, header, or any shared UI in a layout component, it stays mounted and preserves its state:
 
-<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`export default function DashboardLayout({ children }: LayoutProps) {
+<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import { useState } from 'react'
+import type { LayoutProps } from 'rari'
+
+export default function DashboardLayout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   return (
@@ -204,50 +207,6 @@ Links with `target` attributes other than `_self` are not intercepted:
   Open Admin in New Tab
 </a>
 `}</CodeBlock>
-
-## Programmatic Navigation
-
-For programmatic navigation in client components, you can use standard browser APIs or trigger link clicks:
-
-<CodeBlock filename="src/app/components/LoginForm.tsx" language="tsx">{`'use client'
-
-export default function LoginForm() {
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // ... login logic
-
-    // Navigate using standard browser API
-    window.location.href = '/dashboard'
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <button type="submit">Log In</button>
-    </form>
-  )
-}
-`}</CodeBlock>
-
-The client router will intercept the navigation and handle it as a client-side route change.
-
-### Server Actions with Redirects
-
-Server actions can return redirect responses that are automatically handled:
-
-<CodeBlock filename="src/actions/auth.ts" language="tsx">{`'use server'
-
-export async function loginAction(formData: FormData) {
-  const email = formData.get('email')
-  const password = formData.get('password')
-
-  // ... authentication logic
-
-  // Return redirect in the response
-  return { redirect: '/dashboard' }
-}
-`}</CodeBlock>
-
-When a server action returns a redirect, the client automatically navigates to the specified URL.
 
 ## Prefetching
 
