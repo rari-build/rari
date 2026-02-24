@@ -6,6 +6,10 @@
 - *(runtime)* Enhance DOM safety and add HTML sanitization
 - *(runtime)* Normalize SVG element names to lowercase
 - *(runtime)* Add error handling for client component hydration
+
+### 💼 Other
+
+- Rari@0.10.6
 ## [rari@0.10.5] - 2026-02-24
 
 ### 🐛 Bug Fixes
