@@ -22,6 +22,9 @@ pub enum RscElement {
     },
     Reference(String),
     Text(String),
+    Fragment {
+        children: Vec<RscElement>,
+    },
 }
 
 #[derive(Debug, Clone)]

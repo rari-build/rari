@@ -22,11 +22,32 @@ if (!globalThis.renderToRsc) {
       const uniqueKey = element.key || `element-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
       if (element.type) {
+        if (element.type === Symbol.for('react.fragment') || element.type === Symbol.for('react.transitional.fragment')) {
+          const props = element.props || {}
+          const actualChildren = element.children ?? props.children
+
+          if (actualChildren == null)
+            return null
+
+          if (Array.isArray(actualChildren)) {
+            const results = []
+            for (const child of actualChildren)
+              results.push(await globalThis.renderToRsc(child, clientComponents))
+
+            if (results.length === 0)
+              return null
+
+            return results.length === 1 ? results[0] : results
+          }
+
+          return await globalThis.renderToRsc(actualChildren, clientComponents)
+        }
+
         if (typeof element.type === 'string') {
           const props = element.props || {}
           const { children: propsChildren, ...otherProps } = props
 
-          const actualChildren = element.children || propsChildren
+          const actualChildren = element.children ?? propsChildren
 
           const rscProps = {
             ...otherProps,

@@ -356,7 +356,12 @@ impl RscHtmlRenderer {
                     return self.parse_react_element(arr);
                 }
 
-                Ok(RscElement::Text(serde_json::to_string(value).unwrap_or_default()))
+                let mut children = Vec::new();
+                for item in arr {
+                    children.push(self.parse_rsc_element(item)?);
+                }
+
+                Ok(RscElement::Fragment { children })
             }
 
             JsonValue::Number(n) => Ok(RscElement::Text(n.to_string())),
@@ -553,6 +558,15 @@ impl RscHtmlRenderer {
                     }
 
                     Ok(escape_html(text))
+                }
+
+                RscElement::Fragment { children } => {
+                    let mut html = String::new();
+                    for child in children {
+                        let child_html = self.render_rsc_element(child, row_map, row_cache).await?;
+                        html.push_str(&child_html);
+                    }
+                    Ok(html)
                 }
 
                 RscElement::Component { tag, key: _, props } => {
