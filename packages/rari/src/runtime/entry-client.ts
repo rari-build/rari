@@ -303,9 +303,11 @@ export async function renderApp(): Promise<void> {
           const props = propsJson ? JSON.parse(propsJson) : {}
 
           requestAnimationFrame(() => {
-            element.innerHTML = ''
-            const root = createRoot(element)
-            root.render(React.createElement(Component, props))
+            if (document.contains(element)) {
+              element.replaceChildren()
+              const root = createRoot(element)
+              root.render(React.createElement(Component, props))
+            }
           })
         }
         catch (error) {

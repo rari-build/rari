@@ -141,6 +141,98 @@ if (typeof window !== 'undefined') {
             .replace(HTML_QUOTE_REGEX, '&quot;')
             .replace(HTML_APOS_REGEX, '&#39;')
 
+        const ALLOWED_TAGS = new Set([
+          'div',
+          'span',
+          'p',
+          'ul',
+          'ol',
+          'li',
+          'a',
+          'img',
+          'section',
+          'article',
+          'header',
+          'footer',
+          'nav',
+          'main',
+          'aside',
+          'strong',
+          'em',
+          'b',
+          'i',
+          'button',
+          'input',
+          'label',
+          'form',
+          'select',
+          'option',
+          'textarea',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'table',
+          'thead',
+          'tbody',
+          'tr',
+          'td',
+          'th',
+          'code',
+          'pre',
+          'blockquote',
+          'hr',
+          'br',
+          'small',
+          'mark',
+          'del',
+          'ins',
+          'sub',
+          'sup',
+          'abbr',
+          'time',
+          'figure',
+          'figcaption',
+          'details',
+          'summary',
+          'dialog',
+          'menu',
+          'menuitem',
+          'canvas',
+          'svg',
+          'path',
+          'circle',
+          'rect',
+          'line',
+          'polygon',
+          'polyline',
+          'ellipse',
+          'text',
+          'g',
+          'defs',
+          'use',
+          'symbol',
+          'clipPath',
+          'mask',
+          'pattern',
+          'linearGradient',
+          'radialGradient',
+          'stop',
+          'image',
+          'video',
+          'audio',
+          'source',
+          'track',
+          'picture',
+          'dl',
+          'dt',
+          'dd',
+          'fieldset',
+          'legend',
+        ])
+
         if (!element)
           return ''
 
@@ -150,6 +242,11 @@ if (typeof window !== 'undefined') {
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
             const [, tag, , props] = element
+
+            const sanitizedTag = typeof tag === 'string' && ALLOWED_TAGS.has(tag.toLowerCase())
+              ? tag.toLowerCase()
+              : 'div'
+
             let innerHTML = null
             let children = ''
 
@@ -184,7 +281,7 @@ if (typeof window !== 'undefined') {
                 children = rscToHtml(props.children)
             }
 
-            return `<${tag}${attrs}>${innerHTML !== null ? innerHTML : children}</${tag}>`
+            return `<${sanitizedTag}${attrs}>${innerHTML !== null ? innerHTML : children}</${sanitizedTag}>`
           }
 
           return element.map(rscToHtml).join('')
@@ -197,19 +294,22 @@ if (typeof window !== 'undefined') {
 
       if (htmlContent) {
         requestAnimationFrame(() => {
-          if (document.contains(boundaryElement)) {
+          const isInDocument = document.contains(boundaryElement)
+
+          if (isInDocument) {
             boundaryElement.innerHTML = htmlContent
             boundaryElement.classList.add('rari-boundary-resolved')
-
-            window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
-              detail: {
-                boundaryId,
-                rscRow,
-                rowId,
-                element: boundaryElement,
-              },
-            }))
           }
+
+          window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+            detail: {
+              boundaryId,
+              rscRow,
+              rowId,
+              element: boundaryElement,
+              wasAttached: isInDocument,
+            },
+          }))
         })
       }
     }
