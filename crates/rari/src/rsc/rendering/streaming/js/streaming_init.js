@@ -24,7 +24,7 @@ if (!globalThis.renderToRsc) {
       if (element.type) {
         if (element.type === Symbol.for('react.fragment') || element.type === Symbol.for('react.transitional.fragment')) {
           const props = element.props || {}
-          const actualChildren = element.children || props.children
+          const actualChildren = element.children ?? props.children
 
           if (actualChildren == null)
             return null
@@ -47,7 +47,7 @@ if (!globalThis.renderToRsc) {
           const props = element.props || {}
           const { children: propsChildren, ...otherProps } = props
 
-          const actualChildren = element.children || propsChildren
+          const actualChildren = element.children ?? propsChildren
 
           const rscProps = {
             ...otherProps,
