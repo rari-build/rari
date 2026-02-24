@@ -51,7 +51,9 @@ if (!globalThis.renderToRsc) {
 
           const rscProps = {
             ...otherProps,
-            children: actualChildren ? await globalThis.renderToRsc(actualChildren, clientComponents) : undefined,
+            children: actualChildren == null
+              ? undefined
+              : await globalThis.renderToRsc(actualChildren, clientComponents),
           }
           if (rscProps.children === undefined)
             delete rscProps.children
