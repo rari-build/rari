@@ -1,0 +1,230 @@
+export const title = 'Links and Navigation'
+export const description = 'Learn how navigation works in rari using standard HTML anchor tags with automatic client-side routing, no Link component required.'
+
+<PageHeader title="Links and Navigation" />
+
+rari takes a different approach to navigation. Instead of requiring a special `<Link>` component, you use standard HTML `<a>` tags. The framework's client router automatically intercepts link clicks and performs client-side navigation — giving you the benefits of a single-page application without the API overhead.
+
+## Basic Usage
+
+Just use regular anchor tags:
+
+<CodeBlock filename="src/app/page.tsx" language="tsx">{`export default function HomePage() {
+  return (
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
+    </nav>
+  )
+}
+`}</CodeBlock>
+
+That's it. No imports, no special components, no learning curve. If you know HTML, you know how to navigate in rari.
+
+## How It Works
+
+When you click a link, rari's client router:
+
+1. Intercepts the click event on `<a>` tags
+2. Prevents the default browser navigation
+3. Fetches only the new page content (not the entire HTML document)
+4. Updates the URL in the browser
+5. Streams the new content into the page
+6. Preserves layout state and scroll position
+
+This gives you instant navigation with no full-page reloads, while keeping your code simple and standards-based.
+
+## Client-Side Navigation Benefits
+
+### Layout Preservation
+
+Layouts don't re-render during navigation. If you have a sidebar, header, or any shared UI in a layout component, it stays mounted and preserves its state:
+
+<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import { useState } from 'react'
+import type { LayoutProps } from 'rari'
+
+export default function DashboardLayout({ children }: LayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  return (
+    <div>
+      <aside>
+        {/* This sidebar state persists across page navigation */}
+        <button onClick={() => setSidebarOpen(!sidebarOpen)}>
+          Toggle
+        </button>
+        <nav>
+          <a href="/dashboard">Overview</a>
+          <a href="/dashboard/analytics">Analytics</a>
+          <a href="/dashboard/settings">Settings</a>
+        </nav>
+      </aside>
+      <main>{children}</main>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+Navigating between `/dashboard/analytics` and `/dashboard/settings` only swaps the page content — the sidebar stays mounted with `sidebarOpen` intact.
+
+### Streaming Updates
+
+Only the changed content is fetched and streamed. If you navigate from `/blog` to `/blog/hello-world`, rari fetches just the blog post page, not the entire document with layouts and navigation.
+
+### Optimized Performance
+
+The router includes built-in optimizations:
+- Debounced navigation to prevent rapid-fire requests
+- Automatic request cancellation when navigating away
+- Route info caching to avoid redundant fetches
+- Scroll position restoration on back/forward navigation
+
+## Styling Links
+
+Since links are just `<a>` tags, style them however you want — CSS, Tailwind, CSS modules, styled-components, anything:
+
+<CodeBlock filename="src/app/components/Navigation.tsx" language="tsx">{`export default function Navigation() {
+  return (
+    <nav className="flex gap-4">
+      <a
+        href="/products"
+        className="px-4 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+      >
+        Products
+      </a>
+      <a
+        href="/pricing"
+        className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+      >
+        Pricing
+      </a>
+    </nav>
+  )
+}
+`}</CodeBlock>
+
+## Active Link Styling
+
+Use the `pathname` prop available in layouts and pages to style active links:
+
+<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+
+export default function RootLayout({ children, pathname }: LayoutProps) {
+  const isActive = (path: string) => pathname === path
+
+  return (
+    <div>
+      <nav>
+        <a
+          href="/"
+          className={isActive('/') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
+        >
+          Home
+        </a>
+        <a
+          href="/about"
+          className={isActive('/about') ? 'text-indigo-600 font-semibold' : 'text-gray-700'}
+        >
+          About
+        </a>
+      </nav>
+      <main>{children}</main>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+For more complex active state logic, you can check if the pathname starts with a certain path:
+
+<CodeBlock language="tsx">{`const isActiveSection = (path: string) => pathname?.startsWith(path)
+
+<a
+  href="/docs/getting-started"
+  className={isActiveSection('/docs') ? 'active' : ''}
+>
+  Documentation
+</a>
+`}</CodeBlock>
+
+## External Links
+
+External links work exactly as you'd expect — they're not intercepted and perform normal browser navigation:
+
+<CodeBlock language="tsx">{`export default function Footer() {
+  return (
+    <footer>
+      <a href="https://github.com/your-repo" target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
+      <a href="https://twitter.com/your-handle" target="_blank" rel="noopener noreferrer">
+        Twitter
+      </a>
+    </footer>
+  )
+}
+`}</CodeBlock>
+
+The router automatically detects external URLs and lets the browser handle them normally.
+
+## Special Link Behaviors
+
+### Hash Links
+
+Hash links scroll to elements on the current page:
+
+<CodeBlock language="tsx">{`<a href="#features">Jump to Features</a>
+
+<section id="features">
+  <h2>Features</h2>
+</section>
+`}</CodeBlock>
+
+The router intercepts hash links and performs smooth scrolling to the target element.
+
+### Download Links
+
+Links with the `download` attribute are not intercepted:
+
+<CodeBlock language="tsx">{`<a href="/files/report.pdf" download>
+  Download Report
+</a>
+`}</CodeBlock>
+
+### Modified Clicks
+
+Links clicked with modifier keys (Ctrl, Cmd, Shift, Alt) are not intercepted, allowing users to open links in new tabs or windows as expected:
+
+- `Cmd/Ctrl + Click` — Opens in new tab
+- `Shift + Click` — Opens in new window
+- `Alt + Click` — Downloads the link
+
+### Target Attribute
+
+Links with `target` attributes other than `_self` are not intercepted:
+
+<CodeBlock language="tsx">{`<a href="/admin" target="_blank">
+  Open Admin in New Tab
+</a>
+`}</CodeBlock>
+
+## Prefetching
+
+Currently, rari does not include automatic link prefetching. Navigation is fast enough with the streaming architecture and route caching that prefetching hasn't been necessary. This may be added in a future release based on user feedback.
+
+## Why No Link Component?
+
+The decision to use standard `<a>` tags instead of a custom component is intentional:
+
+1. **Zero learning curve**: If you know HTML, you already know how to navigate
+2. **Better DX**: No imports, no prop mapping, no framework-specific APIs
+3. **Standards-based**: Works with any styling solution, accessibility tools, and browser features
+4. **Less code**: Fewer abstractions mean less to maintain and debug
+5. **Progressive enhancement**: Links work even if JavaScript fails to load
+
+The client router handles all the complexity behind the scenes, giving you SPA-like navigation with the simplicity of static HTML.
+
+## Related
+
+- [Routing](/docs/getting-started/routing) — Learn about file-based routing and route conventions
+- [Layouts](/docs/getting-started/routing#layouts) — Understand layout persistence during navigation

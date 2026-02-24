@@ -10,6 +10,7 @@ export const docsNavigation: NavItem[] = [
     href: '/docs/getting-started',
     items: [
       { label: 'Routing', href: '/docs/getting-started/routing' },
+      { label: 'Links and Navigation', href: '/docs/getting-started/links' },
       { label: 'Metadata', href: '/docs/getting-started/metadata' },
       { label: 'Deploying', href: '/docs/getting-started/deploying' },
     ],
