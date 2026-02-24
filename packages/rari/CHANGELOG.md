@@ -1,8 +1,20 @@
+## [rari@0.10.6] - 2026-02-24
+
+### 🐛 Bug Fixes
+
+- *(runtime)* Improve DOM manipulation safety and performance
+- *(runtime)* Enhance DOM safety and add HTML sanitization
+- *(runtime)* Normalize SVG element names to lowercase
+- *(runtime)* Add error handling for client component hydration
 ## [rari@0.10.5] - 2026-02-24
 
 ### 🐛 Bug Fixes
 
 - *(AppRouterProvider)* Remove redundant cache control headers
+
+### 💼 Other
+
+- Rari@0.10.5
 ## [rari@0.10.4] - 2026-02-23
 
 ### 🚀 Features
