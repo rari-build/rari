@@ -604,8 +604,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const response = await fetch(url, {
           headers: {
             'Accept': 'text/x-component',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
           },
           cache: 'no-store',
           signal: abortSignal,
