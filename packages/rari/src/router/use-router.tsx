@@ -1,3 +1,4 @@
+/* eslint-disable react/no-context-provider */
 'use client'
 
 import type { NavigationOptions } from './navigation-types'
@@ -25,7 +26,7 @@ export interface RouterProviderProps {
 export function RouterProvider({ children, initialPathname }: RouterProviderProps) {
   const [pathname, setPathname] = useState(initialPathname)
   const [searchParams, setSearchParams] = useState(() => new URLSearchParams(window.location.search))
-  const [params] = useState<Record<string, string | string[]>>({})
+  const [params, setParams] = useState<Record<string, string | string[]>>({})
   const navigateRef = useRef<((href: string, options?: NavigationOptions) => Promise<void>) | null>(null)
 
   useEffect(() => {
@@ -36,6 +37,13 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       if (detail?.to) {
         setPathname(detail.to)
         setSearchParams(new URLSearchParams(window.location.search))
+
+        if (detail?.routeInfo?.params) {
+          setParams(detail.routeInfo.params)
+        }
+        else {
+          setParams({})
+        }
       }
     }
 
@@ -100,7 +108,7 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
     prefetch: async (href: string) => {
       try {
         const url = new URL(href, window.location.origin)
-        await fetch(url.pathname, {
+        await fetch(url.pathname + url.search, {
           headers: { Accept: 'text/x-component' },
           priority: 'low',
         } as RequestInit)
@@ -112,9 +120,9 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
   }), [pathname, params, searchParams])
 
   return (
-    <RouterContext value={value}>
+    <RouterContext.Provider value={value}>
       {children}
-    </RouterContext>
+    </RouterContext.Provider>
   )
 }
 

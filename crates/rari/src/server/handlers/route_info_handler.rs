@@ -1,6 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
+use crate::server::routing::types::RouteSegment;
 use crate::server::types::ServerState;
 
 #[derive(Debug, Deserialize)]
@@ -17,6 +18,8 @@ pub struct RouteInfoResponse {
     is_dynamic: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     params: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    segments: Option<Vec<RouteSegment>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,12 +69,19 @@ pub async fn get_route_info(
                 Some(route_match.route.params.clone())
             };
 
+            let segments = if route_match.route.is_dynamic {
+                Some(route_match.route.segments.clone())
+            } else {
+                None
+            };
+
             Ok(Json(RouteInfoResponse {
                 exists: true,
                 layouts,
                 loading,
                 is_dynamic: route_match.route.is_dynamic,
                 params,
+                segments,
             }))
         }
         Err(_) => Ok(Json(RouteInfoResponse {
@@ -80,6 +90,7 @@ pub async fn get_route_info(
             loading: None,
             is_dynamic: false,
             params: None,
+            segments: None,
         })),
     }
 }

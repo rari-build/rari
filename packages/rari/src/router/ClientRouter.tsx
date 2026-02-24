@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
 import { registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
-import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
+import { extractPathname, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { routeInfoCache } from './route-info-client'
 import { StatePreserver } from './StatePreserver'
@@ -443,13 +443,20 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
               }))
             }
 
+            const params = routeInfo?.segments
+              ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
+              : {}
+
             window.dispatchEvent(new CustomEvent('rari:navigate', {
               detail: {
                 from: fromRoute,
                 to: actualTargetPath,
                 navigationId,
                 options,
-                routeInfo,
+                routeInfo: {
+                  ...routeInfo,
+                  params,
+                },
                 abortSignal: abortController.signal,
                 isStreaming: true,
               },
@@ -463,13 +470,20 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         else {
           const rscWireFormat = await response.text()
 
+          const params = routeInfo?.segments
+            ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
+            : {}
+
           window.dispatchEvent(new CustomEvent('rari:navigate', {
             detail: {
               from: fromRoute,
               to: actualTargetPath,
               navigationId,
               options,
-              routeInfo,
+              routeInfo: {
+                ...routeInfo,
+                params,
+              },
               abortSignal: abortController.signal,
               rscWireFormat,
             },
