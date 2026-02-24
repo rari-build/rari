@@ -1,8 +1,8 @@
-/* eslint-disable react/no-context-provider */
 'use client'
 
 import type { NavigationOptions } from './navigation-types'
 import { createContext, use, useEffect, useMemo, useRef, useState } from 'react'
+import { getNavigate } from './navigate'
 
 export interface RouterContextValue {
   pathname: string
@@ -25,7 +25,11 @@ export interface RouterProviderProps {
 
 export function RouterProvider({ children, initialPathname }: RouterProviderProps) {
   const [pathname, setPathname] = useState(initialPathname)
-  const [searchParams, setSearchParams] = useState(() => new URLSearchParams(window.location.search))
+  const [searchParams, setSearchParams] = useState(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams(),
+  )
   const [params, setParams] = useState<Record<string, string | string[]>>({})
   const navigateRef = useRef<((href: string, options?: NavigationOptions) => Promise<void>) | null>(null)
 
@@ -38,30 +42,26 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
         setPathname(detail.to)
         setSearchParams(new URLSearchParams(window.location.search))
 
-        if (detail?.routeInfo?.params) {
-          setParams(detail.routeInfo.params)
+        if (detail?.routeInfo?.extractedParams) {
+          setParams(detail.routeInfo.extractedParams)
         }
         else {
           setParams({})
         }
       }
     }
-
-    const handlePopState = () => {
-      setPathname(window.location.pathname)
-      setSearchParams(new URLSearchParams(window.location.search))
-    }
-
     window.addEventListener('rari:navigate', handleNavigate)
-    window.addEventListener('popstate', handlePopState)
 
     return () => {
       window.removeEventListener('rari:navigate', handleNavigate)
-      window.removeEventListener('popstate', handlePopState)
     }
   }, [])
 
   useEffect(() => {
+    const existingNavigate = getNavigate()
+    if (existingNavigate)
+      navigateRef.current = existingNavigate
+
     const handleRegisterNavigate = (event: Event) => {
       const customEvent = event as CustomEvent<{ navigate: (href: string, options?: NavigationOptions) => Promise<void> }>
       navigateRef.current = customEvent.detail.navigate
@@ -120,9 +120,9 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
   }), [pathname, params, searchParams])
 
   return (
-    <RouterContext.Provider value={value}>
+    <RouterContext value={value}>
       {children}
-    </RouterContext.Provider>
+    </RouterContext>
   )
 }
 

@@ -2,6 +2,10 @@ import type { NavigationOptions } from './navigation-types'
 
 let navigateFunction: ((href: string, options?: NavigationOptions) => Promise<void>) | null = null
 
+export function getNavigate(): ((href: string, options?: NavigationOptions) => Promise<void>) | null {
+  return navigateFunction
+}
+
 export function registerNavigate(fn: (href: string, options?: NavigationOptions) => Promise<void>): void {
   if (typeof window === 'undefined') {
     console.warn('[rari] Router cannot register navigate in non-browser environment')

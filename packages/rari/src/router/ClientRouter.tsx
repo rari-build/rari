@@ -443,7 +443,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
               }))
             }
 
-            const params = routeInfo?.segments
+            const extractedParams = routeInfo?.segments
               ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
               : {}
 
@@ -455,7 +455,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
                 options,
                 routeInfo: {
                   ...routeInfo,
-                  params,
+                  extractedParams,
                 },
                 abortSignal: abortController.signal,
                 isStreaming: true,
@@ -470,7 +470,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         else {
           const rscWireFormat = await response.text()
 
-          const params = routeInfo?.segments
+          const extractedParams = routeInfo?.segments
             ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
             : {}
 
@@ -482,7 +482,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
               options,
               routeInfo: {
                 ...routeInfo,
-                params,
+                extractedParams,
               },
               abortSignal: abortController.signal,
               rscWireFormat,
