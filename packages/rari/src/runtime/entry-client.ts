@@ -303,10 +303,15 @@ export async function renderApp(): Promise<void> {
           const props = propsJson ? JSON.parse(propsJson) : {}
 
           requestAnimationFrame(() => {
-            if (document.contains(element)) {
-              element.replaceChildren()
-              const root = createRoot(element)
-              root.render(React.createElement(Component, props))
+            try {
+              if (document.contains(element)) {
+                element.replaceChildren()
+                const root = createRoot(element)
+                root.render(React.createElement(Component, props))
+              }
+            }
+            catch (error) {
+              console.error(`[rari] Failed to hydrate client component ${componentId}:`, error)
             }
           })
         }
