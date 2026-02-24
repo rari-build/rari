@@ -603,7 +603,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const response = await fetch(url, {
           headers: {
-            'Accept': 'text/x-component',
+            Accept: 'text/x-component',
           },
           cache: 'no-store',
           signal: abortSignal,

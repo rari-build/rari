@@ -141,6 +141,98 @@ if (typeof window !== 'undefined') {
             .replace(HTML_QUOTE_REGEX, '&quot;')
             .replace(HTML_APOS_REGEX, '&#39;')
 
+        const ALLOWED_TAGS = new Set([
+          'div',
+          'span',
+          'p',
+          'ul',
+          'ol',
+          'li',
+          'a',
+          'img',
+          'section',
+          'article',
+          'header',
+          'footer',
+          'nav',
+          'main',
+          'aside',
+          'strong',
+          'em',
+          'b',
+          'i',
+          'button',
+          'input',
+          'label',
+          'form',
+          'select',
+          'option',
+          'textarea',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'table',
+          'thead',
+          'tbody',
+          'tr',
+          'td',
+          'th',
+          'code',
+          'pre',
+          'blockquote',
+          'hr',
+          'br',
+          'small',
+          'mark',
+          'del',
+          'ins',
+          'sub',
+          'sup',
+          'abbr',
+          'time',
+          'figure',
+          'figcaption',
+          'details',
+          'summary',
+          'dialog',
+          'menu',
+          'menuitem',
+          'canvas',
+          'svg',
+          'path',
+          'circle',
+          'rect',
+          'line',
+          'polygon',
+          'polyline',
+          'ellipse',
+          'text',
+          'g',
+          'defs',
+          'use',
+          'symbol',
+          'clippath',
+          'mask',
+          'pattern',
+          'lineargradient',
+          'radialgradient',
+          'stop',
+          'image',
+          'video',
+          'audio',
+          'source',
+          'track',
+          'picture',
+          'dl',
+          'dt',
+          'dd',
+          'fieldset',
+          'legend',
+        ])
+
         if (!element)
           return ''
 
@@ -150,6 +242,11 @@ if (typeof window !== 'undefined') {
         if (Array.isArray(element)) {
           if (element.length >= 4 && element[0] === '$') {
             const [, tag, , props] = element
+
+            const sanitizedTag = typeof tag === 'string' && ALLOWED_TAGS.has(tag.toLowerCase())
+              ? tag.toLowerCase()
+              : 'div'
+
             let innerHTML = null
             let children = ''
 
@@ -184,7 +281,7 @@ if (typeof window !== 'undefined') {
                 children = rscToHtml(props.children)
             }
 
-            return `<${tag}${attrs}>${innerHTML !== null ? innerHTML : children}</${tag}>`
+            return `<${sanitizedTag}${attrs}>${innerHTML !== null ? innerHTML : children}</${sanitizedTag}>`
           }
 
           return element.map(rscToHtml).join('')
@@ -196,22 +293,29 @@ if (typeof window !== 'undefined') {
       const htmlContent = rscToHtml(content)
 
       if (htmlContent) {
-        boundaryElement.innerHTML = htmlContent
-        boundaryElement.classList.add('rari-boundary-resolved')
+        requestAnimationFrame(() => {
+          const isInDocument = document.contains(boundaryElement)
+
+          if (isInDocument) {
+            boundaryElement.innerHTML = htmlContent
+            boundaryElement.classList.add('rari-boundary-resolved')
+          }
+
+          window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+            detail: {
+              boundaryId,
+              rscRow,
+              rowId,
+              element: boundaryElement,
+              wasAttached: isInDocument,
+            },
+          }))
+        })
       }
     }
     catch (e) {
       console.error('[rari] Error processing boundary update:', e)
     }
-
-    window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
-      detail: {
-        boundaryId,
-        rscRow,
-        rowId,
-        element: boundaryElement,
-      },
-    }))
   }
 
   const windowWithRari = window as unknown as WindowWithRari
@@ -1524,9 +1628,7 @@ class HMRErrorOverlay {
     if (!this.overlay)
       return
 
-    while (this.overlay.firstChild) {
-      this.overlay.removeChild(this.overlay.firstChild)
-    }
+    this.overlay.replaceChildren()
 
     const container = document.createElement('div')
     container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 2rem; backdrop-filter: blur(4px);'
