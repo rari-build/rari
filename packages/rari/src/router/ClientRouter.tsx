@@ -759,7 +759,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   useEffect(() => {
     isMountedRef.current = true
 
-    registerNavigate(navigate)
+    registerNavigate((href, options) => {
+      return navigateRef.current?.(href, options) ?? Promise.resolve()
+    })
 
     return () => {
       isMountedRef.current = false

@@ -33,8 +33,10 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       const customEvent = event as CustomEvent
       const detail = customEvent.detail
 
-      if (detail?.to)
+      if (detail?.to) {
         setPathname(detail.to)
+        setSearchParams(new URLSearchParams(window.location.search))
+      }
     }
 
     const handlePopState = () => {
@@ -69,18 +71,22 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
     params,
     searchParams,
     push: async (href: string, options?: NavigationOptions) => {
-      if (navigateRef.current)
+      if (navigateRef.current) {
         await navigateRef.current(href, options)
-      else
+      }
+      else {
         console.warn('[rari] Router not ready, falling back to window.location')
-      window.location.href = href
+        window.location.href = href
+      }
     },
     replace: async (href: string, options?: NavigationOptions) => {
-      if (navigateRef.current)
+      if (navigateRef.current) {
         await navigateRef.current(href, { ...options, replace: true })
-      else
+      }
+      else {
         console.warn('[rari] Router not ready, falling back to window.location')
-      window.location.replace(href)
+        window.location.replace(href)
+      }
     },
     back: () => {
       window.history.back()
