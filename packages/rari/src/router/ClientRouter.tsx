@@ -6,6 +6,7 @@ import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
+import { registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
 import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
@@ -757,6 +758,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   useEffect(() => {
     isMountedRef.current = true
+
+    registerNavigate(navigate)
 
     return () => {
       isMountedRef.current = false
