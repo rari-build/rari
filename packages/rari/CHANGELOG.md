@@ -1,3 +1,27 @@
+## [rari@0.10.8] - 2026-02-25
+
+### 🚀 Features
+
+- *(router)* Add public router API with navigate function and hooks
+- *(router)* Add route segment matching and improve parameter extraction
+- *(router)* Export navigate getter and improve router provider
+- *(router)* Add navigate deregistration and cleanup on unmount
+
+### 🐛 Bug Fixes
+
+- *(router)* Preserve hash in history state and handle hash-based scrolling
+- *(router)* Improve navigation registration and hash scrolling behavior
+- *(router)* Refactor parameter extraction and improve navigate registration
+- *(router)* Add spacing between navigate registration functions
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.10.8
+## [rari@0.10.7] - 2026-02-24
+
+### 💼 Other
+
+- Rari@0.10.7
 ## [rari@0.10.6] - 2026-02-24
 
 ### 🐛 Bug Fixes
