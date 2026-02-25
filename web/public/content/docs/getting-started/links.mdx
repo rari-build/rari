@@ -247,7 +247,7 @@ await navigate('/settings', { scroll: false })
 await navigate('/filters?sort=date', { shallow: true })
 `}</CodeBlock>
 
-If the router hasn't initialized yet (e.g. during SSR or before hydration), `navigate` falls back to `window.location` automatically.
+The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically.
 
 ### The `useRouter` Hook
 
@@ -297,7 +297,9 @@ Both `navigate` and `router.push`/`router.replace` accept the same options:
 
 If you only need a specific piece of route state, use the focused hooks to avoid unnecessary re-renders:
 
-<CodeBlock language="tsx">{`import { usePathname, useParams, useSearchParams } from 'rari/router'
+<CodeBlock language="tsx">{`'use client'
+
+import { usePathname, useParams, useSearchParams } from 'rari/router'
 
 function Breadcrumb() {
   const pathname = usePathname()
@@ -326,12 +328,19 @@ function FilteredList() {
 
 You can prefetch routes programmatically using the `useRouter` hook:
 
-<CodeBlock language="tsx">{`const router = useRouter()
+<CodeBlock language="tsx">{`'use client'
 
-// Prefetch on hover, pointer enter, etc.
-<div onMouseEnter={() => router.prefetch('/dashboard')}>
-  <a href="/dashboard">Dashboard</a>
-</div>
+import { useRouter } from 'rari/router'
+
+export default function ProductCard({ href }: { href: string }) {
+  const router = useRouter()
+
+  return (
+    <div onMouseEnter={() => router.prefetch(href)}>
+      <a href={href}>View Product</a>
+    </div>
+  )
+}
 `}</CodeBlock>
 
 Automatic link prefetching is not built in. The streaming architecture and route caching keep navigation fast enough that it hasn't been necessary. This may change in a future release based on feedback.
