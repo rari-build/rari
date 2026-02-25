@@ -216,7 +216,9 @@ Sometimes you need to navigate in response to events, form submissions, or condi
 
 For simple, fire-and-forget navigation outside of React components (or inside them), import `navigate` directly:
 
-<CodeBlock filename="src/app/components/SearchForm.tsx" language="tsx">{`import { navigate } from 'rari/router'
+<CodeBlock filename="src/app/components/SearchForm.tsx" language="tsx">{`'use client'
+
+import { navigate } from 'rari/router'
 
 export default function SearchForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -239,12 +241,6 @@ export default function SearchForm() {
 
 <CodeBlock language="tsx">{`// Replace the current history entry instead of pushing
 await navigate('/dashboard', { replace: true })
-
-// Navigate without scrolling to the top
-await navigate('/settings', { scroll: false })
-
-// Shallow navigation (update URL without re-fetching page content)
-await navigate('/filters?sort=date', { shallow: true })
 `}</CodeBlock>
 
 The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically.
@@ -290,8 +286,6 @@ Both `navigate` and `router.push`/`router.replace` accept the same options:
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `replace` | `boolean` | `false` | Replace the current history entry instead of pushing |
-| `scroll` | `boolean` | `true` | Scroll to top after navigation |
-| `shallow` | `boolean` | `false` | Update the URL without re-fetching page content |
 
 ### Convenience Hooks
 
