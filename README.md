@@ -125,11 +125,7 @@ rari is made possible by the support of these companies:
 
 <div>
   <a href="https://get.neon.com/KDQudHN" target="_blank">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://neon.com/brand/neon-logo-dark-color.svg">
-      <source media="(prefers-color-scheme: light)" srcset="https://neon.com/brand/neon-logo-light-color.svg">
-      <img width="250px" alt="Neon - Serverless Postgres" src="https://neon.com/brand/neon-logo-dark-color.svg">
-    </picture>
+    <img width="250px" alt="Neon - Serverless Postgres" src=".github/assets/neon.svg">
   </a>
 </div>
 
