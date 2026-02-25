@@ -1,5 +1,5 @@
 export const title = 'Links and Navigation'
-export const description = 'Learn how navigation works in rari using standard HTML anchor tags with automatic client-side routing, no Link component required.'
+export const description = 'Learn how navigation works in rari using standard HTML anchor tags with automatic client-side routing, plus programmatic navigation via the navigate function and useRouter hook.'
 
 <PageHeader title="Links and Navigation" />
 
@@ -208,9 +208,136 @@ Links with `target` attributes other than `_self` are not intercepted:
 </a>
 `}</CodeBlock>
 
+## Programmatic Navigation
+
+Sometimes you need to navigate in response to events, form submissions, or conditional logic — not just link clicks. rari provides two ways to do this.
+
+### The `navigate` Function
+
+For navigation from non-component code (e.g., event handlers, utilities, or server/standalone scripts), import `navigate` directly. Inside React components, prefer `useRouter` for in-component navigation:
+
+<CodeBlock filename="src/app/components/SearchForm.tsx" language="tsx">{`'use client'
+
+import { navigate } from 'rari/router'
+
+export default function SearchForm() {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const query = formData.get('q') as string
+    await navigate(\`/search?q=\${encodeURIComponent(query)}\`)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="q" placeholder="Search..." />
+      <button type="submit">Search</button>
+    </form>
+  )
+}
+`}</CodeBlock>
+
+`navigate` accepts an optional second argument with navigation options:
+
+<CodeBlock language="tsx">{`// Replace the current history entry instead of pushing
+await navigate('/dashboard', { replace: true })
+`}</CodeBlock>
+
+The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically. When using the fallback, the `replace` option is respected by calling `window.location.replace(...)` instead of assigning `window.location.href`.
+
+### The `useRouter` Hook
+
+For React components that need full router access, `useRouter` gives you navigation methods plus reactive route state:
+
+<CodeBlock filename="src/app/components/LogoutButton.tsx" language="tsx">{`'use client'
+
+import { useRouter } from 'rari/router'
+
+export default function LogoutButton() {
+  const router = useRouter()
+
+  async function handleLogout() {
+    await fetch('/api/logout', { method: 'POST' })
+    await router.push('/login')
+  }
+
+  return <button onClick={handleLogout}>Log out</button>
+}
+`}</CodeBlock>
+
+The hook returns:
+
+| Method / Property | Description |
+|---|---|
+| `push(href, options?)` | Navigate to a new URL (adds history entry) |
+| `replace(href, options?)` | Navigate without adding a history entry |
+| `back()` | Go back (equivalent to browser back button) |
+| `forward()` | Go forward |
+| `refresh()` | Re-render the current route |
+| `prefetch(href)` | Prefetch a route for faster future navigation |
+| `pathname` | Current pathname (reactive) |
+| `params` | Current route parameters (reactive) |
+| `searchParams` | Current URL search params (reactive) |
+
+### Navigation Options
+
+Both `navigate` and `router.push`/`router.replace` accept the same options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `replace` | `boolean` | `false` | Replace the current history entry instead of pushing |
+
+### Convenience Hooks
+
+If you only need a specific piece of route state, use the focused hooks to avoid unnecessary re-renders:
+
+<CodeBlock language="tsx">{`'use client'
+
+import { usePathname, useParams, useSearchParams } from 'rari/router'
+
+function Breadcrumb() {
+  const pathname = usePathname()
+  // ...
+}
+
+function ProductPage() {
+  const params = useParams() // { slug: 'my-product' }
+  // ...
+}
+
+function FilteredList() {
+  const searchParams = useSearchParams() // URLSearchParams
+  const sort = searchParams.get('sort')
+  // ...
+}
+`}</CodeBlock>
+
+### When to Use What
+
+- **`<a>` tags** — the default. Use for all standard navigation.
+- **`navigate()`** — for navigation outside React components, or when you don't need reactive route state.
+- **`useRouter()`** — for components that need to navigate *and* read route state.
+
 ## Prefetching
 
-Currently, rari does not include automatic link prefetching. Navigation is fast enough with the streaming architecture and route caching that prefetching hasn't been necessary. This may be added in a future release based on user feedback.
+You can prefetch routes programmatically using the `useRouter` hook:
+
+<CodeBlock language="tsx">{`'use client'
+
+import { useRouter } from 'rari/router'
+
+export default function ProductCard({ href }: { href: string }) {
+  const router = useRouter()
+
+  return (
+    <div onMouseEnter={() => router.prefetch(href)}>
+      <a href={href}>View Product</a>
+    </div>
+  )
+}
+`}</CodeBlock>
+
+Automatic link prefetching is not built in. The streaming architecture and route caching keep navigation fast enough that it hasn't been necessary. This may change in a future release based on feedback.
 
 ## Why No Link Component?
 
