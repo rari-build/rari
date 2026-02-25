@@ -14,7 +14,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.8.0
-    posthog-js: ^1.353.0
+    posthog-js: ^1.353.1
   build:
     rolldown: 1.0.0-rc.5
     rolldown-vite: ^7.3.1
@@ -24,7 +24,7 @@ catalogs:
   default:
     rari: ^0.10.8
   eslint:
-    '@antfu/eslint-config': ^7.5.0
+    '@antfu/eslint-config': ^7.6.0
     '@e18e/eslint-plugin': ^0.2.0
     '@eslint-react/eslint-plugin': ^2.13.0
     '@typescript-eslint/utils': ^8.56.1

@@ -10,8 +10,8 @@ catalogs:
       specifier: ^1.8.0
       version: 1.8.0
     posthog-js:
-      specifier: ^1.353.0
-      version: 1.353.0
+      specifier: ^1.353.1
+      version: 1.353.1
   build:
     rolldown:
       specifier: 1.0.0-rc.5
@@ -32,8 +32,8 @@ catalogs:
       version: 0.10.8
   eslint:
     '@antfu/eslint-config':
-      specifier: ^7.5.0
-      version: 7.5.0
+      specifier: ^7.6.0
+      version: 7.6.0
     '@e18e/eslint-plugin':
       specifier: ^0.2.0
       version: 0.2.0
@@ -138,7 +138,7 @@ importers:
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:eslint
-        version: 7.5.0(@eslint-react/eslint-plugin@2.13.0(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/rule-tester@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/typescript-estree@8.56.1(typescript@5.9.3))(@typescript-eslint/utils@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.2(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))
+        version: 7.6.0(@eslint-react/eslint-plugin@2.13.0(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/rule-tester@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/typescript-estree@8.56.1(typescript@5.9.3))(@typescript-eslint/utils@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.2(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))
       '@e18e/eslint-plugin':
         specifier: catalog:eslint
         version: 0.2.0(eslint@10.0.2(jiti@2.6.1))(oxlint@1.50.0)
@@ -321,7 +321,7 @@ importers:
         version: 3.1.1
       '@posthog/react':
         specifier: catalog:analytics
-        version: 1.8.0(@types/react@19.2.14)(posthog-js@1.353.0)(react@19.2.4)
+        version: 1.8.0(@types/react@19.2.14)(posthog-js@1.353.1)(react@19.2.4)
       '@sentry/react':
         specifier: catalog:monitoring
         version: 10.40.0(react@19.2.4)
@@ -342,7 +342,7 @@ importers:
         version: 3.22.0
       posthog-js:
         specifier: catalog:analytics
-        version: 1.353.0
+        version: 1.353.1
       rari:
         specifier: 'catalog:'
         version: 0.10.8(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -386,8 +386,8 @@ importers:
 
 packages:
 
-  '@antfu/eslint-config@7.5.0':
-    resolution: {integrity: sha512-77smYBppIrK/x0tc0lYQgG3Ub6Mf11COOxQyJ3zgabwh7rurQvyKszQHSNVgfTxYS2COpX1tTRUem6MlPbZskQ==}
+  '@antfu/eslint-config@7.6.0':
+    resolution: {integrity: sha512-zxMWlccO+fB+JPCDYplYwGXKsX9fkmqOXFUcStIOd43yI8UJuwD10TRnr8Sa+vHV7rIpcPC0fLabx5p1ll8d1g==}
     hasBin: true
     peerDependencies:
       '@angular-eslint/eslint-plugin': ^21.1.0
@@ -1222,8 +1222,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@posthog/types@1.353.0':
-    resolution: {integrity: sha512-wG5zMdr80QNV+0XkJFCX5ZxcpdER1TtYe21YlLAuI4i0G1wjQDi/FDCjh4b0QGiV8KljQMHfC2xPZ/SXnPBlBQ==}
+  '@posthog/types@1.353.1':
+    resolution: {integrity: sha512-8zTsChX8yvYT9t5H1u9fb+qRAetYDIXGRXKDPv7goKyF+cuFFAVofKwlVSZ9W41sS1sYsMMqjXLRJzawgDVXxw==}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -3358,8 +3358,8 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.353.0:
-    resolution: {integrity: sha512-1ifN9CDMavZwRvm+6UYAaEbvzJPvC6q0warmNGyqUcmtDe3SZh4PfvftSJrucH5Oeh6r+ihWtLS7ESIUS0pYuw==}
+  posthog-js@1.353.1:
+    resolution: {integrity: sha512-yMQQ0sX6oSVqS2n8y8WKzHzX1qcjBibc/ZfomyDAc1PyEz5rmdszR1pA7UBAJOLc3zD0fcw9Gh5M+2QaAgDmoA==}
 
   preact@10.28.2:
     resolution: {integrity: sha512-lbteaWGzGHdlIuiJ0l2Jq454m6kcpI1zNje6d8MlGAFlYvP2GO4ibnat7P74Esfz4sPTdM6UxtTwh/d3pwM9JA==}
@@ -3965,7 +3965,7 @@ packages:
 
 snapshots:
 
-  '@antfu/eslint-config@7.5.0(@eslint-react/eslint-plugin@2.13.0(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/rule-tester@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/typescript-estree@8.56.1(typescript@5.9.3))(@typescript-eslint/utils@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.2(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))':
+  '@antfu/eslint-config@7.6.0(@eslint-react/eslint-plugin@2.13.0(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/rule-tester@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/typescript-estree@8.56.1(typescript@5.9.3))(@typescript-eslint/utils@8.56.1(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.25)(eslint-plugin-react-hooks@7.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint-plugin-react-refresh@0.5.2(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))':
     dependencies:
       '@antfu/install-pkg': 1.1.0
       '@clack/prompts': 1.0.1
@@ -3998,7 +3998,6 @@ snapshots:
       eslint-plugin-yml: 3.3.0(eslint@10.0.2(jiti@2.6.1))
       eslint-processor-vue-blocks: 2.0.0(@vue/compiler-sfc@3.5.25)(eslint@10.0.2(jiti@2.6.1))
       globals: 17.3.0
-      jsonc-eslint-parser: 3.1.0
       local-pkg: 1.1.2
       parse-gitignore: 2.0.0
       toml-eslint-parser: 1.0.3
@@ -4702,14 +4701,14 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
-  '@posthog/react@1.8.0(@types/react@19.2.14)(posthog-js@1.353.0)(react@19.2.4)':
+  '@posthog/react@1.8.0(@types/react@19.2.14)(posthog-js@1.353.1)(react@19.2.4)':
     dependencies:
-      posthog-js: 1.353.0
+      posthog-js: 1.353.1
       react: 19.2.4
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@posthog/types@1.353.0': {}
+  '@posthog/types@1.353.1': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 
@@ -7120,7 +7119,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.353.0:
+  posthog-js@1.353.1:
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.208.0
@@ -7128,7 +7127,7 @@ snapshots:
       '@opentelemetry/resources': 2.4.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-logs': 0.208.0(@opentelemetry/api@1.9.0)
       '@posthog/core': 1.23.1
-      '@posthog/types': 1.353.0
+      '@posthog/types': 1.353.1
       core-js: 3.47.0
       dompurify: 3.3.1
       fflate: 0.4.8

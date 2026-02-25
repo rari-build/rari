@@ -476,6 +476,14 @@
     },
     {
       "files": [
+        "**/*.md"
+      ],
+      "rules": {
+        "no-irregular-whitespace": "off"
+      }
+    },
+    {
+      "files": [
         "**/*.md/**/*.?([cm])[jt]s?(x)"
       ],
       "rules": {
