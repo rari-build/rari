@@ -60,6 +60,7 @@ test.describe('Mobile Smoke Tests', () => {
 
   test('mobile menu opens and closes', async ({ page }) => {
     await page.goto('/')
+    await page.waitForLoadState('networkidle')
 
     await openMobileMenu(page)
 
@@ -76,7 +77,10 @@ test.describe('Mobile Smoke Tests', () => {
     await page.goto('/docs/getting-started')
     await expect(page.locator('h1')).toBeVisible()
 
-    await page.locator('a[href="/docs/api-reference"]').click()
+    await openMobileMenu(page)
+
+    const link = page.locator('a[href="/docs/api-reference"]').first()
+    await link.click()
     await expect(page).toHaveURL(URL_PATTERNS.DOCS_API_REFERENCE)
     await expect(page.locator('h1')).toBeVisible()
 

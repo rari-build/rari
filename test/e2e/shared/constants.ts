@@ -1,5 +1,6 @@
 export const URL_PATTERNS = {
   HOME: /\/$/,
+  DOCS_PATH_REGEX: /\/docs/,
   DOCS_GETTING_STARTED: /\/docs\/getting-started$/,
   DOCS_API_REFERENCE: /\/docs\/api-reference$/,
   DOCS_ROUTING: /\/docs\/getting-started\/routing$/,
@@ -17,13 +18,4 @@ export const MOBILE_DEVICES = {
     userAgent: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
     viewport: { width: 412, height: 915 },
   },
-} as const
-
-export const TIMEOUTS = {
-  NAVIGATION: 10000,
-  ANIMATION: 300,
-  SHORT_WAIT: 100,
-  MEDIUM_WAIT: 500,
-  LONG_WAIT: 2000,
-  STALE_WINDOW: 30000,
 } as const
