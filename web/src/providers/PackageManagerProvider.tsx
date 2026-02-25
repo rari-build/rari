@@ -4,9 +4,9 @@
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useState } from 'react'
 
-export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun' | 'deno'
+export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
 
-const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun', 'deno']
+const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
 
 interface PackageManagerContextType {
   packageManager: PackageManager

@@ -28,7 +28,6 @@ export default async function HomePage() {
                   npm: 'npm create rari-app@latest my-rari-app',
                   yarn: 'yarn create rari-app my-rari-app',
                   bun: 'bun create rari-app my-rari-app',
-                  deno: 'deno run -A npm:create-rari-app@latest my-rari-app',
                 }}
               />
 

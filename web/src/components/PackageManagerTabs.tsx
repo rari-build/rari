@@ -7,7 +7,6 @@ import { usePackageManager } from '@/providers/PackageManagerProvider'
 import Bun from './icons/Bun'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
-import Deno from './icons/Deno'
 import Npm from './icons/Npm'
 import Pnpm from './icons/Pnpm'
 import Yarn from './icons/Yarn'
@@ -18,7 +17,6 @@ interface PackageManagerTabsProps {
     npm: string
     yarn: string
     bun: string
-    deno: string
   }
 }
 
@@ -27,7 +25,6 @@ const packageManagerIcons: Record<PackageManager, React.ComponentType<{ classNam
   npm: Npm,
   yarn: Yarn,
   bun: Bun,
-  deno: Deno,
 }
 
 export default function PackageManagerTabs({ commands }: PackageManagerTabsProps) {
