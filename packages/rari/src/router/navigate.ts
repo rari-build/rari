@@ -27,17 +27,6 @@ export function registerNavigate(fn: (href: string, options?: NavigationOptions)
   }))
 }
 
-export function deregisterNavigate(): void {
-  if (typeof window === 'undefined') {
-    console.warn('[rari] Router cannot deregister navigate in non-browser environment')
-    return
-  }
-
-  navigateFunction = null
-
-  window.dispatchEvent(new CustomEvent('rari:deregister-navigate'))
-}
-
 export async function navigate(href: string, options?: NavigationOptions): Promise<void> {
   if (typeof window === 'undefined') {
     console.warn('[rari] Router cannot navigate in non-browser environment')
