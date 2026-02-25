@@ -152,7 +152,7 @@ export default function Counter() {
 
 ## Using NPM Packages
 
-rari's Rust runtime handles standard `node_modules` resolution — you can `import` from any npm package the same way you would in Node. This is worth calling out because most Rust-based JS runtimes (like Deno) use URL imports or npm specifiers instead. With rari, your existing `package.json` workflow just works.
+rari's Rust runtime handles standard `node_modules` resolution — you can `import` from any npm package the same way you would in Node. Unlike most Rust-based JS runtimes, there are no URL imports or special npm specifiers. Your existing `package.json` workflow just works.
 
 <PackageManagerTabs
   commands={{

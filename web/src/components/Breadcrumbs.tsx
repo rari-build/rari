@@ -14,8 +14,8 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
   const isGettingStarted = pathname === '/docs/getting-started'
 
   return (
-    <nav aria-label="Breadcrumb" className="not-prose mb-6 pt-1 pl-1">
-      <ol className="flex items-center space-x-2 text-sm">
+    <nav aria-label="Breadcrumb" className="not-prose mb-6 pt-1 pl-1 overflow-x-auto scrollbar-none">
+      <ol className="flex items-center space-x-2 text-sm whitespace-nowrap">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1
           const isDocsLink = crumb.href === '/docs/getting-started'
