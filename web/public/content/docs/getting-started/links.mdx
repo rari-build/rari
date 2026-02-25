@@ -214,7 +214,7 @@ Sometimes you need to navigate in response to events, form submissions, or condi
 
 ### The `navigate` Function
 
-For simple, fire-and-forget navigation outside of React components (or inside them), import `navigate` directly:
+For navigation from non-component code (e.g., event handlers, utilities, or server/standalone scripts), import `navigate` directly. Inside React components, prefer `useRouter` for in-component navigation:
 
 <CodeBlock filename="src/app/components/SearchForm.tsx" language="tsx">{`'use client'
 
@@ -243,7 +243,7 @@ export default function SearchForm() {
 await navigate('/dashboard', { replace: true })
 `}</CodeBlock>
 
-The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically.
+The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically. When using the fallback, the `replace` option is respected by calling `window.location.replace(...)` instead of assigning `window.location.href`.
 
 ### The `useRouter` Hook
 
