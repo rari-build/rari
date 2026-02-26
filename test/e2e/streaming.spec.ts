@@ -8,7 +8,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('h1')).toBeVisible()
@@ -178,14 +178,14 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
 })
 
 test.describe('RSC Protocol Tests', () => {
-  test('should achieve fast Time to First Byte', async ({ page }) => {
+  test('should measure fast DOMContentLoaded time', async ({ page }) => {
     const startTime = Date.now()
 
     await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
 
-    const ttfb = Date.now() - startTime
+    const domContentLoadedMs = Date.now() - startTime
 
-    expect(ttfb).toBeLessThan(5000)
+    expect(domContentLoadedMs).toBeLessThan(5000)
 
     await expect(page.locator('h1')).toBeVisible({ timeout: 2000 })
   })
@@ -209,17 +209,31 @@ test.describe('RSC Protocol Tests', () => {
 
   test('should not block main thread', async ({ page }) => {
     await page.addInitScript(() => {
-      const observer = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          (window as any).__longTasks = (window as any).__longTasks || [];
-          (window as any).__longTasks.push(entry.duration)
-        }
-      })
-      observer.observe({ entryTypes: ['longtask'] })
+      if (typeof PerformanceObserver !== 'undefined'
+        && PerformanceObserver.supportedEntryTypes
+        && PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            (window as any).__longTasks = (window as any).__longTasks || [];
+            (window as any).__longTasks.push(entry.duration)
+          }
+        })
+        observer.observe({ entryTypes: ['longtask'] })
+      }
+      else {
+        (window as any).__longtaskUnsupported = true
+      }
     })
 
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
+
+    const unsupported = await page.evaluate(() => (window as any).__longtaskUnsupported)
+
+    if (unsupported) {
+      console.warn('Longtask API not supported, skipping blocking task check')
+      return
+    }
 
     const tasks = await page.evaluate(() => (window as any).__longTasks || [])
 
@@ -295,6 +309,10 @@ test.describe('RSC Protocol Tests', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page).toHaveURL(URL_PATTERNS.DOCS_GETTING_STARTED)
+
+    const scrollY = await page.evaluate(() => window.scrollY)
+    expect(scrollY).toBeGreaterThanOrEqual(450)
+    expect(scrollY).toBeLessThanOrEqual(550)
   })
 })
 

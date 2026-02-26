@@ -39,12 +39,34 @@ function generateCacheKey(input, init) {
     headersStr = JSON.stringify(headerEntries)
   }
 
-  const body = init?.body ? String(init.body) : ''
-  return `${method}:${url}:${headersStr}:${body}`
+  let bodyStr = ''
+  if (init?.body) {
+    if (typeof init.body === 'string' || typeof init.body === 'number' || typeof init.body === 'boolean') {
+      bodyStr = String(init.body)
+    }
+    else if (init.body instanceof Blob) {
+      bodyStr = `<blob:${init.body.size}:${init.body.type}>`
+    }
+    else if (init.body instanceof ArrayBuffer || ArrayBuffer.isView(init.body)) {
+      const size = init.body instanceof ArrayBuffer ? init.body.byteLength : init.body.byteLength
+      bodyStr = `<buffer:${size}>`
+    }
+    else if (init.body instanceof FormData) {
+      bodyStr = '<formdata>'
+    }
+    else if (init.body instanceof ReadableStream) {
+      bodyStr = '<stream>'
+    }
+    else {
+      bodyStr = String(init.body)
+    }
+  }
+
+  return `${method}:${url}:${headersStr}:${bodyStr}`
 }
 
-function shouldCache(input, init) {
-  const { method, cacheMode } = resolveRequestMeta(input, init)
+function shouldCache(input, init, meta) {
+  const { method, cacheMode } = meta || resolveRequestMeta(input, init)
   if (cacheMode === 'no-store' || cacheMode === 'no-cache' || cacheMode === 'reload') {
     return false
   }
@@ -59,8 +81,8 @@ function shouldCache(input, init) {
   return true
 }
 
-async function fetchWithRustCache(input, init) {
-  const { url, headers } = resolveRequestMeta(input, init)
+async function fetchWithRustCache(input, init, meta) {
+  const { url, headers } = meta || resolveRequestMeta(input, init)
   const options = {}
 
   if (headers) {
@@ -79,7 +101,8 @@ async function fetchWithRustCache(input, init) {
     options.cacheTTLMs = String(revalidate * 1000)
   }
 
-  options.timeout = '5000'
+  const timeoutMs = init?.rari?.timeout ?? init?.fetchOptions?.timeout ?? 5000
+  options.timeout = String(typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 5000)
 
   try {
     const result = await Deno.core.ops.op_fetch_with_cache(url, JSON.stringify(options))
@@ -137,7 +160,9 @@ async function fetchWithRustCache(input, init) {
 }
 
 async function cachedFetch(input, init) {
-  if (!shouldCache(input, init)) {
+  const meta = resolveRequestMeta(input, init)
+
+  if (!shouldCache(input, init, meta)) {
     return originalFetch(input, init)
   }
 
@@ -151,7 +176,7 @@ async function cachedFetch(input, init) {
 
   const hasRustOp = typeof Deno?.core?.ops?.op_fetch_with_cache === 'function'
 
-  const promise = hasRustOp ? fetchWithRustCache(input, init) : originalFetch(input, init)
+  const promise = hasRustOp ? fetchWithRustCache(input, init, meta) : originalFetch(input, init)
   requestDedupeMap.set(cacheKey, promise)
   try {
     return await promise

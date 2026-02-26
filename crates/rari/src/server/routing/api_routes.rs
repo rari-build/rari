@@ -434,7 +434,12 @@ impl ApiRouteHandler {
 
             let component_id = if let Some(server_idx) = module_specifier.rfind("/server/") {
                 let after_server = &module_specifier[server_idx + 8..];
-                after_server.trim_end_matches(".js").to_string()
+                after_server
+                    .split('?')
+                    .next()
+                    .unwrap_or(after_server)
+                    .trim_end_matches(".js")
+                    .to_string()
             } else {
                 route_match
                     .route
