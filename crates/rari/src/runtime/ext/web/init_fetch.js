@@ -52,7 +52,7 @@ function shouldCache(input, init) {
   if (revalidate === false || revalidate === 0) {
     return false
   }
-  if (method !== 'GET' && method !== 'HEAD') {
+  if (method !== 'GET') {
     return false
   }
 

@@ -191,19 +191,20 @@ test.describe('RSC Protocol Tests', () => {
   })
 
   test('should handle progressive rendering', async ({ page }) => {
-    const visibilityTimestamps: Record<string, number> = {}
     const startTime = Date.now()
 
     await page.goto('/docs/getting-started')
 
     await page.locator('h1').waitFor({ state: 'visible' })
-    visibilityTimestamps.title = Date.now() - startTime
+    const titleVisibleTime = Date.now() - startTime
 
     const isInteractive = await page.evaluate(() => {
       return document.readyState === 'interactive' || document.readyState === 'complete'
     })
 
     expect(isInteractive).toBe(true)
+    expect(titleVisibleTime).toBeGreaterThan(0)
+    expect(titleVisibleTime).toBeLessThan(10000)
   })
 
   test('should not block main thread', async ({ page }) => {
@@ -402,16 +403,14 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForLoadState('networkidle')
 
     await page.evaluate(() => {
-      (window as any).__navigateEventFired = false
+      (window as any).__navigateEventFired = false;
+      (window as any).__rariNavigateRegistered = true
       window.addEventListener('rari:navigate', () => {
         (window as any).__navigateEventFired = true
       })
     })
 
-    await page.waitForFunction(() => {
-      const listeners = (window as any).getEventListeners?.(window)
-      return listeners?.['rari:navigate']?.length > 0 || true
-    })
+    await page.waitForFunction(() => (window as any).__rariNavigateRegistered === true)
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
     expect(await link.count()).toBeGreaterThan(0)
