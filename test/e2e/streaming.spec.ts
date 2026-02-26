@@ -225,7 +225,7 @@ test.describe('RSC Protocol Tests', () => {
     expect(parsingErrors.length).toBe(0)
   })
 
-  test('should handle multiple concurrent navigations', async ({ page }) => {
+  test('should handle sequential navigations', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -323,24 +323,23 @@ test.describe('Client-Side Navigation Tests', () => {
     })
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
+    expect(await link.count()).toBeGreaterThan(0)
 
-    if (await link.count() > 0) {
-      await link.click()
+    await link.click()
 
-      await page.waitForResponse(
-        response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url())
-          && response.request().headers().accept?.includes('text/x-component'),
-        { timeout: 5000 },
-      )
+    await page.waitForResponse(
+      response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url())
+        && response.request().headers().accept?.includes('text/x-component'),
+      { timeout: 5000 },
+    )
 
-      await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('networkidle')
 
-      const rscRequestMade = requests.some(r => r.accept.includes('text/x-component'))
+    const rscRequestMade = requests.some(r => r.accept.includes('text/x-component'))
 
-      expect(rscRequestMade).toBe(true)
-      await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
-      await expect(page.locator('h1')).toBeVisible()
-    }
+    expect(rscRequestMade).toBe(true)
+    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
+    await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should receive RSC wire format on navigation', async ({ page }) => {
@@ -358,19 +357,19 @@ test.describe('Client-Side Navigation Tests', () => {
     })
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
-    if (await link.count() > 0) {
-      await link.click()
+    expect(await link.count()).toBeGreaterThan(0)
 
-      await page.waitForResponse(
-        response => response.headers()['content-type']?.includes('text/x-component'),
-        { timeout: 5000 },
-      )
+    await link.click()
 
-      await page.waitForLoadState('networkidle')
+    await page.waitForResponse(
+      response => response.headers()['content-type']?.includes('text/x-component'),
+      { timeout: 5000 },
+    )
 
-      expect(rscResponses.length).toBeGreaterThan(0)
-      await expect(page.locator('h1')).toBeVisible()
-    }
+    await page.waitForLoadState('networkidle')
+
+    expect(rscResponses.length).toBeGreaterThan(0)
+    await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should dispatch rari:navigate events', async ({ page }) => {
@@ -387,24 +386,24 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForTimeout(500)
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
-    if (await link.count() > 0) {
-      await link.click()
+    expect(await link.count()).toBeGreaterThan(0)
 
-      await page.waitForResponse(
-        response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url()),
-        { timeout: 5000 },
-      )
+    await link.click()
 
-      await page.waitForLoadState('networkidle')
+    await page.waitForResponse(
+      response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url()),
+      { timeout: 5000 },
+    )
 
-      await page.waitForTimeout(500)
+    await page.waitForLoadState('networkidle')
 
-      const navigateEventFired = await page.evaluate(() => {
-        return !!(window as any).__navigateEventFired
-      })
+    await page.waitForTimeout(500)
 
-      expect(navigateEventFired).toBe(true)
-    }
+    const navigateEventFired = await page.evaluate(() => {
+      return !!(window as any).__navigateEventFired
+    })
+
+    expect(navigateEventFired).toBe(true)
   })
 
   test('should handle link clicks for navigation', async ({ page }) => {
@@ -413,13 +412,13 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForTimeout(500)
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
-    if (await link.count() > 0) {
-      await link.click()
-      await page.waitForLoadState('networkidle')
+    expect(await link.count()).toBeGreaterThan(0)
 
-      await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
-      await expect(page.locator('h1')).toBeVisible()
-    }
+    await link.click()
+    await page.waitForLoadState('networkidle')
+
+    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
+    await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should handle hash navigation', async ({ page }) => {
@@ -448,11 +447,16 @@ test.describe('Client-Side Navigation Tests', () => {
     })
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
-    if (await link.count() > 0) {
-      await link.click()
-      await page.waitForLoadState('networkidle')
+    expect(await link.count()).toBeGreaterThan(0)
 
-      await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
-    }
+    await link.click()
+    await page.waitForLoadState('networkidle')
+
+    const pageReloaded = await page.evaluate(() => {
+      return !!(window as any).__pageReloaded
+    })
+
+    expect(pageReloaded).toBe(false)
+    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
   })
 })

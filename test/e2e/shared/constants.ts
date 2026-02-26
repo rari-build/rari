@@ -1,6 +1,6 @@
 export const URL_PATTERNS = {
   HOME: /\/$/,
-  DOCS_PATH_REGEX: /\/docs/,
+  DOCS_PATH_REGEX: /\/docs(?:\/|$)/,
   DOCS_GETTING_STARTED: /\/docs\/getting-started$/,
   DOCS_API_REFERENCE: /\/docs\/api-reference$/,
   DOCS_ROUTING: /\/docs\/getting-started\/routing$/,
