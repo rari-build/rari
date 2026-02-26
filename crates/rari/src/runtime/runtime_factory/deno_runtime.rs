@@ -55,6 +55,9 @@ enum JsRequest {
         request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
+    ClearRequestContext {
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
 }
 
 pub struct DenoRuntime {
@@ -245,6 +248,20 @@ impl DenoRuntime {
                                             op_state_borrow.try_borrow_mut::<FetchOpState>()
                                         {
                                             fetch_state.request_context = Some(request_context);
+                                        }
+                                        let _ = result_tx.send(Ok(()));
+                                        Ok::<(), RariError>(())
+                                    }
+                                    JsRequest::ClearRequestContext {
+                                        result_tx,
+                                    } => {
+                                        use crate::runtime::ops::FetchOpState;
+                                        let op_state = deno_runtime.op_state();
+                                        let mut op_state_borrow = op_state.borrow_mut();
+                                        if let Some(fetch_state) =
+                                            op_state_borrow.try_borrow_mut::<FetchOpState>()
+                                        {
+                                            fetch_state.request_context = None;
                                         }
                                         let _ = result_tx.send(Ok(()));
                                         Ok::<(), RariError>(())
@@ -730,6 +747,27 @@ impl JsRuntimeInterface for DenoRuntime {
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
                     "JS executor failed to respond (set_request_context)".to_string(),
+                )
+            })?
+        })
+    }
+
+    fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let request_sender = self.request_sender.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+            request_sender
+                .send(JsRequest::ClearRequestContext { result_tx: response_sender })
+                .await
+                .map_err(|_| {
+                    RariError::js_runtime(
+                        "JS executor channel closed (clear_request_context)".to_string(),
+                    )
+                })?;
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (clear_request_context)".to_string(),
                 )
             })?
         })

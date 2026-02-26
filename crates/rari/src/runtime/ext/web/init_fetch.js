@@ -14,29 +14,25 @@ const originalFetch = fetch.fetch
 const requestDedupeMap = new Map()
 const FILE_EXTENSION_REGEX = /\.([^./]+)$/
 
+function resolveRequestMeta(input, init = {}) {
+  const req = input instanceof Request ? input : null
+  return {
+    url: typeof input === 'string' ? input : input instanceof URL ? input.href : req.url,
+    method: (init.method ?? req?.method ?? 'GET').toUpperCase(),
+    headers: init.headers ?? req?.headers,
+    cacheMode: init.cache ?? req?.cache,
+  }
+}
+
 function generateCacheKey(input, init) {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-  const method = init?.method || 'GET'
+  const { url, method, headers } = resolveRequestMeta(input, init)
 
   let headersStr = '{}'
-  if (init?.headers) {
+  if (headers) {
     const headerEntries = []
-    const headers = init.headers
-
-    if (typeof headers.entries === 'function') {
-      for (const [name, value] of headers.entries()) {
-        headerEntries.push([name.toLowerCase(), value])
-      }
-    }
-    else if (typeof headers.forEach === 'function') {
-      headers.forEach((value, name) => {
-        headerEntries.push([name.toLowerCase(), value])
-      })
-    }
-    else if (typeof headers === 'object') {
-      for (const [name, value] of Object.entries(headers)) {
-        headerEntries.push([name.toLowerCase(), String(value)])
-      }
+    const normalizedHeaders = new Headers(headers)
+    for (const [name, value] of normalizedHeaders.entries()) {
+      headerEntries.push([name.toLowerCase(), value])
     }
 
     headerEntries.sort((a, b) => a[0].localeCompare(b[0]))
@@ -47,15 +43,15 @@ function generateCacheKey(input, init) {
   return `${method}:${url}:${headersStr}:${body}`
 }
 
-function shouldCache(init) {
-  if (init?.cache === 'no-store' || init?.cache === 'no-cache') {
+function shouldCache(input, init) {
+  const { method, cacheMode } = resolveRequestMeta(input, init)
+  if (cacheMode === 'no-store' || cacheMode === 'no-cache') {
     return false
   }
   const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate
   if (revalidate === false || revalidate === 0) {
     return false
   }
-  const method = init?.method?.toUpperCase() || 'GET'
   if (method !== 'GET' && method !== 'HEAD') {
     return false
   }
@@ -64,13 +60,13 @@ function shouldCache(init) {
 }
 
 async function fetchWithRustCache(input, init) {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  const { url, headers } = resolveRequestMeta(input, init)
   const options = {}
 
-  if (init?.headers) {
-    const headers = new Headers(init.headers)
+  if (headers) {
+    const normalizedHeaders = new Headers(headers)
     const headerPairs = []
-    headers.forEach((value, key) => {
+    normalizedHeaders.forEach((value, key) => {
       headerPairs.push([key, value])
     })
     if (headerPairs.length > 0) {
@@ -141,7 +137,7 @@ async function fetchWithRustCache(input, init) {
 }
 
 async function cachedFetch(input, init) {
-  if (!shouldCache(init)) {
+  if (!shouldCache(input, init)) {
     return originalFetch(input, init)
   }
 
@@ -155,27 +151,13 @@ async function cachedFetch(input, init) {
 
   const hasRustOp = typeof Deno?.core?.ops?.op_fetch_with_cache === 'function'
 
-  if (hasRustOp) {
-    const promise = fetchWithRustCache(input, init)
-    requestDedupeMap.set(cacheKey, promise)
-    try {
-      const response = await promise
-      return response.clone()
-    }
-    finally {
-      requestDedupeMap.delete(cacheKey)
-    }
+  const promise = hasRustOp ? fetchWithRustCache(input, init) : originalFetch(input, init)
+  requestDedupeMap.set(cacheKey, promise)
+  try {
+    return await promise
   }
-  else {
-    const promise = originalFetch(input, init)
-    requestDedupeMap.set(cacheKey, promise)
-    try {
-      const response = await promise
-      return response.clone()
-    }
-    finally {
-      requestDedupeMap.delete(cacheKey)
-    }
+  finally {
+    requestDedupeMap.delete(cacheKey)
   }
 }
 

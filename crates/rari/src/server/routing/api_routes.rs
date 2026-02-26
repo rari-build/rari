@@ -398,9 +398,30 @@ impl ApiRouteHandler {
             RariError::js_execution(format!("Failed to set request context: {e}"))
         })?;
 
+        let _guard = scopeguard::guard((), |_| {
+            let runtime = self.runtime.clone();
+            tokio::spawn(async move {
+                if let Err(e) = runtime.clear_request_context().await {
+                    error!("Failed to clear request context: {}", e);
+                }
+            });
+        });
+
         let dist_path = Self::resolve_dist_path(&route_match.route.file_path)?;
-        let module_specifier =
-            format!("file://{}", dist_path.canonicalize().unwrap_or(dist_path.clone()).display());
+        let canonical_path = dist_path.canonicalize().map_err(|e| {
+            RariError::io(format!(
+                "Failed to canonicalize API route path {}: {e}",
+                dist_path.display()
+            ))
+        })?;
+        let module_specifier = url::Url::from_file_path(&canonical_path)
+            .map_err(|_| {
+                RariError::configuration(format!(
+                    "Failed to create file URL from path: {}",
+                    canonical_path.display()
+                ))
+            })?
+            .to_string();
 
         if let Err(e) =
             self.runtime.add_module_to_loader_only(&module_specifier, handler.code.clone()).await
@@ -444,20 +465,8 @@ impl ApiRouteHandler {
             return Err(RariError::js_execution(format!("Failed to evaluate module: {e}")));
         }
 
-        let namespace = self.runtime.get_module_namespace(module_id).await.map_err(|e| {
-            error!(
-                route_path = %route_match.route.path,
-                method = %route_match.method,
-                module_id = module_id,
-                error = %e,
-                "Failed to get module namespace"
-            );
-            RariError::js_execution(format!("Failed to get module namespace: {e}"))
-        })?;
-
         let result = self
             .execute_handler_from_namespace(
-                namespace,
                 &route_match.method,
                 &request_obj,
                 &route_match.route.path,
@@ -501,7 +510,6 @@ impl ApiRouteHandler {
 
     async fn execute_handler_from_namespace(
         &self,
-        _namespace: serde_json::Value,
         method: &str,
         request_obj: &JsonValue,
         route_path: &str,
@@ -509,6 +517,11 @@ impl ApiRouteHandler {
     ) -> Result<JsonValue, RariError> {
         let request_json = serde_json::to_string(request_obj)
             .map_err(|e| RariError::serialization(format!("Failed to serialize request: {e}")))?;
+        let method_json = serde_json::to_string(method)
+            .map_err(|e| RariError::serialization(format!("Failed to serialize method: {e}")))?;
+        let module_specifier_json = serde_json::to_string(module_specifier).map_err(|e| {
+            RariError::serialization(format!("Failed to serialize module specifier: {e}"))
+        })?;
 
         let script = format!(
             r#"
@@ -536,8 +549,8 @@ impl ApiRouteHandler {
             params: requestData.params || {{}}
         }};
 
-        const moduleNamespace = await import('{module_specifier}');
-        const handler = moduleNamespace['{method}'];
+        const moduleNamespace = await import({module_specifier_json});
+        const handler = moduleNamespace[{method_json}];
 
         if (typeof handler !== 'function') {{
             console.error('Available exports:', Object.keys(moduleNamespace));
@@ -582,8 +595,8 @@ impl ApiRouteHandler {
 }})()
 "#,
             request_json = request_json,
-            method = method,
-            module_specifier = module_specifier,
+            method_json = method_json,
+            module_specifier_json = module_specifier_json,
         );
 
         let script_name = route_path.cow_replace('/', "_");

@@ -572,6 +572,23 @@ impl JsExecutionRuntime {
             ))),
         }
     }
+
+    pub async fn clear_request_context(&self) -> Result<(), RariError> {
+        let runtime = self.runtime.clone();
+
+        match tokio::time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            runtime.clear_request_context(),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(RariError::timeout(format!(
+                "Clearing request context timed out after {} ms",
+                self.timeout_ms
+            ))),
+        }
+    }
 }
 
 impl From<crate::error::RariError> for JsError {

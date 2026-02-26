@@ -139,10 +139,25 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   })
 
   test('should handle network conditions gracefully', async ({ page }) => {
+    const client = await page.context().newCDPSession(page)
+    await client.send('Network.emulateNetworkConditions', {
+      offline: false,
+      downloadThroughput: 500 * 1024 / 8,
+      uploadThroughput: 500 * 1024 / 8,
+      latency: 400,
+    })
+
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('h1')).toBeVisible()
+
+    await client.send('Network.emulateNetworkConditions', {
+      offline: false,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+      latency: 0,
+    })
   })
 
   test('should handle multiple page navigations', async ({ page }) => {
@@ -192,15 +207,24 @@ test.describe('RSC Protocol Tests', () => {
   })
 
   test('should not block main thread', async ({ page }) => {
-    await page.goto('/docs/getting-started')
-
-    const isInteractive = await page.evaluate(() => {
-      return document.readyState === 'interactive' || document.readyState === 'complete'
+    await page.addInitScript(() => {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          (window as any).__longTasks = (window as any).__longTasks || [];
+          (window as any).__longTasks.push(entry.duration)
+        }
+      })
+      observer.observe({ entryTypes: ['longtask'] })
     })
 
-    expect(isInteractive).toBe(true)
+    await page.goto('/docs/getting-started')
+    await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('h1')).toBeVisible()
+    const tasks = await page.evaluate(() => (window as any).__longTasks || [])
+
+    const blockingTasks = tasks.filter((d: number) => d > 100)
+
+    expect(blockingTasks.length).toBe(0)
   })
 
   test('should handle content rendering without errors', async ({ page }) => {
@@ -309,7 +333,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.waitForTimeout(500)
+    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
 
     const requests: Array<{ url: string, accept: string }> = []
 
@@ -345,7 +369,8 @@ test.describe('Client-Side Navigation Tests', () => {
   test('should receive RSC wire format on navigation', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+
+    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
 
     const rscResponses: Response[] = []
 
@@ -383,7 +408,10 @@ test.describe('Client-Side Navigation Tests', () => {
       })
     })
 
-    await page.waitForTimeout(500)
+    await page.waitForFunction(() => {
+      const listeners = (window as any).getEventListeners?.(window)
+      return listeners?.['rari:navigate']?.length > 0 || true
+    })
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
     expect(await link.count()).toBeGreaterThan(0)
@@ -397,7 +425,7 @@ test.describe('Client-Side Navigation Tests', () => {
 
     await page.waitForLoadState('networkidle')
 
-    await page.waitForTimeout(500)
+    await page.waitForFunction(() => !!(window as any).__navigateEventFired)
 
     const navigateEventFired = await page.evaluate(() => {
       return !!(window as any).__navigateEventFired
@@ -409,7 +437,8 @@ test.describe('Client-Side Navigation Tests', () => {
   test('should handle link clicks for navigation', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+
+    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
     expect(await link.count()).toBeGreaterThan(0)
@@ -429,7 +458,7 @@ test.describe('Client-Side Navigation Tests', () => {
       window.history.pushState(null, '', '#test')
     })
 
-    await page.waitForTimeout(500)
+    await page.waitForFunction(() => window.location.hash === '#test')
 
     expect(page.url()).toContain('#test')
   })
@@ -437,7 +466,8 @@ test.describe('Client-Side Navigation Tests', () => {
   test('should intercept link clicks and prevent full page reload', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+
+    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
 
     await page.evaluate(() => {
       (window as any).__pageReloaded = false
