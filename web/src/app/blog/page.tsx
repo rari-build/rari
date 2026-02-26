@@ -36,10 +36,10 @@ async function getBlogPosts(): Promise<BlogPost[]> {
 
         return {
           slug,
-          title: titleMatch?.[1] || 'Untitled',
-          description: descriptionMatch?.[1] || '',
-          date: dateMatch?.[1] || '',
-          author: authorMatch?.[1],
+          title: titleMatch?.[2] || 'Untitled',
+          description: descriptionMatch?.[2] || '',
+          date: dateMatch?.[2] || '',
+          author: authorMatch?.[2],
         }
       }),
     )

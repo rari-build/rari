@@ -54,8 +54,8 @@ export async function generateMetadata({ params }: PageProps) {
 
     if (titleMatch || descriptionMatch) {
       return {
-        title: titleMatch ? `${titleMatch[1]} / rari Blog` : DEFAULT_METADATA.title,
-        description: descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description,
+        title: titleMatch ? `${titleMatch[2]} / rari Blog` : DEFAULT_METADATA.title,
+        description: descriptionMatch ? descriptionMatch[2] : DEFAULT_METADATA.description,
       }
     }
 

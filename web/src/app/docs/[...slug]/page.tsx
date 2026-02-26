@@ -56,8 +56,8 @@ export async function generateMetadata({ params }: PageProps) {
     const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 
     if (titleMatch || descriptionMatch) {
-      const pageTitle = titleMatch ? `${titleMatch[1]} / rari Docs` : DEFAULT_METADATA.title
-      const pageDescription = descriptionMatch ? descriptionMatch[1] : DEFAULT_METADATA.description
+      const pageTitle = titleMatch ? `${titleMatch[2]} / rari Docs` : DEFAULT_METADATA.title
+      const pageDescription = descriptionMatch ? descriptionMatch[2] : DEFAULT_METADATA.description
 
       return {
         title: pageTitle,

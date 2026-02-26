@@ -17,9 +17,9 @@ export default async function Image({ params }: PageProps) {
       const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 
       if (titleMatch)
-        title = titleMatch[1]
+        title = titleMatch[2]
       if (descriptionMatch)
-        description = descriptionMatch[1]
+        description = descriptionMatch[2]
     }
     catch {}
   }
