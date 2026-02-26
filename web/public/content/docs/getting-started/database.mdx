@@ -374,6 +374,13 @@ import { ApiResponse } from 'rari'
 
 const sql = neon(process.env.DATABASE_URL!)
 
+// Example: Get current user from session/auth
+async function getCurrentUserId() {
+  // Replace with your actual auth implementation
+  // e.g., from cookies, session, or auth library
+  return 1 // Placeholder
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
@@ -402,6 +409,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getCurrentUserId()
+
+    if (!userId) {
+      return ApiResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { title, content } = await request.json()
 
     if (!title || !content) {
@@ -412,8 +428,8 @@ export async function POST(request: Request) {
     }
 
     const result = await sql\`
-      INSERT INTO posts (title, content)
-      VALUES (\${title}, \${content})
+      INSERT INTO posts (title, content, user_id)
+      VALUES (\${title}, \${content}, \${userId})
       RETURNING id, title, content, created_at
     \`
 
@@ -616,7 +632,7 @@ export async function createPost(data: FormData) {
 
 // Avoid: Client-side database access
 'use client'
-export function createPost() {
+export async function createPost() {
   await db.insert(posts).values({ ... }) // Database credentials exposed!
 }
 `}</CodeBlock>
@@ -723,6 +739,8 @@ export default async function PostsPage() {
   return <PostsList posts={posts} />
 }
 `}</CodeBlock>
+
+Note: In production, use a singleton pattern to reuse the `MongoClient` connection across requests. Creating a new client at module scope works, but you should handle connection lifecycle properly. Consider using a connection helper that caches the client promise and handles `client.connect()` and graceful shutdown.
 
 ### SQLite
 
