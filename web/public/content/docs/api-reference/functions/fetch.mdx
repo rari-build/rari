@@ -39,7 +39,7 @@ const data = await fetch('https://api.example.com/data')
 - **Type:** `string | URL`
 - **Required:** Yes
 
-The URL to fetch. Can be a string or URL object.
+The URL to fetch. It can be a string or a URL object.
 
 <CodeBlock language="tsx">{`// String URL
 await fetch('https://api.example.com/posts')
@@ -256,7 +256,7 @@ export default async function UserPage({ params }: PageProps<{ id: string }>) {
     .then(r => r.json())
 
   // Then fetch a specific post using data from the user response
-  const posts = await fetch(\`https://api.example.com/posts/\${user.favoritePostId}\`)
+  const favoritePost = await fetch(\`https://api.example.com/posts/\${user.favoritePostId}\`)
     .then(r => r.json())
 
   return (
@@ -264,8 +264,8 @@ export default async function UserPage({ params }: PageProps<{ id: string }>) {
       <h1>{user.name}</h1>
       <h2>Favorite Post</h2>
       <div>
-        <h3>{posts.title}</h3>
-        <p>{posts.content}</p>
+        <h3>{favoritePost.title}</h3>
+        <p>{favoritePost.content}</p>
       </div>
     </div>
   )
