@@ -1,7 +1,7 @@
 {
   "name": "rari-linux-x64",
   "type": "module",
-  "version": "0.10.8",
+  "version": "0.10.9",
   "description": "Runtime Accelerated Rendering Infrastructure (Linux x64 binary)",
   "author": "Ryan Skinner",
   "license": "MIT",
