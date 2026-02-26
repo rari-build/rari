@@ -7,6 +7,10 @@ export async function hasRouteCache(page: Page): Promise<boolean> {
   })
 }
 
+export async function waitForRariRuntime(page: Page): Promise<void> {
+  await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
+}
+
 export async function openMobileMenu(page: Page): Promise<void> {
   const menuButton = page.locator('label[aria-label="Open navigation menu"]')
   await menuButton.waitFor({ state: 'visible', timeout: 5000 })

@@ -1,7 +1,7 @@
 import type { Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
-import { hasRouteCache } from './shared/mobile-helpers'
+import { hasRouteCache, waitForRariRuntime } from './shared/mobile-helpers'
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should show loading skeleton during navigation', async ({ page }) => {
@@ -237,10 +237,7 @@ test.describe('RSC Protocol Tests', () => {
 
     const unsupported = await page.evaluate(() => (window as any).__longtaskUnsupported)
 
-    if (unsupported) {
-      console.warn('Longtask API not supported, skipping blocking task check')
-      return
-    }
+    test.skip(unsupported, 'Long Task API not supported, skipping blocking task check')
 
     const tasks = await page.evaluate(() => (window as any).__longTasks || [])
 
@@ -359,7 +356,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
+    await waitForRariRuntime(page)
 
     const requests: Array<{ url: string, accept: string }> = []
 
@@ -396,7 +393,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
+    await waitForRariRuntime(page)
 
     const rscResponses: Response[] = []
 
@@ -462,7 +459,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
+    await waitForRariRuntime(page)
 
     const link = page.locator('a[href="/docs/getting-started"]').first()
     expect(await link.count()).toBeGreaterThan(0)
@@ -491,7 +488,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
+    await waitForRariRuntime(page)
 
     await page.evaluate(() => {
       (window as any).__pageReloaded = false

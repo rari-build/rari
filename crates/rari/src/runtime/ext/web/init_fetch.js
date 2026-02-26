@@ -52,10 +52,22 @@ function generateCacheKey(input, init) {
       bodyStr = `<buffer:${size}>`
     }
     else if (init.body instanceof FormData) {
-      bodyStr = '<formdata>'
+      const entries = []
+      for (const [key, value] of init.body.entries()) {
+        if (typeof value === 'string') {
+          entries.push(`${key}=${value}`)
+        }
+        else if (value instanceof File) {
+          entries.push(`${key}=<file:${value.name}:${value.size}:${value.type}>`)
+        }
+        else if (value instanceof Blob) {
+          entries.push(`${key}=<blob:${value.size}:${value.type}>`)
+        }
+      }
+      bodyStr = `<formdata:${entries.join('&')}>`
     }
     else if (init.body instanceof ReadableStream) {
-      bodyStr = '<stream>'
+      bodyStr = `<stream:${Date.now()}:${Math.random().toString(36).slice(2)}>`
     }
     else {
       bodyStr = String(init.body)
