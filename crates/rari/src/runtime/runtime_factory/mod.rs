@@ -6,7 +6,6 @@ mod lazy_runtime;
 mod runtime_builder;
 mod v8_utils;
 
-pub use constants::FETCH_CACHE_INIT_SCRIPT;
 pub use deno_runtime::DenoRuntime;
 pub use interface::JsRuntimeInterface;
 pub use lazy_runtime::{create_lazy_runtime, create_lazy_runtime_with_env};
