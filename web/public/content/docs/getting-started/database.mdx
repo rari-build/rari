@@ -17,7 +17,7 @@ rari's Rust runtime delivers exceptional performance for database-heavy applicat
 
 ## Neon: Recommended Database Partner
 
-[Neon](https://get.neon.com/KDQudHN) is our recommended database partner for rari applications. Neon provides Postgres with autoscaling, branching, and scale-to-zero capabilities.
+[Neon](https://get.neon.com/KDQudHN) is our recommended database partner for rari applications, providing Postgres with autoscaling, branching, and scale-to-zero capabilities.
 
 ### Why Neon + rari
 
@@ -268,6 +268,13 @@ import { neon } from '@neondatabase/serverless'
 
 const sql = neon(process.env.DATABASE_URL!)
 
+// Example: Get current user from session/auth
+async function getCurrentUserId() {
+  // Replace with your actual auth implementation
+  // e.g., from cookies, session, or auth library
+  return 1 // Placeholder
+}
+
 export async function createPost(formData: FormData) {
   const title = formData.get('title') as string
   const content = formData.get('content') as string
@@ -277,9 +284,11 @@ export async function createPost(formData: FormData) {
   }
 
   try {
+    const userId = await getCurrentUserId()
+
     await sql\`
-      INSERT INTO posts (title, content)
-      VALUES (\${title}, \${content})
+      INSERT INTO posts (title, content, user_id)
+      VALUES (\${title}, \${content}, \${userId})
     \`
 
     return { success: true }
@@ -291,7 +300,18 @@ export async function createPost(formData: FormData) {
 
 export async function deletePost(postId: number) {
   try {
-    await sql\`DELETE FROM posts WHERE id = \${postId}\`
+    const userId = await getCurrentUserId()
+
+    const result = await sql\`
+      DELETE FROM posts
+      WHERE id = \${postId} AND user_id = \${userId}
+      RETURNING id
+    \`
+
+    if (result.length === 0) {
+      return { success: false, error: 'Post not found or unauthorized' }
+    }
+
     return { success: true }
   } catch (error) {
     console.error('Failed to delete post:', error)
@@ -357,7 +377,11 @@ const sql = neon(process.env.DATABASE_URL!)
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
-    const limit = Number(url.searchParams.get('limit')) || 10
+    const parsedLimit = Number(url.searchParams.get('limit'))
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 100)
+        : 10
 
     const posts = await sql\`
       SELECT id, title, content, created_at
@@ -368,7 +392,7 @@ export async function GET(request: Request) {
 
     return ApiResponse.json({ posts })
   } catch (error) {
-    console.error('Database error:', error)
+    console.error('Database error - failed to fetch posts')
     return ApiResponse.json(
       { error: 'Failed to fetch posts' },
       { status: 500 }
@@ -395,7 +419,7 @@ export async function POST(request: Request) {
 
     return ApiResponse.json({ post: result[0] }, { status: 201 })
   } catch (error) {
-    console.error('Database error:', error)
+    console.error('Database error - failed to create post')
     return ApiResponse.json(
       { error: 'Failed to create post' },
       { status: 500 }
@@ -606,7 +630,7 @@ Always handle database errors and provide fallbacks:
     const posts = await db.select().from(posts)
     return <PostsList posts={posts} />
   } catch (error) {
-    console.error('Database error:', error)
+    console.error('Database error - failed to load posts')
     return <p>Failed to load posts. Please try again later.</p>
   }
 }
