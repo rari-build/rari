@@ -14,6 +14,10 @@
 - *(router)* Refactor parameter extraction and improve navigate registration
 - *(router)* Add spacing between navigate registration functions
 
+### 💼 Other
+
+- Rari@0.10.8
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump optional dependencies to 0.10.8
