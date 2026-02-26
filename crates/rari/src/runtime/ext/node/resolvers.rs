@@ -249,7 +249,7 @@ pub struct NpmPackageFolderResolverImpl {
 impl NpmPackageFolderResolverImpl {
     pub fn new(base_dir: Option<PathBuf>) -> Self {
         let base = base_dir.or(std::env::current_dir().ok());
-        let base_dir = base.map(|mut p| {
+        let base_dir = base.clone().map(|mut p| {
             p.push(NODE_MODULES_DIR);
             p
         });
@@ -264,6 +264,7 @@ impl NpmPackageFolderResolverImpl {
             sys: NodeResolutionSys::new(RealSys, Some(resolution_cache.clone())),
             root_node_modules_dir: base_dir.clone(),
             pkg_json_resolver: pjson.clone(),
+            search_stop_dir: base.clone(),
         };
 
         let byonm = ByonmNpmResolver::new(options);
