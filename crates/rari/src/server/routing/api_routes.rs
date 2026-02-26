@@ -432,22 +432,17 @@ impl ApiRouteHandler {
                 )));
             }
 
-            let component_id = if let Some(server_idx) = module_specifier.rfind("/server/") {
-                let after_server = &module_specifier[server_idx + 8..];
-                after_server
-                    .split('?')
-                    .next()
-                    .unwrap_or(after_server)
-                    .trim_end_matches(".js")
-                    .to_string()
-            } else {
-                route_match
-                    .route
-                    .file_path
-                    .trim_end_matches(".ts")
-                    .trim_end_matches(".tsx")
-                    .to_string()
-            };
+            let component_id = dist_path
+                .strip_prefix(Path::new("dist").join("server"))
+                .map_err(|_| {
+                    RariError::configuration(format!(
+                        "Failed to derive component_id from dist path: {}",
+                        dist_path.display()
+                    ))
+                })?
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
 
             let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
                 error!(

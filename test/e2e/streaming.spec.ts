@@ -8,8 +8,14 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    const navigationPromise = page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('.animate-pulse').first()).toBeVisible({ timeout: 1000 })
+
+    await navigationPromise
     await page.waitForLoadState('networkidle')
+
+    await expect(page.locator('.animate-pulse').first()).toBeHidden()
 
     await expect(page.locator('h1')).toBeVisible()
   })
@@ -138,7 +144,8 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await expect(page.locator('h1')).toBeVisible()
   })
 
-  test('should handle network conditions gracefully', async ({ page }) => {
+  test('should handle network conditions gracefully', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP network emulation is Chromium-only')
     const client = await page.context().newCDPSession(page)
     await client.send('Network.emulateNetworkConditions', {
       offline: false,
