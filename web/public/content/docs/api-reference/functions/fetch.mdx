@@ -145,11 +145,11 @@ Deduplication only applies to `GET` requests with identical URLs and options dur
 
 ### Static Data Fetching
 
-Fetch data at build time and cache it indefinitely:
+Fetch data at build time and keep it cached until revalidated or evicted:
 
 <CodeBlock filename="src/app/posts/page.tsx" language="tsx">{`export default async function PostsPage() {
   const posts = await fetch('https://api.example.com/posts', {
-    cache: 'force-cache' // Default - cached indefinitely
+    cache: 'force-cache' // Default - cached until revalidation/eviction
   }).then(r => r.json())
 
   return (
