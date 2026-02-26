@@ -327,7 +327,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                     const itemKey = `${sectionKey}-item-${itemIdx}`
                                     const isItemExpanded = expandedSections[itemKey] !== undefined ? expandedSections[itemKey] : true
                                     const hasSubItems = subItem.items && subItem.items.length > 0
-                                    const showItemChevron = hasSubItems && (subItem.label === 'Components' || subItem.label === 'Functions')
+                                    const showItemChevron = hasSubItems
 
                                     return (
                                       <li key={itemIdx}>

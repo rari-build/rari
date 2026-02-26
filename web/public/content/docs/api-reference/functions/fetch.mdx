@@ -255,19 +255,18 @@ export default async function UserPage({ params }: PageProps<{ id: string }>) {
   const user = await fetch(\`https://api.example.com/users/\${params.id}\`)
     .then(r => r.json())
 
-  // Then fetch user's posts
-  const posts = await fetch(\`https://api.example.com/users/\${params.id}/posts\`)
+  // Then fetch a specific post using data from the user response
+  const posts = await fetch(\`https://api.example.com/posts/\${user.favoritePostId}\`)
     .then(r => r.json())
 
   return (
     <div>
       <h1>{user.name}</h1>
-      <h2>Posts</h2>
-      <ul>
-        {posts.map((post: any) => (
-          <li key={post.id}>{post.title}</li>
-        ))}
-      </ul>
+      <h2>Favorite Post</h2>
+      <div>
+        <h3>{posts.title}</h3>
+        <p>{posts.content}</p>
+      </div>
     </div>
   )
 }
