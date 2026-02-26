@@ -442,7 +442,8 @@ impl ApiRouteHandler {
                 })?
                 .with_extension("")
                 .to_string_lossy()
-                .replace('\\', "/");
+                .cow_replace('\\', "/")
+                .into_owned();
 
             let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
                 error!(
