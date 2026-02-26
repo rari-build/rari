@@ -3,6 +3,7 @@ declare global {
     rari?: {
       revalidate?: number | false
       tags?: string[]
+      timeout?: number
     }
   }
 }

@@ -27,6 +27,13 @@ export const docsNavigation: NavItem[] = [
           { label: 'ImageResponse', href: '/docs/api-reference/components/image-response' },
         ],
       },
+      {
+        label: 'Functions',
+        href: '/docs/api-reference/functions',
+        items: [
+          { label: 'fetch', href: '/docs/api-reference/functions/fetch' },
+        ],
+      },
     ],
   },
 ]
