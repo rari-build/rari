@@ -1,3 +1,4 @@
+import { formatCompactNumber } from '@/lib/format-utils'
 import { getLatestCommitHash, getRepoStars } from '@/lib/github-utils'
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
@@ -56,7 +57,7 @@ export default async function Footer() {
             <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
             <Github className="w-5 h-5 relative z-10" />
             {stars !== null && (
-              <span className="text-xs text-gray-400 relative z-10">{stars.toLocaleString()}</span>
+              <span className="text-xs text-gray-400 relative z-10">{formatCompactNumber(stars)}</span>
             )}
             <span className="sr-only">rari on GitHub</span>
           </a>
