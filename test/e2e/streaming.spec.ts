@@ -103,7 +103,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await expect(page.locator('h1')).toBeVisible()
   })
 
-  test('should handle rapid navigation', async ({ page }) => {
+  test('should navigate sequentially between pages', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
 
@@ -114,7 +114,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await expect(page.locator('h1')).toBeVisible()
   })
 
-  test('should maintain page state during navigation', async ({ page }) => {
+  test('should render pages with content', async ({ page }) => {
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 
@@ -449,7 +449,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await expect(page.locator('h1')).toBeVisible()
   })
 
-  test('should handle hash navigation', async ({ page }) => {
+  test('should handle programmatic hash changes', async ({ page }) => {
     await page.goto('/docs/getting-started')
     await page.waitForLoadState('networkidle')
 

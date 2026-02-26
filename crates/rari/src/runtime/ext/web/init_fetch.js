@@ -45,7 +45,7 @@ function generateCacheKey(input, init) {
 
 function shouldCache(input, init) {
   const { method, cacheMode } = resolveRequestMeta(input, init)
-  if (cacheMode === 'no-store' || cacheMode === 'no-cache') {
+  if (cacheMode === 'no-store' || cacheMode === 'no-cache' || cacheMode === 'reload') {
     return false
   }
   const revalidate = init?.rari?.revalidate ?? init?.next?.revalidate
@@ -126,7 +126,7 @@ async function fetchWithRustCache(input, init) {
 
     return new Response(result.body, {
       status: result.status,
-      statusText: result.statusText || 'OK',
+      statusText: result.statusText || (result.status === 200 ? 'OK' : ''),
       headers: responseHeaders,
     })
   }
