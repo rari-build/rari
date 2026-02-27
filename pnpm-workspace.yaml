@@ -14,7 +14,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.8.1
-    posthog-js: ^1.354.3
+    posthog-js: ^1.356.0
   build:
     rolldown: 1.0.0-rc.5
     rolldown-vite: ^7.3.1
@@ -58,8 +58,8 @@ catalogs:
     '@vitest/coverage-v8': 4.0.18
     vitest: ^4.0.18
   typescript:
-    '@types/node': ^25.3.1
-    '@typescript/native-preview': ^7.0.0-dev.20260225.1
+    '@types/node': ^25.3.2
+    '@typescript/native-preview': ^7.0.0-dev.20260226.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
