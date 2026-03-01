@@ -104,10 +104,12 @@ function crossPlatformSpawn(command: string, args: string[], options: SpawnOptio
   if (command === 'npx') {
     const executor = getPackageExecutor()
     if (executor.includes('bun')) {
-      const isWindows = process.platform === 'win32'
-      const binExt = isWindows ? '.cmd' : ''
-      const binPath = resolve(process.cwd(), 'node_modules', '.bin', `${args[0]}${binExt}`)
-      return spawn(executor, ['--bun', binPath, ...args.slice(1)], options)
+      const binPath = resolve(process.cwd(), 'node_modules', '.bin', args[0])
+      const commandToUse = existsSync(binPath) ? binPath : args[0]
+      const spawnOptions = process.platform === 'win32'
+        ? { ...options, shell: true }
+        : options
+      return spawn(executor, ['--bun', commandToUse, ...args.slice(1)], spawnOptions)
     }
     if (executor.includes('pnpm'))
       return spawn(executor, ['exec', ...args], options)
