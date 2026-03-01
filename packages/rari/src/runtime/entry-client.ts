@@ -547,6 +547,7 @@ export async function renderApp(): Promise<void> {
 
     wrappedContent = React.createElement(
       RouterProvider,
+      // @ts-ignore - children passed as third argument; type checking varies based on build state
       { initialPathname: window.location.pathname },
       wrappedContent,
     )
