@@ -1,3 +1,18 @@
+## [rari@0.10.10] - 2026-03-01
+
+### 🚀 Features
+
+- *(fetch-cache)* Add timeout option to global fetch configuration
+
+### 🐛 Bug Fixes
+
+- *(cli)* Improve bun package executor handling for cross-platform compatibility
+- *(cli)* Refactor bun package executor to improve cross-platform compatibility
+## [rari@0.10.9] - 2026-02-26
+
+### 💼 Other
+
+- Rari@0.10.9
 ## [rari@0.10.8] - 2026-02-25
 
 ### 🚀 Features
