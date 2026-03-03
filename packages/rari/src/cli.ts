@@ -101,21 +101,22 @@ function getPackageExecutor(): string {
 }
 
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
+  const isWindows = process.platform === 'win32'
+
   if (command === 'npx') {
     const executor = getPackageExecutor()
     if (executor.includes('bun')) {
-      const bunxCommand = process.platform === 'win32' ? 'bunx.cmd' : 'bunx'
-      return spawn(bunxCommand, args, options)
+      const bunxCommand = isWindows ? 'bunx.cmd' : 'bunx'
+      return spawn(bunxCommand, args, { ...options, shell: isWindows })
     }
     if (executor.includes('pnpm'))
-      return spawn(executor, ['exec', ...args], options)
+      return spawn(executor, ['exec', ...args], { ...options, shell: isWindows })
     if (executor.includes('yarn'))
-      return spawn(executor, ['dlx', ...args], options)
+      return spawn(executor, ['dlx', ...args], { ...options, shell: isWindows })
   }
 
-  const isWindows = process.platform === 'win32'
   if (isWindows && command === 'npx')
-    return spawn('npx.cmd', args, options)
+    return spawn('npx.cmd', args, { ...options, shell: true })
 
   return spawn(command, args, options)
 }
