@@ -518,7 +518,8 @@ ${styleText('bold', 'Notes:')}
 
 const isMainModule = process.argv[1] && (
   import.meta.url === `file://${process.argv[1]}`
-    || (import.meta.url.endsWith('/dist/cli.mjs') && process.argv[1].includes('cli.mjs'))
+    || import.meta.url.endsWith('/dist/cli.mjs')
+    || import.meta.url.endsWith('/cli.mjs')
 )
 
 if (isMainModule) {
