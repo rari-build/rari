@@ -2,7 +2,7 @@
 
 import type { SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -517,13 +517,13 @@ ${styleText('bold', 'Notes:')}
   }
 }
 
-const invokedPath = process.argv[1] ? resolve(process.argv[1]) : ''
-const currentPath = resolve(fileURLToPath(import.meta.url))
+const invokedPath = process.argv[1] ? realpathSync(resolve(process.argv[1])) : ''
+const currentPath = realpathSync(fileURLToPath(import.meta.url))
 const isMainModule = Boolean(invokedPath) && currentPath === invokedPath
 
 if (isMainModule) {
   main().catch((error) => {
-    logError(`CLI Error: ${error.message}`)
+    logError(`CLI Error: ${normalizeError(error)}`)
     console.error(error)
     process.exit(1)
   })
