@@ -1,3 +1,9 @@
+## [rari@0.10.11] - 2026-03-04
+
+### 🐛 Bug Fixes
+
+- *(cli)* Simplify bun package executor to use bunx directly
+- *(cli)* Improve cross-platform spawn handling
 ## [rari@0.10.10] - 2026-03-01
 
 ### 🚀 Features
@@ -8,6 +14,10 @@
 
 - *(cli)* Improve bun package executor handling for cross-platform compatibility
 - *(cli)* Refactor bun package executor to improve cross-platform compatibility
+
+### 💼 Other
+
+- Rari@0.10.10
 ## [rari@0.10.9] - 2026-02-26
 
 ### 💼 Other
