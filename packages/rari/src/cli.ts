@@ -2,9 +2,10 @@
 
 import type { SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { styleText } from 'node:util'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import { getBinaryPath, getInstallationInstructions } from './platform'
@@ -516,14 +517,13 @@ ${styleText('bold', 'Notes:')}
   }
 }
 
-const isMainModule = process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}`
-    || (import.meta.url.endsWith('/dist/cli.mjs') && process.argv[1].includes('cli.mjs'))
-)
+const invokedPath = process.argv[1] ? realpathSync(resolve(process.argv[1])) : ''
+const currentPath = realpathSync(fileURLToPath(import.meta.url))
+const isMainModule = Boolean(invokedPath) && currentPath === invokedPath
 
 if (isMainModule) {
   main().catch((error) => {
-    logError(`CLI Error: ${error.message}`)
+    logError(`CLI Error: ${normalizeError(error)}`)
     console.error(error)
     process.exit(1)
   })
