@@ -1,9 +1,20 @@
+## [rari@0.10.12] - 2026-03-06
+
+### 🐛 Bug Fixes
+
+- *(cli)* Improve main module detection for esm entry points
+- *(cli)* Improve main module detection
+- *(cli)* Resolve symlinks in module detection
 ## [rari@0.10.11] - 2026-03-04
 
 ### 🐛 Bug Fixes
 
 - *(cli)* Simplify bun package executor to use bunx directly
 - *(cli)* Improve cross-platform spawn handling
+
+### 💼 Other
+
+- Rari@0.10.11
 ## [rari@0.10.10] - 2026-03-01
 
 ### 🚀 Features
