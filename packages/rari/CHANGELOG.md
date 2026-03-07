@@ -5,6 +5,10 @@
 - *(cli)* Improve main module detection for esm entry points
 - *(cli)* Improve main module detection
 - *(cli)* Resolve symlinks in module detection
+
+### 💼 Other
+
+- Rari@0.10.12
 ## [rari@0.10.11] - 2026-03-04
 
 ### 🐛 Bug Fixes
