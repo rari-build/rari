@@ -240,7 +240,6 @@ deno_error::js_error_wrapper!(ReadlineError, JsReadlineError, |err| {
         ReadlineError::Io(e) => e.get_class(),
         ReadlineError::Eof
         | ReadlineError::Interrupted
-        | ReadlineError::WindowResized
         | ReadlineError::Decode(_)
         | ReadlineError::SystemError(_)
         | _ => GENERIC_ERROR.into(),
