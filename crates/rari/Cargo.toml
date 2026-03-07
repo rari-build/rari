@@ -168,7 +168,7 @@ hyper-util = { version = "0.1.20", features = [
   "tokio",
   "client-legacy",
 ] }
-libc = "0.2.168"
+libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
 sys_traits = "=0.1.24"
 sysinfo = "0.38.0"
@@ -181,6 +181,7 @@ deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
 winapi = { version = "0.3.9", features = [
+  "std",
   "wincon",
   "handleapi",
   "consoleapi",
