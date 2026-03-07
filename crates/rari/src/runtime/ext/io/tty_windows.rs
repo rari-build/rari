@@ -262,13 +262,7 @@ pub fn op_read_line_prompt(
     let read_result = editor.readline_with_initial(prompt_text, (default_value, ""));
     match read_result {
         Ok(line) => Ok(Some(line)),
-        Err(ReadlineError::Interrupted) => {
-            // SAFETY: Disable raw mode and raise SIGINT.
-            unsafe {
-                libc::raise(libc::SIGINT);
-            }
-            Ok(None)
-        }
+        Err(ReadlineError::Interrupted) => Ok(None),
         Err(ReadlineError::Eof) => Ok(None),
         Err(err) => Err(JsReadlineError(err)),
     }
