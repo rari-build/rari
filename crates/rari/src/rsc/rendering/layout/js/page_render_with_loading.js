@@ -38,10 +38,10 @@ else {
       })
 
       const lazyMarker = {
-        __rari_lazy: true,
-        __rari_promise_id: promiseId,
-        __rari_component_id: '{route_file_path}#default',
-        __rari_loading_id: '{loading_file_path}#default',
+        '~rari_lazy': true,
+        '~rari_promise_id': promiseId,
+        '~rari_component_id': '{route_file_path}#default',
+        '~rari_loading_id': '{loading_file_path}#default',
       }
 
       const loadingFallback = LoadingComponent()

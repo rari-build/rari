@@ -120,8 +120,8 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
         }
 
         let clear_cache_script = r#"
-            if (typeof globalThis.__RARI_CLEAR_RESOLVED_CACHE__ === 'function') {
-                globalThis.__RARI_CLEAR_RESOLVED_CACHE__();
+            if (typeof globalThis['~RARI_CLEAR_RESOLVED_CACHE'] === 'function') {
+                globalThis['~RARI_CLEAR_RESOLVED_CACHE']();
             }
         "#;
 

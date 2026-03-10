@@ -50,7 +50,7 @@ impl LayoutRenderer {
                 .runtime
                 .execute_script(
                     "enable_streaming".to_string(),
-                    "globalThis.__RARI_STREAMING_SUSPENSE__ = true;".to_string(),
+                    "globalThis['~RARI_STREAMING_SUSPENSE'] = true;".to_string(),
                 )
                 .await?;
 
@@ -237,7 +237,7 @@ impl LayoutRenderer {
 
         for lazy_promise in pending_promises {
             let resolve_script = format!(
-                "(async () => {{ return await globalThis.__RARI_RESOLVE_LAZY__('{}'); }})()",
+                "(async () => {{ return await globalThis['~RARI_RESOLVE_LAZY']('{}'); }})()",
                 lazy_promise.promise_id
             );
 
@@ -494,7 +494,7 @@ impl LayoutRenderer {
 
                 for lazy_promise in pending_promises {
                     let resolve_script = format!(
-                        "(async () => {{ return await globalThis.__RARI_RESOLVE_LAZY__('{}'); }})()",
+                        "(async () => {{ return await globalThis['~RARI_RESOLVE_LAZY']('{}'); }})()",
                         lazy_promise.promise_id
                     );
 

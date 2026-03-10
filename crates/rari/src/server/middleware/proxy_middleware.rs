@@ -64,7 +64,7 @@ async fn execute_proxy(
         "headers": headers,
     });
 
-    let result_json = runtime.execute_function("__rariExecuteProxy", vec![request_data]).await?;
+    let result_json = runtime.execute_function("~rariExecuteProxy", vec![request_data]).await?;
 
     let proxy_result: ProxyResult = serde_json::from_value(result_json)?;
 
