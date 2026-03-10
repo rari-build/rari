@@ -216,4 +216,4 @@ applyToGlobal({
 
 globalThis.Deno.HttpClient = httpClient.HttpClient
 globalThis.Deno.createHttpClient = httpClient.createHttpClient
-globalThis.__rariFetchCacheInstalled = true
+globalThis['~rariFetchCacheInstalled'] = true

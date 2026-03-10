@@ -123,5 +123,5 @@ export function createClientModuleProxy(id: string): any {
   })
 }
 
-export const __CLIENT_REFERENCE_REGISTRY__ = clientReferenceRegistry
-export const __SERVER_REFERENCE_REGISTRY__ = serverReferenceRegistry
+export const CLIENT_REFERENCE_REGISTRY = clientReferenceRegistry
+export const SERVER_REFERENCE_REGISTRY = serverReferenceRegistry

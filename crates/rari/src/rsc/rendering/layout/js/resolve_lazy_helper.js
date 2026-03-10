@@ -1,29 +1,29 @@
-if (!globalThis.__RARI_RESOLVE_LAZY__) {
-  if (!globalThis.__RARI_RESOLVED_PROMISES__)
-    globalThis.__RARI_RESOLVED_PROMISES__ = new Map()
+if (!globalThis['~RARI_RESOLVE_LAZY']) {
+  if (!globalThis['~RARI_RESOLVED_PROMISES'])
+    globalThis['~RARI_RESOLVED_PROMISES'] = new Map()
 
-  globalThis.__RARI_CLEAR_RESOLVED_CACHE__ = function (promiseId) {
+  globalThis['~RARI_CLEAR_RESOLVED_CACHE'] = function (promiseId) {
     if (promiseId) {
-      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+      globalThis['~RARI_RESOLVED_PROMISES'].delete(promiseId)
+      if (globalThis['~RARI_PENDING_PROMISES'])
+        globalThis['~RARI_PENDING_PROMISES'].delete(promiseId)
     }
     else {
-      globalThis.__RARI_RESOLVED_PROMISES__.clear()
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.clear()
+      globalThis['~RARI_RESOLVED_PROMISES'].clear()
+      if (globalThis['~RARI_PENDING_PROMISES'])
+        globalThis['~RARI_PENDING_PROMISES'].clear()
     }
   }
 
-  globalThis.__RARI_RESOLVE_LAZY__ = async function (promiseId) {
-    if (globalThis.__RARI_RESOLVED_PROMISES__.has(promiseId))
-      return globalThis.__RARI_RESOLVED_PROMISES__.get(promiseId)
+  globalThis['~RARI_RESOLVE_LAZY'] = async function (promiseId) {
+    if (globalThis['~RARI_RESOLVED_PROMISES'].has(promiseId))
+      return globalThis['~RARI_RESOLVED_PROMISES'].get(promiseId)
 
     try {
-      if (!globalThis.__RARI_PENDING_PROMISES__)
+      if (!globalThis['~RARI_PENDING_PROMISES'])
         throw new Error('No pending promises found')
 
-      const promiseOrDeferred = globalThis.__RARI_PENDING_PROMISES__.get(promiseId)
+      const promiseOrDeferred = globalThis['~RARI_PENDING_PROMISES'].get(promiseId)
       if (!promiseOrDeferred)
         throw new Error(`Promise not found: ${promiseId}`)
 
@@ -42,7 +42,7 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
           }
         }
         catch (promiseError) {
-          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+          globalThis['~RARI_PENDING_PROMISES'].delete(promiseId)
           throw new Error(`Promise rejected: ${promiseError.message || String(promiseError)}`)
         }
 
@@ -56,8 +56,8 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
               data: rscData,
             }
 
-            globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
-            globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+            globalThis['~RARI_RESOLVED_PROMISES'].set(promiseId, response)
+            globalThis['~RARI_PENDING_PROMISES'].delete(promiseId)
 
             return response
           }
@@ -71,21 +71,21 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
             data: result,
           }
 
-          globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
-          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+          globalThis['~RARI_RESOLVED_PROMISES'].set(promiseId, response)
+          globalThis['~RARI_PENDING_PROMISES'].delete(promiseId)
 
           return response
         }
       })()
 
-      globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, inflightPromise)
+      globalThis['~RARI_RESOLVED_PROMISES'].set(promiseId, inflightPromise)
 
       return await inflightPromise
     }
     catch (error) {
-      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+      globalThis['~RARI_RESOLVED_PROMISES'].delete(promiseId)
+      if (globalThis['~RARI_PENDING_PROMISES'])
+        globalThis['~RARI_PENDING_PROMISES'].delete(promiseId)
 
       if (!error.message || !error.message.includes('Promise not found'))
         console.error('[rari] Error resolving lazy promise:', error)
