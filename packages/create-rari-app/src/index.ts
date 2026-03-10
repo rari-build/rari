@@ -121,7 +121,7 @@ async function main() {
     name: projectName,
     template: template as string,
     packageManager: packageManager as string,
-    installDeps,
+    installDeps: installDeps as boolean,
   }
 
   await createProject(options)
@@ -224,7 +224,7 @@ async function installDependencies(
       stdio: 'pipe',
     })
 
-    child.on('close', (code) => {
+    child.on('close', (code: number | null) => {
       if (code === 0)
         resolve()
       else
