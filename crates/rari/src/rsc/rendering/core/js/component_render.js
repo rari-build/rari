@@ -30,7 +30,7 @@
 
   const elementToRSC = (element, componentId) => {
     try {
-      const clientComponents = globalThis['~rsc'].clientComponents || {}
+      const clientComponents = globalThis['~clientComponents'] || {}
 
       let rscResult
       if (typeof globalThis.renderToRsc === 'function') {

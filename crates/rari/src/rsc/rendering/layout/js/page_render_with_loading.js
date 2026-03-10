@@ -19,29 +19,27 @@ else {
   const isAsync = PageComponent.constructor.name === 'AsyncFunction'
 
   if (isAsync && useSuspense) {
-    const streamingEnabled = globalThis.__RARI_STREAMING_SUSPENSE__ === true
+    const streamingEnabled = globalThis['~rari']?.streaming?.enabled === true
 
     if (streamingEnabled) {
-      if (!globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__ = new Map()
+      if (!globalThis['~rari'].lazy)
+        globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
 
-      if (!globalThis.__RARI_PROMISE_COUNTER__)
-        globalThis.__RARI_PROMISE_COUNTER__ = 0
-      globalThis.__RARI_PROMISE_COUNTER__++
+      globalThis['~rari'].lazy.counter++
 
-      const promiseId = `{page_component_id}_promise_${globalThis.__RARI_PROMISE_COUNTER__}`
+      const promiseId = `{page_component_id}_promise_${globalThis['~rari'].lazy.counter}`
 
-      globalThis.__RARI_PENDING_PROMISES__.set(promiseId, {
+      globalThis['~rari'].lazy.pending.set(promiseId, {
         component: PageComponent,
         props: pageProps,
         isDeferred: true,
       })
 
       const lazyMarker = {
-        __rari_lazy: true,
-        __rari_promise_id: promiseId,
-        __rari_component_id: '{route_file_path}#default',
-        __rari_loading_id: '{loading_file_path}#default',
+        '~rari_lazy': true,
+        '~rari_promise_id': promiseId,
+        '~rari_component_id': '{route_file_path}#default',
+        '~rari_loading_id': '{loading_file_path}#default',
       }
 
       const loadingFallback = LoadingComponent()

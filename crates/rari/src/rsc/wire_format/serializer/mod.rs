@@ -325,7 +325,7 @@ impl RscSerializer {
                 }
             }
             RSCTree::Primitive(Value::Object(obj)) => {
-                if obj.get("__rari_lazy").and_then(|v| v.as_bool()) == Some(true) {}
+                if obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true) {}
             }
             _ => {}
         }
@@ -559,11 +559,11 @@ impl RscSerializer {
 
     fn extract_lazy_marker(&self, tree: &RSCTree) -> Option<LazyMarker> {
         if let RSCTree::Primitive(Value::Object(obj)) = tree
-            && obj.get("__rari_lazy").and_then(|v| v.as_bool()) == Some(true)
+            && obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true)
         {
-            let promise_id = obj.get("__rari_promise_id")?.as_str()?.to_string();
-            let component_id = obj.get("__rari_component_id")?.as_str()?.to_string();
-            let loading_id = obj.get("__rari_loading_id")?.as_str()?.to_string();
+            let promise_id = obj.get("~rari_promise_id")?.as_str()?.to_string();
+            let component_id = obj.get("~rari_component_id")?.as_str()?.to_string();
+            let loading_id = obj.get("~rari_loading_id")?.as_str()?.to_string();
 
             return Some(LazyMarker { promise_id, component_id, loading_id });
         }

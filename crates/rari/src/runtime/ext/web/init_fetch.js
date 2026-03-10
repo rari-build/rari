@@ -198,13 +198,6 @@ async function cachedFetch(input, init) {
   }
 }
 
-Object.defineProperty(cachedFetch, '__rariWrapped', {
-  value: true,
-  writable: false,
-  enumerable: false,
-  configurable: false,
-})
-
 applyToGlobal({
   fetch: writeable(cachedFetch),
   Request: nonEnumerable(request.Request),
@@ -216,4 +209,3 @@ applyToGlobal({
 
 globalThis.Deno.HttpClient = httpClient.HttpClient
 globalThis.Deno.createHttpClient = httpClient.createHttpClient
-globalThis.__rariFetchCacheInstalled = true

@@ -8,4 +8,4 @@ declare global {
   }
 }
 
-export const __rariFetchCacheTypes = true
+export const rariFetchCacheTypes = true

@@ -1,29 +1,29 @@
-if (!globalThis.__RARI_RESOLVE_LAZY__) {
-  if (!globalThis.__RARI_RESOLVED_PROMISES__)
-    globalThis.__RARI_RESOLVED_PROMISES__ = new Map()
+if (!globalThis['~rari'])
+  globalThis['~rari'] = {}
+if (!globalThis['~rari'].lazy) {
+  globalThis['~rari'].lazy = {
+    pending: new Map(),
+    resolved: new Map(),
+    counter: 0,
+  }
 
-  globalThis.__RARI_CLEAR_RESOLVED_CACHE__ = function (promiseId) {
+  globalThis['~rari'].lazy.clear = function (promiseId) {
     if (promiseId) {
-      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+      globalThis['~rari'].lazy.resolved.delete(promiseId)
+      globalThis['~rari'].lazy.pending.delete(promiseId)
     }
     else {
-      globalThis.__RARI_RESOLVED_PROMISES__.clear()
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.clear()
+      globalThis['~rari'].lazy.resolved.clear()
+      globalThis['~rari'].lazy.pending.clear()
     }
   }
 
-  globalThis.__RARI_RESOLVE_LAZY__ = async function (promiseId) {
-    if (globalThis.__RARI_RESOLVED_PROMISES__.has(promiseId))
-      return globalThis.__RARI_RESOLVED_PROMISES__.get(promiseId)
+  globalThis['~rari'].lazy.resolve = async function (promiseId) {
+    if (globalThis['~rari'].lazy.resolved.has(promiseId))
+      return globalThis['~rari'].lazy.resolved.get(promiseId)
 
     try {
-      if (!globalThis.__RARI_PENDING_PROMISES__)
-        throw new Error('No pending promises found')
-
-      const promiseOrDeferred = globalThis.__RARI_PENDING_PROMISES__.get(promiseId)
+      const promiseOrDeferred = globalThis['~rari'].lazy.pending.get(promiseId)
       if (!promiseOrDeferred)
         throw new Error(`Promise not found: ${promiseId}`)
 
@@ -42,13 +42,13 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
           }
         }
         catch (promiseError) {
-          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+          globalThis['~rari'].lazy.pending.delete(promiseId)
           throw new Error(`Promise rejected: ${promiseError.message || String(promiseError)}`)
         }
 
         if (typeof globalThis.renderToRsc === 'function') {
           try {
-            const clientComponents = globalThis['~clientComponents'] || globalThis['~rsc']?.clientComponents || {}
+            const clientComponents = globalThis['~clientComponents'] || {}
             const rscData = await globalThis.renderToRsc(result, clientComponents)
 
             const response = {
@@ -56,8 +56,8 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
               data: rscData,
             }
 
-            globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
-            globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+            globalThis['~rari'].lazy.resolved.set(promiseId, response)
+            globalThis['~rari'].lazy.pending.delete(promiseId)
 
             return response
           }
@@ -71,21 +71,20 @@ if (!globalThis.__RARI_RESOLVE_LAZY__) {
             data: result,
           }
 
-          globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, response)
-          globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+          globalThis['~rari'].lazy.resolved.set(promiseId, response)
+          globalThis['~rari'].lazy.pending.delete(promiseId)
 
           return response
         }
       })()
 
-      globalThis.__RARI_RESOLVED_PROMISES__.set(promiseId, inflightPromise)
+      globalThis['~rari'].lazy.resolved.set(promiseId, inflightPromise)
 
       return await inflightPromise
     }
     catch (error) {
-      globalThis.__RARI_RESOLVED_PROMISES__.delete(promiseId)
-      if (globalThis.__RARI_PENDING_PROMISES__)
-        globalThis.__RARI_PENDING_PROMISES__.delete(promiseId)
+      globalThis['~rari'].lazy.resolved.delete(promiseId)
+      globalThis['~rari'].lazy.pending.delete(promiseId)
 
       if (!error.message || !error.message.includes('Promise not found'))
         console.error('[rari] Error resolving lazy promise:', error)

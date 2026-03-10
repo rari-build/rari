@@ -133,12 +133,12 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
       return await traverseReactElement(fakeSuspenseElement, clientComponents, depth + 1)
     }
 
-    if (element.__rari_lazy === true) {
+    if (element['~rari_lazy'] === true) {
       return {
-        __rari_lazy: true,
-        __rari_promise_id: element.__rari_promise_id,
-        __rari_component_id: element.__rari_component_id,
-        __rari_loading_id: element.__rari_loading_id,
+        '~rari_lazy': true,
+        '~rari_promise_id': element['~rari_promise_id'],
+        '~rari_component_id': element['~rari_component_id'],
+        '~rari_loading_id': element['~rari_loading_id'],
       }
     }
 
@@ -247,37 +247,42 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     )
 
     const hasLazyMarker = processedChildren.some((child) => {
-      const isLazy = child && typeof child === 'object' && child.__rari_lazy === true
+      const isLazy = child && typeof child === 'object' && child['~rari_lazy'] === true
       return isLazy
     })
 
     let traversedChildren
     if (hasPendingPromises) {
-      const isStreaming = globalThis['~suspense']?.streaming === true || globalThis.__RARI_STREAMING_SUSPENSE__ === true
+      const isStreaming = globalThis['~rari']?.streaming?.enabled === true
 
       if (isStreaming) {
-        if (!globalThis.__RARI_PENDING_PROMISES__)
-          globalThis.__RARI_PENDING_PROMISES__ = new Map()
+        if (!globalThis['~rari'].lazy)
+          globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
 
         const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
           p => p.boundaryId === boundaryId,
         )
 
         for (const pending of boundaryPromises) {
-          globalThis.__RARI_PENDING_PROMISES__.set(pending.id, {
-            component: pending.componentType,
-            props: pending.componentProps,
-            isDeferred: true,
-          })
+          if (!pending.componentType && globalThis['~suspense'].promises?.[pending.id]) {
+            globalThis['~rari'].lazy.pending.set(pending.id, globalThis['~suspense'].promises[pending.id])
+          }
+          else {
+            globalThis['~rari'].lazy.pending.set(pending.id, {
+              component: pending.componentType,
+              props: pending.componentProps,
+              isDeferred: true,
+            })
+          }
         }
 
         const lazyMarkers = []
         for (const pending of boundaryPromises) {
           lazyMarkers.push({
-            __rari_lazy: true,
-            __rari_promise_id: pending.id,
-            __rari_component_id: pending.componentPath || 'AsyncComponent',
-            __rari_loading_id: '',
+            '~rari_lazy': true,
+            '~rari_promise_id': pending.id,
+            '~rari_component_id': pending.componentPath || 'AsyncComponent',
+            '~rari_loading_id': '',
           })
         }
 
@@ -611,7 +616,7 @@ function isClientComponent(componentType, clientComponents) {
 }
 
 function isServerComponent(componentType) {
-  if (componentType && componentType.__isServerComponent)
+  if (componentType && componentType['~isServerComponent'])
     return true
 
   if (

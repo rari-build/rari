@@ -33,7 +33,7 @@
       }
 
       if (typeof React !== 'undefined' && React.Suspense) {
-        React.__originalSuspense = React.Suspense
+        React['~originalSuspense'] = React.Suspense
 
         React.Suspense = function SuspenseOverride(props) {
           if (!props)

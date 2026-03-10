@@ -514,8 +514,7 @@ export class ServerComponentBuilder {
 
             const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
-  let Component = globalThis['~rsc']?.components?.['components/${componentName}']
-    || globalThis['~rsc']?.modules?.['components/${componentName}']?.default
+  let Component = globalThis['~clientComponents']?.['components/${componentName}']?.component
     || globalThis['components/${componentName}'];
 
   if (Component && typeof Component === 'object' && Component.default) {
@@ -583,8 +582,7 @@ const ${importName} = (props) => {
 
           const replacement = `// Component reference: ${componentName}
 const ${importName} = (props) => {
-  let Component = globalThis['~rsc']?.components?.['${componentId}']
-    || globalThis['~rsc']?.modules?.['${componentId}']?.default
+  let Component = globalThis['~clientComponents']?.['${componentId}']?.component
     || globalThis['${componentId}'];
 
   if (Component && typeof Component === 'object' && Component.default) {
@@ -1393,12 +1391,12 @@ if (!globalThis["${componentId}"]) {
                     globalThis[moduleKey] = mainExport;
                 }
 
-                if (!globalThis['~rsc']) globalThis['~rsc'] = {};
-                globalThis['~rsc'].components = globalThis['~rsc'].components || {};
-                globalThis['~rsc'].components[moduleKey] = mainExport;
-
-                globalThis['~rsc'].modules = globalThis['~rsc'].modules || {};
-                globalThis['~rsc'].modules[moduleKey] = { default: mainExport, ...exportedFunctions };
+                if (!globalThis['~clientComponents']) globalThis['~clientComponents'] = {};
+                globalThis['~clientComponents'][moduleKey] = {
+                    component: mainExport,
+                    id: moduleKey,
+                    registered: true
+                };
 
                 if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
                     globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);

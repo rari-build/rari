@@ -111,7 +111,7 @@ impl RouteComposer {
             r#"
 
                 const startRSC = performance.now();
-                const rscData = await globalThis.renderToRsc({final_element}, globalThis['~rsc'].clientComponents || {{}});
+                const rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
                 timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;

@@ -21,7 +21,9 @@ interface SimpleProxyResult {
 }
 
 declare global {
-  var __rariExecuteProxy: ((request: SimpleRequest) => Promise<SimpleProxyResult>) | undefined
+  interface GlobalThis {
+    '~rariExecuteProxy'?: (request: SimpleRequest) => Promise<SimpleProxyResult>
+  }
 }
 
 export async function initializeProxyExecutor(proxyModulePath: string, rariRequestPath: string) {
@@ -34,7 +36,7 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
     }
     const { RariRequest } = await import(rariRequestPath)
 
-    globalThis.__rariExecuteProxy = async function (simpleRequest: SimpleRequest): Promise<SimpleProxyResult> {
+    ;(globalThis as any)['~rariExecuteProxy'] = async function (simpleRequest: SimpleRequest): Promise<SimpleProxyResult> {
       try {
         const rariRequest = new RariRequest(simpleRequest.url, {
           method: simpleRequest.method,
