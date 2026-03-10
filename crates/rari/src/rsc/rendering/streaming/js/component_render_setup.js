@@ -332,7 +332,7 @@ globalThis['~render'].componentAsync = async function () {
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis['~rsc']?.clientComponents || {})
+                  return globalThis.renderToRsc(result, globalThis['~clientComponents'] || {})
                 }
               }
             }
@@ -416,7 +416,7 @@ globalThis['~render'].componentAsync = async function () {
     let rscData
     try {
       rscData = globalThis.renderToRsc
-        ? await globalThis.renderToRsc(element, globalThis['~rsc']?.clientComponents || {})
+        ? await globalThis.renderToRsc(element, globalThis['~clientComponents'] || {})
         : element
     }
     catch (rscError) {

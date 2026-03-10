@@ -19,19 +19,17 @@ else {
   const isAsync = PageComponent.constructor.name === 'AsyncFunction'
 
   if (isAsync && useSuspense) {
-    const streamingEnabled = globalThis['~RARI_STREAMING_SUSPENSE'] === true
+    const streamingEnabled = globalThis['~rari']?.streaming?.enabled === true
 
     if (streamingEnabled) {
-      if (!globalThis['~RARI_PENDING_PROMISES'])
-        globalThis['~RARI_PENDING_PROMISES'] = new Map()
+      if (!globalThis['~rari'].lazy)
+        globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
 
-      if (!globalThis['~RARI_PROMISE_COUNTER'])
-        globalThis['~RARI_PROMISE_COUNTER'] = 0
-      globalThis['~RARI_PROMISE_COUNTER']++
+      globalThis['~rari'].lazy.counter++
 
-      const promiseId = `{page_component_id}_promise_${globalThis['~RARI_PROMISE_COUNTER']}`
+      const promiseId = `{page_component_id}_promise_${globalThis['~rari'].lazy.counter}`
 
-      globalThis['~RARI_PENDING_PROMISES'].set(promiseId, {
+      globalThis['~rari'].lazy.pending.set(promiseId, {
         component: PageComponent,
         props: pageProps,
         isDeferred: true,

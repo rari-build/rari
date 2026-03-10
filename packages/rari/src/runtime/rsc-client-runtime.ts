@@ -40,8 +40,11 @@ if (typeof window !== 'undefined') {
   if (!(window as unknown as WindowWithRari)['~rari'])
     (window as unknown as WindowWithRari)['~rari'] = (globalThis as unknown as GlobalWithRari)['~rari']
 
-  if (!(window as unknown as WindowWithRari)['~rari'].bufferedEvents)
-    (window as unknown as WindowWithRari)['~rari'].bufferedEvents = []
+  if (!(window as unknown as WindowWithRari)['~rari'].streaming)
+    (window as unknown as WindowWithRari)['~rari'].streaming = { bufferedRows: [], bufferedEvents: [] }
+
+  if (!(window as unknown as WindowWithRari)['~rari'].streaming!.bufferedEvents)
+    (window as unknown as WindowWithRari)['~rari'].streaming!.bufferedEvents = []
 
   if (!(window as unknown as WindowWithRari)['~rari'].boundaryModules)
     (window as unknown as WindowWithRari)['~rari'].boundaryModules = new Map()
@@ -321,12 +324,12 @@ if (typeof window !== 'undefined') {
   const windowWithRari = window as unknown as WindowWithRari
   const globalWithRari = globalThis as unknown as GlobalWithRari
 
-  if (windowWithRari['~rari'].bufferedEvents && windowWithRari['~rari'].bufferedEvents!.length > 0) {
-    windowWithRari['~rari'].bufferedEvents!.forEach((event) => {
+  if (windowWithRari['~rari'].streaming?.bufferedEvents && windowWithRari['~rari'].streaming!.bufferedEvents!.length > 0) {
+    windowWithRari['~rari'].streaming!.bufferedEvents!.forEach((event) => {
       const { boundaryId, rscRow, rowId } = event
       globalWithRari['~rari'].processBoundaryUpdate?.(boundaryId, rscRow, rowId)
     })
-    windowWithRari['~rari'].bufferedEvents = []
+    windowWithRari['~rari'].streaming!.bufferedEvents = []
   }
 
   window.addEventListener('rari:boundary-update', (event) => {
@@ -462,7 +465,7 @@ class RscClient {
   }
 
   async fetchServerComponent(componentId: string, props: any = {}): Promise<any> {
-    const hmrCounter = (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rscRefreshCounters'] && (window as unknown as WindowWithRari)['~rscRefreshCounters']![componentId]) || 0
+    const hmrCounter = (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rari']?.hmr?.refreshCounters?.[componentId]) || 0
     const cacheKey = `${componentId}:${JSON.stringify(props)}:hmr:${hmrCounter}`
 
     if (this.componentCache.has(cacheKey))
@@ -1165,11 +1168,12 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
 
   if (typeof window !== 'undefined') {
     const windowWithRari = window as unknown as WindowWithRari
-    windowWithRari['~rscRefreshCounters'] = windowWithRari['~rscRefreshCounters'] || {}
-    if (windowWithRari['~rscRefreshCounters']![componentName] === undefined) {
-      windowWithRari['~rscRefreshCounters']![componentName] = 0
-    }
-    globalRefreshCounter = windowWithRari['~rscRefreshCounters']![componentName]!
+    if (!windowWithRari['~rari'].hmr)
+      windowWithRari['~rari'].hmr = { refreshCounters: {} }
+    if (windowWithRari['~rari'].hmr!.refreshCounters[componentName] === undefined)
+      windowWithRari['~rari'].hmr!.refreshCounters[componentName] = 0
+
+    globalRefreshCounter = windowWithRari['~rari'].hmr!.refreshCounters[componentName]!
   }
 
   const ServerComponent = (props: any): any => {
@@ -1183,11 +1187,11 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
 
           if (typeof window !== 'undefined') {
             const windowWithRari = window as unknown as WindowWithRari
-            if (!windowWithRari['~rscRefreshCounters']) {
-              windowWithRari['~rscRefreshCounters'] = {}
-            }
-            windowWithRari['~rscRefreshCounters']![componentName] = (windowWithRari['~rscRefreshCounters']![componentName] || 0) + 1
-            setMountKey(windowWithRari['~rscRefreshCounters']![componentName])
+            if (!windowWithRari['~rari'].hmr)
+              windowWithRari['~rari'].hmr = { refreshCounters: {} }
+
+            windowWithRari['~rari'].hmr!.refreshCounters[componentName] = (windowWithRari['~rari'].hmr!.refreshCounters[componentName] || 0) + 1
+            setMountKey(windowWithRari['~rari'].hmr!.refreshCounters[componentName])
           }
         }
       }

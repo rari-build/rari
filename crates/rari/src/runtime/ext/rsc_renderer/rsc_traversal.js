@@ -253,18 +253,18 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
 
     let traversedChildren
     if (hasPendingPromises) {
-      const isStreaming = globalThis['~suspense']?.streaming === true || globalThis['~RARI_STREAMING_SUSPENSE'] === true
+      const isStreaming = globalThis['~rari']?.streaming?.enabled === true
 
       if (isStreaming) {
-        if (!globalThis['~RARI_PENDING_PROMISES'])
-          globalThis['~RARI_PENDING_PROMISES'] = new Map()
+        if (!globalThis['~rari'].lazy)
+          globalThis['~rari'].lazy = { pending: new Map(), resolved: new Map(), counter: 0 }
 
         const boundaryPromises = globalThis['~suspense'].pendingPromises.filter(
           p => p.boundaryId === boundaryId,
         )
 
         for (const pending of boundaryPromises) {
-          globalThis['~RARI_PENDING_PROMISES'].set(pending.id, {
+          globalThis['~rari'].lazy.pending.set(pending.id, {
             component: pending.componentType,
             props: pending.componentProps,
             isDeferred: true,

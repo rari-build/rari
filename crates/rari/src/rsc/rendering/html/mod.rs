@@ -793,9 +793,10 @@ impl RscHtmlRenderer {
             r#"<script data-boundary-id="{}" data-row-id="{}">
 (function() {{
     if (!window['~rari']) window['~rari'] = {{}};
-    if (!window['~rari'].bufferedRows) window['~rari'].bufferedRows = [];
+    if (!window['~rari'].streaming) window['~rari'].streaming = {{}};
+    if (!window['~rari'].streaming.bufferedRows) window['~rari'].streaming.bufferedRows = [];
 
-    window['~rari'].bufferedRows.push('{}');
+    window['~rari'].streaming.bufferedRows.push('{}');
 
     if (window['~rari'].processBoundaryUpdate) {{
         window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
@@ -942,7 +943,7 @@ impl RscToHtmlConverter {
 
                 let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
-                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
                 );
                 Ok(script.into_bytes())
@@ -1093,7 +1094,8 @@ impl RscToHtmlConverter {
 <script>
 if (typeof window !== 'undefined') {{
     if (!window['~rari']) window['~rari'] = {{}};
-    window['~rari'].streamComplete = true;
+    if (!window['~rari'].streaming) window['~rari'].streaming = {{}};
+    window['~rari'].streaming.complete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
 }}
 </script>
@@ -1428,7 +1430,7 @@ if (typeof window !== 'undefined') {{
                 error!("Boundary update chunk missing boundary_id");
                 let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
-                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];window['~rari'].bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
                 );
                 return Ok(script.into_bytes());
@@ -1451,15 +1453,16 @@ if (typeof window !== 'undefined') {{
             r#"<script data-boundary-id="{}" data-row-id="{}">
 (function(){{
   if(!window['~rari'])window['~rari']={{}};
-  if(!window['~rari'].bufferedRows)window['~rari'].bufferedRows=[];
-  if(!window['~rari'].bufferedEvents)window['~rari'].bufferedEvents=[];
+  if(!window['~rari'].streaming)window['~rari'].streaming={{}};
+  if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];
+  if(!window['~rari'].streaming.bufferedEvents)window['~rari'].streaming.bufferedEvents=[];
 
-  window['~rari'].bufferedRows.push('{}');
+  window['~rari'].streaming.bufferedRows.push('{}');
 
   if(window['~rari'].processBoundaryUpdate){{
     window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
   }} else {{
-    window['~rari'].bufferedEvents.push({{
+    window['~rari'].streaming.bufferedEvents.push({{
       boundaryId: '{}',
       rscRow: '{}',
       rowId: '{}'

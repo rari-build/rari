@@ -50,5 +50,8 @@ if (!globalThis['~rsc'].rendererInitialized) {
   if (typeof globalThis['~clientComponentPaths'] === 'undefined')
     globalThis['~clientComponentPaths'] = {}
 
-  globalThis['~rsc'].clientComponents = globalThis['~clientComponents']
+  if (!globalThis['~rsc'])
+    globalThis['~rsc'] = {}
+
+  globalThis['~rsc'].keyCounter = 0
 }

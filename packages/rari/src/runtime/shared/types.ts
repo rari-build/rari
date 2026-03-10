@@ -23,12 +23,25 @@ export interface GlobalWithRari {
     getClientComponent?: (id: string) => any
     preloadClientComponent?: (id: string) => Promise<void>
     hydrateClientComponents?: (boundaryId: string, content: any, boundaryElement: Element) => void
+    lazy?: {
+      pending: Map<string, any>
+      resolved: Map<string, any>
+      counter: number
+      resolve: (promiseId: string) => Promise<any>
+      clear: (promiseId?: string) => void
+    }
+    streaming?: {
+      enabled?: boolean
+      complete?: boolean
+      bufferedRows: string[]
+      bufferedEvents: any[]
+    }
+    hmr?: {
+      refreshCounters: Record<string, number>
+    }
     processBoundaryUpdate?: (boundaryId: string, rscRow: string, rowId: string) => void
     boundaryModules?: Map<string, ModuleData>
-    bufferedRows?: string[]
-    streamComplete?: boolean
     pendingBoundaryHydrations?: Map<string, any>
-    bufferedEvents?: any[]
     serverComponents?: Set<string>
     routeInfoCache?: Map<string, any>
     bridge?: any
@@ -36,7 +49,6 @@ export interface GlobalWithRari {
   '~clientComponents': Record<string, ComponentInfo>
   '~clientComponentPaths': Record<string, string>
   '~clientComponentNames': Record<string, string>
-  '~rscRefreshCounters'?: Record<string, number>
 }
 
 export interface WindowWithRari extends Window {
@@ -44,5 +56,4 @@ export interface WindowWithRari extends Window {
   '~clientComponents': GlobalWithRari['~clientComponents']
   '~clientComponentPaths': GlobalWithRari['~clientComponentPaths']
   '~clientComponentNames': GlobalWithRari['~clientComponentNames']
-  '~rscRefreshCounters'?: Record<string, number>
 }

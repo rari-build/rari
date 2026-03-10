@@ -274,7 +274,7 @@ export async function renderApp(): Promise<void> {
 
   const payloadScript = document.getElementById('__RARI_RSC_PAYLOAD__')
   const hasServerRenderedContent = rootElement.children.length > 0
-  const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
+  const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
 
   setupPartialHydration()
 
@@ -410,19 +410,19 @@ export async function renderApp(): Promise<void> {
       try {
         const payloadJson = payloadScript.textContent
 
-        const hasBufferedRows = getWindow()['~rari']?.bufferedRows && getWindow()['~rari'].bufferedRows!.length > 0
-        const isStreaming = getWindow()['~rari']?.streamComplete === undefined || hasBufferedRows
+        const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
+        const isStreaming = getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows
 
         if (isStreaming) {
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode(payloadJson))
 
-              if (getWindow()['~rari']?.bufferedRows) {
-                for (const row of getWindow()['~rari'].bufferedRows!)
+              if (getWindow()['~rari']?.streaming?.bufferedRows) {
+                for (const row of getWindow()['~rari'].streaming!.bufferedRows!)
                   controller.enqueue(new TextEncoder().encode(`\n${row}`))
 
-                getWindow()['~rari'].bufferedRows = []
+                getWindow()['~rari'].streaming!.bufferedRows = []
               }
 
               const handleStreamUpdate = (event: Event) => {
@@ -440,7 +440,7 @@ export async function renderApp(): Promise<void> {
               window.addEventListener('rari:rsc-row', handleStreamUpdate)
               window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-              if (getWindow()['~rari']?.streamComplete)
+              if (getWindow()['~rari']?.streaming?.complete)
                 handleStreamComplete()
             },
           })
@@ -471,11 +471,11 @@ export async function renderApp(): Promise<void> {
       try {
         const stream = new ReadableStream({
           start(controller) {
-            if (getWindow()['~rari']?.bufferedRows) {
-              for (const row of getWindow()['~rari'].bufferedRows!)
+            if (getWindow()['~rari']?.streaming?.bufferedRows) {
+              for (const row of getWindow()['~rari'].streaming!.bufferedRows!)
                 controller.enqueue(new TextEncoder().encode(`${row}\n`))
 
-              getWindow()['~rari'].bufferedRows = []
+              getWindow()['~rari'].streaming!.bufferedRows = []
             }
 
             const handleStreamUpdate = (event: Event) => {
@@ -493,7 +493,7 @@ export async function renderApp(): Promise<void> {
             window.addEventListener('rari:rsc-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
 
-            if (getWindow()['~rari']?.streamComplete)
+            if (getWindow()['~rari']?.streaming?.complete)
               handleStreamComplete()
           },
         })
