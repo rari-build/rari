@@ -15,6 +15,7 @@ if (typeof globalThis.registerClientComponent === 'undefined') {
 
 if (!globalThis['~rsc'])
   globalThis['~rsc'] = {}
+
 if (!globalThis['~rsc'].rendererInitialized) {
   globalThis['~rsc'].rendererInitialized = true
   globalThis['~rsc'].rendererInitTimestamp = Date.now()
@@ -49,9 +50,6 @@ if (!globalThis['~rsc'].rendererInitialized) {
     globalThis['~clientComponentNames'] = {}
   if (typeof globalThis['~clientComponentPaths'] === 'undefined')
     globalThis['~clientComponentPaths'] = {}
-
-  if (!globalThis['~rsc'])
-    globalThis['~rsc'] = {}
 
   globalThis['~rsc'].keyCounter = 0
 }

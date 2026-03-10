@@ -264,11 +264,16 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
         )
 
         for (const pending of boundaryPromises) {
-          globalThis['~rari'].lazy.pending.set(pending.id, {
-            component: pending.componentType,
-            props: pending.componentProps,
-            isDeferred: true,
-          })
+          if (!pending.componentType && globalThis['~suspense'].promises?.[pending.id]) {
+            globalThis['~rari'].lazy.pending.set(pending.id, globalThis['~suspense'].promises[pending.id])
+          }
+          else {
+            globalThis['~rari'].lazy.pending.set(pending.id, {
+              component: pending.componentType,
+              props: pending.componentProps,
+              isDeferred: true,
+            })
+          }
         }
 
         const lazyMarkers = []
