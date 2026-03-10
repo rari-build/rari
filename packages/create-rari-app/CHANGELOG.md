@@ -1,3 +1,13 @@
+## [create-rari-app@0.4.21] - 2026-03-10
+
+### 🐛 Bug Fixes
+
+- *(create-rari-app)* Add explicit type annotations
+## [create-rari-app@0.4.20] - 2026-03-07
+
+### 💼 Other
+
+- Create-rari-app@0.4.20
 ## [create-rari-app@0.4.19] - 2026-03-04
 
 ### 💼 Other
