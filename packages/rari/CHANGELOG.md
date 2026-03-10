@@ -1,3 +1,14 @@
+## [rari@0.10.14] - 2026-03-10
+
+### 🚜 Refactor
+
+- *(rsc)* Replace double underscore globals with bracket notation
+- *(rsc)* Reorganize global namespace under ~rari object
+## [rari@0.10.13] - 2026-03-07
+
+### 💼 Other
+
+- Rari@0.10.13
 ## [rari@0.10.12] - 2026-03-06
 
 ### 🐛 Bug Fixes
