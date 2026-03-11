@@ -232,6 +232,7 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             name: args.name,
             main_module: args.main_module.clone(),
             worker_id: args.worker_id,
+            maybe_cpu_prof_config: None,
             bootstrap: BootstrapOptions {
                 deno_version: env!("CARGO_PKG_VERSION").to_string(),
                 args: vec![],
@@ -239,7 +240,6 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
                     .map(std::num::NonZero::get)
                     .unwrap_or(1),
                 log_level: WorkerLogLevel::default(),
-                enable_op_summary_metrics: false,
                 enable_testing_features: false,
                 locale: deno_core::v8::icu::get_language_tag(),
                 location: Some(args.main_module),
