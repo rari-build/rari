@@ -85,10 +85,14 @@ impl ComponentLoader {
                                                 if (!globalThis['~serverFunctions'].all) {{
                                                     globalThis['~serverFunctions'].all = {{}};
                                                 }}
+                                                if (!globalThis['~serverFunctions'].exported) {{
+                                                    globalThis['~serverFunctions'].exported = {{}};
+                                                }}
                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                     if (typeof value === 'function') {{
                                                         const moduleKey = {} + ':' + key;
                                                         globalThis['~serverFunctions'].all[moduleKey] = value;
+                                                        globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                     }}
                                                 }}
                                                 return {{ success: true }};
@@ -308,10 +312,14 @@ impl ComponentLoader {
                                                                 if (!globalThis['~serverFunctions'].all) {{
                                                                     globalThis['~serverFunctions'].all = {{}};
                                                                 }}
+                                                                if (!globalThis['~serverFunctions'].exported) {{
+                                                                    globalThis['~serverFunctions'].exported = {{}};
+                                                                }}
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
                                                                         const moduleKey = {} + ':' + key;
                                                                         globalThis['~serverFunctions'].all[moduleKey] = value;
+                                                                        globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                                     }}
                                                                 }}
                                                                 return {{ success: true }};
@@ -517,10 +525,14 @@ impl ComponentLoader {
                                                     if (!globalThis['~serverFunctions'].all) {{
                                                         globalThis['~serverFunctions'].all = {{}};
                                                     }}
+                                                    if (!globalThis['~serverFunctions'].exported) {{
+                                                        globalThis['~serverFunctions'].exported = {{}};
+                                                    }}
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
                                                             const moduleKey = {} + ':' + key;
                                                             globalThis['~serverFunctions'].all[moduleKey] = value;
+                                                            globalThis['~serverFunctions'].exported[moduleKey] = value;
                                                         }}
                                                     }}
                                                     return {{ success: true }};

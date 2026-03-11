@@ -160,7 +160,14 @@
       const serverFunction = globalThis.getServerFunction(functionName)
       if (!serverFunction) {
         const error = new Error(`Server function '${functionName}' not found`)
-        return Promise.reject(error)
+        promise = Promise.reject(error)
+        promise['~rsc_function_name'] = functionName
+        promise['~rsc_function_args'] = args
+        promise['~rsc_cache_key'] = cacheKey
+        promise['~rsc_promise_id'] = promiseId
+        promise.toString = () =>
+          `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
+        return promise
       }
 
       const result = serverFunction(...args)

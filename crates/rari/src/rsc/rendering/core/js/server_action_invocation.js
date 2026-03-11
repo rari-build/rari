@@ -1,13 +1,17 @@
 /* eslint-disable no-undef, style/object-curly-spacing */
 (async () => {
   try {
-    const fn = globalThis.getServerFunction ? globalThis.getServerFunction('{function_name}') : globalThis['{function_name}']
+    if (!globalThis.getServerFunction) {
+      throw new TypeError('Server function registry not initialized (~serverFunctions from init_rsc_modules.js has not run)')
+    }
+
+    const fn = globalThis.getServerFunction('{function_name}')
 
     if (!fn)
-      throw new TypeError('Function \'{function_name}\' not found')
+      throw new TypeError('Server function \'{function_name}\' not found or not registered')
 
     if (typeof fn !== 'function')
-      throw new TypeError('Function \'{function_name}\' is not a function')
+      throw new TypeError('Server function \'{function_name}\' is not a function')
 
     const hasOwn = Object.prototype.hasOwnProperty
     const rawArgs = {args_json}
