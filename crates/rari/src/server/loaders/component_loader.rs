@@ -253,7 +253,7 @@ impl ComponentLoader {
                                                                 }}
                                                                 return {{ success: true }};
                                                             }} catch (error) {{
-                                                                console.error("Failed to register server action " + {}: ", error);
+                                                                console.error("Failed to register server action " + {}, error);
                                                                 return {{ success: false, error: error.message }};
                                                             }}
                                                         }})()"#,
@@ -436,7 +436,7 @@ impl ComponentLoader {
                                                     }}
                                                     return {{ success: true }};
                                                 }} catch (error) {{
-                                                    console.error("Failed to register server action " + {}: ", error);
+                                                    console.error("Failed to register server action " + {}, error);
                                                     return {{ success: false, error: error.message }};
                                                 }}
                                             }})()"#,
@@ -595,16 +595,19 @@ impl ComponentLoader {
                                     }
 
                                     if is_client_component {
+                                        let component_id_json =
+                                            serde_json::to_string(&component_id)
+                                                .unwrap_or_else(|_| "\"\"".to_string());
                                         let mark_client_script = format!(
                                             r#"(function() {{
-                                                const comp = globalThis["{}"];
+                                                const comp = globalThis[{}];
                                                 if (comp && typeof comp === 'function') {{
                                                     comp['~isClientComponent'] = true;
-                                                    comp['~clientComponentId'] = "{}";
+                                                    comp['~clientComponentId'] = {};
                                                 }}
-                                                return {{ componentId: "{}", isClient: true }};
+                                                return {{ componentId: {}, isClient: true }};
                                             }})()"#,
-                                            component_id, component_id, component_id
+                                            component_id_json, component_id_json, component_id_json
                                         );
 
                                         if let Err(e) = renderer
@@ -644,16 +647,18 @@ impl ComponentLoader {
                         {
                             Ok(_) => {
                                 if is_client_component {
+                                    let component_id_json = serde_json::to_string(&component_id)
+                                        .unwrap_or_else(|_| "\"\"".to_string());
                                     let mark_client_script = format!(
                                         r#"(function() {{
-                                            const comp = globalThis["{}"];
+                                            const comp = globalThis[{}];
                                             if (comp && typeof comp === 'function') {{
                                                 comp['~isClientComponent'] = true;
-                                                comp['~clientComponentId'] = "{}";
+                                                comp['~clientComponentId'] = {};
                                             }}
-                                            return {{ componentId: "{}", isClient: true }};
+                                            return {{ componentId: {}, isClient: true }};
                                         }})()"#,
-                                        component_id, component_id, component_id
+                                        component_id_json, component_id_json, component_id_json
                                     );
 
                                     if let Err(e) = renderer

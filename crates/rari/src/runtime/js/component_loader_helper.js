@@ -9,8 +9,12 @@ globalThis['~rari'].componentLoader = {
       if (moduleNamespace.default) {
         if (componentId in globalThis) {
           console.warn(
-            `Component ${componentId} would overwrite existing global. Proceeding with caution.`,
+            `Skipping component ${componentId}: would overwrite existing global`,
           )
+          return {
+            success: false,
+            error: `Component ${componentId} would overwrite existing global`,
+          }
         }
         globalThis[componentId] = moduleNamespace.default
       }
