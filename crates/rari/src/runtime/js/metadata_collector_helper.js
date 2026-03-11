@@ -10,7 +10,7 @@ globalThis['~rari'].metadataCollector = {
 
     async function extractMetadata(modulePath, params, searchParams) {
       try {
-        if (typeof globalThis['~rsc'].modules !== 'undefined') {
+        if (globalThis['~rsc'] && typeof globalThis['~rsc'].modules !== 'undefined') {
           const moduleKey = modulePath.replace(FILE_URL_REGEX, 'app/').replace(JS_EXTENSION_REGEX, '')
           const module = globalThis['~rsc'].modules[moduleKey]
 
@@ -45,7 +45,8 @@ globalThis['~rari'].metadataCollector = {
       }
     }
 
-    for (const layoutPath of layoutPaths) {
+    const validLayoutPaths = Array.isArray(layoutPaths) ? layoutPaths : []
+    for (const layoutPath of validLayoutPaths) {
       const layoutMetadata = await extractMetadata(layoutPath, params, searchParams)
       metadataList.push(layoutMetadata)
     }

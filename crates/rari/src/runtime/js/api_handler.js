@@ -14,10 +14,13 @@ globalThis['~rari'].apiHandler = {
 
       const headers = new Headers(requestData.headers || {})
 
+      const method = requestData.method.toUpperCase()
+      const body = (method === 'GET' || method === 'HEAD') ? undefined : (requestData.body || undefined)
+
       const request = new Request(url.toString(), {
         method: requestData.method,
         headers,
-        body: requestData.body || undefined,
+        body,
       })
 
       const context = {
@@ -61,14 +64,15 @@ globalThis['~rari'].apiHandler = {
     }
     catch (error) {
       console.error('API route handler error:', error)
+      const isDevelopment = globalThis['~rari']?.isDevelopment === true
       return {
         status: 500,
         statusText: 'Internal Server Error',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           error: 'Internal Server Error',
-          message: error.message || String(error),
-          stack: error.stack,
+          message: error?.message || String(error),
+          stack: isDevelopment ? error?.stack : undefined,
         }),
       }
     }

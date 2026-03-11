@@ -490,44 +490,16 @@ impl ComponentLoader {
                                     );
                                 } else {
                                     let registration_script = format!(
-                                        r#"(async function() {{
-                                            try {{
-                                                const moduleNamespace = await import("{}");
-
-                                                if (moduleNamespace.default) {{
-                                                    globalThis["{}"] = moduleNamespace.default;
-                                                }} else {{
-                                                    const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
-                                                    if (exports.length > 0) {{
-                                                        globalThis["{}"] = exports[0];
-                                                    }}
-                                                }}
-
-                                                for (const [key, value] of Object.entries(moduleNamespace)) {{
-                                                    if (key !== 'default' && typeof value === 'function') {{
-                                                        globalThis[key] = value;
-                                                    }}
-                                                }}
-
-                                                if (!globalThis['~rsc'].modules) {{
-                                                    globalThis['~rsc'].modules = {{}};
-                                                }}
-                                                globalThis['~rsc'].modules["{}"] = moduleNamespace;
-
-                                                return {{ success: true }};
-                                            }} catch (error) {{
-                                                console.error("Failed to register component {}: ", error);
-                                                return {{ success: false, error: error.message }};
-                                            }}
-                                        }})()"#,
-                                        module_specifier,
-                                        component_id,
-                                        component_id,
-                                        component_id,
+                                        r#"globalThis['~rari'].componentLoader.registerComponent("{}", "{}")"#,
+                                        module_specifier
+                                            .cow_replace('\\', "\\\\")
+                                            .cow_replace('"', "\\\""),
                                         component_id
+                                            .cow_replace('\\', "\\\\")
+                                            .cow_replace('"', "\\\"")
                                     );
 
-                                    if let Err(e) = renderer
+                                    match renderer
                                         .runtime
                                         .execute_script(
                                             format!(
@@ -538,10 +510,24 @@ impl ComponentLoader {
                                         )
                                         .await
                                     {
-                                        error!(
-                                            "Failed to register component {}: {}",
-                                            component_id, e
-                                        );
+                                        Ok(result) => {
+                                            if let Some(success) =
+                                                result.get("success").and_then(|v| v.as_bool())
+                                                && !success
+                                            {
+                                                error!(
+                                                    "Failed to register component {} to globalThis: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                "Failed to register component {}: {}",
+                                                component_id, e
+                                            );
+                                        }
                                     }
 
                                     if is_client_component {

@@ -67,23 +67,21 @@ pub fn create_deno_runtime(
         eprintln!("[rari] Failed to check module registration extension: {err}");
     }
 
-    if let Err(err) =
-        runtime.execute_script("api_handler_init.js", API_HANDLER_INIT_SCRIPT.to_string())
-    {
-        eprintln!("[rari] Failed to initialize API handler helper: {err}");
-    }
+    runtime.execute_script("api_handler_init.js", API_HANDLER_INIT_SCRIPT.to_string()).map_err(
+        |e| RariError::internal(format!("Failed to initialize API handler helper: {e}")),
+    )?;
 
-    if let Err(err) = runtime
+    runtime
         .execute_script("metadata_collector_init.js", METADATA_COLLECTOR_INIT_SCRIPT.to_string())
-    {
-        eprintln!("[rari] Failed to initialize metadata collector helper: {err}");
-    }
+        .map_err(|e| {
+            RariError::internal(format!("Failed to initialize metadata collector helper: {e}"))
+        })?;
 
-    if let Err(err) =
-        runtime.execute_script("component_loader_init.js", COMPONENT_LOADER_INIT_SCRIPT.to_string())
-    {
-        eprintln!("[rari] Failed to initialize component loader helper: {err}");
-    }
+    runtime
+        .execute_script("component_loader_init.js", COMPONENT_LOADER_INIT_SCRIPT.to_string())
+        .map_err(|e| {
+            RariError::internal(format!("Failed to initialize component loader helper: {e}"))
+        })?;
 
     Ok((runtime, module_loader))
 }

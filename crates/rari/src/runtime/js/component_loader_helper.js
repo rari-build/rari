@@ -11,23 +11,36 @@ globalThis['~rari'].componentLoader = {
       }
       else {
         const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
-        if (exports.length > 0)
+        if (exports.length > 0) {
+          const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
+          console.warn(
+            `Component ${componentId} has no default export. Using first function export. Available exports: ${exportKeys.join(', ')}`,
+          )
           globalThis[componentId] = exports[0]
+        }
       }
 
       for (const [key, value] of Object.entries(moduleNamespace)) {
-        if (key !== 'default' && typeof value === 'function')
-          globalThis[key] = value
+        if (key !== 'default' && typeof value === 'function') {
+          if (key in globalThis) {
+            console.warn(
+              `Skipping export '${key}' from component ${componentId}: would overwrite existing global`,
+            )
+          }
+          else {
+            globalThis[key] = value
+          }
+        }
       }
 
+      if (!globalThis['~rsc'])
+        globalThis['~rsc'] = {}
       if (!globalThis['~rsc'].modules)
         globalThis['~rsc'].modules = {}
 
       globalThis['~rsc'].modules[componentId] = moduleNamespace
 
-      const exportNames = Object.keys(moduleNamespace).filter(
-        k => k !== 'Symbol(Symbol.toStringTag)',
-      )
+      const exportNames = Object.keys(moduleNamespace)
 
       return {
         success: true,
