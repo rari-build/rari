@@ -23,6 +23,15 @@ globalThis['~rari'].componentLoader = {
         const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
 
         if (exports.length > 0) {
+          if (typeof globalThis[componentId] !== 'undefined') {
+            console.warn(
+              `Component ${componentId} has no default export and globalThis[${componentId}] already exists. Preserving existing global. Available exports: ${exportKeys.join(', ')}`,
+            )
+            return {
+              success: false,
+              error: `Component ${componentId} would overwrite existing global`,
+            }
+          }
           console.warn(
             `Component ${componentId} has no default export. Using first function export. Available exports: ${exportKeys.join(', ')}`,
           )

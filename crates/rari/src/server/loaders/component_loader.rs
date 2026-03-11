@@ -247,8 +247,8 @@ impl ComponentLoader {
                                                                 }}
                                                                 for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                                     if (typeof value === 'function') {{
-                                                                        globalThis['~serverFunctions'].all[key] = value;
-                                                                        globalThis[key] = value;
+                                                                        const moduleKey = {} + ':' + key;
+                                                                        globalThis['~serverFunctions'].all[moduleKey] = value;
                                                                     }}
                                                                 }}
                                                                 return {{ success: true }};
@@ -257,10 +257,12 @@ impl ComponentLoader {
                                                                 return {{ success: false, error: error.message }};
                                                             }}
                                                         }})()"#,
-                                                        module_specifier_json, action_id_json
+                                                        module_specifier_json,
+                                                        action_id_json,
+                                                        action_id_json
                                                     );
 
-                                                    if let Err(e) = renderer
+                                                    match renderer
                                                         .runtime
                                                         .execute_script(
                                                             format!(
@@ -271,10 +273,34 @@ impl ComponentLoader {
                                                         )
                                                         .await
                                                     {
-                                                        error!(
-                                                            "Failed to register server action {}: {}",
-                                                            action_id, e
-                                                        );
+                                                        Ok(result) => {
+                                                            if let Some(success) = result
+                                                                .get("success")
+                                                                .and_then(|v| v.as_bool())
+                                                                && !success
+                                                            {
+                                                                if let Some(error_msg) = result
+                                                                    .get("error")
+                                                                    .and_then(|v| v.as_str())
+                                                                {
+                                                                    error!(
+                                                                        "Failed to register server action {}: {}",
+                                                                        action_id, error_msg
+                                                                    );
+                                                                } else {
+                                                                    error!(
+                                                                        "Failed to register server action {}: unknown error",
+                                                                        action_id
+                                                                    );
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            error!(
+                                                                "Failed to register server action {}: {}",
+                                                                action_id, e
+                                                            );
+                                                        }
                                                     }
                                                 }
                                             }
@@ -430,8 +456,8 @@ impl ComponentLoader {
                                                     }}
                                                     for (const [key, value] of Object.entries(moduleNamespace)) {{
                                                         if (typeof value === 'function') {{
-                                                            globalThis['~serverFunctions'].all[key] = value;
-                                                            globalThis[key] = value;
+                                                            const moduleKey = {} + ':' + key;
+                                                            globalThis['~serverFunctions'].all[moduleKey] = value;
                                                         }}
                                                     }}
                                                     return {{ success: true }};
@@ -440,10 +466,12 @@ impl ComponentLoader {
                                                     return {{ success: false, error: error.message }};
                                                 }}
                                             }})()"#,
-                                            module_specifier_json, relative_str_json
+                                            module_specifier_json,
+                                            relative_str_json,
+                                            relative_str_json
                                         );
 
-                                        if let Err(e) = renderer
+                                        match renderer
                                             .runtime
                                             .execute_script(
                                                 format!(
@@ -454,10 +482,32 @@ impl ComponentLoader {
                                             )
                                             .await
                                         {
-                                            error!(
-                                                "Failed to register server functions from {}: {}",
-                                                relative_str, e
-                                            );
+                                            Ok(result) => {
+                                                if let Some(success) =
+                                                    result.get("success").and_then(|v| v.as_bool())
+                                                    && !success
+                                                {
+                                                    if let Some(error_msg) =
+                                                        result.get("error").and_then(|v| v.as_str())
+                                                    {
+                                                        error!(
+                                                            "Failed to register server functions from {}: {}",
+                                                            relative_str, error_msg
+                                                        );
+                                                    } else {
+                                                        error!(
+                                                            "Failed to register server functions from {}: unknown error",
+                                                            relative_str
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!(
+                                                    "Failed to register server functions from {}: {}",
+                                                    relative_str, e
+                                                );
+                                            }
                                         }
                                     }
                                 }
@@ -575,54 +625,58 @@ impl ComponentLoader {
                                         .await
                                     {
                                         Ok(result) => {
-                                            if let Some(success) =
-                                                result.get("success").and_then(|v| v.as_bool())
-                                                && !success
-                                            {
+                                            let registration_succeeded = result
+                                                .get("success")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false);
+
+                                            if !registration_succeeded {
                                                 error!(
                                                     "Failed to register component {} to globalThis: {:?}",
                                                     component_id,
                                                     result.get("error")
                                                 );
                                             }
+
+                                            if registration_succeeded && is_client_component {
+                                                let component_id_json =
+                                                    serde_json::to_string(&component_id)
+                                                        .unwrap_or_else(|_| "\"\"".to_string());
+                                                let mark_client_script = format!(
+                                                    r#"(function() {{
+                                                        const comp = globalThis[{}];
+                                                        if (comp && typeof comp === 'function') {{
+                                                            comp['~isClientComponent'] = true;
+                                                            comp['~clientComponentId'] = {};
+                                                        }}
+                                                        return {{ componentId: {}, isClient: true }};
+                                                    }})()"#,
+                                                    component_id_json,
+                                                    component_id_json,
+                                                    component_id_json
+                                                );
+
+                                                if let Err(e) = renderer
+                                                    .runtime
+                                                    .execute_script(
+                                                        format!(
+                                                            "mark_client_{}.js",
+                                                            component_id.cow_replace('/', "_")
+                                                        ),
+                                                        mark_client_script,
+                                                    )
+                                                    .await
+                                                {
+                                                    error!(
+                                                        "Failed to mark component {} as client: {}",
+                                                        component_id, e
+                                                    );
+                                                }
+                                            }
                                         }
                                         Err(e) => {
                                             error!(
                                                 "Failed to register component {}: {}",
-                                                component_id, e
-                                            );
-                                        }
-                                    }
-
-                                    if is_client_component {
-                                        let component_id_json =
-                                            serde_json::to_string(&component_id)
-                                                .unwrap_or_else(|_| "\"\"".to_string());
-                                        let mark_client_script = format!(
-                                            r#"(function() {{
-                                                const comp = globalThis[{}];
-                                                if (comp && typeof comp === 'function') {{
-                                                    comp['~isClientComponent'] = true;
-                                                    comp['~clientComponentId'] = {};
-                                                }}
-                                                return {{ componentId: {}, isClient: true }};
-                                            }})()"#,
-                                            component_id_json, component_id_json, component_id_json
-                                        );
-
-                                        if let Err(e) = renderer
-                                            .runtime
-                                            .execute_script(
-                                                format!(
-                                                    "mark_client_{}.js",
-                                                    component_id.cow_replace('/', "_")
-                                                ),
-                                                mark_client_script,
-                                            )
-                                            .await
-                                        {
-                                            error!(
-                                                "Failed to mark component {} as client: {}",
                                                 component_id, e
                                             );
                                         }
