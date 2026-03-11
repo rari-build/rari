@@ -1,4 +1,24 @@
+## [rari@0.10.15] - 2026-03-11
+
+### 🐛 Bug Fixes
+
+- *(runtime)* Improve error handling and safety checks in JS helpers
+- *(runtime)* Improve server action registration safety and namespacing
+- *(runtime)* Improve server function namespacing and lookup
+
+### 🚜 Refactor
+
+- *(rari)* Reorganize main entry point exports
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Migrate from rolldown-vite to vite 8 beta
+- *(rari)* Bump optional dependencies to 0.10.15
 ## [rari@0.10.14] - 2026-03-10
+
+### 💼 Other
+
+- Rari@0.10.14
 
 ### 🚜 Refactor
 
