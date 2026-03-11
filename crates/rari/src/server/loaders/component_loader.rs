@@ -67,10 +67,13 @@ impl ComponentLoader {
 
                         match renderer.runtime.get_module_namespace(module_id).await {
                             Ok(_namespace) => {
+                                let specifier_json = serde_json::to_string(specifier)
+                                    .unwrap_or_else(|_| "\"\"".to_string());
+                                let component_id_json = serde_json::to_string(component_id)
+                                    .unwrap_or_else(|_| "\"\"".to_string());
                                 let registration_script = format!(
-                                    r#"globalThis['~rari'].componentLoader.registerComponent("{}", "{}")"#,
-                                    specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
-                                    component_id.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
+                                    r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
+                                    specifier_json, component_id_json
                                 );
 
                                 match renderer
@@ -489,14 +492,14 @@ impl ComponentLoader {
                                         component_id, module_id, e
                                     );
                                 } else {
+                                    let module_specifier_json =
+                                        serde_json::to_string(&module_specifier)
+                                            .unwrap_or_else(|_| "\"\"".to_string());
+                                    let component_id_json = serde_json::to_string(&component_id)
+                                        .unwrap_or_else(|_| "\"\"".to_string());
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent("{}", "{}")"#,
-                                        module_specifier
-                                            .cow_replace('\\', "\\\\")
-                                            .cow_replace('"', "\\\""),
-                                        component_id
-                                            .cow_replace('\\', "\\\\")
-                                            .cow_replace('"', "\\\"")
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
+                                        module_specifier_json, component_id_json
                                     );
 
                                     match renderer

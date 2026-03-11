@@ -11,12 +11,22 @@ globalThis['~rari'].componentLoader = {
       }
       else {
         const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
+        const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
+
         if (exports.length > 0) {
-          const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
           console.warn(
             `Component ${componentId} has no default export. Using first function export. Available exports: ${exportKeys.join(', ')}`,
           )
           globalThis[componentId] = exports[0]
+        }
+        else {
+          console.error(
+            `Component ${componentId} has no default export and no function exports. Available exports: ${exportKeys.join(', ')}`,
+          )
+          return {
+            success: false,
+            error: `No default export or function exports found in component ${componentId}`,
+          }
         }
       }
 

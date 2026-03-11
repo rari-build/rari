@@ -6,12 +6,6 @@ globalThis['~rari'].apiHandler = {
     try {
       const url = new URL(requestData.url, 'http://localhost')
 
-      if (requestData.params) {
-        for (const [key, value] of Object.entries(requestData.params)) {
-          url.searchParams.set(key, value)
-        }
-      }
-
       const headers = new Headers(requestData.headers || {})
 
       const method = requestData.method.toUpperCase()
