@@ -1,8 +1,22 @@
+## [create-rari-app@0.4.22] - 2026-03-11
+
+### 🐛 Bug Fixes
+
+- *(runtime)* Improve component loading and JSON serialization
+- *(runtime)* Add serialization error handling and safety checks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Migrate from rolldown-vite to vite 8 beta
 ## [create-rari-app@0.4.21] - 2026-03-10
 
 ### 🐛 Bug Fixes
 
 - *(create-rari-app)* Add explicit type annotations
+
+### 💼 Other
+
+- Create-rari-app@0.4.21
 ## [create-rari-app@0.4.20] - 2026-03-07
 
 ### 💼 Other
