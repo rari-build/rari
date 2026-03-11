@@ -6,8 +6,8 @@ globalThis['~rari'].componentLoader = {
     try {
       const moduleNamespace = await import(moduleSpecifier)
 
-      const isApiRoute = componentId.includes('/route') || componentId.includes('api/')
-      const isServerAction = componentId.includes('actions/')
+      const isApiRoute = componentId.includes('/route') || componentId.startsWith('api/')
+      const isServerAction = componentId.startsWith('actions/')
 
       if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
         if (componentId in globalThis) {

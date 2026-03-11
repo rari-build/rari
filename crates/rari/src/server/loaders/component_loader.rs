@@ -70,9 +70,21 @@ impl ComponentLoader {
                         match renderer.runtime.get_module_namespace(module_id).await {
                             Ok(_namespace) => {
                                 let specifier_json = serde_json::to_string(specifier)
-                                    .unwrap_or_else(|_| "\"\"".to_string());
+                                    .unwrap_or_else(|e| {
+                                        error!(
+                                            "Failed to serialize module specifier for {}: {}",
+                                            component_id, e
+                                        );
+                                        "\"\"".to_string()
+                                    });
                                 let component_id_json = serde_json::to_string(component_id)
-                                    .unwrap_or_else(|_| "\"\"".to_string());
+                                    .unwrap_or_else(|e| {
+                                        error!(
+                                            "Failed to serialize component_id {}: {}",
+                                            component_id, e
+                                        );
+                                        "\"\"".to_string()
+                                    });
 
                                 if is_server_action {
                                     let action_registration_script = format!(
