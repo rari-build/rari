@@ -714,9 +714,16 @@ impl ComponentLoader {
                                             }
 
                                             if registration_succeeded && is_client_component {
-                                                let component_id_json =
-                                                    serde_json::to_string(&component_id)
-                                                        .unwrap_or_else(|_| "\"\"".to_string());
+                                                let component_id_json = serde_json::to_string(
+                                                    &component_id,
+                                                )
+                                                .unwrap_or_else(|e| {
+                                                    error!(
+                                                        "Failed to serialize component_id {}: {}",
+                                                        component_id, e
+                                                    );
+                                                    "\"\"".to_string()
+                                                });
                                                 let mark_client_script = format!(
                                                     r#"(function() {{
                                                         const comp = globalThis[{}];
@@ -777,7 +784,13 @@ impl ComponentLoader {
                             Ok(_) => {
                                 if is_client_component {
                                     let component_id_json = serde_json::to_string(&component_id)
-                                        .unwrap_or_else(|_| "\"\"".to_string());
+                                        .unwrap_or_else(|e| {
+                                            error!(
+                                                "Failed to serialize component_id {}: {}",
+                                                component_id, e
+                                            );
+                                            "\"\"".to_string()
+                                        });
                                     let mark_client_script = format!(
                                         r#"(function() {{
                                             const comp = globalThis[{}];

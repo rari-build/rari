@@ -47,6 +47,24 @@
 
     globalThis['~rsc'].modules[moduleKey] = module
 
+    const prefix = `${moduleKey}:`
+    if (globalThis['~serverFunctions'].all) {
+      const allKeys = Object.keys(globalThis['~serverFunctions'].all)
+      for (const key of allKeys) {
+        if (key.startsWith(prefix)) {
+          delete globalThis['~serverFunctions'].all[key]
+        }
+      }
+    }
+    if (globalThis['~serverFunctions'].exported) {
+      const exportedKeys = Object.keys(globalThis['~serverFunctions'].exported)
+      for (const key of exportedKeys) {
+        if (key.startsWith(prefix)) {
+          delete globalThis['~serverFunctions'].exported[key]
+        }
+      }
+    }
+
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
@@ -98,7 +116,8 @@
     let foundFunction = null
 
     if (globalThis['~serverFunctions'].exported) {
-      for (const key in globalThis['~serverFunctions'].exported) {
+      const exportedKeys = Object.keys(globalThis['~serverFunctions'].exported)
+      for (const key of exportedKeys) {
         if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].exported[key] === 'function') {
           if (foundKey !== null) {
             throw new Error(
@@ -116,7 +135,8 @@
     }
 
     if (globalThis['~serverFunctions'].all) {
-      for (const key in globalThis['~serverFunctions'].all) {
+      const allKeys = Object.keys(globalThis['~serverFunctions'].all)
+      for (const key of allKeys) {
         if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].all[key] === 'function') {
           if (foundKey !== null) {
             throw new Error(
