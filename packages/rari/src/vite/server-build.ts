@@ -1353,7 +1353,7 @@ if (!globalThis["${componentId}"]) {
               .map(
                 name => `if (typeof ${name} !== 'undefined') {
                 globalThis.${name} = ${name};
-                globalThis['~serverFunctions'].all['${name}'] = ${name};
+                globalThis['~serverFunctions'].all['${componentId}:${name}'] = ${name};
                 exportedFunctions['${name}'] = ${name};
             }`,
               )

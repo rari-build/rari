@@ -50,8 +50,9 @@
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        globalThis['~serverFunctions'].all[key] = module[key]
-        globalThis['~serverFunctions'].exported[key] = module[key]
+        const namespacedKey = `${moduleKey}:${key}`
+        globalThis['~serverFunctions'].all[namespacedKey] = module[key]
+        globalThis['~serverFunctions'].exported[namespacedKey] = module[key]
         exportCount++
       }
     }
@@ -74,18 +75,20 @@
   }
 
   globalThis.getServerFunction = function (name) {
-    if (
-      globalThis['~serverFunctions'].exported
-      && typeof globalThis['~serverFunctions'].exported[name] === 'function'
-    ) {
-      return globalThis['~serverFunctions'].exported[name]
+    if (globalThis['~serverFunctions'].exported) {
+      for (const key in globalThis['~serverFunctions'].exported) {
+        if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].exported[key] === 'function') {
+          return globalThis['~serverFunctions'].exported[key]
+        }
+      }
     }
 
-    if (
-      globalThis['~serverFunctions'].all
-      && typeof globalThis['~serverFunctions'].all[name] === 'function'
-    ) {
-      return globalThis['~serverFunctions'].all[name]
+    if (globalThis['~serverFunctions'].all) {
+      for (const key in globalThis['~serverFunctions'].all) {
+        if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].all[key] === 'function') {
+          return globalThis['~serverFunctions'].all[key]
+        }
+      }
     }
 
     return undefined
