@@ -75,23 +75,50 @@
   }
 
   globalThis.getServerFunction = function (name) {
+    if (globalThis['~serverFunctions'].exported && typeof globalThis['~serverFunctions'].exported[name] === 'function') {
+      return globalThis['~serverFunctions'].exported[name]
+    }
+
+    if (globalThis['~serverFunctions'].all && typeof globalThis['~serverFunctions'].all[name] === 'function') {
+      return globalThis['~serverFunctions'].all[name]
+    }
+
+    let foundKey = null
+    let foundFunction = null
+
     if (globalThis['~serverFunctions'].exported) {
       for (const key in globalThis['~serverFunctions'].exported) {
         if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].exported[key] === 'function') {
-          return globalThis['~serverFunctions'].exported[key]
+          if (foundKey !== null) {
+            throw new Error(
+              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
+            )
+          }
+          foundKey = key
+          foundFunction = globalThis['~serverFunctions'].exported[key]
         }
       }
+    }
+
+    if (foundFunction) {
+      return foundFunction
     }
 
     if (globalThis['~serverFunctions'].all) {
       for (const key in globalThis['~serverFunctions'].all) {
         if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].all[key] === 'function') {
-          return globalThis['~serverFunctions'].all[key]
+          if (foundKey !== null) {
+            throw new Error(
+              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
+            )
+          }
+          foundKey = key
+          foundFunction = globalThis['~serverFunctions'].all[key]
         }
       }
     }
 
-    return undefined
+    return foundFunction
   }
 
   globalThis.createServerFunctionPromise = function (functionName, args = []) {

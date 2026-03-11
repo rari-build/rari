@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { isNodeVersionSufficient, logError, logInfo, logSuccess, logWarn } from './utils'
+import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
 
 export async function createRenderDeployment() {
   const cwd = process.cwd()
@@ -30,17 +30,7 @@ export async function createRenderDeployment() {
     packageJson.scripts['start:local'] = 'rari start'
     packageJson.scripts['deploy:render'] = 'echo "Push to GitHub and connect to Render to deploy"'
 
-    packageJson.engines = packageJson.engines || {}
-    if (packageJson.engines.node) {
-      if (!isNodeVersionSufficient(packageJson.engines.node)) {
-        logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of >=22.12.0`)
-        logWarn('Updating to >=22.12.0 for Render deployment compatibility')
-        packageJson.engines.node = '>=22.12.0'
-      }
-    }
-    else {
-      packageJson.engines.node = '>=22.12.0'
-    }
+    ensureMinimumNodeEngine(packageJson)
 
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')

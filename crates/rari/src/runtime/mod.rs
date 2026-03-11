@@ -355,9 +355,24 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
-                if (globalThis['~serverFunctions']?.all && globalThis['~serverFunctions'].all[componentId]) {{
-                    delete globalThis['~serverFunctions'].all[componentId];
-                    deleted = true;
+                if (globalThis['~serverFunctions']?.all) {{
+                    const prefix = componentId + ':';
+                    for (const key in globalThis['~serverFunctions'].all) {{
+                        if (key === componentId || key.startsWith(prefix)) {{
+                            delete globalThis['~serverFunctions'].all[key];
+                            deleted = true;
+                        }}
+                    }}
+                }}
+
+                if (globalThis['~serverFunctions']?.exported) {{
+                    const prefix = componentId + ':';
+                    for (const key in globalThis['~serverFunctions'].exported) {{
+                        if (key === componentId || key.startsWith(prefix)) {{
+                            delete globalThis['~serverFunctions'].exported[key];
+                            deleted = true;
+                        }}
+                    }}
                 }}
 
                 if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{

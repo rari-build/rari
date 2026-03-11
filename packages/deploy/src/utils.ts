@@ -1,4 +1,6 @@
-export { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
+import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
+
+export { logError, logInfo, logSuccess, logWarn }
 
 export const MIN_SUPPORTED_NODE_MAJOR = 22
 
@@ -109,6 +111,27 @@ function extractMajorAndCompare(versionRange: string, minMajor: number): boolean
   if (match) {
     const majorNum = Number.parseInt(match[1], 10)
     return majorNum >= minMajor
+  }
+
+  return false
+}
+
+export const MIN_NODE_VERSION = '>=22.12.0'
+
+export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = MIN_NODE_VERSION): boolean {
+  packageJson.engines = packageJson.engines || {}
+
+  if (packageJson.engines.node) {
+    if (!isNodeVersionSufficient(packageJson.engines.node)) {
+      logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of ${minVersion}`)
+      logWarn(`Updating to ${minVersion} for deployment compatibility`)
+      packageJson.engines.node = minVersion
+      return true
+    }
+  }
+  else {
+    packageJson.engines.node = minVersion
+    return true
   }
 
   return false

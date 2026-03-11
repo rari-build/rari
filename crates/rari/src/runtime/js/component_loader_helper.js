@@ -6,7 +6,7 @@ globalThis['~rari'].componentLoader = {
     try {
       const moduleNamespace = await import(moduleSpecifier)
 
-      if (moduleNamespace.default) {
+      if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
         if (componentId in globalThis) {
           console.warn(
             `Skipping component ${componentId}: would overwrite existing global`,
