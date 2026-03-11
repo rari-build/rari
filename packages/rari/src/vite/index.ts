@@ -2075,7 +2075,4 @@ export function defineRariConfig(
   }
 }
 
-export { RariRequest } from '../proxy/RariRequest'
-export { RariResponse } from '../proxy/RariResponse'
-export type { ProxyConfig, ProxyFunction, RariFetchEvent, RariURL } from '../proxy/types'
 export { rariProxy } from '../proxy/vite-plugin'
