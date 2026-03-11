@@ -16,6 +16,7 @@ const MAJOR_MINOR_REGEX = /^(?:>=?|<=?|[=~^])?\s*(\d+)\.(\d+)/
 const WILDCARD_REGEX = /^(\d+)\.(?:x|\*)/i
 const MAJOR_ONLY_REGEX = /^(?:>=?|[=~^])\s*(\d+)(?:\s|$)/
 const NUMBER_ONLY_REGEX = /^(\d+)$/
+const EXTRACT_MAJOR_REGEX = /(\d+)/
 
 export function isNodeVersionSufficient(versionRange: string, minMajor: number = MIN_SUPPORTED_NODE_MAJOR): boolean {
   const cleaned = versionRange.trim()
@@ -121,8 +122,11 @@ export const MIN_NODE_VERSION = '>=22.12.0'
 export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = MIN_NODE_VERSION): boolean {
   packageJson.engines = packageJson.engines || {}
 
+  const minMajorMatch = minVersion.match(EXTRACT_MAJOR_REGEX)
+  const minMajor = minMajorMatch ? Number.parseInt(minMajorMatch[1], 10) : MIN_SUPPORTED_NODE_MAJOR
+
   if (packageJson.engines.node) {
-    if (!isNodeVersionSufficient(packageJson.engines.node)) {
+    if (!isNodeVersionSufficient(packageJson.engines.node, minMajor)) {
       logWarn(`Current engines.node value "${packageJson.engines.node}" may not meet the required minimum of ${minVersion}`)
       logWarn(`Updating to ${minVersion} for deployment compatibility`)
       packageJson.engines.node = minVersion

@@ -144,14 +144,14 @@
       }
     }
 
-    const serverFunction = globalThis.getServerFunction(functionName)
-    if (!serverFunction) {
-      const error = new Error(`Server function '${functionName}' not found`)
-      return Promise.reject(error)
-    }
-
     let promise
     try {
+      const serverFunction = globalThis.getServerFunction(functionName)
+      if (!serverFunction) {
+        const error = new Error(`Server function '${functionName}' not found`)
+        return Promise.reject(error)
+      }
+
       const result = serverFunction(...args)
 
       if (result && typeof result.then === 'function')

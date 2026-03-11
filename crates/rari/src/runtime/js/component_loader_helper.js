@@ -6,6 +6,9 @@ globalThis['~rari'].componentLoader = {
     try {
       const moduleNamespace = await import(moduleSpecifier)
 
+      const isApiRoute = componentId.includes('/route') || componentId.includes('api/')
+      const isServerAction = componentId.includes('actions/')
+
       if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
         if (componentId in globalThis) {
           console.warn(
@@ -18,7 +21,7 @@ globalThis['~rari'].componentLoader = {
         }
         globalThis[componentId] = moduleNamespace.default
       }
-      else {
+      else if (!isApiRoute && !isServerAction) {
         const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
         const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
 
@@ -48,15 +51,17 @@ globalThis['~rari'].componentLoader = {
         }
       }
 
-      for (const [key, value] of Object.entries(moduleNamespace)) {
-        if (key !== 'default' && typeof value === 'function') {
-          if (key in globalThis) {
-            console.warn(
-              `Skipping export '${key}' from component ${componentId}: would overwrite existing global`,
-            )
-          }
-          else {
-            globalThis[key] = value
+      if (!isApiRoute && !isServerAction) {
+        for (const [key, value] of Object.entries(moduleNamespace)) {
+          if (key !== 'default' && typeof value === 'function') {
+            if (key in globalThis) {
+              console.warn(
+                `Skipping export '${key}' from component ${componentId}: would overwrite existing global`,
+              )
+            }
+            else {
+              globalThis[key] = value
+            }
           }
         }
       }

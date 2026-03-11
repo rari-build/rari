@@ -350,6 +350,16 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
+                const moduleNamespace = globalThis['~rsc']?.modules?.[componentId];
+                if (moduleNamespace) {{
+                    for (const key in moduleNamespace) {{
+                        if (key !== 'default' && typeof moduleNamespace[key] === 'function' && globalThis[key] === moduleNamespace[key]) {{
+                            delete globalThis[key];
+                            deleted = true;
+                        }}
+                    }}
+                }}
+
                 if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
                     delete globalThis['~rsc'].functions[componentId];
                     deleted = true;
