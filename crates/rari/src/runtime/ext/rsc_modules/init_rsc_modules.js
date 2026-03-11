@@ -47,11 +47,30 @@
 
     globalThis['~rsc'].modules[moduleKey] = module
 
+    const prefix = `${moduleKey}:`
+    if (globalThis['~serverFunctions'].all) {
+      const allKeys = Object.keys(globalThis['~serverFunctions'].all)
+      for (const key of allKeys) {
+        if (key.startsWith(prefix)) {
+          delete globalThis['~serverFunctions'].all[key]
+        }
+      }
+    }
+    if (globalThis['~serverFunctions'].exported) {
+      const exportedKeys = Object.keys(globalThis['~serverFunctions'].exported)
+      for (const key of exportedKeys) {
+        if (key.startsWith(prefix)) {
+          delete globalThis['~serverFunctions'].exported[key]
+        }
+      }
+    }
+
     let exportCount = 0
     for (const key in module) {
       if (typeof module[key] === 'function') {
-        globalThis['~serverFunctions'].all[key] = module[key]
-        globalThis['~serverFunctions'].exported[key] = module[key]
+        const namespacedKey = `${moduleKey}:${key}`
+        globalThis['~serverFunctions'].all[namespacedKey] = module[key]
+        globalThis['~serverFunctions'].exported[namespacedKey] = module[key]
         exportCount++
       }
     }
@@ -74,21 +93,63 @@
   }
 
   globalThis.getServerFunction = function (name) {
-    if (
-      globalThis['~serverFunctions'].exported
-      && typeof globalThis['~serverFunctions'].exported[name] === 'function'
-    ) {
+    if (name.includes(':')) {
+      if (globalThis['~serverFunctions'].exported && typeof globalThis['~serverFunctions'].exported[name] === 'function') {
+        return globalThis['~serverFunctions'].exported[name]
+      }
+      if (globalThis['~serverFunctions'].all && typeof globalThis['~serverFunctions'].all[name] === 'function') {
+        return globalThis['~serverFunctions'].all[name]
+      }
+
+      return null
+    }
+
+    if (globalThis['~serverFunctions'].exported && typeof globalThis['~serverFunctions'].exported[name] === 'function') {
       return globalThis['~serverFunctions'].exported[name]
     }
 
-    if (
-      globalThis['~serverFunctions'].all
-      && typeof globalThis['~serverFunctions'].all[name] === 'function'
-    ) {
+    if (globalThis['~serverFunctions'].all && typeof globalThis['~serverFunctions'].all[name] === 'function') {
       return globalThis['~serverFunctions'].all[name]
     }
 
-    return undefined
+    let foundKey = null
+    let foundFunction = null
+
+    if (globalThis['~serverFunctions'].exported) {
+      const exportedKeys = Object.keys(globalThis['~serverFunctions'].exported)
+      for (const key of exportedKeys) {
+        if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].exported[key] === 'function') {
+          if (foundKey !== null) {
+            throw new Error(
+              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
+            )
+          }
+          foundKey = key
+          foundFunction = globalThis['~serverFunctions'].exported[key]
+        }
+      }
+    }
+
+    if (foundFunction) {
+      return foundFunction
+    }
+
+    if (globalThis['~serverFunctions'].all) {
+      const allKeys = Object.keys(globalThis['~serverFunctions'].all)
+      for (const key of allKeys) {
+        if (key.endsWith(`:${name}`) && typeof globalThis['~serverFunctions'].all[key] === 'function') {
+          if (foundKey !== null) {
+            throw new Error(
+              `Ambiguous server function name '${name}'. Multiple modules export this function: '${foundKey}' and '${key}'. Use the full namespaced key (moduleId:functionName) instead.`,
+            )
+          }
+          foundKey = key
+          foundFunction = globalThis['~serverFunctions'].all[key]
+        }
+      }
+    }
+
+    return foundFunction
   }
 
   globalThis.createServerFunctionPromise = function (functionName, args = []) {
@@ -114,14 +175,21 @@
       }
     }
 
-    const serverFunction = globalThis.getServerFunction(functionName)
-    if (!serverFunction) {
-      const error = new Error(`Server function '${functionName}' not found`)
-      return Promise.reject(error)
-    }
-
     let promise
     try {
+      const serverFunction = globalThis.getServerFunction(functionName)
+      if (!serverFunction) {
+        const error = new Error(`Server function '${functionName}' not found`)
+        promise = Promise.reject(error)
+        promise['~rsc_function_name'] = functionName
+        promise['~rsc_function_args'] = args
+        promise['~rsc_cache_key'] = cacheKey
+        promise['~rsc_promise_id'] = promiseId
+        promise.toString = () =>
+          `ServerFunctionPromise(${functionName}(${JSON.stringify(args)}))`
+        return promise
+      }
+
       const result = serverFunction(...args)
 
       if (result && typeof result.then === 'function')

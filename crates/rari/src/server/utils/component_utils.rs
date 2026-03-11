@@ -48,8 +48,8 @@ pub fn has_use_server_directive(code: &str) -> bool {
             continue;
         }
 
-        if trimmed == "'use server';"
-            || trimmed == "\"use server\";"
+        if trimmed.starts_with("'use server';")
+            || trimmed.starts_with("\"use server\";")
             || trimmed == "'use server'"
             || trimmed == "\"use server\""
         {

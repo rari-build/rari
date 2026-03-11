@@ -117,29 +117,29 @@ impl JsExecutionRuntime {
         params: rustc_hash::FxHashMap<String, crate::server::routing::types::ParamValue>,
         search_params: rustc_hash::FxHashMap<String, Vec<String>>,
     ) -> Result<Value, RariError> {
-        const METADATA_COLLECTOR_TEMPLATE: &str = include_str!("js/metadata_collector.js");
+        #[allow(clippy::disallowed_methods)]
+        let data = json!({
+            "layoutPaths": layout_paths,
+            "pagePath": page_path,
+            "params": params,
+            "searchParams": search_params,
+        });
 
-        let layout_paths_json = serde_json::to_string(&layout_paths)
-            .map_err(|e| RariError::serialization(e.to_string()))?;
-        let params_json =
-            serde_json::to_string(&params).map_err(|e| RariError::serialization(e.to_string()))?;
+        let data_json =
+            serde_json::to_string(&data).map_err(|e| RariError::serialization(e.to_string()))?;
 
-        let search_params_simple: rustc_hash::FxHashMap<String, String> = search_params
-            .iter()
-            .filter_map(|(k, v)| v.first().map(|val| (k.clone(), val.clone())))
-            .collect();
-        let search_params_json = serde_json::to_string(&search_params_simple)
-            .map_err(|e| RariError::serialization(e.to_string()))?;
-
-        let page_path_json = serde_json::to_string(&page_path)
-            .map_err(|e| RariError::serialization(e.to_string()))?;
-
-        let script = METADATA_COLLECTOR_TEMPLATE
-            .cow_replace("LAYOUT_PATHS_PLACEHOLDER", &layout_paths_json)
-            .cow_replace("'PAGE_PATH_PLACEHOLDER'", &page_path_json)
-            .cow_replace("SEARCH_PARAMS_PLACEHOLDER", &search_params_json)
-            .cow_replace("PARAMS_PLACEHOLDER", &params_json)
-            .into_owned();
+        let script = format!(
+            r#"(function() {{
+                const data = {};
+                return globalThis['~rari'].metadataCollector.collect(
+                    data.layoutPaths,
+                    data.pagePath,
+                    data.params,
+                    data.searchParams
+                );
+            }})()"#,
+            data_json
+        );
 
         let metadata_list = self.execute_script("collect_metadata".to_string(), script).await?;
 
@@ -350,19 +350,53 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
+                const moduleNamespace = globalThis['~rsc']?.modules?.[componentId];
+                if (moduleNamespace) {{
+                    for (const key in moduleNamespace) {{
+                        if (key !== 'default' && typeof moduleNamespace[key] === 'function' && globalThis[key] === moduleNamespace[key]) {{
+                            delete globalThis[key];
+                            deleted = true;
+                        }}
+                    }}
+                }}
+
                 if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
                     delete globalThis['~rsc'].functions[componentId];
                     deleted = true;
                 }}
 
-                if (globalThis['~serverFunctions']?.all && globalThis['~serverFunctions'].all[componentId]) {{
-                    delete globalThis['~serverFunctions'].all[componentId];
-                    deleted = true;
+                if (globalThis['~serverFunctions']?.all) {{
+                    const prefix = componentId + ':';
+                    for (const key in globalThis['~serverFunctions'].all) {{
+                        if (key === componentId || key.startsWith(prefix)) {{
+                            delete globalThis['~serverFunctions'].all[key];
+                            deleted = true;
+                        }}
+                    }}
+                }}
+
+                if (globalThis['~serverFunctions']?.exported) {{
+                    const prefix = componentId + ':';
+                    for (const key in globalThis['~serverFunctions'].exported) {{
+                        if (key === componentId || key.startsWith(prefix)) {{
+                            delete globalThis['~serverFunctions'].exported[key];
+                            deleted = true;
+                        }}
+                    }}
                 }}
 
                 if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
                     delete globalThis['~rsc'].modules[componentId];
                     deleted = true;
+                }}
+
+                if (globalThis.PromiseManager && globalThis.PromiseManager.clear) {{
+                    try {{
+                        globalThis.PromiseManager.clear(componentId);
+                        deleted = true;
+                    }} catch (e) {{
+                        console.warn('Failed to clear PromiseManager for component:', componentId, e);
+                    }}
                 }}
 
                 if (globalThis['~rsc'].components && globalThis['~rsc'].components[componentId]) {{

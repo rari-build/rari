@@ -1,4 +1,4 @@
-import type { Plugin, ViteDevServer } from 'rolldown-vite'
+import type { Plugin, ViteDevServer } from 'vite'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -304,7 +304,6 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
 
       // Suppress Vite warnings about dynamic imports in our runtime-client
       // These are intentional and use @vite-ignore comments that get stripped by minification
-      // See: https://github.com/vitejs/rolldown-vite/issues/426
       const originalWarn = config.logger.warn
       config.logger.warn = (msg, options) => {
         if (typeof msg === 'string' && msg.includes('runtime-client') && msg.includes('The above dynamic import cannot be analyzed'))

@@ -525,91 +525,18 @@ impl ApiRouteHandler {
     ) -> Result<JsonValue, RariError> {
         let request_json = serde_json::to_string(request_obj)
             .map_err(|e| RariError::serialization(format!("Failed to serialize request: {e}")))?;
-        let method_json = serde_json::to_string(method)
-            .map_err(|e| RariError::serialization(format!("Failed to serialize method: {e}")))?;
-        let module_specifier_json = serde_json::to_string(module_specifier).map_err(|e| {
-            RariError::serialization(format!("Failed to serialize module specifier: {e}"))
-        })?;
 
         let script = format!(
-            r#"
-(async function() {{
-    try {{
-        const requestData = {request_json};
-
-        const url = new URL(requestData.url, 'http://localhost');
-
-        if (requestData.params) {{
-            for (const [key, value] of Object.entries(requestData.params)) {{
-                url.searchParams.set(key, value);
-            }}
-        }}
-
-        const headers = new Headers(requestData.headers || {{}});
-
-        const request = new Request(url.toString(), {{
-            method: requestData.method,
-            headers: headers,
-            body: requestData.body || undefined,
-        }});
-
-        const context = {{
-            params: requestData.params || {{}}
-        }};
-
-        const moduleNamespace = await import({module_specifier_json});
-        const handler = moduleNamespace[{method_json}];
-
-        if (typeof handler !== 'function') {{
-            console.error('Available exports:', Object.keys(moduleNamespace));
-            throw new Error('Handler ' + {method_json} + ' is not a function. Available: ' + Object.keys(moduleNamespace).join(', '));
-        }}
-
-        const result = await handler(request, context);
-
-        if (result instanceof Response) {{
-            const body = await result.text();
-            const headers = {{}};
-            result.headers.forEach((value, key) => {{
-                headers[key] = value;
-            }});
-
-            return {{
-                status: result.status,
-                statusText: result.statusText,
-                headers: headers,
-                body: body,
-            }};
-        }} else {{
-            return {{
-                status: 200,
-                headers: {{ 'content-type': 'application/json' }},
-                body: JSON.stringify(result),
-            }};
-        }}
-    }} catch (error) {{
-        console.error('API route handler error:', error);
-        return {{
-            status: 500,
-            statusText: 'Internal Server Error',
-            headers: {{ 'content-type': 'application/json' }},
-            body: JSON.stringify({{
-                error: 'Internal Server Error',
-                message: error.message || String(error),
-                stack: error.stack
-            }}),
-        }};
-    }}
-}})()
-"#,
-            request_json = request_json,
-            method_json = method_json,
-            module_specifier_json = module_specifier_json,
+            r#"globalThis['~rari'].apiHandler.callHandler({}, "{}", "{}")"#,
+            request_json,
+            module_specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
+            method.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
         );
 
         let trimmed = module_specifier.trim_start_matches("file://");
         let with_underscores = trimmed.cow_replace('/', "_");
         let script_name = with_underscores.cow_replace(':', "_");
+
         self.runtime
             .execute_script(format!("api_route_call_{}", script_name), script)
             .await

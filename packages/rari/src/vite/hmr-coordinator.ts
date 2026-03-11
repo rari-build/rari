@@ -1,4 +1,4 @@
-import type { ViteDevServer } from 'rolldown-vite'
+import type { ViteDevServer } from 'vite'
 import type { ServerComponentBuilder } from './server-build'
 import fs from 'node:fs'
 import path from 'node:path'

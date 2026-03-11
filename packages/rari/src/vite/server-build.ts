@@ -1,4 +1,4 @@
-import type { Plugin } from 'rolldown-vite'
+import type { Plugin } from 'vite'
 import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1353,7 +1353,7 @@ if (!globalThis["${componentId}"]) {
               .map(
                 name => `if (typeof ${name} !== 'undefined') {
                 globalThis.${name} = ${name};
-                globalThis['~serverFunctions'].all['${name}'] = ${name};
+                globalThis['~serverFunctions'].all['${componentId}:${name}'] = ${name};
                 exportedFunctions['${name}'] = ${name};
             }`,
               )
