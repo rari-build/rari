@@ -1,4 +1,4 @@
-import type { Plugin } from 'rolldown-vite'
+import type { Plugin } from 'vite'
 import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'

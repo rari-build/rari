@@ -19,7 +19,7 @@
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
-    "rolldown-vite": "catalog:build",
-    "tailwindcss": "catalog:tailwind"
+    "tailwindcss": "catalog:tailwind",
+    "vite": "catalog:build"
   }
 }

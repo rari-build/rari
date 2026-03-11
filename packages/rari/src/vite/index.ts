@@ -1,4 +1,4 @@
-import type { Plugin, UserConfig } from 'rolldown-vite'
+import type { Plugin, UserConfig } from 'vite'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'
@@ -859,23 +859,30 @@ if (import.meta.hot) {
           : [config.build.rolldownOptions.output]
 
         for (const output of outputs) {
-          output.advancedChunks = output.advancedChunks || {}
-          output.advancedChunks.groups = output.advancedChunks.groups || []
+          // Initialize codeSplitting as an object if it's not already
+          if (output.codeSplitting !== false && typeof output.codeSplitting !== 'object') {
+            output.codeSplitting = {}
+          }
 
-          output.advancedChunks.groups.push({
-            name(moduleId: string) {
-              if (moduleId.includes('node_modules')) {
-                if (moduleId.includes('node_modules/react-dom'))
-                  return 'react-dom'
-                if (moduleId.includes('node_modules/react'))
-                  return 'react'
+          // Only configure groups if codeSplitting is an object
+          if (typeof output.codeSplitting === 'object') {
+            output.codeSplitting.groups = output.codeSplitting.groups || []
 
-                return 'vendor'
-              }
+            output.codeSplitting.groups.push({
+              name(moduleId: string) {
+                if (moduleId.includes('node_modules')) {
+                  if (moduleId.includes('node_modules/react-dom'))
+                    return 'react-dom'
+                  if (moduleId.includes('node_modules/react'))
+                    return 'react'
 
-              return null
-            },
-          })
+                  return 'vendor'
+                }
+
+                return null
+              },
+            })
+          }
 
           if (!output.chunkFileNames) {
             output.chunkFileNames = (chunkInfo) => {

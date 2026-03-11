@@ -28,10 +28,10 @@ export default defineConfig({
   external: [
     'lightningcss',
     'postcss',
-    'rolldown-vite',
-    '@oxc-project/types',
+    'vite',
     'rolldown',
     '@rolldown/pluginutils',
+    '@oxc-project/types',
     'virtual:app-router-provider',
     'virtual:app-router-provider.tsx',
     'virtual:react-server-dom-rari-client.ts',

@@ -1,4 +1,4 @@
-import type { Plugin, ViteDevServer } from 'rolldown-vite'
+import type { Plugin, ViteDevServer } from 'vite'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'

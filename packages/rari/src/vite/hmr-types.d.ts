@@ -1,4 +1,4 @@
-/// <reference types="rolldown-vite/client" />
+/// <reference types="vite/client" />
 
 interface ImportMetaEnv {
   readonly RARI_SERVER_URL?: string

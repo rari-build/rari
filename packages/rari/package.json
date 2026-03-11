@@ -127,7 +127,7 @@
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
     "oxlint": "catalog:eslint",
-    "rolldown-vite": "catalog:build",
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "vite": "catalog:build"
   }
 }
