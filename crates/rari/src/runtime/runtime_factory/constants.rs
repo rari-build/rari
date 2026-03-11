@@ -36,6 +36,12 @@ pub const MODULE_CHECK_SCRIPT: &str = r#"
 })()
 "#;
 
+pub const API_HANDLER_INIT_SCRIPT: &str = include_str!("../js/api_handler.js");
+
+pub const METADATA_COLLECTOR_INIT_SCRIPT: &str = include_str!("../js/metadata_collector_helper.js");
+
+pub const COMPONENT_LOADER_INIT_SCRIPT: &str = include_str!("../js/component_loader_helper.js");
+
 pub const PROMISE_SETUP_SCRIPT: &str = r#"
 (function() {
     try {

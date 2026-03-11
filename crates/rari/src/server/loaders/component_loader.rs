@@ -66,57 +66,11 @@ impl ComponentLoader {
                         }
 
                         match renderer.runtime.get_module_namespace(module_id).await {
-                            Ok(namespace) => {
-                                let export_names: Vec<String> =
-                                    if let Some(obj) = namespace.as_object() {
-                                        obj.keys()
-                                            .filter(|k| *k != "Symbol(Symbol.toStringTag)")
-                                            .map(|k| k.to_string())
-                                            .collect()
-                                    } else {
-                                        vec![]
-                                    };
-
-                                let export_names_json = serde_json::to_string(&export_names)
-                                    .unwrap_or_else(|_| "[]".to_string());
+                            Ok(_namespace) => {
                                 let registration_script = format!(
-                                    r#"(async function() {{
-                                        try {{
-                                            const moduleNamespace = await import("{}");
-                                            const exportNames = {};
-
-                                            if (moduleNamespace.default) {{
-                                                globalThis["{}"] = moduleNamespace.default;
-                                            }} else {{
-                                                const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function');
-                                                if (exports.length > 0) {{
-                                                    globalThis["{}"] = exports[0];
-                                                }}
-                                            }}
-
-                                            for (const [key, value] of Object.entries(moduleNamespace)) {{
-                                                if (key !== 'default' && typeof value === 'function') {{
-                                                    globalThis[key] = value;
-                                                }}
-                                            }}
-
-                                            if (!globalThis['~rsc'].modules) {{
-                                                globalThis['~rsc'].modules = {{}};
-                                            }}
-                                            globalThis['~rsc'].modules["{}"] = moduleNamespace;
-
-                                            return {{ success: true, hasDefault: !!moduleNamespace.default, exportCount: exportNames.length }};
-                                        }} catch (error) {{
-                                            console.error("Failed to register component {}: ", error);
-                                            return {{ success: false, error: error.message }};
-                                        }}
-                                    }})()"#,
-                                    specifier,
-                                    export_names_json,
-                                    component_id,
-                                    component_id,
-                                    component_id,
-                                    component_id
+                                    r#"globalThis['~rari'].componentLoader.registerComponent("{}", "{}")"#,
+                                    specifier.cow_replace('\\', "\\\\").cow_replace('"', "\\\""),
+                                    component_id.cow_replace('\\', "\\\\").cow_replace('"', "\\\"")
                                 );
 
                                 match renderer

@@ -15,8 +15,8 @@
     "dev": "rari dev",
     "start": "rari start",
     "clean": "rm -rf dist",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "lint": "oxlint -c ../.oxlintrc.json",
+    "lint:fix": "oxlint -c ../.oxlintrc.json --fix",
     "typecheck": "tsgo"
   },
   "dependencies": {

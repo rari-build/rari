@@ -1,7 +1,10 @@
 use crate::error::RariError;
 use crate::runtime::module_loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
-use crate::runtime::runtime_factory::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT};
+use crate::runtime::runtime_factory::constants::{
+    API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, ENV_INJECTION_SCRIPT,
+    METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
+};
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
 use rustc_hash::FxHashMap;
@@ -62,6 +65,24 @@ pub fn create_deno_runtime(
         runtime.execute_script("module_registration_check.js", MODULE_CHECK_SCRIPT.to_string())
     {
         eprintln!("[rari] Failed to check module registration extension: {err}");
+    }
+
+    if let Err(err) =
+        runtime.execute_script("api_handler_init.js", API_HANDLER_INIT_SCRIPT.to_string())
+    {
+        eprintln!("[rari] Failed to initialize API handler helper: {err}");
+    }
+
+    if let Err(err) = runtime
+        .execute_script("metadata_collector_init.js", METADATA_COLLECTOR_INIT_SCRIPT.to_string())
+    {
+        eprintln!("[rari] Failed to initialize metadata collector helper: {err}");
+    }
+
+    if let Err(err) =
+        runtime.execute_script("component_loader_init.js", COMPONENT_LOADER_INIT_SCRIPT.to_string())
+    {
+        eprintln!("[rari] Failed to initialize component loader helper: {err}");
     }
 
     Ok((runtime, module_loader))
