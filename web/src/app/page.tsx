@@ -74,7 +74,7 @@ export default async function HomePage() {
               },
               {
                 title: 'Rolldown + Vite',
-                description: 'Bundled by Rolldown-Vite with zero config needed — just add the plugin to your vite.config.ts and go',
+                description: 'Bundled by Rolldown-powered Vite with zero config needed — just add the plugin to your vite.config.ts and go',
                 icon: 'vite',
               },
               {
