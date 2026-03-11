@@ -216,10 +216,29 @@ impl ComponentLoader {
                                                         action_id, e
                                                     );
                                                 } else {
+                                                    let module_specifier_json = serde_json::to_string(&module_specifier)
+                                                        .map_err(|e| {
+                                                            error!("Failed to serialize module_specifier for {}: {}", action_id, e);
+                                                            RariError::internal(format!("Failed to serialize module_specifier: {}", e))
+                                                        })?;
+                                                    let action_id_json = serde_json::to_string(
+                                                        &action_id,
+                                                    )
+                                                    .map_err(|e| {
+                                                        error!(
+                                                            "Failed to serialize action_id {}: {}",
+                                                            action_id, e
+                                                        );
+                                                        RariError::internal(format!(
+                                                            "Failed to serialize action_id: {}",
+                                                            e
+                                                        ))
+                                                    })?;
+
                                                     let registration_script = format!(
                                                         r#"(async function() {{
                                                             try {{
-                                                                const moduleNamespace = await import("{}");
+                                                                const moduleNamespace = await import({});
                                                                 if (!globalThis['~serverFunctions']) {{
                                                                     globalThis['~serverFunctions'] = {{}};
                                                                 }}
@@ -234,11 +253,11 @@ impl ComponentLoader {
                                                                 }}
                                                                 return {{ success: true }};
                                                             }} catch (error) {{
-                                                                console.error("Failed to register server action {}: ", error);
+                                                                console.error("Failed to register server action " + {}: ", error);
                                                                 return {{ success: false, error: error.message }};
                                                             }}
                                                         }})()"#,
-                                                        module_specifier, action_id
+                                                        module_specifier_json, action_id_json
                                                     );
 
                                                     if let Err(e) = renderer
@@ -374,10 +393,35 @@ impl ComponentLoader {
                                             relative_str, e
                                         );
                                     } else {
+                                        let module_specifier_json = serde_json::to_string(
+                                            &module_specifier,
+                                        )
+                                        .map_err(|e| {
+                                            error!(
+                                                "Failed to serialize module_specifier for {}: {}",
+                                                relative_str, e
+                                            );
+                                            RariError::internal(format!(
+                                                "Failed to serialize module_specifier: {}",
+                                                e
+                                            ))
+                                        })?;
+                                        let relative_str_json =
+                                            serde_json::to_string(&relative_str).map_err(|e| {
+                                                error!(
+                                                    "Failed to serialize relative_str {}: {}",
+                                                    relative_str, e
+                                                );
+                                                RariError::internal(format!(
+                                                    "Failed to serialize relative_str: {}",
+                                                    e
+                                                ))
+                                            })?;
+
                                         let registration_script = format!(
                                             r#"(async function() {{
                                                 try {{
-                                                    const moduleNamespace = await import("{}");
+                                                    const moduleNamespace = await import({});
                                                     if (!globalThis['~serverFunctions']) {{
                                                         globalThis['~serverFunctions'] = {{}};
                                                     }}
@@ -392,11 +436,11 @@ impl ComponentLoader {
                                                     }}
                                                     return {{ success: true }};
                                                 }} catch (error) {{
-                                                    console.error("Failed to register server action {}: ", error);
+                                                    console.error("Failed to register server action " + {}: ", error);
                                                     return {{ success: false, error: error.message }};
                                                 }}
                                             }})()"#,
-                                            module_specifier, relative_str
+                                            module_specifier_json, relative_str_json
                                         );
 
                                         if let Err(e) = renderer
@@ -493,10 +537,27 @@ impl ComponentLoader {
                                     );
                                 } else {
                                     let module_specifier_json =
-                                        serde_json::to_string(&module_specifier)
-                                            .unwrap_or_else(|_| "\"\"".to_string());
+                                        serde_json::to_string(&module_specifier).map_err(|e| {
+                                            error!(
+                                                "Failed to serialize module_specifier for {}: {}",
+                                                component_id, e
+                                            );
+                                            RariError::internal(format!(
+                                                "Failed to serialize module_specifier: {}",
+                                                e
+                                            ))
+                                        })?;
                                     let component_id_json = serde_json::to_string(&component_id)
-                                        .unwrap_or_else(|_| "\"\"".to_string());
+                                        .map_err(|e| {
+                                            error!(
+                                                "Failed to serialize component_id {}: {}",
+                                                component_id, e
+                                            );
+                                            RariError::internal(format!(
+                                                "Failed to serialize component_id: {}",
+                                                e
+                                            ))
+                                        })?;
                                     let registration_script = format!(
                                         r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
                                         module_specifier_json, component_id_json

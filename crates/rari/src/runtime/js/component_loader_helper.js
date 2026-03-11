@@ -7,6 +7,11 @@ globalThis['~rari'].componentLoader = {
       const moduleNamespace = await import(moduleSpecifier)
 
       if (moduleNamespace.default) {
+        if (componentId in globalThis) {
+          console.warn(
+            `Component ${componentId} would overwrite existing global. Proceeding with caution.`,
+          )
+        }
         globalThis[componentId] = moduleNamespace.default
       }
       else {

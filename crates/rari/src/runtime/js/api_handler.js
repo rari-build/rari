@@ -48,11 +48,27 @@ globalThis['~rari'].apiHandler = {
         }
       }
       else {
-        return {
-          status: 200,
-          statusText: 'OK',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(result),
+        try {
+          return {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(result),
+          }
+        }
+        catch (serializationError) {
+          console.error('Failed to serialize API response:', serializationError)
+          const isDevelopment = globalThis['~rari']?.isDevelopment === true
+          return {
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              error: 'Failed to serialize response',
+              message: serializationError?.message || 'Response contains circular references or non-serializable values',
+              stack: isDevelopment ? serializationError?.stack : undefined,
+            }),
+          }
         }
       }
     }
