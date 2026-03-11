@@ -45,6 +45,8 @@ impl ComponentLoader {
             let component_code = std::fs::read_to_string(&component_file)
                 .map_err(|_e| RariError::io("Failed to read component file".to_string()))?;
 
+            let is_server_action = has_use_server_directive(&component_code);
+
             if let Some(specifier) = module_specifier {
                 if let Err(e) = renderer
                     .runtime
@@ -71,39 +73,100 @@ impl ComponentLoader {
                                     .unwrap_or_else(|_| "\"\"".to_string());
                                 let component_id_json = serde_json::to_string(component_id)
                                     .unwrap_or_else(|_| "\"\"".to_string());
-                                let registration_script = format!(
-                                    r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
-                                    specifier_json, component_id_json
-                                );
 
-                                match renderer
-                                    .runtime
-                                    .execute_script(
-                                        format!(
-                                            "register_{}.js",
-                                            component_id.cow_replace('/', "_")
-                                        ),
-                                        registration_script,
-                                    )
-                                    .await
-                                {
-                                    Ok(result) => {
-                                        if let Some(success) =
-                                            result.get("success").and_then(|v| v.as_bool())
-                                            && !success
-                                        {
+                                if is_server_action {
+                                    let action_registration_script = format!(
+                                        r#"(async function() {{
+                                            try {{
+                                                const moduleNamespace = await import({});
+                                                if (!globalThis['~serverFunctions']) {{
+                                                    globalThis['~serverFunctions'] = {{}};
+                                                }}
+                                                if (!globalThis['~serverFunctions'].all) {{
+                                                    globalThis['~serverFunctions'].all = {{}};
+                                                }}
+                                                for (const [key, value] of Object.entries(moduleNamespace)) {{
+                                                    if (typeof value === 'function') {{
+                                                        const moduleKey = {} + ':' + key;
+                                                        globalThis['~serverFunctions'].all[moduleKey] = value;
+                                                    }}
+                                                }}
+                                                return {{ success: true }};
+                                            }} catch (error) {{
+                                                console.error("Failed to register server action " + {}, error);
+                                                return {{ success: false, error: error.message }};
+                                            }}
+                                        }})()"#,
+                                        specifier_json, component_id_json, component_id_json
+                                    );
+
+                                    match renderer
+                                        .runtime
+                                        .execute_script(
+                                            format!(
+                                                "register_action_{}.js",
+                                                component_id.cow_replace('/', "_")
+                                            ),
+                                            action_registration_script,
+                                        )
+                                        .await
+                                    {
+                                        Ok(result) => {
+                                            if let Some(success) =
+                                                result.get("success").and_then(|v| v.as_bool())
+                                                && !success
+                                            {
+                                                error!(
+                                                    "Failed to register server action {}: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
                                             error!(
-                                                "Failed to register component {} to globalThis: {:?}",
-                                                component_id,
-                                                result.get("error")
+                                                "Failed to register server action {}: {}",
+                                                component_id, e
                                             );
                                         }
                                     }
-                                    Err(e) => {
-                                        error!(
-                                            "Failed to register component {} to globalThis: {}",
-                                            component_id, e
-                                        );
+                                }
+
+                                if !is_server_action {
+                                    let registration_script = format!(
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
+                                        specifier_json, component_id_json
+                                    );
+
+                                    match renderer
+                                        .runtime
+                                        .execute_script(
+                                            format!(
+                                                "register_{}.js",
+                                                component_id.cow_replace('/', "_")
+                                            ),
+                                            registration_script,
+                                        )
+                                        .await
+                                    {
+                                        Ok(result) => {
+                                            if let Some(success) =
+                                                result.get("success").and_then(|v| v.as_bool())
+                                                && !success
+                                            {
+                                                error!(
+                                                    "Failed to register component {} to globalThis: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                "Failed to register component {} to globalThis: {}",
+                                                component_id, e
+                                            );
+                                        }
                                     }
                                 }
                             }

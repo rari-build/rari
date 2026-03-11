@@ -75,6 +75,17 @@
   }
 
   globalThis.getServerFunction = function (name) {
+    if (name.includes(':')) {
+      if (globalThis['~serverFunctions'].exported && typeof globalThis['~serverFunctions'].exported[name] === 'function') {
+        return globalThis['~serverFunctions'].exported[name]
+      }
+      if (globalThis['~serverFunctions'].all && typeof globalThis['~serverFunctions'].all[name] === 'function') {
+        return globalThis['~serverFunctions'].all[name]
+      }
+
+      return null
+    }
+
     if (globalThis['~serverFunctions'].exported && typeof globalThis['~serverFunctions'].exported[name] === 'function') {
       return globalThis['~serverFunctions'].exported[name]
     }

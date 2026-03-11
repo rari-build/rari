@@ -35,9 +35,11 @@ globalThis['~rari'].componentLoader = {
               error: `Component ${componentId} would overwrite existing global`,
             }
           }
-          console.warn(
-            `Component ${componentId} has no default export. Using first function export. Available exports: ${exportKeys.join(', ')}`,
-          )
+          if (globalThis.Deno?.env?.get('NODE_ENV') === 'development') {
+            console.warn(
+              `Component ${componentId} has no default export. Using first function export. Available exports: ${exportKeys.join(', ')}`,
+            )
+          }
           globalThis[componentId] = exports[0]
         }
         else {

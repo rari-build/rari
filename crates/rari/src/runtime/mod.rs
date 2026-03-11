@@ -390,6 +390,16 @@ impl JsExecutionRuntime {
                     deleted = true;
                 }}
 
+                if (globalThis.PromiseManager && globalThis.PromiseManager.clear) {{
+                    try {{
+                        globalThis.PromiseManager.clear(componentId);
+                        deleted = true;
+                    }} catch (e) {{
+                        console.warn('Failed to clear PromiseManager for component:', componentId, e);
+                    }}
+                }}
+                }}
+
                 if (globalThis['~rsc'].components && globalThis['~rsc'].components[componentId]) {{
                     delete globalThis['~rsc'].components[componentId];
                     deleted = true;

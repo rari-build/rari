@@ -1,14 +1,15 @@
 /* eslint-disable no-undef, style/object-curly-spacing */
 (async () => {
   try {
-    const hasOwn = Object.prototype.hasOwnProperty
-    if (!hasOwn.call(globalThis, '{function_name}'))
-      throw new TypeError('Function \'{function_name}\' not found in globalThis')
+    const fn = globalThis.getServerFunction ? globalThis.getServerFunction('{function_name}') : globalThis['{function_name}']
 
-    const fn = globalThis['{function_name}']
+    if (!fn)
+      throw new TypeError('Function \'{function_name}\' not found')
+
     if (typeof fn !== 'function')
       throw new TypeError('Function \'{function_name}\' is not a function')
 
+    const hasOwn = Object.prototype.hasOwnProperty
     const rawArgs = {args_json}
     const processedArgs = rawArgs.map((arg) => {
       if (arg && typeof arg === 'object' && !Array.isArray(arg) && !(arg instanceof FormData)) {
