@@ -149,9 +149,10 @@ impl ComponentLoader {
                                 }
 
                                 if !is_server_action {
+                                    let skip_global_binding = component_id.starts_with("lib/");
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
-                                        specifier_json, component_id_json
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
+                                        specifier_json, component_id_json, skip_global_binding
                                     );
 
                                     match renderer
@@ -673,6 +674,7 @@ impl ComponentLoader {
                                         component_id, module_id, e
                                     );
                                 } else {
+                                    let skip_global_binding = component_id.starts_with("lib/");
                                     let module_specifier_json =
                                         serde_json::to_string(&module_specifier).map_err(|e| {
                                             error!(
@@ -696,8 +698,10 @@ impl ComponentLoader {
                                             ))
                                         })?;
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
-                                        module_specifier_json, component_id_json
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
+                                        module_specifier_json,
+                                        component_id_json,
+                                        skip_global_binding
                                     );
 
                                     match renderer
@@ -736,19 +740,38 @@ impl ComponentLoader {
                                                     );
                                                     "\"\"".to_string()
                                                 });
-                                                let mark_client_script = format!(
-                                                    r#"(function() {{
-                                                        const comp = globalThis[{}];
-                                                        if (comp && typeof comp === 'function') {{
-                                                            comp['~isClientComponent'] = true;
-                                                            comp['~clientComponentId'] = {};
-                                                        }}
-                                                        return {{ componentId: {}, isClient: true }};
-                                                    }})()"#,
-                                                    component_id_json,
-                                                    component_id_json,
-                                                    component_id_json
-                                                );
+                                                let mark_client_script = if skip_global_binding {
+                                                    format!(
+                                                        r#"(function() {{
+                                                            const module = globalThis['~rsc']?.modules?.[{}];
+                                                            if (module) {{
+                                                                const comp = module.default || Object.values(module).find(v => typeof v === 'function');
+                                                                if (comp && typeof comp === 'function') {{
+                                                                    comp['~isClientComponent'] = true;
+                                                                    comp['~clientComponentId'] = {};
+                                                                }}
+                                                            }}
+                                                            return {{ componentId: {}, isClient: true }};
+                                                        }})()"#,
+                                                        component_id_json,
+                                                        component_id_json,
+                                                        component_id_json
+                                                    )
+                                                } else {
+                                                    format!(
+                                                        r#"(function() {{
+                                                            const comp = globalThis[{}];
+                                                            if (comp && typeof comp === 'function') {{
+                                                                comp['~isClientComponent'] = true;
+                                                                comp['~clientComponentId'] = {};
+                                                            }}
+                                                            return {{ componentId: {}, isClient: true }};
+                                                        }})()"#,
+                                                        component_id_json,
+                                                        component_id_json,
+                                                        component_id_json
+                                                    )
+                                                };
 
                                                 if let Err(e) = renderer
                                                     .runtime
@@ -795,6 +818,7 @@ impl ComponentLoader {
                         {
                             Ok(_) => {
                                 if is_client_component {
+                                    let skip_global_binding = component_id.starts_with("lib/");
                                     let component_id_json = serde_json::to_string(&component_id)
                                         .unwrap_or_else(|e| {
                                             error!(
@@ -803,17 +827,35 @@ impl ComponentLoader {
                                             );
                                             "\"\"".to_string()
                                         });
-                                    let mark_client_script = format!(
-                                        r#"(function() {{
-                                            const comp = globalThis[{}];
-                                            if (comp && typeof comp === 'function') {{
-                                                comp['~isClientComponent'] = true;
-                                                comp['~clientComponentId'] = {};
-                                            }}
-                                            return {{ componentId: {}, isClient: true }};
-                                        }})()"#,
-                                        component_id_json, component_id_json, component_id_json
-                                    );
+
+                                    let mark_client_script = if skip_global_binding {
+                                        format!(
+                                            r#"(function() {{
+                                                const module = globalThis['~rsc']?.modules?.[{}];
+                                                if (module) {{
+                                                    const comp = module.default || Object.values(module).find(v => typeof v === 'function');
+                                                    if (comp && typeof comp === 'function') {{
+                                                        comp['~isClientComponent'] = true;
+                                                        comp['~clientComponentId'] = {};
+                                                    }}
+                                                }}
+                                                return {{ componentId: {}, isClient: true }};
+                                            }})()"#,
+                                            component_id_json, component_id_json, component_id_json
+                                        )
+                                    } else {
+                                        format!(
+                                            r#"(function() {{
+                                                const comp = globalThis[{}];
+                                                if (comp && typeof comp === 'function') {{
+                                                    comp['~isClientComponent'] = true;
+                                                    comp['~clientComponentId'] = {};
+                                                }}
+                                                return {{ componentId: {}, isClient: true }};
+                                            }})()"#,
+                                            component_id_json, component_id_json, component_id_json
+                                        )
+                                    };
 
                                     if let Err(e) = renderer
                                         .runtime

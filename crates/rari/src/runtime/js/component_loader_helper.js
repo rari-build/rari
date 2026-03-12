@@ -2,62 +2,69 @@ if (!globalThis['~rari'])
   globalThis['~rari'] = {}
 
 globalThis['~rari'].componentLoader = {
-  async registerComponent(moduleSpecifier, componentId) {
+  async registerComponent(moduleSpecifier, componentId, skipGlobalBinding = false) {
     try {
       const moduleNamespace = await import(moduleSpecifier)
 
       const isApiRoute = componentId.includes('/route') || componentId.startsWith('api/')
       const isServerAction = componentId.startsWith('actions/')
 
-      if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
-        if (componentId in globalThis) {
-          console.warn(
-            `Skipping component ${componentId}: would overwrite existing global`,
-          )
-          return {
-            success: false,
-            error: `Component ${componentId} would overwrite existing global`,
-          }
-        }
-        globalThis[componentId] = moduleNamespace.default
-      }
-      else if (!isApiRoute && !isServerAction) {
-        const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
-        const exportKeys = Object.keys(moduleNamespace).filter(k => k !== 'default')
-
-        if (exports.length > 0) {
-          if (typeof globalThis[componentId] !== 'undefined') {
-            console.warn(
-              `Component ${componentId} has no default export and globalThis[${componentId}] already exists. Preserving existing global. Available exports: ${exportKeys.join(', ')}`,
-            )
+      if (!skipGlobalBinding) {
+        if (moduleNamespace.default && typeof moduleNamespace.default === 'function') {
+          if (componentId in globalThis) {
             return {
               success: false,
               error: `Component ${componentId} would overwrite existing global`,
             }
           }
-          globalThis[componentId] = exports[0]
+          globalThis[componentId] = moduleNamespace.default
         }
-        else {
-          console.error(
-            `Component ${componentId} has no default export and no function exports. Available exports: ${exportKeys.join(', ')}`,
-          )
-          return {
-            success: false,
-            error: `No default export or function exports found in component ${componentId}`,
+        else if (!isApiRoute && !isServerAction) {
+          const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
+
+          if (exports.length > 0) {
+            if (componentId in globalThis) {
+              return {
+                success: false,
+                error: `Component ${componentId} would overwrite existing global`,
+              }
+            }
+            globalThis[componentId] = exports[0]
+          }
+          else {
+            return {
+              success: false,
+              error: `No default export or function exports found in component ${componentId}`,
+            }
           }
         }
       }
 
-      if (!isApiRoute && !isServerAction) {
+      const exportOwners = globalThis['~rari'].exportOwners ||= Object.create(null)
+
+      if (!skipGlobalBinding && !isApiRoute && !isServerAction) {
         for (const [key, value] of Object.entries(moduleNamespace)) {
           if (key !== 'default' && typeof value === 'function') {
-            if (key in globalThis) {
-              console.warn(
-                `Skipping export '${key}' from component ${componentId}: would overwrite existing global`,
-              )
+            if (!(key in globalThis)) {
+              globalThis[key] = value
+              exportOwners[key] = componentId
             }
             else {
-              globalThis[key] = value
+              const existingOwner = Object.hasOwn(exportOwners, key)
+                ? exportOwners[key]
+                : null
+              if (existingOwner) {
+                console.warn(
+                  `Export name collision detected: "${key}" from component "${componentId}" `
+                  + `already came from component "${existingOwner}". Keeping the first-registered value.`,
+                )
+              }
+              else {
+                console.warn(
+                  `Export name collision detected: "${key}" from component "${componentId}" `
+                  + `collides with existing globalThis property. Export will not be registered.`,
+                )
+              }
             }
           }
         }

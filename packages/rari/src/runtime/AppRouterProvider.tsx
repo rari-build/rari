@@ -264,7 +264,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
 
         if (typeof element === 'object' && React.isValidElement(element) && !element.key)
-          // eslint-disable-next-line react/no-clone-element
           return React.cloneElement(element, { key: index })
 
         return element
