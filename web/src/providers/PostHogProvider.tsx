@@ -20,6 +20,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
           person_profiles: 'always',
           capture_pageview: false,
           capture_pageleave: true,
+          defaults: '2026-01-30',
         })
       }
       document.removeEventListener('click', initOnInteraction)
