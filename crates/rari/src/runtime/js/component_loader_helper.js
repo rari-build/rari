@@ -44,6 +44,12 @@ globalThis['~rari'].componentLoader = {
             if (!(key in globalThis)) {
               globalThis[key] = value
             }
+            else {
+              console.warn(
+                `Export name collision detected: "${key}" from component "${componentId}" `
+                + `already exists in globalThis. Keeping the first-registered value.`,
+              )
+            }
           }
         }
       }

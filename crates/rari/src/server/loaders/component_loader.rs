@@ -169,13 +169,20 @@ impl ComponentLoader {
                                             if let Some(success) =
                                                 result.get("success").and_then(|v| v.as_bool())
                                                 && !success
-                                                && !component_id.starts_with("lib/")
                                             {
-                                                error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
+                                                if component_id.starts_with("lib/") {
+                                                    tracing::debug!(
+                                                        "Library component {} registration returned non-success (expected for utilities): {:?}",
+                                                        component_id,
+                                                        result.get("error")
+                                                    );
+                                                } else {
+                                                    error!(
+                                                        "Failed to register component {} to globalThis: {:?}",
+                                                        component_id,
+                                                        result.get("error")
+                                                    );
+                                                }
                                             }
                                         }
                                         Err(e) => {
@@ -718,14 +725,20 @@ impl ComponentLoader {
                                                 .and_then(|v| v.as_bool())
                                                 .unwrap_or(false);
 
-                                            if !registration_succeeded
-                                                && !component_id.starts_with("lib/")
-                                            {
-                                                error!(
-                                                    "Failed to register component {} to globalThis: {:?}",
-                                                    component_id,
-                                                    result.get("error")
-                                                );
+                                            if !registration_succeeded {
+                                                if component_id.starts_with("lib/") {
+                                                    tracing::debug!(
+                                                        "Library component {} registration returned non-success (expected for utilities): {:?}",
+                                                        component_id,
+                                                        result.get("error")
+                                                    );
+                                                } else {
+                                                    error!(
+                                                        "Failed to register component {} to globalThis: {:?}",
+                                                        component_id,
+                                                        result.get("error")
+                                                    );
+                                                }
                                             }
 
                                             if registration_succeeded && is_client_component {
