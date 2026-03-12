@@ -147,10 +147,12 @@ impl ComponentLoader {
                                         }
                                     }
                                 }
-                                if !is_server_action && !component_id.starts_with("lib/") {
+
+                                if !is_server_action {
+                                    let skip_global_binding = component_id.starts_with("lib/");
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
-                                        specifier_json, component_id_json
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
+                                        specifier_json, component_id_json, skip_global_binding
                                     );
 
                                     match renderer
@@ -671,7 +673,8 @@ impl ComponentLoader {
                                         "Failed to evaluate ESM module {} (id: {}): {}",
                                         component_id, module_id, e
                                     );
-                                } else if !component_id.starts_with("lib/") {
+                                } else {
+                                    let skip_global_binding = component_id.starts_with("lib/");
                                     let module_specifier_json =
                                         serde_json::to_string(&module_specifier).map_err(|e| {
                                             error!(
@@ -695,8 +698,10 @@ impl ComponentLoader {
                                             ))
                                         })?;
                                     let registration_script = format!(
-                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
-                                        module_specifier_json, component_id_json
+                                        r#"globalThis['~rari'].componentLoader.registerComponent({}, {}, {})"#,
+                                        module_specifier_json,
+                                        component_id_json,
+                                        skip_global_binding
                                     );
 
                                     match renderer
