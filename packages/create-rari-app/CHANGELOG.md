@@ -1,9 +1,18 @@
+## [create-rari-app@0.4.23] - 2026-03-12
+
+### 🚀 Features
+
+- *(runtime)* Remove suppressions + update to Vite 8
 ## [create-rari-app@0.4.22] - 2026-03-11
 
 ### 🐛 Bug Fixes
 
 - *(runtime)* Improve component loading and JSON serialization
 - *(runtime)* Add serialization error handling and safety checks
+
+### 💼 Other
+
+- Create-rari-app@0.4.22
 
 ### ⚙️ Miscellaneous Tasks
 
