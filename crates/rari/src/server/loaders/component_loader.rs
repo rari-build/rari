@@ -147,8 +147,7 @@ impl ComponentLoader {
                                         }
                                     }
                                 }
-
-                                if !is_server_action {
+                                if !is_server_action && !component_id.starts_with("lib/") {
                                     let registration_script = format!(
                                         r#"globalThis['~rari'].componentLoader.registerComponent({}, {})"#,
                                         specifier_json, component_id_json
@@ -170,19 +169,11 @@ impl ComponentLoader {
                                                 result.get("success").and_then(|v| v.as_bool())
                                                 && !success
                                             {
-                                                if component_id.starts_with("lib/") {
-                                                    tracing::debug!(
-                                                        "Library component {} registration returned non-success (expected for utilities): {:?}",
-                                                        component_id,
-                                                        result.get("error")
-                                                    );
-                                                } else {
-                                                    error!(
-                                                        "Failed to register component {} to globalThis: {:?}",
-                                                        component_id,
-                                                        result.get("error")
-                                                    );
-                                                }
+                                                error!(
+                                                    "Failed to register component {} to globalThis: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
                                             }
                                         }
                                         Err(e) => {
@@ -680,7 +671,7 @@ impl ComponentLoader {
                                         "Failed to evaluate ESM module {} (id: {}): {}",
                                         component_id, module_id, e
                                     );
-                                } else {
+                                } else if !component_id.starts_with("lib/") {
                                     let module_specifier_json =
                                         serde_json::to_string(&module_specifier).map_err(|e| {
                                             error!(
@@ -726,19 +717,11 @@ impl ComponentLoader {
                                                 .unwrap_or(false);
 
                                             if !registration_succeeded {
-                                                if component_id.starts_with("lib/") {
-                                                    tracing::debug!(
-                                                        "Library component {} registration returned non-success (expected for utilities): {:?}",
-                                                        component_id,
-                                                        result.get("error")
-                                                    );
-                                                } else {
-                                                    error!(
-                                                        "Failed to register component {} to globalThis: {:?}",
-                                                        component_id,
-                                                        result.get("error")
-                                                    );
-                                                }
+                                                error!(
+                                                    "Failed to register component {} to globalThis: {:?}",
+                                                    component_id,
+                                                    result.get("error")
+                                                );
                                             }
 
                                             if registration_succeeded && is_client_component {

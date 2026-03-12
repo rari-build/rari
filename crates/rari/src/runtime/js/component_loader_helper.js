@@ -38,16 +38,19 @@ globalThis['~rari'].componentLoader = {
         }
       }
 
+      const exportOwners = globalThis['~rari'].exportOwners ||= {}
+
       if (!isApiRoute && !isServerAction) {
         for (const [key, value] of Object.entries(moduleNamespace)) {
           if (key !== 'default' && typeof value === 'function') {
             if (!(key in globalThis)) {
               globalThis[key] = value
+              exportOwners[key] = componentId
             }
-            else {
+            else if (exportOwners[key]) {
               console.warn(
                 `Export name collision detected: "${key}" from component "${componentId}" `
-                + `already exists in globalThis. Keeping the first-registered value.`,
+                + `already came from component "${exportOwners[key]}". Keeping the first-registered value.`,
               )
             }
           }
