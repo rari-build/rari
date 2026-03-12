@@ -740,19 +740,35 @@ impl ComponentLoader {
                                                     );
                                                     "\"\"".to_string()
                                                 });
-                                                let mark_client_script = format!(
-                                                    r#"(function() {{
-                                                        const comp = globalThis[{}];
-                                                        if (comp && typeof comp === 'function') {{
-                                                            comp['~isClientComponent'] = true;
-                                                            comp['~clientComponentId'] = {};
-                                                        }}
-                                                        return {{ componentId: {}, isClient: true }};
-                                                    }})()"#,
-                                                    component_id_json,
-                                                    component_id_json,
-                                                    component_id_json
-                                                );
+                                                let mark_client_script = if skip_global_binding {
+                                                    format!(
+                                                        r#"(function() {{
+                                                            const module = globalThis['~rsc']?.modules?.[{}];
+                                                            if (module) {{
+                                                                module['~isClientComponent'] = true;
+                                                                module['~clientComponentId'] = {};
+                                                            }}
+                                                            return {{ componentId: {}, isClient: true }};
+                                                        }})()"#,
+                                                        component_id_json,
+                                                        component_id_json,
+                                                        component_id_json
+                                                    )
+                                                } else {
+                                                    format!(
+                                                        r#"(function() {{
+                                                            const comp = globalThis[{}];
+                                                            if (comp && typeof comp === 'function') {{
+                                                                comp['~isClientComponent'] = true;
+                                                                comp['~clientComponentId'] = {};
+                                                            }}
+                                                            return {{ componentId: {}, isClient: true }};
+                                                        }})()"#,
+                                                        component_id_json,
+                                                        component_id_json,
+                                                        component_id_json
+                                                    )
+                                                };
 
                                                 if let Err(e) = renderer
                                                     .runtime

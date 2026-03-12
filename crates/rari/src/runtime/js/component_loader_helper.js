@@ -23,7 +23,7 @@ globalThis['~rari'].componentLoader = {
           const exports = Object.values(moduleNamespace).filter(v => typeof v === 'function')
 
           if (exports.length > 0) {
-            if (typeof globalThis[componentId] !== 'undefined') {
+            if (componentId in globalThis) {
               return {
                 success: false,
                 error: `Component ${componentId} would overwrite existing global`,
