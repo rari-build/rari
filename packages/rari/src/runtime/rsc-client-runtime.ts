@@ -581,7 +581,6 @@ class RscClient {
           if (props?.children) {
             const child = convertRscToReact(props.children)
             if (Array.isArray(child)) {
-              // eslint-disable-next-line react/no-clone-element
               processedProps.children = child.map((c, i) => isValidElement(c) ? cloneElement(c, { key: (c.key ?? i) }) : c)
             }
             else {
@@ -788,7 +787,6 @@ class RscClient {
           if (props && props.children) {
             const updatedChildren = renderWithBoundaryUpdates(props.children)
             if (updatedChildren !== props.children) {
-              // eslint-disable-next-line react/no-clone-element
               return cloneElement(element, { ...props, children: updatedChildren } as any)
             }
           }

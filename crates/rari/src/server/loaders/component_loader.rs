@@ -169,6 +169,7 @@ impl ComponentLoader {
                                             if let Some(success) =
                                                 result.get("success").and_then(|v| v.as_bool())
                                                 && !success
+                                                && !component_id.starts_with("lib/")
                                             {
                                                 error!(
                                                     "Failed to register component {} to globalThis: {:?}",
@@ -717,7 +718,9 @@ impl ComponentLoader {
                                                 .and_then(|v| v.as_bool())
                                                 .unwrap_or(false);
 
-                                            if !registration_succeeded {
+                                            if !registration_succeeded
+                                                && !component_id.starts_with("lib/")
+                                            {
                                                 error!(
                                                     "Failed to register component {} to globalThis: {:?}",
                                                     component_id,
