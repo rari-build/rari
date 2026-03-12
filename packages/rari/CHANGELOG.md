@@ -1,3 +1,8 @@
+## [rari@0.10.16] - 2026-03-12
+
+### 🚀 Features
+
+- *(runtime)* Remove suppressions + update to Vite 8
 ## [rari@0.10.15] - 2026-03-11
 
 ### 🐛 Bug Fixes
@@ -5,6 +10,10 @@
 - *(runtime)* Improve error handling and safety checks in JS helpers
 - *(runtime)* Improve server action registration safety and namespacing
 - *(runtime)* Improve server function namespacing and lookup
+
+### 💼 Other
+
+- Rari@0.10.15
 
 ### 🚜 Refactor
 
