@@ -12,8 +12,9 @@ interface TodoListProps {
 export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos)
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
-  const todosKey = initialTodos.map(t => t.id).join(',')
+  const todosKey = initialTodos.map(t => `${t.id}:${t.completed}:${t.text}`).join('|')
   const prevKeyRef = useRef(todosKey)
 
   if (prevKeyRef.current !== todosKey) {
@@ -27,9 +28,15 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
       formData.append('id', id)
       const result = await toggleTodo(formData)
       if (result.success && result.todos) {
+        setError(null)
         setTodos(result.todos)
         if (onUpdate)
           onUpdate()
+      }
+      else {
+        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        setError(errorMsg)
+        console.error('Toggle todo failed:', errorMsg)
       }
     })
   }
@@ -40,9 +47,15 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
       formData.append('id', id)
       const result = await deleteTodo(formData)
       if (result.success && result.todos) {
+        setError(null)
         setTodos(result.todos)
         if (onUpdate)
           onUpdate()
+      }
+      else {
+        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        setError(errorMsg)
+        console.error('Delete todo failed:', errorMsg)
       }
     })
   }
@@ -51,9 +64,15 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
     startTransition(async () => {
       const result = await clearCompleted()
       if (result.success && result.todos) {
+        setError(null)
         setTodos(result.todos)
         if (onUpdate)
           onUpdate()
+      }
+      else {
+        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        setError(errorMsg)
+        console.error('Clear completed failed:', errorMsg)
       }
     })
   }
@@ -62,9 +81,15 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
     startTransition(async () => {
       const result = await resetTodos()
       if (result.success && result.todos) {
+        setError(null)
         setTodos(result.todos)
         if (onUpdate)
           onUpdate()
+      }
+      else {
+        const errorMsg = ('error' in result && typeof result.error === 'string') ? result.error : 'Action failed'
+        setError(errorMsg)
+        console.error('Reset todos failed:', errorMsg)
       }
     })
   }
@@ -73,6 +98,7 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
     <div data-testid="todo-list">
       <h2>Todo List</h2>
       <div data-testid="transition-state">{isPending ? 'pending' : 'idle'}</div>
+      {error && <div data-testid="error-message" role="alert">{error}</div>}
       <div data-testid="todo-count">
         Total:
         {' '}

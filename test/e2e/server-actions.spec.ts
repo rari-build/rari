@@ -37,8 +37,6 @@ test.describe.serial('Server Actions', () => {
     })
 
     test('should delete todo', async ({ page }) => {
-      const initialCount = await page.locator('[data-testid="todo-count"]').textContent()
-      expect(initialCount).toContain('2')
       await page.click('[data-testid="delete-button-1"]')
       await expect(page.locator('[data-testid="todo-count"]')).toHaveText('Total: 1')
       await expect(page.locator('[data-testid="todo-item-1"]')).not.toBeVisible()

@@ -798,7 +798,7 @@ impl LayoutRenderer {
             .collect();
 
         let error_boundary = route_match.error.as_ref().map(|error| {
-            let component_id = utils::create_component_id(&error.file_path);
+            let component_id = format!("src/app/{}", error.file_path);
             super::route_composer::ErrorBoundaryInfo {
                 component_id,
                 file_path: error.file_path.clone(),

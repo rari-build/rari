@@ -15,6 +15,13 @@ use std::time::SystemTime;
 use tracing::error;
 use urlencoding::decode;
 
+fn parse_decoded_path_segments(path: &str) -> Vec<String> {
+    path.split('/')
+        .filter(|s| !s.is_empty())
+        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+        .collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRouteEntry {
     pub path: String,
@@ -134,11 +141,7 @@ impl ApiRouteHandler {
         path: &str,
     ) -> Option<FxHashMap<String, String>> {
         let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
-        let path_segments: Vec<String> = path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
-            .collect();
+        let path_segments = parse_decoded_path_segments(path);
 
         let mut params = FxHashMap::default();
         let mut route_idx = 0;
