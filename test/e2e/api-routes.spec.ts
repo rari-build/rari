@@ -1,11 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-const BASE_URL = 'http://localhost:3000'
-
 test.describe('API Routes', () => {
   test.describe('Basic HTTP Methods', () => {
     test('should handle GET request', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/hello`)
+      const response = await request.get(`/api/hello`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({ message: 'Hello from API!' })
@@ -13,7 +11,7 @@ test.describe('API Routes', () => {
 
     test('should handle POST request with JSON body', async ({ request }) => {
       const payload = { name: 'Test User', age: 25 }
-      const response = await request.post(`${BASE_URL}/api/hello`, {
+      const response = await request.post(`/api/hello`, {
         data: payload,
       })
       expect(response.status()).toBe(201)
@@ -23,7 +21,7 @@ test.describe('API Routes', () => {
 
     test('should handle PUT request', async ({ request }) => {
       const payload = { name: 'Updated User' }
-      const response = await request.put(`${BASE_URL}/api/hello`, {
+      const response = await request.put(`/api/hello`, {
         data: payload,
       })
       expect(response.status()).toBe(200)
@@ -32,7 +30,7 @@ test.describe('API Routes', () => {
     })
 
     test('should handle DELETE request', async ({ request }) => {
-      const response = await request.delete(`${BASE_URL}/api/hello`)
+      const response = await request.delete(`/api/hello`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({ deleted: true })
@@ -40,7 +38,7 @@ test.describe('API Routes', () => {
 
     test('should handle PATCH request', async ({ request }) => {
       const payload = { status: 'active' }
-      const response = await request.patch(`${BASE_URL}/api/hello`, {
+      const response = await request.patch(`/api/hello`, {
         data: payload,
       })
       expect(response.status()).toBe(200)
@@ -51,7 +49,7 @@ test.describe('API Routes', () => {
 
   test.describe('Dynamic Route Params', () => {
     test('should handle single dynamic segment', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/users/123`)
+      const response = await request.get(`/api/users/123`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({
@@ -64,7 +62,7 @@ test.describe('API Routes', () => {
     test('should handle dynamic segment with special characters', async ({
       request,
     }) => {
-      const response = await request.get(`${BASE_URL}/api/users/user-abc-123`)
+      const response = await request.get(`/api/users/user-abc-123`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data.id).toBe('user-abc-123')
@@ -72,7 +70,7 @@ test.describe('API Routes', () => {
 
     test('should handle PUT with dynamic segment', async ({ request }) => {
       const payload = { name: 'John Doe', email: 'john@example.com' }
-      const response = await request.put(`${BASE_URL}/api/users/456`, {
+      const response = await request.put(`/api/users/456`, {
         data: payload,
       })
       expect(response.status()).toBe(200)
@@ -85,7 +83,7 @@ test.describe('API Routes', () => {
     })
 
     test('should handle DELETE with dynamic segment', async ({ request }) => {
-      const response = await request.delete(`${BASE_URL}/api/users/789`)
+      const response = await request.delete(`/api/users/789`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({
@@ -98,7 +96,7 @@ test.describe('API Routes', () => {
   test.describe('Multiple Dynamic Segments', () => {
     test('should handle multiple dynamic params', async ({ request }) => {
       const response = await request.get(
-        `${BASE_URL}/api/posts/tech/article-123`,
+        `/api/posts/tech/article-123`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -111,7 +109,7 @@ test.describe('API Routes', () => {
 
     test('should handle URL-encoded params', async ({ request }) => {
       const response = await request.get(
-        `${BASE_URL}/api/posts/web%20dev/my%20post`,
+        `/api/posts/web%20dev/my%20post`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -122,7 +120,7 @@ test.describe('API Routes', () => {
 
   test.describe('Catch-all Routes', () => {
     test('should handle catch-all with single segment', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/files/document.pdf`)
+      const response = await request.get(`/api/files/document.pdf`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({
@@ -136,7 +134,7 @@ test.describe('API Routes', () => {
       request,
     }) => {
       const response = await request.get(
-        `${BASE_URL}/api/files/folder/subfolder/file.txt`,
+        `/api/files/folder/subfolder/file.txt`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -151,7 +149,7 @@ test.describe('API Routes', () => {
       request,
     }) => {
       const response = await request.get(
-        `${BASE_URL}/api/files/my-file_v2.0.txt`,
+        `/api/files/my-file_v2.0.txt`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -161,7 +159,7 @@ test.describe('API Routes', () => {
 
   test.describe('Optional Catch-all Routes', () => {
     test('should handle optional catch-all root', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/docs`)
+      const response = await request.get(`/api/docs`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({
@@ -176,7 +174,7 @@ test.describe('API Routes', () => {
     test('should handle optional catch-all with single segment', async ({
       request,
     }) => {
-      const response = await request.get(`${BASE_URL}/api/docs/intro`)
+      const response = await request.get(`/api/docs/intro`)
       expect(response.status()).toBe(200)
       const data = await response.json()
       expect(data).toEqual({
@@ -192,7 +190,7 @@ test.describe('API Routes', () => {
       request,
     }) => {
       const response = await request.get(
-        `${BASE_URL}/api/docs/guide/getting-started`,
+        `/api/docs/guide/getting-started`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -207,7 +205,7 @@ test.describe('API Routes', () => {
 
     test('should handle query parameters', async ({ request }) => {
       const response = await request.get(
-        `${BASE_URL}/api/docs/intro?format=markdown`,
+        `/api/docs/intro?format=markdown`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -217,21 +215,21 @@ test.describe('API Routes', () => {
 
   test.describe('Error Handling', () => {
     test('should return 404 error', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/error?type=404`)
+      const response = await request.get(`/api/error?type=404`)
       expect(response.status()).toBe(404)
       const data = await response.json()
       expect(data).toEqual({ error: 'Not found' })
     })
 
     test('should return 500 error', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/error?type=500`)
+      const response = await request.get(`/api/error?type=500`)
       expect(response.status()).toBe(500)
       const data = await response.json()
       expect(data).toEqual({ error: 'Internal server error' })
     })
 
     test('should handle validation errors', async ({ request }) => {
-      const response = await request.post(`${BASE_URL}/api/error`, {
+      const response = await request.post(`/api/error`, {
         data: { email: 'test@example.com' },
       })
       expect(response.status()).toBe(400)
@@ -242,12 +240,12 @@ test.describe('API Routes', () => {
 
   test.describe('Headers and Content Types', () => {
     test('should return correct content-type header', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/hello`)
+      const response = await request.get(`/api/hello`)
       expect(response.headers()['content-type']).toContain('application/json')
     })
 
     test('should handle custom headers in request', async ({ request }) => {
-      const response = await request.get(`${BASE_URL}/api/hello`, {
+      const response = await request.get(`/api/hello`, {
         headers: {
           'X-Custom-Header': 'test-value',
         },
@@ -259,7 +257,7 @@ test.describe('API Routes', () => {
   test.describe('Query Parameters', () => {
     test('should handle query parameters', async ({ request }) => {
       const response = await request.get(
-        `${BASE_URL}/api/docs?format=json&version=v2`,
+        `/api/docs?format=json&version=v2`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()
@@ -268,7 +266,7 @@ test.describe('API Routes', () => {
 
     test('should handle encoded query parameters', async ({ request }) => {
       const response = await request.get(
-        `${BASE_URL}/api/docs?format=${encodeURIComponent('markdown+html')}`,
+        `/api/docs?format=${encodeURIComponent('markdown+html')}`,
       )
       expect(response.status()).toBe(200)
       const data = await response.json()

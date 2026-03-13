@@ -1,7 +1,7 @@
 import type { Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
-import { hasRouteCache, waitForRariRuntime } from './shared/mobile-helpers'
+import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should load pages without RSC parsing errors', async ({ page }) => {
@@ -278,22 +278,14 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    const hasRariRuntime = await page.evaluate(() => {
-      return typeof (window as any)['~rari'] !== 'undefined'
-    })
-
-    expect(hasRariRuntime).toBe(true)
+    expect(await hasRariRuntime(page)).toBe(true)
   })
 
   test('should have ClientRouter injected', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    const hasClientRouter = await page.evaluate(() => {
-      return typeof (window as any)['~rari']?.ClientRouter !== 'undefined'
-    })
-
-    expect(hasClientRouter).toBe(true)
+    expect(await hasClientRouter(page)).toBe(true)
   })
 
   test('should have route info cache', async ({ page }) => {

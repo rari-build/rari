@@ -1,13 +1,11 @@
 import { expect, test } from '@playwright/test'
 
-const BASE_URL = 'http://localhost:3000'
-
 test.describe('Error Handling', () => {
   test.describe('Error Boundaries', () => {
     test('should catch component errors with error boundary', async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
 
       await expect(page.locator('[data-testid="error-test-page"]')).toBeVisible()
 
@@ -22,7 +20,7 @@ test.describe('Error Handling', () => {
     })
 
     test('should allow error recovery with reset button', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
 
       await page.click('[data-testid="trigger-error-button"]')
       await expect(
@@ -37,7 +35,7 @@ test.describe('Error Handling', () => {
     })
 
     test('should display error message in error boundary', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
 
       await page.click('[data-testid="trigger-error-button"]')
 
@@ -49,7 +47,7 @@ test.describe('Error Handling', () => {
 
   test.describe('Layout Error Boundaries', () => {
     test('should catch layout errors', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-layout`)
+      await page.goto(`/error-layout`)
 
       await expect(page.locator('[data-testid="error-layout"]')).toBeVisible()
       await expect(
@@ -67,7 +65,7 @@ test.describe('Error Handling', () => {
     })
 
     test('should allow layout error recovery', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-layout`)
+      await page.goto(`/error-layout`)
 
       await page.click('[data-testid="trigger-layout-error-button"]')
       await expect(
@@ -84,7 +82,7 @@ test.describe('Error Handling', () => {
 
   test.describe('Nested Error Boundaries', () => {
     test('should catch errors in nested routes', async ({ page }) => {
-      await page.goto(`${BASE_URL}/nested-error/child`)
+      await page.goto(`/nested-error/child`)
 
       await expect(
         page.locator('[data-testid="nested-error-child-page"]'),
@@ -103,7 +101,7 @@ test.describe('Error Handling', () => {
     test('should isolate errors to nearest error boundary', async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}/nested-error/child`)
+      await page.goto(`/nested-error/child`)
 
       await page.click('[data-testid="trigger-nested-error-button"]')
 
@@ -116,7 +114,7 @@ test.describe('Error Handling', () => {
     })
 
     test('should allow nested error recovery', async ({ page }) => {
-      await page.goto(`${BASE_URL}/nested-error/child`)
+      await page.goto(`/nested-error/child`)
 
       await page.click('[data-testid="trigger-nested-error-button"]')
       await expect(
@@ -135,20 +133,20 @@ test.describe('Error Handling', () => {
     test('should show custom 404 page for non-existent routes', async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}/this-page-does-not-exist`)
+      await page.goto(`/this-page-does-not-exist`)
 
       await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible()
       await expect(page.locator('h1')).toContainText('404')
     })
 
     test('should have working home link on 404 page', async ({ page }) => {
-      await page.goto(`${BASE_URL}/non-existent-route`)
+      await page.goto(`/non-existent-route`)
 
       await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible()
 
       await page.click('a[href="/"]')
 
-      await page.waitForURL(`${BASE_URL}/`)
+      await page.waitForURL(`/`)
       await expect(page.locator('h1')).toContainText('Test App Home')
     })
 
@@ -156,7 +154,7 @@ test.describe('Error Handling', () => {
       request,
     }) => {
       const response = await request.get(
-        `${BASE_URL}/definitely-does-not-exist`,
+        `/definitely-does-not-exist`,
       )
       expect(response.status()).toBe(404)
     })
@@ -164,7 +162,7 @@ test.describe('Error Handling', () => {
     test('should show 404 for deeply nested non-existent routes', async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}/a/b/c/d/e/f/non-existent`)
+      await page.goto(`/a/b/c/d/e/f/non-existent`)
 
       await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible()
     })
@@ -172,25 +170,25 @@ test.describe('Error Handling', () => {
 
   test.describe('Error Propagation', () => {
     test('should not affect other routes after error', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
       await page.click('[data-testid="trigger-error-button"]')
       await expect(
         page.locator('[data-testid="error-boundary"]'),
       ).toBeVisible()
 
-      await page.goto(`${BASE_URL}/`)
+      await page.goto(`/`)
 
       await expect(page.locator('h1')).toContainText('Test App Home')
     })
 
     test('should handle navigation from error state', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
       await page.click('[data-testid="trigger-error-button"]')
       await expect(
         page.locator('[data-testid="error-boundary"]'),
       ).toBeVisible()
 
-      await page.goto(`${BASE_URL}/about`)
+      await page.goto(`/about`)
 
       await expect(page.locator('h1')).toContainText('About')
     })
@@ -198,7 +196,7 @@ test.describe('Error Handling', () => {
 
   test.describe('Error Boundary Rendering', () => {
     test('should render error boundary UI correctly', async ({ page }) => {
-      await page.goto(`${BASE_URL}/error-test`)
+      await page.goto(`/error-test`)
       await page.click('[data-testid="trigger-error-button"]')
 
       const errorBoundary = page.locator('[data-testid="error-boundary"]')
@@ -213,7 +211,7 @@ test.describe('Error Handling', () => {
     test('should render layout error boundary UI correctly', async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}/error-layout`)
+      await page.goto(`/error-layout`)
       await page.click('[data-testid="trigger-layout-error-button"]')
 
       const layoutErrorBoundary = page.locator(

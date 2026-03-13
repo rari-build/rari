@@ -9,3 +9,15 @@ export async function hasRouteCache(page: Page): Promise<boolean> {
 export async function waitForRariRuntime(page: Page): Promise<void> {
   await page.waitForFunction(() => typeof (window as any)['~rari'] !== 'undefined')
 }
+
+export async function hasRariRuntime(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    return typeof (window as any)['~rari'] !== 'undefined'
+  })
+}
+
+export async function hasClientRouter(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    return typeof (window as any)['~rari']?.ClientRouter !== 'undefined'
+  })
+}
