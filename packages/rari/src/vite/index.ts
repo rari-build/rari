@@ -1704,6 +1704,8 @@ const ${componentName} = registerClientReference(
         return 'virtual:react-server-dom-rari-client.ts'
       if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
         return 'virtual:app-router-provider.tsx'
+      if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
+        return 'virtual:error-boundary-wrapper.tsx'
       if (id === './DefaultLoadingIndicator' || id === './DefaultLoadingIndicator.tsx')
         return 'virtual:default-loading-indicator.tsx'
       if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
@@ -1801,6 +1803,7 @@ const ${componentName} = registerClientReference(
 
         const externalClientComponents = [
           { path: 'rari/image', exports: ['Image'] },
+          { path: 'virtual:error-boundary-wrapper.tsx', exports: ['ErrorBoundaryWrapper'] },
         ]
 
         const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
@@ -1941,6 +1944,85 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         }
 
         return 'export class LoadingErrorBoundary extends React.Component { render() { return this.props.children; } }'
+      }
+
+      if (id === 'virtual:error-boundary-wrapper.tsx') {
+        const possiblePaths = [
+          path.join(process.cwd(), 'packages/rari/dist/runtime/ErrorBoundaryWrapper.mjs'),
+          path.join(process.cwd(), 'node_modules/rari/dist/runtime/ErrorBoundaryWrapper.mjs'),
+          path.join(process.cwd(), 'packages/rari/src/runtime/ErrorBoundaryWrapper.tsx'),
+        ]
+
+        for (const possiblePath of possiblePaths) {
+          if (fs.existsSync(possiblePath)) {
+            const content = await loadRuntimeFile(path.basename(possiblePath))
+            if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
+              return `import * as React from 'react';\n${content}`
+            }
+
+            return content
+          }
+        }
+
+        return `import * as React from 'react';
+export class ErrorBoundaryWrapper extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, ErrorComponent: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[rari] Error boundary caught error:', error, errorInfo);
+
+    const errorComponentId = this.props.errorComponentId;
+    if (errorComponentId && typeof window !== 'undefined') {
+      const globalThis = window;
+      const componentInfo = globalThis['~clientComponents']?.[errorComponentId];
+
+      if (componentInfo) {
+        if (componentInfo.component) {
+          this.setState({ ErrorComponent: componentInfo.component });
+        } else if (componentInfo.loader && !componentInfo.loading) {
+          componentInfo.loading = true;
+          componentInfo.loader()
+            .then((module) => {
+              const component = module.default || module;
+              componentInfo.component = component;
+              componentInfo.registered = true;
+              componentInfo.loading = false;
+              this.setState({ ErrorComponent: component });
+            })
+            .catch((loadError) => {
+              componentInfo.loading = false;
+              console.error('[rari] Failed to load error component ' + errorComponentId + ':', loadError);
+            });
+        }
+      }
+    }
+  }
+
+  reset = () => {
+    this.setState({ hasError: false, error: null, ErrorComponent: null });
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const ErrorComponent = this.state.ErrorComponent;
+      if (ErrorComponent) {
+        return React.createElement(ErrorComponent, { error: this.state.error, reset: this.reset });
+      }
+      return React.createElement('div', { style: { padding: '20px', background: '#fee', border: '2px solid #f00' } },
+        React.createElement('h2', null, 'Error'),
+        React.createElement('p', null, this.state.error.message)
+      );
+    }
+    return this.props.children;
+  }
+}`
       }
 
       if (id === 'virtual:rsc-integration.ts') {

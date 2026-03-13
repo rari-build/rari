@@ -557,6 +557,7 @@
     {
       "files": [
         "examples/**/src/app/**",
+        "test/fixtures/**/src/app/**",
         "web/src/app/**"
       ],
       "rules": {

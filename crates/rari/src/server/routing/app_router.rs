@@ -5,6 +5,7 @@ use crate::server::routing::types::{ParamValue, RouteSegment};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use urlencoding::decode;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppRouteEntry {
@@ -164,8 +165,10 @@ impl AppRouter {
                 let param_name = &route_seg[5..route_seg.len() - 2];
 
                 if path_idx < path_segments.len() {
-                    let remaining: Vec<String> =
-                        path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
+                    let remaining: Vec<String> = path_segments[path_idx..]
+                        .iter()
+                        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+                        .collect();
                     params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
                 }
 
@@ -179,8 +182,10 @@ impl AppRouter {
                     return None;
                 }
 
-                let remaining: Vec<String> =
-                    path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
+                let remaining: Vec<String> = path_segments[path_idx..]
+                    .iter()
+                    .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+                    .collect();
                 params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
 
                 return Some(params);
@@ -192,10 +197,10 @@ impl AppRouter {
                 }
 
                 let param_name = &route_seg[1..route_seg.len() - 1];
-                params.insert(
-                    param_name.to_string(),
-                    ParamValue::Single(path_segments[path_idx].to_string()),
-                );
+                let decoded_value = decode(path_segments[path_idx])
+                    .unwrap_or_else(|_| path_segments[path_idx].to_string().into())
+                    .into_owned();
+                params.insert(param_name.to_string(), ParamValue::Single(decoded_value));
 
                 path_idx += 1;
                 route_idx += 1;

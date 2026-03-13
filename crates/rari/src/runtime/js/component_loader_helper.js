@@ -1,3 +1,4 @@
+/* eslint-disable node/prefer-global/process */
 if (!globalThis['~rari'])
   globalThis['~rari'] = {}
 
@@ -43,13 +44,24 @@ globalThis['~rari'].componentLoader = {
       const exportOwners = globalThis['~rari'].exportOwners ||= Object.create(null)
 
       if (!skipGlobalBinding && !isApiRoute && !isServerAction) {
+        const isDebugLogging = (() => {
+          try {
+            const rustLog = globalThis.Deno?.env?.get('RUST_LOG')
+              || globalThis.process?.env?.RUST_LOG
+            return rustLog === 'debug' || rustLog === 'trace'
+          }
+          catch {
+            return false
+          }
+        })()
+
         for (const [key, value] of Object.entries(moduleNamespace)) {
           if (key !== 'default' && typeof value === 'function') {
             if (!(key in globalThis)) {
               globalThis[key] = value
               exportOwners[key] = componentId
             }
-            else {
+            else if (isDebugLogging) {
               const existingOwner = Object.hasOwn(exportOwners, key)
                 ? exportOwners[key]
                 : null

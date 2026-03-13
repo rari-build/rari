@@ -87,7 +87,18 @@ pub async fn static_or_spa_handler(
         }
     }
     if path.contains('.') {
-        return Err(StatusCode::NOT_FOUND);
+        let last_segment = path.rsplit('/').next().unwrap_or(&path);
+        if last_segment.contains('.') {
+            let parts: Vec<&str> = last_segment.split('.').collect();
+            if parts.len() >= 2
+                && let Some(extension) = parts.last()
+                && extension.len() >= 2
+                && extension.len() <= 5
+                && extension.chars().all(|c| c.is_alphanumeric())
+            {
+                return Err(StatusCode::NOT_FOUND);
+            }
+        }
     }
 
     let route_path = if path.is_empty() { "/" } else { &format!("/{}", path) };

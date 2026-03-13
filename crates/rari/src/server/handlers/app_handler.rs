@@ -808,32 +808,47 @@ pub async fn handle_app_route(
                 }
             }
 
-            use crate::server::utils::path_validation::validate_safe_path;
+            let last_segment =
+                path_without_leading_slash.rsplit('/').next().unwrap_or(path_without_leading_slash);
+            let looks_like_file = if last_segment.contains('.') {
+                let parts: Vec<&str> = last_segment.split('.').collect();
+                parts.len() >= 2
+                    && parts.last().is_some_and(|ext| {
+                        ext.len() >= 2 && ext.len() <= 5 && ext.chars().all(|c| c.is_alphanumeric())
+                    })
+            } else {
+                false
+            };
 
-            let file_path =
-                match validate_safe_path(state.config.public_dir(), path_without_leading_slash) {
-                    Ok(path) => path,
-                    Err(_) => return Err(StatusCode::NOT_FOUND),
-                };
+            if looks_like_file {
+                use crate::server::utils::path_validation::validate_safe_path;
 
-            if file_path.is_file() {
-                match std::fs::read(&file_path) {
-                    Ok(content) => {
-                        let content_type = get_content_type(path_without_leading_slash);
-                        let cache_control = &state.config.caching.static_files;
-                        return Ok(Response::builder()
-                            .header("content-type", content_type)
-                            .header("cache-control", cache_control)
-                            .body(Body::from(content))
-                            .expect("Valid static file response"));
-                    }
-                    Err(e) => {
-                        error!("Failed to read static file {}: {}", file_path.display(), e);
+                let file_path =
+                    match validate_safe_path(state.config.public_dir(), path_without_leading_slash)
+                    {
+                        Ok(path) => path,
+                        Err(_) => return Err(StatusCode::NOT_FOUND),
+                    };
+
+                if file_path.is_file() {
+                    match std::fs::read(&file_path) {
+                        Ok(content) => {
+                            let content_type = get_content_type(path_without_leading_slash);
+                            let cache_control = &state.config.caching.static_files;
+                            return Ok(Response::builder()
+                                .header("content-type", content_type)
+                                .header("cache-control", cache_control)
+                                .body(Body::from(content))
+                                .expect("Valid static file response"));
+                        }
+                        Err(e) => {
+                            error!("Failed to read static file {}: {}", file_path.display(), e);
+                        }
                     }
                 }
-            }
 
-            return Err(StatusCode::NOT_FOUND);
+                return Err(StatusCode::NOT_FOUND);
+            }
         }
     }
 

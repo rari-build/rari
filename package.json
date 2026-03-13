@@ -10,14 +10,12 @@
     "lint": "pnpm -r run lint && oxlint crates/ && eslint crates/ packages/ web/ examples/ test/",
     "lint:fix": "pnpm -r run lint:fix && oxlint crates/ --fix && eslint crates/ packages/ web/ examples/ test/ --fix",
     "lint:knip": "knip",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest",
+    "test:unit:run": "vitest run",
+    "test:unit:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:mobile": "playwright test --project \"Mobile Chrome\"",
-    "test:e2e:smoke": "playwright test smoke.spec.ts",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:smoke": "playwright test smoke.spec.ts"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",

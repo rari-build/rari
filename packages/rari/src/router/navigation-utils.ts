@@ -40,14 +40,14 @@ export function matchRouteParams(
 
       case 'dynamic':
         if (segment.param)
-          params[segment.param] = actualSegments[actualIndex]
+          params[segment.param] = decodeURIComponent(actualSegments[actualIndex])
         actualIndex++
         break
 
       case 'catch-all':
       case 'optional-catch-all':
         if (segment.param)
-          params[segment.param] = actualSegments.slice(actualIndex)
+          params[segment.param] = actualSegments.slice(actualIndex).map(s => decodeURIComponent(s))
         actualIndex = actualSegments.length
         break
     }

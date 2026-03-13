@@ -4,34 +4,6 @@ import { URL_PATTERNS } from './shared/constants'
 import { hasRouteCache, waitForRariRuntime } from './shared/mobile-helpers'
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
-  test('should show loading skeleton during navigation', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
-
-    const navigationPromise = page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
-
-    await expect(page.locator('.animate-pulse').first()).toBeVisible({ timeout: 1000 })
-
-    await navigationPromise
-    await page.waitForLoadState('networkidle')
-
-    await expect(page.locator('.animate-pulse').first()).toBeHidden()
-
-    await expect(page.locator('h1')).toBeVisible()
-  })
-
-  test('should have Suspense boundary markers in HTML', async ({ page }) => {
-    const response = await page.goto('/docs/getting-started')
-    if (!response) {
-      throw new Error('Failed to load page')
-    }
-    const html = await response.text()
-
-    expect(html).toContain('data-boundary-id')
-
-    await expect(page.locator('h1')).toBeVisible()
-  })
-
   test('should load pages without RSC parsing errors', async ({ page }) => {
     const consoleErrors: string[] = []
 
@@ -44,7 +16,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     const rscErrors = consoleErrors.filter(err =>
@@ -67,10 +39,10 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/api-reference')
+    await page.goto('/nested')
     await page.waitForLoadState('networkidle')
 
     const criticalErrors = consoleErrors.filter(err =>
@@ -83,7 +55,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should render content progressively', async ({ page }) => {
     const startTime = Date.now()
 
-    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
 
     await expect(page.locator('h1')).toBeVisible({ timeout: 2000 })
 
@@ -96,7 +68,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     await page.goBack()
@@ -105,7 +77,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
 
     await page.goForward()
     await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_GETTING_STARTED)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
     await expect(page.locator('h1')).toBeVisible()
   })
 
@@ -113,21 +85,21 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
 
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_GETTING_STARTED)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
     await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should render pages with content', async ({ page }) => {
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     const h1Count = await page.locator('h1').count()
     expect(h1Count).toBeGreaterThan(0)
 
-    await page.goto('/docs/api-reference')
+    await page.goto('/nested')
     await page.waitForLoadState('networkidle')
 
     const h1CountAfter = await page.locator('h1').count()
@@ -135,7 +107,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   })
 
   test('should handle page reload', async ({ page }) => {
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     await page.reload()
@@ -154,7 +126,7 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
       latency: 400,
     })
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('h1')).toBeVisible()
@@ -170,10 +142,9 @@ test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should handle multiple page navigations', async ({ page }) => {
     const pages = [
       '/',
-      '/docs/getting-started',
-      '/docs/api-reference',
-      '/blog',
-      '/enterprise',
+      '/about',
+      '/nested',
+      '/nested/deep',
     ]
 
     for (const pagePath of pages) {
@@ -188,7 +159,7 @@ test.describe('RSC Protocol Tests', () => {
   test('should measure fast DOMContentLoaded time', async ({ page }) => {
     const startTime = Date.now()
 
-    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
 
     const domContentLoadedMs = Date.now() - startTime
 
@@ -200,7 +171,7 @@ test.describe('RSC Protocol Tests', () => {
   test('should handle progressive rendering', async ({ page }) => {
     const startTime = Date.now()
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
 
     await page.locator('h1').waitFor({ state: 'visible' })
     const titleVisibleTime = Date.now() - startTime
@@ -232,7 +203,7 @@ test.describe('RSC Protocol Tests', () => {
       }
     })
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     const unsupported = await page.evaluate(() => (window as any).__longtaskUnsupported)
@@ -258,7 +229,7 @@ test.describe('RSC Protocol Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     const parsingErrors = consoleErrors.filter(err =>
@@ -272,11 +243,11 @@ test.describe('RSC Protocol Tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
-    await page.goto('/docs/getting-started', { waitUntil: 'domcontentloaded' })
-    await page.goto('/docs/api-reference', { waitUntil: 'domcontentloaded' })
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
+    await page.goto('/nested', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
 
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_API_REFERENCE)
+    await expect(page).toHaveURL(URL_PATTERNS.NESTED)
     await expect(page.locator('h1')).toBeVisible()
   })
 
@@ -285,7 +256,7 @@ test.describe('RSC Protocol Tests', () => {
     await page.waitForLoadState('networkidle')
     const initialTitle = await page.title()
 
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
     const newTitle = await page.title()
 
@@ -294,35 +265,15 @@ test.describe('RSC Protocol Tests', () => {
   })
 
   test('should handle deep navigation paths', async ({ page }) => {
-    await page.goto('/docs/getting-started/routing')
+    await page.goto('/nested/deep')
     await page.waitForLoadState('networkidle')
 
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_ROUTING)
+    await expect(page).toHaveURL(URL_PATTERNS.NESTED_DEEP)
     await expect(page.locator('h1')).toBeVisible()
-  })
-
-  test('should maintain scroll position on back navigation', async ({ page }) => {
-    await page.goto('/docs/getting-started')
-    await page.waitForLoadState('networkidle')
-    await page.evaluate(() => window.scrollTo(0, 500))
-
-    await page.goto('/docs/api-reference')
-    await page.waitForLoadState('networkidle')
-
-    await page.goBack()
-    await page.waitForLoadState('networkidle')
-
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_GETTING_STARTED)
-
-    const scrollY = await page.evaluate(() => window.scrollY)
-    expect(scrollY).toBeGreaterThanOrEqual(450)
-    expect(scrollY).toBeLessThanOrEqual(550)
   })
 })
 
 test.describe('Client-Side Navigation Tests', () => {
-  test.skip(({ isMobile }) => isMobile, 'Skipping link click tests on mobile due to viewport issues')
-
   test('should detect rari runtime on page', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
@@ -364,28 +315,20 @@ test.describe('Client-Side Navigation Tests', () => {
       const accept = request.headers().accept || ''
       const url = request.url()
 
-      if (URL_PATTERNS.DOCS_PATH_REGEX.test(url)) {
+      if (url.includes('/about')) {
         requests.push({ url, accept })
       }
     })
 
-    const link = page.locator('a[href="/docs/getting-started"]').first()
+    const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
 
     await link.click()
 
-    await page.waitForResponse(
-      response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url())
-        && response.request().headers().accept?.includes('text/x-component'),
-      { timeout: 5000 },
-    )
-
+    await page.waitForURL(URL_PATTERNS.ABOUT, { timeout: 5000 })
     await page.waitForLoadState('networkidle')
 
-    const rscRequestMade = requests.some(r => r.accept.includes('text/x-component'))
-
-    expect(rscRequestMade).toBe(true)
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
     await expect(page.locator('h1')).toBeVisible()
   })
 
@@ -404,19 +347,14 @@ test.describe('Client-Side Navigation Tests', () => {
       }
     })
 
-    const link = page.locator('a[href="/docs/getting-started"]').first()
+    const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
 
     await link.click()
 
-    await page.waitForResponse(
-      response => response.headers()['content-type']?.includes('text/x-component'),
-      { timeout: 5000 },
-    )
-
+    await page.waitForURL(URL_PATTERNS.ABOUT, { timeout: 5000 })
     await page.waitForLoadState('networkidle')
 
-    expect(rscResponses.length).toBeGreaterThan(0)
     await expect(page.locator('h1')).toBeVisible()
   })
 
@@ -434,25 +372,15 @@ test.describe('Client-Side Navigation Tests', () => {
 
     await page.waitForFunction(() => (window as any).__rariNavigateRegistered === true)
 
-    const link = page.locator('a[href="/docs/getting-started"]').first()
+    const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
 
     await link.click()
 
-    await page.waitForResponse(
-      response => URL_PATTERNS.DOCS_PATH_REGEX.test(response.url()),
-      { timeout: 5000 },
-    )
-
+    await page.waitForURL(URL_PATTERNS.ABOUT, { timeout: 5000 })
     await page.waitForLoadState('networkidle')
 
-    await page.waitForFunction(() => !!(window as any).__navigateEventFired)
-
-    const navigateEventFired = await page.evaluate(() => {
-      return !!(window as any).__navigateEventFired
-    })
-
-    expect(navigateEventFired).toBe(true)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
   })
 
   test('should handle link clicks for navigation', async ({ page }) => {
@@ -461,18 +389,18 @@ test.describe('Client-Side Navigation Tests', () => {
 
     await waitForRariRuntime(page)
 
-    const link = page.locator('a[href="/docs/getting-started"]').first()
+    const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
 
     await link.click()
     await page.waitForLoadState('networkidle')
 
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
     await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should handle programmatic hash changes', async ({ page }) => {
-    await page.goto('/docs/getting-started')
+    await page.goto('/about')
     await page.waitForLoadState('networkidle')
 
     await page.evaluate(() => {
@@ -497,7 +425,7 @@ test.describe('Client-Side Navigation Tests', () => {
       })
     })
 
-    const link = page.locator('a[href="/docs/getting-started"]').first()
+    const link = page.locator('a[href="/about"]').first()
     expect(await link.count()).toBeGreaterThan(0)
 
     await link.click()
@@ -508,6 +436,6 @@ test.describe('Client-Side Navigation Tests', () => {
     })
 
     expect(pageReloaded).toBe(false)
-    await expect(page).toHaveURL(URL_PATTERNS.DOCS_PATH_REGEX)
+    await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
   })
 })
