@@ -50,6 +50,7 @@ const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-
 const JSX_TEST_REGEX = /\bJSX\b/
 const COMPONENTS_PREFIX_REGEX = /^components\//
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
+const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
 interface RouterPluginOptions {
   appDir?: string
@@ -1957,7 +1958,16 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
           if (fs.existsSync(possiblePath)) {
             const content = fs.readFileSync(possiblePath, 'utf-8')
             if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
-              return `import * as React from 'react';\n${content}`
+              const useClientMatch = content.match(USE_CLIENT_DIRECTIVE_LINE_REGEX)
+              if (useClientMatch) {
+                const directive = useClientMatch[0]
+                const rest = content.slice(directive.length)
+                return `
+${directive}import * as React from 'react';\n${rest}`
+              }
+
+              return `
+import * as React from 'react';\n${content}`
             }
 
             return content
@@ -2031,7 +2041,7 @@ export class ErrorBoundaryWrapper extends React.Component {
       }
       return React.createElement('div', { style: { padding: '20px', background: '#fee', border: '2px solid #f00' } },
         React.createElement('h2', null, 'Error'),
-        React.createElement('p', null, this.state.error.message)
+        React.createElement('p', null, 'Something went wrong.')
       );
     }
     return this.props.children;

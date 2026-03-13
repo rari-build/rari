@@ -56,8 +56,7 @@ export class ErrorBoundaryWrapper extends Component<
         const hasComponent = componentInfo.component && typeof componentInfo.component === 'function'
 
         if (hasComponent) {
-          if (this._isMounted)
-            this.setState({ ErrorComponent: componentInfo.component })
+          this.setState({ ErrorComponent: componentInfo.component })
         }
         else if (componentInfo.loader && !componentInfo.loading) {
           componentInfo.loading = true
@@ -67,8 +66,7 @@ export class ErrorBoundaryWrapper extends Component<
               componentInfo.component = component
               componentInfo.registered = true
               componentInfo.loading = false
-              if (this._isMounted)
-                this.setState({ ErrorComponent: component })
+              this.setState({ ErrorComponent: component })
             })
             .catch((loadError: Error) => {
               componentInfo.loading = false
