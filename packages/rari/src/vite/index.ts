@@ -1964,7 +1964,8 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
           }
         }
 
-        return `import * as React from 'react';
+        return `'use client';
+import * as React from 'react';
 export class ErrorBoundaryWrapper extends React.Component {
   constructor(props) {
     super(props);

@@ -18,7 +18,7 @@ test.describe.serial('Server Actions', () => {
 
     test('should show error message for invalid input', async ({ page }) => {
       await page.click('[data-testid="submit-button"]')
-      await expect(page.locator('[data-testid="error-message"]')).toBeVisible()
+      await expect(page.locator('[data-testid="todo-form"] [data-testid="error-message"]')).toBeVisible()
     })
 
     test('should reset form after successful submission', async ({ page }) => {
