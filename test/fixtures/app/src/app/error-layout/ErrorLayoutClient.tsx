@@ -18,6 +18,7 @@ export default function ErrorLayoutClient({
       <div data-testid="layout-header">
         <h2>Layout with Error Test</h2>
         <button
+          type="button"
           data-testid="trigger-layout-error-button"
           onClick={() => setShouldThrow(true)}
         >

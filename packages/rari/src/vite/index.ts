@@ -1955,7 +1955,7 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 
         for (const possiblePath of possiblePaths) {
           if (fs.existsSync(possiblePath)) {
-            const content = await loadRuntimeFile(path.basename(possiblePath))
+            const content = await loadRuntimeFile(possiblePath)
             if (!content.includes('import React') && !content.includes('from "react"') && !content.includes('from \'react\'')) {
               return `import * as React from 'react';\n${content}`
             }

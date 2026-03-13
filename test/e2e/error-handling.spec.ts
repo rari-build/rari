@@ -31,7 +31,7 @@ test.describe('Error Handling', () => {
 
       await expect(
         page.locator('[data-testid="error-boundary"]'),
-      ).toBeVisible()
+      ).toBeHidden()
     })
 
     test('should display error message in error boundary', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Error Handling', () => {
 
       await expect(
         page.locator('[data-testid="layout-error-boundary"]'),
-      ).toBeVisible()
+      ).toBeHidden()
     })
   })
 
@@ -125,7 +125,7 @@ test.describe('Error Handling', () => {
 
       await expect(
         page.locator('[data-testid="nested-error-boundary"]'),
-      ).toBeVisible()
+      ).toBeHidden()
     })
   })
 

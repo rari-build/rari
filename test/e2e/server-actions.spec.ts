@@ -10,7 +10,6 @@ test.describe.serial('Server Actions', () => {
 
   test.describe('useActionState Hook', () => {
     test('should add todo using form action', async ({ page }) => {
-      await page.goto('/actions')
       await page.fill('[data-testid="todo-input"]', 'New test todo')
       await page.click('[data-testid="submit-button"]')
       await expect(page.locator('[data-testid="success-message"]')).toBeVisible()
@@ -18,13 +17,11 @@ test.describe.serial('Server Actions', () => {
     })
 
     test('should show error message for invalid input', async ({ page }) => {
-      await page.goto('/actions')
       await page.click('[data-testid="submit-button"]')
       await expect(page.locator('[data-testid="error-message"]')).toBeVisible()
     })
 
     test('should reset form after successful submission', async ({ page }) => {
-      await page.goto('/actions')
       await page.fill('[data-testid="todo-input"]', 'Test form reset')
       await page.click('[data-testid="submit-button"]')
       await expect(page.locator('[data-testid="success-message"]')).toBeVisible()
@@ -34,14 +31,12 @@ test.describe.serial('Server Actions', () => {
 
   test.describe('useTransition Hook', () => {
     test('should toggle todo completion status', async ({ page }) => {
-      await page.goto('/actions')
       await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('completed')
       await page.click('[data-testid="toggle-button-1"]')
       await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('active')
     })
 
     test('should delete todo', async ({ page }) => {
-      await page.goto('/actions')
       const initialCount = await page.locator('[data-testid="todo-count"]').textContent()
       expect(initialCount).toContain('2')
       await page.click('[data-testid="delete-button-1"]')
@@ -50,7 +45,6 @@ test.describe.serial('Server Actions', () => {
     })
 
     test('should clear completed todos', async ({ page }) => {
-      await page.goto('/actions')
       await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('completed')
       await page.click('[data-testid="clear-completed-button"]')
       await expect(page.locator('[data-testid="todo-item-1"]')).not.toBeVisible()

@@ -11,7 +11,7 @@ export default function ErrorBoundary({
     <div data-testid="error-boundary">
       <h2>Something went wrong!</h2>
       <p data-testid="error-message">{error.message}</p>
-      <button data-testid="reset-button" onClick={reset}>
+      <button type="button" data-testid="reset-button" onClick={reset}>
         Try again
       </button>
     </div>

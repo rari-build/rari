@@ -126,7 +126,9 @@ impl RouteComposer {
         error_boundary: Option<&ErrorBoundaryInfo>,
     ) -> String {
         let wrap_with_error_boundary = error_boundary.is_some();
-        let error_component_id = error_boundary.map(|e| e.component_id.as_str()).unwrap_or("");
+        let error_component_id_json = error_boundary
+            .map(|e| serde_json::to_string(&e.component_id).unwrap_or_else(|_| "\"\"".to_string()))
+            .unwrap_or_else(|| "\"\"".to_string());
 
         format!(
             r#"
@@ -135,7 +137,7 @@ impl RouteComposer {
                 let rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
 
                 if ({wrap_with_error_boundary}) {{
-                    const errorComponentId = '{error_component_id}';
+                    const errorComponentId = {error_component_id_json};
                     const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
 
                     rscData = [
@@ -185,7 +187,7 @@ impl RouteComposer {
             "#,
             final_element = final_element,
             wrap_with_error_boundary = wrap_with_error_boundary,
-            error_component_id = error_component_id
+            error_component_id_json = error_component_id_json
         )
     }
 }

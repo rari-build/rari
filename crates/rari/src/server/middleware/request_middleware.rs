@@ -39,9 +39,17 @@ pub async fn cors_middleware(
 ) -> Response<axum::body::Body> {
     let mut response = next.run(request).await;
 
+    let is_error = response.status().is_client_error() || response.status().is_server_error();
     let headers = response.headers_mut();
 
     add_cors_headers(headers);
+
+    if is_error {
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+        );
+    }
 
     response
 }
@@ -67,9 +75,17 @@ pub async fn security_headers_middleware(
 ) -> Response<axum::body::Body> {
     let mut response = next.run(request).await;
 
+    let is_error = response.status().is_client_error() || response.status().is_server_error();
     let headers = response.headers_mut();
 
     add_security_headers(headers);
+
+    if is_error {
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+        );
+    }
 
     response
 }

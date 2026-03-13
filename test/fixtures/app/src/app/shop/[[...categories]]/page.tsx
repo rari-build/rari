@@ -1,8 +1,12 @@
 import type { Metadata, PageProps } from 'rari'
 
+function normalizeCategories(categories: string | string[] | undefined): string[] {
+  return categories ? (Array.isArray(categories) ? categories : [categories]) : []
+}
+
 export default async function ShopPage({ params }: PageProps) {
   const { categories } = params
-  const categoriesArray = categories ? (Array.isArray(categories) ? categories : [categories]) : []
+  const categoriesArray = normalizeCategories(categories)
   const hasCategories = categoriesArray.length > 0
 
   return (
@@ -30,7 +34,7 @@ export default async function ShopPage({ params }: PageProps) {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categories } = params
-  const categoriesArray = categories ? (Array.isArray(categories) ? categories : [categories]) : []
+  const categoriesArray = normalizeCategories(categories)
   const title = categoriesArray.length > 0 ? `Shop: ${categoriesArray.join(' > ')}` : 'Shop'
 
   return {

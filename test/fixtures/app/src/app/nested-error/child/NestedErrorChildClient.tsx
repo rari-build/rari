@@ -13,6 +13,7 @@ export default function NestedErrorChildClient() {
     <div data-testid="nested-error-child-page">
       <h1>Nested Child Page</h1>
       <button
+        type="button"
         data-testid="trigger-nested-error-button"
         onClick={() => setShouldThrow(true)}
       >

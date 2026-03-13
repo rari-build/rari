@@ -8,6 +8,15 @@ export function parseRoutePath(path: string): string[] {
   return normalized ? normalized.split('/') : []
 }
 
+function safeDecodeURIComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  }
+  catch {
+    return null
+  }
+}
+
 export function matchRouteParams(
   _routePath: string,
   routeSegments: RouteSegment[],
@@ -39,15 +48,27 @@ export function matchRouteParams(
         break
 
       case 'dynamic':
-        if (segment.param)
-          params[segment.param] = decodeURIComponent(actualSegments[actualIndex])
+        if (segment.param) {
+          const decoded = safeDecodeURIComponent(actualSegments[actualIndex])
+          if (decoded === null)
+            return null
+          params[segment.param] = decoded
+        }
         actualIndex++
         break
 
       case 'catch-all':
       case 'optional-catch-all':
-        if (segment.param)
-          params[segment.param] = actualSegments.slice(actualIndex).map(s => decodeURIComponent(s))
+        if (segment.param) {
+          const decodedSegments: string[] = []
+          for (const seg of actualSegments.slice(actualIndex)) {
+            const decoded = safeDecodeURIComponent(seg)
+            if (decoded === null)
+              return null
+            decodedSegments.push(decoded)
+          }
+          params[segment.param] = decodedSegments
+        }
         actualIndex = actualSegments.length
         break
     }

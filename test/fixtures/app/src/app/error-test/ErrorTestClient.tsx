@@ -14,6 +14,7 @@ export default function ErrorTestClient() {
       <h1>Error Test Page</h1>
       <p>This page can trigger errors for testing error boundaries.</p>
       <button
+        type="button"
         data-testid="trigger-error-button"
         onClick={() => setShouldThrow(true)}
       >

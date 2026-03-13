@@ -11,7 +11,7 @@ export default function NestedErrorBoundary({
     <div data-testid="nested-error-boundary">
       <h2>Nested Error Caught!</h2>
       <p data-testid="nested-error-message">{error.message}</p>
-      <button data-testid="nested-reset-button" onClick={reset}>
+      <button type="button" data-testid="nested-reset-button" onClick={reset}>
         Reset Nested
       </button>
     </div>

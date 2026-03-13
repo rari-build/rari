@@ -8,5 +8,5 @@ export const URL_PATTERNS = {
   PRODUCTS: /\/products$/,
   PRODUCT_DETAIL: /\/products\/[^/]+\/[^/]+$/,
   DOCS: /\/docs\/.+/,
-  SHOP: /\/shop/,
+  SHOP: /^\/shop(?:\/|$)/,
 } as const

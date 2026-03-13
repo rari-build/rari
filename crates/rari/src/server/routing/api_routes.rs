@@ -134,7 +134,11 @@ impl ApiRouteHandler {
         path: &str,
     ) -> Option<FxHashMap<String, String>> {
         let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
-        let path_segments = path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
+        let path_segments: Vec<String> = path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+            .collect();
 
         let mut params = FxHashMap::default();
         let mut route_idx = 0;
@@ -147,10 +151,7 @@ impl ApiRouteHandler {
                 let param_name = &route_seg[5..route_seg.len() - 2];
 
                 if path_idx < path_segments.len() {
-                    let remaining: Vec<String> = path_segments[path_idx..]
-                        .iter()
-                        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
-                        .collect();
+                    let remaining: Vec<String> = path_segments[path_idx..].to_vec();
                     params.insert(param_name.to_string(), remaining.join("/"));
                 }
 
@@ -164,10 +165,7 @@ impl ApiRouteHandler {
                     return None;
                 }
 
-                let remaining: Vec<String> = path_segments[path_idx..]
-                    .iter()
-                    .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
-                    .collect();
+                let remaining: Vec<String> = path_segments[path_idx..].to_vec();
                 params.insert(param_name.to_string(), remaining.join("/"));
 
                 return Some(params);
@@ -179,10 +177,7 @@ impl ApiRouteHandler {
                 }
 
                 let param_name = &route_seg[1..route_seg.len() - 1];
-                let decoded_value = decode(path_segments[path_idx])
-                    .unwrap_or_else(|_| path_segments[path_idx].to_string().into())
-                    .into_owned();
-                params.insert(param_name.to_string(), decoded_value);
+                params.insert(param_name.to_string(), path_segments[path_idx].clone());
 
                 path_idx += 1;
                 route_idx += 1;

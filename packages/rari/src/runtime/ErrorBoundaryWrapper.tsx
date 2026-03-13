@@ -19,6 +19,9 @@ export class ErrorBoundaryWrapper extends Component<
   ErrorBoundaryWrapperProps,
   ErrorBoundaryWrapperState
 > {
+  private _isMounted = false
+  private _pendingTimer: ReturnType<typeof setTimeout> | null = null
+
   constructor(props: ErrorBoundaryWrapperProps) {
     super(props)
     this.state = { hasError: false, error: null, ErrorComponent: null }
@@ -26,6 +29,18 @@ export class ErrorBoundaryWrapper extends Component<
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryWrapperState> {
     return { hasError: true, error }
+  }
+
+  componentDidMount(): void {
+    this._isMounted = true
+  }
+
+  componentWillUnmount(): void {
+    this._isMounted = false
+    if (this._pendingTimer) {
+      clearTimeout(this._pendingTimer)
+      this._pendingTimer = null
+    }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
@@ -41,9 +56,8 @@ export class ErrorBoundaryWrapper extends Component<
         const hasComponent = componentInfo.component && typeof componentInfo.component === 'function'
 
         if (hasComponent) {
-          setTimeout(() => {
+          if (this._isMounted)
             this.setState({ ErrorComponent: componentInfo.component })
-          }, 0)
         }
         else if (componentInfo.loader && !componentInfo.loading) {
           componentInfo.loading = true
@@ -53,7 +67,8 @@ export class ErrorBoundaryWrapper extends Component<
               componentInfo.component = component
               componentInfo.registered = true
               componentInfo.loading = false
-              this.setState({ ErrorComponent: component })
+              if (this._isMounted)
+                this.setState({ ErrorComponent: component })
             })
             .catch((loadError: Error) => {
               componentInfo.loading = false
@@ -65,8 +80,16 @@ export class ErrorBoundaryWrapper extends Component<
   }
 
   reset = (): void => {
-    setTimeout(() => {
-      this.setState({ hasError: false, error: null })
+    if (this._pendingTimer) {
+      clearTimeout(this._pendingTimer)
+      this._pendingTimer = null
+    }
+
+    this._pendingTimer = setTimeout(() => {
+      if (this._isMounted) {
+        this.setState({ hasError: false, error: null, ErrorComponent: null })
+      }
+      this._pendingTimer = null
     }, 50)
   }
 
@@ -80,7 +103,7 @@ export class ErrorBoundaryWrapper extends Component<
       return (
         <div style={{ padding: '20px', background: '#fee', border: '2px solid #f00' }}>
           <h2>Error</h2>
-          <p>{this.state.error.message}</p>
+          <p>Something went wrong.</p>
         </div>
       )
     }

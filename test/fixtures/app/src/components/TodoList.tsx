@@ -85,19 +85,19 @@ export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
             <span data-testid={`todo-status-${todo.id}`}>
               {todo.completed ? 'completed' : 'active'}
             </span>
-            <button onClick={() => handleToggle(todo.id)} data-testid={`toggle-button-${todo.id}`} disabled={isPending}>
+            <button type="button" onClick={() => handleToggle(todo.id)} data-testid={`toggle-button-${todo.id}`} disabled={isPending}>
               Toggle
             </button>
-            <button onClick={() => handleDelete(todo.id)} data-testid={`delete-button-${todo.id}`} disabled={isPending}>
+            <button type="button" onClick={() => handleDelete(todo.id)} data-testid={`delete-button-${todo.id}`} disabled={isPending}>
               Delete
             </button>
           </li>
         ))}
       </ul>
-      <button onClick={handleClearCompleted} data-testid="clear-completed-button" disabled={isPending}>
+      <button type="button" onClick={handleClearCompleted} data-testid="clear-completed-button" disabled={isPending}>
         Clear Completed
       </button>
-      <button onClick={handleReset} data-testid="reset-button" disabled={isPending}>
+      <button type="button" onClick={handleReset} data-testid="reset-button" disabled={isPending}>
         Reset Todos
       </button>
     </div>
