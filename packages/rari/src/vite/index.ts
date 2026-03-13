@@ -1970,6 +1970,15 @@ export class ErrorBoundaryWrapper extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null, ErrorComponent: null };
+    this._isMounted = false;
+  }
+
+  componentDidMount() {
+    this._isMounted = true;
+  }
+
+  componentWillUnmount() {
+    this._isMounted = false;
   }
 
   static getDerivedStateFromError(error) {
@@ -1985,8 +1994,10 @@ export class ErrorBoundaryWrapper extends React.Component {
       const componentInfo = globalThis['~clientComponents']?.[errorComponentId];
 
       if (componentInfo) {
-        if (componentInfo.component) {
-          this.setState({ ErrorComponent: componentInfo.component });
+        if (componentInfo.component && typeof componentInfo.component === 'function') {
+          if (this._isMounted) {
+            this.setState({ ErrorComponent: componentInfo.component });
+          }
         } else if (componentInfo.loader && !componentInfo.loading) {
           componentInfo.loading = true;
           componentInfo.loader()
@@ -1995,7 +2006,9 @@ export class ErrorBoundaryWrapper extends React.Component {
               componentInfo.component = component;
               componentInfo.registered = true;
               componentInfo.loading = false;
-              this.setState({ ErrorComponent: component });
+              if (this._isMounted) {
+                this.setState({ ErrorComponent: component });
+              }
             })
             .catch((loadError) => {
               componentInfo.loading = false;
