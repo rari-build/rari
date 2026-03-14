@@ -18,6 +18,7 @@ export default defineConfig({
     'runtime/rsc-client-runtime': 'src/runtime/rsc-client-runtime.ts',
     'runtime/AppRouterProvider': 'src/runtime/AppRouterProvider.tsx',
     'runtime/LoadingErrorBoundary': 'src/runtime/LoadingErrorBoundary.tsx',
+    'runtime/ErrorBoundaryWrapper': 'src/runtime/ErrorBoundaryWrapper.tsx',
     'proxy/runtime-executor': 'src/proxy/runtime-executor.ts',
     'proxy/RariRequest': 'src/proxy/RariRequest.ts',
     'proxy/RariResponse': 'src/proxy/RariResponse.ts',

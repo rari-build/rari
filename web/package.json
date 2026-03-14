@@ -17,7 +17,9 @@
     "clean": "rm -rf dist",
     "lint": "oxlint -c ../.oxlintrc.json",
     "lint:fix": "oxlint -c ../.oxlintrc.json --fix",
-    "typecheck": "tsgo"
+    "typecheck": "tsgo",
+    "worker:dev": "wrangler dev worker/worker.js",
+    "worker:deploy": "wrangler deploy worker/worker.js"
   },
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -43,6 +45,7 @@
     "@typescript/native-preview": "catalog:typescript",
     "oxlint": "catalog:eslint",
     "tailwindcss": "catalog:tailwind",
-    "vite": "catalog:build"
+    "vite": "catalog:build",
+    "wrangler": "catalog:build"
   }
 }

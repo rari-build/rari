@@ -5,6 +5,14 @@ use crate::server::routing::types::{ParamValue, RouteSegment};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use urlencoding::decode;
+
+fn parse_decoded_path_segments(path: &str) -> Vec<String> {
+    path.split('/')
+        .filter(|s| !s.is_empty())
+        .map(|s| decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
+        .collect()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppRouteEntry {
@@ -151,7 +159,7 @@ impl AppRouter {
         path: &str,
     ) -> Option<FxHashMap<String, ParamValue>> {
         let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
-        let path_segments = path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
+        let path_segments = parse_decoded_path_segments(path);
 
         let mut params = FxHashMap::default();
         let mut route_idx = 0;
@@ -164,8 +172,7 @@ impl AppRouter {
                 let param_name = &route_seg[5..route_seg.len() - 2];
 
                 if path_idx < path_segments.len() {
-                    let remaining: Vec<String> =
-                        path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
+                    let remaining: Vec<String> = path_segments[path_idx..].to_vec();
                     params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
                 }
 
@@ -179,8 +186,7 @@ impl AppRouter {
                     return None;
                 }
 
-                let remaining: Vec<String> =
-                    path_segments[path_idx..].iter().map(|s| s.to_string()).collect();
+                let remaining: Vec<String> = path_segments[path_idx..].to_vec();
                 params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
 
                 return Some(params);
@@ -194,7 +200,7 @@ impl AppRouter {
                 let param_name = &route_seg[1..route_seg.len() - 1];
                 params.insert(
                     param_name.to_string(),
-                    ParamValue::Single(path_segments[path_idx].to_string()),
+                    ParamValue::Single(path_segments[path_idx].clone()),
                 );
 
                 path_idx += 1;

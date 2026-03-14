@@ -10,15 +10,17 @@ packages:
   - '!packages/rari-linux-arm64'
   - '!packages/rari-linux-x64'
   - '!packages/rari-win32-x64'
+  - test/fixtures/*
   - web
 catalogs:
   analytics:
     '@posthog/react': ^1.8.2
-    posthog-js: ^1.360.1
+    posthog-js: ^1.360.2
   build:
     rolldown: ^1.0.0-rc.9
     tsdown: ^0.20.3
     vite: ^8.0.0
+    wrangler: ^4.73.0
   cli:
     '@clack/prompts': ^1.1.0
   default:
@@ -59,7 +61,7 @@ catalogs:
     vitest: ^4.1.0
   typescript:
     '@types/node': ^25.5.0
-    '@typescript/native-preview': ^7.0.0-dev.20260312.1
+    '@typescript/native-preview': ^7.0.0-dev.20260313.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:

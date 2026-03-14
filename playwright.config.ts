@@ -17,7 +17,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm --filter web build && pnpm --filter web start',
+    command: 'pnpm --filter @test/app build && pnpm --filter @test/app start',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

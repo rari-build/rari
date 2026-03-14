@@ -3,7 +3,8 @@
   "workspaces": {
     ".": {
       "ignore": [
-        "crates/**/*"
+        "crates/**/*",
+        "test/fixtures/**/*"
       ],
       "ignoreDependencies": [
         "@typescript/native-preview", // Used by TypeScript tooling

@@ -797,10 +797,19 @@ impl LayoutRenderer {
             })
             .collect();
 
-        let script = super::route_composer::RouteComposer::build_composition_script(
+        let error_boundary = route_match.error.as_ref().map(|error| {
+            let component_id = format!("src/{}", utils::create_component_id(&error.file_path));
+            super::route_composer::ErrorBoundaryInfo {
+                component_id,
+                file_path: error.file_path.clone(),
+            }
+        });
+
+        let script = super::route_composer::RouteComposer::build_composition_script_with_error(
             &page_render_script,
             &layouts,
             &pathname_json,
+            error_boundary.as_ref(),
         );
 
         Ok(script)

@@ -810,14 +810,12 @@ pub async fn handle_app_route(
 
             use crate::server::utils::path_validation::validate_safe_path;
 
-            let file_path =
-                match validate_safe_path(state.config.public_dir(), path_without_leading_slash) {
-                    Ok(path) => path,
-                    Err(_) => return Err(StatusCode::NOT_FOUND),
-                };
-
-            if file_path.is_file() {
-                match std::fs::read(&file_path) {
+            if let Ok(file_path) =
+                validate_safe_path(state.config.public_dir(), path_without_leading_slash)
+                && let Ok(metadata) = tokio::fs::metadata(&file_path).await
+                && metadata.is_file()
+            {
+                match tokio::fs::read(&file_path).await {
                     Ok(content) => {
                         let content_type = get_content_type(path_without_leading_slash);
                         let cache_control = &state.config.caching.static_files;
@@ -832,8 +830,6 @@ pub async fn handle_app_route(
                     }
                 }
             }
-
-            return Err(StatusCode::NOT_FOUND);
         }
     }
 

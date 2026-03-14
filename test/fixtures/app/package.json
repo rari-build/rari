@@ -1,0 +1,25 @@
+{
+  "name": "@test/app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "rari dev",
+    "build": "rari build",
+    "start": "rari start",
+    "typecheck": "tsgo"
+  },
+  "dependencies": {
+    "rari": "workspace:*",
+    "react": "catalog:react",
+    "react-dom": "catalog:react"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:tailwind",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "@typescript/native-preview": "catalog:typescript",
+    "tailwindcss": "catalog:tailwind",
+    "vite": "catalog:build"
+  }
+}

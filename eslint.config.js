@@ -19,7 +19,7 @@ export default antfu(
     },
   },
   {
-    files: ['examples/**/src/app/**', 'web/src/app/**'],
+    files: ['examples/**/src/app/**', 'test/fixtures/**/src/app/**', 'web/src/app/**'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

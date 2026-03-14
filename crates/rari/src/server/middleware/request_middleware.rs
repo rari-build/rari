@@ -1,5 +1,5 @@
 use axum::{
-    http::{HeaderValue, Request, Response},
+    http::{HeaderValue, Request, Response, StatusCode},
     middleware::Next,
 };
 
@@ -33,15 +33,26 @@ const CORP_SAME_ORIGIN: &str = "same-origin";
 const REFERRER_STRICT_ORIGIN: &str = "strict-origin-when-cross-origin";
 const PERMISSIONS_RESTRICTIVE: &str = "geolocation=(), microphone=(), camera=(), payment=()";
 
+fn apply_error_cache_control(headers: &mut axum::http::HeaderMap, status: StatusCode) {
+    if status.is_client_error() || status.is_server_error() {
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+        );
+    }
+}
+
 pub async fn cors_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response<axum::body::Body> {
     let mut response = next.run(request).await;
 
+    let status = response.status();
     let headers = response.headers_mut();
 
     add_cors_headers(headers);
+    apply_error_cache_control(headers, status);
 
     response
 }
@@ -67,9 +78,11 @@ pub async fn security_headers_middleware(
 ) -> Response<axum::body::Body> {
     let mut response = next.run(request).await;
 
+    let status = response.status();
     let headers = response.headers_mut();
 
     add_security_headers(headers);
+    apply_error_cache_control(headers, status);
 
     response
 }

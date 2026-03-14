@@ -5,6 +5,12 @@ pub struct LayoutInfo {
     pub file_path: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ErrorBoundaryInfo {
+    pub component_id: String,
+    pub file_path: String,
+}
+
 pub struct RouteComposer;
 
 impl RouteComposer {
@@ -12,6 +18,15 @@ impl RouteComposer {
         page_render_script: &str,
         layouts: &[LayoutInfo],
         pathname_json: &str,
+    ) -> String {
+        Self::build_composition_script_with_error(page_render_script, layouts, pathname_json, None)
+    }
+
+    pub fn build_composition_script_with_error(
+        page_render_script: &str,
+        layouts: &[LayoutInfo],
+        pathname_json: &str,
+        error_boundary: Option<&ErrorBoundaryInfo>,
     ) -> String {
         let mut script = format!(
             r#"
@@ -74,7 +89,7 @@ impl RouteComposer {
             current_element = layout_var;
         }
 
-        script.push_str(&Self::generate_rsc_conversion(&current_element));
+        script.push_str(&Self::generate_rsc_conversion(&current_element, error_boundary));
 
         script
     }
@@ -106,12 +121,36 @@ impl RouteComposer {
         )
     }
 
-    fn generate_rsc_conversion(final_element: &str) -> String {
+    fn generate_rsc_conversion(
+        final_element: &str,
+        error_boundary: Option<&ErrorBoundaryInfo>,
+    ) -> String {
+        let wrap_with_error_boundary = error_boundary.is_some();
+        let error_component_id_json = error_boundary
+            .map(|e| serde_json::to_string(&e.component_id).unwrap_or_else(|_| "\"\"".to_string()))
+            .unwrap_or_else(|| "\"\"".to_string());
+
         format!(
             r#"
 
                 const startRSC = performance.now();
-                const rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
+                let rscData = await globalThis.renderToRsc({final_element}, globalThis['~clientComponents'] || {{}});
+
+                if ({wrap_with_error_boundary}) {{
+                    const errorComponentId = {error_component_id_json};
+                    const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
+
+                    rscData = [
+                        '$',
+                        wrapperComponentId,
+                        null,
+                        {{
+                            errorComponentId: errorComponentId,
+                            children: rscData
+                        }}
+                    ];
+                }}
+
                 timings.rscConversion = performance.now() - startRSC;
 
                 timings.total = performance.now() - startTotal;
@@ -146,7 +185,9 @@ impl RouteComposer {
                 }}
             }})()
             "#,
-            final_element = final_element
+            final_element = final_element,
+            wrap_with_error_boundary = wrap_with_error_boundary,
+            error_component_id_json = error_component_id_json
         )
     }
 }
@@ -258,11 +299,28 @@ mod tests {
 
     #[test]
     fn test_generate_rsc_conversion() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement");
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None);
 
         assert!(conversion.contains("renderToRsc(finalElement"));
         assert!(conversion.contains("rsc_data: rscData"));
         assert!(conversion.contains("timings: timings"));
         assert!(conversion.contains("success: true"));
+    }
+
+    #[test]
+    fn test_generate_rsc_conversion_with_error_boundary() {
+        let error_boundary = ErrorBoundaryInfo {
+            component_id: "src/app/test/error.tsx".to_string(),
+            file_path: "test/error.tsx".to_string(),
+        };
+
+        let conversion =
+            RouteComposer::generate_rsc_conversion("finalElement", Some(&error_boundary));
+
+        assert!(conversion.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
+        assert!(conversion.contains("src/app/test/error.tsx"));
+        assert!(conversion.contains("errorComponentId:"));
+        assert!(conversion.contains("rscData = ["));
+        assert!(conversion.contains("'$'"));
     }
 }
