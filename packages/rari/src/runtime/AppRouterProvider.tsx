@@ -70,6 +70,7 @@ function GlobalLoadingFallback() {
 
 export function AppRouterProvider({ children, initialPayload, onNavigate }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
+  const rscPayloadRef = useRef(rscPayload)
   const [, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -655,8 +656,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const rscWireFormat = await response.text()
 
         if (isStaleContent(rscWireFormat)) {
-          if (rscPayload)
-            return rscPayload
+          if (rscPayloadRef.current)
+            return rscPayloadRef.current
         }
 
         let parsedPayload
@@ -699,11 +700,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     pendingFetchesRef.current.set(fullFetchKey, fetchPromise)
 
     return fetchPromise
-  }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent])
+  }, [parseRscWireFormat, trackHMRFailure, isStaleContent])
 
   onNavigateRef.current = onNavigate
   parseRscWireFormatRef.current = parseRscWireFormat
   refetchRscPayloadRef.current = refetchRscPayload
+  rscPayloadRef.current = rscPayload
 
   useEffect(() => {
     if (typeof window === 'undefined')
