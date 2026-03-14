@@ -697,10 +697,12 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
           if (componentInfo) {
             if (componentInfo.component) {
               const Component = componentInfo.component
-              const childProps = {
-                ...props,
-                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
-              }
+              const childProps = props !== null && typeof props === 'object'
+                ? {
+                    ...props,
+                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+                  }
+                : {}
               return React.createElement(Component, { key, ...childProps })
             }
             else if (componentInfo.loader && !componentInfo.loading) {
@@ -718,10 +720,12 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
 
             if (componentInfo.loadPromise) {
-              const childProps = {
-                ...props,
-                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
-              }
+              const childProps = props !== null && typeof props === 'object'
+                ? {
+                    ...props,
+                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+                  }
+                : {}
               return React.createElement(ClientComponentLoader, {
                 key,
                 componentInfo,
@@ -732,10 +736,12 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             return React.createElement(ClientComponentLoader, {
               key,
               componentInfo,
-              childProps: {
-                ...props,
-                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
-              },
+              childProps: props !== null && typeof props === 'object'
+                ? {
+                    ...props,
+                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+                  }
+                : {},
             })
           }
         }
@@ -769,7 +775,7 @@ function processProps(props: any, modules: Map<string, any>, symbols: Map<string
       if (key.startsWith('$') || key === 'ref')
         continue
       if (key === 'children')
-        processed[key] = 'children' in props ? rscToReact(props.children, modules, symbols) : undefined
+        processed[key] = rscToReact(props.children, modules, symbols)
       else if (key === 'dangerouslySetInnerHTML')
         processed[key] = props[key]
       else

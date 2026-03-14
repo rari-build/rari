@@ -200,6 +200,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const refetchRscPayloadRef = useRef<any>(null)
   const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
 
+  function clearPendingSuspense() {
+    suspendingPromisesRef.current.forEach((entry) => {
+      entry.cleanup()
+    })
+    suspendingPromisesRef.current.clear()
+    pendingRefsRef.current.clear()
+  }
+
   function getSuspendingPromise(contentRef: string): Promise<never> {
     if (!suspendingPromisesRef.current.has(contentRef)) {
       let resolvePromise: (() => void) | undefined
@@ -224,8 +232,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     if (rows.has(contentRef)) {
       const entry = suspendingPromisesRef.current.get(contentRef)
-      if (entry)
-        entry.cleanup()
+      if (entry) {
+        queueMicrotask(() => {
+          entry.cleanup()
+        })
+      }
 
       const rowData = rows.get(contentRef)
       const result = rscToReactRef.current(rowData, modules, undefined, symbols, rows)
@@ -267,7 +278,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             }
           }
           else {
-            processed[key] = children ? rscToReactRef.current(children, modules, layoutPath, symbols, rows) : undefined
+            processed[key] = (children !== null && children !== undefined) ? rscToReactRef.current(children, modules, layoutPath, symbols, rows) : undefined
           }
         }
         else if (key === 'dangerouslySetInnerHTML') {
@@ -333,7 +344,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           const childProps = {
             ...props,
-            children: props.children ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
+            children: (props.children !== null && props.children !== undefined) ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
           }
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
@@ -580,22 +591,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
         }
         else if (Array.isArray(rootElement[0])) {
-          const elements = rootElement
-            .map((el: any) =>
-              Array.isArray(el) && el[0] === '$'
-                ? rscToReact(el, modules, undefined, symbols, rows, true)
-                : el,
-            )
-            .filter((el: any) => {
-              return (
-                el == null
-                || typeof el === 'string'
-                || typeof el === 'number'
-                || typeof el === 'boolean'
-                || React.isValidElement(el)
-              )
-            })
-          rootElement = elements.length === 1 ? elements[0] : elements
+          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, false)
         }
       }
 
@@ -672,11 +668,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           throw error
         }
 
-        setRscPayload(parsedPayload)
-
         lastSuccessfulPayloadRef.current = rscWireFormat
-
-        resetFailureTracking()
 
         return parsedPayload
       }
@@ -701,7 +693,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     pendingFetchesRef.current.set(fullFetchKey, fetchPromise)
 
     return fetchPromise
-  }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent, resetFailureTracking])
+  }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent])
 
   onNavigateRef.current = onNavigate
   parseRscWireFormatRef.current = parseRscWireFormat
@@ -718,6 +710,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       currentNavigationIdRef.current = detail.navigationId
       streamingRowsRef.current = null
       shouldScrollToHashRef.current = true
+      clearPendingSuspense()
 
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -727,23 +720,33 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       startTransition(async () => {
         try {
+          let parsedPayload
+          let wireFormat
+
           if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormatRef.current(detail.rscWireFormat, false)
-            setRscPayload(parsedPayload)
-            lastSuccessfulPayloadRef.current = detail.rscWireFormat
-            resetFailureTracking()
+            parsedPayload = await parseRscWireFormatRef.current(detail.rscWireFormat, false)
+            wireFormat = detail.rscWireFormat
           }
           else if (detail.isStreaming) {
             streamingRowsRef.current = []
           }
           else {
-            await refetchRscPayloadRef.current(
+            parsedPayload = await refetchRscPayloadRef.current(
               detail.to,
               detail.abortSignal,
             )
+            wireFormat = lastSuccessfulPayloadRef.current
           }
 
           if (currentNavigationIdRef.current === detail.navigationId) {
+            if (parsedPayload) {
+              setRscPayload(parsedPayload)
+              if (wireFormat) {
+                lastSuccessfulPayloadRef.current = wireFormat
+              }
+              resetFailureTracking()
+            }
+
             setRenderKey(prev => prev + 1)
             setHmrError(null)
 
@@ -790,7 +793,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        await refetchRscPayloadRef.current()
+        const parsedPayload = await refetchRscPayloadRef.current()
+        setRscPayload(parsedPayload)
+        resetFailureTracking()
 
         setRenderKey(prev => prev + 1)
 
@@ -813,7 +818,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleRscInvalidate = async () => {
       try {
-        await refetchRscPayloadRef.current()
+        const parsedPayload = await refetchRscPayloadRef.current()
+        setRscPayload(parsedPayload)
+        resetFailureTracking()
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -828,7 +835,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleManifestUpdated = async () => {
       try {
-        await refetchRscPayloadRef.current()
+        const parsedPayload = await refetchRscPayloadRef.current()
+        setRscPayload(parsedPayload)
+        resetFailureTracking()
         setHmrError(null)
       }
       catch (error) {
@@ -879,6 +888,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     window.addEventListener('rari:rsc-row', handleRscRow)
 
     return () => {
+      clearPendingSuspense()
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
