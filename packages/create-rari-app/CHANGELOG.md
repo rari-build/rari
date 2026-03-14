@@ -3,6 +3,10 @@
 ### 🚀 Features
 
 - *(runtime)* Remove suppressions + update to Vite 8
+
+### 💼 Other
+
+- Create-rari-app@0.4.23
 ## [create-rari-app@0.4.22] - 2026-03-11
 
 ### 🐛 Bug Fixes
