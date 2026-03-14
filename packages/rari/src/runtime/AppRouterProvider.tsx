@@ -819,8 +819,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (currentNavigationIdRef.current === detail.navigationId) {
             if (parsedPayload) {
               setRscPayload(parsedPayload)
-              if (wireFormat)
+              if (wireFormat) {
                 lastSuccessfulPayloadRef.current = wireFormat
+                const freshnessMatch = wireFormat.match(FRESHNESS_TOKEN_REGEX)
+                if (freshnessMatch)
+                  lastSuccessfulFreshnessRef.current = freshnessMatch[1]
+              }
               if (!isStale)
                 resetFailureTracking()
             }
