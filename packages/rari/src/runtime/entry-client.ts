@@ -191,8 +191,15 @@ function setupPartialHydration(): void {
                   }
 
                   if (componentInfo.loadPromise && !componentInfo.component) {
-                    // eslint-disable-next-line react-hooks/rules-of-hooks
-                    React.use(componentInfo.loadPromise)
+                    const AsyncComponent = () => {
+                      React.use(componentInfo.loadPromise!)
+                      if (componentInfo.component)
+                        return React.createElement(componentInfo.component, processedProps)
+
+                      return null
+                    }
+
+                    return React.createElement(AsyncComponent, key ? { key } : undefined)
                   }
                 }
 
@@ -647,7 +654,10 @@ function injectHeadContent(headElement: any): void {
 }
 
 function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: any, childProps: any }) {
-  React.use(componentInfo.loadPromise!)
+  if (!componentInfo.loadPromise)
+    return null
+
+  React.use(componentInfo.loadPromise)
 
   if (componentInfo.component) {
     const Component = componentInfo.component
@@ -658,7 +668,7 @@ function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: a
 }
 
 function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, any>): any {
-  if (!rsc)
+  if (rsc === null || rsc === undefined)
     return null
 
   if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
@@ -733,16 +743,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
               })
             }
 
-            return React.createElement(ClientComponentLoader, {
-              key,
-              componentInfo,
-              childProps: props !== null && typeof props === 'object'
-                ? {
-                    ...props,
-                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
-                  }
-                : {},
-            })
+            return null
           }
         }
 

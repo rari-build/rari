@@ -297,7 +297,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (isRootCall)
       fallbackKeyCounterRef.current = 0
 
-    if (!rsc)
+    if (rsc === null || rsc === undefined)
       return null
 
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
@@ -332,20 +332,26 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (!moduleInfo)
             return null
 
-          const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
+          const baseComponent = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
+
+          if (!baseComponent)
+            return null
+
+          const Component = moduleInfo.name && moduleInfo.name !== 'default'
+            ? baseComponent[moduleInfo.name]
+            : baseComponent
 
           if (!Component)
             return null
 
-          if (typeof Component !== 'function')
-            return null
-
           const effectiveKey = serverKey || `fallback-${resolvedType}-${fallbackKeyCounterRef.current++}`
 
-          const childProps = {
-            ...props,
-            children: (props.children !== null && props.children !== undefined) ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
-          }
+          const childProps = props != null
+            ? {
+                ...props,
+                children: (props.children !== null && props.children !== undefined) ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
+              }
+            : undefined
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
 
