@@ -1,3 +1,19 @@
+## [rari@0.10.18] - 2026-03-14
+
+### 🚀 Features
+
+- *(rari)* Optimize RSC payload ref handling and add CLI integration tests
+- *(rari)* Improve RSC rendering and add CLI utility exports
+- *(rari)* Improve stale content handling and navigation state tracking
+- *(rari)* Refactor RSC payload parsing and freshness tracking
+- *(rari)* Add type safety and improve RSC payload ref handling
+- *(rari)* Improve component validation and RSC error tracking
+- *(rari)* Extract and track freshness token from RSC payload
+
+### ⚙️ Miscellaneous Tasks
+
+- *(typescript)* Centralize TypeScript configuration
+- *(rari)* Bump binary dependencies to 0.10.18
 ## [rari@0.10.17] - 2026-03-14
 
 ### 🚀 Features
@@ -7,10 +23,27 @@
 - *(rari)* Add client directive to error boundary and improve component ID generation
 - *(rari)* Add lifecycle management to error boundary component
 - *(rari)* Remove mount checks and improve use client directive handling
+- *(rsc)* Improve component rendering and fix edge cases
+- *(rsc)* Improve component rendering stability and HMR cache handling
+- *(rsc)* Optimize component rendering with memoized callbacks and lazy content loading
+- *(rsc)* Improve error handling, promise cleanup, and component rendering
+- *(rsc)* Improve streaming error format and optimize cache invalidation
+- *(rari)* Migrate to vite-plus CLI and improve RSC root call handling
+- *(rari)* Improve RSC payload handling and suspense cleanup
+- *(rari)* Improve component rendering and async loading
+- *(rari)* Improve type safety and refactor async component loading
+
+### 💼 Other
+
+- Rari@0.10.17
 
 ### 🚜 Refactor
 
 - *(rari)* Optimize routing and middleware with extracted utilities
+
+### ⚙️ Miscellaneous Tasks
+
+- Migrate from tsdown to vite-plus and consolidate build tooling
 ## [rari@0.10.16] - 2026-03-12
 
 ### 🚀 Features
