@@ -191,15 +191,11 @@ function setupPartialHydration(): void {
                   }
 
                   if (componentInfo.loadPromise && !componentInfo.component) {
-                    const AsyncComponent = () => {
-                      React.use(componentInfo.loadPromise!)
-                      if (componentInfo.component)
-                        return React.createElement(componentInfo.component, processedProps)
-
-                      return null
-                    }
-
-                    return React.createElement(AsyncComponent, key ? { key } : undefined)
+                    return React.createElement(ClientComponentLoader, {
+                      key,
+                      componentInfo,
+                      childProps: processedProps,
+                    })
                   }
                 }
 
@@ -220,8 +216,11 @@ function setupPartialHydration(): void {
 
         return element.map((child, index) => {
           let elementKey: string | null = null
-          if (Array.isArray(child) && child.length >= 4 && child[0] === '$')
-            elementKey = child[2]
+          if (Array.isArray(child) && child.length >= 4 && child[0] === '$') {
+            const rawKey = child[2]
+            if (typeof rawKey === 'string' || typeof rawKey === 'number')
+              elementKey = String(rawKey)
+          }
           if (!elementKey)
             elementKey = `rsc-${index}-${typeof child === 'string' ? child : JSON.stringify(child).slice(0, 20)}`
 

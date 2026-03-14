@@ -225,7 +225,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return suspendingPromisesRef.current.get(contentRef)!.promise
   }
 
-  const LazyContent = useCallback(({ contentRef }: { contentRef: string }): any => {
+  const LazyContent = useCallback(({ contentRef }: { contentRef: string }): React.ReactNode => {
     const rows = rowsDataRef.current
     const modules = modulesDataRef.current
     const symbols = symbolsDataRef.current
