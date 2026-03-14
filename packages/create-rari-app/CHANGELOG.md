@@ -1,3 +1,21 @@
+## [create-rari-app@0.4.25] - 2026-03-14
+
+### ⚙️ Miscellaneous Tasks
+
+- *(typescript)* Centralize TypeScript configuration
+## [create-rari-app@0.4.24] - 2026-03-14
+
+### 🚀 Features
+
+- *(rsc)* Improve component rendering and fix edge cases
+
+### 💼 Other
+
+- Create-rari-app@0.4.24
+
+### ⚙️ Miscellaneous Tasks
+
+- Migrate from tsdown to vite-plus and consolidate build tooling
 ## [create-rari-app@0.4.23] - 2026-03-12
 
 ### 🚀 Features
