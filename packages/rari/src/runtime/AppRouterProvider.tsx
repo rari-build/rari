@@ -200,6 +200,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const parseRscWireFormatRef = useRef<any>(null)
   const refetchRscPayloadRef = useRef<any>(null)
   const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
+  const isNavigatingRef = useRef(false)
 
   function clearPendingSuspense() {
     suspendingPromisesRef.current.forEach((entry) => {
@@ -243,6 +244,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const result = rscToReactRef.current(rowData, modules, undefined, symbols, rows)
       return result
     }
+
+    if (isNavigatingRef.current)
+      return null
 
     throw getSuspendingPromise(contentRef)
   }, [])
@@ -619,7 +623,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const refetchRscPayload = useCallback(async (
     targetPath?: string,
     abortSignal?: AbortSignal,
-  ) => {
+  ): Promise<{ payload: any, isStale: boolean }> => {
     const pathToFetch = targetPath || window.location.pathname
     const searchPart = window.location.search
     const fullFetchKey = `${pathToFetch}${searchPart}`
@@ -656,8 +660,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const rscWireFormat = await response.text()
 
         if (isStaleContent(rscWireFormat)) {
-          if (rscPayloadRef.current)
-            return rscPayloadRef.current
+          const error = new Error('Server returned stale content')
+          trackHMRFailure(
+            error,
+            'stale',
+            `Stale content detected: payload timestamp is more than 5 seconds old or matches previous payload`,
+            window.location.pathname,
+          )
+          if (rscPayloadRef.current) {
+            return { payload: rscPayloadRef.current, isStale: true }
+          }
+          throw error
         }
 
         let parsedPayload
@@ -677,7 +690,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         lastSuccessfulPayloadRef.current = rscWireFormat
 
-        return parsedPayload
+        return { payload: parsedPayload, isStale: false }
       }
       catch (error) {
         if (error instanceof Error && !error.message.includes('Failed to fetch RSC data') && !error.message.includes('Failed to parse')) {
@@ -718,6 +731,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       currentNavigationIdRef.current = detail.navigationId
       streamingRowsRef.current = null
       shouldScrollToHashRef.current = true
+      isNavigatingRef.current = true
       clearPendingSuspense()
 
       scrollPositionRef.current = {
@@ -730,6 +744,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         try {
           let parsedPayload
           let wireFormat
+          let isStale = false
 
           if (detail.rscWireFormat) {
             parsedPayload = await parseRscWireFormatRef.current(detail.rscWireFormat, false)
@@ -739,24 +754,27 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             streamingRowsRef.current = []
           }
           else {
-            parsedPayload = await refetchRscPayloadRef.current(
+            const result = await refetchRscPayloadRef.current(
               detail.to,
               detail.abortSignal,
             )
+            parsedPayload = result.payload
+            isStale = result.isStale
             wireFormat = lastSuccessfulPayloadRef.current
           }
 
           if (currentNavigationIdRef.current === detail.navigationId) {
             if (parsedPayload) {
               setRscPayload(parsedPayload)
-              if (wireFormat) {
+              if (wireFormat)
                 lastSuccessfulPayloadRef.current = wireFormat
-              }
-              resetFailureTracking()
+              if (!isStale)
+                resetFailureTracking()
             }
 
             setRenderKey(prev => prev + 1)
             setHmrError(null)
+            isNavigatingRef.current = false
 
             if (onNavigateRef.current)
               onNavigateRef.current(detail)
@@ -766,6 +784,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (error instanceof Error && error.name === 'AbortError')
             return
 
+          isNavigatingRef.current = false
           console.error('[rari] AppRouter: Navigation failed:', error)
 
           window.dispatchEvent(new CustomEvent('rari:navigate-error', {
@@ -801,9 +820,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        const parsedPayload = await refetchRscPayloadRef.current()
-        setRscPayload(parsedPayload)
-        resetFailureTracking()
+        const result = await refetchRscPayloadRef.current()
+        setRscPayload(result.payload)
+        if (!result.isStale)
+          resetFailureTracking()
 
         setRenderKey(prev => prev + 1)
 
@@ -826,9 +846,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleRscInvalidate = async () => {
       try {
-        const parsedPayload = await refetchRscPayloadRef.current()
-        setRscPayload(parsedPayload)
-        resetFailureTracking()
+        const result = await refetchRscPayloadRef.current()
+        setRscPayload(result.payload)
+        if (!result.isStale)
+          resetFailureTracking()
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -843,9 +864,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleManifestUpdated = async () => {
       try {
-        const parsedPayload = await refetchRscPayloadRef.current()
-        setRscPayload(parsedPayload)
-        resetFailureTracking()
+        const result = await refetchRscPayloadRef.current()
+        setRscPayload(result.payload)
+        if (!result.isStale)
+          resetFailureTracking()
         setHmrError(null)
       }
       catch (error) {
