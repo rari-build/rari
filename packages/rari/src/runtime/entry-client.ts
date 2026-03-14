@@ -707,8 +707,12 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
 
             if (componentInfo.loadPromise) {
-              // eslint-disable-next-line react-hooks/rules-of-hooks
-              React.use(componentInfo.loadPromise)
+              const SuspenseLoader = () => {
+                React.use(componentInfo.loadPromise!)
+                return null
+              }
+
+              return React.createElement(SuspenseLoader)
             }
           }
         }

@@ -685,10 +685,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const parseRscWireFormatRef = useRef(parseRscWireFormat)
   const refetchRscPayloadRef = useRef(refetchRscPayload)
 
-  useEffect(() => {
-    parseRscWireFormatRef.current = parseRscWireFormat
-    refetchRscPayloadRef.current = refetchRscPayload
-  })
+  parseRscWireFormatRef.current = parseRscWireFormat
+  refetchRscPayloadRef.current = refetchRscPayload
 
   useEffect(() => {
     if (typeof window === 'undefined')

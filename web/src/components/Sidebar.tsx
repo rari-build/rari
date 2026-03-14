@@ -377,7 +377,7 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                         {hasSubItems && (showItemChevron ? isItemExpanded : true) && (
                                           <ul className="mt-1 space-y-1">
                                             {subItem.items!.map(nestedItem => (
-                                              <li key={nestedItem.href}>
+                                              <li key={`${itemKey}-${nestedItem.href || nestedItem.label}`}>
                                                 <a
                                                   href={nestedItem.href}
                                                   className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href

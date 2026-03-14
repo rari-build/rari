@@ -2,7 +2,14 @@
 (async function () {
   if (globalThis['~render']?.shouldStart) {
     globalThis['~render'].shouldStart = false
-    await globalThis['~render'].componentAsync()
-    globalThis['~render'].completeSignal = true
+    try {
+      await globalThis['~render'].componentAsync()
+      globalThis['~render'].completeSignal = true
+    }
+    catch (error) {
+      console.error('[rari] render_start: Component async execution failed:', error)
+      globalThis['~render'].completeSignal = true
+      throw error
+    }
   }
 })()

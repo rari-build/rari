@@ -59,6 +59,9 @@
     }
 
     globalThis['~components'].isolateData = function (componentId) {
+      if (!globalThis['~rsc'])
+        globalThis['~rsc'] = {}
+
       if (!globalThis['~rsc'].componentData)
         globalThis['~rsc'].componentData = new Map()
 
@@ -83,7 +86,8 @@
       }
 
       if (
-        globalThis['~rsc'].componentData
+        globalThis['~rsc']
+        && globalThis['~rsc'].componentData
         && globalThis['~rsc'].componentData.has(componentId)
       ) {
         const data = globalThis['~rsc'].componentData.get(componentId)

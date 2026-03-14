@@ -1116,8 +1116,9 @@ function ServerComponentWrapper({
   props: any
   fallback?: any
 }): any {
+  const hmrCounter = (typeof window !== 'undefined' && (window as unknown as WindowWithRari)['~rari']?.hmr?.refreshCounters?.[componentId]) || 0
   const propsKey = JSON.stringify(props)
-  const cacheKey = `${componentId}:${propsKey}`
+  const cacheKey = `${componentId}:${propsKey}:hmr:${hmrCounter}`
 
   if (!serverComponentCache.has(cacheKey)) {
     const promise = rscClient.fetchServerComponent(componentId, props)

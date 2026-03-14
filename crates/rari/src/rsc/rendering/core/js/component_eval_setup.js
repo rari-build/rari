@@ -27,7 +27,13 @@ if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
       props = props || {}
-      props.children = children.length === 1 ? children[0] : children
+      if (children.length === 1) {
+        props.children = children[0]
+      }
+      else if (children.length > 1) {
+        props.children = children
+      }
+
       return { $$typeof: Symbol.for('react.transitional.element'), type, props }
     },
     Fragment(props) { return props?.children ?? null },
