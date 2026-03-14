@@ -1477,8 +1477,27 @@ if (import.meta.hot) {
       }
     }
 
-    for (const key of keysToDelete)
+    for (const key of keysToDelete) {
       rscClient.componentCache.delete(key)
+      serverComponentCache.delete(key)
+    }
+
+    const serverCacheKeysToDelete = []
+    for (const key of serverComponentCache.keys()) {
+      for (const route of routes) {
+        if (key.includes(`route:${route}:`) || key.startsWith(`${route}:`)) {
+          serverCacheKeysToDelete.push(key)
+          break
+        }
+        if (route !== '/' && key.includes(`route:${route}/`)) {
+          serverCacheKeysToDelete.push(key)
+          break
+        }
+      }
+    }
+
+    for (const key of serverCacheKeysToDelete)
+      serverComponentCache.delete(key)
   }
 
   async function invalidateAppRouterCache(data: any): Promise<void> {

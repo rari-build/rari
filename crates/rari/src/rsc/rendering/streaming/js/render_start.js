@@ -11,9 +11,9 @@
       globalThis['~render'].completeSignal = true
       globalThis['~render'].initialComplete = true
       globalThis['~render'].streamingResult = {
-        error: true,
-        message: error?.message || String(error),
-        stack: error?.stack,
+        success: false,
+        error: error?.message || String(error),
+        error_stack: error?.stack,
       }
       globalThis['~render'].lastError = error
     }

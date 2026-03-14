@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
 
@@ -86,6 +86,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const shouldScrollToHashRef = useRef<boolean>(
     typeof window !== 'undefined' && window.location.hash.length > 0,
   )
+  const fallbackKeyCounterRef = useRef<number>(0)
   const MAX_RETRIES = 3
 
   const saveFormState = () => {
@@ -195,6 +196,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const processPropsRef = useRef<any>(null)
   const rscToReactRef = useRef<any>(null)
+  const parseRscWireFormatRef = useRef<any>(null)
+  const refetchRscPayloadRef = useRef<any>(null)
   const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
 
   function getSuspendingPromise(contentRef: string): Promise<never> {
@@ -323,7 +326,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (typeof Component !== 'function')
             return null
 
-          const effectiveKey = serverKey || `fallback-${Math.random()}`
+          const effectiveKey = serverKey || `fallback-${resolvedType}-${fallbackKeyCounterRef.current++}`
 
           const childProps = {
             ...props,
@@ -697,8 +700,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return fetchPromise
   }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent, resetFailureTracking])
 
-  const parseRscWireFormatRef = useRef(parseRscWireFormat)
-  const refetchRscPayloadRef = useRef(refetchRscPayload)
+  onNavigateRef.current = onNavigate
+  parseRscWireFormatRef.current = parseRscWireFormat
+  refetchRscPayloadRef.current = refetchRscPayload
 
   useEffect(() => {
     if (typeof window === 'undefined')
@@ -898,12 +902,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       })
     }
   }, [rscPayload])
-
-  useLayoutEffect(() => {
-    onNavigateRef.current = onNavigate
-    parseRscWireFormatRef.current = parseRscWireFormat
-    refetchRscPayloadRef.current = refetchRscPayload
-  }, [onNavigate, parseRscWireFormat, refetchRscPayload])
 
   const handleManualRefresh = () => {
     window.location.reload()
