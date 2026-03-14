@@ -1,5 +1,5 @@
-/* eslint-disable no-undef */
-/* eslint-disable style/object-curly-spacing */
+/* eslint-disable no-undef, style/object-curly-spacing */
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
   let Component
   let componentSource = 'not found'
@@ -153,7 +153,7 @@
         try {
           await error.promise
 
-          const newElement = Component(props)
+          const newElement = isAsyncComponent ? await Component(props) : Component(props)
 
           const rscResult = elementToRSC(newElement, '{component_id}')
 

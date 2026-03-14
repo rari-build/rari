@@ -68,8 +68,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
 
-    docsNavigation.forEach((section, idx) => {
-      const sectionKey = `section-${idx}`
+    docsNavigation.forEach((section) => {
+      const sectionKey = section.href || section.label
 
       if (manualToggles[sectionKey] !== undefined) {
         sections[sectionKey] = manualToggles[sectionKey]
@@ -90,8 +90,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
       }
 
       if (section.items) {
-        section.items.forEach((item, itemIdx) => {
-          const itemKey = `${sectionKey}-item-${itemIdx}`
+        section.items.forEach((item) => {
+          const itemKey = `${sectionKey}-${item.href || item.label}`
 
           if (manualToggles[itemKey] !== undefined) {
             sections[itemKey] = manualToggles[itemKey]
@@ -273,14 +273,14 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                   {isDocs && isDocsExpanded && (
                     <div className="mt-1">
                       <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
-                        {docsNavigation.map((section, idx) => {
-                          const sectionKey = `section-${idx}`
+                        {docsNavigation.map((section) => {
+                          const sectionKey = section.href || section.label
                           const isSectionExpanded = expandedSections[sectionKey] !== undefined ? expandedSections[sectionKey] : true
                           const hasSectionItems = section.items && section.items.length > 0
                           const showSectionChevron = hasSectionItems && section.label === 'Getting Started'
 
                           return (
-                            <div key={idx}>
+                            <div key={sectionKey}>
                               <div className="flex items-center">
                                 {section.href
                                   ? (
@@ -323,14 +323,14 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                               </div>
                               {hasSectionItems && (showSectionChevron ? isSectionExpanded : true) && (
                                 <ul className="mt-1 space-y-1">
-                                  {section.items!.map((subItem, itemIdx) => {
-                                    const itemKey = `${sectionKey}-item-${itemIdx}`
+                                  {section.items!.map((subItem) => {
+                                    const itemKey = `${sectionKey}-${subItem.href || subItem.label}`
                                     const isItemExpanded = expandedSections[itemKey] !== undefined ? expandedSections[itemKey] : true
                                     const hasSubItems = subItem.items && subItem.items.length > 0
                                     const showItemChevron = hasSubItems
 
                                     return (
-                                      <li key={itemIdx}>
+                                      <li key={subItem.href || subItem.label}>
                                         <div className="flex items-center">
                                           {subItem.href
                                             ? (
@@ -376,8 +376,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
                                         </div>
                                         {hasSubItems && (showItemChevron ? isItemExpanded : true) && (
                                           <ul className="mt-1 space-y-1">
-                                            {subItem.items!.map((nestedItem, subIdx) => (
-                                              <li key={subIdx}>
+                                            {subItem.items!.map(nestedItem => (
+                                              <li key={`${itemKey}-${nestedItem.href || nestedItem.label}`}>
                                                 <a
                                                   href={nestedItem.href}
                                                   className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href

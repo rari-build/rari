@@ -584,6 +584,7 @@ const nodeModules = new Map([
       clearTimeout: globalThis.clearTimeout,
       setInterval: globalThis.setInterval,
       clearInterval: globalThis.clearInterval,
+      // oxlint-disable-next-line @typescript-eslint/no-implied-eval
       setImmediate: fn => setTimeout(fn, 0),
       clearImmediate: clearTimeout,
     },
@@ -595,6 +596,7 @@ const nodeModules = new Map([
       clearTimeout: globalThis.clearTimeout,
       setInterval: globalThis.setInterval,
       clearInterval: globalThis.clearInterval,
+      // oxlint-disable-next-line @typescript-eslint/no-implied-eval
       setImmediate: fn => setTimeout(fn, 0),
       clearImmediate: clearTimeout,
     },

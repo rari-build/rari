@@ -1,4 +1,4 @@
-import { SVGProps } from 'react'
+import type { SVGProps } from 'react'
 
 export default function News(props: SVGProps<SVGSVGElement>) {
   return (

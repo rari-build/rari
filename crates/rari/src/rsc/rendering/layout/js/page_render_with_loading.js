@@ -1,5 +1,6 @@
 /* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing */
 // oxlint-disable vars-on-top, no-var, block-scoped-var, no-redeclare
+// @ts-nocheck
 const startPage = performance.now()
 const PageComponent = globalThis['{page_component_id}']
 if (!PageComponent || typeof PageComponent !== 'function')
@@ -42,7 +43,7 @@ else {
         '~rari_loading_id': '{loading_file_path}#default',
       }
 
-      const loadingFallback = LoadingComponent()
+      const loadingFallback = React.createElement(LoadingComponent)
 
       pageElement = React.createElement(
         React.Suspense,
@@ -53,7 +54,7 @@ else {
     else {
       const pageResult = (async () => await PageComponent(pageProps))()
 
-      const loadingFallback = LoadingComponent()
+      const loadingFallback = React.createElement(LoadingComponent)
       pageElement = React.createElement(
         React.Suspense,
         { fallback: loadingFallback },

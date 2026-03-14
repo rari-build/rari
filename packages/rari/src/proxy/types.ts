@@ -60,7 +60,7 @@ export type ProxyFunction = (
   event?: RariFetchEvent,
 ) => Promise<any> | any
 
-export type ProxyCondition = {
+export interface ProxyCondition {
   type: 'header' | 'query' | 'cookie'
   key: string
   value?: string

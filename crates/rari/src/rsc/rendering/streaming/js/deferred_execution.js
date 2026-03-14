@@ -1,4 +1,5 @@
 /* eslint-disable no-undef */
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
   if (typeof React === 'undefined' || !React) {
     return {

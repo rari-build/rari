@@ -1,6 +1,8 @@
 import type { GlobalWithRari, WindowWithRari } from './shared/types'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - rari/client is resolved from the built package (circular reference)
 import { ClientRouter } from 'rari/client'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - rari/router is resolved from the built package (circular reference)
 import { RouterProvider } from 'rari/router'
 import * as React from 'react'
@@ -12,6 +14,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
@@ -188,7 +191,15 @@ function setupPartialHydration(): void {
                   }
 
                   if (componentInfo.loadPromise && !componentInfo.component) {
-                    React.use(componentInfo.loadPromise)
+                    return React.createElement(
+                      React.Suspense,
+                      { fallback: null },
+                      React.createElement(ClientComponentLoader, {
+                        key,
+                        componentInfo,
+                        childProps: processedProps,
+                      }),
+                    )
                   }
                 }
 
@@ -208,9 +219,20 @@ function setupPartialHydration(): void {
         }
 
         return element.map((child, index) => {
+          let elementKey: string | null = null
+          if (Array.isArray(child) && child.length >= 4 && child[0] === '$') {
+            const rawKey = child[2]
+            if (typeof rawKey === 'string' || typeof rawKey === 'number')
+              elementKey = String(rawKey)
+          }
+          if (!elementKey)
+            elementKey = `rsc-${index}-${typeof child === 'string' ? child : JSON.stringify(child).slice(0, 20)}`
+
           const result = rscToReactElement(child)
-          if (React.isValidElement(result) && !result.key)
-            return React.cloneElement(result, { key: index })
+
+          if (React.isValidElement(result) && !result.key) {
+            return React.createElement(React.Fragment, { key: elementKey }, result)
+          }
 
           return result
         })
@@ -539,16 +561,12 @@ export async function renderApp(): Promise<void> {
 
     wrappedContent = React.createElement(
       ClientRouter,
-      // @ts-ignore - children passed as third argument; type checking varies based on build state
-      { initialRoute: window.location.pathname },
-      wrappedContent,
+      { initialRoute: window.location.pathname, children: wrappedContent },
     )
 
     wrappedContent = React.createElement(
       RouterProvider,
-      // @ts-ignore - children passed as third argument; type checking varies based on build state
-      { initialPathname: window.location.pathname },
-      wrappedContent,
+      { initialPathname: window.location.pathname, children: wrappedContent },
     )
 
     const root = createRoot(rootElement)
@@ -638,8 +656,22 @@ function injectHeadContent(headElement: any): void {
   }
 }
 
+function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: any, childProps: any }) {
+  if (!componentInfo.loadPromise)
+    return null
+
+  React.use(componentInfo.loadPromise)
+
+  if (componentInfo.component) {
+    const Component = componentInfo.component
+    return React.createElement(Component, childProps)
+  }
+
+  return null
+}
+
 function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, any>): any {
-  if (!rsc)
+  if (rsc === null || rsc === undefined)
     return null
 
   if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
@@ -678,10 +710,12 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
           if (componentInfo) {
             if (componentInfo.component) {
               const Component = componentInfo.component
-              const childProps = {
-                ...props,
-                children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
-              }
+              const childProps = props !== null && typeof props === 'object'
+                ? {
+                    ...props,
+                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+                  }
+                : {}
               return React.createElement(Component, { key, ...childProps })
             }
             else if (componentInfo.loader && !componentInfo.loading) {
@@ -699,8 +733,24 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
 
             if (componentInfo.loadPromise) {
-              React.use(componentInfo.loadPromise)
+              const childProps = props !== null && typeof props === 'object'
+                ? {
+                    ...props,
+                    children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+                  }
+                : {}
+              return React.createElement(
+                React.Suspense,
+                { fallback: null },
+                React.createElement(ClientComponentLoader, {
+                  key,
+                  componentInfo,
+                  childProps,
+                }),
+              )
             }
+
+            return null
           }
         }
 
@@ -733,7 +783,7 @@ function processProps(props: any, modules: Map<string, any>, symbols: Map<string
       if (key.startsWith('$') || key === 'ref')
         continue
       if (key === 'children')
-        processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
+        processed[key] = rscToReact(props.children, modules, symbols)
       else if (key === 'dangerouslySetInnerHTML')
         processed[key] = props[key]
       else

@@ -1,3 +1,4 @@
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
   try {
     if (typeof globalThis.resolveServerFunctionsForComponent === 'function')

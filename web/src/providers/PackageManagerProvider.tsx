@@ -1,8 +1,8 @@
-/* eslint-disable react/no-use-context, react/no-context-provider */
+/* eslint-disable react-refresh/only-export-components */
 'use client'
 
 import type { ReactNode } from 'react'
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, use, useCallback, useState } from 'react'
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
 
@@ -42,14 +42,14 @@ export function PackageManagerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <PackageManagerContext.Provider value={{ packageManager, setPackageManager: handleSetPackageManager }}>
+    <PackageManagerContext value={{ packageManager, setPackageManager: handleSetPackageManager }}>
       {children}
-    </PackageManagerContext.Provider>
+    </PackageManagerContext>
   )
 }
 
 export function usePackageManager() {
-  const context = useContext(PackageManagerContext)
+  const context = use(PackageManagerContext)
 
   if (!context) {
     throw new Error('usePackageManager must be used within a PackageManagerProvider')

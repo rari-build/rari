@@ -14,10 +14,10 @@
     }
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "vp pack"
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
-    "tsdown": "catalog:build"
+    "vite-plus": "catalog:build"
   }
 }

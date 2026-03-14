@@ -16,14 +16,14 @@ export default function Breadcrumbs({ pathname }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className="not-prose mb-6 pt-1 pl-1 overflow-x-auto scrollbar-none">
       <ol className="flex items-center space-x-2 text-sm whitespace-nowrap">
-        {breadcrumbs.map((crumb, index) => {
-          const isLast = index === breadcrumbs.length - 1
+        {breadcrumbs.map((crumb) => {
+          const isLast = crumb === breadcrumbs.at(-1)
           const isDocsLink = crumb.href === '/docs/getting-started'
           const shouldDisableDocsLink = isDocsLink && isGettingStarted
 
           return (
-            <li key={index} className="flex items-center">
-              {index > 0 && (
+            <li key={crumb.href || crumb.label} className="flex items-center">
+              {!isLast && breadcrumbs.indexOf(crumb) > 0 && (
                 <ChevronRight
                   className="w-4 h-4 mx-2 text-gray-600"
                 />

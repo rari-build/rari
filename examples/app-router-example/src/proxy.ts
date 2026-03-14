@@ -1,4 +1,5 @@
-import { RariRequest, RariResponse } from 'rari'
+import type { RariRequest } from 'rari'
+import { RariResponse } from 'rari'
 
 export function proxy(request: RariRequest) {
   const { pathname } = request.rariUrl

@@ -1,5 +1,5 @@
 import { extractParams, matchesPattern } from '@rari/proxy/matcher'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe('matchesPattern', () => {
   describe('exact matches', () => {

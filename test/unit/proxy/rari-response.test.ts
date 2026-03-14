@@ -1,5 +1,5 @@
 import { RariResponse } from '@rari/proxy/RariResponse'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe('RariResponse', () => {
   describe('constructor', () => {

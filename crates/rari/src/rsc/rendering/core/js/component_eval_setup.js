@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define, no-var, vars-on-top */
 // oxlint-disable block-scoped-var, no-use-before-define, no-var, vars-on-top
 if (typeof _jsx === 'undefined')
   var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
@@ -25,16 +26,24 @@ class ReactComponent {
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
-      return { $$typeof: Symbol.for('react.transitional.element'), type, props: props || {}, children }
+      const normalizedProps = props ? { ...props } : {}
+      if (children.length === 1) {
+        normalizedProps.children = children[0]
+      }
+      else if (children.length > 1) {
+        normalizedProps.children = children
+      }
+
+      return { $$typeof: Symbol.for('react.transitional.element'), type, props: normalizedProps }
     },
-    Fragment(props) { return props?.children || null },
-    Suspense(props) { return props?.children || props?.fallback || null },
+    Fragment(props) { return props?.children ?? null },
+    Suspense(props) { return props?.children ?? props?.fallback ?? null },
     Component: ReactComponent,
   }
 }
 
 if (!globalThis.React.Suspense)
-  globalThis.React.Suspense = function (props) { return props?.children || props?.fallback || null }
+  globalThis.React.Suspense = function (props) { return props?.children ?? props?.fallback ?? null }
 
 if (!globalThis.React.Component)
   globalThis.React.Component = ReactComponent

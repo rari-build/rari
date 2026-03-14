@@ -99,10 +99,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "pnpm clean && pnpm typecheck && tsdown",
+    "build": "pnpm clean && pnpm typecheck && vp pack",
     "clean": "rm -rf dist",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
   },
   "peerDependencies": {
@@ -126,8 +126,6 @@
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
-    "oxlint": "catalog:eslint",
-    "tsdown": "catalog:build",
-    "vite": "catalog:build"
+    "vite-plus": "catalog:build"
   }
 }

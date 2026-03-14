@@ -1,5 +1,6 @@
+import type { ReactElement, ReactNode } from 'react'
 import * as React from 'react'
-import { Component, ReactElement, ReactNode, Suspense } from 'react'
+import { Component, Suspense } from 'react'
 
 export interface RuntimeClient {
   initialize: () => Promise<void>

@@ -1,12 +1,7 @@
 {
+  "extends": "../../.config/typescript/package.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true
+    "jsx": "react-jsx"
   },
   "include": ["src"]
 }

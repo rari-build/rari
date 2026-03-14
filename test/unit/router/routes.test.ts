@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { generateAppRouteManifest } from '@rari/router/routes'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 vi.mock('node:fs', () => ({
   promises: {

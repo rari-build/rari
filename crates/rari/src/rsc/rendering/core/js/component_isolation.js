@@ -1,4 +1,5 @@
 /* eslint-disable e18e/prefer-static-regex */
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function initializeComponentIsolation() {
   const FN_MATCH_REGEX = /(\w+)\s*\(/
   try {
@@ -48,7 +49,9 @@
             .then((result) => {
               globalThis['~components'].resolvedValues.set(key, result)
             })
-            .catch(() => {})
+            .catch((error) => {
+              console.error(`Failed to resolve global promise for key "${key}" in component context:`, error)
+            })
         }
       }
 
@@ -56,6 +59,9 @@
     }
 
     globalThis['~components'].isolateData = function (componentId) {
+      if (!globalThis['~rsc'])
+        globalThis['~rsc'] = {}
+
       if (!globalThis['~rsc'].componentData)
         globalThis['~rsc'].componentData = new Map()
 
@@ -80,7 +86,8 @@
       }
 
       if (
-        globalThis['~rsc'].componentData
+        globalThis['~rsc']
+        && globalThis['~rsc'].componentData
         && globalThis['~rsc'].componentData.has(componentId)
       ) {
         const data = globalThis['~rsc'].componentData.get(componentId)

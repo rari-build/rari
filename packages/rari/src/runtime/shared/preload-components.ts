@@ -1,5 +1,5 @@
+import type { GlobalWithRari, ModuleData } from './types'
 import { BACKSLASH_REGEX, SRC_PREFIX_REGEX } from '../../shared/regex-constants'
-import { GlobalWithRari, ModuleData } from './types'
 
 export async function preloadComponentsFromModules(modules: Map<string, ModuleData>): Promise<void> {
   const clientComponents = (globalThis as unknown as GlobalWithRari)['~clientComponents'] || {}

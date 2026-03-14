@@ -1,6 +1,6 @@
 import type { Sitemap, SitemapVideo } from '@rari/types/metadata-route'
 import { generateSitemapXml } from '@rari/router/sitemap-generator'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe('generateSitemapXml', () => {
   describe('basic sitemap', () => {

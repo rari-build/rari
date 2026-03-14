@@ -1,12 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["node"],
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true
-  },
+  "extends": "../../.config/typescript/package.json",
   "include": ["src"]
 }

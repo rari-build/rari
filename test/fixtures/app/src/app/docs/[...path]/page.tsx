@@ -15,7 +15,7 @@ export default async function DocsPage({ params }: PageProps) {
       <p>This is a catch-all route.</p>
       <div data-testid="path-segments" data-segments={JSON.stringify(pathArray)}>
         {pathArray.map((segment, i) => (
-          <span key={i} data-testid={`segment-${i}`}>{segment}</span>
+          <span key={segment} data-testid={`segment-${i}`}>{segment}</span>
         ))}
       </div>
       <div data-testid="path-length">{String(pathArray.length)}</div>

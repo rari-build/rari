@@ -1,3 +1,4 @@
+// oxlint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/await-thenable, @typescript-eslint/no-base-to-string
 (async function () {
   try {
     if (!globalThis['~suspense'])

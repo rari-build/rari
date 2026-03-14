@@ -1,5 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
-/* eslint-disable unused-imports/no-unused-vars */
+/* eslint-disable unused-imports/no-unused-vars, no-use-before-define */
 // oxlint-disable no-use-before-define
 import { core, internals, primordials } from 'ext:core/mod.js'
 import { op_set_format_exception_callback } from 'ext:core/ops'

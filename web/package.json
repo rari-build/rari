@@ -15,8 +15,8 @@
     "dev": "rari dev",
     "start": "rari start",
     "clean": "rm -rf dist",
-    "lint": "oxlint -c ../.oxlintrc.json",
-    "lint:fix": "oxlint -c ../.oxlintrc.json --fix",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
     "typecheck": "tsgo",
     "worker:dev": "wrangler dev worker/worker.js",
     "worker:deploy": "wrangler deploy worker/worker.js"
@@ -43,9 +43,8 @@
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
-    "oxlint": "catalog:eslint",
     "tailwindcss": "catalog:tailwind",
-    "vite": "catalog:build",
+    "vite-plus": "catalog:build",
     "wrangler": "catalog:build"
   }
 }

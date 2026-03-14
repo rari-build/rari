@@ -51,13 +51,14 @@ export default function HeroSection() {
 
         <div className="flex flex-wrap items-center justify-center gap-3">
           {[
-            { label: 'Rust Runtime + V8', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
-            { label: 'React Server Components', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
-            { label: 'Streaming & Suspense', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
-            { label: 'Zero Config', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
-          ].map((feature, i) => (
+            { id: 'rust-v8', label: 'Rust Runtime + V8', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
+            { id: 'rsc', label: 'React Server Components', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
+            { id: 'streaming', label: 'Streaming & Suspense', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
+            { id: 'zero-config', label: 'Zero Config', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+          ].map(feature => (
+
             <div
-              key={i}
+              key={feature.id}
               className={`px-4 py-2 ${feature.bg} border ${feature.border} rounded-full text-xs font-medium ${feature.text} backdrop-blur-sm`}
             >
               {feature.label}

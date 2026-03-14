@@ -40,12 +40,12 @@
     "templates"
   ],
   "scripts": {
-    "build": "pnpm clean && pnpm typecheck && tsdown",
-    "dev": "tsdown --watch",
+    "build": "pnpm clean && pnpm typecheck && vp pack",
+    "dev": "vp pack --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsgo",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsgo"
   },
   "dependencies": {
     "@clack/prompts": "catalog:cli"
@@ -53,7 +53,6 @@
   "devDependencies": {
     "@types/node": "catalog:typescript",
     "@typescript/native-preview": "catalog:typescript",
-    "oxlint": "catalog:eslint",
-    "tsdown": "catalog:build"
+    "vite-plus": "catalog:build"
   }
 }

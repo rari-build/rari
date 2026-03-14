@@ -1,6 +1,6 @@
 import type { Robots } from '@rari/types/metadata-route'
 import { generateRobotsTxt } from '@rari/router/robots-generator'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe('generateRobotsTxt', () => {
   describe('basic rules', () => {

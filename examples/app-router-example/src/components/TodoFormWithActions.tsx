@@ -8,7 +8,7 @@ interface TodoFormProps {
   onSuccess?: () => void
 }
 
-type FormState = {
+interface FormState {
   success: boolean
   error?: string
   todos?: Todo[]

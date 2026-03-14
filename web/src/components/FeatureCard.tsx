@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Code from '@/components/icons/Code'
 import Npm from '@/components/icons/Npm'
 import ReactIcon from '@/components/icons/React'
