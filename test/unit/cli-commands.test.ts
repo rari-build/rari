@@ -15,6 +15,16 @@ function runCLI(args: string[], env: Record<string, string> = {}): Promise<{ cod
 
     let stdout = ''
     let stderr = ''
+    let resolved = false
+    let timeoutId: NodeJS.Timeout
+
+    const cleanup = (result: { code: number, stdout: string, stderr: string }) => {
+      if (resolved)
+        return
+      resolved = true
+      clearTimeout(timeoutId)
+      resolve(result)
+    }
 
     child.stdout?.on('data', (data) => {
       stdout += data.toString()
@@ -25,16 +35,16 @@ function runCLI(args: string[], env: Record<string, string> = {}): Promise<{ cod
     })
 
     child.on('close', (code) => {
-      resolve({ code: code || 0, stdout, stderr })
+      cleanup({ code: code || 0, stdout, stderr })
     })
 
     child.on('error', () => {
-      resolve({ code: 1, stdout, stderr })
+      cleanup({ code: 1, stdout, stderr })
     })
 
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       child.kill()
-      resolve({ code: -1, stdout, stderr })
+      cleanup({ code: -1, stdout, stderr })
     }, 2000)
   })
 }
