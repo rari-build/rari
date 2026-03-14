@@ -161,7 +161,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         detail: failure,
       }))
     }
-  }, [MAX_RETRIES])
+  }, [])
 
   const handleFallbackReload = () => {
     setTimeout(() => {
@@ -186,14 +186,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }, [])
 
   const pendingRefsRef = useRef<Set<string>>(new Set())
-  const rowsDataRef = useRef<Map<string, any>>(new Map())
-  const modulesDataRef = useRef<Map<string, any>>(new Map())
-  const symbolsDataRef = useRef<Map<string, string>>(new Map())
 
-  const processPropsRef = useRef<any>(null)
-  const rscToReactRef = useRef<any>(null)
-  const parseRscWireFormatRef = useRef<any>(null)
-  const refetchRscPayloadRef = useRef<any>(null)
+  type ProcessPropsFunction = (props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>) => any
+  type RscToReactFunction = (rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>, isRoot?: boolean) => any
+  type ParseRscWireFormatFunction = (wireFormat: string, extractBoundaries?: boolean) => Promise<any>
+  type RefetchRscPayloadFunction = (targetPath?: string, abortSignal?: AbortSignal) => Promise<{ payload: any, isStale: boolean }>
+
+  const processPropsRef = useRef<ProcessPropsFunction | null>(null)
+  const rscToReactRef = useRef<RscToReactFunction | null>(null)
+  const parseRscWireFormatRef = useRef<ParseRscWireFormatFunction | null>(null)
+  const refetchRscPayloadRef = useRef<RefetchRscPayloadFunction | null>(null)
   const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
   const isNavigatingRef = useRef(false)
 
@@ -222,11 +224,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return suspendingPromisesRef.current.get(contentRef)!.promise
   }
 
-  const LazyContent = useCallback(({ contentRef }: { contentRef: string }): React.ReactNode => {
-    const rows = rowsDataRef.current
-    const modules = modulesDataRef.current
-    const symbols = symbolsDataRef.current
-
+  const LazyContent = useCallback(({ contentRef, rows, modules, symbols }: {
+    contentRef: string
+    rows: Map<string, any>
+    modules: Map<string, any>
+    symbols: Map<string, string>
+  }): React.ReactNode => {
     if (rows.has(contentRef)) {
       const entry = suspendingPromisesRef.current.get(contentRef)
       if (entry) {
@@ -236,7 +239,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
 
       const rowData = rows.get(contentRef)
-      const result = rscToReactRef.current(rowData, modules, undefined, symbols, rows)
+      const result = rscToReactRef.current!(rowData, modules, undefined, symbols, rows)
       return result
     }
 
@@ -250,13 +253,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (!props || typeof props !== 'object')
       return props
 
-    if (rows)
-      rowsDataRef.current = rows
-    if (modules)
-      modulesDataRef.current = modules
-    if (symbols)
-      symbolsDataRef.current = symbols
-
     const processed: any = {}
     for (const key in props) {
       if (Object.hasOwn(props, key)) {
@@ -267,25 +263,28 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             if (rows && rows.has(children)) {
               const rowData = rows.get(children)
               pendingRefsRef.current.delete(children)
-              processed[key] = rscToReactRef.current(rowData, modules, layoutPath, symbols, rows)
+              processed[key] = rscToReactRef.current!(rowData, modules, layoutPath, symbols, rows)
             }
             else {
               pendingRefsRef.current.add(children)
               processed[key] = React.createElement(LazyContent, {
                 key: `lazy-${children}`,
                 contentRef: children,
+                rows: rows || new Map(),
+                modules: modules || new Map(),
+                symbols: symbols || new Map(),
               })
             }
           }
           else {
-            processed[key] = (children !== null && children !== undefined) ? rscToReactRef.current(children, modules, layoutPath, symbols, rows) : undefined
+            processed[key] = (children !== null && children !== undefined) ? rscToReactRef.current!(children, modules, layoutPath, symbols, rows) : undefined
           }
         }
         else if (key === 'dangerouslySetInnerHTML') {
           processed[key] = props[key]
         }
         else {
-          processed[key] = rscToReactRef.current(props[key], modules, layoutPath, symbols, rows)
+          processed[key] = rscToReactRef.current!(props[key], modules, layoutPath, symbols, rows)
         }
       }
     }
@@ -322,7 +321,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         if (resolvedType === 'Suspense' || type === 'Suspense') {
-          const processedProps = processPropsRef.current(props, modules, layoutPath, symbols, rows)
+          const processedProps = processPropsRef.current!(props, modules, layoutPath, symbols, rows)
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }
 
@@ -343,6 +342,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           if (!Component)
             return null
+
+          if (typeof Component !== 'function') {
+            console.error('[rari] AppRouter: Component is not a function:', {
+              moduleId: moduleInfo.id,
+              exportName: moduleInfo.name,
+              componentType: typeof Component,
+              resolvedType,
+            })
+            return null
+          }
 
           const effectiveKey = serverKey || `fallback-${resolvedType}-${fallbackKeyCounterRef.current++}`
 
@@ -369,7 +378,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
         }
 
-        const processedProps = processPropsRef.current(props, modules, layoutPath, symbols, rows)
+        const processedProps = processPropsRef.current!(props, modules, layoutPath, symbols, rows)
         return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
 
@@ -790,14 +799,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           let isStale = false
 
           if (detail.rscWireFormat) {
-            parsedPayload = await parseRscWireFormatRef.current(detail.rscWireFormat, false)
+            parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
             wireFormat = detail.rscWireFormat
           }
           else if (detail.isStreaming) {
             streamingRowsRef.current = []
           }
           else {
-            const result = await refetchRscPayloadRef.current(
+            const result = await refetchRscPayloadRef.current!(
               detail.to,
               detail.abortSignal,
             )
@@ -863,7 +872,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        const result = await refetchRscPayloadRef.current()
+        const result = await refetchRscPayloadRef.current!()
+        clearPendingSuspense()
         setRscPayload(result.payload)
         if (!result.isStale)
           resetFailureTracking()
@@ -889,7 +899,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleRscInvalidate = async () => {
       try {
-        const result = await refetchRscPayloadRef.current()
+        const result = await refetchRscPayloadRef.current!()
+        clearPendingSuspense()
         setRscPayload(result.payload)
         if (!result.isStale)
           resetFailureTracking()
@@ -907,7 +918,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleManifestUpdated = async () => {
       try {
-        const result = await refetchRscPayloadRef.current()
+        const result = await refetchRscPayloadRef.current!()
+        clearPendingSuspense()
         setRscPayload(result.payload)
         if (!result.isStale)
           resetFailureTracking()
@@ -935,7 +947,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       try {
         const wireFormat = streamingRowsRef.current.join('\n')
-        const parsedPayload = await parseRscWireFormatRef.current(wireFormat, false)
+        const parsedPayload = await parseRscWireFormatRef.current!(wireFormat, false)
         const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
 
         if (isInitialShell) {
