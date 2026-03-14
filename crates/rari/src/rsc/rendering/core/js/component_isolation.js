@@ -49,7 +49,9 @@
             .then((result) => {
               globalThis['~components'].resolvedValues.set(key, result)
             })
-            .catch(() => {})
+            .catch((error) => {
+              console.error(`Failed to resolve global promise for key "${key}" in component context:`, error)
+            })
         }
       }
 

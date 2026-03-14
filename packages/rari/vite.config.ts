@@ -24,8 +24,6 @@ export default defineConfig({
       'proxy/RariRequest': 'src/proxy/RariRequest.ts',
       'proxy/RariResponse': 'src/proxy/RariResponse.ts',
     },
-    dts: true,
-    format: 'esm',
     minify: true,
     deps: {
       neverBundle: [

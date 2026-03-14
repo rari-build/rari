@@ -68,8 +68,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
 
-    docsNavigation.forEach((section, idx) => {
-      const sectionKey = `section-${idx}`
+    docsNavigation.forEach((section) => {
+      const sectionKey = section.href || section.label
 
       if (manualToggles[sectionKey] !== undefined) {
         sections[sectionKey] = manualToggles[sectionKey]
@@ -90,8 +90,8 @@ export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
       }
 
       if (section.items) {
-        section.items.forEach((item, itemIdx) => {
-          const itemKey = `${sectionKey}-item-${itemIdx}`
+        section.items.forEach((item) => {
+          const itemKey = `${sectionKey}-${item.href || item.label}`
 
           if (manualToggles[itemKey] !== undefined) {
             sections[itemKey] = manualToggles[itemKey]

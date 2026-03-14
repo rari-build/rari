@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
   resolve: {
     alias: {
-      '@rari': new URL('./packages/rari/src', import.meta.url).pathname,
+      '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
     },
   },
   test: {
@@ -12,7 +13,7 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     coverage: {
       include: [
-        'packages/*/src/**/*.ts',
+        'packages/*/src/**/*.{ts,tsx}',
       ],
       exclude: [
         'node_modules/',

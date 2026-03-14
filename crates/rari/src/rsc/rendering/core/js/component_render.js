@@ -153,7 +153,7 @@
         try {
           await error.promise
 
-          const newElement = Component(props)
+          const newElement = isAsyncComponent ? await Component(props) : Component(props)
 
           const rscResult = elementToRSC(newElement, '{component_id}')
 

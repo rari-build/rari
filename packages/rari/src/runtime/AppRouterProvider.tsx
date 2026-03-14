@@ -88,9 +88,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   )
   const MAX_RETRIES = 3
 
-  useEffect(() => {
-    onNavigateRef.current = onNavigate
-  }, [onNavigate])
+  onNavigateRef.current = onNavigate
 
   const saveFormState = () => {
     if (typeof document === 'undefined')
@@ -269,8 +267,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
 
         if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
-          const stableKey = `rsc-${typeof child === 'object' && child !== null ? JSON.stringify(child).substring(0, 50) : index}-${index}`
-          return React.createElement(React.Fragment, { key: stableKey }, element)
+          const fallbackKey = Array.isArray(child) && child[0] === '$' && child[2] != null
+            ? `rsc-${child[2]}`
+            : index
+          return React.createElement(React.Fragment, { key: fallbackKey }, element)
         }
 
         return element

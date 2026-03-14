@@ -5,6 +5,4 @@
     await globalThis['~render'].componentAsync()
     globalThis['~render'].completeSignal = true
   }
-
-  return { started: true }
 })()

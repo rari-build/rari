@@ -1,5 +1,5 @@
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
-import { createElement, Fragment, isValidElement, Suspense, use, useEffect, useState } from 'react'
+import { cloneElement, createElement, isValidElement, Suspense, use, useEffect, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 import {
   CAMEL_CASE_REGEX,
@@ -434,6 +434,8 @@ async function loadRscClient(): Promise<any> {
   return rscClientLoadPromise
 }
 
+const serverComponentCache = new Map<string, Promise<any>>()
+
 class RscClient {
   componentCache: Map<string, any>
   moduleCache: Map<string, any>
@@ -462,6 +464,7 @@ class RscClient {
   clearCache(): void {
     this.componentCache.clear()
     this.moduleCache.clear()
+    serverComponentCache.clear()
   }
 
   async fetchServerComponent(componentId: string, props: any = {}): Promise<any> {
@@ -583,7 +586,8 @@ class RscClient {
             if (Array.isArray(child)) {
               processedProps.children = child.map((c, i) => {
                 if (isValidElement(c) && !c.key) {
-                  return createElement(Fragment, { key: c.key ?? i }, c)
+                  // eslint-disable-next-line react/no-clone-element, react/no-array-index-key
+                  return cloneElement(c, { key: i })
                 }
 
                 return c
@@ -793,7 +797,7 @@ class RscClient {
           if (props && props.children) {
             const updatedChildren = renderWithBoundaryUpdates(props.children)
             if (updatedChildren !== props.children) {
-              return createElement(element.type, { ...props, children: updatedChildren })
+              return createElement(element.type, { ...props, key: element.key }, updatedChildren)
             }
           }
 
@@ -1103,8 +1107,6 @@ function RscErrorComponent({ error, details }: { error: string, details?: any })
   )))
 }
 
-const serverComponentCache = new Map<string, Promise<any>>()
-
 function ServerComponentWrapper({
   componentId,
   props,
@@ -1132,7 +1134,7 @@ function ServerComponentWrapper({
   if (data?.['~isRscResponse'])
     return createElement(Suspense, { fallback: fallback || null }, (data as any).readRoot())
 
-  return data || null
+  return data ?? null
 }
 
 function createServerComponentWrapper(componentName: string): (props: any) => any {

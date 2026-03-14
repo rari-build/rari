@@ -43,7 +43,7 @@ else {
         '~rari_loading_id': '{loading_file_path}#default',
       }
 
-      const loadingFallback = LoadingComponent()
+      const loadingFallback = React.createElement(LoadingComponent)
 
       pageElement = React.createElement(
         React.Suspense,
@@ -54,7 +54,7 @@ else {
     else {
       const pageResult = (async () => await PageComponent(pageProps))()
 
-      const loadingFallback = LoadingComponent()
+      const loadingFallback = React.createElement(LoadingComponent)
       pageElement = React.createElement(
         React.Suspense,
         { fallback: loadingFallback },

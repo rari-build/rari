@@ -213,7 +213,7 @@ function setupPartialHydration(): void {
 
         return element.map((child, index) => {
           let elementKey: string | null = null
-          if (Array.isArray(child) && child.length >= 3)
+          if (Array.isArray(child) && child.length >= 4 && child[0] === '$')
             elementKey = child[2]
           if (!elementKey)
             elementKey = `rsc-${index}-${typeof child === 'string' ? child : JSON.stringify(child).slice(0, 20)}`
