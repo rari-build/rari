@@ -6,93 +6,71 @@ import { describe, expect, it } from 'vite-plus/test'
 
 const CLI_PATH = resolve(process.cwd(), 'packages/rari/dist/cli.mjs')
 
+function runCLI(args: string[], env: Record<string, string> = {}): Promise<{ code: number, stdout: string, stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn('node', [CLI_PATH, ...args], {
+      env: { ...process.env, ...env },
+      cwd: process.cwd(),
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout?.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    child.stderr?.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    child.on('close', (code) => {
+      resolve({ code: code || 0, stdout, stderr })
+    })
+
+    child.on('error', () => {
+      resolve({ code: 1, stdout, stderr })
+    })
+
+    setTimeout(() => {
+      child.kill()
+      resolve({ code: -1, stdout, stderr })
+    }, 2000)
+  })
+}
+
 describe('cli commands', () => {
-  describe('command structure', () => {
-    it('should have spawn function available', () => {
-      expect(spawn).toBeDefined()
-      expect(typeof spawn).toBe('function')
-    })
+  it('should have CLI binary built', () => {
+    expect(existsSync(CLI_PATH)).toBe(true)
+  })
 
-    it('should have existsSync function available', () => {
-      expect(existsSync).toBeDefined()
-      expect(typeof existsSync).toBe('function')
-    })
-
-    it('should have process.env available', () => {
-      expect(process.env).toBeDefined()
-      expect(typeof process.env).toBe('object')
-    })
-
-    it('should have CLI binary built', () => {
-      expect(existsSync(CLI_PATH)).toBe(true)
+  describe('help command', () => {
+    it('should display help text', async () => {
+      const { code, stderr } = await runCLI(['help'])
+      expect(code).toBe(0)
+      expect(stderr).toContain('rari')
     })
   })
 
-  describe('environment variables', () => {
-    it('should handle PORT environment variable', () => {
-      const originalPort = process.env.PORT
-      process.env.PORT = '8080'
-      expect(process.env.PORT).toBe('8080')
-      if (originalPort) {
-        process.env.PORT = originalPort
-      }
-      else {
-        delete process.env.PORT
-      }
+  describe('environment variable handling', () => {
+    it('should accept PORT environment variable', async () => {
+      const { stderr } = await runCLI(['help'], { PORT: '8080' })
+      expect(stderr).toContain('rari')
     })
 
-    it('should handle NODE_ENV environment variable', () => {
-      const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'development'
-      expect(process.env.NODE_ENV).toBe('development')
-      if (originalEnv) {
-        process.env.NODE_ENV = originalEnv
-      }
-      else {
-        delete process.env.NODE_ENV
-      }
+    it('should accept NODE_ENV environment variable', async () => {
+      const { stderr } = await runCLI(['help'], { NODE_ENV: 'development' })
+      expect(stderr).toContain('rari')
     })
 
-    it('should handle RAILWAY_ENVIRONMENT', () => {
-      const original = process.env.RAILWAY_ENVIRONMENT
-      process.env.RAILWAY_ENVIRONMENT = 'production'
-      expect(process.env.RAILWAY_ENVIRONMENT).toBe('production')
-      if (original) {
-        process.env.RAILWAY_ENVIRONMENT = original
-      }
-      else {
-        delete process.env.RAILWAY_ENVIRONMENT
-      }
+    it('should accept RAILWAY_ENVIRONMENT', async () => {
+      const { stderr } = await runCLI(['help'], { RAILWAY_ENVIRONMENT: 'production' })
+      expect(stderr).toContain('rari')
     })
 
-    it('should handle RENDER environment', () => {
-      const original = process.env.RENDER
-      process.env.RENDER = 'true'
-      expect(process.env.RENDER).toBe('true')
-      if (original) {
-        process.env.RENDER = original
-      }
-      else {
-        delete process.env.RENDER
-      }
-    })
-  })
-
-  describe('vite-plus integration', () => {
-    it('should use vp as the build tool', () => {
-      expect(existsSync(CLI_PATH)).toBe(true)
-    })
-
-    it('should support dev command', () => {
-      expect(existsSync(CLI_PATH)).toBe(true)
-    })
-
-    it('should support build command', () => {
-      expect(existsSync(CLI_PATH)).toBe(true)
-    })
-
-    it('should support development mode builds', () => {
-      expect(existsSync(CLI_PATH)).toBe(true)
+    it('should accept RENDER environment', async () => {
+      const { stderr } = await runCLI(['help'], { RENDER: 'true' })
+      expect(stderr).toContain('rari')
     })
   })
 
@@ -100,8 +78,9 @@ describe('cli commands', () => {
     const commands = ['dev', 'build', 'start', 'deploy', 'help']
 
     commands.forEach((cmd) => {
-      it(`should support ${cmd} command`, () => {
-        expect(existsSync(CLI_PATH)).toBe(true)
+      it(`should recognize ${cmd} command in help`, async () => {
+        const { stderr } = await runCLI(['help'])
+        expect(stderr).toContain(cmd)
       })
     })
   })
