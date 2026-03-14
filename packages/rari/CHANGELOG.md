@@ -1,8 +1,25 @@
+## [rari@0.10.17] - 2026-03-14
+
+### 🚀 Features
+
+- *(rari)* Add error boundary support and expand e2e test coverage
+- *(rari)* Improve error boundary handling and static file serving
+- *(rari)* Add client directive to error boundary and improve component ID generation
+- *(rari)* Add lifecycle management to error boundary component
+- *(rari)* Remove mount checks and improve use client directive handling
+
+### 🚜 Refactor
+
+- *(rari)* Optimize routing and middleware with extracted utilities
 ## [rari@0.10.16] - 2026-03-12
 
 ### 🚀 Features
 
 - *(runtime)* Remove suppressions + update to Vite 8
+
+### 💼 Other
+
+- Rari@0.10.16
 ## [rari@0.10.15] - 2026-03-11
 
 ### 🐛 Bug Fixes
