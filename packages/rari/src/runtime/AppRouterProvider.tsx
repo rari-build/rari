@@ -195,15 +195,23 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   const processPropsRef = useRef<any>(null)
   const rscToReactRef = useRef<any>(null)
-  const suspendingPromisesRef = useRef<Map<string, Promise<never>>>(new Map())
+  const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
 
   function getSuspendingPromise(contentRef: string): Promise<never> {
     if (!suspendingPromisesRef.current.has(contentRef)) {
-      const promise = new Promise<never>(() => {})
-      suspendingPromisesRef.current.set(contentRef, promise)
+      let resolvePromise: (() => void) | undefined
+      const promise = new Promise<never>((resolve) => {
+        resolvePromise = resolve as any
+      })
+      const cleanup = () => {
+        suspendingPromisesRef.current.delete(contentRef)
+        if (resolvePromise)
+          resolvePromise()
+      }
+      suspendingPromisesRef.current.set(contentRef, { promise, cleanup })
     }
 
-    return suspendingPromisesRef.current.get(contentRef)!
+    return suspendingPromisesRef.current.get(contentRef)!.promise
   }
 
   const LazyContent = useCallback(({ contentRef }: { contentRef: string }): any => {
@@ -212,7 +220,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const symbols = symbolsDataRef.current
 
     if (rows.has(contentRef)) {
-      suspendingPromisesRef.current.delete(contentRef)
+      const entry = suspendingPromisesRef.current.get(contentRef)
+      if (entry)
+        entry.cleanup()
 
       const rowData = rows.get(contentRef)
       const result = rscToReactRef.current(rowData, modules, undefined, symbols, rows)
@@ -602,8 +612,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     abortSignal?: AbortSignal,
   ) => {
     const pathToFetch = targetPath || window.location.pathname
+    const searchPart = window.location.search
+    const fullFetchKey = `${pathToFetch}${searchPart}`
 
-    const existingFetch = pendingFetchesRef.current.get(pathToFetch)
+    const existingFetch = pendingFetchesRef.current.get(fullFetchKey)
     if (existingFetch)
       return existingFetch
 
@@ -676,11 +688,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         throw error
       }
       finally {
-        pendingFetchesRef.current.delete(pathToFetch)
+        pendingFetchesRef.current.delete(fullFetchKey)
       }
     })()
 
-    pendingFetchesRef.current.set(pathToFetch, fetchPromise)
+    pendingFetchesRef.current.set(fullFetchKey, fetchPromise)
 
     return fetchPromise
   }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent, resetFailureTracking])

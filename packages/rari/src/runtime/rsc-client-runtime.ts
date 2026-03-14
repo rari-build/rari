@@ -586,7 +586,7 @@ class RscClient {
             const child = convertRscToReact(props.children)
             if (Array.isArray(child)) {
               processedProps.children = child.map((c, i) => {
-                if (isValidElement(c) && !c.key) {
+                if (isValidElement(c) && c.key == null) {
                   // eslint-disable-next-line react/no-clone-element, react/no-array-index-key
                   return cloneElement(c, { key: i })
                 }
@@ -1113,6 +1113,10 @@ function RscErrorComponent({ error, details }: { error: string, details?: any })
   )))
 }
 
+function RscRootReader({ rootPromise }: { rootPromise: Promise<any> }): any {
+  return use(rootPromise)
+}
+
 function ServerComponentWrapper({
   componentId,
   props,
@@ -1140,14 +1144,14 @@ function ServerComponentWrapper({
 
   if (data?.['~isRscResponse']) {
     const rootPromise = (data as any).readRoot()
-    return createElement(Suspense, { fallback: fallback ?? null }, use(rootPromise))
+    return createElement(Suspense, { fallback: fallback ?? null }, createElement(RscRootReader, { rootPromise }))
   }
 
   return data ?? null
 }
 
 class ServerComponentErrorBoundary extends React.Component<
-  { children: any, componentId: string },
+  { children: any, componentId: string, mountKey: number },
   { hasError: boolean, error: Error | null }
 > {
   constructor(props: any) {
@@ -1157,6 +1161,12 @@ class ServerComponentErrorBoundary extends React.Component<
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error }
+  }
+
+  componentDidUpdate(prevProps: { mountKey: number }) {
+    if (prevProps.mountKey !== this.props.mountKey && this.state.hasError) {
+      this.setState({ hasError: false, error: null })
+    }
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
@@ -1221,6 +1231,7 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
       fallback: null,
     }, createElement(ServerComponentErrorBoundary, {
       componentId: componentName,
+      mountKey,
     }, createElement(ServerComponentWrapper, {
       key: `${componentName}-${mountKey}`,
       componentId: componentName,

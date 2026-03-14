@@ -699,7 +699,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
               const Component = componentInfo.component
               const childProps = {
                 ...props,
-                children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
+                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
               }
               return React.createElement(Component, { key, ...childProps })
             }
@@ -720,7 +720,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             if (componentInfo.loadPromise) {
               const childProps = {
                 ...props,
-                children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
+                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
               }
               return React.createElement(ClientComponentLoader, {
                 key,
@@ -728,6 +728,15 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
                 childProps,
               })
             }
+
+            return React.createElement(ClientComponentLoader, {
+              key,
+              componentInfo,
+              childProps: {
+                ...props,
+                children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
+              },
+            })
           }
         }
 
@@ -760,7 +769,7 @@ function processProps(props: any, modules: Map<string, any>, symbols: Map<string
       if (key.startsWith('$') || key === 'ref')
         continue
       if (key === 'children')
-        processed[key] = props.children ? rscToReact(props.children, modules, symbols) : undefined
+        processed[key] = 'children' in props ? rscToReact(props.children, modules, symbols) : undefined
       else if (key === 'dangerouslySetInnerHTML')
         processed[key] = props[key]
       else
