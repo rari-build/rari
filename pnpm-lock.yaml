@@ -300,20 +300,20 @@ importers:
         version: 8.0.0(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.2)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.10.16
-        version: 0.10.16
+        specifier: 0.10.17
+        version: 0.10.17
       rari-darwin-x64:
-        specifier: 0.10.16
-        version: 0.10.16
+        specifier: 0.10.17
+        version: 0.10.17
       rari-linux-arm64:
-        specifier: 0.10.16
-        version: 0.10.16
+        specifier: 0.10.17
+        version: 0.10.17
       rari-linux-x64:
-        specifier: 0.10.16
-        version: 0.10.16
+        specifier: 0.10.17
+        version: 0.10.17
       rari-win32-x64:
-        specifier: 0.10.16
-        version: 0.10.16
+        specifier: 0.10.17
+        version: 0.10.17
 
   packages/rari-darwin-arm64: {}
 
@@ -3509,8 +3509,22 @@ packages:
     os: [darwin]
     hasBin: true
 
+  rari-darwin-arm64@0.10.17:
+    resolution: {integrity: sha512-tU11T1AZyUPiRAxxEeJgVdDKexCFB6wtMrnvguJ6HkEvs0k6/K+rvgR1z/D91LqympWSB1pRPZNqFjQR/myE3Q==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
   rari-darwin-x64@0.10.16:
     resolution: {integrity: sha512-PW5gNTrLbWx5UwsesSn53eeRtP8D1WbIM2ly/kGyJ0wkqeW7YUdovyfKUGvLMgqY+2lndpoyH6vRg/O7Z8acFg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  rari-darwin-x64@0.10.17:
+    resolution: {integrity: sha512-vWcW0tSekec48m+UKu4QeZUgNxQ6ZtQCAxuFb0TPgkssG6qTfGD9LTx7WSpM6GhaAgfw+myGlHlxqxhNS3XACw==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [darwin]
@@ -3523,6 +3537,13 @@ packages:
     os: [linux]
     hasBin: true
 
+  rari-linux-arm64@0.10.17:
+    resolution: {integrity: sha512-3Zk/2e3oMC6Dm1tUk5H+jQ521Ajlm6ICaMxKAjOucg/GsduB7/+49d46jM8NOXdtW/1ibVzOrpeLU4PfsQS13A==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
   rari-linux-x64@0.10.16:
     resolution: {integrity: sha512-WSw47cKTgcqFIug7HUz11PfnkTGBl7HxhCPL//ufuvsfoFCrqH0Mh2f2wQNRhI7272SPVp1ceptnx+ZTaVD2yw==}
     engines: {node: '>=22.12.0'}
@@ -3530,8 +3551,22 @@ packages:
     os: [linux]
     hasBin: true
 
+  rari-linux-x64@0.10.17:
+    resolution: {integrity: sha512-MymKcLpP+K9z5N4qtRMlJYvNVNjkLguQbpEP7fABdCBoOXcqUdrNXwsgSIVpW1fitzq9NPzG9faKnMl103xW/w==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
   rari-win32-x64@0.10.16:
     resolution: {integrity: sha512-je+7IoFWbzBZo8hzsI1dL9DhOtdXHGKssVAvY5LZIE1NFPtmaqRaHoXRidy46LWGGjyFRjeXp19ROp/ZydPKEg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  rari-win32-x64@0.10.17:
+    resolution: {integrity: sha512-7+pbRIoWJYUiUXjmXqxeswfyTHHVw0bD/sDwRDkJDWk/c9OMHAQpIl3Axim7j6J3dveNwYqA2ouwoz2wg5cC3w==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [win32]
@@ -7401,16 +7436,31 @@ snapshots:
   rari-darwin-arm64@0.10.16:
     optional: true
 
+  rari-darwin-arm64@0.10.17:
+    optional: true
+
   rari-darwin-x64@0.10.16:
+    optional: true
+
+  rari-darwin-x64@0.10.17:
     optional: true
 
   rari-linux-arm64@0.10.16:
     optional: true
 
+  rari-linux-arm64@0.10.17:
+    optional: true
+
   rari-linux-x64@0.10.16:
     optional: true
 
+  rari-linux-x64@0.10.17:
+    optional: true
+
   rari-win32-x64@0.10.16:
+    optional: true
+
+  rari-win32-x64@0.10.17:
     optional: true
 
   rari@0.10.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
