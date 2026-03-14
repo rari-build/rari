@@ -28,8 +28,8 @@ catalogs:
       version: 1.1.0
   default:
     rari:
-      specifier: ^0.10.17
-      version: 0.10.17
+      specifier: ^0.10.18
+      version: 0.10.18
   eslint:
     '@antfu/eslint-config':
       specifier: ^7.7.2
@@ -119,8 +119,8 @@ catalogs:
       specifier: ^25.5.0
       version: 25.5.0
     '@typescript/native-preview':
-      specifier: ^7.0.0-dev.20260313.1
-      version: 7.0.0-dev.20260313.1
+      specifier: ^7.0.0-dev.20260314.1
+      version: 7.0.0-dev.20260314.1
   utils:
     unist-util-visit:
       specifier: ^5.1.0
@@ -150,7 +150,7 @@ importers:
         version: 8.57.0(eslint@10.0.3(jiti@2.6.1))(typescript@5.9.3)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       '@vitest/coverage-v8':
         specifier: catalog:testing
         version: 4.1.0(vitest@4.1.0(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(vite@8.0.0(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.2)))
@@ -199,7 +199,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.2.1
@@ -218,7 +218,7 @@ importers:
         version: 25.5.0
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       vite-plus:
         specifier: catalog:build
         version: 0.1.11(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(typescript@5.9.3)(vite@8.0.0(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.2))(yaml@2.8.2)
@@ -273,26 +273,26 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       vite-plus:
         specifier: catalog:build
         version: 0.1.11(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(typescript@5.9.3)(vite@8.0.0(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.2))(yaml@2.8.2)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.10.17
-        version: 0.10.17
+        specifier: 0.10.18
+        version: 0.10.18
       rari-darwin-x64:
-        specifier: 0.10.17
-        version: 0.10.17
+        specifier: 0.10.18
+        version: 0.10.18
       rari-linux-arm64:
-        specifier: 0.10.17
-        version: 0.10.17
+        specifier: 0.10.18
+        version: 0.10.18
       rari-linux-x64:
-        specifier: 0.10.17
-        version: 0.10.17
+        specifier: 0.10.18
+        version: 0.10.18
       rari-win32-x64:
-        specifier: 0.10.17
-        version: 0.10.17
+        specifier: 0.10.18
+        version: 0.10.18
 
   packages/rari-darwin-arm64: {}
 
@@ -319,7 +319,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.2.1
@@ -358,7 +358,7 @@ importers:
         version: 1.360.2
       rari:
         specifier: 'catalog:'
-        version: 0.10.17(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 0.10.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: catalog:react
         version: 19.2.4
@@ -386,7 +386,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@typescript/native-preview':
         specifier: catalog:typescript
-        version: 7.0.0-dev.20260313.1
+        version: 7.0.0-dev.20260314.1
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.2.1
@@ -2033,43 +2033,43 @@ packages:
     resolution: {integrity: sha512-zm6xx8UT/Xy2oSr2ZXD0pZo7Jx2XsCoID2IUh9YSTFRu7z+WdwYTRk6LhUftm1crwqbuoF6I8zAFeCMw0YjwDg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-/fU2IvlRQWOy63xSzkejW7tTQpsL5dQ/ATIsJFlK75vS941CnNJY8dAx3iQYLkHMhS45hhCIR+bbJPRaacq/fw==}
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-PlDvhms3QsLOkXNnCoQGJXjcZG7G5QMnhpSOmtO5toZ93VhU1qaUdvDlxtbacCYxGXcs6qZiJnGUgcedfqn5cg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-oy7Ew1J3+YtO9QsqVGkncQ8bCwVPxNk8nSO2q1sHLccyYq0f4eDaZTlJ+u9Ynry548NwNucLh9wE+DWfWhzU3Q==}
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-EEL6sN1kWor4yPCaowFdPOu/5o0puiudCLWTpDXzkbhFDR0sak/g+2VmtRuNiUi4JOKdJ6bJQKiXFrATAJWDYw==}
     cpu: [x64]
     os: [darwin]
 
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-KkbAweTnBpmQ8wCGHjrLzPX+FuwhSrVERNqyGPaq/267Sxt0UwbIO3rZduXlq5UUln1+/z7uT/BNJiuoFW3iLw==}
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-qllNIMVM+kNH/ivL4AMelDs1C8J9NzUFzO6tmJ6hoXD5jUrvc38agcO+DnrXwrxR1Wd7mS7iDujAeSoZkeWWfQ==}
     cpu: [arm64]
     os: [linux]
 
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-IAx0ajfEiL1tJg1N6+/nHXJKebNe72yanY2N5bicwIB3t2BmydnrEPG+/OFVqc+prfJngxSx/61mvkXScZePzg==}
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-7tahKAxuJvjVmtORpecEtWWJmYVRmYL3t3U+PXaFKwPOBmoa38zWjlmbrBHodTqfO5XSpCp9wUbWC3k83DsCsw==}
     cpu: [arm]
     os: [linux]
 
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-9LCNgXVNoArHlMuL6yFKJxSdshiiadTfW/pU4tz4Vbg+Dg9La1VE9mLlBdijy5ZIg4nsOFpR8JTDURcA1RoHXw==}
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-vdqd/swfZTN7EN85QON0e/2fpDbYNP6ZFPjBbZ78BISPy3nsv+DR0t5vAlfRB9wA86zpExfTgVJ4ZUnoUQpTkw==}
     cpu: [x64]
     os: [linux]
 
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-cP2y5hb2xhfEDIgxdhxhPXa/D5Lq3yj6zxVuhh9ZkUariF+ZAmF4pySlIA+7NdprgTQqvNY5Mp70cPUiYD3yUg==}
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-ukLU9r2/H4oMIw8+JHfmraavREotyt9/5Z2X1F5EksefOvfb0Fpb6j6TWastQFZIFuAlvpr8tXHThq7rZwIdPg==}
     cpu: [arm64]
     os: [win32]
 
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-8KDfi7U1enFo4z6F0qe4Rd5QzBhk+4cwpZtOGAT9lgyR4pF/mo8zQd0t+Hlkj6d87W057RP8lgCGTGfclGWxUg==}
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-kkl27prdWvxiRzS8n7/trlVrHTOrrY8AdGZgKnE07C4kUqk/FeIudp5DaOsYeFD9GWO32vUU7KXCfpFqvFrK3A==}
     cpu: [x64]
     os: [win32]
 
-  '@typescript/native-preview@7.0.0-dev.20260313.1':
-    resolution: {integrity: sha512-x+ZrFAEq+c7bF4Ml8+abYZ9vW6mzu22fmcPbDcBmUl/4uGFCYXXww0FS3+me9MfdSOCAPtqcZtwApx1RQO2X/w==}
+  '@typescript/native-preview@7.0.0-dev.20260314.1':
+    resolution: {integrity: sha512-XOVmR59UL6r2dmcdZD6SV4nhX5u4e34onMv7XSz9zKBp9mb8/v8kKPgGy9adp9at24FpAeBYNN5HKIViSeHtpQ==}
     hasBin: true
 
   '@ungap/structured-clone@1.3.0':
@@ -3625,43 +3625,43 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-  rari-darwin-arm64@0.10.17:
-    resolution: {integrity: sha512-tU11T1AZyUPiRAxxEeJgVdDKexCFB6wtMrnvguJ6HkEvs0k6/K+rvgR1z/D91LqympWSB1pRPZNqFjQR/myE3Q==}
+  rari-darwin-arm64@0.10.18:
+    resolution: {integrity: sha512-7bSY/ObuW1KA0XbI+57KExYzW7raoOY3W30/2xNvgfC6H7FZIQiMFGdqNPG6Xi5YXfxXx40atIudusualnAZpw==}
     engines: {node: '>=22.12.0'}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  rari-darwin-x64@0.10.17:
-    resolution: {integrity: sha512-vWcW0tSekec48m+UKu4QeZUgNxQ6ZtQCAxuFb0TPgkssG6qTfGD9LTx7WSpM6GhaAgfw+myGlHlxqxhNS3XACw==}
+  rari-darwin-x64@0.10.18:
+    resolution: {integrity: sha512-SzJ0/Ug8eFl9MmILhExckRbhxtm+AJTsnEcwnhjy5kwpTeqZs/vPrLO8zrTEiS9m0ZmR4Wn7LoY3baFRcKAB7w==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  rari-linux-arm64@0.10.17:
-    resolution: {integrity: sha512-3Zk/2e3oMC6Dm1tUk5H+jQ521Ajlm6ICaMxKAjOucg/GsduB7/+49d46jM8NOXdtW/1ibVzOrpeLU4PfsQS13A==}
+  rari-linux-arm64@0.10.18:
+    resolution: {integrity: sha512-fpj99bU97WsULYg6yEpMWhop38c2HOyh80yebRkGdEtRcFBLBF+Vx5HBNVNqmwbP0/cz7yIGGxI63Sjfkh5ukQ==}
     engines: {node: '>=22.12.0'}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  rari-linux-x64@0.10.17:
-    resolution: {integrity: sha512-MymKcLpP+K9z5N4qtRMlJYvNVNjkLguQbpEP7fABdCBoOXcqUdrNXwsgSIVpW1fitzq9NPzG9faKnMl103xW/w==}
+  rari-linux-x64@0.10.18:
+    resolution: {integrity: sha512-sZOX1qSOzLAus2XSjXwszapTuw0KbA4fly4xdv28GPt2CaLYM52lLch8YYPN+IilGNukdF/IKTOSV7Hp+PJkzA==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  rari-win32-x64@0.10.17:
-    resolution: {integrity: sha512-7+pbRIoWJYUiUXjmXqxeswfyTHHVw0bD/sDwRDkJDWk/c9OMHAQpIl3Axim7j6J3dveNwYqA2ouwoz2wg5cC3w==}
+  rari-win32-x64@0.10.18:
+    resolution: {integrity: sha512-NmTj9zP5OWOpvRhOTdtHYRp8doS398UwbGL7fFoGqWyBMEHSf/RyZStgpvNr6MveLe6mbUbczg/5A+iDiyCnMQ==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  rari@0.10.17:
-    resolution: {integrity: sha512-NPmlav83s0uO3lFKbNIlymOBPuuo5oNnH5qX884Ja/cGbtgaXZ5TO3NQ0G7SP8c2dd4V6GKrW/1Zno8lAj2WuA==}
+  rari@0.10.18:
+    resolution: {integrity: sha512-VVp1m8P5BdGhqL8RkIhEOCCnfFd0RyNkhoH6cvPE5lNUkde+SaHFdGKOBJMP+HGQaETLQx2eMEmeLr8TkSNvag==}
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
@@ -5547,36 +5547,36 @@ snapshots:
       '@typescript-eslint/types': 8.57.0
       eslint-visitor-keys: 5.0.1
 
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260313.1':
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260314.1':
     optional: true
 
-  '@typescript/native-preview@7.0.0-dev.20260313.1':
+  '@typescript/native-preview@7.0.0-dev.20260314.1':
     optionalDependencies:
-      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260313.1
-      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260313.1
+      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260314.1
+      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260314.1
 
   '@ungap/structured-clone@1.3.0': {}
 
@@ -7565,32 +7565,32 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  rari-darwin-arm64@0.10.17:
+  rari-darwin-arm64@0.10.18:
     optional: true
 
-  rari-darwin-x64@0.10.17:
+  rari-darwin-x64@0.10.18:
     optional: true
 
-  rari-linux-arm64@0.10.17:
+  rari-linux-arm64@0.10.18:
     optional: true
 
-  rari-linux-x64@0.10.17:
+  rari-linux-x64@0.10.18:
     optional: true
 
-  rari-win32-x64@0.10.17:
+  rari-win32-x64@0.10.18:
     optional: true
 
-  rari@0.10.17(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  rari@0.10.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
       rolldown: 1.0.0-rc.9
     optionalDependencies:
-      rari-darwin-arm64: 0.10.17
-      rari-darwin-x64: 0.10.17
-      rari-linux-arm64: 0.10.17
-      rari-linux-x64: 0.10.17
-      rari-win32-x64: 0.10.17
+      rari-darwin-arm64: 0.10.18
+      rari-darwin-x64: 0.10.18
+      rari-linux-arm64: 0.10.18
+      rari-linux-x64: 0.10.18
+      rari-win32-x64: 0.10.18
 
   react-dom@19.2.4(react@19.2.4):
     dependencies:
