@@ -5,7 +5,8 @@ import { Suspense, useCallback, useEffect, useRef, useState, useTransition } fro
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
 
-const TIMESTAMP_REGEX = /"timestamp":(\d+)/
+const FRESHNESS_TOKEN_REGEX = /"__freshness":"([^"]+)"/
+const HEX_ROW_ID_REGEX = /^[0-9a-f]+$/i
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 
 interface AppRouterProviderProps {
@@ -79,9 +80,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
-  const pendingFetchesRef = useRef<Map<string, Promise<any>>>(new Map())
+  const pendingFetchesRef = useRef<Map<string, Map<AbortSignal | undefined, Promise<any>>>>(new Map())
   const failureHistoryRef = useRef<HMRFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
+  const lastSuccessfulFreshnessRef = useRef<string | null>(null)
   const consecutiveFailuresRef = useRef<number>(0)
   const [hmrError, setHmrError] = useState<HMRFailure | null>(null)
   const shouldScrollToHashRef = useRef<boolean>(
@@ -176,18 +178,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (!lastSuccessfulPayloadRef.current)
       return false
 
-    if (wireFormat === lastSuccessfulPayloadRef.current)
-      return true
+    const freshnessMatch = wireFormat.match(FRESHNESS_TOKEN_REGEX)
+    if (freshnessMatch && lastSuccessfulFreshnessRef.current)
+      return freshnessMatch[1] === lastSuccessfulFreshnessRef.current
 
-    const timestampMatch = wireFormat.match(TIMESTAMP_REGEX)
-    if (timestampMatch) {
-      const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
-      const now = Date.now()
-      if (now - payloadTimestamp > 5000)
-        return true
-    }
-
-    return false
+    return wireFormat === lastSuccessfulPayloadRef.current
   }, [])
 
   const pendingRefsRef = useRef<Set<string>>(new Set())
@@ -492,12 +487,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const rowId = line.substring(0, colonIndex)
 
-        if (!NUMERIC_REGEX.test(rowId)) {
-          console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
+        if (!HEX_ROW_ID_REGEX.test(rowId)) {
+          console.warn('[rari] AppRouter: Invalid row ID (non-hex), skipping line:', line.substring(0, 50))
           continue
         }
 
-        const content = line.substring(colonIndex + 1)
+        const afterColon = colonIndex + 1
+        const tag = afterColon < line.length ? line[afterColon] : ''
+        const contentStart = (tag && 'IETHWDC'.includes(tag)) ? afterColon + 1 : afterColon
+        const content = line.substring(contentStart)
 
         try {
           if (content.startsWith('"$S')) {
@@ -506,9 +504,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             continue
           }
 
-          if (content.startsWith('I[')) {
-            const jsonContent = content.substring(1)
-            const sanitized = sanitizeJsonString(jsonContent, 'array')
+          if (tag === 'I') {
+            const sanitized = sanitizeJsonString(content, 'array')
 
             if (!sanitized) {
               console.warn('[rari] AppRouter: Could not sanitize import line, skipping:', line.substring(0, 80))
@@ -538,8 +535,35 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 currentLayoutStartLine = lineIndex
               }
             }
+            continue
           }
-          else if (content.startsWith('[')) {
+
+          if (tag === 'E') {
+            console.error('[rari] AppRouter: Error chunk received:', content)
+            try {
+              const errorData = JSON.parse(content)
+              rows.set(rowId, { error: errorData })
+            }
+            catch {
+              rows.set(rowId, { error: content })
+            }
+            continue
+          }
+
+          if (tag === 'T') {
+            rows.set(rowId, content)
+            continue
+          }
+
+          if (tag === 'H' || tag === 'D' || tag === 'W') {
+            console.warn(`[rari] AppRouter: ${tag === 'H' ? 'Hint' : tag === 'D' ? 'Debug' : 'Console'}:`, content)
+            continue
+          }
+
+          if (tag === 'C')
+            continue
+
+          if (content.startsWith('[')) {
             const elementData = JSON.parse(content)
             rows.set(`$L${rowId}`, elementData)
 
@@ -575,7 +599,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 rootElement = elementData.length === 1 ? elementData[0] : elementData
               }
             }
+            continue
           }
+
+          console.warn('[rari] AppRouter: Unknown row format, skipping:', line.substring(0, 80))
         }
         catch (e) {
           console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
@@ -628,9 +655,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const searchPart = window.location.search
     const fullFetchKey = `${pathToFetch}${searchPart}`
 
-    const existingFetch = pendingFetchesRef.current.get(fullFetchKey)
-    if (existingFetch)
-      return existingFetch
+    let signalMap = pendingFetchesRef.current.get(fullFetchKey)
+    if (signalMap) {
+      const existingFetch = signalMap.get(abortSignal)
+      if (existingFetch)
+        return existingFetch
+    }
+    else {
+      signalMap = new Map()
+      pendingFetchesRef.current.set(fullFetchKey, signalMap)
+    }
 
     const fetchPromise = (async () => {
       try {
@@ -690,6 +724,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         lastSuccessfulPayloadRef.current = rscWireFormat
 
+        const freshnessMatch = rscWireFormat.match(FRESHNESS_TOKEN_REGEX)
+        if (freshnessMatch)
+          lastSuccessfulFreshnessRef.current = freshnessMatch[1]
+
         return { payload: parsedPayload, isStale: false }
       }
       catch (error) {
@@ -706,11 +744,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         throw error
       }
       finally {
-        pendingFetchesRef.current.delete(fullFetchKey)
+        const signalMap = pendingFetchesRef.current.get(fullFetchKey)
+        if (signalMap) {
+          signalMap.delete(abortSignal)
+          if (signalMap.size === 0)
+            pendingFetchesRef.current.delete(fullFetchKey)
+        }
       }
     })()
 
-    pendingFetchesRef.current.set(fullFetchKey, fetchPromise)
+    signalMap.set(abortSignal, fetchPromise)
 
     return fetchPromise
   }, [parseRscWireFormat, trackHMRFailure, isStaleContent])
