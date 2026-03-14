@@ -646,6 +646,17 @@ function injectHeadContent(headElement: any): void {
   }
 }
 
+function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: any, childProps: any }) {
+  React.use(componentInfo.loadPromise!)
+
+  if (componentInfo.component) {
+    const Component = componentInfo.component
+    return React.createElement(Component, childProps)
+  }
+
+  return null
+}
+
 function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, any>): any {
   if (!rsc)
     return null
@@ -707,12 +718,15 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
 
             if (componentInfo.loadPromise) {
-              const SuspenseLoader = () => {
-                React.use(componentInfo.loadPromise!)
-                return null
+              const childProps = {
+                ...props,
+                children: props.children ? rscToReact(props.children, modules, symbols) : undefined,
               }
-
-              return React.createElement(SuspenseLoader)
+              return React.createElement(ClientComponentLoader, {
+                key,
+                componentInfo,
+                childProps,
+              })
             }
           }
         }

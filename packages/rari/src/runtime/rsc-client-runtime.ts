@@ -1,4 +1,5 @@
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
+import * as React from 'react'
 import { cloneElement, createElement, isValidElement, Suspense, use, useEffect, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 import {
@@ -797,7 +798,12 @@ class RscClient {
           if (props && props.children) {
             const updatedChildren = renderWithBoundaryUpdates(props.children)
             if (updatedChildren !== props.children) {
-              return createElement(element.type, { ...props, key: element.key }, updatedChildren)
+              const propsForCreate = { ...props }
+              if (element.key !== null && element.key !== undefined) {
+                propsForCreate.key = element.key
+              }
+
+              return createElement(element.type, propsForCreate, updatedChildren)
             }
           }
 
@@ -1132,10 +1138,41 @@ function ServerComponentWrapper({
   const promise = serverComponentCache.get(cacheKey)!
   const data = use(promise)
 
-  if (data?.['~isRscResponse'])
-    return createElement(Suspense, { fallback: fallback || null }, (data as any).readRoot())
+  if (data?.['~isRscResponse']) {
+    const rootPromise = (data as any).readRoot()
+    return createElement(Suspense, { fallback: fallback ?? null }, use(rootPromise))
+  }
 
   return data ?? null
+}
+
+class ServerComponentErrorBoundary extends React.Component<
+  { children: any, componentId: string },
+  { hasError: boolean, error: Error | null }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error(`[rari] ServerComponentErrorBoundary: Error in component ${this.props.componentId}:`, error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return createElement(RscErrorComponent, {
+        error: this.state.error?.message || 'Unknown error',
+        details: { componentId: this.props.componentId },
+      })
+    }
+
+    return this.props.children
+  }
 }
 
 function createServerComponentWrapper(componentName: string): (props: any) => any {
@@ -1182,12 +1219,14 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
 
     return createElement(Suspense, {
       fallback: null,
+    }, createElement(ServerComponentErrorBoundary, {
+      componentId: componentName,
     }, createElement(ServerComponentWrapper, {
       key: `${componentName}-${mountKey}`,
       componentId: componentName,
       props,
       fallback: null,
-    }))
+    })))
   }
 
   ServerComponent.displayName = `ServerComponent(${componentName})`

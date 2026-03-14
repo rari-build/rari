@@ -26,15 +26,15 @@ class ReactComponent {
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
-      props = props || {}
+      const normalizedProps = props ? { ...props } : {}
       if (children.length === 1) {
-        props.children = children[0]
+        normalizedProps.children = children[0]
       }
       else if (children.length > 1) {
-        props.children = children
+        normalizedProps.children = children
       }
 
-      return { $$typeof: Symbol.for('react.transitional.element'), type, props }
+      return { $$typeof: Symbol.for('react.transitional.element'), type, props: normalizedProps }
     },
     Fragment(props) { return props?.children ?? null },
     Suspense(props) { return props?.children ?? props?.fallback ?? null },

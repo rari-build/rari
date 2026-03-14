@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
 
@@ -88,8 +88,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   )
   const MAX_RETRIES = 3
 
-  onNavigateRef.current = onNavigate
-
   const saveFormState = () => {
     if (typeof document === 'undefined')
       return
@@ -126,7 +124,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     })
   }
 
-  const trackHMRFailure = (error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
+  const trackHMRFailure = useCallback((error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
     const failure: HMRFailure = {
       timestamp: Date.now(),
       error,
@@ -159,7 +157,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         detail: failure,
       }))
     }
-  }
+  }, [MAX_RETRIES])
 
   const handleFallbackReload = () => {
     setTimeout(() => {
@@ -167,12 +165,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }, 1000)
   }
 
-  const resetFailureTracking = () => {
+  const resetFailureTracking = useCallback(() => {
     if (consecutiveFailuresRef.current > 0)
       consecutiveFailuresRef.current = 0
-  }
+  }, [])
 
-  const isStaleContent = (wireFormat: string): boolean => {
+  const isStaleContent = useCallback((wireFormat: string): boolean => {
     if (!lastSuccessfulPayloadRef.current)
       return false
 
@@ -188,9 +186,90 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
 
     return false
+  }, [])
+
+  const pendingRefsRef = useRef<Set<string>>(new Set())
+  const rowsDataRef = useRef<Map<string, any>>(new Map())
+  const modulesDataRef = useRef<Map<string, any>>(new Map())
+  const symbolsDataRef = useRef<Map<string, string>>(new Map())
+
+  const processPropsRef = useRef<any>(null)
+  const rscToReactRef = useRef<any>(null)
+  const suspendingPromisesRef = useRef<Map<string, Promise<never>>>(new Map())
+
+  function getSuspendingPromise(contentRef: string): Promise<never> {
+    if (!suspendingPromisesRef.current.has(contentRef)) {
+      const promise = new Promise<never>(() => {})
+      suspendingPromisesRef.current.set(contentRef, promise)
+    }
+
+    return suspendingPromisesRef.current.get(contentRef)!
   }
 
-  function rscToReact(rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any {
+  const LazyContent = useCallback(({ contentRef }: { contentRef: string }): any => {
+    const rows = rowsDataRef.current
+    const modules = modulesDataRef.current
+    const symbols = symbolsDataRef.current
+
+    if (rows.has(contentRef)) {
+      suspendingPromisesRef.current.delete(contentRef)
+
+      const rowData = rows.get(contentRef)
+      const result = rscToReactRef.current(rowData, modules, undefined, symbols, rows)
+      return result
+    }
+
+    throw getSuspendingPromise(contentRef)
+  }, [])
+
+  const processProps = useCallback((props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any => {
+    if (!props || typeof props !== 'object')
+      return props
+
+    if (rows)
+      rowsDataRef.current = rows
+    if (modules)
+      modulesDataRef.current = modules
+    if (symbols)
+      symbolsDataRef.current = symbols
+
+    const processed: any = {}
+    for (const key in props) {
+      if (Object.hasOwn(props, key)) {
+        if (key === 'children') {
+          const children = props.children
+
+          if (typeof children === 'string' && children.startsWith('$L')) {
+            if (rows && rows.has(children)) {
+              const rowData = rows.get(children)
+              pendingRefsRef.current.delete(children)
+              processed[key] = rscToReactRef.current(rowData, modules, layoutPath, symbols, rows)
+            }
+            else {
+              pendingRefsRef.current.add(children)
+              processed[key] = React.createElement(LazyContent, {
+                key: `lazy-${children}`,
+                contentRef: children,
+              })
+            }
+          }
+          else {
+            processed[key] = children ? rscToReactRef.current(children, modules, layoutPath, symbols, rows) : undefined
+          }
+        }
+        else if (key === 'dangerouslySetInnerHTML') {
+          processed[key] = props[key]
+        }
+        else {
+          processed[key] = rscToReactRef.current(props[key], modules, layoutPath, symbols, rows)
+        }
+      }
+    }
+
+    return processed
+  }, [LazyContent])
+
+  const rscToReact = useCallback((rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any => {
     if (!rsc)
       return null
 
@@ -216,7 +295,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         if (resolvedType === 'Suspense' || type === 'Suspense') {
-          const processedProps = processProps(props, modules, layoutPath, symbols, rows)
+          const processedProps = processPropsRef.current(props, modules, layoutPath, symbols, rows)
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }
 
@@ -257,16 +336,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
         }
 
-        const processedProps = processProps(props, modules, layoutPath, symbols, rows)
+        const processedProps = processPropsRef.current(props, modules, layoutPath, symbols, rows)
         return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
 
       return rsc.map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
-        if (!element)
+        if (element == null || typeof element === 'boolean')
           return null
 
-        if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
+        if (typeof element === 'object' && React.isValidElement(element) && element.key == null) {
           const fallbackKey = Array.isArray(child) && child[0] === '$' && child[2] != null
             ? `rsc-${child[2]}`
             : index
@@ -274,90 +353,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         return element
-      }).filter(Boolean)
+      }).filter(element => element !== null)
     }
 
     return rsc
-  }
+  }, [])
 
-  const pendingRefsRef = useRef<Set<string>>(new Set())
-  const rowsDataRef = useRef<Map<string, any>>(new Map())
-  const modulesDataRef = useRef<Map<string, any>>(new Map())
-  const symbolsDataRef = useRef<Map<string, string>>(new Map())
-
-  const suspendingPromisesRef = useRef<Map<string, Promise<never>>>(new Map())
-
-  function getSuspendingPromise(contentRef: string): Promise<never> {
-    if (!suspendingPromisesRef.current.has(contentRef)) {
-      const promise = new Promise<never>(() => {})
-      suspendingPromisesRef.current.set(contentRef, promise)
-    }
-
-    return suspendingPromisesRef.current.get(contentRef)!
-  }
-
-  function LazyContent({ contentRef }: { contentRef: string }): any {
-    const rows = rowsDataRef.current
-    const modules = modulesDataRef.current
-    const symbols = symbolsDataRef.current
-
-    if (rows.has(contentRef)) {
-      suspendingPromisesRef.current.delete(contentRef)
-
-      const rowData = rows.get(contentRef)
-      const result = rscToReact(rowData, modules, undefined, symbols, rows)
-      return result
-    }
-
-    throw getSuspendingPromise(contentRef)
-  }
-
-  function processProps(props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any {
-    if (!props || typeof props !== 'object')
-      return props
-
-    if (rows)
-      rowsDataRef.current = rows
-    if (modules)
-      modulesDataRef.current = modules
-    if (symbols)
-      symbolsDataRef.current = symbols
-
-    const processed: any = {}
-    for (const key in props) {
-      if (Object.hasOwn(props, key)) {
-        if (key === 'children') {
-          const children = props.children
-
-          if (typeof children === 'string' && children.startsWith('$L')) {
-            if (rows && rows.has(children)) {
-              const rowData = rows.get(children)
-              pendingRefsRef.current.delete(children)
-              processed[key] = rscToReact(rowData, modules, layoutPath, symbols, rows)
-            }
-            else {
-              pendingRefsRef.current.add(children)
-              processed[key] = React.createElement(LazyContent, {
-                key: `lazy-${children}`,
-                contentRef: children,
-              })
-            }
-          }
-          else {
-            processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
-          }
-        }
-        else if (key === 'dangerouslySetInnerHTML') {
-          processed[key] = props[key]
-        }
-        else {
-          processed[key] = rscToReact(props[key], modules, layoutPath, symbols, rows)
-        }
-      }
-    }
-
-    return processed
-  }
+  processPropsRef.current = processProps
+  rscToReactRef.current = rscToReact
 
   const sanitizeJsonString = (input: string, type: 'array' | 'object'): string | null => {
     try {
@@ -423,7 +426,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
   }
 
-  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
+  const parseRscWireFormat = useCallback(async (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
       const modules = new Map()
@@ -592,9 +595,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       console.error('[rari] AppRouter: Failed to parse RSC wire format:', error)
       throw error
     }
-  }
+  }, [rscToReact])
 
-  const refetchRscPayload = async (
+  const refetchRscPayload = useCallback(async (
     targetPath?: string,
     abortSignal?: AbortSignal,
   ) => {
@@ -680,13 +683,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     pendingFetchesRef.current.set(pathToFetch, fetchPromise)
 
     return fetchPromise
-  }
+  }, [parseRscWireFormat, rscPayload, trackHMRFailure, isStaleContent, resetFailureTracking])
 
   const parseRscWireFormatRef = useRef(parseRscWireFormat)
   const refetchRscPayloadRef = useRef(refetchRscPayload)
-
-  parseRscWireFormatRef.current = parseRscWireFormat
-  refetchRscPayloadRef.current = refetchRscPayload
 
   useEffect(() => {
     if (typeof window === 'undefined')
@@ -866,7 +866,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
       window.removeEventListener('rari:rsc-row', handleRscRow)
     }
-  }, [])
+  }, [resetFailureTracking])
 
   useEffect(() => {
     if (typeof window === 'undefined')
@@ -886,6 +886,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       })
     }
   }, [rscPayload])
+
+  useLayoutEffect(() => {
+    onNavigateRef.current = onNavigate
+    parseRscWireFormatRef.current = parseRscWireFormat
+    refetchRscPayloadRef.current = refetchRscPayload
+  }, [onNavigate, parseRscWireFormat, refetchRscPayload])
 
   const handleManualRefresh = () => {
     window.location.reload()

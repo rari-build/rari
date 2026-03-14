@@ -9,7 +9,7 @@
     catch (error) {
       console.error('[rari] render_start: Component async execution failed:', error)
       globalThis['~render'].completeSignal = true
-      throw error
+      globalThis['~render'].lastError = error
     }
   }
 })()
