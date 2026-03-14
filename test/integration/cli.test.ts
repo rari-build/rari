@@ -146,25 +146,30 @@ describe('CLI Integration Tests', () => {
 
   describe('environment variable handling', () => {
     it('should work with custom PORT', async () => {
-      const { stderr } = await runCLI(['help'], {
+      const { code, stderr } = await runCLI(['help'], {
         env: { PORT: '8080' },
       })
 
+      expect(code).toBe(0)
       expect(stderr).toContain('rari CLI')
+      expect(stderr).toContain('PORT')
+      expect(stderr).toContain('Server port')
     }, TIMEOUT)
 
     it('should work with NODE_ENV', async () => {
-      const { stderr } = await runCLI(['help'], {
+      const { code, stderr } = await runCLI(['help'], {
         env: { NODE_ENV: 'development' },
       })
 
+      expect(code).toBe(0)
       expect(stderr).toContain('rari CLI')
+      expect(stderr).toContain('NODE_ENV')
+      expect(stderr).toContain('Environment')
     }, TIMEOUT)
   })
 
   describe('platform detection', () => {
     it('should work without platform variables', async () => {
-      // Create env without platform variables
       const env = Object.fromEntries(
         Object.entries(process.env).filter(([key]) =>
           key !== 'RAILWAY_ENVIRONMENT' && key !== 'RENDER',
@@ -175,6 +180,7 @@ describe('CLI Integration Tests', () => {
 
       expect(code).toBe(0)
       expect(stderr).toContain('rari CLI')
+      expect(stderr).toContain('Platform deployment')
     }, TIMEOUT)
 
     it('should work with Railway environment', async () => {
@@ -184,6 +190,7 @@ describe('CLI Integration Tests', () => {
 
       expect(code).toBe(0)
       expect(stderr).toContain('rari CLI')
+      expect(stderr).toContain('railway')
     }, TIMEOUT)
 
     it('should work with Render environment', async () => {
@@ -193,6 +200,7 @@ describe('CLI Integration Tests', () => {
 
       expect(code).toBe(0)
       expect(stderr).toContain('rari CLI')
+      expect(stderr).toContain('render')
     }, TIMEOUT)
   })
 
@@ -202,6 +210,7 @@ describe('CLI Integration Tests', () => {
 
       expect(stderr).toContain('rari dev')
       expect(stderr).toContain('Vite')
+      expect(stderr).toContain('development server')
     }, TIMEOUT)
 
     it('should recognize build command (vite-plus)', async () => {
@@ -209,6 +218,7 @@ describe('CLI Integration Tests', () => {
 
       expect(stderr).toContain('rari build')
       expect(stderr).toContain('production')
+      expect(stderr).toContain('Build for production')
     }, TIMEOUT)
 
     it('should show correct command structure', async () => {
@@ -218,6 +228,8 @@ describe('CLI Integration Tests', () => {
       expect(stderr).toContain('rari build')
       expect(stderr).toContain('rari start')
       expect(stderr).toContain('rari deploy')
+      expect(stderr).toContain('Vite')
+      expect(stderr).toContain('production')
     }, TIMEOUT)
   })
 })

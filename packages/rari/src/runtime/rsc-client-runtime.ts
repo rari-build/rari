@@ -822,11 +822,13 @@ class RscClient {
 
     processStream()
 
+    const rootPromise = Promise.resolve(createElement(StreamingWrapper))
+
     return {
       '~isRscResponse': true,
-      '~rscPromise': Promise.resolve(createElement(StreamingWrapper)),
+      '~rscPromise': rootPromise,
       readRoot() {
-        return Promise.resolve(createElement(StreamingWrapper))
+        return rootPromise
       },
     }
   }

@@ -598,7 +598,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
         }
         else if (Array.isArray(rootElement[0])) {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, false)
+          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
         }
       }
 

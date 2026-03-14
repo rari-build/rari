@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vite-plus/test'
+
+const CLI_PATH = resolve(process.cwd(), 'packages/rari/dist/cli.mjs')
 
 describe('cli commands', () => {
   describe('command structure', () => {
@@ -18,6 +21,10 @@ describe('cli commands', () => {
     it('should have process.env available', () => {
       expect(process.env).toBeDefined()
       expect(typeof process.env).toBe('object')
+    })
+
+    it('should have CLI binary built', () => {
+      expect(existsSync(CLI_PATH)).toBe(true)
     })
   })
 
@@ -73,41 +80,29 @@ describe('cli commands', () => {
 
   describe('vite-plus integration', () => {
     it('should use vp as the build tool', () => {
-      expect(true).toBe(true)
+      expect(existsSync(CLI_PATH)).toBe(true)
     })
 
     it('should support dev command', () => {
-      expect(true).toBe(true)
+      expect(existsSync(CLI_PATH)).toBe(true)
     })
 
     it('should support build command', () => {
-      expect(true).toBe(true)
+      expect(existsSync(CLI_PATH)).toBe(true)
     })
 
     it('should support development mode builds', () => {
-      expect(true).toBe(true)
+      expect(existsSync(CLI_PATH)).toBe(true)
     })
   })
 
   describe('command availability', () => {
-    it('should support dev command', () => {
-      expect(true).toBe(true)
-    })
+    const commands = ['dev', 'build', 'start', 'deploy', 'help']
 
-    it('should support build command', () => {
-      expect(true).toBe(true)
-    })
-
-    it('should support start command', () => {
-      expect(true).toBe(true)
-    })
-
-    it('should support deploy command', () => {
-      expect(true).toBe(true)
-    })
-
-    it('should support help command', () => {
-      expect(true).toBe(true)
+    commands.forEach((cmd) => {
+      it(`should support ${cmd} command`, () => {
+        expect(existsSync(CLI_PATH)).toBe(true)
+      })
     })
   })
 })

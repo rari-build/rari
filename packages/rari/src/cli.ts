@@ -528,3 +528,5 @@ if (isMainModule) {
     process.exit(1)
   })
 }
+
+export { detectPackageManager, getDeploymentConfig, isRailwayEnvironment, isRenderEnvironment }

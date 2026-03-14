@@ -191,11 +191,15 @@ function setupPartialHydration(): void {
                   }
 
                   if (componentInfo.loadPromise && !componentInfo.component) {
-                    return React.createElement(ClientComponentLoader, {
-                      key,
-                      componentInfo,
-                      childProps: processedProps,
-                    })
+                    return React.createElement(
+                      React.Suspense,
+                      { fallback: null },
+                      React.createElement(ClientComponentLoader, {
+                        key,
+                        componentInfo,
+                        childProps: processedProps,
+                      }),
+                    )
                   }
                 }
 
@@ -735,11 +739,15 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
                     children: 'children' in props ? rscToReact(props.children, modules, symbols) : undefined,
                   }
                 : {}
-              return React.createElement(ClientComponentLoader, {
-                key,
-                componentInfo,
-                childProps,
-              })
+              return React.createElement(
+                React.Suspense,
+                { fallback: null },
+                React.createElement(ClientComponentLoader, {
+                  key,
+                  componentInfo,
+                  childProps,
+                }),
+              )
             }
 
             return null
