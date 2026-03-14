@@ -221,8 +221,8 @@ function TierCard({ tier }: { tier: Tier }) {
 
           <div className="flex-1">
             <div className="space-y-3">
-              {tier.benefits.map((benefit, i) => (
-                <div key={i} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
+              {tier.benefits.map(benefit => (
+                <div key={benefit.text} className={`flex items-start gap-2 ${benefit.isStatement ? 'mt-4 pt-4 border-t border-[#30363d]' : ''}`}>
                   {!benefit.isStatement && (
                     <Check className="w-5 h-5 text-[#fd7e14] shrink-0 mt-0.5" />
                   )}
@@ -252,8 +252,8 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
             <h3 className="text-xl font-bold text-[#f0f6fc] mb-2">{tier.name}</h3>
             <p className="text-gray-400 text-sm mb-3 group-hover:text-gray-300 transition-colors duration-300">{tier.description}</p>
             <div className="space-y-2">
-              {tier.benefits.map((benefit, i) => (
-                <div key={i} className="flex items-start gap-2">
+              {tier.benefits.map(benefit => (
+                <div key={benefit.text} className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-[#fd7e14] shrink-0 mt-0.5" />
                   <span className="text-gray-300 text-sm">{benefit.text}</span>
                 </div>

@@ -1,5 +1,5 @@
 import { fetchWithCsrf, getCsrfToken, refreshCsrfToken } from '@rari/runtime/csrf'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 describe('csrf', () => {
   let _origWindow: any

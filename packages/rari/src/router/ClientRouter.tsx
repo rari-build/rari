@@ -692,8 +692,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
     if (!currentHistoryState || !currentHistoryState.key) {
       const initialHistoryState: HistoryState = {
-        route: navigationState.currentRoute,
-        navigationId: navigationState.navigationId,
+        route: normalizePath(initialRoute),
+        navigationId: 0,
         scrollPosition: { x: window.scrollX, y: window.scrollY },
         timestamp: Date.now(),
         key: generateHistoryKey(),
@@ -705,7 +705,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         window.location.pathname + window.location.search + window.location.hash,
       )
     }
-  }, [])
+  }, [initialRoute])
 
   const handlePageHide = (event: PageTransitionEvent) => {
     if (event.persisted) {

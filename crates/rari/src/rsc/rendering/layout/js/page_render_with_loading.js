@@ -1,5 +1,6 @@
 /* eslint-disable unused-imports/no-unused-vars, no-undef, style/object-curly-spacing */
 // oxlint-disable vars-on-top, no-var, block-scoped-var, no-redeclare
+// @ts-nocheck
 const startPage = performance.now()
 const PageComponent = globalThis['{page_component_id}']
 if (!PageComponent || typeof PageComponent !== 'function')

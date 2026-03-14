@@ -75,6 +75,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const streamingRowsRef = useRef<string[] | null>(null)
   const [, startTransition] = useTransition()
+  const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
   const pendingFetchesRef = useRef<Map<string, Promise<any>>>(new Map())
@@ -86,6 +87,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     typeof window !== 'undefined' && window.location.hash.length > 0,
   )
   const MAX_RETRIES = 3
+
+  useEffect(() => {
+    onNavigateRef.current = onNavigate
+  }, [onNavigate])
 
   const saveFormState = () => {
     if (typeof document === 'undefined')
@@ -263,8 +268,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         if (!element)
           return null
 
-        if (typeof element === 'object' && React.isValidElement(element) && !element.key)
-          return React.cloneElement(element, { key: index })
+        if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
+          const stableKey = `rsc-${typeof child === 'object' && child !== null ? JSON.stringify(child).substring(0, 50) : index}-${index}`
+          return React.createElement(React.Fragment, { key: stableKey }, element)
+        }
 
         return element
       }).filter(Boolean)
@@ -675,6 +682,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return fetchPromise
   }
 
+  const parseRscWireFormatRef = useRef(parseRscWireFormat)
+  const refetchRscPayloadRef = useRef(refetchRscPayload)
+
+  useEffect(() => {
+    parseRscWireFormatRef.current = parseRscWireFormat
+    refetchRscPayloadRef.current = refetchRscPayload
+  })
+
   useEffect(() => {
     if (typeof window === 'undefined')
       return
@@ -696,7 +711,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       startTransition(async () => {
         try {
           if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormat(detail.rscWireFormat, false)
+            const parsedPayload = await parseRscWireFormatRef.current(detail.rscWireFormat, false)
             setRscPayload(parsedPayload)
             lastSuccessfulPayloadRef.current = detail.rscWireFormat
             resetFailureTracking()
@@ -705,7 +720,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             streamingRowsRef.current = []
           }
           else {
-            await refetchRscPayload(
+            await refetchRscPayloadRef.current(
               detail.to,
               detail.abortSignal,
             )
@@ -715,8 +730,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             setRenderKey(prev => prev + 1)
             setHmrError(null)
 
-            if (onNavigate)
-              onNavigate(detail)
+            if (onNavigateRef.current)
+              onNavigateRef.current(detail)
           }
         }
         catch (error) {
@@ -758,7 +773,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        await refetchRscPayload()
+        await refetchRscPayloadRef.current()
 
         setRenderKey(prev => prev + 1)
 
@@ -781,7 +796,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleRscInvalidate = async () => {
       try {
-        await refetchRscPayload()
+        await refetchRscPayloadRef.current()
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -796,7 +811,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleManifestUpdated = async () => {
       try {
-        await refetchRscPayload()
+        await refetchRscPayloadRef.current()
         setHmrError(null)
       }
       catch (error) {
@@ -821,7 +836,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       try {
         const wireFormat = streamingRowsRef.current.join('\n')
-        const parsedPayload = await parseRscWireFormat(wireFormat, false)
+        const parsedPayload = await parseRscWireFormatRef.current(wireFormat, false)
         const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
 
         if (isInitialShell) {
@@ -853,7 +868,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
       window.removeEventListener('rari:rsc-row', handleRscRow)
     }
-  }, [onNavigate])
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined')

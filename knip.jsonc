@@ -2,24 +2,37 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "ignore": [
-        "crates/**/*",
-        "test/fixtures/**/*"
+      "entry": [
+        "test/setup.ts",
+        "test/**/*.test.ts"
+      ],
+      "project": [
+        "test/**/*.ts"
       ],
       "ignoreDependencies": [
         "@typescript/native-preview", // Used by TypeScript tooling
-        "@typescript-eslint/utils" // Used by antfu eslint config
+        "@typescript-eslint/utils", // Used by antfu eslint config
+        "@vitest/coverage-v8" // Used by vitest for coverage
       ]
     },
     "packages/rari": {
       "entry": [
-        "src/**/*.ts"
+        "src/**/*.ts",
+        "src/runtime/*.tsx"
       ],
       "project": [
         "src/**/*.{ts,tsx,js,jsx}"
       ]
     },
     "packages/create-rari-app": {
+      "entry": [
+        "src/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/logger": {
       "entry": [
         "src/**/*.ts"
       ],
@@ -46,7 +59,8 @@
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
       "ignoreDependencies": [
-        "tailwindcss"
+        "tailwindcss",
+        "@tailwindcss/vite" // Used by Tailwind CSS
       ]
     },
     "web": {
@@ -61,7 +75,13 @@
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
       "ignoreDependencies": [
-        "tailwindcss"
+        "tailwindcss",
+        "@tailwindcss/vite" // Used by Tailwind CSS
+      ]
+    },
+    "test/fixtures/app": {
+      "ignore": [
+        "**/*" // Test fixture app is not analyzed
       ]
     }
   }

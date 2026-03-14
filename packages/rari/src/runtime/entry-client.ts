@@ -1,6 +1,8 @@
 import type { GlobalWithRari, WindowWithRari } from './shared/types'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - rari/client is resolved from the built package (circular reference)
 import { ClientRouter } from 'rari/client'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - rari/router is resolved from the built package (circular reference)
 import { RouterProvider } from 'rari/router'
 import * as React from 'react'
@@ -12,6 +14,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
+// eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
@@ -188,6 +191,7 @@ function setupPartialHydration(): void {
                   }
 
                   if (componentInfo.loadPromise && !componentInfo.component) {
+                    // eslint-disable-next-line react-hooks/rules-of-hooks
                     React.use(componentInfo.loadPromise)
                   }
                 }
@@ -208,9 +212,17 @@ function setupPartialHydration(): void {
         }
 
         return element.map((child, index) => {
+          let elementKey: string | null = null
+          if (Array.isArray(child) && child.length >= 3)
+            elementKey = child[2]
+          if (!elementKey)
+            elementKey = `rsc-${index}-${typeof child === 'string' ? child : JSON.stringify(child).slice(0, 20)}`
+
           const result = rscToReactElement(child)
-          if (React.isValidElement(result) && !result.key)
-            return React.cloneElement(result, { key: index })
+
+          if (React.isValidElement(result) && !result.key) {
+            return React.createElement(React.Fragment, { key: elementKey }, result)
+          }
 
           return result
         })
@@ -539,16 +551,12 @@ export async function renderApp(): Promise<void> {
 
     wrappedContent = React.createElement(
       ClientRouter,
-      // @ts-ignore - children passed as third argument; type checking varies based on build state
-      { initialRoute: window.location.pathname },
-      wrappedContent,
+      { initialRoute: window.location.pathname, children: wrappedContent },
     )
 
     wrappedContent = React.createElement(
       RouterProvider,
-      // @ts-ignore - children passed as third argument; type checking varies based on build state
-      { initialPathname: window.location.pathname },
-      wrappedContent,
+      { initialPathname: window.location.pathname, children: wrappedContent },
     )
 
     const root = createRoot(rootElement)
@@ -699,6 +707,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             }
 
             if (componentInfo.loadPromise) {
+              // eslint-disable-next-line react-hooks/rules-of-hooks
               React.use(componentInfo.loadPromise)
             }
           }

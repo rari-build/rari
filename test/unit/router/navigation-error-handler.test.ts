@@ -1,5 +1,5 @@
 import { createNavigationError, NavigationErrorHandler } from '@rari/router/navigation-error-handler'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 describe('createNavigationError', () => {
   beforeEach(() => {

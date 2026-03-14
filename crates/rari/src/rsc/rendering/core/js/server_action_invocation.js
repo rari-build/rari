@@ -1,4 +1,5 @@
 /* eslint-disable no-undef, style/object-curly-spacing */
+// oxlint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/unbound-method
 (async () => {
   try {
     if (!globalThis.getServerFunction) {

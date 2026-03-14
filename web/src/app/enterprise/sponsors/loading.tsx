@@ -17,8 +17,8 @@ export default function SponsorsLoading() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-xl p-6 space-y-4">
+            {Array.from({ length: 3 }, (_, i) => `skeleton-${i}`).map(key => (
+              <div key={key} className="bg-[#161b22] border border-[#30363d] rounded-xl p-6 space-y-4">
                 <div className="h-7 bg-[#21262d] rounded w-1/2 animate-pulse"></div>
                 <div className="h-10 bg-[#21262d] rounded w-1/3 animate-pulse"></div>
                 <div className="space-y-2">

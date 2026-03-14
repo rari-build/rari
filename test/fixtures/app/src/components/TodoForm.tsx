@@ -4,7 +4,7 @@ import type { Todo } from '@/actions/todo-actions'
 import { useActionState, useState } from 'react'
 import { addTodo } from '@/actions/todo-actions'
 
-type FormState = {
+interface FormState {
   success: boolean
   error?: string
   todos?: Todo[]

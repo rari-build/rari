@@ -1,3 +1,4 @@
+import type { ModuleData } from './shared/types'
 import * as React from 'react'
 import {
   BACKSLASH_REGEX,
@@ -6,7 +7,6 @@ import {
 } from '../shared/regex-constants'
 import { loadClientComponent } from './shared/get-client-component'
 import { preloadComponentsFromModules } from './shared/preload-components'
-import { ModuleData } from './shared/types'
 
 interface ParsedWireFormat {
   modules: Map<string, ModuleData>

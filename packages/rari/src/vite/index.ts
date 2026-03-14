@@ -1,4 +1,4 @@
-import type { Plugin, UserConfig } from 'vite'
+import type { Plugin, UserConfig } from 'vite-plus'
 import type { ProxyPluginOptions } from '../proxy/vite-plugin'
 import type { ServerBuildOptions } from './server-build'
 import { Buffer } from 'node:buffer'

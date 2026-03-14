@@ -1,7 +1,7 @@
 import nodePath from 'node:path'
 import process from 'node:process'
 import { getBinaryPath, getInstallationInstructions } from '@rari/platform'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const UNSUPPORTED_PLATFORM_REGEX = /Unsupported platform: sunos.*rari supports Linux, macOS, and Windows/
 const UNSUPPORTED_ARCH_REGEX = /Unsupported architecture: s390x.*rari supports x64 and ARM64/

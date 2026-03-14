@@ -253,7 +253,7 @@ function renderAttributes(attributes, _isStatic) {
         const styleStr = Object.entries(value)
           .map(([k, v]) => {
             const kebabKey = k.replace(CAMEL_TO_KEBAB_REGEX, '-$1').toLowerCase()
-            return `${kebabKey}:${v}`
+            return `${kebabKey}:${String(v)}`
           })
           .join(';')
         return ` style="${styleStr}"`

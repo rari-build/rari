@@ -1,5 +1,5 @@
-/* eslint-disable no-undef */
-/* eslint-disable style/object-curly-spacing */
+/* eslint-disable no-undef, style/object-curly-spacing */
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
   let Component
   let componentSource = 'not found'

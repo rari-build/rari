@@ -63,37 +63,44 @@ export default async function HomePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
+                id: 'rust-runtime',
                 title: 'Rust Runtime',
                 description: 'The HTTP server, RSC renderer, and router are written in Rust with an embedded V8 engine that executes your React components',
                 icon: 'rust',
               },
               {
+                id: 'rsc',
                 title: 'React Server Components',
                 description: 'Server components by default with streaming, Suspense boundary handling, and server action execution built into the runtime',
                 icon: 'react',
               },
               {
+                id: 'rolldown',
                 title: 'Rolldown + Vite',
                 description: 'Bundled by Rolldown-powered Vite with zero config needed — just add the plugin to your vite.config.ts and go',
                 icon: 'vite',
               },
               {
+                id: 'node-modules',
                 title: 'node_modules Support',
                 description: 'Unlike most Rust-based JS runtimes, rari resolves packages from node_modules directly — no import maps or URL specifiers needed',
                 icon: 'npm',
               },
               {
+                id: 'typescript',
                 title: 'TypeScript First',
                 description: 'Full type safety across the server/client boundary, with tsgo for faster type checking during development',
                 icon: 'typescript',
               },
               {
+                id: 'dx',
                 title: 'Developer Experience',
                 description: 'Instant HMR, detailed error overlays, and a project generator that gets you from zero to a running RSC app in seconds',
                 icon: 'code',
               },
-            ].map((feature, i) => (
-              <FeatureCard key={i} {...feature} />
+
+            ].map(feature => (
+              <FeatureCard key={feature.id} {...feature} />
             ))}
           </div>
         </div>

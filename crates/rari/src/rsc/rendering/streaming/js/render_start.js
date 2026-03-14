@@ -1,3 +1,4 @@
+// oxlint-disable @typescript-eslint/no-floating-promises
 (async function () {
   if (globalThis['~render']?.shouldStart) {
     globalThis['~render'].shouldStart = false

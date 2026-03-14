@@ -20,7 +20,7 @@ export default async function ShopPage({ params }: PageProps) {
         ? (
             <div data-testid="categories" data-categories={JSON.stringify(categoriesArray)}>
               {categoriesArray.map((category, i) => (
-                <span key={i} data-testid={`category-${i}`}>{category}</span>
+                <span key={category} data-testid={`category-${i}`}>{category}</span>
               ))}
             </div>
           )

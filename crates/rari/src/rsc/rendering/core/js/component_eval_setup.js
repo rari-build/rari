@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define, no-var, vars-on-top */
 // oxlint-disable block-scoped-var, no-use-before-define, no-var, vars-on-top
 if (typeof _jsx === 'undefined')
   var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)

@@ -1,6 +1,6 @@
 import type { AppRouteManifest, RouteSegment } from '@rari/router/types'
 import { createRouteInfo, extractPathname, findLayoutChain, isExternalUrl, matchRouteParams, normalizePath, parseRoutePath } from '@rari/router/navigation-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 
 describe('parseRoutePath', () => {
   it('should parse a simple path', () => {

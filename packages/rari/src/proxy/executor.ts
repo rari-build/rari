@@ -1,8 +1,8 @@
+import type { RariResponse } from './RariResponse'
 import type { ProxyConfig, ProxyFunction, ProxyModule, ProxyResult } from './types'
 import { TSX_EXT_REGEX } from '../shared/regex-constants'
 import { shouldRunProxy } from './matcher'
 import { RariRequest } from './RariRequest'
-import { RariResponse } from './RariResponse'
 
 export class ProxyExecutor {
   private proxyFn: ProxyFunction | null = null

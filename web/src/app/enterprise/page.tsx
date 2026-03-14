@@ -43,13 +43,13 @@ export default async function EnterprisePage() {
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             {[
-              { label: 'Production-Ready', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
-              { label: '100% Open Source', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
-              { label: 'Enterprise Support', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
-              { label: 'MIT Licensed', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
-            ].map((feature, i) => (
+              { id: 'prod-ready', label: 'Production-Ready', bg: 'bg-[#D34516]/10', text: 'text-[#D34516]', border: 'border-[#D34516]/20' },
+              { id: 'open-source', label: '100% Open Source', bg: 'bg-[#61dafb]/10', text: 'text-[#61dafb]', border: 'border-[#61dafb]/20' },
+              { id: 'enterprise', label: 'Enterprise Support', bg: 'bg-yellow-500/10', text: 'text-yellow-600', border: 'border-yellow-500/20' },
+              { id: 'mit', label: 'MIT Licensed', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+            ].map(feature => (
               <div
-                key={i}
+                key={feature.id}
                 className={`px-4 py-2 ${feature.bg} border ${feature.border} rounded-full text-xs font-medium ${feature.text} backdrop-blur-sm`}
               >
                 {feature.label}
@@ -99,31 +99,37 @@ export default async function EnterprisePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
+                id: 'performance',
                 title: 'Production-Ready Performance',
                 description: 'Rust-powered runtime delivers consistent sub-50ms response times. Built for scale from day one.',
               },
               {
+                id: 'support',
                 title: 'Enterprise Support',
                 description: 'Priority bug fixes, production issue support, and direct access to the core team. SLAs from 48hr to 24hr.',
               },
               {
+                id: 'roadmap',
                 title: 'Roadmap Influence',
                 description: 'Vote on priorities, request features, and shape the framework to meet your business needs.',
               },
               {
+                id: 'migration',
                 title: 'Migration Consulting',
                 description: 'Get expert guidance moving from Next.js, Remix, or other frameworks. We help you ship faster.',
               },
               {
+                id: 'custom-dev',
                 title: 'Custom Development',
                 description: 'Need a specific feature? Higher tiers include custom development hours aligned with the roadmap.',
               },
               {
+                id: 'partnership',
                 title: 'Technology Partnership',
                 description: 'Co-marketing opportunities, case studies, and joint speaking engagements to showcase your success.',
               },
-            ].map((feature, i) => (
-              <div key={i} className="relative group h-full overflow-hidden rounded-xl p-px">
+            ].map(feature => (
+              <div key={feature.id} className="relative group h-full overflow-hidden rounded-xl p-px">
                 <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
                   <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
                   <div className="relative z-10">
@@ -168,19 +174,22 @@ export default async function EnterprisePage() {
           <div className="space-y-6">
             {[
               {
+                id: 'performance',
                 title: 'Performance at Scale',
                 body: 'Unlike JavaScript-based frameworks, rari\'s Rust runtime eliminates the overhead of Node.js. Your React Server Components execute in an embedded V8 engine managed by Rust, giving you predictable performance even under heavy load.',
               },
               {
+                id: 'costs',
                 title: 'Lower Infrastructure Costs',
                 body: 'Rust\'s memory efficiency means you can handle more traffic with fewer servers. The runtime uses ~50% less memory than Node.js for equivalent workloads.',
               },
               {
+                id: 'dx',
                 title: 'Developer Experience',
                 body: 'Your team writes React. That\'s it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.',
               },
-            ].map((section, i) => (
-              <div key={i} className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
+            ].map(section => (
+              <div key={section.id} className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-8">
                 <h3 className="text-2xl font-bold text-[#f0f6fc] mb-4">{section.title}</h3>
                 <p className="text-gray-400 leading-relaxed">{section.body}</p>
               </div>

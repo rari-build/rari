@@ -25,11 +25,11 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "vp pack"
   },
   "devDependencies": {
     "@rari/logger": "workspace:*",
     "@types/node": "catalog:typescript",
-    "tsdown": "catalog:build"
+    "vite-plus": "catalog:build"
   }
 }

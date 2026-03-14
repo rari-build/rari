@@ -1,5 +1,5 @@
 import type { GlobalWithRari, ModuleData, WindowWithRari } from './shared/types'
-import { cloneElement, createElement, isValidElement, Suspense, useEffect, useRef, useState } from 'react'
+import { createElement, Fragment, isValidElement, Suspense, use, useEffect, useState } from 'react'
 import * as ReactDOMClient from 'react-dom/client'
 import {
   CAMEL_CASE_REGEX,
@@ -581,7 +581,13 @@ class RscClient {
           if (props?.children) {
             const child = convertRscToReact(props.children)
             if (Array.isArray(child)) {
-              processedProps.children = child.map((c, i) => isValidElement(c) ? cloneElement(c, { key: (c.key ?? i) }) : c)
+              processedProps.children = child.map((c, i) => {
+                if (isValidElement(c) && !c.key) {
+                  return createElement(Fragment, { key: c.key ?? i }, c)
+                }
+
+                return c
+              })
             }
             else {
               processedProps.children = child
@@ -787,7 +793,7 @@ class RscClient {
           if (props && props.children) {
             const updatedChildren = renderWithBoundaryUpdates(props.children)
             if (updatedChildren !== props.children) {
-              return cloneElement(element, { ...props, children: updatedChildren } as any)
+              return createElement(element.type, { ...props, children: updatedChildren })
             }
           }
 
@@ -1097,6 +1103,8 @@ function RscErrorComponent({ error, details }: { error: string, details?: any })
   )))
 }
 
+const serverComponentCache = new Map<string, Promise<any>>()
+
 function ServerComponentWrapper({
   componentId,
   props,
@@ -1106,59 +1114,25 @@ function ServerComponentWrapper({
   props: any
   fallback?: any
 }): any {
-  const [state, setState] = useState({ data: null, loading: true, error: null })
   const propsKey = JSON.stringify(props)
-  const prevPropsKeyRef = useRef(propsKey)
+  const cacheKey = `${componentId}:${propsKey}`
 
-  useEffect(() => {
-    let mounted = true
-
-    if (prevPropsKeyRef.current !== propsKey) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
-      setState({ data: null, loading: true, error: null })
-      prevPropsKeyRef.current = propsKey
-    }
-
-    rscClient.fetchServerComponent(componentId, props)
-      .then((result) => {
-        if (mounted)
-          setState({ data: result, loading: false, error: null })
-      })
+  if (!serverComponentCache.has(cacheKey)) {
+    const promise = rscClient.fetchServerComponent(componentId, props)
       .catch((err) => {
-        if (mounted)
-          setState({ data: null, loading: false, error: err })
+        serverComponentCache.delete(cacheKey)
+        throw err
       })
-
-    return () => {
-      mounted = false
-    }
-  }, [componentId, propsKey])
-
-  const { data, loading, error } = state
-
-  if (loading)
-    return fallback || null
-
-  if (error) {
-    return createElement(RscErrorComponent, {
-      error: 'Error loading component',
-      details: { message: (error as Error).message, componentId },
-    })
+    serverComponentCache.set(cacheKey, promise)
   }
 
-  if (data) {
-    if (data['~isRscResponse']) {
-      return createElement(Suspense, { fallback: fallback || null }, (data as any).readRoot(),
-      )
-    }
+  const promise = serverComponentCache.get(cacheKey)!
+  const data = use(promise)
 
-    return data
-  }
+  if (data?.['~isRscResponse'])
+    return createElement(Suspense, { fallback: fallback || null }, (data as any).readRoot())
 
-  return createElement(RscErrorComponent, {
-    error: `No data received for component: ${componentId}`,
-    details: { componentId, dataType: typeof data, hasData: !!data },
-  })
+  return data || null
 }
 
 function createServerComponentWrapper(componentName: string): (props: any) => any {
