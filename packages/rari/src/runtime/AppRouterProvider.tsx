@@ -343,8 +343,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (!Component)
             return null
 
-          if (typeof Component !== 'function') {
-            console.error('[rari] AppRouter: Component is not a function:', {
+          const isValidComponent = typeof Component === 'function'
+            || (typeof Component === 'object' && Component !== null && Component.$$typeof)
+
+          if (!isValidComponent) {
+            console.error('[rari] AppRouter: Component is not a valid React component:', {
               moduleId: moduleInfo.id,
               exportName: moduleInfo.name,
               componentType: typeof Component,
@@ -549,18 +552,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           if (tag === 'E') {
             console.error('[rari] AppRouter: Error chunk received:', content)
+            const key = `$L${rowId}`
             try {
               const errorData = JSON.parse(content)
-              rows.set(rowId, { error: errorData })
+              rows.set(key, { error: errorData })
             }
             catch {
-              rows.set(rowId, { error: content })
+              rows.set(key, { error: content })
             }
             continue
           }
 
           if (tag === 'T') {
-            rows.set(rowId, content)
+            const key = `$L${rowId}`
+            rows.set(key, content)
             continue
           }
 
@@ -690,7 +695,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
 
         if (!response.ok) {
-          const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`)
+          const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`) as Error & { '~hmrTracked'?: boolean }
+          error['~hmrTracked'] = true
           trackHMRFailure(
             error,
             'fetch',
@@ -703,17 +709,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const rscWireFormat = await response.text()
 
         if (isStaleContent(rscWireFormat)) {
-          const error = new Error('Server returned stale content')
-          trackHMRFailure(
-            error,
-            'stale',
-            `Stale content detected: payload timestamp is more than 5 seconds old or matches previous payload`,
-            window.location.pathname,
-          )
           if (rscPayloadRef.current) {
             return { payload: rscPayloadRef.current, isStale: true }
           }
-          throw error
+          throw new Error('Server returned stale content but no cached payload available')
         }
 
         let parsedPayload
@@ -721,7 +720,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           parsedPayload = await parseRscWireFormat(rscWireFormat, false)
         }
         catch (parseError) {
-          const error = parseError instanceof Error ? parseError : new Error(String(parseError))
+          const error = (parseError instanceof Error ? parseError : new Error(String(parseError))) as Error & { '~hmrTracked'?: boolean }
+          error['~hmrTracked'] = true
           trackHMRFailure(
             error,
             'parse',
@@ -740,7 +740,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         return { payload: parsedPayload, isStale: false }
       }
       catch (error) {
-        if (error instanceof Error && !error.message.includes('Failed to fetch RSC data') && !error.message.includes('Failed to parse')) {
+        const isTracked = error instanceof Error && ((error as any)['~hmrTracked'] || error.name === 'AbortError')
+        if (!isTracked && error instanceof Error) {
           trackHMRFailure(
             error,
             'network',
@@ -833,8 +834,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
         }
         catch (error) {
-          if (error instanceof Error && error.name === 'AbortError')
+          if (error instanceof Error && error.name === 'AbortError') {
+            isNavigatingRef.current = false
             return
+          }
 
           isNavigatingRef.current = false
           console.error('[rari] AppRouter: Navigation failed:', error)
@@ -921,6 +924,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const result = await refetchRscPayloadRef.current!()
         clearPendingSuspense()
         setRscPayload(result.payload)
+        if (result.isStale && result.payload === rscPayloadRef.current)
+          setRenderKey(prev => prev + 1)
         if (!result.isStale)
           resetFailureTracking()
         setHmrError(null)
