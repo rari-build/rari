@@ -1,11 +1,11 @@
 {
-  "extends": "../packages/rari/tsconfig.json",
+  "extends": "../.config/typescript/base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     "paths": {
       "@rari/*": ["../packages/rari/src/*"]
-    }
+    },
+    "types": ["node"]
   },
-  "include": [
-    "**/*.ts"
-  ]
+  "include": ["**/*.ts"]
 }
