@@ -282,7 +282,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return processed
   }, [LazyContent])
 
-  const rscToReact = useCallback((rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any => {
+  const rscToReact = useCallback((rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>, isRootCall: boolean = false): any => {
+    if (isRootCall)
+      fallbackKeyCounterRef.current = 0
+
     if (!rsc)
       return null
 
@@ -574,13 +577,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       if (rootElement && Array.isArray(rootElement)) {
         if (rootElement[0] === '$') {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
+          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
         }
         else if (Array.isArray(rootElement[0])) {
           const elements = rootElement
             .map((el: any) =>
               Array.isArray(el) && el[0] === '$'
-                ? rscToReact(el, modules, undefined, symbols, rows)
+                ? rscToReact(el, modules, undefined, symbols, rows, true)
                 : el,
             )
             .filter((el: any) => {

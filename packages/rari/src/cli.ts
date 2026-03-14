@@ -204,7 +204,7 @@ async function runViteBuild() {
   })
 
   logInfo('Building for production...')
-  const buildProcess = crossPlatformSpawn('npx', ['vite', 'build'], {
+  const buildProcess = crossPlatformSpawn('npx', ['vp', 'build'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
@@ -276,7 +276,7 @@ async function runViteDev() {
   if (!existsSync(distPath)) {
     logInfo('First run detected - building project...')
 
-    const buildProcess = crossPlatformSpawn('npx', ['vite', 'build', '--mode', 'development'], {
+    const buildProcess = crossPlatformSpawn('npx', ['vp', 'build', '--mode', 'development'], {
       stdio: 'inherit',
       cwd: process.cwd(),
     })
@@ -296,8 +296,8 @@ async function runViteDev() {
     })
   }
 
-  logInfo('Starting Vite dev server...')
-  const viteProcess = crossPlatformSpawn('npx', ['vite'], {
+  logInfo('Starting Vite+ dev server...')
+  const viteProcess = crossPlatformSpawn('npx', ['vp', 'dev'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
