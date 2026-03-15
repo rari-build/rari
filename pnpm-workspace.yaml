@@ -23,7 +23,7 @@ catalogs:
   cli:
     '@clack/prompts': ^1.1.0
   default:
-    rari: ^0.10.18
+    rari: ^0.10.19
   eslint:
     '@antfu/eslint-config': ^7.7.2
     '@e18e/eslint-plugin': ^0.2.0
