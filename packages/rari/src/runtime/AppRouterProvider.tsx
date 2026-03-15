@@ -1,13 +1,26 @@
 'use client'
 
 import * as React from 'react'
-import { Suspense, useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadComponentsFromModules } from './shared/preload-components'
 
-const FRESHNESS_TOKEN_REGEX = /"__freshness":"([^"]+)"/
-const HEX_ROW_ID_REGEX = /^[0-9a-f]+$/i
+const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
+const STALE_PAYLOAD_THRESHOLD_MS = 5000
+const SUSPENSE_TTL_MS = 30000
+const CLEANUP_INTERVAL_MS = SUSPENSE_TTL_MS
+
+type RSCElement = ['$', string | React.ComponentType, string | null, Record<string, any>]
+type RSCPrimitive = string | number | boolean | null | undefined
+type RSCArray = RSCData[]
+type RSCData = RSCPrimitive | RSCElement | RSCArray
+
+interface ModuleRecord {
+  id: string
+  name: string
+  chunks: string[]
+}
 
 interface AppRouterProviderProps {
   children: React.ReactNode
@@ -69,9 +82,41 @@ function GlobalLoadingFallback() {
   )
 }
 
+interface LazyContentProps {
+  contentRef: string
+  rowsDataRef: React.RefObject<Map<string, RSCData>>
+  modulesDataRef: React.RefObject<Map<string, ModuleRecord>>
+  symbolsDataRef: React.RefObject<Map<string, string>>
+  suspendingPromisesRef: React.RefObject<Map<string, { promise: Promise<never>, timestamp: number }>>
+  getSuspendingPromise: (contentRef: string) => Promise<never>
+  rscToReact: (rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => React.ReactNode
+}
+
+function LazyContent({ contentRef, rowsDataRef, modulesDataRef, symbolsDataRef, suspendingPromisesRef, getSuspendingPromise, rscToReact }: LazyContentProps): React.ReactNode {
+  const rowsData = rowsDataRef.current!
+  const modulesData = modulesDataRef.current!
+  const symbolsData = symbolsDataRef.current!
+  const suspendingPromises = suspendingPromisesRef.current!
+
+  const hasContent = rowsData.has(contentRef)
+
+  React.useEffect(() => {
+    if (hasContent && suspendingPromises.has(contentRef)) {
+      suspendingPromises.delete(contentRef)
+    }
+  }, [contentRef, hasContent, suspendingPromises])
+
+  if (hasContent) {
+    const rowData = rowsData.get(contentRef)
+    const result = rscToReact(rowData, modulesData, undefined, symbolsData, rowsData)
+    return result
+  }
+
+  throw getSuspendingPromise(contentRef)
+}
+
 export function AppRouterProvider({ children, initialPayload, onNavigate }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
-  const rscPayloadRef = useRef(rscPayload)
   const [, setRenderKey] = useState(0)
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -80,10 +125,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
-  const pendingFetchesRef = useRef<Map<string, Map<AbortSignal | undefined, Promise<any>>>>(new Map())
+  const pendingFetchesRef = useRef<Map<string, Promise<any>>>(new Map())
   const failureHistoryRef = useRef<HMRFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
-  const lastSuccessfulFreshnessRef = useRef<string | null>(null)
   const consecutiveFailuresRef = useRef<number>(0)
   const [hmrError, setHmrError] = useState<HMRFailure | null>(null)
   const shouldScrollToHashRef = useRef<boolean>(
@@ -91,6 +135,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   )
   const fallbackKeyCounterRef = useRef<number>(0)
   const MAX_RETRIES = 3
+
+  useEffect(() => {
+    onNavigateRef.current = onNavigate
+  }, [onNavigate])
 
   const saveFormState = () => {
     if (typeof document === 'undefined')
@@ -128,7 +176,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     })
   }
 
-  const trackHMRFailure = useCallback((error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
+  const trackHMRFailure = (error: Error, type: HMRFailure['type'], details: string, filePath?: string) => {
     const failure: HMRFailure = {
       timestamp: Date.now(),
       error,
@@ -161,7 +209,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         detail: failure,
       }))
     }
-  }, [])
+  }
 
   const handleFallbackReload = () => {
     setTimeout(() => {
@@ -169,134 +217,66 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }, 1000)
   }
 
-  const resetFailureTracking = useCallback(() => {
+  const resetFailureTracking = () => {
     if (consecutiveFailuresRef.current > 0)
       consecutiveFailuresRef.current = 0
-  }, [])
+  }
 
-  const isStaleContent = useCallback((wireFormat: string): boolean => {
+  const isStaleContent = (wireFormat: string): boolean => {
     if (!lastSuccessfulPayloadRef.current)
       return false
 
-    const freshnessMatch = wireFormat.match(FRESHNESS_TOKEN_REGEX)
-    if (freshnessMatch && lastSuccessfulFreshnessRef.current)
-      return freshnessMatch[1] === lastSuccessfulFreshnessRef.current
+    if (wireFormat === lastSuccessfulPayloadRef.current)
+      return true
 
-    return wireFormat === lastSuccessfulPayloadRef.current
-  }, [])
-
-  const pendingRefsRef = useRef<Set<string>>(new Set())
-
-  type ProcessPropsFunction = (props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>) => any
-  type RscToReactFunction = (rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>, isRoot?: boolean) => any
-  type ParseRscWireFormatFunction = (wireFormat: string, extractBoundaries?: boolean) => Promise<any>
-  type RefetchRscPayloadFunction = (targetPath?: string, abortSignal?: AbortSignal) => Promise<{ payload: any, isStale: boolean }>
-
-  const processPropsRef = useRef<ProcessPropsFunction | null>(null)
-  const rscToReactRef = useRef<RscToReactFunction | null>(null)
-  const parseRscWireFormatRef = useRef<ParseRscWireFormatFunction | null>(null)
-  const refetchRscPayloadRef = useRef<RefetchRscPayloadFunction | null>(null)
-  const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, cleanup: () => void }>>(new Map())
-  const isNavigatingRef = useRef(false)
-
-  function clearPendingSuspense() {
-    suspendingPromisesRef.current.forEach((entry) => {
-      entry.cleanup()
-    })
-    suspendingPromisesRef.current.clear()
-    pendingRefsRef.current.clear()
-  }
-
-  function getSuspendingPromise(contentRef: string): Promise<never> {
-    if (!suspendingPromisesRef.current.has(contentRef)) {
-      let resolvePromise: (() => void) | undefined
-      const promise = new Promise<never>((resolve) => {
-        resolvePromise = resolve as any
-      })
-      const cleanup = () => {
-        suspendingPromisesRef.current.delete(contentRef)
-        if (resolvePromise)
-          resolvePromise()
-      }
-      suspendingPromisesRef.current.set(contentRef, { promise, cleanup })
+    const timestampMatch = wireFormat.match(TIMESTAMP_REGEX)
+    if (timestampMatch) {
+      const payloadTimestamp = Number.parseInt(timestampMatch[1], 10)
+      const now = Date.now()
+      if (now - payloadTimestamp > STALE_PAYLOAD_THRESHOLD_MS)
+        return true
     }
 
-    return suspendingPromisesRef.current.get(contentRef)!.promise
+    return false
   }
 
-  const LazyContent = useCallback(({ contentRef, rows, modules, symbols }: {
-    contentRef: string
-    rows: Map<string, any>
-    modules: Map<string, any>
-    symbols: Map<string, string>
-  }): React.ReactNode => {
-    if (rows.has(contentRef)) {
-      const entry = suspendingPromisesRef.current.get(contentRef)
-      if (entry) {
-        queueMicrotask(() => {
-          entry.cleanup()
+  function hashRscData(data: any): string {
+    let str: string
+
+    try {
+      str = JSON.stringify(data)
+    }
+    catch {
+      try {
+        const seen = new WeakSet()
+        str = JSON.stringify(data, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]'
+            }
+            seen.add(value)
+          }
+
+          return value
         })
       }
-
-      const rowData = rows.get(contentRef)
-      const result = rscToReactRef.current!(rowData, modules, undefined, symbols, rows)
-      return result
-    }
-
-    if (isNavigatingRef.current)
-      return null
-
-    throw getSuspendingPromise(contentRef)
-  }, [])
-
-  const processProps = useCallback((props: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>): any => {
-    if (!props || typeof props !== 'object')
-      return props
-
-    const processed: any = {}
-    for (const key in props) {
-      if (Object.hasOwn(props, key)) {
-        if (key === 'children') {
-          const children = props.children
-
-          if (typeof children === 'string' && children.startsWith('$L')) {
-            if (rows && rows.has(children)) {
-              const rowData = rows.get(children)
-              pendingRefsRef.current.delete(children)
-              processed[key] = rscToReactRef.current!(rowData, modules, layoutPath, symbols, rows)
-            }
-            else {
-              pendingRefsRef.current.add(children)
-              processed[key] = React.createElement(LazyContent, {
-                key: `lazy-${children}`,
-                contentRef: children,
-                rows: rows || new Map(),
-                modules: modules || new Map(),
-                symbols: symbols || new Map(),
-              })
-            }
-          }
-          else {
-            processed[key] = (children !== null && children !== undefined) ? rscToReactRef.current!(children, modules, layoutPath, symbols, rows) : undefined
-          }
-        }
-        else if (key === 'dangerouslySetInnerHTML') {
-          processed[key] = props[key]
-        }
-        else {
-          processed[key] = rscToReactRef.current!(props[key], modules, layoutPath, symbols, rows)
-        }
+      catch {
+        str = `[Unstringifiable:${typeof data}:${String(data).substring(0, 50)}]`
       }
     }
 
-    return processed
-  }, [LazyContent])
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash
+    }
 
-  const rscToReact = useCallback((rsc: any, modules: Map<string, any>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, any>, isRootCall: boolean = false): any => {
-    if (isRootCall)
-      fallbackKeyCounterRef.current = 0
+    return Math.abs(hash).toString(36)
+  }
 
-    if (rsc === null || rsc === undefined)
+  function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>): React.ReactNode {
+    if (!rsc)
       return null
 
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
@@ -304,7 +284,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     if (Array.isArray(rsc)) {
       if (rsc.length >= 4 && rsc[0] === '$') {
-        const [, type, serverKey, props] = rsc
+        const [, type, serverKey, props] = rsc as RSCElement
 
         let resolvedType = type
         if (typeof type === 'string' && type.startsWith('$') && symbols) {
@@ -321,7 +301,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         if (resolvedType === 'Suspense' || type === 'Suspense') {
-          const processedProps = processPropsRef.current!(props, modules, layoutPath, symbols, rows)
+          const processedProps = processProps(props, modules, layoutPath, symbols, rows)
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }
 
@@ -331,39 +311,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           if (!moduleInfo)
             return null
 
-          const baseComponent = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
-
-          if (!baseComponent)
-            return null
-
-          const Component = moduleInfo.name && moduleInfo.name !== 'default'
-            ? baseComponent[moduleInfo.name]
-            : baseComponent
+          const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
           if (!Component)
             return null
 
-          const isValidComponent = typeof Component === 'function'
-            || (typeof Component === 'object' && Component !== null && Component.$$typeof)
-
-          if (!isValidComponent) {
-            console.error('[rari] AppRouter: Component is not a valid React component:', {
-              moduleId: moduleInfo.id,
-              exportName: moduleInfo.name,
-              componentType: typeof Component,
-              resolvedType,
-            })
+          if (typeof Component !== 'function')
             return null
-          }
 
           const effectiveKey = serverKey || `fallback-${resolvedType}-${fallbackKeyCounterRef.current++}`
 
-          const childProps = props != null
-            ? {
-                ...props,
-                children: (props.children !== null && props.children !== undefined) ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
-              }
-            : undefined
+          const childProps = {
+            ...props,
+            children: props.children ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
+          }
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
 
@@ -381,31 +342,120 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return null
         }
 
-        const processedProps = processPropsRef.current!(props, modules, layoutPath, symbols, rows)
+        const processedProps = processProps(props, modules, layoutPath, symbols, rows)
         return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
       }
 
-      return rsc.map((child, index) => {
+      return (rsc as RSCArray).map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
-        if (element == null || typeof element === 'boolean')
+        if (!element)
           return null
 
-        if (typeof element === 'object' && React.isValidElement(element) && element.key == null) {
-          const fallbackKey = Array.isArray(child) && child[0] === '$' && child[2] != null
-            ? `rsc-${child[2]}`
-            : index
-          return React.createElement(React.Fragment, { key: fallbackKey }, element)
+        if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
+          const childHash = typeof child === 'object' && child !== null ? hashRscData(child) : 'primitive'
+          const childType = Array.isArray(child) && child[0] === '$' && child[1] ? String(child[1]) : 'unknown'
+          const stableKey = `rsc-${childType}-${childHash}-${index}`
+          return React.createElement(React.Fragment, { key: stableKey }, element)
         }
 
         return element
-      }).filter(element => element !== null)
+      }).filter(Boolean)
     }
 
     return rsc
-  }, [])
+  }
 
-  processPropsRef.current = processProps
-  rscToReactRef.current = rscToReact
+  const pendingRefsRef = useRef<Set<string>>(new Set())
+  const rowsDataRef = useRef<Map<string, RSCData>>(new Map())
+  const modulesDataRef = useRef<Map<string, ModuleRecord>>(new Map())
+  const symbolsDataRef = useRef<Map<string, string>>(new Map())
+
+  const suspendingPromisesRef = useRef<Map<string, { promise: Promise<never>, timestamp: number }>>(new Map())
+
+  function getSuspendingPromise(contentRef: string): Promise<never> {
+    if (!suspendingPromisesRef.current.has(contentRef)) {
+      const promise = new Promise<never>(() => {})
+      suspendingPromisesRef.current.set(contentRef, {
+        promise,
+        timestamp: Date.now(),
+      })
+    }
+
+    return suspendingPromisesRef.current.get(contentRef)!.promise
+  }
+
+  function clearAllSuspendingPromises() {
+    suspendingPromisesRef.current.clear()
+    pendingRefsRef.current.clear()
+  }
+
+  function cleanupStaleSuspendingPromises() {
+    const now = Date.now()
+    const staleEntries: string[] = []
+
+    suspendingPromisesRef.current.forEach((entry, key) => {
+      if (now - entry.timestamp > SUSPENSE_TTL_MS)
+        staleEntries.push(key)
+    })
+
+    staleEntries.forEach((key) => {
+      suspendingPromisesRef.current.delete(key)
+      pendingRefsRef.current.delete(key)
+    })
+  }
+
+  function processProps(props: any, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>): any {
+    if (!props || typeof props !== 'object')
+      return props
+
+    if (rows)
+      rowsDataRef.current = rows
+    if (modules)
+      modulesDataRef.current = modules
+    if (symbols)
+      symbolsDataRef.current = symbols
+
+    const processed: any = {}
+    for (const key in props) {
+      if (Object.hasOwn(props, key)) {
+        if (key === 'children') {
+          const children = props.children
+
+          if (typeof children === 'string' && children.startsWith('$L')) {
+            if (rows && rows.has(children)) {
+              const rowData = rows.get(children)
+              pendingRefsRef.current.delete(children)
+              processed[key] = rscToReact(rowData, modules, layoutPath, symbols, rows)
+            }
+            else {
+              pendingRefsRef.current.add(children)
+              processed[key] = React.createElement(LazyContent, {
+                key: `lazy-${children}`,
+                contentRef: children,
+                rowsDataRef,
+                modulesDataRef,
+                symbolsDataRef,
+                suspendingPromisesRef,
+                getSuspendingPromise,
+                rscToReact,
+              })
+            }
+          }
+          else {
+            processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
+          }
+        }
+        else if (key === 'dangerouslySetInnerHTML') {
+          processed[key] = props[key]
+        }
+        else {
+          processed[key] = rscToReact(props[key], modules, layoutPath, symbols, rows)
+        }
+      }
+    }
+
+    return processed
+  }
 
   const sanitizeJsonString = (input: string, type: 'array' | 'object'): string | null => {
     try {
@@ -471,7 +521,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
   }
 
-  const parseRscWireFormat = useCallback(async (wireFormat: string, extractBoundaries = false) => {
+  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
       const modules = new Map()
@@ -499,15 +549,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const rowId = line.substring(0, colonIndex)
 
-        if (!HEX_ROW_ID_REGEX.test(rowId)) {
-          console.warn('[rari] AppRouter: Invalid row ID (non-hex), skipping line:', line.substring(0, 50))
+        if (!NUMERIC_REGEX.test(rowId)) {
+          console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
           continue
         }
 
-        const afterColon = colonIndex + 1
-        const tag = afterColon < line.length ? line[afterColon] : ''
-        const contentStart = (tag && 'IETHWDC'.includes(tag)) ? afterColon + 1 : afterColon
-        const content = line.substring(contentStart)
+        const content = line.substring(colonIndex + 1)
 
         try {
           if (content.startsWith('"$S')) {
@@ -516,8 +563,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             continue
           }
 
-          if (tag === 'I') {
-            const sanitized = sanitizeJsonString(content, 'array')
+          if (content.startsWith('I[')) {
+            const jsonContent = content.substring(1)
+            const sanitized = sanitizeJsonString(jsonContent, 'array')
 
             if (!sanitized) {
               console.warn('[rari] AppRouter: Could not sanitize import line, skipping:', line.substring(0, 80))
@@ -547,37 +595,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 currentLayoutStartLine = lineIndex
               }
             }
-            continue
           }
-
-          if (tag === 'E') {
-            console.error('[rari] AppRouter: Error chunk received:', content)
-            const key = `$L${rowId}`
-            try {
-              const errorData = JSON.parse(content)
-              rows.set(key, { error: errorData })
-            }
-            catch {
-              rows.set(key, { error: content })
-            }
-            continue
-          }
-
-          if (tag === 'T') {
-            const key = `$L${rowId}`
-            rows.set(key, content)
-            continue
-          }
-
-          if (tag === 'H' || tag === 'D' || tag === 'W') {
-            console.warn(`[rari] AppRouter: ${tag === 'H' ? 'Hint' : tag === 'D' ? 'Debug' : 'Console'}:`, content)
-            continue
-          }
-
-          if (tag === 'C')
-            continue
-
-          if (content.startsWith('[')) {
+          else if (content.startsWith('[')) {
             const elementData = JSON.parse(content)
             rows.set(`$L${rowId}`, elementData)
 
@@ -613,10 +632,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 rootElement = elementData.length === 1 ? elementData[0] : elementData
               }
             }
-            continue
           }
-
-          console.warn('[rari] AppRouter: Unknown row format, skipping:', line.substring(0, 80))
         }
         catch (e) {
           console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
@@ -639,11 +655,28 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
 
       if (rootElement && Array.isArray(rootElement)) {
+        fallbackKeyCounterRef.current = 0
+
         if (rootElement[0] === '$') {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
+          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
         }
         else if (Array.isArray(rootElement[0])) {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows, true)
+          const elements = rootElement
+            .map((el: any) =>
+              Array.isArray(el) && el[0] === '$'
+                ? rscToReact(el, modules, undefined, symbols, rows)
+                : el,
+            )
+            .filter((el: any) => {
+              return (
+                el == null
+                || typeof el === 'string'
+                || typeof el === 'number'
+                || typeof el === 'boolean'
+                || React.isValidElement(el)
+              )
+            })
+          rootElement = elements.length === 1 ? elements[0] : elements
         }
       }
 
@@ -659,26 +692,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       console.error('[rari] AppRouter: Failed to parse RSC wire format:', error)
       throw error
     }
-  }, [rscToReact])
+  }
 
-  const refetchRscPayload = useCallback(async (
+  const refetchRscPayload = async (
     targetPath?: string,
     abortSignal?: AbortSignal,
-  ): Promise<{ payload: any, isStale: boolean }> => {
+  ) => {
     const pathToFetch = targetPath || window.location.pathname
-    const searchPart = window.location.search
-    const fullFetchKey = `${pathToFetch}${searchPart}`
 
-    let signalMap = pendingFetchesRef.current.get(fullFetchKey)
-    if (signalMap) {
-      const existingFetch = signalMap.get(abortSignal)
-      if (existingFetch)
-        return existingFetch
-    }
-    else {
-      signalMap = new Map()
-      pendingFetchesRef.current.set(fullFetchKey, signalMap)
-    }
+    const existingFetch = pendingFetchesRef.current.get(pathToFetch)
+    if (existingFetch)
+      return existingFetch
 
     const fetchPromise = (async () => {
       try {
@@ -695,8 +719,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
 
         if (!response.ok) {
-          const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`) as Error & { '~hmrTracked'?: boolean }
-          error['~hmrTracked'] = true
+          const error = new Error(`Failed to fetch RSC data: ${response.status} ${response.statusText}`)
           trackHMRFailure(
             error,
             'fetch',
@@ -709,10 +732,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const rscWireFormat = await response.text()
 
         if (isStaleContent(rscWireFormat)) {
-          if (rscPayloadRef.current) {
-            return { payload: rscPayloadRef.current, isStale: true }
-          }
-          throw new Error('Server returned stale content but no cached payload available')
+          if (rscPayload)
+            return rscPayload
         }
 
         let parsedPayload
@@ -720,8 +741,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           parsedPayload = await parseRscWireFormat(rscWireFormat, false)
         }
         catch (parseError) {
-          const error = (parseError instanceof Error ? parseError : new Error(String(parseError))) as Error & { '~hmrTracked'?: boolean }
-          error['~hmrTracked'] = true
+          const error = parseError instanceof Error ? parseError : new Error(String(parseError))
           trackHMRFailure(
             error,
             'parse',
@@ -731,17 +751,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           throw error
         }
 
+        setRscPayload(parsedPayload)
+
         lastSuccessfulPayloadRef.current = rscWireFormat
 
-        const freshnessMatch = rscWireFormat.match(FRESHNESS_TOKEN_REGEX)
-        if (freshnessMatch)
-          lastSuccessfulFreshnessRef.current = freshnessMatch[1]
+        resetFailureTracking()
 
-        return { payload: parsedPayload, isStale: false }
+        return parsedPayload
       }
       catch (error) {
-        const isTracked = error instanceof Error && ((error as any)['~hmrTracked'] || error.name === 'AbortError')
-        if (!isTracked && error instanceof Error) {
+        if (error instanceof Error && !error.message.includes('Failed to fetch RSC data') && !error.message.includes('Failed to parse')) {
           trackHMRFailure(
             error,
             'network',
@@ -754,28 +773,34 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         throw error
       }
       finally {
-        const signalMap = pendingFetchesRef.current.get(fullFetchKey)
-        if (signalMap) {
-          signalMap.delete(abortSignal)
-          if (signalMap.size === 0)
-            pendingFetchesRef.current.delete(fullFetchKey)
-        }
+        pendingFetchesRef.current.delete(pathToFetch)
       }
     })()
 
-    signalMap.set(abortSignal, fetchPromise)
+    pendingFetchesRef.current.set(pathToFetch, fetchPromise)
 
     return fetchPromise
-  }, [parseRscWireFormat, trackHMRFailure, isStaleContent])
+  }
 
-  onNavigateRef.current = onNavigate
-  parseRscWireFormatRef.current = parseRscWireFormat
-  refetchRscPayloadRef.current = refetchRscPayload
-  rscPayloadRef.current = rscPayload
+  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean) => Promise<any>>(parseRscWireFormat)
+  const refetchRscPayloadRef = useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<any>>(refetchRscPayload)
+  const processPropsRef = useRef<(props: any, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => any>(processProps)
+  const rscToReactRef = useRef<(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => React.ReactNode>(rscToReact)
+
+  useEffect(() => {
+    parseRscWireFormatRef.current = parseRscWireFormat
+    refetchRscPayloadRef.current = refetchRscPayload
+    processPropsRef.current = processProps
+    rscToReactRef.current = rscToReact
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined')
       return
+
+    const cleanupInterval = setInterval(() => {
+      cleanupStaleSuspendingPromises()
+    }, CLEANUP_INTERVAL_MS)
 
     const handleNavigate = async (event: Event) => {
       const customEvent = event as CustomEvent<NavigationDetail>
@@ -784,8 +809,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       currentNavigationIdRef.current = detail.navigationId
       streamingRowsRef.current = null
       shouldScrollToHashRef.current = true
-      isNavigatingRef.current = true
-      clearPendingSuspense()
+      clearAllSuspendingPromises()
 
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -795,55 +819,34 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       startTransition(async () => {
         try {
-          let parsedPayload
-          let wireFormat
-          let isStale = false
-
           if (detail.rscWireFormat) {
-            parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
-            wireFormat = detail.rscWireFormat
+            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
+            setRscPayload(parsedPayload)
+            lastSuccessfulPayloadRef.current = detail.rscWireFormat
+            resetFailureTracking()
           }
           else if (detail.isStreaming) {
             streamingRowsRef.current = []
           }
           else {
-            const result = await refetchRscPayloadRef.current!(
+            await refetchRscPayloadRef.current!(
               detail.to,
               detail.abortSignal,
             )
-            parsedPayload = result.payload
-            isStale = result.isStale
-            wireFormat = lastSuccessfulPayloadRef.current
           }
 
           if (currentNavigationIdRef.current === detail.navigationId) {
-            if (parsedPayload) {
-              setRscPayload(parsedPayload)
-              if (wireFormat) {
-                lastSuccessfulPayloadRef.current = wireFormat
-                const freshnessMatch = wireFormat.match(FRESHNESS_TOKEN_REGEX)
-                if (freshnessMatch)
-                  lastSuccessfulFreshnessRef.current = freshnessMatch[1]
-              }
-              if (!isStale)
-                resetFailureTracking()
-            }
-
             setRenderKey(prev => prev + 1)
             setHmrError(null)
-            isNavigatingRef.current = false
 
             if (onNavigateRef.current)
               onNavigateRef.current(detail)
           }
         }
         catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            isNavigatingRef.current = false
+          if (error instanceof Error && error.name === 'AbortError')
             return
-          }
 
-          isNavigatingRef.current = false
           console.error('[rari] AppRouter: Navigation failed:', error)
 
           window.dispatchEvent(new CustomEvent('rari:navigate-error', {
@@ -879,11 +882,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       saveFormState()
 
       try {
-        const result = await refetchRscPayloadRef.current!()
-        clearPendingSuspense()
-        setRscPayload(result.payload)
-        if (!result.isStale)
-          resetFailureTracking()
+        await refetchRscPayloadRef.current!()
 
         setRenderKey(prev => prev + 1)
 
@@ -906,11 +905,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleRscInvalidate = async () => {
       try {
-        const result = await refetchRscPayloadRef.current!()
-        clearPendingSuspense()
-        setRscPayload(result.payload)
-        if (!result.isStale)
-          resetFailureTracking()
+        await refetchRscPayloadRef.current!()
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -925,13 +920,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     const handleManifestUpdated = async () => {
       try {
-        const result = await refetchRscPayloadRef.current!()
-        clearPendingSuspense()
-        setRscPayload(result.payload)
-        if (result.isStale && result.payload === rscPayloadRef.current)
-          setRenderKey(prev => prev + 1)
-        if (!result.isStale)
-          resetFailureTracking()
+        await refetchRscPayloadRef.current!()
         setHmrError(null)
       }
       catch (error) {
@@ -982,14 +971,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     window.addEventListener('rari:rsc-row', handleRscRow)
 
     return () => {
-      clearPendingSuspense()
+      clearInterval(cleanupInterval)
+      clearAllSuspendingPromises()
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
       window.removeEventListener('rari:rsc-row', handleRscRow)
     }
-  }, [resetFailureTracking])
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined')

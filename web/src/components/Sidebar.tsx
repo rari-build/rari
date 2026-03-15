@@ -1,6 +1,7 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
+import { usePathname } from 'rari/router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
 import Bluesky from './icons/Bluesky'
@@ -14,7 +15,6 @@ import Rari from './icons/Rari'
 
 interface SidebarProps {
   version: string
-  pathname?: string
 }
 
 const navigation = [
@@ -52,7 +52,8 @@ function useResetOnPathnameChange<T>(initialValue: T, pathname: string): [T, Dis
   return [value, setValue]
 }
 
-export default function Sidebar({ version, pathname = '/' }: SidebarProps) {
+export default function Sidebar({ version }: SidebarProps) {
+  const pathname = usePathname()
   const isDocsPage = pathname?.startsWith('/docs')
   const isEnterprisePage = pathname?.startsWith('/enterprise')
 
