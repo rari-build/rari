@@ -12,9 +12,15 @@ interface NpmPackageInfo {
 
 async function fetchRariVersion(): Promise<string> {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
+
     const response = await fetch('https://registry.npmjs.org/rari', {
+      signal: controller.signal,
       rari: { revalidate: 3600 },
     })
+    clearTimeout(timeoutId)
+
     if (!response.ok)
       throw new Error(`Failed to fetch version: ${response.status}`)
     const data: NpmPackageInfo = await response.json()
