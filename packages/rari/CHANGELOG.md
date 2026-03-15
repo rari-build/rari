@@ -1,3 +1,8 @@
+## [rari@0.10.19] - 2026-03-15
+
+### 🚀 Features
+
+- *(rari)* Refactor RSC payload handling and suspense management
 ## [rari@0.10.18] - 2026-03-14
 
 ### 🚀 Features
@@ -9,6 +14,10 @@
 - *(rari)* Add type safety and improve RSC payload ref handling
 - *(rari)* Improve component validation and RSC error tracking
 - *(rari)* Extract and track freshness token from RSC payload
+
+### 💼 Other
+
+- Rari@0.10.18
 
 ### ⚙️ Miscellaneous Tasks
 
