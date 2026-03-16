@@ -1,9 +1,0 @@
-name = "rari-cache-handler"
-main = "worker.js"
-compatibility_date = "2026-02-23"
-routes = [
-  { pattern = "www.ryanskinner.com/*", zone_name = "ryanskinner.com" },
-  { pattern = "ryanskinner.com/*", zone_name = "ryanskinner.com" },
-  { pattern = "www.rari.build/*", zone_name = "rari.build" },
-  { pattern = "rari.build/*", zone_name = "rari.build" }
-]

@@ -19,7 +19,6 @@ catalogs:
   build:
     rolldown: ^1.0.0-rc.9
     vite-plus: ^0.1.11
-    wrangler: ^4.73.0
   cli:
     '@clack/prompts': ^1.1.0
   default:
