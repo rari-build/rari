@@ -45,59 +45,85 @@ function pathToRegex(pattern: string): RegExp {
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
+function checkHeaderCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.headers.get(key)
+}
+
+function checkQueryCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.rariUrl.searchParams.get(key)
+}
+
+function checkCookieCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  const cookie = request.cookies.get(key)
+  return cookie ? cookie.value : null
+}
+
+function matchesHasCondition(
+  request: RariRequest,
+  condition: { type: string, key: string, value?: string },
+): boolean {
+  let actualValue: string | null = null
+
+  if (condition.type === 'header')
+    actualValue = checkHeaderCondition(request, condition.key)
+  else if (condition.type === 'query')
+    actualValue = checkQueryCondition(request, condition.key)
+  else if (condition.type === 'cookie')
+    actualValue = checkCookieCondition(request, condition.key)
+
+  if (!actualValue)
+    return false
+  if (condition.value && actualValue !== condition.value)
+    return false
+
+  return true
+}
+
+function matchesMissingCondition(
+  request: RariRequest,
+  condition: { type: string, key: string, value?: string },
+): boolean {
+  let actualValue: string | null = null
+
+  if (condition.type === 'header')
+    actualValue = checkHeaderCondition(request, condition.key)
+  else if (condition.type === 'query')
+    actualValue = checkQueryCondition(request, condition.key)
+  else if (condition.type === 'cookie')
+    actualValue = checkCookieCondition(request, condition.key)
+
+  if (!actualValue)
+    return true
+  if (!condition.value || actualValue === condition.value)
+    return false
+
+  return true
+}
+
 function matchesConditions(
   request: RariRequest,
   matcher: ProxyMatcher,
 ): boolean {
   if (matcher.has) {
     for (const condition of matcher.has) {
-      if (condition.type === 'header') {
-        const headerValue = request.headers.get(condition.key)
-        if (!headerValue)
-          return false
-        if (condition.value && headerValue !== condition.value)
-          return false
-      }
-      else if (condition.type === 'query') {
-        const queryValue = request.rariUrl.searchParams.get(condition.key)
-        if (!queryValue)
-          return false
-        if (condition.value && queryValue !== condition.value)
-          return false
-      }
-      else if (condition.type === 'cookie') {
-        const cookieValue = request.cookies.get(condition.key)
-        if (!cookieValue)
-          return false
-        if (condition.value && cookieValue.value !== condition.value)
-          return false
-      }
+      if (!matchesHasCondition(request, condition))
+        return false
     }
   }
 
   if (matcher.missing) {
     for (const condition of matcher.missing) {
-      if (condition.type === 'header') {
-        const headerValue = request.headers.get(condition.key)
-        if (headerValue) {
-          if (!condition.value || headerValue === condition.value)
-            return false
-        }
-      }
-      else if (condition.type === 'query') {
-        const queryValue = request.rariUrl.searchParams.get(condition.key)
-        if (queryValue) {
-          if (!condition.value || queryValue === condition.value)
-            return false
-        }
-      }
-      else if (condition.type === 'cookie') {
-        const cookieValue = request.cookies.get(condition.key)
-        if (cookieValue) {
-          if (!condition.value || cookieValue.value === condition.value)
-            return false
-        }
-      }
+      if (!matchesMissingCondition(request, condition))
+        return false
     }
   }
 
@@ -113,6 +139,20 @@ export function matchesPattern(pathname: string, pattern: string): boolean {
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
+function matchesSingleMatcher(
+  request: RariRequest,
+  pathname: string,
+  matcher: string | ProxyMatcher,
+): boolean {
+  if (typeof matcher === 'string')
+    return matchesPattern(pathname, matcher)
+
+  if (!matchesPattern(pathname, matcher.source))
+    return false
+
+  return matchesConditions(request, matcher)
+}
+
 export function shouldRunProxy(
   request: RariRequest,
   config?: ProxyConfig,
@@ -123,20 +163,7 @@ export function shouldRunProxy(
   const pathname = request.rariUrl.pathname
   const matchers = Array.isArray(config.matcher) ? config.matcher : [config.matcher]
 
-  for (const matcher of matchers) {
-    if (typeof matcher === 'string') {
-      if (matchesPattern(pathname, matcher))
-        return true
-    }
-    else {
-      if (matchesPattern(pathname, matcher.source)) {
-        if (matchesConditions(request, matcher))
-          return true
-      }
-    }
-  }
-
-  return false
+  return matchers.some(matcher => matchesSingleMatcher(request, pathname, matcher))
 }
 /* v8 ignore stop */
 

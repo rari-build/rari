@@ -75,6 +75,51 @@ export interface MetadataResult {
 
 export type StaticParamsResult = Array<Record<string, string | string[]>>
 
+interface DataFetchResult {
+  props?: Record<string, any>
+  revalidate?: number
+  notFound?: boolean
+  redirect?: string | { destination: string }
+}
+
+function processGetDataResult(result: DataFetchResult | null | undefined, state: ServerSidePropsResult): void {
+  if (!result)
+    return
+
+  if (result.notFound)
+    state.notFound = true
+  if (result.redirect)
+    state.redirect = typeof result.redirect === 'string' ? result.redirect : result.redirect.destination
+  if (result.revalidate !== undefined)
+    state.revalidate = result.revalidate
+  if (result.props)
+    state.props = { ...state.props, ...result.props }
+}
+
+async function tryGetData(module: any, params: Record<string, string>, searchParams: Record<string, string>, state: ServerSidePropsResult): Promise<void> {
+  if (typeof module.getData !== 'function')
+    return
+
+  const result = await module.getData({ params, searchParams })
+  processGetDataResult(result, state)
+}
+
+async function tryGetServerSideProps(module: any, params: Record<string, string>, searchParams: Record<string, string>, state: ServerSidePropsResult): Promise<void> {
+  if (typeof module.getServerSideProps !== 'function')
+    return
+
+  const result = await module.getServerSideProps({ params, searchParams })
+  processGetDataResult(result, state)
+}
+
+async function tryGetStaticProps(module: any, params: Record<string, string>, state: ServerSidePropsResult): Promise<void> {
+  if (typeof module.getStaticProps !== 'function')
+    return
+
+  const result = await module.getStaticProps({ params })
+  processGetDataResult(result, state)
+}
+
 /* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractServerProps(
   componentPath: string,
@@ -84,57 +129,18 @@ export async function extractServerProps(
   try {
     const module = await import(/* @vite-ignore */ componentPath)
 
-    let props: Record<string, any> = {}
-    let revalidate: number | undefined
-    let notFound = false
-    let redirect: string | undefined
-
-    if (typeof module.getData === 'function') {
-      const result = await module.getData({ params, searchParams })
-      if (result) {
-        if (result.notFound)
-          notFound = true
-        if (result.redirect)
-          redirect = result.redirect
-        if (result.revalidate !== undefined)
-          revalidate = result.revalidate
-        if (result.props)
-          props = { ...props, ...result.props }
-      }
+    const state: ServerSidePropsResult = {
+      props: {},
+      revalidate: undefined,
+      notFound: false,
+      redirect: undefined,
     }
 
-    if (typeof module.getServerSideProps === 'function') {
-      const result = await module.getServerSideProps({ params, searchParams })
-      if (result) {
-        if (result.notFound)
-          notFound = true
-        if (result.redirect)
-          redirect = result.redirect.destination
-        if (result.props)
-          props = { ...props, ...result.props }
-      }
-    }
+    await tryGetData(module, params, searchParams, state)
+    await tryGetServerSideProps(module, params, searchParams, state)
+    await tryGetStaticProps(module, params, state)
 
-    if (typeof module.getStaticProps === 'function') {
-      const result = await module.getStaticProps({ params })
-      if (result) {
-        if (result.notFound)
-          notFound = true
-        if (result.redirect)
-          redirect = result.redirect.destination
-        if (result.revalidate !== undefined)
-          revalidate = result.revalidate
-        if (result.props)
-          props = { ...props, ...result.props }
-      }
-    }
-
-    return {
-      props,
-      revalidate,
-      notFound,
-      redirect,
-    }
+    return state
   }
   catch (error) {
     console.error(`[rari] Router: Failed to extract server props from ${componentPath}:`, error)
@@ -172,48 +178,53 @@ export async function extractMetadata(
 }
 /* v8 ignore stop */
 
+function mergeTitleField(parentTitle: MetadataResult['title'], childTitle: MetadataResult['title']): MetadataResult['title'] {
+  if (childTitle === undefined)
+    return parentTitle
+
+  if (typeof childTitle === 'string') {
+    if (typeof parentTitle === 'object' && parentTitle?.template)
+      return parentTitle.template.replace('%s', childTitle)
+
+    return childTitle
+  }
+
+  return childTitle
+}
+
+function mergeObjectField<T extends Record<string, any>>(
+  parentField: T | undefined,
+  childField: T | undefined,
+): T | undefined {
+  if (childField === undefined)
+    return parentField
+
+  return { ...parentField, ...childField } as T
+}
+
+function mergeSimpleField<T>(parentField: T | undefined, childField: T | undefined): T | undefined {
+  return childField !== undefined ? childField : parentField
+}
+
 export function mergeMetadata(
   parentMetadata: MetadataResult,
   childMetadata: MetadataResult,
 ): MetadataResult {
-  const merged: MetadataResult = { ...parentMetadata }
-
-  if (childMetadata.title !== undefined) {
-    if (typeof childMetadata.title === 'string') {
-      if (typeof parentMetadata.title === 'object' && parentMetadata.title?.template)
-        merged.title = parentMetadata.title.template.replace('%s', childMetadata.title)
-      else
-        merged.title = childMetadata.title
-    }
-    else {
-      merged.title = childMetadata.title
-    }
+  return {
+    ...parentMetadata,
+    title: mergeTitleField(parentMetadata.title, childMetadata.title),
+    description: mergeSimpleField(parentMetadata.description, childMetadata.description),
+    keywords: mergeSimpleField(parentMetadata.keywords, childMetadata.keywords),
+    openGraph: mergeObjectField(parentMetadata.openGraph, childMetadata.openGraph),
+    twitter: mergeObjectField(parentMetadata.twitter, childMetadata.twitter),
+    robots: mergeObjectField(parentMetadata.robots, childMetadata.robots),
+    icons: mergeObjectField(parentMetadata.icons, childMetadata.icons),
+    manifest: mergeSimpleField(parentMetadata.manifest, childMetadata.manifest),
+    themeColor: mergeSimpleField(parentMetadata.themeColor, childMetadata.themeColor),
+    appleWebApp: mergeObjectField(parentMetadata.appleWebApp, childMetadata.appleWebApp),
+    viewport: mergeSimpleField(parentMetadata.viewport, childMetadata.viewport),
+    canonical: mergeSimpleField(parentMetadata.canonical, childMetadata.canonical),
   }
-
-  if (childMetadata.description !== undefined)
-    merged.description = childMetadata.description
-  if (childMetadata.keywords !== undefined)
-    merged.keywords = childMetadata.keywords
-  if (childMetadata.openGraph !== undefined)
-    merged.openGraph = { ...parentMetadata.openGraph, ...childMetadata.openGraph }
-  if (childMetadata.twitter !== undefined)
-    merged.twitter = { ...parentMetadata.twitter, ...childMetadata.twitter }
-  if (childMetadata.robots !== undefined)
-    merged.robots = { ...parentMetadata.robots, ...childMetadata.robots }
-  if (childMetadata.icons !== undefined)
-    merged.icons = { ...parentMetadata.icons, ...childMetadata.icons }
-  if (childMetadata.manifest !== undefined)
-    merged.manifest = childMetadata.manifest
-  if (childMetadata.themeColor !== undefined)
-    merged.themeColor = childMetadata.themeColor
-  if (childMetadata.appleWebApp !== undefined)
-    merged.appleWebApp = { ...parentMetadata.appleWebApp, ...childMetadata.appleWebApp }
-  if (childMetadata.viewport !== undefined)
-    merged.viewport = childMetadata.viewport
-  if (childMetadata.canonical !== undefined)
-    merged.canonical = childMetadata.canonical
-
-  return merged
 }
 
 /* v8 ignore start - requires dynamic imports, better tested in integration/e2e */

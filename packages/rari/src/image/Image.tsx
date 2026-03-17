@@ -49,6 +49,274 @@ function buildImageUrl(
   return `/_rari/image?${params}`
 }
 
+function extractImageProps(src: string | StaticImageData, width?: number, height?: number, blurDataURL?: string) {
+  const imgSrc = typeof src === 'string' ? src : src.src
+  const imgWidth = width || (typeof src !== 'string' ? src.width : undefined)
+  const imgHeight = height || (typeof src !== 'string' ? src.height : undefined)
+  const imgBlurDataURL = blurDataURL || (typeof src !== 'string' ? src.blurDataURL : undefined)
+
+  return { imgSrc, imgWidth, imgHeight, imgBlurDataURL }
+}
+
+function useImagePreload(
+  shouldPreload: boolean,
+  finalSrc: string,
+  imgWidth: number | undefined,
+  quality: number,
+  sizes: string | undefined,
+  loader: ImageProps['loader'],
+  unoptimized: boolean,
+) {
+  useEffect(() => {
+    if (!shouldPreload)
+      return
+
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'image'
+
+    if (loader)
+      link.href = loader({ src: finalSrc, width: imgWidth || 1920, quality })
+    else if (unoptimized)
+      link.href = finalSrc
+    else
+      link.href = buildImageUrl(finalSrc, imgWidth || 1920, quality)
+
+    if (sizes)
+      link.setAttribute('imagesizes', sizes)
+
+    document.head.appendChild(link)
+
+    return () => {
+      if (link.parentNode === document.head)
+        document.head.removeChild(link)
+    }
+  }, [shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized])
+}
+
+function useImageLazyLoad(
+  imgRef: React.RefObject<HTMLImageElement | null>,
+  shouldPreload: boolean,
+  unoptimized: boolean,
+  loading: 'lazy' | 'eager',
+) {
+  useEffect(() => {
+    if (shouldPreload || unoptimized || loading === 'eager')
+      return
+
+    const img = imgRef.current
+    if (!img)
+      return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting)
+            observer.unobserve(img)
+        })
+      },
+      {
+        rootMargin: '50px',
+      },
+    )
+
+    observer.observe(img)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [imgRef, shouldPreload, unoptimized, loading])
+}
+
+function buildImageStyle(
+  style: React.CSSProperties | undefined,
+  fill: boolean,
+  placeholder: 'blur' | 'empty',
+  imgBlurDataURL: string | undefined,
+  blurComplete: boolean,
+): React.CSSProperties {
+  return {
+    ...style,
+    ...(fill && {
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+    }),
+    ...(placeholder === 'blur' && imgBlurDataURL && !blurComplete && {
+      backgroundImage: `url(${imgBlurDataURL})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      filter: 'blur(20px)',
+      transition: 'filter 0.3s ease-out',
+    }),
+    ...(placeholder === 'blur' && blurComplete && {
+      filter: 'none',
+      transition: 'filter 0.3s ease-out',
+    }),
+  }
+}
+
+function buildSrcSetString(
+  sizesArray: number[],
+  finalSrc: string,
+  quality: number,
+  format: ImageFormat | undefined,
+  loader: ImageProps['loader'],
+): string {
+  if (loader)
+    return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
+
+  return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
+}
+
+function UnoptimizedImage({
+  imgRef,
+  finalSrc,
+  imgWidth,
+  quality,
+  loader,
+  showAltText,
+  alt,
+  fill,
+  imgHeight,
+  shouldPreload,
+  loading,
+  imgDecoding,
+  handleLoad,
+  handleError,
+  imgStyle,
+  className,
+}: {
+  imgRef: React.RefObject<HTMLImageElement | null>
+  finalSrc: string
+  imgWidth: number | undefined
+  quality: number
+  loader: ImageProps['loader']
+  showAltText: boolean
+  alt: string
+  fill: boolean
+  imgHeight: number | undefined
+  shouldPreload: boolean
+  loading: 'lazy' | 'eager'
+  imgDecoding: 'async' | 'sync' | 'auto'
+  handleLoad: (event: React.SyntheticEvent<HTMLImageElement>) => void
+  handleError: (event: React.SyntheticEvent<HTMLImageElement>) => void
+  imgStyle: React.CSSProperties
+  className: string | undefined
+}) {
+  const finalImgSrc = loader
+    ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
+    : finalSrc
+
+  return (
+    <img
+      ref={imgRef}
+      src={finalImgSrc}
+      alt={showAltText ? alt : ''}
+      width={fill ? undefined : imgWidth}
+      height={fill ? undefined : imgHeight}
+      loading={shouldPreload ? 'eager' : loading}
+      fetchPriority={shouldPreload ? 'high' : 'auto'}
+      decoding={imgDecoding}
+      onLoad={handleLoad}
+      onError={handleError}
+      style={imgStyle}
+      className={className}
+    />
+  )
+}
+
+function OptimizedImage({
+  imgRef,
+  pictureRef,
+  finalSrc,
+  imgWidth,
+  quality,
+  loader,
+  sizes,
+  showAltText,
+  alt,
+  fill,
+  imgHeight,
+  shouldPreload,
+  loading,
+  imgDecoding,
+  handleLoad,
+  handleError,
+  imgStyle,
+  className,
+}: {
+  imgRef: React.RefObject<HTMLImageElement | null>
+  pictureRef: React.RefObject<HTMLPictureElement | null>
+  finalSrc: string
+  imgWidth: number | undefined
+  quality: number
+  loader: ImageProps['loader']
+  sizes: string | undefined
+  showAltText: boolean
+  alt: string
+  fill: boolean
+  imgHeight: number | undefined
+  shouldPreload: boolean
+  loading: 'lazy' | 'eager'
+  imgDecoding: 'async' | 'sync' | 'auto'
+  handleLoad: (event: React.SyntheticEvent<HTMLImageElement>) => void
+  handleError: (event: React.SyntheticEvent<HTMLImageElement>) => void
+  imgStyle: React.CSSProperties
+  className: string | undefined
+}) {
+  const defaultWidth = imgWidth || 1920
+  const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
+  const mainSrc = loader
+    ? loader({ src: finalSrc, width: defaultWidth, quality })
+    : buildImageUrl(finalSrc, defaultWidth, quality)
+  const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
+
+  const imgElement = (
+    <img
+      ref={imgRef}
+      src={mainSrc}
+      srcSet={shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader) : undefined}
+      sizes={shouldUseSrcSet ? sizes : undefined}
+      alt={showAltText ? alt : ''}
+      width={fill ? undefined : imgWidth}
+      height={fill ? undefined : imgHeight}
+      loading={shouldPreload ? 'eager' : loading}
+      fetchPriority={shouldPreload ? 'high' : 'auto'}
+      decoding={imgDecoding}
+      onLoad={handleLoad}
+      onError={handleError}
+      style={imgStyle}
+      className={className}
+    />
+  )
+
+  if (!shouldUseSrcSet)
+    return imgElement
+
+  return (
+    <picture ref={pictureRef}>
+      {DEFAULT_FORMATS.includes('avif') && (
+        <source
+          type="image/avif"
+          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'avif', loader)}
+          sizes={sizes}
+        />
+      )}
+      {DEFAULT_FORMATS.includes('webp') && (
+        <source
+          type="image/webp"
+          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'webp', loader)}
+          sizes={sizes}
+        />
+      )}
+      {imgElement}
+    </picture>
+  )
+}
+
 export function Image({
   src,
   alt,
@@ -70,10 +338,7 @@ export function Image({
   overrideSrc,
   decoding,
 }: ImageProps) {
-  const imgSrc = typeof src === 'string' ? src : src.src
-  const imgWidth = width || (typeof src !== 'string' ? src.width : undefined)
-  const imgHeight = height || (typeof src !== 'string' ? src.height : undefined)
-  const imgBlurDataURL = blurDataURL || (typeof src !== 'string' ? src.blurDataURL : undefined)
+  const { imgSrc, imgWidth, imgHeight, imgBlurDataURL } = extractImageProps(src, width, height, blurDataURL)
   const finalSrc = overrideSrc || imgSrc
   const shouldPreload = preload
   const imgDecoding = decoding || (preload ? 'sync' : 'async')
@@ -115,155 +380,33 @@ export function Image({
     [placeholder, onError],
   )
 
-  useEffect(() => {
-    if (shouldPreload) {
-      const link = document.createElement('link')
-      link.rel = 'preload'
-      link.as = 'image'
-      if (loader)
-        link.href = loader({ src: finalSrc, width: imgWidth || 1920, quality })
-      else if (unoptimized)
-        link.href = finalSrc
-      else
-        link.href = buildImageUrl(finalSrc, imgWidth || 1920, quality)
-      if (sizes)
-        link.setAttribute('imagesizes', sizes)
-      document.head.appendChild(link)
+  useImagePreload(shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized)
+  useImageLazyLoad(imgRef, shouldPreload, unoptimized, loading)
 
-      return () => {
-        if (link.parentNode === document.head)
-          document.head.removeChild(link)
-      }
-    }
-  }, [shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized])
+  const imgStyle = buildImageStyle(style, fill, placeholder, imgBlurDataURL, blurComplete)
 
-  useEffect(() => {
-    if (shouldPreload || unoptimized || loading === 'eager')
-      return
-
-    const img = imgRef.current
-    if (!img)
-      return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting)
-            observer.unobserve(img)
-        })
-      },
-      {
-        rootMargin: '50px',
-      },
-    )
-
-    observer.observe(img)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [shouldPreload, unoptimized, loading])
-
-  const imgStyle: React.CSSProperties = {
-    ...style,
-    ...(fill && {
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-    }),
-    ...(placeholder === 'blur' && imgBlurDataURL && !blurComplete && {
-      backgroundImage: `url(${imgBlurDataURL})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      filter: 'blur(20px)',
-      transition: 'filter 0.3s ease-out',
-    }),
-    ...(placeholder === 'blur' && blurComplete && {
-      filter: 'none',
-      transition: 'filter 0.3s ease-out',
-    }),
+  const commonProps = {
+    imgRef,
+    finalSrc,
+    imgWidth,
+    quality,
+    loader,
+    showAltText,
+    alt,
+    fill,
+    imgHeight,
+    shouldPreload,
+    loading,
+    imgDecoding,
+    handleLoad,
+    handleError,
+    imgStyle,
+    className,
   }
 
   if (unoptimized) {
-    const finalImgSrc = loader
-      ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
-      : finalSrc
-
-    return (
-      <img
-        ref={imgRef}
-        src={finalImgSrc}
-        alt={showAltText ? alt : ''}
-        width={fill ? undefined : imgWidth}
-        height={fill ? undefined : imgHeight}
-        loading={shouldPreload ? 'eager' : loading}
-        fetchPriority={shouldPreload ? 'high' : 'auto'}
-        decoding={imgDecoding}
-        onLoad={handleLoad}
-        onError={handleError}
-        style={imgStyle}
-        className={className}
-      />
-    )
+    return <UnoptimizedImage {...commonProps} />
   }
 
-  const defaultWidth = imgWidth || 1920
-  const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
-
-  const buildSrcSet = (format?: ImageFormat) => {
-    if (loader)
-      return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
-
-    return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
-  }
-
-  const mainSrc = loader
-    ? loader({ src: finalSrc, width: defaultWidth, quality })
-    : buildImageUrl(finalSrc, defaultWidth, quality)
-
-  const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
-
-  const imgElement = (
-    <img
-      ref={imgRef}
-      src={mainSrc}
-      srcSet={shouldUseSrcSet ? buildSrcSet() : undefined}
-      sizes={shouldUseSrcSet ? sizes : undefined}
-      alt={showAltText ? alt : ''}
-      width={fill ? undefined : imgWidth}
-      height={fill ? undefined : imgHeight}
-      loading={shouldPreload ? 'eager' : loading}
-      fetchPriority={shouldPreload ? 'high' : 'auto'}
-      decoding={imgDecoding}
-      onLoad={handleLoad}
-      onError={handleError}
-      style={imgStyle}
-      className={className}
-    />
-  )
-
-  if (!shouldUseSrcSet)
-    return imgElement
-
-  return (
-    <picture ref={pictureRef}>
-      {DEFAULT_FORMATS.includes('avif') && (
-        <source
-          type="image/avif"
-          srcSet={buildSrcSet('avif')}
-          sizes={sizes}
-        />
-      )}
-      {DEFAULT_FORMATS.includes('webp') && (
-        <source
-          type="image/webp"
-          srcSet={buildSrcSet('webp')}
-          sizes={sizes}
-        />
-      )}
-      {imgElement}
-    </picture>
-  )
+  return <OptimizedImage {...commonProps} pictureRef={pictureRef} sizes={sizes} />
 }

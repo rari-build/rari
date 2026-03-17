@@ -12,35 +12,78 @@ import { getBinaryPath, getInstallationInstructions } from './platform'
 
 const ENV_LINE_REGEX = /^([^=]+)=(.*)$/
 
+function parseEnvLine(line: string): { key: string, value: string } | null {
+  const trimmed = line.trim()
+
+  if (!trimmed || trimmed.startsWith('#'))
+    return null
+
+  const match = trimmed.match(ENV_LINE_REGEX)
+  if (!match)
+    return null
+
+  const [, key, value] = match
+  const cleanKey = key.trim()
+  let cleanValue = value.trim()
+
+  if ((cleanValue.startsWith('"') && cleanValue.endsWith('"'))
+    || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) {
+    cleanValue = cleanValue.slice(1, -1)
+  }
+
+  return { key: cleanKey, value: cleanValue }
+}
+
 function loadEnvFile() {
   const envPath = resolve(process.cwd(), '.env')
-  if (existsSync(envPath)) {
-    const envContent = readFileSync(envPath, 'utf-8')
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim()
+  if (!existsSync(envPath))
+    return
 
-      if (!trimmed || trimmed.startsWith('#'))
-        continue
-
-      const match = trimmed.match(ENV_LINE_REGEX)
-      if (match) {
-        const [, key, value] = match
-        const cleanKey = key.trim()
-        let cleanValue = value.trim()
-
-        if ((cleanValue.startsWith('"') && cleanValue.endsWith('"'))
-          || (cleanValue.startsWith('\'') && cleanValue.endsWith('\''))) { cleanValue = cleanValue.slice(1, -1) }
-
-        if (!process.env[cleanKey])
-          process.env[cleanKey] = cleanValue
-      }
-    }
+  const envContent = readFileSync(envPath, 'utf-8')
+  for (const line of envContent.split('\n')) {
+    const parsed = parseEnvLine(line)
+    if (parsed && !process.env[parsed.key])
+      process.env[parsed.key] = parsed.value
   }
 }
 
 loadEnvFile()
 
 const [, , command, ...args] = process.argv
+
+function checkLockFiles(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
+  if (existsSync(resolve(dir, 'pnpm-lock.yaml')))
+    return 'pnpm'
+  if (existsSync(resolve(dir, 'yarn.lock')))
+    return 'yarn'
+  if (existsSync(resolve(dir, 'bun.lockb')))
+    return 'bun'
+  if (existsSync(resolve(dir, 'package-lock.json')))
+    return 'npm'
+
+  return null
+}
+
+function checkPackageJson(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
+  try {
+    const pkgPath = resolve(dir, 'package.json')
+    if (!existsSync(pkgPath))
+      return null
+
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    if (pkg.packageManager?.startsWith('pnpm'))
+      return 'pnpm'
+    if (pkg.packageManager?.startsWith('yarn'))
+      return 'yarn'
+    if (pkg.packageManager?.startsWith('bun'))
+      return 'bun'
+    if (pkg.packageManager?.startsWith('npm'))
+      return 'npm'
+  }
+  catch {}
+
+  return null
+}
 
 function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
   let currentDir = process.cwd()
@@ -51,30 +94,13 @@ function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
   while (currentDir !== root && iterations < maxIterations) {
     iterations++
 
-    if (existsSync(resolve(currentDir, 'pnpm-lock.yaml')))
-      return 'pnpm'
-    if (existsSync(resolve(currentDir, 'yarn.lock')))
-      return 'yarn'
-    if (existsSync(resolve(currentDir, 'bun.lockb')))
-      return 'bun'
-    if (existsSync(resolve(currentDir, 'package-lock.json')))
-      return 'npm'
+    const lockFileResult = checkLockFiles(currentDir)
+    if (lockFileResult)
+      return lockFileResult
 
-    try {
-      const pkgPath = resolve(currentDir, 'package.json')
-      if (existsSync(pkgPath)) {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-        if (pkg.packageManager?.startsWith('pnpm'))
-          return 'pnpm'
-        if (pkg.packageManager?.startsWith('yarn'))
-          return 'yarn'
-        if (pkg.packageManager?.startsWith('bun'))
-          return 'bun'
-        if (pkg.packageManager?.startsWith('npm'))
-          return 'npm'
-      }
-    }
-    catch {}
+    const packageJsonResult = checkPackageJson(currentDir)
+    if (packageJsonResult)
+      return packageJsonResult
 
     const parentDir = resolve(currentDir, '..')
     if (parentDir === currentDir)

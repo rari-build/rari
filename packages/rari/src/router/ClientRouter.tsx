@@ -42,24 +42,24 @@ interface PageMetadata {
   }
 }
 
-function updateDocumentMetadata(metadata: PageMetadata): void {
+function updateOrCreateMetaTag(selector: string, attributes: Record<string, string>) {
+  let element = document.querySelector(selector) as HTMLMetaElement | null
+  if (!element) {
+    element = document.createElement('meta')
+    for (const [key, value] of Object.entries(attributes))
+      element.setAttribute(key, value)
+
+    document.head.appendChild(element)
+  }
+  else {
+    if (attributes.content)
+      element.setAttribute('content', attributes.content)
+  }
+}
+
+function updateBasicMetadata(metadata: PageMetadata): void {
   if (metadata.title)
     document.title = metadata.title
-
-  const updateOrCreateMetaTag = (selector: string, attributes: Record<string, string>) => {
-    let element = document.querySelector(selector) as HTMLMetaElement | null
-    if (!element) {
-      element = document.createElement('meta')
-      for (const [key, value] of Object.entries(attributes))
-        element.setAttribute(key, value)
-
-      document.head.appendChild(element)
-    }
-    else {
-      if (attributes.content)
-        element.setAttribute('content', attributes.content)
-    }
-  }
 
   if (metadata.description) {
     updateOrCreateMetaTag('meta[name="description"]', {
@@ -81,118 +81,133 @@ function updateDocumentMetadata(metadata: PageMetadata): void {
       content: metadata.viewport,
     })
   }
+}
 
-  if (metadata.canonical) {
-    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
-    if (!canonical) {
-      canonical = document.createElement('link')
-      canonical.setAttribute('rel', 'canonical')
-      document.head.appendChild(canonical)
-    }
-    canonical.setAttribute('href', metadata.canonical)
+function updateCanonicalLink(canonical: string): void {
+  let canonicalEl = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+  if (!canonicalEl) {
+    canonicalEl = document.createElement('link')
+    canonicalEl.setAttribute('rel', 'canonical')
+    document.head.appendChild(canonicalEl)
   }
+  canonicalEl.setAttribute('href', canonical)
+}
 
-  if (metadata.robots) {
-    const robotsContent: string[] = []
-    if (metadata.robots.index !== undefined)
-      robotsContent.push(metadata.robots.index ? 'index' : 'noindex')
-    if (metadata.robots.follow !== undefined)
-      robotsContent.push(metadata.robots.follow ? 'follow' : 'nofollow')
-    if (metadata.robots.nocache)
-      robotsContent.push('nocache')
-    if (robotsContent.length > 0) {
-      updateOrCreateMetaTag('meta[name="robots"]', {
-        name: 'robots',
-        content: robotsContent.join(', '),
-      })
-    }
+function updateRobotsMetadata(robots: NonNullable<PageMetadata['robots']>): void {
+  const robotsContent: string[] = []
+  if (robots.index !== undefined)
+    robotsContent.push(robots.index ? 'index' : 'noindex')
+  if (robots.follow !== undefined)
+    robotsContent.push(robots.follow ? 'follow' : 'nofollow')
+  if (robots.nocache)
+    robotsContent.push('nocache')
+
+  if (robotsContent.length > 0) {
+    updateOrCreateMetaTag('meta[name="robots"]', {
+      name: 'robots',
+      content: robotsContent.join(', '),
+    })
   }
+}
 
-  if (metadata.openGraph) {
-    const og = metadata.openGraph
-    if (og.title) {
-      updateOrCreateMetaTag('meta[property="og:title"]', {
-        property: 'og:title',
-        content: og.title,
-      })
-    }
-    if (og.description) {
-      updateOrCreateMetaTag('meta[property="og:description"]', {
-        property: 'og:description',
-        content: og.description,
-      })
-    }
-    if (og.url) {
-      updateOrCreateMetaTag('meta[property="og:url"]', {
-        property: 'og:url',
-        content: og.url,
-      })
-    }
-    if (og.siteName) {
-      updateOrCreateMetaTag('meta[property="og:site_name"]', {
-        property: 'og:site_name',
-        content: og.siteName,
-      })
-    }
-    if (og.type) {
-      updateOrCreateMetaTag('meta[property="og:type"]', {
-        property: 'og:type',
-        content: og.type,
-      })
-    }
-    if (og.images && og.images.length > 0) {
-      document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
-      for (const image of og.images) {
-        const meta = document.createElement('meta')
-        meta.setAttribute('property', 'og:image')
-        meta.setAttribute('content', image)
-        document.head.appendChild(meta)
-      }
-    }
+function updateOpenGraphMetadata(og: NonNullable<PageMetadata['openGraph']>): void {
+  if (og.title) {
+    updateOrCreateMetaTag('meta[property="og:title"]', {
+      property: 'og:title',
+      content: og.title,
+    })
   }
-
-  if (metadata.twitter) {
-    const twitter = metadata.twitter
-    if (twitter.card) {
-      updateOrCreateMetaTag('meta[name="twitter:card"]', {
-        name: 'twitter:card',
-        content: twitter.card,
-      })
-    }
-    if (twitter.site) {
-      updateOrCreateMetaTag('meta[name="twitter:site"]', {
-        name: 'twitter:site',
-        content: twitter.site,
-      })
-    }
-    if (twitter.creator) {
-      updateOrCreateMetaTag('meta[name="twitter:creator"]', {
-        name: 'twitter:creator',
-        content: twitter.creator,
-      })
-    }
-    if (twitter.title) {
-      updateOrCreateMetaTag('meta[name="twitter:title"]', {
-        name: 'twitter:title',
-        content: twitter.title,
-      })
-    }
-    if (twitter.description) {
-      updateOrCreateMetaTag('meta[name="twitter:description"]', {
-        name: 'twitter:description',
-        content: twitter.description,
-      })
-    }
-    if (twitter.images && twitter.images.length > 0) {
-      document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
-      for (const image of twitter.images) {
-        const meta = document.createElement('meta')
-        meta.setAttribute('name', 'twitter:image')
-        meta.setAttribute('content', image)
-        document.head.appendChild(meta)
-      }
+  if (og.description) {
+    updateOrCreateMetaTag('meta[property="og:description"]', {
+      property: 'og:description',
+      content: og.description,
+    })
+  }
+  if (og.url) {
+    updateOrCreateMetaTag('meta[property="og:url"]', {
+      property: 'og:url',
+      content: og.url,
+    })
+  }
+  if (og.siteName) {
+    updateOrCreateMetaTag('meta[property="og:site_name"]', {
+      property: 'og:site_name',
+      content: og.siteName,
+    })
+  }
+  if (og.type) {
+    updateOrCreateMetaTag('meta[property="og:type"]', {
+      property: 'og:type',
+      content: og.type,
+    })
+  }
+  if (og.images && og.images.length > 0) {
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+    for (const image of og.images) {
+      const meta = document.createElement('meta')
+      meta.setAttribute('property', 'og:image')
+      meta.setAttribute('content', image)
+      document.head.appendChild(meta)
     }
   }
+}
+
+function updateTwitterMetadata(twitter: NonNullable<PageMetadata['twitter']>): void {
+  if (twitter.card) {
+    updateOrCreateMetaTag('meta[name="twitter:card"]', {
+      name: 'twitter:card',
+      content: twitter.card,
+    })
+  }
+  if (twitter.site) {
+    updateOrCreateMetaTag('meta[name="twitter:site"]', {
+      name: 'twitter:site',
+      content: twitter.site,
+    })
+  }
+  if (twitter.creator) {
+    updateOrCreateMetaTag('meta[name="twitter:creator"]', {
+      name: 'twitter:creator',
+      content: twitter.creator,
+    })
+  }
+  if (twitter.title) {
+    updateOrCreateMetaTag('meta[name="twitter:title"]', {
+      name: 'twitter:title',
+      content: twitter.title,
+    })
+  }
+  if (twitter.description) {
+    updateOrCreateMetaTag('meta[name="twitter:description"]', {
+      name: 'twitter:description',
+      content: twitter.description,
+    })
+  }
+  if (twitter.images && twitter.images.length > 0) {
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+    for (const image of twitter.images) {
+      const meta = document.createElement('meta')
+      meta.setAttribute('name', 'twitter:image')
+      meta.setAttribute('content', image)
+      document.head.appendChild(meta)
+    }
+  }
+}
+
+function updateDocumentMetadata(metadata: PageMetadata): void {
+  updateBasicMetadata(metadata)
+
+  if (metadata.canonical)
+    updateCanonicalLink(metadata.canonical)
+
+  if (metadata.robots)
+    updateRobotsMetadata(metadata.robots)
+
+  if (metadata.openGraph)
+    updateOpenGraphMetadata(metadata.openGraph)
+
+  if (metadata.twitter)
+    updateTwitterMetadata(metadata.twitter)
 }
 
 export interface ClientRouterProps {
@@ -291,6 +306,256 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
+  const handleSameRouteNavigation = (targetPath: string, hash: string) => {
+    if (!hash)
+      return
+
+    const element = document.getElementById(hash)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.pushState(window.history.state, '', `${targetPath}#${hash}`)
+    }
+  }
+
+  const updateHistoryState = (
+    targetPath: string,
+    navigationId: number,
+    hash: string,
+    options: NavigationOptions,
+    historyKey: string,
+  ) => {
+    const historyState: HistoryState = {
+      route: targetPath,
+      navigationId,
+      scrollPosition: { x: window.scrollX, y: window.scrollY },
+      timestamp: Date.now(),
+      key: historyKey,
+    }
+
+    const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
+
+    if (options.replace) {
+      window.history.replaceState(historyState, '', urlWithHash)
+    }
+    else {
+      window.history.pushState(historyState, '', urlWithHash)
+    }
+  }
+
+  const handleRedirect = (
+    finalPath: string,
+    targetPath: string,
+    navigationId: number,
+    hash: string,
+    options: NavigationOptions,
+  ) => {
+    if (finalPath === targetPath)
+      return finalPath
+
+    const finalUrlWithHash = hash ? `${finalPath}#${hash}` : finalPath
+    window.history.replaceState(
+      {
+        route: finalPath,
+        navigationId,
+        scrollPosition: { x: window.scrollX, y: window.scrollY },
+        timestamp: Date.now(),
+        key: options.historyKey || generateHistoryKey(),
+      },
+      '',
+      finalUrlWithHash,
+    )
+    return finalPath
+  }
+
+  const processMetadata = (response: Response) => {
+    try {
+      const metadataHeader = response.headers.get('x-rari-metadata')
+      if (metadataHeader) {
+        const decodedMetadata = decodeURIComponent(metadataHeader)
+        const metadata = JSON.parse(decodedMetadata) as PageMetadata
+        updateDocumentMetadata(metadata)
+      }
+    }
+    catch {}
+  }
+
+  const handleStreamingResponse = async (
+    response: Response,
+    abortController: AbortController,
+    actualTargetPath: string,
+    navigationId: number,
+    fromRoute: string,
+    options: NavigationOptions,
+    routeInfo: RouteInfoResponse | undefined,
+    extractedParams: Record<string, string | string[]>,
+  ) => {
+    if (!response.body)
+      return
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done)
+          break
+
+        if (abortController.signal.aborted) {
+          await reader.cancel()
+          cleanupAbortedNavigation(actualTargetPath, navigationId)
+          return
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.trim()) {
+            window.dispatchEvent(new CustomEvent('rari:rsc-row', {
+              detail: { rscRow: line },
+            }))
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        window.dispatchEvent(new CustomEvent('rari:rsc-row', {
+          detail: { rscRow: buffer },
+        }))
+      }
+
+      window.dispatchEvent(new CustomEvent('rari:navigate', {
+        detail: {
+          from: fromRoute,
+          to: actualTargetPath,
+          navigationId,
+          options,
+          routeInfo: {
+            ...routeInfo,
+            extractedParams,
+          },
+          abortSignal: abortController.signal,
+          isStreaming: true,
+        },
+      }))
+    }
+    catch (streamError) {
+      console.error('[rari] Router: Streaming error:', streamError)
+      throw streamError
+    }
+  }
+
+  const handleNonStreamingResponse = async (
+    response: Response,
+    fromRoute: string,
+    actualTargetPath: string,
+    navigationId: number,
+    options: NavigationOptions,
+    routeInfo: RouteInfoResponse | undefined,
+    extractedParams: Record<string, string | string[]>,
+    abortController: AbortController,
+  ) => {
+    const rscWireFormat = await response.text()
+
+    window.dispatchEvent(new CustomEvent('rari:navigate', {
+      detail: {
+        from: fromRoute,
+        to: actualTargetPath,
+        navigationId,
+        options,
+        routeInfo: {
+          ...routeInfo,
+          extractedParams,
+        },
+        abortSignal: abortController.signal,
+        rscWireFormat,
+      },
+    }))
+  }
+
+  const handleScrollAfterNavigation = (
+    actualTargetPath: string,
+    hash: string,
+    options: NavigationOptions,
+  ) => {
+    if (options.historyKey) {
+      requestAnimationFrame(() => {
+        statePreserverRef.current.restoreState(actualTargetPath)
+      })
+    }
+    else if (hash) {
+      requestAnimationFrame(() => {
+        const scrollToHash = (attempts = 0) => {
+          const element = document.getElementById(hash)
+          if (element)
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          else if (attempts < 10)
+            setTimeout(scrollToHash, 50, attempts + 1)
+        }
+        scrollToHash()
+      })
+    }
+  }
+
+  const completeNavigation = (
+    actualTargetPath: string,
+    hash: string,
+    options: NavigationOptions,
+  ) => {
+    if (!isMountedRef.current)
+      return
+
+    currentRouteRef.current = actualTargetPath
+
+    setNavigationState(prev => ({
+      ...prev,
+      currentRoute: actualTargetPath,
+      error: null,
+    }))
+
+    errorHandlerRef.current.resetRetry(actualTargetPath)
+    handleScrollAfterNavigation(actualTargetPath, hash, options)
+  }
+
+  const handleNavigationError = (
+    error: unknown,
+    targetPath: string,
+    navigationId: number,
+    fromRoute: string,
+  ) => {
+    if (error instanceof Error && error.name === 'AbortError') {
+      cleanupAbortedNavigation(targetPath, navigationId)
+      return
+    }
+
+    const navError = errorHandlerRef.current.handleError(error, targetPath)
+
+    if (isMountedRef.current) {
+      setNavigationState(prev => ({
+        ...prev,
+        error: navError,
+      }))
+    }
+
+    pendingNavigationsRef.current.delete(targetPath)
+
+    window.dispatchEvent(new CustomEvent('rari:navigate-error', {
+      detail: {
+        from: fromRoute,
+        to: targetPath,
+        error: navError,
+        navigationId,
+      },
+    }))
+
+    processNavigationQueueRef.current?.()
+  }
+
   const navigate = async (href: string, options: NavigationOptions = {}) => {
     if (!href || typeof href !== 'string') {
       console.error('[rari] Router: Invalid navigation target:', href)
@@ -301,14 +566,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     const targetPath = normalizePath(pathWithoutHash)
 
     if (targetPath === currentRouteRef.current && !options.replace) {
-      if (hash) {
-        const element = document.getElementById(hash)
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          window.history.pushState(window.history.state, '', `${targetPath}#${hash}`)
-        }
-      }
-
+      handleSameRouteNavigation(targetPath, hash)
       return
     }
 
@@ -333,30 +591,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           statePreserverRef.current.captureState(fromRoute)
 
         const historyKey = options.historyKey || generateHistoryKey()
-        const historyState: HistoryState = {
-          route: targetPath,
-          navigationId,
-          scrollPosition: { x: window.scrollX, y: window.scrollY },
-          timestamp: Date.now(),
-          key: historyKey,
-        }
-
-        const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
-
-        if (options.replace) {
-          window.history.replaceState(
-            historyState,
-            '',
-            urlWithHash,
-          )
-        }
-        else {
-          window.history.pushState(
-            historyState,
-            '',
-            urlWithHash,
-          )
-        }
+        updateHistoryState(targetPath, navigationId, hash, options, historyKey)
 
         const fetchUrl = window.location.origin + targetPath
 
@@ -370,37 +605,14 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         const finalUrl = new URL(response.url)
         const finalPath = finalUrl.pathname
-        const actualTargetPath = finalPath !== targetPath ? finalPath : targetPath
-
-        if (finalPath !== targetPath) {
-          const finalUrlWithHash = hash ? `${finalPath}#${hash}` : finalPath
-          window.history.replaceState(
-            {
-              route: finalPath,
-              navigationId,
-              scrollPosition: { x: window.scrollX, y: window.scrollY },
-              timestamp: Date.now(),
-              key: options.historyKey || generateHistoryKey(),
-            },
-            '',
-            finalUrlWithHash,
-          )
-        }
+        const actualTargetPath = handleRedirect(finalPath, targetPath, navigationId, hash, options)
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(actualTargetPath, navigationId)
           return
         }
 
-        try {
-          const metadataHeader = response.headers.get('x-rari-metadata')
-          if (metadataHeader) {
-            const decodedMetadata = decodeURIComponent(metadataHeader)
-            const metadata = JSON.parse(decodedMetadata) as PageMetadata
-            updateDocumentMetadata(metadata)
-          }
-        }
-        catch {}
+        processMetadata(response)
 
         const renderMode = response.headers.get('x-render-mode')
         const isStreaming = renderMode === 'streaming'
@@ -410,80 +622,28 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           : {}
 
         if (isStreaming && response.body) {
-          const reader = response.body.getReader()
-          const decoder = new TextDecoder()
-          let buffer = ''
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-
-              if (done)
-                break
-
-              if (abortController.signal.aborted) {
-                await reader.cancel()
-                cleanupAbortedNavigation(actualTargetPath, navigationId)
-                return
-              }
-
-              buffer += decoder.decode(value, { stream: true })
-
-              const lines = buffer.split('\n')
-              buffer = lines.pop() || ''
-
-              for (const line of lines) {
-                if (line.trim()) {
-                  window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-                    detail: { rscRow: line },
-                  }))
-                }
-              }
-            }
-
-            if (buffer.trim()) {
-              window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-                detail: { rscRow: buffer },
-              }))
-            }
-
-            window.dispatchEvent(new CustomEvent('rari:navigate', {
-              detail: {
-                from: fromRoute,
-                to: actualTargetPath,
-                navigationId,
-                options,
-                routeInfo: {
-                  ...routeInfo,
-                  extractedParams,
-                },
-                abortSignal: abortController.signal,
-                isStreaming: true,
-              },
-            }))
-          }
-          catch (streamError) {
-            console.error('[rari] Router: Streaming error:', streamError)
-            throw streamError
-          }
+          await handleStreamingResponse(
+            response,
+            abortController,
+            actualTargetPath,
+            navigationId,
+            fromRoute,
+            options,
+            routeInfo,
+            extractedParams,
+          )
         }
         else {
-          const rscWireFormat = await response.text()
-
-          window.dispatchEvent(new CustomEvent('rari:navigate', {
-            detail: {
-              from: fromRoute,
-              to: actualTargetPath,
-              navigationId,
-              options,
-              routeInfo: {
-                ...routeInfo,
-                extractedParams,
-              },
-              abortSignal: abortController.signal,
-              rscWireFormat,
-            },
-          }))
+          await handleNonStreamingResponse(
+            response,
+            fromRoute,
+            actualTargetPath,
+            navigationId,
+            options,
+            routeInfo,
+            extractedParams,
+            abortController,
+          )
         }
 
         if (abortController.signal.aborted) {
@@ -491,67 +651,13 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           return
         }
 
-        if (isMountedRef.current) {
-          currentRouteRef.current = actualTargetPath
-
-          setNavigationState(prev => ({
-            ...prev,
-            currentRoute: actualTargetPath,
-            error: null,
-          }))
-
-          errorHandlerRef.current.resetRetry(actualTargetPath)
-
-          if (options.historyKey) {
-            requestAnimationFrame(() => {
-              statePreserverRef.current.restoreState(actualTargetPath)
-            })
-          }
-          else if (hash) {
-            requestAnimationFrame(() => {
-              const scrollToHash = (attempts = 0) => {
-                const element = document.getElementById(hash)
-                if (element)
-                  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                else if (attempts < 10)
-                  setTimeout(scrollToHash, 50, attempts + 1)
-              }
-              scrollToHash()
-            })
-          }
-        }
+        completeNavigation(actualTargetPath, hash, options)
 
         pendingNavigationsRef.current.delete(targetPath)
-
         processNavigationQueueRef.current?.()
       }
       catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
-
-        const navError = errorHandlerRef.current.handleError(error, targetPath)
-
-        if (isMountedRef.current) {
-          setNavigationState(prev => ({
-            ...prev,
-            error: navError,
-          }))
-        }
-
-        pendingNavigationsRef.current.delete(targetPath)
-
-        window.dispatchEvent(new CustomEvent('rari:navigate-error', {
-          detail: {
-            from: fromRoute,
-            to: targetPath,
-            error: navError,
-            navigationId,
-          },
-        }))
-
-        processNavigationQueueRef.current?.()
+        handleNavigationError(error, targetPath, navigationId, fromRoute)
       }
     })()
 

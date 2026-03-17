@@ -27,93 +27,88 @@ export interface NavigationErrorHandlerOptions {
 const DEFAULT_TIMEOUT = 10000
 const DEFAULT_MAX_RETRIES = 3
 
-export function createNavigationError(
-  error: unknown,
-  url?: string,
-): NavigationError {
-  if (error instanceof Error && error.name === 'AbortError') {
-    return {
-      type: 'abort',
-      message: 'Navigation was cancelled',
-      originalError: error,
-      url,
-      timestamp: Date.now(),
-      retryable: false,
-    }
+function handleAbortError(error: Error, url?: string): NavigationError {
+  return {
+    type: 'abort',
+    message: 'Navigation was cancelled',
+    originalError: error,
+    url,
+    timestamp: Date.now(),
+    retryable: false,
   }
+}
 
-  if (error instanceof Error && error.message.includes('timeout')) {
-    return {
-      type: 'timeout',
-      message: 'Navigation request timed out',
-      originalError: error,
-      url,
-      timestamp: Date.now(),
-      retryable: true,
-    }
+function handleTimeoutError(error: Error, url?: string): NavigationError {
+  return {
+    type: 'timeout',
+    message: 'Navigation request timed out',
+    originalError: error,
+    url,
+    timestamp: Date.now(),
+    retryable: true,
   }
+}
 
-  if (error instanceof Error && 'status' in error) {
-    const status = (error as any).status as number
-
-    if (status === 404) {
-      return {
-        type: 'not-found',
-        message: 'Page not found',
-        originalError: error,
-        statusCode: status,
-        url,
-        timestamp: Date.now(),
-        retryable: false,
-      }
-    }
-
-    if (status >= 500) {
-      return {
-        type: 'server-error',
-        message: `Server error: ${status}`,
-        originalError: error,
-        statusCode: status,
-        url,
-        timestamp: Date.now(),
-        retryable: true,
-      }
-    }
-
+function handleHttpError(error: Error, status: number, url?: string): NavigationError {
+  if (status === 404) {
     return {
-      type: 'fetch-error',
-      message: `HTTP error: ${status}`,
+      type: 'not-found',
+      message: 'Page not found',
       originalError: error,
       statusCode: status,
       url,
       timestamp: Date.now(),
-      retryable: status >= 500,
+      retryable: false,
     }
   }
 
-  if (error instanceof TypeError && error.message.includes('fetch')) {
+  if (status >= 500) {
     return {
-      type: 'network-error',
-      message: 'Network error - check your connection',
+      type: 'server-error',
+      message: `Server error: ${status}`,
       originalError: error,
+      statusCode: status,
       url,
       timestamp: Date.now(),
       retryable: true,
     }
   }
 
-  if (error instanceof SyntaxError || (error instanceof Error && error.message.includes('parse'))) {
-    return {
-      type: 'parse-error',
-      message: 'Failed to parse server response',
-      /* v8 ignore next - defensive check for non-Error values from parse-related condition */
-      originalError: error instanceof Error ? error : undefined,
-      url,
-      timestamp: Date.now(),
-      retryable: false,
-    }
+  return {
+    type: 'fetch-error',
+    message: `HTTP error: ${status}`,
+    originalError: error,
+    statusCode: status,
+    url,
+    timestamp: Date.now(),
+    retryable: status >= 500,
   }
+}
 
+function handleNetworkError(error: TypeError, url?: string): NavigationError {
+  return {
+    type: 'network-error',
+    message: 'Network error - check your connection',
+    originalError: error,
+    url,
+    timestamp: Date.now(),
+    retryable: true,
+  }
+}
+
+function handleParseError(error: unknown, url?: string): NavigationError {
+  return {
+    type: 'parse-error',
+    message: 'Failed to parse server response',
+    /* v8 ignore next - defensive check for non-Error values from parse-related condition */
+    originalError: error instanceof Error ? error : undefined,
+    url,
+    timestamp: Date.now(),
+    retryable: false,
+  }
+}
+
+function handleUnknownError(error: unknown, url?: string): NavigationError {
   return {
     type: 'fetch-error',
     message: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -122,6 +117,30 @@ export function createNavigationError(
     timestamp: Date.now(),
     retryable: false,
   }
+}
+
+export function createNavigationError(
+  error: unknown,
+  url?: string,
+): NavigationError {
+  if (error instanceof Error && error.name === 'AbortError')
+    return handleAbortError(error, url)
+
+  if (error instanceof Error && error.message.includes('timeout'))
+    return handleTimeoutError(error, url)
+
+  if (error instanceof Error && 'status' in error) {
+    const status = (error as any).status as number
+    return handleHttpError(error, status, url)
+  }
+
+  if (error instanceof TypeError && error.message.includes('fetch'))
+    return handleNetworkError(error, url)
+
+  if (error instanceof SyntaxError || (error instanceof Error && error.message.includes('parse')))
+    return handleParseError(error, url)
+
+  return handleUnknownError(error, url)
 }
 
 /* v8 ignore start - requires actual fetch calls, better tested in integration/e2e */

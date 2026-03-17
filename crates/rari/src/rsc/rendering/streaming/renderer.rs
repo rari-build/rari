@@ -648,7 +648,10 @@ impl StreamingRenderer {
     ) -> Result<PartialRenderResult, RariError> {
         let react_init_result = self
             .runtime
-            .execute_script("streaming-react-init".to_string(), REACT_INIT_SCRIPT.to_string())
+            .execute_script(
+                "streaming-react-init".to_string(),
+                STREAMING_REACT_SETUP_SCRIPT.to_string(),
+            )
             .await?;
 
         if let Some(available) = react_init_result.get("available").and_then(|v| v.as_bool()) {
@@ -883,7 +886,10 @@ impl StreamingRenderer {
     ) -> Result<PartialRenderResult, RariError> {
         let react_init_result = self
             .runtime
-            .execute_script("streaming-react-init".to_string(), REACT_INIT_SCRIPT.to_string())
+            .execute_script(
+                "streaming-react-init".to_string(),
+                STREAMING_REACT_SETUP_SCRIPT.to_string(),
+            )
             .await
             .map_err(|e| {
                 error!("Failed to execute React initialization script: {}", e);

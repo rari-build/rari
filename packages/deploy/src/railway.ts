@@ -4,11 +4,7 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
 
-export async function createRailwayDeployment() {
-  const cwd = process.cwd()
-
-  logInfo('Creating Railway deployment configuration...')
-
+function updatePackageJsonForRailway(cwd: string) {
   const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {
     logError('No package.json found. Please run this command from your project root.')
@@ -45,7 +41,25 @@ export async function createRailwayDeployment() {
     logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
     process.exit(1)
   }
+}
 
+export async function createRailwayDeployment() {
+  const cwd = process.cwd()
+
+  logInfo('Creating Railway deployment configuration...')
+
+  updatePackageJsonForRailway(cwd)
+
+  createRailwayToml(cwd)
+
+  updateGitignoreForRailway(cwd)
+
+  updateReadmeForRailway(cwd)
+
+  printRailwaySuccessMessage()
+}
+
+function createRailwayToml(cwd: string) {
   const railwayConfig = `[build]
 builder = "RAILPACK"
 
@@ -66,7 +80,9 @@ restartPolicyMaxRetries = 3
 
   writeFileSync(railwayTomlPath, railwayConfig)
   logSuccess('Created railway.toml configuration')
+}
 
+function updateGitignoreForRailway(cwd: string) {
   const gitignorePath = join(cwd, '.gitignore')
   const railwayGitignoreEntries = [
     '',
@@ -121,7 +137,9 @@ tmp/
     writeFileSync(gitignorePath, defaultGitignore)
     logSuccess('Created .gitignore with Railway entries')
   }
+}
 
+function updateReadmeForRailway(cwd: string) {
   const readmePath = join(cwd, 'README.md')
   const railwayReadmeSection = `
 ## 🚂 Deploy to Railway
@@ -194,7 +212,9 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
     writeFileSync(readmePath, defaultReadme)
     logSuccess('Created README.md with Railway deployment instructions')
   }
+}
 
+function printRailwaySuccessMessage() {
   console.warn('')
   logSuccess('Railway deployment setup complete! 🎉')
   console.warn('')

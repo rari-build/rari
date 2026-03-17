@@ -4,11 +4,7 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
 
-export async function createRenderDeployment() {
-  const cwd = process.cwd()
-
-  logInfo('Creating Render deployment configuration...')
-
+function updatePackageJsonForRender(cwd: string) {
   const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {
     logError('No package.json found. Please run this command from your project root.')
@@ -45,7 +41,25 @@ export async function createRenderDeployment() {
     logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
     process.exit(1)
   }
+}
 
+export async function createRenderDeployment() {
+  const cwd = process.cwd()
+
+  logInfo('Creating Render deployment configuration...')
+
+  updatePackageJsonForRender(cwd)
+
+  createRenderYaml(cwd)
+
+  updateGitignoreForRender(cwd)
+
+  updateReadmeForRender(cwd)
+
+  printRenderSuccessMessage()
+}
+
+function createRenderYaml(cwd: string) {
   const renderConfig = `services:
   - type: web
     name: rari-app
@@ -71,7 +85,9 @@ export async function createRenderDeployment() {
 
   writeFileSync(renderYamlPath, renderConfig)
   logSuccess('Created render.yaml configuration')
+}
 
+function updateGitignoreForRender(cwd: string) {
   const gitignorePath = join(cwd, '.gitignore')
   const renderGitignoreEntries = [
     '',
@@ -126,7 +142,9 @@ tmp/
     writeFileSync(gitignorePath, defaultGitignore)
     logSuccess('Created .gitignore with Render entries')
   }
+}
 
+function updateReadmeForRender(cwd: string) {
   const readmePath = join(cwd, 'README.md')
   const renderReadmeSection = `
 ## 🎨 Deploy to Render
@@ -200,7 +218,9 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
     writeFileSync(readmePath, defaultReadme)
     logSuccess('Created README.md with Render deployment instructions')
   }
+}
 
+function printRenderSuccessMessage() {
   console.warn('')
   logSuccess('Render deployment setup complete! 🎉')
   console.warn('')
