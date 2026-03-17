@@ -17,9 +17,7 @@
     "clean": "rm -rf dist",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsgo",
-    "worker:dev": "wrangler dev worker/worker.js",
-    "worker:deploy": "wrangler deploy worker/worker.js"
+    "typecheck": "tsgo"
   },
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
