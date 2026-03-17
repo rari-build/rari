@@ -3,6 +3,7 @@ import type { ServerComponentBuilder } from './server-build'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { throwIfNotOk } from '../shared/http-utils'
 import { HMRErrorHandler } from './hmr-error-handler'
 
 export interface ComponentRebuildResult {
@@ -207,10 +208,7 @@ export class HMRCoordinator {
         },
       )
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
+      await throwIfNotOk(response)
 
       interface ServerResponse {
         success: boolean

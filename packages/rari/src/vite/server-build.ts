@@ -15,6 +15,8 @@ import {
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
+import { resolveAlias } from './alias-resolver'
+import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
 const CODE_IMPORT_REGEX = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
@@ -680,14 +682,7 @@ const ${importName} = (props) => {
           let resolvedPath: string | null = null
           const aliases = self.options.alias || {}
 
-          for (const [alias, replacement] of Object.entries(aliases)) {
-            if (source.startsWith(`${alias}/`) || source === alias) {
-              const relativePath = source.slice(alias.length)
-              const newPath = path.join(replacement, relativePath)
-              resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(self.projectRoot, newPath)
-              break
-            }
-          }
+          resolvedPath = resolveAlias(source, aliases, self.projectRoot)
 
           if (!resolvedPath && (source.startsWith('./') || source.startsWith('../'))) {
             const importerDir = importer === virtualModuleId ? resolveDir : path.dirname(importer)
@@ -807,14 +802,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           let resolvedPath: string | null = null
           const aliases = self.options.alias || {}
 
-          for (const [alias, replacement] of Object.entries(aliases)) {
-            if (source.startsWith(`${alias}/`) || source === alias) {
-              const relativePath = source.slice(alias.length)
-              const newPath = path.join(replacement, relativePath)
-              resolvedPath = path.isAbsolute(newPath) ? newPath : path.resolve(self.projectRoot, newPath)
-              break
-            }
-          }
+          resolvedPath = resolveAlias(source, aliases, self.projectRoot)
 
           const importerDir = importer?.startsWith('\0') ? resolveDir : (importer ? path.dirname(importer) : resolveDir)
           if (!resolvedPath && (source.startsWith('./') || source.startsWith('../')))
@@ -1535,19 +1523,13 @@ function registerClientReference(clientReference, id, exportName) {
       resolvedPath = path.resolve(path.dirname(importerPath), resolvedPath)
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
-    for (const ext of extensions) {
-      const pathWithExt = `${resolvedPath}${ext}`
-      if (fs.existsSync(pathWithExt))
-        return pathWithExt
-    }
+    const withExt = resolveWithExtensions(resolvedPath, extensions)
+    if (withExt)
+      return withExt
 
-    if (fs.existsSync(resolvedPath)) {
-      for (const ext of extensions) {
-        const indexPath = path.join(resolvedPath, `index${ext}`)
-        if (fs.existsSync(indexPath))
-          return indexPath
-      }
-    }
+    const indexFile = resolveIndexFile(resolvedPath, extensions)
+    if (indexFile)
+      return indexFile
 
     return `${resolvedPath}.tsx`
   }

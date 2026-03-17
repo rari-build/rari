@@ -25,7 +25,11 @@ function normalizeArray<T>(value: T | T[] | undefined): T[] {
   return Array.isArray(value) ? value : [value]
 }
 
-function generateRuleLines(rule: any): string[] {
+type RobotsRule = Robots extends { rules: infer R }
+  ? R extends (infer T)[] ? T : R
+  : never
+
+function generateRuleLines(rule: RobotsRule): string[] {
   const lines: string[] = []
   const userAgents = normalizeUserAgents(rule.userAgent)
 
@@ -193,6 +197,10 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     const code = entryChunk.code
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     const module = await import(dataUrl)
+
+    if (!module || module.default === undefined) {
+      throw new Error('Robots file must export a default export (either an object or a function)')
+    }
 
     let robotsData: Robots
     if (typeof module.default === 'function') {

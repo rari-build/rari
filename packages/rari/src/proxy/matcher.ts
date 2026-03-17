@@ -1,4 +1,4 @@
-import type { ProxyConfig, ProxyMatcher, RariRequest } from './types'
+import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from './types'
 import {
   MULTIPLE_SLASHES_REGEX,
   PATH_TRAILING_SLASH_REGEX,
@@ -67,22 +67,39 @@ function checkCookieCondition(
   return cookie ? cookie.value : null
 }
 
+function checkHostCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.rariUrl.hostname === key ? key : null
+}
+
 function matchesHasCondition(
   request: RariRequest,
-  condition: { type: string, key: string, value?: string },
+  condition: ProxyRuleCondition,
 ): boolean {
   let actualValue: string | null = null
 
-  if (condition.type === 'header')
-    actualValue = checkHeaderCondition(request, condition.key)
-  else if (condition.type === 'query')
-    actualValue = checkQueryCondition(request, condition.key)
-  else if (condition.type === 'cookie')
-    actualValue = checkCookieCondition(request, condition.key)
+  switch (condition.type) {
+    case 'header':
+      actualValue = checkHeaderCondition(request, condition.key)
+      break
+    case 'query':
+      actualValue = checkQueryCondition(request, condition.key)
+      break
+    case 'cookie':
+      actualValue = checkCookieCondition(request, condition.key)
+      break
+    case 'host':
+      actualValue = checkHostCondition(request, condition.key)
+      break
+    default:
+      throw new Error(`Unknown condition type: ${(condition as any).type}`)
+  }
 
-  if (!actualValue)
+  if (actualValue === null)
     return false
-  if (condition.value && actualValue !== condition.value)
+  if (condition.value !== undefined && actualValue !== condition.value)
     return false
 
   return true
@@ -90,23 +107,33 @@ function matchesHasCondition(
 
 function matchesMissingCondition(
   request: RariRequest,
-  condition: { type: string, key: string, value?: string },
+  condition: ProxyRuleCondition,
 ): boolean {
   let actualValue: string | null = null
 
-  if (condition.type === 'header')
-    actualValue = checkHeaderCondition(request, condition.key)
-  else if (condition.type === 'query')
-    actualValue = checkQueryCondition(request, condition.key)
-  else if (condition.type === 'cookie')
-    actualValue = checkCookieCondition(request, condition.key)
+  switch (condition.type) {
+    case 'header':
+      actualValue = checkHeaderCondition(request, condition.key)
+      break
+    case 'query':
+      actualValue = checkQueryCondition(request, condition.key)
+      break
+    case 'cookie':
+      actualValue = checkCookieCondition(request, condition.key)
+      break
+    case 'host':
+      actualValue = checkHostCondition(request, condition.key)
+      break
+    default:
+      throw new Error(`Unknown condition type: ${(condition as any).type}`)
+  }
 
-  if (!actualValue)
+  if (actualValue === null)
     return true
-  if (!condition.value || actualValue === condition.value)
+  if (condition.value === undefined)
     return false
 
-  return true
+  return actualValue !== condition.value
 }
 
 function matchesConditions(

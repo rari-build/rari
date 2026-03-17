@@ -17,10 +17,31 @@ interface NavItem {
   label: string
   href?: string
   items?: NavItem[]
+  collapsible?: boolean
 }
 
 interface SidebarProps {
   version: string
+}
+
+function shouldExpandSection(section: NavItem, pathname: string | null): boolean {
+  if (section.href && pathname?.startsWith(section.href))
+    return true
+
+  if (section.items)
+    return section.items.some(item => item.href && pathname?.startsWith(item.href))
+
+  return false
+}
+
+function shouldExpandItem(item: NavItem, pathname: string | null): boolean {
+  if (item.href && pathname?.startsWith(item.href))
+    return true
+
+  if (item.items)
+    return item.items.some((nested: NavItem) => nested.href && pathname === nested.href)
+
+  return false
 }
 
 const navigation = [
@@ -142,7 +163,7 @@ function DocsSection({
   const sectionKey = section.href || section.label
   const isSectionExpanded = expandedSections[sectionKey] ?? true
   const hasSectionItems = section.items && section.items.length > 0
-  const showSectionChevron = hasSectionItems && section.label === 'Getting Started'
+  const showSectionChevron = hasSectionItems && section.collapsible === true
 
   return (
     <div key={sectionKey}>
@@ -435,28 +456,6 @@ export default function Sidebar({ version }: SidebarProps) {
 
   const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : (isDocsPage ?? false)
   const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : (isEnterprisePage ?? false)
-
-  const shouldExpandSection = (section: NavItem, pathname: string | null) => {
-    if (section.href && pathname?.startsWith(section.href)) {
-      return true
-    }
-    if (section.items) {
-      return section.items.some(item => item.href && pathname?.startsWith(item.href))
-    }
-
-    return false
-  }
-
-  const shouldExpandItem = (item: NavItem, pathname: string | null) => {
-    if (item.href && pathname?.startsWith(item.href)) {
-      return true
-    }
-    if (item.items) {
-      return item.items.some((nested: NavItem) => nested.href && pathname === nested.href)
-    }
-
-    return false
-  }
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}

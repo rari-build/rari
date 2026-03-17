@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import * as React from 'react'
 import { Component, Suspense } from 'react'
+import { throwIfNotOk } from './shared/http-utils'
 
 export interface RuntimeClient {
   initialize: () => Promise<void>
@@ -83,6 +84,14 @@ export class HttpRuntimeClient implements RuntimeClient {
     this.timeout = timeout
   }
 
+  private assertInitialized(): void {
+    if (!this.initialized) {
+      throw new Error(
+        'Runtime client not initialized. Call initialize() first.',
+      )
+    }
+  }
+
   private async request<T = any>(
     endpoint: string,
     options: {
@@ -110,10 +119,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     try {
       const response = await fetch(url, requestOptions)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
+      await throwIfNotOk(response)
 
       const contentType = response.headers.get('content-type')
       if (contentType?.includes('application/json'))
@@ -153,11 +159,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     componentId: string,
     componentCode: string,
   ): Promise<void> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
+    this.assertInitialized()
 
     const request: RegisterRequest = {
       component_id: componentId,
@@ -188,11 +190,7 @@ export class HttpRuntimeClient implements RuntimeClient {
     componentId: string,
     props?: string,
   ): Promise<any> {
-    if (!this.initialized) {
-      throw new Error(
-        'Runtime client not initialized. Call initialize() first.',
-      )
-    }
+    this.assertInitialized()
 
     const request: RenderRequest = {
       component_id: componentId,
@@ -209,10 +207,7 @@ export class HttpRuntimeClient implements RuntimeClient {
         signal: AbortSignal.timeout(this.timeout),
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
+      await throwIfNotOk(response)
 
       return response.body
     }

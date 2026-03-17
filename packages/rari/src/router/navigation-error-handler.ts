@@ -17,6 +17,8 @@ export interface NavigationError {
   retryable: boolean
 }
 
+const NETWORK_ERROR_REGEX = /fetch|networkerror|load failed/i
+
 export interface NavigationErrorHandlerOptions {
   timeout?: number
   maxRetries?: number
@@ -134,8 +136,12 @@ export function createNavigationError(
     return handleHttpError(error, status, url)
   }
 
-  if (error instanceof TypeError && error.message.includes('fetch'))
+  if (
+    error instanceof TypeError
+    && NETWORK_ERROR_REGEX.test(error.message)
+  ) {
     return handleNetworkError(error, url)
+  }
 
   if (error instanceof SyntaxError || (error instanceof Error && error.message.includes('parse')))
     return handleParseError(error, url)

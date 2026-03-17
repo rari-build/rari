@@ -131,9 +131,6 @@ export async function extractServerProps(
 
     const state: ServerSidePropsResult = {
       props: {},
-      revalidate: undefined,
-      notFound: false,
-      redirect: undefined,
     }
 
     await tryGetData(module, params, searchParams, state)

@@ -10,6 +10,8 @@ import {
   XML_QUOTE_REGEX,
 } from '../shared/regex-constants'
 
+const SANITIZE_ID_REGEX = /[^\w-]/g
+
 export interface SitemapGeneratorOptions {
   appDir: string
   outDir: string
@@ -111,9 +113,9 @@ function addVideoBooleanFields(lines: string[], video: SitemapVideo): void {
 
 function addVideoComplexFields(lines: string[], video: SitemapVideo): void {
   if (video.restriction)
-    lines.push(`      <video:restriction relationship="${video.restriction.relationship}">${escapeXml(video.restriction.content)}</video:restriction>`)
+    lines.push(`      <video:restriction relationship="${escapeXml(video.restriction.relationship)}">${escapeXml(video.restriction.content)}</video:restriction>`)
   if (video.platform)
-    lines.push(`      <video:platform relationship="${video.platform.relationship}">${escapeXml(video.platform.content)}</video:platform>`)
+    lines.push(`      <video:platform relationship="${escapeXml(video.platform.relationship)}">${escapeXml(video.platform.content)}</video:platform>`)
   if (video.uploader) {
     const infoAttr = video.uploader.info ? ` info="${escapeXml(video.uploader.info)}"` : ''
     lines.push(`      <video:uploader${infoAttr}>${escapeXml(video.uploader.name)}</video:uploader>`)
@@ -154,7 +156,7 @@ function buildNamespaces(sitemap: Sitemap): string[] {
   return namespaces
 }
 
-function addSitemapEntryFields(lines: string[], entry: any): void {
+function addSitemapEntryFields(lines: string[], entry: Sitemap[number]): void {
   lines.push('  <url>')
   lines.push(`    <loc>${escapeXml(entry.url)}</loc>`)
 
@@ -168,7 +170,7 @@ function addSitemapEntryFields(lines: string[], entry: any): void {
     lines.push(`    <priority>${entry.priority}</priority>`)
 }
 
-function addAlternateLanguages(lines: string[], entry: any): void {
+function addAlternateLanguages(lines: string[], entry: Sitemap[number]): void {
   if (!entry.alternates?.languages)
     return
 
@@ -176,7 +178,7 @@ function addAlternateLanguages(lines: string[], entry: any): void {
     lines.push(`    <xhtml:link rel="alternate" hreflang="${escapeXml(lang)}" href="${escapeXml(String(url))}" />`)
 }
 
-function addMediaContent(lines: string[], entry: any): void {
+function addMediaContent(lines: string[], entry: Sitemap[number]): void {
   if (entry.images && entry.images.length > 0)
     lines.push(generateImageXml(entry.images))
 
@@ -316,12 +318,14 @@ async function generateMultipleSitemaps(module: any, outDir: string): Promise<vo
   await fs.mkdir(sitemapDir, { recursive: true })
 
   for (const { id } of sitemapIds) {
+    const sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
+
     const sitemapData = typeof module.default === 'function'
       ? await module.default({ id: String(id) })
       : module.default
 
     const content = generateSitemapXml(sitemapData)
-    const outputPath = path.join(outDir, `sitemap/${id}.xml`)
+    const outputPath = path.join(sitemapDir, `${sanitizedId}.xml`)
 
     await fs.writeFile(outputPath, content)
   }

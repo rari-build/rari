@@ -2,57 +2,23 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
+import { createOrBackupConfigFile, getRariVersion, logInfo, logSuccess, updateGitignoreForProvider, updatePackageJsonForProvider } from './utils'
 
-function updatePackageJsonForRailway(cwd: string) {
-  const packageJsonPath = join(cwd, 'package.json')
-  if (!existsSync(packageJsonPath)) {
-    logError('No package.json found. Please run this command from your project root.')
-    process.exit(1)
-  }
-
-  try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-
-    packageJson.scripts = packageJson.scripts || {}
-
-    if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarn('Backing up to start:original and replacing with "rari start"')
-      packageJson.scripts['start:original'] = packageJson.scripts.start
-    }
-
-    packageJson.scripts.start = 'rari start'
-    packageJson.scripts['start:local'] = 'rari start'
-    packageJson.scripts['deploy:railway'] = 'echo "Push to GitHub and connect to Railway to deploy"'
-
-    ensureMinimumNodeEngine(packageJson)
-
-    if (!packageJson.dependencies || !packageJson.dependencies.rari) {
-      logInfo('Adding rari dependency...')
-      packageJson.dependencies = packageJson.dependencies || {}
-      packageJson.dependencies.rari = '^0.1.0'
-    }
-
-    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
-    logSuccess('Updated package.json for Railway deployment')
-  }
-  catch (error) {
-    logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    process.exit(1)
-  }
-}
-
-export async function createRailwayDeployment() {
+export function createRailwayDeployment() {
   const cwd = process.cwd()
 
   logInfo('Creating Railway deployment configuration...')
 
-  updatePackageJsonForRailway(cwd)
+  updatePackageJsonForProvider(cwd, {
+    providerName: 'Railway',
+    deployScript: 'echo "Push to GitHub and connect to Railway to deploy"',
+    startScript: 'rari start',
+    dependency: getRariVersion(),
+  })
 
   createRailwayToml(cwd)
 
-  updateGitignoreForRailway(cwd)
+  updateGitignoreForProvider(cwd, 'Railway', '.railway')
 
   updateReadmeForRailway(cwd)
 
@@ -71,72 +37,7 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 `
 
-  const railwayTomlPath = join(cwd, 'railway.toml')
-  if (existsSync(railwayTomlPath)) {
-    logWarn('railway.toml already exists, backing up to railway.toml.backup')
-    const existingConfig = readFileSync(railwayTomlPath, 'utf-8')
-    writeFileSync(join(cwd, 'railway.toml.backup'), existingConfig)
-  }
-
-  writeFileSync(railwayTomlPath, railwayConfig)
-  logSuccess('Created railway.toml configuration')
-}
-
-function updateGitignoreForRailway(cwd: string) {
-  const gitignorePath = join(cwd, '.gitignore')
-  const railwayGitignoreEntries = [
-    '',
-    '# Railway',
-    '.railway/',
-    '',
-  ].join('\n')
-
-  if (existsSync(gitignorePath)) {
-    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-    if (!gitignoreContent.includes('.railway/')) {
-      writeFileSync(gitignorePath, gitignoreContent + railwayGitignoreEntries)
-      logSuccess('Updated .gitignore with Railway entries')
-    }
-  }
-  else {
-    const defaultGitignore = `# Dependencies
-node_modules/
-.pnpm-store/
-
-# Build outputs
-dist/
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# Railway
-.railway/
-
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Temporary files
-.tmp/
-tmp/
-`
-    writeFileSync(gitignorePath, defaultGitignore)
-    logSuccess('Created .gitignore with Railway entries')
-  }
+  createOrBackupConfigFile(cwd, 'railway.toml', railwayConfig)
 }
 
 function updateReadmeForRailway(cwd: string) {

@@ -120,7 +120,7 @@ function resolveByPath(
   const componentInfo = clientComponents[componentId] as LazyComponentInfo
   const component = getComponentFromInfo(componentInfo, exportName)
 
-  if (component)
+  if (component !== null && component !== undefined)
     return component
 
   tryLoadComponent(componentInfo)
@@ -193,9 +193,18 @@ export async function getClientComponentAsync(id: string): Promise<any> {
 
   if (!componentInfo && id.includes('#')) {
     const [path] = id.split('#')
-    const componentId = clientComponentPaths[path]
-    if (componentId)
-      componentInfo = clientComponents[componentId] as LazyComponentInfo
+    const candidates = path.startsWith('./')
+      ? [path, path.slice(2)]
+      : [path, `
+./${path}`]
+    for (const candidate of candidates) {
+      const componentId = clientComponentPaths[candidate]
+      if (componentId) {
+        componentInfo = clientComponents[componentId] as LazyComponentInfo
+        if (componentInfo)
+          break
+      }
+    }
   }
 
   if (componentInfo)

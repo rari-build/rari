@@ -100,8 +100,11 @@ function useImageLazyLoad(
   unoptimized: boolean,
   loading: 'lazy' | 'eager',
 ) {
+  const shouldLoadImmediately = shouldPreload || unoptimized || loading === 'eager'
+  const [isVisible, setIsVisible] = useState(shouldLoadImmediately)
+
   useEffect(() => {
-    if (shouldPreload || unoptimized || loading === 'eager')
+    if (shouldLoadImmediately)
       return
 
     const img = imgRef.current
@@ -111,8 +114,10 @@ function useImageLazyLoad(
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting)
+          if (entry.isIntersecting) {
+            setIsVisible(true)
             observer.unobserve(img)
+          }
         })
       },
       {
@@ -125,7 +130,9 @@ function useImageLazyLoad(
     return () => {
       observer.disconnect()
     }
-  }, [imgRef, shouldPreload, unoptimized, loading])
+  }, [imgRef, shouldLoadImmediately])
+
+  return isVisible
 }
 
 function buildImageStyle(
@@ -188,6 +195,7 @@ function UnoptimizedImage({
   handleError,
   imgStyle,
   className,
+  isVisible,
 }: {
   imgRef: React.RefObject<HTMLImageElement | null>
   finalSrc: string
@@ -205,6 +213,7 @@ function UnoptimizedImage({
   handleError: (event: React.SyntheticEvent<HTMLImageElement>) => void
   imgStyle: React.CSSProperties
   className: string | undefined
+  isVisible: boolean
 }) {
   const finalImgSrc = loader
     ? loader({ src: finalSrc, width: imgWidth || 1920, quality })
@@ -213,7 +222,7 @@ function UnoptimizedImage({
   return (
     <img
       ref={imgRef}
-      src={finalImgSrc}
+      src={isVisible ? finalImgSrc : undefined}
       alt={showAltText ? alt : ''}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
@@ -247,6 +256,7 @@ function OptimizedImage({
   handleError,
   imgStyle,
   className,
+  isVisible,
 }: {
   imgRef: React.RefObject<HTMLImageElement | null>
   pictureRef: React.RefObject<HTMLPictureElement | null>
@@ -266,6 +276,7 @@ function OptimizedImage({
   handleError: (event: React.SyntheticEvent<HTMLImageElement>) => void
   imgStyle: React.CSSProperties
   className: string | undefined
+  isVisible: boolean
 }) {
   const defaultWidth = imgWidth || 1920
   const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
@@ -277,8 +288,8 @@ function OptimizedImage({
   const imgElement = (
     <img
       ref={imgRef}
-      src={mainSrc}
-      srcSet={shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader) : undefined}
+      src={isVisible ? mainSrc : undefined}
+      srcSet={isVisible && shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader) : undefined}
       sizes={shouldUseSrcSet ? sizes : undefined}
       alt={showAltText ? alt : ''}
       width={fill ? undefined : imgWidth}
@@ -298,14 +309,14 @@ function OptimizedImage({
 
   return (
     <picture ref={pictureRef}>
-      {DEFAULT_FORMATS.includes('avif') && (
+      {isVisible && !loader && DEFAULT_FORMATS.includes('avif') && (
         <source
           type="image/avif"
           srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'avif', loader)}
           sizes={sizes}
         />
       )}
-      {DEFAULT_FORMATS.includes('webp') && (
+      {isVisible && !loader && DEFAULT_FORMATS.includes('webp') && (
         <source
           type="image/webp"
           srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'webp', loader)}
@@ -381,7 +392,7 @@ export function Image({
   )
 
   useImagePreload(shouldPreload, finalSrc, imgWidth, quality, sizes, loader, unoptimized)
-  useImageLazyLoad(imgRef, shouldPreload, unoptimized, loading)
+  const isVisible = useImageLazyLoad(imgRef, shouldPreload, unoptimized, loading)
 
   const imgStyle = buildImageStyle(style, fill, placeholder, imgBlurDataURL, blurComplete)
 
@@ -402,6 +413,7 @@ export function Image({
     handleError,
     imgStyle,
     className,
+    isVisible,
   }
 
   if (unoptimized) {

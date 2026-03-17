@@ -1,3 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import process from 'node:process'
 import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 
 export { logError, logInfo, logSuccess, logWarn }
@@ -139,4 +142,135 @@ export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = M
   }
 
   return false
+}
+
+export function getRariVersion(): string {
+  try {
+    const rariPackageJsonPath = join(process.cwd(), 'node_modules/rari/package.json')
+
+    if (existsSync(rariPackageJsonPath)) {
+      const packageJson = JSON.parse(readFileSync(rariPackageJsonPath, 'utf-8'))
+      if (packageJson.version) {
+        return `^${packageJson.version}`
+      }
+    }
+  }
+  catch {}
+
+  return 'latest'
+}
+
+interface ProviderConfig {
+  providerName: string
+  deployScript: string
+  startScript?: string
+  dependency?: string
+}
+
+export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig) {
+  const packageJsonPath = join(cwd, 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    logError('No package.json found. Please run this command from your project root.')
+    process.exit(1)
+  }
+
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+
+    packageJson.scripts = packageJson.scripts || {}
+
+    if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
+      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
+      logWarn('Backing up to start:original and replacing with "rari start"')
+      packageJson.scripts['start:original'] = packageJson.scripts.start
+    }
+
+    packageJson.scripts.start = config.startScript || 'rari start'
+    packageJson.scripts['start:local'] = 'rari start'
+    packageJson.scripts[`deploy:${config.providerName.toLowerCase()}`] = config.deployScript
+
+    ensureMinimumNodeEngine(packageJson)
+
+    if (!packageJson.dependencies || !packageJson.dependencies.rari) {
+      logInfo('Adding rari dependency...')
+      packageJson.dependencies = packageJson.dependencies || {}
+      packageJson.dependencies.rari = config.dependency || 'latest'
+    }
+
+    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
+    logSuccess(`Updated package.json for ${config.providerName} deployment`)
+  }
+  catch (error) {
+    logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    process.exit(1)
+  }
+}
+
+export function updateGitignoreForProvider(cwd: string, providerName: string, providerFolder: string) {
+  const gitignorePath = join(cwd, '.gitignore')
+  const providerGitignoreEntries = [
+    '',
+    `# ${providerName}`,
+    `${providerFolder}/`,
+    '',
+  ].join('\n')
+
+  if (existsSync(gitignorePath)) {
+    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
+    if (!gitignoreContent.includes(providerFolder)) {
+      writeFileSync(gitignorePath, gitignoreContent + providerGitignoreEntries)
+      logSuccess(`Updated .gitignore with ${providerName} entries`)
+    }
+  }
+  else {
+    const defaultGitignore = `# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# ${providerName}
+${providerFolder}/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+.tmp/
+tmp/
+`
+    writeFileSync(gitignorePath, defaultGitignore)
+    logSuccess(`Created .gitignore with ${providerName} entries`)
+  }
+}
+
+export function createOrBackupConfigFile(cwd: string, filename: string, content: string) {
+  const configPath = join(cwd, filename)
+  if (existsSync(configPath)) {
+    logWarn(`${filename} already exists, backing up to ${filename}.backup`)
+    const existingConfig = readFileSync(configPath, 'utf-8')
+    writeFileSync(join(cwd, `${filename}.backup`), existingConfig)
+  }
+
+  writeFileSync(configPath, content)
+  logSuccess(`Created ${filename} configuration`)
 }

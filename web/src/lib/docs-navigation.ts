@@ -2,12 +2,14 @@ interface NavItem {
   label: string
   href?: string
   items?: NavItem[]
+  collapsible?: boolean
 }
 
 export const docsNavigation: NavItem[] = [
   {
     label: 'Getting Started',
     href: '/docs/getting-started',
+    collapsible: true,
     items: [
       { label: 'Routing', href: '/docs/getting-started/routing' },
       { label: 'Database', href: '/docs/getting-started/database' },

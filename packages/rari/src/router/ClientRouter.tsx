@@ -57,15 +57,28 @@ function updateOrCreateMetaTag(selector: string, attributes: Record<string, stri
   }
 }
 
+function removeMetaTag(selector: string) {
+  const element = document.querySelector(selector)
+  if (element)
+    element.remove()
+}
+
 function updateBasicMetadata(metadata: PageMetadata): void {
-  if (metadata.title)
+  if (metadata.title) {
     document.title = metadata.title
+  }
+  else {
+    document.title = ''
+  }
 
   if (metadata.description) {
     updateOrCreateMetaTag('meta[name="description"]', {
       name: 'description',
       content: metadata.description,
     })
+  }
+  else {
+    removeMetaTag('meta[name="description"]')
   }
 
   if (metadata.keywords && metadata.keywords.length > 0) {
@@ -74,6 +87,9 @@ function updateBasicMetadata(metadata: PageMetadata): void {
       content: metadata.keywords.join(', '),
     })
   }
+  else {
+    removeMetaTag('meta[name="keywords"]')
+  }
 
   if (metadata.viewport) {
     updateOrCreateMetaTag('meta[name="viewport"]', {
@@ -81,19 +97,38 @@ function updateBasicMetadata(metadata: PageMetadata): void {
       content: metadata.viewport,
     })
   }
-}
-
-function updateCanonicalLink(canonical: string): void {
-  let canonicalEl = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
-  if (!canonicalEl) {
-    canonicalEl = document.createElement('link')
-    canonicalEl.setAttribute('rel', 'canonical')
-    document.head.appendChild(canonicalEl)
+  else {
+    removeMetaTag('meta[name="viewport"]')
   }
-  canonicalEl.setAttribute('href', canonical)
 }
 
-function updateRobotsMetadata(robots: NonNullable<PageMetadata['robots']>): void {
+function updateCanonicalLink(canonical: string | undefined): void {
+  const canonicalEl = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+
+  if (canonical === undefined) {
+    if (canonicalEl)
+      canonicalEl.remove()
+
+    return
+  }
+
+  if (!canonicalEl) {
+    const newCanonicalEl = document.createElement('link')
+    newCanonicalEl.setAttribute('rel', 'canonical')
+    newCanonicalEl.setAttribute('href', canonical)
+    document.head.appendChild(newCanonicalEl)
+  }
+  else {
+    canonicalEl.setAttribute('href', canonical)
+  }
+}
+
+function updateRobotsMetadata(robots: PageMetadata['robots']): void {
+  if (robots === undefined) {
+    removeMetaTag('meta[name="robots"]')
+    return
+  }
+
   const robotsContent: string[] = []
   if (robots.index !== undefined)
     robotsContent.push(robots.index ? 'index' : 'noindex')
@@ -108,39 +143,72 @@ function updateRobotsMetadata(robots: NonNullable<PageMetadata['robots']>): void
       content: robotsContent.join(', '),
     })
   }
+  else {
+    removeMetaTag('meta[name="robots"]')
+  }
 }
 
-function updateOpenGraphMetadata(og: NonNullable<PageMetadata['openGraph']>): void {
+function updateOpenGraphMetadata(og: PageMetadata['openGraph']): void {
+  if (og === undefined) {
+    removeMetaTag('meta[property="og:title"]')
+    removeMetaTag('meta[property="og:description"]')
+    removeMetaTag('meta[property="og:url"]')
+    removeMetaTag('meta[property="og:site_name"]')
+    removeMetaTag('meta[property="og:type"]')
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+    return
+  }
+
   if (og.title) {
     updateOrCreateMetaTag('meta[property="og:title"]', {
       property: 'og:title',
       content: og.title,
     })
   }
+  else {
+    removeMetaTag('meta[property="og:title"]')
+  }
+
   if (og.description) {
     updateOrCreateMetaTag('meta[property="og:description"]', {
       property: 'og:description',
       content: og.description,
     })
   }
+  else {
+    removeMetaTag('meta[property="og:description"]')
+  }
+
   if (og.url) {
     updateOrCreateMetaTag('meta[property="og:url"]', {
       property: 'og:url',
       content: og.url,
     })
   }
+  else {
+    removeMetaTag('meta[property="og:url"]')
+  }
+
   if (og.siteName) {
     updateOrCreateMetaTag('meta[property="og:site_name"]', {
       property: 'og:site_name',
       content: og.siteName,
     })
   }
+  else {
+    removeMetaTag('meta[property="og:site_name"]')
+  }
+
   if (og.type) {
     updateOrCreateMetaTag('meta[property="og:type"]', {
       property: 'og:type',
       content: og.type,
     })
   }
+  else {
+    removeMetaTag('meta[property="og:type"]')
+  }
+
   if (og.images && og.images.length > 0) {
     document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
     for (const image of og.images) {
@@ -150,39 +218,72 @@ function updateOpenGraphMetadata(og: NonNullable<PageMetadata['openGraph']>): vo
       document.head.appendChild(meta)
     }
   }
+  else {
+    document.querySelectorAll('meta[property="og:image"]').forEach(el => el.remove())
+  }
 }
 
-function updateTwitterMetadata(twitter: NonNullable<PageMetadata['twitter']>): void {
+function updateTwitterMetadata(twitter: PageMetadata['twitter']): void {
+  if (twitter === undefined) {
+    removeMetaTag('meta[name="twitter:card"]')
+    removeMetaTag('meta[name="twitter:site"]')
+    removeMetaTag('meta[name="twitter:creator"]')
+    removeMetaTag('meta[name="twitter:title"]')
+    removeMetaTag('meta[name="twitter:description"]')
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+    return
+  }
+
   if (twitter.card) {
     updateOrCreateMetaTag('meta[name="twitter:card"]', {
       name: 'twitter:card',
       content: twitter.card,
     })
   }
+  else {
+    removeMetaTag('meta[name="twitter:card"]')
+  }
+
   if (twitter.site) {
     updateOrCreateMetaTag('meta[name="twitter:site"]', {
       name: 'twitter:site',
       content: twitter.site,
     })
   }
+  else {
+    removeMetaTag('meta[name="twitter:site"]')
+  }
+
   if (twitter.creator) {
     updateOrCreateMetaTag('meta[name="twitter:creator"]', {
       name: 'twitter:creator',
       content: twitter.creator,
     })
   }
+  else {
+    removeMetaTag('meta[name="twitter:creator"]')
+  }
+
   if (twitter.title) {
     updateOrCreateMetaTag('meta[name="twitter:title"]', {
       name: 'twitter:title',
       content: twitter.title,
     })
   }
+  else {
+    removeMetaTag('meta[name="twitter:title"]')
+  }
+
   if (twitter.description) {
     updateOrCreateMetaTag('meta[name="twitter:description"]', {
       name: 'twitter:description',
       content: twitter.description,
     })
   }
+  else {
+    removeMetaTag('meta[name="twitter:description"]')
+  }
+
   if (twitter.images && twitter.images.length > 0) {
     document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
     for (const image of twitter.images) {
@@ -192,22 +293,17 @@ function updateTwitterMetadata(twitter: NonNullable<PageMetadata['twitter']>): v
       document.head.appendChild(meta)
     }
   }
+  else {
+    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => el.remove())
+  }
 }
 
 function updateDocumentMetadata(metadata: PageMetadata): void {
   updateBasicMetadata(metadata)
-
-  if (metadata.canonical)
-    updateCanonicalLink(metadata.canonical)
-
-  if (metadata.robots)
-    updateRobotsMetadata(metadata.robots)
-
-  if (metadata.openGraph)
-    updateOpenGraphMetadata(metadata.openGraph)
-
-  if (metadata.twitter)
-    updateTwitterMetadata(metadata.twitter)
+  updateCanonicalLink(metadata.canonical)
+  updateRobotsMetadata(metadata.robots)
+  updateOpenGraphMetadata(metadata.openGraph)
+  updateTwitterMetadata(metadata.twitter)
 }
 
 export interface ClientRouterProps {
@@ -317,53 +413,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const updateHistoryState = (
-    targetPath: string,
-    navigationId: number,
-    hash: string,
-    options: NavigationOptions,
-    historyKey: string,
-  ) => {
-    const historyState: HistoryState = {
-      route: targetPath,
-      navigationId,
-      scrollPosition: { x: window.scrollX, y: window.scrollY },
-      timestamp: Date.now(),
-      key: historyKey,
-    }
-
-    const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
-
-    if (options.replace) {
-      window.history.replaceState(historyState, '', urlWithHash)
-    }
-    else {
-      window.history.pushState(historyState, '', urlWithHash)
-    }
-  }
-
   const handleRedirect = (
     finalPath: string,
-    targetPath: string,
-    navigationId: number,
-    hash: string,
-    options: NavigationOptions,
+    _targetPath: string,
   ) => {
-    if (finalPath === targetPath)
-      return finalPath
-
-    const finalUrlWithHash = hash ? `${finalPath}#${hash}` : finalPath
-    window.history.replaceState(
-      {
-        route: finalPath,
-        navigationId,
-        scrollPosition: { x: window.scrollX, y: window.scrollY },
-        timestamp: Date.now(),
-        key: options.historyKey || generateHistoryKey(),
-      },
-      '',
-      finalUrlWithHash,
-    )
     return finalPath
   }
 
@@ -422,6 +475,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           }
         }
       }
+
+      buffer += decoder.decode()
 
       if (buffer.trim()) {
         window.dispatchEvent(new CustomEvent('rari:rsc-row', {
@@ -504,17 +559,36 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   const completeNavigation = (
     actualTargetPath: string,
+    targetPath: string,
     hash: string,
     options: NavigationOptions,
+    navigationId: number,
+    historyKey: string,
   ) => {
     if (!isMountedRef.current)
       return
 
     currentRouteRef.current = actualTargetPath
 
+    const historyState: HistoryState = {
+      route: actualTargetPath,
+      navigationId,
+      scrollPosition: { x: window.scrollX, y: window.scrollY },
+      timestamp: Date.now(),
+      key: historyKey,
+    }
+
+    const urlWithHash = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
+
+    if (options.replace || actualTargetPath !== targetPath)
+      window.history.replaceState(historyState, '', urlWithHash)
+    else
+      window.history.pushState(historyState, '', urlWithHash)
+
     setNavigationState(prev => ({
       ...prev,
       currentRoute: actualTargetPath,
+      navigationId,
       error: null,
     }))
 
@@ -591,7 +665,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           statePreserverRef.current.captureState(fromRoute)
 
         const historyKey = options.historyKey || generateHistoryKey()
-        updateHistoryState(targetPath, navigationId, hash, options, historyKey)
 
         const fetchUrl = window.location.origin + targetPath
 
@@ -605,7 +678,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         const finalUrl = new URL(response.url)
         const finalPath = finalUrl.pathname
-        const actualTargetPath = handleRedirect(finalPath, targetPath, navigationId, hash, options)
+        const actualTargetPath = handleRedirect(finalPath, targetPath)
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(actualTargetPath, navigationId)
@@ -651,7 +724,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           return
         }
 
-        completeNavigation(actualTargetPath, hash, options)
+        completeNavigation(actualTargetPath, targetPath, hash, options, navigationId, historyKey)
 
         pendingNavigationsRef.current.delete(targetPath)
         processNavigationQueueRef.current?.()

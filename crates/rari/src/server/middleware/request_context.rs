@@ -128,6 +128,15 @@ impl RequestContext {
                 if elapsed_ms < ttl_ms as u128 {
                     let mut result = cached.clone();
                     result.was_cached = true;
+
+                    for tag in &tags {
+                        if !result.tags.contains(tag) {
+                            result.tags.push(tag.clone());
+                        }
+                    }
+
+                    cache.put(cache_key.clone(), result.clone());
+
                     return Ok(result);
                 }
                 cache.pop(&cache_key);
@@ -164,7 +173,11 @@ impl RequestContext {
         let mut fetch_result = self.perform_fetch(url, &options).await;
 
         if let Ok(ref mut result) = fetch_result {
-            result.tags = tags;
+            for tag in &tags {
+                if !result.tags.contains(tag) {
+                    result.tags.push(tag.clone());
+                }
+            }
         }
 
         *guard = Some(fetch_result.clone());

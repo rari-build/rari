@@ -21,6 +21,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
+import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
 import { createServerBuildPlugin } from './server-build'
@@ -581,19 +582,13 @@ if (import.meta.hot) {
     const resolvedPath = path.resolve(path.dirname(importerPath), resolvedImportPath)
 
     const extensions = ['.tsx', '.jsx', '.ts', '.js']
-    for (const ext of extensions) {
-      const pathWithExt = `${resolvedPath}${ext}`
-      if (fs.existsSync(pathWithExt))
-        return pathWithExt
-    }
+    const withExt = resolveWithExtensions(resolvedPath, extensions)
+    if (withExt)
+      return withExt
 
-    if (fs.existsSync(resolvedPath)) {
-      for (const ext of extensions) {
-        const indexPath = path.join(resolvedPath, `index${ext}`)
-        if (fs.existsSync(indexPath))
-          return indexPath
-      }
-    }
+    const indexFile = resolveIndexFile(resolvedPath, extensions)
+    if (indexFile)
+      return indexFile
 
     return `${resolvedPath}.tsx`
   }

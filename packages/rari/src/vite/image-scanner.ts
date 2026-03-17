@@ -11,8 +11,6 @@ const WIDTH_REGEX = /width:\s*(\d+)/
 const QUALITY_REGEX = /quality:\s*(\d+)/
 const PRELOAD_TRUE_REGEX = /preload:\s*(true|!0)/
 const PRELOAD_FALSE_REGEX = /preload:\s*(false|!1)/
-const IMAGE_SELF_CLOSING_REGEX = /<Image\s([^/>]+)\/>/g
-const IMAGE_OPENING_REGEX = /<Image\s([^>]+)>/g
 const SRC_PROP_REGEX = /src=\{?["']([^"']+)["']\}?|src=\{([^}]+)\}/
 const WIDTH_PROP_REGEX = /width=\{?(\d+)\}?/
 const QUALITY_PROP_REGEX = /quality=\{?(\d+)\}?/
@@ -181,22 +179,94 @@ function addImageToMap(imageUsage: ImageUsage, images: Map<string, ImageUsage>):
     images.set(key, imageUsage)
 }
 
+function extractBalancedBraces(code: string, startIndex: number): string | null {
+  let braceCount = 0
+  let inString = false
+  let stringChar = ''
+  let escaped = false
+
+  for (let i = startIndex; i < code.length; i++) {
+    const char = code[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inString && (char === '"' || char === '\'' || char === '`')) {
+      inString = true
+      stringChar = char
+      continue
+    }
+
+    if (inString && char === stringChar) {
+      inString = false
+      stringChar = ''
+      continue
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+      }
+      else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          return code.substring(startIndex + 1, i)
+        }
+      }
+    }
+  }
+
+  return null
+}
+
 function processImageIdentifiers(transformedCode: string, imageIdentifiers: Set<string>, images: Map<string, ImageUsage>): void {
   for (const identifier of imageIdentifiers) {
     const escapedIdentifier = identifier.replace(ESCAPE_REGEX, '\\$&')
-    const createElementRegex = new RegExp(`React\\.createElement\\(\\s*${escapedIdentifier}\\s*,\\s*\\{([^}]+)\\}`, 'g')
+    const createElementPattern = new RegExp(`React\\.createElement\\(\\s*${escapedIdentifier}\\s*,\\s*\\{`, 'g')
 
-    for (const match of transformedCode.matchAll(createElementRegex)) {
-      const propsString = match[1]
-      const imageUsage = parseImageProps(propsString)
+    for (const match of transformedCode.matchAll(createElementPattern)) {
+      const braceStartIndex = match.index! + match[0].length - 1
+      const propsString = extractBalancedBraces(transformedCode, braceStartIndex)
 
-      if (imageUsage)
-        addImageToMap(imageUsage, images)
+      if (propsString) {
+        const imageUsage = parseImageProps(propsString)
+
+        if (imageUsage)
+          addImageToMap(imageUsage, images)
+      }
     }
   }
 }
 
+function extractImageAliases(content: string): Set<string> {
+  const aliases = new Set<string>()
+
+  for (const match of content.matchAll(DEFAULT_IMPORT_REGEX))
+    aliases.add(match[1])
+
+  for (const match of content.matchAll(NAMED_IMPORT_REGEX)) {
+    if (match[1])
+      aliases.add(match[1])
+    else
+      aliases.add('Image')
+  }
+
+  return aliases
+}
+
 async function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
+  const aliases = extractImageAliases(content)
+
+  if (aliases.size === 0)
+    return
+
   try {
     const loader = determineLoader(filePath)
     const transformedCode = await transformCode(content, filePath, loader)
@@ -208,16 +278,22 @@ async function extractImageUsages(content: string, filePath: string, images: Map
     processImageIdentifiers(transformedCode, imageIdentifiers, images)
   }
   catch {
-    extractImageUsagesWithRegex(content, images)
+    extractImageUsagesWithRegex(content, aliases, images)
   }
 }
 
-function extractImageUsagesWithRegex(content: string, images: Map<string, ImageUsage>) {
-  for (const match of content.matchAll(IMAGE_SELF_CLOSING_REGEX))
-    processImageProps(match[1], images)
+function extractImageUsagesWithRegex(content: string, aliases: Set<string>, images: Map<string, ImageUsage>) {
+  for (const alias of aliases) {
+    const escapedAlias = alias.replace(ESCAPE_REGEX, '\\$&')
+    const selfClosingRegex = new RegExp(`<${escapedAlias}\\s([^/>]+)\\/>`, 'g')
+    const openingRegex = new RegExp(`<${escapedAlias}\\s([^>]+)>`, 'g')
 
-  for (const match of content.matchAll(IMAGE_OPENING_REGEX))
-    processImageProps(match[1], images)
+    for (const match of content.matchAll(selfClosingRegex))
+      processImageProps(match[1], images)
+
+    for (const match of content.matchAll(openingRegex))
+      processImageProps(match[1], images)
+  }
 }
 
 function processImageProps(propsString: string, images: Map<string, ImageUsage>) {
