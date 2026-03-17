@@ -295,7 +295,8 @@ pub async fn op_fetch_with_cache(
                     "statusText": http_status_text(result.status),
                     "body": body_str,
                     "headers": headers_obj,
-                    "cached": result.was_cached
+                    "cached": result.was_cached,
+                    "tags": result.tags
                 }))
             }
             Err(e) => {

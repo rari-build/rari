@@ -19,6 +19,7 @@ pub struct CachedFetchResult {
     pub headers: HeaderMap,
     pub cached_at: Instant,
     pub was_cached: bool,
+    pub tags: Vec<String>,
 }
 type InFlightFetches =
     Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
@@ -77,7 +78,7 @@ impl RequestContext {
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout"))
+            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags"))
             .collect();
 
         if cache_relevant_options.is_empty() {
@@ -112,6 +113,9 @@ impl RequestContext {
         options: FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
         let cache_key = Self::generate_cache_key(url, &options);
+
+        let tags: Vec<String> =
+            options.get("tags").and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
 
         {
             let mut cache = self.fetch_cache.lock();
@@ -157,7 +161,11 @@ impl RequestContext {
             cache_key: cache_key.clone(),
         };
 
-        let fetch_result = self.perform_fetch(url, &options).await;
+        let mut fetch_result = self.perform_fetch(url, &options).await;
+
+        if let Ok(ref mut result) = fetch_result {
+            result.tags = tags;
+        }
 
         *guard = Some(fetch_result.clone());
 
@@ -210,6 +218,7 @@ impl RequestContext {
             headers,
             cached_at: Instant::now(),
             was_cached: false,
+            tags: Vec::new(),
         })
     }
 }
@@ -240,6 +249,7 @@ mod tests {
             headers: HeaderMap::new(),
             cached_at: Instant::now(),
             was_cached: false,
+            tags: Vec::new(),
         };
 
         let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());
