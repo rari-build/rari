@@ -203,6 +203,33 @@ export const readdir = () => Promise.resolve([]);
 export const __esModule = true;
 "#;
 
+pub const JSX_RUNTIME_STUB: &str = r#"
+export function jsx(type, props, key) {
+  const element = {
+    $$typeof: Symbol.for('react.transitional.element'),
+    type,
+    props: props || {},
+    key: key || null
+  };
+
+  if (props && props.children !== undefined) {
+    element.props = { ...element.props, children: props.children };
+  }
+
+  return element;
+}
+
+export function jsxs(type, props, key) {
+  return jsx(type, props, key);
+}
+
+export function Fragment(props) {
+  return props?.children || null;
+}
+
+export default { jsx, jsxs, Fragment };
+"#;
+
 pub const LOADER_STUB_TEMPLATE: &str = r#"
 // Auto-generated loader stub for {component_id}
 
@@ -698,6 +725,97 @@ export default {
 export const __esModule = true;
 "#;
 
+pub const REACT_STUB: &str = r#"
+// React stub for Deno environment
+
+const createElement = (type, props, ...children) => {
+  if (typeof type === 'string') {
+    // HTML element
+    return { type, props: props || {}, children: children.flat() };
+  }
+  // Component
+  return { type, props: props || {}, children: children.flat() };
+};
+
+const Fragment = Symbol.for('react.fragment');
+const Suspense = (props) => props.children;
+const useState = (initial) => [initial, () => {}];
+const useEffect = () => {};
+const useContext = () => null;
+const use = (promise) => {
+  if (promise && typeof promise.then === 'function') {
+    throw promise; // Suspense behavior
+  }
+  return promise;
+};
+const createContext = (defaultValue) => ({
+  Provider: ({ children }) => children,
+  Consumer: ({ children }) => children(defaultValue),
+  _currentValue: defaultValue
+});
+const memo = (component) => component;
+const useRef = (initial) => ({ current: initial });
+const useCallback = (fn) => fn;
+const useMemo = (fn) => fn();
+const createRef = () => ({ current: null });
+const lazy = (factory) => factory;
+const StrictMode = ({ children }) => children;
+const useTransition = () => [false, (fn) => fn()];
+const useDeferredValue = (value) => value;
+const useId = () => Math.random().toString(36);
+const startTransition = (fn) => fn();
+const flushSync = (fn) => fn();
+const unstable_act = (fn) => fn();
+
+export {
+  createElement,
+  Fragment,
+  Suspense,
+  useState,
+  useEffect,
+  useContext,
+  use,
+  createContext,
+  memo,
+  useRef,
+  useCallback,
+  useMemo,
+  createRef,
+  lazy,
+  StrictMode,
+  useTransition,
+  useDeferredValue,
+  useId,
+  startTransition,
+  flushSync,
+  unstable_act
+};
+
+export default {
+  createElement,
+  Fragment,
+  Suspense,
+  useState,
+  useEffect,
+  useContext,
+  use,
+  createContext,
+  memo,
+  useRef,
+  useCallback,
+  useMemo,
+  createRef,
+  lazy,
+  StrictMode,
+  useTransition,
+  useDeferredValue,
+  useId,
+  startTransition,
+  flushSync,
+  unstable_act
+};
+"#;
+
 pub fn create_generic_module_stub(module_path: &str) -> String {
     format!(
         r#"
@@ -707,6 +825,12 @@ export default {{
   name: '{module_path}',
   isStub: true
 }};
+
+export const useState = (initialState) => [initialState, () => {{}}];
+export const useEffect = (fn, deps) => {{}};
+export const createElement = (type, props, ...children) => ({{ type, props, children }});
+export const render = () => {{}};
+export const Fragment = Symbol('fragment');
 "#
     )
 }
