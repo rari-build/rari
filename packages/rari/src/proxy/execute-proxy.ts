@@ -27,13 +27,13 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
     }
 
     const proxyFn = (executor as any).proxyFn
-    if (!proxyFn)
+    if (!proxyFn || typeof proxyFn !== 'function')
       return { continue: true }
 
     const result = await proxyFn(rariRequest, event)
 
     if (waitUntilPromises.length > 0) {
-      Promise.allSettled(waitUntilPromises).then((results) => {
+      void Promise.allSettled(waitUntilPromises).then((results) => {
         results.forEach((result, index) => {
           if (result.status === 'rejected') {
             console.error(`[rari] Proxy: waitUntil promise ${index} failed:`, result.reason)

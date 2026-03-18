@@ -76,6 +76,8 @@ function handleHttpError(error: Error, status: number, url?: string): Navigation
     }
   }
 
+  const isRetryable = status === 408 || status === 429
+
   return {
     type: 'fetch-error',
     message: `HTTP error: ${status}`,
@@ -83,7 +85,7 @@ function handleHttpError(error: Error, status: number, url?: string): Navigation
     statusCode: status,
     url,
     timestamp: Date.now(),
-    retryable: status >= 500,
+    retryable: isRetryable,
   }
 }
 
@@ -128,7 +130,7 @@ export function createNavigationError(
   if (error instanceof Error && error.name === 'AbortError')
     return handleAbortError(error, url)
 
-  if (error instanceof Error && error.message.includes('timeout'))
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout')))
     return handleTimeoutError(error, url)
 
   if (error instanceof Error && 'status' in error) {

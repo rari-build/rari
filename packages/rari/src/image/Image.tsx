@@ -102,6 +102,16 @@ function useImageLazyLoad(
 ) {
   const shouldLoadImmediately = shouldPreload || unoptimized || loading === 'eager'
   const [isVisible, setIsVisible] = useState(shouldLoadImmediately)
+  const prevShouldLoadImmediatelyRef = useRef(shouldLoadImmediately)
+
+  if (shouldLoadImmediately && !prevShouldLoadImmediatelyRef.current) {
+    prevShouldLoadImmediatelyRef.current = true
+    setIsVisible(true)
+  }
+
+  useEffect(() => {
+    prevShouldLoadImmediatelyRef.current = shouldLoadImmediately
+  }, [shouldLoadImmediately])
 
   useEffect(() => {
     if (shouldLoadImmediately)
@@ -184,7 +194,6 @@ function UnoptimizedImage({
   imgWidth,
   quality,
   loader,
-  showAltText,
   alt,
   fill,
   imgHeight,
@@ -202,7 +211,6 @@ function UnoptimizedImage({
   imgWidth: number | undefined
   quality: number
   loader: ImageProps['loader']
-  showAltText: boolean
   alt: string
   fill: boolean
   imgHeight: number | undefined
@@ -223,7 +231,7 @@ function UnoptimizedImage({
     <img
       ref={imgRef}
       src={isVisible ? finalImgSrc : undefined}
-      alt={showAltText ? alt : ''}
+      alt={alt}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
       loading={shouldPreload ? 'eager' : loading}
@@ -245,7 +253,6 @@ function OptimizedImage({
   quality,
   loader,
   sizes,
-  showAltText,
   alt,
   fill,
   imgHeight,
@@ -265,7 +272,6 @@ function OptimizedImage({
   quality: number
   loader: ImageProps['loader']
   sizes: string | undefined
-  showAltText: boolean
   alt: string
   fill: boolean
   imgHeight: number | undefined
@@ -291,7 +297,7 @@ function OptimizedImage({
       src={isVisible ? mainSrc : undefined}
       srcSet={isVisible && shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader) : undefined}
       sizes={shouldUseSrcSet ? sizes : undefined}
-      alt={showAltText ? alt : ''}
+      alt={alt}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
       loading={shouldPreload ? 'eager' : loading}
@@ -355,7 +361,6 @@ export function Image({
   const imgDecoding = decoding || (preload ? 'sync' : 'async')
 
   const [blurComplete, setBlurComplete] = useState(false)
-  const [showAltText, setShowAltText] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
   const onLoadRef = useRef(onLoad)
   const pictureRef = useRef<HTMLPictureElement>(null)
@@ -381,7 +386,6 @@ export function Image({
 
   const handleError = useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
-      setShowAltText(true)
       if (placeholder === 'blur')
         setBlurComplete(true)
 
@@ -402,7 +406,6 @@ export function Image({
     imgWidth,
     quality,
     loader,
-    showAltText,
     alt,
     fill,
     imgHeight,

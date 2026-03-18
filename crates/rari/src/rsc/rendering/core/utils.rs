@@ -38,7 +38,9 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
                 let named_imports = named_imports_match.as_str();
                 let imports: Vec<&str> = named_imports.split(',').map(|s| s.trim()).collect();
 
-                result.push_str("if (typeof React === 'undefined') { var React = globalThis.React || { createElement: function() { return null; }, Fragment: function() { return null; } }; }\n");
+                result.push_str(
+                    "if (typeof React === 'undefined') { var React = globalThis.React; }\n",
+                );
 
                 for import in imports {
                     let import_name = import.trim();
@@ -65,7 +67,9 @@ pub fn transform_imports_for_hmr(source: &str) -> String {
             }
 
             if react_default_import_regex.is_match(trimmed) {
-                result.push_str("if (typeof React === 'undefined') { var React = globalThis.React || { createElement: function() { return null; }, Fragment: function() { return null; } }; }\n");
+                result.push_str(
+                    "if (typeof React === 'undefined') { var React = globalThis.React; }\n",
+                );
                 continue;
             }
         } else if trimmed.starts_with("import") && !trimmed.contains("from 'react'") {

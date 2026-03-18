@@ -636,10 +636,3 @@ impl From<deno_core::v8::DataError> for crate::error::RariError {
         crate::error::RariError::JsRuntime(format!("V8 Data Error: {err}"), None)
     }
 }
-
-pub trait RsFunction: 'static {
-    fn call(
-        &self,
-        args: &[serde_json::Value],
-    ) -> Result<serde_json::Value, crate::error::RariError>;
-}

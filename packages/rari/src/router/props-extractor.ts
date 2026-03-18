@@ -180,8 +180,10 @@ function mergeTitleField(parentTitle: MetadataResult['title'], childTitle: Metad
     return parentTitle
 
   if (typeof childTitle === 'string') {
-    if (typeof parentTitle === 'object' && parentTitle?.template)
-      return parentTitle.template.replace('%s', childTitle)
+    if (typeof parentTitle === 'object' && parentTitle?.template) {
+      const hasPlaceholder = parentTitle.template.includes('%s')
+      return hasPlaceholder ? parentTitle.template.replace('%s', childTitle) : childTitle
+    }
 
     return childTitle
   }

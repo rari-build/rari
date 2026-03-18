@@ -5,7 +5,9 @@ export function resolveAlias(
   aliases: Record<string, string>,
   projectRoot: string,
 ): string | null {
-  for (const [alias, replacement] of Object.entries(aliases)) {
+  const sortedAliases = Object.entries(aliases).sort((a, b) => b[0].length - a[0].length)
+
+  for (const [alias, replacement] of sortedAliases) {
     if (source.startsWith(`${alias}/`) || source === alias) {
       const relativePath = source.slice(alias.length)
       const newPath = path.join(replacement, relativePath)

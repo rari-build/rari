@@ -114,8 +114,11 @@ async function fetchWithRustCache(input, init, meta) {
   }
 
   const tags = init?.rari?.tags ?? init?.next?.tags
-  if (tags && Array.isArray(tags) && tags.length > 0) {
-    options.tags = JSON.stringify(tags)
+  if (tags && Array.isArray(tags)) {
+    const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0)
+    if (validTags.length > 0) {
+      options.tags = JSON.stringify(validTags)
+    }
   }
 
   const timeoutMs = init?.rari?.timeout ?? init?.fetchOptions?.timeout ?? 5000

@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 if (!globalThis.renderToRsc) {
   globalThis.renderToRsc = async function (element, clientComponents = {}) {
     if (!element)
@@ -129,19 +128,6 @@ if (!globalThis['~suspense']) {
     catch {
       return { type: 'div', props: { children: null }, key: null }
     }
-  }
-
-  if (!globalThis['~react'])
-    globalThis['~react'] = {}
-  if (!globalThis['~react'].patched && typeof React !== 'undefined' && React.createElement) {
-    globalThis['~react'].originalCreateElement = React.createElement
-
-    const createElementOverride = function (type, props, ...children) {
-      return globalThis['~react'].originalCreateElement(type, props, ...children)
-    }
-
-    React.createElement = createElementOverride
-    globalThis['~react'].patched = true
   }
 }
 else {

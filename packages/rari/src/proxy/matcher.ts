@@ -74,28 +74,29 @@ function checkHostCondition(
   return request.rariUrl.hostname === key ? key : null
 }
 
+function getConditionActualValue(
+  request: RariRequest,
+  condition: ProxyRuleCondition,
+): string | null {
+  switch (condition.type) {
+    case 'header':
+      return checkHeaderCondition(request, condition.key)
+    case 'query':
+      return checkQueryCondition(request, condition.key)
+    case 'cookie':
+      return checkCookieCondition(request, condition.key)
+    case 'host':
+      return checkHostCondition(request, condition.key)
+    default:
+      throw new Error(`Unknown condition type: ${(condition as any).type}`)
+  }
+}
+
 function matchesHasCondition(
   request: RariRequest,
   condition: ProxyRuleCondition,
 ): boolean {
-  let actualValue: string | null = null
-
-  switch (condition.type) {
-    case 'header':
-      actualValue = checkHeaderCondition(request, condition.key)
-      break
-    case 'query':
-      actualValue = checkQueryCondition(request, condition.key)
-      break
-    case 'cookie':
-      actualValue = checkCookieCondition(request, condition.key)
-      break
-    case 'host':
-      actualValue = checkHostCondition(request, condition.key)
-      break
-    default:
-      throw new Error(`Unknown condition type: ${(condition as any).type}`)
-  }
+  const actualValue = getConditionActualValue(request, condition)
 
   if (actualValue === null)
     return false
@@ -109,24 +110,7 @@ function matchesMissingCondition(
   request: RariRequest,
   condition: ProxyRuleCondition,
 ): boolean {
-  let actualValue: string | null = null
-
-  switch (condition.type) {
-    case 'header':
-      actualValue = checkHeaderCondition(request, condition.key)
-      break
-    case 'query':
-      actualValue = checkQueryCondition(request, condition.key)
-      break
-    case 'cookie':
-      actualValue = checkCookieCondition(request, condition.key)
-      break
-    case 'host':
-      actualValue = checkHostCondition(request, condition.key)
-      break
-    default:
-      throw new Error(`Unknown condition type: ${(condition as any).type}`)
-  }
+  const actualValue = getConditionActualValue(request, condition)
 
   if (actualValue === null)
     return true

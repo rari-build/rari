@@ -48,7 +48,6 @@ const OS_MODULE: &str = "os";
 const EVENTS_MODULE: &str = "events";
 const CHILD_PROCESS_MODULE: &str = "child_process";
 const MODULE_MODULE: &str = "module";
-const REACT_MODULE: &str = "react";
 const FUNCTIONS_MODULE: &str = "functions";
 
 const VERSION_QUERY_PARAM: &str = "?v=";
@@ -755,7 +754,6 @@ export default {{}};
                 EVENTS_MODULE => NODE_EVENTS_STUB.to_string(),
                 CHILD_PROCESS_MODULE => NODE_CHILD_PROCESS_STUB.to_string(),
                 MODULE_MODULE => NODE_MODULE_STUB.to_string(),
-                REACT_MODULE => REACT_STUB.to_string(),
                 _ => format!(
                     r#"
 // ESM-compatible stub for node:{module_name}
@@ -1087,35 +1085,21 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             let parts: Vec<&str> = specifier_str.split(NODE_MODULES_PATH).collect();
             let module_path = parts.get(1).unwrap_or(&"unknown");
 
-            if module_path.starts_with(REACT_MODULE) {
-                if *module_path == "react/jsx-runtime.js"
-                    || module_path.ends_with("/jsx-runtime.js")
-                {
-                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                        ModuleType::JavaScript,
-                        ModuleSourceCode::String(JSX_RUNTIME_STUB.to_string().into()),
-                        module_specifier,
-                        None,
-                    ))));
-                } else {
-                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                        ModuleType::JavaScript,
-                        ModuleSourceCode::String(REACT_STUB.to_string().into()),
-                        module_specifier,
-                        None,
-                    ))));
-                }
-            }
-
             let package_name = module_path.split('/').next().unwrap_or(module_path);
 
             if let Some(resolved_path) = self.resolve_from_node_modules(package_name, "") {
                 let file_path = resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path);
 
                 if let Ok(content) = fs::read_to_string(file_path) {
+                    let wrapped_content = if self.is_cjs_module(&content, file_path) {
+                        self.wrap_cjs_module(&content, file_path)
+                    } else {
+                        content
+                    };
+
                     return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                         ModuleType::JavaScript,
-                        ModuleSourceCode::String(content.into()),
+                        ModuleSourceCode::String(wrapped_content.into()),
                         module_specifier,
                         None,
                     ))));
@@ -1722,8 +1706,7 @@ impl ModuleLoader for RariModuleLoader {
                     let jsx_runtime_url = "file:///node_modules/react/jsx-runtime.js".to_string();
                     return self.resolve(&jsx_runtime_url, referrer, kind);
                 } else {
-                    let react_url =
-                        "file:///node_modules/react/esm/react.development.js".to_string();
+                    let react_url = "file:///node_modules/react/index.js".to_string();
                     return self.resolve(&react_url, referrer, kind);
                 }
             }

@@ -5,7 +5,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
@@ -129,11 +129,11 @@ impl RequestContext {
                     let mut result = cached.clone();
                     result.was_cached = true;
 
-                    for tag in &tags {
-                        if !result.tags.contains(tag) {
-                            result.tags.push(tag.clone());
-                        }
-                    }
+                    let mut tag_set: FxHashSet<String> = result.tags.iter().cloned().collect();
+                    tag_set.extend(tags.iter().cloned());
+                    let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
+                    merged_tags.sort();
+                    result.tags = merged_tags;
 
                     cache.put(cache_key.clone(), result.clone());
 
@@ -173,11 +173,11 @@ impl RequestContext {
         let mut fetch_result = self.perform_fetch(url, &options).await;
 
         if let Ok(ref mut result) = fetch_result {
-            for tag in &tags {
-                if !result.tags.contains(tag) {
-                    result.tags.push(tag.clone());
-                }
-            }
+            let mut tag_set: FxHashSet<String> = result.tags.iter().cloned().collect();
+            tag_set.extend(tags.iter().cloned());
+            let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
+            merged_tags.sort();
+            result.tags = merged_tags;
         }
 
         *guard = Some(fetch_result.clone());

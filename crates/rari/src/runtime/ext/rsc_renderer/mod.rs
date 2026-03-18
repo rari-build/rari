@@ -3,7 +3,7 @@ use deno_core::{Extension, extension};
 
 extension!(
     init_rsc_renderer,
-    deps = [rari, init_react, init_rsc_modules],
+    deps = [rari, init_rsc_modules],
     esm_entry_point = "ext:init_rsc_renderer/init_rsc_renderer.js",
             esm = [
         dir "src/runtime/ext/rsc_renderer",

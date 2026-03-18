@@ -1,75 +1,35 @@
 /* eslint-disable no-use-before-define, no-var, vars-on-top */
-// oxlint-disable block-scoped-var, no-use-before-define, no-var, vars-on-top
 if (typeof _jsx === 'undefined')
   var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
 if (typeof _jsxs === 'undefined')
   var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || (() => null)
 
-class ReactComponent {
-  constructor(props) {
-    this.props = props
-    this.state = {}
-  }
-
-  setState(updater) {
-    if (typeof updater === 'function')
-      this.state = { ...this.state, ...updater(this.state, this.props) }
-    else
-      this.state = { ...this.state, ...updater }
-  }
-
-  render() {
-    return null
-  }
-}
-
-if (typeof globalThis.React === 'undefined') {
-  globalThis.React = {
-    createElement(type, props, ...children) {
-      const normalizedProps = props ? { ...props } : {}
-      if (children.length === 1) {
-        normalizedProps.children = children[0]
-      }
-      else if (children.length > 1) {
-        normalizedProps.children = children
-      }
-
-      return { $$typeof: Symbol.for('react.transitional.element'), type, props: normalizedProps }
-    },
-    Fragment(props) { return props?.children ?? null },
-    Suspense(props) { return props?.children ?? props?.fallback ?? null },
-    Component: ReactComponent,
-  }
-}
-
-if (!globalThis.React.Suspense)
-  globalThis.React.Suspense = function (props) { return props?.children ?? props?.fallback ?? null }
-
-if (!globalThis.React.Component)
-  globalThis.React.Component = ReactComponent
-
-if (typeof globalThis.Suspense === 'undefined')
-  globalThis.Suspense = globalThis.React.Suspense
-
-if (typeof globalThis.Fragment === 'undefined')
-  globalThis.Fragment = globalThis.React.Fragment
-
-if (typeof globalThis.Component === 'undefined')
-  globalThis.Component = globalThis.React.Component
-
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {
+    if (!globalThis.React)
+      return null
+
     return globalThis.React.createElement(type, { ...props, key })
   }
 }
 
 if (typeof globalThis.jsxs === 'undefined') {
   globalThis.jsxs = function (type, props, key) {
+    if (!globalThis.React)
+      return null
+
     return globalThis.React.createElement(type, { ...props, key })
   }
 }
 
 if (typeof globalThis.LoadingSpinner === 'undefined') {
+  if (typeof document !== 'undefined' && !document.getElementById('spinner-keyframes')) {
+    const style = document.createElement('style')
+    style.id = 'spinner-keyframes'
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'
+    document.head.appendChild(style)
+  }
+
   globalThis.LoadingSpinner = function () {
     return globalThis.React.createElement('div', {
       style: {

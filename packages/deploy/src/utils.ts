@@ -144,20 +144,27 @@ export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = M
   return false
 }
 
-export function getRariVersion(): string {
-  try {
-    const rariPackageJsonPath = join(process.cwd(), 'node_modules/rari/package.json')
+export function getRariVersion(cwd: string): string {
+  const rariPackageJsonPath = join(cwd, 'node_modules/rari/package.json')
 
-    if (existsSync(rariPackageJsonPath)) {
-      const packageJson = JSON.parse(readFileSync(rariPackageJsonPath, 'utf-8'))
-      if (packageJson.version) {
-        return `^${packageJson.version}`
-      }
-    }
+  if (!existsSync(rariPackageJsonPath)) {
+    logError('rari is not installed. Please run "npm install rari" first.')
+    process.exit(1)
   }
-  catch {}
 
-  return 'latest'
+  try {
+    const packageJson = JSON.parse(readFileSync(rariPackageJsonPath, 'utf-8'))
+    if (packageJson.version) {
+      return `^${packageJson.version}`
+    }
+
+    logError('Could not determine rari version from package.json')
+    process.exit(1)
+  }
+  catch (error) {
+    logError(`Failed to read rari package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    process.exit(1)
+  }
 }
 
 interface ProviderConfig {
@@ -194,7 +201,7 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
     if (!packageJson.dependencies || !packageJson.dependencies.rari) {
       logInfo('Adding rari dependency...')
       packageJson.dependencies = packageJson.dependencies || {}
-      packageJson.dependencies.rari = config.dependency || 'latest'
+      packageJson.dependencies.rari = config.dependency || getRariVersion(cwd)
     }
 
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
@@ -217,7 +224,10 @@ export function updateGitignoreForProvider(cwd: string, providerName: string, pr
 
   if (existsSync(gitignorePath)) {
     const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-    if (!gitignoreContent.includes(providerFolder)) {
+    const lines = gitignoreContent.split('\n').map(line => line.trim())
+    const hasExactMatch = lines.includes(`${providerFolder}/`) || lines.includes(providerFolder)
+
+    if (!hasExactMatch) {
       writeFileSync(gitignorePath, gitignoreContent + providerGitignoreEntries)
       logSuccess(`Updated .gitignore with ${providerName} entries`)
     }
@@ -265,12 +275,29 @@ tmp/
 
 export function createOrBackupConfigFile(cwd: string, filename: string, content: string) {
   const configPath = join(cwd, filename)
-  if (existsSync(configPath)) {
-    logWarn(`${filename} already exists, backing up to ${filename}.backup`)
-    const existingConfig = readFileSync(configPath, 'utf-8')
-    writeFileSync(join(cwd, `${filename}.backup`), existingConfig)
-  }
 
-  writeFileSync(configPath, content)
-  logSuccess(`Created ${filename} configuration`)
+  try {
+    if (existsSync(configPath)) {
+      const existingConfig = readFileSync(configPath, 'utf-8')
+
+      let backupFilename = `${filename}.backup`
+      let backupPath = join(cwd, backupFilename)
+
+      if (existsSync(backupPath)) {
+        const timestamp = Date.now()
+        backupFilename = `${filename}.backup.${timestamp}`
+        backupPath = join(cwd, backupFilename)
+      }
+
+      logWarn(`${filename} already exists, backing up to ${backupFilename}`)
+      writeFileSync(backupPath, existingConfig, { flag: 'wx' })
+    }
+
+    writeFileSync(configPath, content)
+    logSuccess(`Created ${filename} configuration`)
+  }
+  catch (error) {
+    logError(`Failed to create or backup ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    process.exit(1)
+  }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
+import type { NavItem } from '@/lib/docs-navigation'
 import { usePathname } from 'rari/router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
@@ -12,13 +13,6 @@ import Github from './icons/Github'
 import Heart from './icons/Heart'
 import Menu from './icons/Menu'
 import Rari from './icons/Rari'
-
-interface NavItem {
-  label: string
-  href?: string
-  items?: NavItem[]
-  collapsible?: boolean
-}
 
 interface SidebarProps {
   version: string
@@ -93,10 +87,13 @@ function EnterpriseItems({
   item: typeof navigation[0]
   pathname: string | null
 }) {
+  if (!item.items || item.items.length === 0)
+    return null
+
   return (
     <div className="mt-1">
       <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
-        {item.items!.map(subItem => (
+        {item.items.map(subItem => (
           <a
             key={subItem.href}
             href={subItem.href}
@@ -121,15 +118,13 @@ function EnterpriseItems({
 
 function NestedDocItem({
   nestedItem,
-  itemKey,
   pathname,
 }: {
   nestedItem: NavItem
-  itemKey: string
   pathname: string | null
 }) {
   return (
-    <li key={`${itemKey}-${nestedItem.href || nestedItem.label}`}>
+    <li>
       <a
         href={nestedItem.href}
         className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href
@@ -166,50 +161,52 @@ function DocsSection({
   const showSectionChevron = hasSectionItems && section.collapsible === true
 
   return (
-    <div key={sectionKey}>
+    <div>
       <div className="flex items-center">
-        {section.href
-          ? (
-              <a
-                href={section.href}
-                className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
-                  ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                  : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
-                }`}
-              >
-                {pathname !== section.href && (
-                  <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                )}
-                <span className="relative z-10">{section.label}</span>
-              </a>
-            )
-          : (
-              <div className="flex-1 px-3 py-2 text-xs text-gray-400 uppercase tracking-wider font-semibold">
+        <div className="flex items-center">
+          {section.href
+            ? (
+                <a
+                  href={section.href}
+                  className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
+                    ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+                    : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
+                  }`}
+                >
+                  {pathname !== section.href && (
+                    <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  )}
+                  <span className="relative z-10">{section.label}</span>
+                </a>
+              )
+            : (
+                <div className="flex-1 px-3 py-2 text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                  {section.label}
+                </div>
+              )}
+          {showSectionChevron && (
+            <button
+              type="button"
+              onClick={() => toggleSection(sectionKey)}
+              className="px-2 py-2 text-gray-300 hover:text-gray-100 cursor-pointer"
+              aria-label={isSectionExpanded ? `Collapse ${section.label} section` : `Expand ${section.label} section`}
+              aria-expanded={isSectionExpanded}
+            >
+              <Chevron isOpen={isSectionExpanded} />
+              <span className="sr-only">
+                {isSectionExpanded ? 'Collapse' : 'Expand'}
+                {' '}
                 {section.label}
-              </div>
-            )}
-        {showSectionChevron && (
-          <button
-            type="button"
-            onClick={() => toggleSection(sectionKey)}
-            className="px-2 py-2 text-gray-300 hover:text-gray-100 cursor-pointer"
-            aria-label={isSectionExpanded ? `Collapse ${section.label} section` : `Expand ${section.label} section`}
-            aria-expanded={isSectionExpanded}
-          >
-            <Chevron isOpen={isSectionExpanded} />
-            <span className="sr-only">
-              {isSectionExpanded ? 'Collapse' : 'Expand'}
-              {' '}
-              {section.label}
-              {' '}
-              section
-            </span>
-          </button>
-        )}
+                {' '}
+                section
+              </span>
+            </button>
+          )}
+        </div>
       </div>
-      {hasSectionItems && (showSectionChevron ? isSectionExpanded : true) && (
+      {hasSectionItems && (showSectionChevron ? isSectionExpanded : true) && section.items && (
         <ul className="mt-1 space-y-1">
-          {section.items!.map(subItem => (
+          {section.items.map(subItem => (
             <DocsSectionItem
               key={subItem.href || subItem.label}
               subItem={subItem}
@@ -244,7 +241,7 @@ function DocsSectionItem({
   const showItemChevron = hasSubItems
 
   return (
-    <li key={subItem.href || subItem.label}>
+    <li>
       <div className="flex items-center">
         {subItem.href
           ? (
@@ -288,13 +285,12 @@ function DocsSectionItem({
           </button>
         )}
       </div>
-      {hasSubItems && (showItemChevron ? isItemExpanded : true) && (
+      {hasSubItems && (showItemChevron ? isItemExpanded : true) && subItem.items && (
         <ul className="mt-1 space-y-1">
-          {subItem.items!.map(nestedItem => (
+          {subItem.items.map(nestedItem => (
             <NestedDocItem
               key={`${itemKey}-${nestedItem.href || nestedItem.label}`}
               nestedItem={nestedItem}
-              itemKey={itemKey}
               pathname={pathname}
             />
           ))}
@@ -362,7 +358,7 @@ function NavigationItem({
   const hasItems = 'items' in item && item.items && item.items.length > 0
 
   return (
-    <li key={item.id}>
+    <li>
       <div className="flex items-center">
         {isDisabled
           ? (

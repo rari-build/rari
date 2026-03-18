@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { build } from 'rolldown'
 import { TSX_EXT_REGEX } from '../shared/regex-constants'
@@ -7,6 +7,7 @@ const DEFAULT_IMPORT_REGEX = /import\s+(\w+)\s+from\s+['"]rari\/image['"]/g
 const NAMED_IMPORT_REGEX = /import\s+\{[^}]*\b(?:Image\s+as\s+(\w+)|Image)\b[^}]*\}\s+from\s+['"]rari\/image['"]/g
 const SRC_REGEX = /src:\s*["']([^"']+)["']/
 const ESCAPE_REGEX = /[.*+?^${}()|[\]\\]/g
+const SAFE_IDENTIFIER_REGEX = /^[A-Z_$][\w$]*$/i
 const WIDTH_REGEX = /width:\s*(\d+)/
 const QUALITY_REGEX = /quality:\s*(\d+)/
 const PRELOAD_TRUE_REGEX = /preload:\s*(true|!0)/
@@ -16,6 +17,7 @@ const WIDTH_PROP_REGEX = /width=\{?(\d+)\}?/
 const QUALITY_PROP_REGEX = /quality=\{?(\d+)\}?/
 const PRELOAD_PROP_REGEX = /preload(?:=\{?true\}?)?/
 const PRELOAD_FALSE_PROP_REGEX = /preload=\{?false\}?/
+const DEFAULT_QUALITY = 75
 
 export interface ImageUsage {
   src: string
@@ -29,24 +31,65 @@ export interface ImageManifest {
 }
 
 async function processFile(fullPath: string, images: Map<string, ImageUsage>): Promise<void> {
-  try {
-    const content = fs.readFileSync(fullPath, 'utf8')
+  const content = await fs.readFile(fullPath, 'utf8')
 
-    if (!content.includes('from \'rari/image\'') && !content.includes('from "rari/image"'))
-      return
+  if (!content.includes('from \'rari/image\'') && !content.includes('from "rari/image"'))
+    return
 
-    await extractImageUsages(content, fullPath, images)
+  await extractImageUsages(content, fullPath, images)
+}
+
+class Semaphore {
+  private permits: number
+  private queue: Array<() => void> = []
+
+  constructor(permits: number) {
+    this.permits = permits
   }
-  catch (error) {
-    console.warn(`Failed to read or process file ${fullPath}:`, error)
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--
+      return
+    }
+
+    return new Promise<void>((resolve) => {
+      this.queue.push(resolve)
+    })
+  }
+
+  release(): void {
+    this.permits++
+    const resolve = this.queue.shift()
+    if (resolve) {
+      this.permits--
+      resolve()
+    }
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire()
+    try {
+      return await fn()
+    }
+    finally {
+      this.release()
+    }
   }
 }
 
-async function scanDirectory(dir: string, images: Map<string, ImageUsage>): Promise<void> {
-  if (!fs.existsSync(dir))
-    return
+const fileSemaphore = new Semaphore(50)
 
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
+async function scanDirectory(dir: string, images: Map<string, ImageUsage>): Promise<void> {
+  try {
+    await fs.access(dir)
+  }
+  catch {
+    return
+  }
+
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  const promises: Promise<void>[] = []
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
@@ -54,12 +97,14 @@ async function scanDirectory(dir: string, images: Map<string, ImageUsage>): Prom
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name === 'dist')
         continue
-      await scanDirectory(fullPath, images)
+      promises.push(scanDirectory(fullPath, images))
     }
     else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
-      await processFile(fullPath, images)
+      promises.push(fileSemaphore.run(() => processFile(fullPath, images)))
     }
   }
+
+  await Promise.all(promises)
 }
 
 export async function scanForImageUsage(srcDir: string, additionalDirs: string[] = []): Promise<ImageManifest> {
@@ -68,8 +113,14 @@ export async function scanForImageUsage(srcDir: string, additionalDirs: string[]
   await scanDirectory(srcDir, images)
 
   for (const dir of additionalDirs) {
-    if (fs.existsSync(dir))
+    try {
+      await fs.access(dir)
       await scanDirectory(dir, images)
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        console.warn(`[rari] Image scanner: Failed to scan directory ${dir}:`, error)
+    }
   }
 
   return {
@@ -93,6 +144,7 @@ async function transformCode(content: string, filePath: string, loader: 'tsx' | 
 
   const result = await build({
     input: virtualModuleId,
+    external: ['rari/image'],
     platform: 'browser',
     write: false,
     output: {
@@ -133,20 +185,24 @@ async function transformCode(content: string, filePath: string, loader: 'tsx' | 
   return result.output[0].code
 }
 
-function extractImageIdentifiers(transformedCode: string): Set<string> {
-  const imageIdentifiers = new Set<string>()
+function parseImageImports(code: string): Set<string> {
+  const identifiers = new Set<string>()
 
-  for (const match of transformedCode.matchAll(DEFAULT_IMPORT_REGEX))
-    imageIdentifiers.add(match[1])
+  for (const match of code.matchAll(DEFAULT_IMPORT_REGEX))
+    identifiers.add(match[1])
 
-  for (const match of transformedCode.matchAll(NAMED_IMPORT_REGEX)) {
+  for (const match of code.matchAll(NAMED_IMPORT_REGEX)) {
     if (match[1])
-      imageIdentifiers.add(match[1])
+      identifiers.add(match[1])
     else
-      imageIdentifiers.add('Image')
+      identifiers.add('Image')
   }
 
-  return imageIdentifiers
+  return identifiers
+}
+
+function extractImageIdentifiers(transformedCode: string): Set<string> {
+  return parseImageImports(transformedCode)
 }
 
 function parseImageProps(propsString: string): ImageUsage | null {
@@ -173,7 +229,7 @@ function parseImageProps(propsString: string): ImageUsage | null {
 }
 
 function addImageToMap(imageUsage: ImageUsage, images: Map<string, ImageUsage>): void {
-  const key = `${imageUsage.src}:${imageUsage.width || 'auto'}:${imageUsage.quality || 75}`
+  const key = `${imageUsage.src}:${imageUsage.width || 'auto'}:${imageUsage.quality || DEFAULT_QUALITY}`
 
   if (!images.has(key) || imageUsage.preload)
     images.set(key, imageUsage)
@@ -184,6 +240,7 @@ function extractBalancedBraces(code: string, startIndex: number): string | null 
   let inString = false
   let stringChar = ''
   let escaped = false
+  let templateDepth = 0
 
   for (let i = startIndex; i < code.length; i++) {
     const char = code[i]
@@ -201,12 +258,39 @@ function extractBalancedBraces(code: string, startIndex: number): string | null 
     if (!inString && (char === '"' || char === '\'' || char === '`')) {
       inString = true
       stringChar = char
+      if (char === '`')
+        templateDepth = 1
       continue
     }
 
     if (inString && char === stringChar) {
-      inString = false
-      stringChar = ''
+      if (stringChar === '`') {
+        templateDepth--
+        if (templateDepth === 0) {
+          inString = false
+          stringChar = ''
+        }
+      }
+      else {
+        inString = false
+        stringChar = ''
+      }
+      continue
+    }
+
+    if (inString && stringChar === '`' && char === '$' && i + 1 < code.length && code[i + 1] === '{') {
+      braceCount++
+      i++
+      continue
+    }
+
+    if (inString && stringChar === '`' && braceCount > 0 && char === '`') {
+      templateDepth++
+      continue
+    }
+
+    if (inString && stringChar === '`' && char === '}' && braceCount > 0) {
+      braceCount--
       continue
     }
 
@@ -216,9 +300,8 @@ function extractBalancedBraces(code: string, startIndex: number): string | null 
       }
       else if (char === '}') {
         braceCount--
-        if (braceCount === 0) {
+        if (braceCount === 0)
           return code.substring(startIndex + 1, i)
-        }
       }
     }
   }
@@ -228,6 +311,11 @@ function extractBalancedBraces(code: string, startIndex: number): string | null 
 
 function processImageIdentifiers(transformedCode: string, imageIdentifiers: Set<string>, images: Map<string, ImageUsage>): void {
   for (const identifier of imageIdentifiers) {
+    if (!SAFE_IDENTIFIER_REGEX.test(identifier)) {
+      console.warn(`[rari] Image scanner: Skipping unsafe identifier: ${identifier}`)
+      continue
+    }
+
     const escapedIdentifier = identifier.replace(ESCAPE_REGEX, '\\$&')
     const createElementPattern = new RegExp(`React\\.createElement\\(\\s*${escapedIdentifier}\\s*,\\s*\\{`, 'g')
 
@@ -246,19 +334,7 @@ function processImageIdentifiers(transformedCode: string, imageIdentifiers: Set<
 }
 
 function extractImageAliases(content: string): Set<string> {
-  const aliases = new Set<string>()
-
-  for (const match of content.matchAll(DEFAULT_IMPORT_REGEX))
-    aliases.add(match[1])
-
-  for (const match of content.matchAll(NAMED_IMPORT_REGEX)) {
-    if (match[1])
-      aliases.add(match[1])
-    else
-      aliases.add('Image')
-  }
-
-  return aliases
+  return parseImageImports(content)
 }
 
 async function extractImageUsages(content: string, filePath: string, images: Map<string, ImageUsage>) {
@@ -284,6 +360,11 @@ async function extractImageUsages(content: string, filePath: string, images: Map
 
 function extractImageUsagesWithRegex(content: string, aliases: Set<string>, images: Map<string, ImageUsage>) {
   for (const alias of aliases) {
+    if (!SAFE_IDENTIFIER_REGEX.test(alias)) {
+      console.warn(`[rari] Image scanner: Skipping unsafe alias: ${alias}`)
+      continue
+    }
+
     const escapedAlias = alias.replace(ESCAPE_REGEX, '\\$&')
     const selfClosingRegex = new RegExp(`<${escapedAlias}\\s([^/>]+)\\/>`, 'g')
     const openingRegex = new RegExp(`<${escapedAlias}\\s([^>]+)>`, 'g')
@@ -314,7 +395,7 @@ function processImageProps(propsString: string, images: Map<string, ImageUsage>)
 
   const preload = PRELOAD_PROP_REGEX.test(propsString) && !PRELOAD_FALSE_PROP_REGEX.test(propsString)
 
-  const key = `${src}:${width || 'auto'}:${quality || 75}`
+  const key = `${src}:${width || 'auto'}:${quality || DEFAULT_QUALITY}`
 
   if (!images.has(key) || preload) {
     images.set(key, {

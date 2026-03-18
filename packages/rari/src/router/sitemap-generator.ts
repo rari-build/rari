@@ -11,6 +11,7 @@ import {
 } from '../shared/regex-constants'
 
 const SANITIZE_ID_REGEX = /[^\w-]/g
+const VIRTUAL_SITEMAP_ID = '\0virtual:sitemap'
 
 export interface SitemapGeneratorOptions {
   appDir: string
@@ -78,14 +79,14 @@ function generateImageXml(images: (string | SitemapImage)[]): string {
   return lines.join('\n')
 }
 
-function addVideoBasicFields(lines: string[], video: SitemapVideo): void {
+function buildVideoXml(video: SitemapVideo): string {
+  const lines: string[] = []
+
   lines.push('    <video:video>')
   lines.push(`      <video:title>${escapeXml(video.title)}</video:title>`)
   lines.push(`      <video:thumbnail_loc>${escapeXml(video.thumbnail_loc)}</video:thumbnail_loc>`)
   lines.push(`      <video:description>${escapeXml(video.description)}</video:description>`)
-}
 
-function addVideoOptionalFields(lines: string[], video: SitemapVideo): void {
   if (video.content_loc)
     lines.push(`      <video:content_loc>${escapeXml(video.content_loc)}</video:content_loc>`)
   if (video.player_loc)
@@ -100,18 +101,14 @@ function addVideoOptionalFields(lines: string[], video: SitemapVideo): void {
     lines.push(`      <video:view_count>${video.view_count}</video:view_count>`)
   if (video.publication_date)
     lines.push(`      <video:publication_date>${escapeXml(video.publication_date)}</video:publication_date>`)
-}
 
-function addVideoBooleanFields(lines: string[], video: SitemapVideo): void {
   if (video.family_friendly !== undefined)
     lines.push(`      <video:family_friendly>${video.family_friendly ? 'yes' : 'no'}</video:family_friendly>`)
   if (video.requires_subscription !== undefined)
     lines.push(`      <video:requires_subscription>${video.requires_subscription ? 'yes' : 'no'}</video:requires_subscription>`)
   if (video.live !== undefined)
     lines.push(`      <video:live>${video.live ? 'yes' : 'no'}</video:live>`)
-}
 
-function addVideoComplexFields(lines: string[], video: SitemapVideo): void {
   if (video.restriction)
     lines.push(`      <video:restriction relationship="${escapeXml(video.restriction.relationship)}">${escapeXml(video.restriction.content)}</video:restriction>`)
   if (video.platform)
@@ -124,20 +121,14 @@ function addVideoComplexFields(lines: string[], video: SitemapVideo): void {
     for (const tag of video.tag)
       lines.push(`      <video:tag>${escapeXml(tag)}</video:tag>`)
   }
+
+  lines.push('    </video:video>')
+
+  return lines.join('\n')
 }
 
 function generateVideoXml(videos: SitemapVideo[]): string {
-  const lines: string[] = []
-
-  for (const video of videos) {
-    addVideoBasicFields(lines, video)
-    addVideoOptionalFields(lines, video)
-    addVideoBooleanFields(lines, video)
-    addVideoComplexFields(lines, video)
-    lines.push('    </video:video>')
-  }
-
-  return lines.join('\n')
+  return videos.map(video => buildVideoXml(video)).join('\n')
 }
 
 function buildNamespaces(sitemap: Sitemap): string[] {
@@ -257,12 +248,10 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' 
 }
 
 function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string) {
-  const virtualModuleId = `\0virtual:sitemap`
-
   return {
     name: 'virtual-sitemap',
     resolveId(resolveId: string) {
-      if (resolveId === virtualModuleId)
+      if (resolveId === VIRTUAL_SITEMAP_ID)
         return resolveId
       if (resolveId.startsWith('.'))
         return path.resolve(path.dirname(sitemapFile.path), resolveId)
@@ -270,7 +259,7 @@ function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string) {
       return null
     },
     load(loadId: string) {
-      if (loadId === virtualModuleId) {
+      if (loadId === VIRTUAL_SITEMAP_ID) {
         const ext = path.extname(sitemapFile.path).slice(1)
         const moduleType = determineModuleType(ext)
         return { code: sourceCode, moduleType }
@@ -296,10 +285,9 @@ function extractChunkCode(result: any): string {
 
 async function buildSitemapModule(sitemapFile: SitemapFile, sourceCode: string) {
   const { build } = await import('rolldown')
-  const virtualModuleId = `\0virtual:sitemap`
 
   const result = await build({
-    input: virtualModuleId,
+    input: VIRTUAL_SITEMAP_ID,
     external: ['rari'],
     platform: 'node',
     write: false,
@@ -318,16 +306,21 @@ async function generateMultipleSitemaps(module: any, outDir: string): Promise<vo
   await fs.mkdir(sitemapDir, { recursive: true })
 
   for (const { id } of sitemapIds) {
-    const sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
+    try {
+      const sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
 
-    const sitemapData = typeof module.default === 'function'
-      ? await module.default({ id: String(id) })
-      : module.default
+      const sitemapData = typeof module.default === 'function'
+        ? await module.default({ id: String(id) })
+        : module.default
 
-    const content = generateSitemapXml(sitemapData)
-    const outputPath = path.join(sitemapDir, `${sanitizedId}.xml`)
+      const content = generateSitemapXml(sitemapData)
+      const outputPath = path.join(sitemapDir, `${sanitizedId}.xml`)
 
-    await fs.writeFile(outputPath, content)
+      await fs.writeFile(outputPath, content)
+    }
+    catch (error) {
+      throw new Error(`Failed to generate sitemap for id "${id}"`, { cause: error })
+    }
   }
 }
 

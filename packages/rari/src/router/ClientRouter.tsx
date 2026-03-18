@@ -64,12 +64,8 @@ function removeMetaTag(selector: string) {
 }
 
 function updateBasicMetadata(metadata: PageMetadata): void {
-  if (metadata.title) {
+  if (metadata.title)
     document.title = metadata.title
-  }
-  else {
-    document.title = ''
-  }
 
   if (metadata.description) {
     updateOrCreateMetaTag('meta[name="description"]', {
@@ -96,9 +92,6 @@ function updateBasicMetadata(metadata: PageMetadata): void {
       name: 'viewport',
       content: metadata.viewport,
     })
-  }
-  else {
-    removeMetaTag('meta[name="viewport"]')
   }
 }
 
@@ -413,13 +406,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const handleRedirect = (
-    finalPath: string,
-    _targetPath: string,
-  ) => {
-    return finalPath
-  }
-
   const processMetadata = (response: Response) => {
     try {
       const metadataHeader = response.headers.get('x-rari-metadata')
@@ -429,7 +415,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         updateDocumentMetadata(metadata)
       }
     }
-    catch {}
+    catch (error) {
+      console.warn('[rari] Router: Failed to parse x-rari-metadata header:', error)
+    }
   }
 
   const handleStreamingResponse = async (
@@ -677,8 +665,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           throw new Error(`Failed to fetch: ${response.status}`)
 
         const finalUrl = new URL(response.url)
-        const finalPath = finalUrl.pathname
-        const actualTargetPath = handleRedirect(finalPath, targetPath)
+        const actualTargetPath = finalUrl.pathname
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(actualTargetPath, navigationId)

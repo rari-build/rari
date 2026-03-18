@@ -21,8 +21,7 @@ export class HMRErrorHandler {
     this.errorCount++
     this.lastError = error
 
-    if (this.resetTimer)
-      clearTimeout(this.resetTimer)
+    this.resetTimer = clearTimer(this.resetTimer)
 
     this.resetTimer = setTimeout(() => {
       this.reset()
@@ -58,7 +57,6 @@ export class HMRErrorHandler {
   }
 
   dispose(): void {
-    this.resetTimer = clearTimer(this.resetTimer)
     this.reset()
   }
 }

@@ -63,15 +63,10 @@ function handleOptionalCatchAll(
   actualSegmentsLength: number,
   segmentParam: string | undefined,
   params: Record<string, string | string[]>,
-): boolean {
-  if (actualIndex >= actualSegmentsLength) {
-    if (segmentParam)
-      params[segmentParam] = []
-
-    return true
+): void {
+  if (actualIndex >= actualSegmentsLength && segmentParam) {
+    params[segmentParam] = []
   }
-
-  return false
 }
 
 function processSegment(

@@ -22,7 +22,8 @@ function normalizeArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined)
     return []
 
-  return Array.isArray(value) ? value : [value]
+  const arr = Array.isArray(value) ? value : [value]
+  return arr.filter(v => v !== '')
 }
 
 type RobotsRule = Robots extends { rules: infer R }

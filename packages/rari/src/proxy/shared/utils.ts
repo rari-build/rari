@@ -20,7 +20,20 @@ export interface SimpleProxyResult {
   }
 }
 
-export function checkForRewrite(result: any): SimpleProxyResult | null {
+export interface ResponseLike {
+  status?: number
+  headers?: {
+    get?: (name: string) => string | null
+    forEach?: (callback: (value: string, key: string) => void) => void
+  }
+  text?: () => Promise<string>
+  body?: any
+}
+
+export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult | null {
+  if (!result)
+    return null
+
   const rewriteHeader = result.headers?.get?.('x-rari-proxy-rewrite')
 
   if (rewriteHeader) {
@@ -33,7 +46,10 @@ export function checkForRewrite(result: any): SimpleProxyResult | null {
   return null
 }
 
-export function checkForRedirect(result: any): SimpleProxyResult | null {
+export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult | null {
+  if (!result || !result.status)
+    return null
+
   const location = result.headers?.get?.('location')
 
   if (location && result.status >= 300 && result.status < 400) {
@@ -49,7 +65,7 @@ export function checkForRedirect(result: any): SimpleProxyResult | null {
   return null
 }
 
-export function extractProxyHeaders(headers: any): { requestHeaders?: Record<string, string>, responseHeaders?: Record<string, string> } {
+export function extractProxyHeaders(headers: ResponseLike['headers']): { requestHeaders?: Record<string, string>, responseHeaders?: Record<string, string> } {
   const requestHeaders: Record<string, string> = {}
   const responseHeaders: Record<string, string> = {}
 
@@ -71,7 +87,7 @@ export function extractProxyHeaders(headers: any): { requestHeaders?: Record<str
   }
 }
 
-export function handleContinueWithHeaders(result: any): SimpleProxyResult {
+export function handleContinueWithHeaders(result: ResponseLike): SimpleProxyResult {
   const { requestHeaders, responseHeaders } = extractProxyHeaders(result.headers)
   return {
     continue: true,
@@ -80,7 +96,7 @@ export function handleContinueWithHeaders(result: any): SimpleProxyResult {
   }
 }
 
-export async function handleDirectResponse(result: any): Promise<SimpleProxyResult> {
+export async function handleDirectResponse(result: ResponseLike): Promise<SimpleProxyResult> {
   const headers: Record<string, string> = {}
 
   if (result.headers?.forEach) {
@@ -91,24 +107,31 @@ export async function handleDirectResponse(result: any): Promise<SimpleProxyResu
 
   let body: string | undefined
   try {
-    if (result.text && typeof result.text === 'function')
+    if (result.text && typeof result.text === 'function') {
       body = await result.text()
-    else if (result.body)
-      body = String(result.body)
+    }
+    else if (result.body && typeof result.body === 'string') {
+      body = result.body
+    }
+    else if (result.body) {
+      console.warn('[rari] Proxy: Response body is not extractable as text')
+    }
   }
-  catch {}
+  catch (error) {
+    console.error('[rari] Proxy: Failed to extract response body:', error)
+  }
 
   return {
     continue: false,
     response: {
-      status: result.status,
+      status: result.status ?? 200,
       headers,
       body,
     },
   }
 }
 
-export async function processProxyResult(result: any): Promise<SimpleProxyResult> {
+export async function processProxyResult(result: ResponseLike | null): Promise<SimpleProxyResult> {
   if (!result)
     return { continue: true }
 
