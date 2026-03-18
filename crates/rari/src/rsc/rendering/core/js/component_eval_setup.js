@@ -7,7 +7,7 @@ if (!globalThis.React) {
       delete propsWithoutKey.key
 
       const element = {
-        $typeof: Symbol.for('react.transitional.element'),
+        $$typeof: Symbol.for('react.transitional.element'),
         type,
         props: propsWithoutKey,
         key,
@@ -23,9 +23,9 @@ if (!globalThis.React) {
 }
 
 if (typeof _jsx === 'undefined')
-  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((...args) => globalThis.React.createElement(...args))
+  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((type, props, key) => globalThis.React.createElement(type, props, key))
 if (typeof _jsxs === 'undefined')
-  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((...args) => globalThis.React.createElement(...args))
+  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((type, props, key) => globalThis.React.createElement(type, props, key))
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {

@@ -48,6 +48,10 @@ export class ProxyExecutor {
     return this.initialized
   }
 
+  getProxyFunction(): ProxyFunction | null {
+    return this.proxyFn
+  }
+
   async execute(request: Request, options?: {
     ip?: string
     geo?: {

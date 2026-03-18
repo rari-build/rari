@@ -568,7 +568,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
     const urlWithHash = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
 
-    if (options.replace || actualTargetPath !== targetPath)
+    if (options.replace)
       window.history.replaceState(historyState, '', urlWithHash)
     else
       window.history.pushState(historyState, '', urlWithHash)

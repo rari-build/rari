@@ -101,7 +101,12 @@ function useImageLazyLoad(
   loading: 'lazy' | 'eager',
 ) {
   const shouldLoadImmediately = shouldPreload || unoptimized || loading === 'eager'
-  const [hasIntersected, setHasIntersected] = useState(false)
+  const [hasIntersected, setHasIntersected] = useState(() => shouldLoadImmediately)
+  const prevShouldLoadImmediatelyRef = useRef(shouldLoadImmediately)
+
+  if (shouldLoadImmediately && !prevShouldLoadImmediatelyRef.current && !hasIntersected)
+    setHasIntersected(true)
+  prevShouldLoadImmediatelyRef.current = shouldLoadImmediately
 
   useEffect(() => {
     if (shouldLoadImmediately)
@@ -143,7 +148,6 @@ function buildImageStyle(
   blurComplete: boolean,
 ): React.CSSProperties {
   return {
-    ...style,
     ...(fill && {
       position: 'absolute',
       inset: 0,
@@ -151,6 +155,7 @@ function buildImageStyle(
       height: '100%',
       objectFit: 'cover',
     }),
+    ...style,
     ...(placeholder === 'blur' && imgBlurDataURL && !blurComplete && {
       backgroundImage: `url(${imgBlurDataURL})`,
       backgroundSize: 'cover',
@@ -290,13 +295,11 @@ function OptimizedImage({
     ? loader({ src: finalSrc, width: defaultWidth, quality })
     : buildImageUrl(finalSrc, defaultWidth, quality)
 
-  const shouldUseSrcSet = true
-
   const imgElement = (
     <img
       ref={imgRef}
       src={isVisible ? mainSrc : undefined}
-      srcSet={isVisible && shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader, hasFixedWidth) : undefined}
+      srcSet={isVisible ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader, hasFixedWidth) : undefined}
       sizes={hasFixedWidth ? undefined : sizes}
       alt={alt}
       width={fill ? undefined : imgWidth}
@@ -310,9 +313,6 @@ function OptimizedImage({
       className={className}
     />
   )
-
-  if (!shouldUseSrcSet)
-    return imgElement
 
   return (
     <picture ref={pictureRef}>

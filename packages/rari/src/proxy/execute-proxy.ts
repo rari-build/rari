@@ -24,13 +24,13 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
     const event = {
       waitUntil: (promise: Promise<unknown>) => {
         const handledPromise = promise.catch((err) => {
-          return err
+          throw err
         })
         waitUntilPromises.push(handledPromise)
       },
     }
 
-    const proxyFn = (executor as any).proxyFn
+    const proxyFn = executor.getProxyFunction()
     if (!proxyFn || typeof proxyFn !== 'function')
       return { continue: true }
 
