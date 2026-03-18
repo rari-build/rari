@@ -1,5 +1,5 @@
 /* eslint-disable no-use-before-define, no-var, vars-on-top */
-if (!globalThis.React) {
+if (!globalThis.React || typeof globalThis.React.createElement !== 'function') {
   globalThis.React = {
     createElement(type, props, ...children) {
       const propsWithoutKey = props ? { ...props } : {}
@@ -29,7 +29,7 @@ if (typeof _jsxs === 'undefined')
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {
-    if (!globalThis.React)
+    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
       return null
 
     if (key !== undefined)
@@ -41,7 +41,7 @@ if (typeof globalThis.jsx === 'undefined') {
 
 if (typeof globalThis.jsxs === 'undefined') {
   globalThis.jsxs = function (type, props, key) {
-    if (!globalThis.React)
+    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
       return null
 
     if (key !== undefined)

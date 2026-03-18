@@ -134,7 +134,10 @@ export function createNavigationError(
     return handleTimeoutError(error, url)
 
   if (error instanceof Error && 'status' in error) {
-    const status = (error as any).status as number
+    const status = (error as any).status
+    if (typeof status !== 'number')
+      return handleUnknownError(error, url)
+
     return handleHttpError(error, status, url)
   }
 

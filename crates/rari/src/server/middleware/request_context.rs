@@ -158,7 +158,7 @@ impl RequestContext {
 
         if let Some(result) = guard.as_ref() {
             let mut cloned_result = result.clone()?;
-            cloned_result.tags = Self::merge_and_sort_tags(cloned_result.tags, tags.clone());
+            cloned_result.tags = Self::merge_and_sort_tags(cloned_result.tags, tags);
 
             {
                 let mut cache = self.fetch_cache.lock();

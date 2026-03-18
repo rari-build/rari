@@ -64,7 +64,7 @@ async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportNam
 }
 
 function triggerComponentLoad(componentInfo: LazyComponentInfo): Promise<any> {
-  if (!componentInfo.loader || componentInfo.loading || componentInfo.component || componentInfo.loadPromise)
+  if (!componentInfo.loader || componentInfo.loading || componentInfo.component != null || componentInfo.loadPromise)
     return Promise.resolve(null)
 
   return executeLoader(componentInfo)
