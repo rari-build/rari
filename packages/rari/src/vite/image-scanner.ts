@@ -241,7 +241,7 @@ function parseImageProps(propsString: string): ImageUsage | null {
 }
 
 function addImageToMap(imageUsage: ImageUsage, images: Map<string, ImageUsage>): void {
-  const key = `${imageUsage.src}:${imageUsage.width || 'auto'}:${imageUsage.quality || DEFAULT_QUALITY}`
+  const key = `${imageUsage.src}:${imageUsage.width ?? 'auto'}:${imageUsage.quality ?? DEFAULT_QUALITY}`
 
   if (!images.has(key) || imageUsage.preload)
     images.set(key, imageUsage)
@@ -407,7 +407,7 @@ function processImageProps(propsString: string, images: Map<string, ImageUsage>)
 
   const preload = PRELOAD_PROP_REGEX.test(propsString) && !PRELOAD_FALSE_PROP_REGEX.test(propsString)
 
-  const key = `${src}:${width || 'auto'}:${quality || DEFAULT_QUALITY}`
+  const key = `${src}:${width ?? 'auto'}:${quality ?? DEFAULT_QUALITY}`
 
   if (!images.has(key) || preload) {
     images.set(key, {

@@ -118,13 +118,13 @@ describe('matchRouteParams', () => {
     expect(params).toEqual({ slug: [] })
   })
 
-  it('should handle optional-catch-all without param name', () => {
+  it('should fail for optional-catch-all without param name', () => {
     const segments: RouteSegment[] = [
       { type: 'static', value: 'docs' },
       { type: 'optional-catch-all', value: '[[...]]' },
     ]
     const params = matchRouteParams('/docs/[[...]]', segments, '/docs')
-    expect(params).toEqual({})
+    expect(params).toBeNull()
   })
 
   it('should handle dynamic segment without param name', () => {

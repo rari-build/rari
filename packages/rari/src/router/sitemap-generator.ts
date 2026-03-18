@@ -199,7 +199,7 @@ export function generateSitemapXml(sitemap: Sitemap): string {
 /* v8 ignore start - file system operations, better tested in integration/e2e */
 export async function findSitemapFiles(
   appDir: string,
-  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx'],
+  extensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
 ): Promise<SitemapFile[]> {
   const sitemapFiles: SitemapFile[] = []
 
@@ -321,7 +321,7 @@ async function generateMultipleSitemaps(module: any, outDir: string): Promise<vo
       seenSanitizedIds.set(sanitizedId, String(id))
 
       const sitemapData = typeof module.default === 'function'
-        ? await module.default({ id: String(id) })
+        ? await module.default({ id })
         : module.default
 
       const content = generateSitemapXml(sitemapData)

@@ -134,10 +134,10 @@ export async function handleDirectResponse(result: ResponseLike): Promise<Simple
     if (result.text && typeof result.text === 'function') {
       body = await result.text()
     }
-    else if (result.body && typeof result.body === 'string') {
+    else if (result.body != null && typeof result.body === 'string') {
       body = result.body
     }
-    else if (result.body) {
+    else if (result.body != null) {
       console.warn('[rari] Proxy: Response body is not extractable as text')
     }
   }

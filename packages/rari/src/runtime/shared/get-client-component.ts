@@ -152,12 +152,15 @@ function resolveByPathWithExport(
   const path = hashIndex === -1 ? id : id.slice(0, hashIndex)
   const exportName = hashIndex === -1 ? '' : id.slice(hashIndex + 1)
 
-  const result = resolveByPath(path, exportName, clientComponents, clientComponentPaths)
-  if (result !== null)
-    return result
+  const variants = path.startsWith('./') ? [path, path.slice(2)] : [path, `./${path}`]
 
-  const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-  return resolveByPath(normalizedPath, exportName, clientComponents, clientComponentPaths)
+  for (const variant of variants) {
+    const result = resolveByPath(variant, exportName, clientComponents, clientComponentPaths)
+    if (result !== null)
+      return result
+  }
+
+  return null
 }
 
 function resolveByName(

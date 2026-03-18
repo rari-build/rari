@@ -77,6 +77,9 @@ function processSegment(
 ): { success: boolean, newIndex: number } {
   if (actualIndex >= actualSegments.length) {
     if (segment.type === 'optional-catch-all') {
+      if (!segment.param)
+        return { success: false, newIndex: actualIndex }
+
       handleOptionalCatchAll(actualIndex, actualSegments.length, segment.param, params)
       return { success: true, newIndex: actualIndex }
     }

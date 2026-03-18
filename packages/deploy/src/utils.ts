@@ -174,6 +174,8 @@ interface ProviderConfig {
   dependency?: string
 }
 
+export type { ProviderConfig }
+
 export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig) {
   const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {

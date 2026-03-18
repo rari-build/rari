@@ -57,6 +57,9 @@ if (typeof globalThis.LoadingSpinner === 'undefined') {
   }
 
   globalThis.LoadingSpinner = function () {
+    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
+      return null
+
     return globalThis.React.createElement('div', {
       style: {
         width: '40px',
@@ -72,6 +75,9 @@ if (typeof globalThis.LoadingSpinner === 'undefined') {
 
 if (typeof globalThis.DefaultLoading === 'undefined') {
   globalThis.DefaultLoading = function () {
+    if (!globalThis.React || typeof globalThis.React.createElement !== 'function' || !globalThis.LoadingSpinner)
+      return null
+
     return globalThis.React.createElement('div', {
       style: {
         display: 'flex',
