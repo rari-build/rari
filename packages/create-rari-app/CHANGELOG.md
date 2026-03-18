@@ -1,4 +1,13 @@
+## [create-rari-app@0.4.26] - 2026-03-18
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
 ## [create-rari-app@0.4.25] - 2026-03-14
+
+### 💼 Other
+
+- Create-rari-app@0.4.25
 
 ### ⚙️ Miscellaneous Tasks
 
