@@ -1,8 +1,33 @@
+## [rari@0.10.20] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+- Add defensive checks and improve path resolution logic
+
+### 🚜 Refactor
+
+- Reorganize deployment and streaming setup code
+- Consolidate deployment and utility functions
+- *(runtime)* Consolidate React globals and streaming setup
+- Consolidate React globals and improve fetch cache handling
+- Improve React setup and error handling across runtime
+- Improve React JSX handling and image optimization logic
+- Improve JSX handling, fetch caching, and proxy utilities
+- *(ClientRouter)* Move route ref update before state change
+- Optimize React JSX handling and image component logic
+- Add defensive type checks and improve null handling
+- Consolidate JSX delegate creation and improve component resolution
+- Improve JSX delegate creation and component ID resolution
+- Add defensive checks and improve component resolution
 ## [rari@0.10.19] - 2026-03-15
 
 ### 🚀 Features
 
 - *(rari)* Refactor RSC payload handling and suspense management
+
+### 💼 Other
+
+- Rari@0.10.19
 ## [rari@0.10.18] - 2026-03-14
 
 ### 🚀 Features
