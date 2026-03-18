@@ -223,26 +223,21 @@ export async function getClientComponentAsync(id: string): Promise<any> {
   const clientComponentPaths = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] || {}
   const clientComponentNames = (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] || {}
 
-  let componentInfo = clientComponents[id] as LazyComponentInfo
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
 
-  if (componentInfo) {
-    const exportName = id.includes('#') ? id.slice(id.indexOf('#') + 1) : undefined
+  let componentInfo = clientComponents[baseId] as LazyComponentInfo
+  if (componentInfo)
     return await ensureComponentLoaded(componentInfo, exportName)
-  }
 
-  if (id.includes('#')) {
-    const hashIndex = id.indexOf('#')
-    const path = id.slice(0, hashIndex)
-    const exportName = id.slice(hashIndex + 1)
-    const variants = getPathVariants(path)
-
-    for (const variant of variants) {
-      const componentId = clientComponentPaths[variant]
-      if (componentId) {
-        componentInfo = clientComponents[componentId] as LazyComponentInfo
-        if (componentInfo)
-          return await ensureComponentLoaded(componentInfo, exportName)
-      }
+  const variants = getPathVariants(baseId)
+  for (const variant of variants) {
+    const componentId = clientComponentPaths[variant]
+    if (componentId) {
+      componentInfo = clientComponents[componentId] as LazyComponentInfo
+      if (componentInfo)
+        return await ensureComponentLoaded(componentInfo, exportName)
     }
   }
 

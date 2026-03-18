@@ -23,12 +23,16 @@ if (!globalThis.React || typeof globalThis.React.createElement !== 'function') {
 }
 
 function createJsxDelegate(runtimeJsx, globalJsx) {
-  return runtimeJsx || globalJsx || ((type, props, key) => {
-    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
-      return null
+  return (type, props, key) => {
+    if (globalThis.React && typeof globalThis.React.createElement === 'function')
+      return globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props)
+    if (typeof runtimeJsx === 'function')
+      return runtimeJsx(type, props, key)
+    if (typeof globalJsx === 'function')
+      return globalJsx(type, props, key)
 
-    return globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props)
-  })
+    return null
+  }
 }
 
 if (typeof _jsx === 'undefined')
