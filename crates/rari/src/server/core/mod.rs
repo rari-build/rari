@@ -129,8 +129,6 @@ impl Server {
             reload_timeout_ms: config.rsc.hmr_reload_timeout_ms,
             parallel_reloads: config.rsc.hmr_parallel_reloads,
             debounce_delay_ms: config.rsc.hmr_debounce_delay_ms,
-            max_history_size: config.rsc.hmr_max_history_size,
-            enable_memory_monitoring: config.rsc.hmr_enable_memory_monitoring,
         };
         let mut module_reload_manager =
             crate::runtime::module_reload::ModuleReloadManager::new(reload_config);

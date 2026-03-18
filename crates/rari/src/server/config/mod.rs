@@ -303,8 +303,6 @@ pub struct RscConfig {
     pub hmr_reload_timeout_ms: u64,
     pub hmr_parallel_reloads: bool,
     pub hmr_debounce_delay_ms: u64,
-    pub hmr_max_history_size: usize,
-    pub hmr_enable_memory_monitoring: bool,
 }
 
 impl Default for RscConfig {
@@ -321,8 +319,6 @@ impl Default for RscConfig {
             hmr_reload_timeout_ms: 5000,
             hmr_parallel_reloads: true,
             hmr_debounce_delay_ms: 150,
-            hmr_max_history_size: 100,
-            hmr_enable_memory_monitoring: true,
         }
     }
 }
@@ -461,19 +457,6 @@ impl Config {
             config.rsc.hmr_debounce_delay_ms = debounce_str
                 .parse()
                 .map_err(|_| ConfigError::Config("RARI_HMR_DEBOUNCE_DELAY_MS".to_string()))?;
-        }
-
-        if let Ok(history_size_str) = std::env::var("RARI_HMR_MAX_HISTORY_SIZE") {
-            config.rsc.hmr_max_history_size = history_size_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_HMR_MAX_HISTORY_SIZE".to_string()))?;
-        }
-
-        if let Ok(memory_monitoring_str) = std::env::var("RARI_HMR_ENABLE_MEMORY_MONITORING") {
-            config.rsc.hmr_enable_memory_monitoring = memory_monitoring_str.cow_to_lowercase()
-                == "true"
-                || memory_monitoring_str == "1"
-                || memory_monitoring_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(rsc_html_enabled_str) = std::env::var("RARI_RSC_HTML_ENABLED") {
