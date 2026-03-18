@@ -152,7 +152,7 @@ function resolveByPathWithExport(
   const path = hashIndex === -1 ? id : id.slice(0, hashIndex)
   const exportName = hashIndex === -1 ? '' : id.slice(hashIndex + 1)
 
-  const variants = path.startsWith('./') ? [path, path.slice(2)] : [path, `./${path}`]
+  const variants = getPathVariants(path)
 
   for (const variant of variants) {
     const result = resolveByPath(variant, exportName, clientComponents, clientComponentPaths)

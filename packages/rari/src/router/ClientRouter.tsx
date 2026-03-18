@@ -379,8 +379,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     pendingNavigationsRef.current.clear()
   }
 
-  const cleanupAbortedNavigation = (path: string, navigationId: number) => {
-    pendingNavigationsRef.current.delete(path)
+  const cleanupAbortedNavigation = (pendingPath: string, navigationId: number) => {
+    pendingNavigationsRef.current.delete(pendingPath)
 
     if (isMountedRef.current && navigationState.navigationId === navigationId) {
       setNavigationState(prev => ({
@@ -423,6 +423,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   const handleStreamingResponse = async (
     response: Response,
     abortController: AbortController,
+    pendingPath: string,
     actualTargetPath: string,
     navigationId: number,
     fromRoute: string,
@@ -446,7 +447,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         if (abortController.signal.aborted) {
           await reader.cancel()
-          cleanupAbortedNavigation(actualTargetPath, navigationId)
+          cleanupAbortedNavigation(pendingPath, navigationId)
           return
         }
 
@@ -547,31 +548,12 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
   const completeNavigation = (
     actualTargetPath: string,
-    targetPath: string,
     hash: string,
     options: NavigationOptions,
     navigationId: number,
-    historyKey: string,
   ) => {
     if (!isMountedRef.current)
       return
-
-    currentRouteRef.current = actualTargetPath
-
-    const historyState: HistoryState = {
-      route: actualTargetPath,
-      navigationId,
-      scrollPosition: { x: window.scrollX, y: window.scrollY },
-      timestamp: Date.now(),
-      key: historyKey,
-    }
-
-    const urlWithHash = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
-
-    if (options.replace)
-      window.history.replaceState(historyState, '', urlWithHash)
-    else
-      window.history.pushState(historyState, '', urlWithHash)
 
     setNavigationState(prev => ({
       ...prev,
@@ -668,9 +650,25 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         const actualTargetPath = finalUrl.pathname
 
         if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(actualTargetPath, navigationId)
+          cleanupAbortedNavigation(targetPath, navigationId)
           return
         }
+
+        const urlWithHash = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
+        const historyState: HistoryState = {
+          route: actualTargetPath,
+          navigationId,
+          scrollPosition: { x: window.scrollX, y: window.scrollY },
+          timestamp: Date.now(),
+          key: historyKey,
+        }
+
+        if (options.replace)
+          window.history.replaceState(historyState, '', urlWithHash)
+        else
+          window.history.pushState(historyState, '', urlWithHash)
+
+        currentRouteRef.current = actualTargetPath
 
         processMetadata(response)
 
@@ -685,6 +683,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           await handleStreamingResponse(
             response,
             abortController,
+            targetPath,
             actualTargetPath,
             navigationId,
             fromRoute,
@@ -707,11 +706,11 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         }
 
         if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(actualTargetPath, navigationId)
+          cleanupAbortedNavigation(targetPath, navigationId)
           return
         }
 
-        completeNavigation(actualTargetPath, targetPath, hash, options, navigationId, historyKey)
+        completeNavigation(actualTargetPath, hash, options, navigationId)
 
         pendingNavigationsRef.current.delete(targetPath)
         processNavigationQueueRef.current?.()

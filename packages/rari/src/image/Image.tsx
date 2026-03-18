@@ -82,6 +82,12 @@ function useImagePreload(
     else
       link.href = buildImageUrl(finalSrc, imgWidth || 1920, quality)
 
+    if (!unoptimized && !loader) {
+      const sizesArray = imgWidth ? [imgWidth, imgWidth * 2, imgWidth * 3] : DEFAULT_DEVICE_SIZES
+      const srcSet = sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality)} ${w}w`).join(', ')
+      link.setAttribute('imagesrcset', srcSet)
+    }
+
     if (sizes)
       link.setAttribute('imagesizes', sizes)
 

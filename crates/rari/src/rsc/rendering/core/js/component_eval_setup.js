@@ -23,9 +23,9 @@ if (!globalThis.React) {
 }
 
 if (typeof _jsx === 'undefined')
-  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((type, props, key) => globalThis.React.createElement(type, props, key))
+  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((type, props, key) => globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props))
 if (typeof _jsxs === 'undefined')
-  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((type, props, key) => globalThis.React.createElement(type, props, key))
+  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((type, props, key) => globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props))
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {

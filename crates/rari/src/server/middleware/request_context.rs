@@ -75,6 +75,17 @@ impl RequestContext {
         &self.fetch_cache
     }
 
+    fn merge_and_sort_tags(
+        existing: impl IntoIterator<Item = String>,
+        extra: impl IntoIterator<Item = String>,
+    ) -> Vec<String> {
+        let mut tag_set: FxHashSet<String> = existing.into_iter().collect();
+        tag_set.extend(extra);
+        let mut merged: Vec<String> = tag_set.into_iter().collect();
+        merged.sort();
+        merged
+    }
+
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
@@ -128,12 +139,7 @@ impl RequestContext {
                 if elapsed_ms < ttl_ms as u128 {
                     let mut result = cached.clone();
                     result.was_cached = true;
-
-                    let mut tag_set: FxHashSet<String> = result.tags.iter().cloned().collect();
-                    tag_set.extend(tags.iter().cloned());
-                    let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
-                    merged_tags.sort();
-                    result.tags = merged_tags;
+                    result.tags = Self::merge_and_sort_tags(result.tags, tags);
 
                     cache.put(cache_key.clone(), result.clone());
 
@@ -152,17 +158,14 @@ impl RequestContext {
 
         if let Some(result) = guard.as_ref() {
             let mut cloned_result = result.clone()?;
-
-            let mut tag_set: FxHashSet<String> = cloned_result.tags.iter().cloned().collect();
-            tag_set.extend(tags.iter().cloned());
-            let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
-            merged_tags.sort();
-            cloned_result.tags = merged_tags;
+            cloned_result.tags = Self::merge_and_sort_tags(cloned_result.tags, tags.clone());
 
             {
                 let mut cache = self.fetch_cache.lock();
                 cache.put(cache_key.clone(), cloned_result.clone());
             }
+
+            *guard = Some(Ok(cloned_result.clone()));
 
             return Ok(cloned_result);
         }
@@ -186,11 +189,7 @@ impl RequestContext {
         let mut fetch_result = self.perform_fetch(url, &options).await;
 
         if let Ok(ref mut result) = fetch_result {
-            let mut tag_set: FxHashSet<String> = result.tags.iter().cloned().collect();
-            tag_set.extend(tags.iter().cloned());
-            let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
-            merged_tags.sort();
-            result.tags = merged_tags;
+            result.tags = Self::merge_and_sort_tags(result.tags.clone(), tags);
         }
 
         *guard = Some(fetch_result.clone());

@@ -18,7 +18,13 @@ function safeDecodeURIComponent(value: string): string | null {
 }
 
 function matchStaticSegment(actualSegment: string, segmentValue: string): boolean {
-  return actualSegment === segmentValue
+  const decodedActual = safeDecodeURIComponent(actualSegment)
+  const decodedValue = safeDecodeURIComponent(segmentValue)
+
+  if (decodedActual === null || decodedValue === null)
+    return false
+
+  return decodedActual === decodedValue
 }
 
 function matchDynamicSegment(

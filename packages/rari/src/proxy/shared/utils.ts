@@ -65,34 +65,34 @@ export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult
   return null
 }
 
+function mergeHeader(
+  headers: Record<string, string | string[]>,
+  key: string,
+  value: string,
+): void {
+  if (Object.hasOwn(headers, key)) {
+    const existing = headers[key]
+    headers[key] = Array.isArray(existing) ? [...existing, value] : [existing, value]
+  }
+  else {
+    headers[key] = value
+  }
+}
+
 export function extractProxyHeaders(headers: ResponseLike['headers']): { requestHeaders?: Record<string, string | string[]>, responseHeaders?: Record<string, string | string[]> } {
   const requestHeaders: Record<string, string | string[]> = {}
   const responseHeaders: Record<string, string | string[]> = {}
 
   if (headers?.forEach) {
     headers.forEach((value: string, key: string) => {
-      if (key.startsWith('x-rari-proxy-request-')) {
-        const headerName = key.replace('x-rari-proxy-request-', '')
-        const lowerKey = headerName.toLowerCase()
+      const lowerKey = key.toLowerCase()
 
-        if (Object.hasOwn(requestHeaders, lowerKey)) {
-          const existing = requestHeaders[lowerKey]
-          requestHeaders[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
-        }
-        else {
-          requestHeaders[lowerKey] = value
-        }
+      if (lowerKey.startsWith('x-rari-proxy-request-')) {
+        const headerName = lowerKey.replace('x-rari-proxy-request-', '')
+        mergeHeader(requestHeaders, headerName, value)
       }
-      else if (!key.startsWith('x-rari-proxy-')) {
-        const lowerKey = key.toLowerCase()
-
-        if (Object.hasOwn(responseHeaders, lowerKey)) {
-          const existing = responseHeaders[lowerKey]
-          responseHeaders[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
-        }
-        else {
-          responseHeaders[lowerKey] = value
-        }
+      else if (!lowerKey.startsWith('x-rari-proxy-')) {
+        mergeHeader(responseHeaders, lowerKey, value)
       }
     })
   }
@@ -118,14 +118,7 @@ export async function handleDirectResponse(result: ResponseLike): Promise<Simple
   if (result.headers?.forEach) {
     result.headers.forEach((value: string, key: string) => {
       const lowerKey = key.toLowerCase()
-
-      if (Object.hasOwn(headers, lowerKey)) {
-        const existing = headers[lowerKey]
-        headers[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
-      }
-      else {
-        headers[lowerKey] = value
-      }
+      mergeHeader(headers, lowerKey, value)
     })
   }
 
