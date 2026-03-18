@@ -15,7 +15,7 @@ export interface SimpleProxyResult {
   responseHeaders?: Record<string, string>
   response?: {
     status: number
-    headers: Record<string, string>
+    headers: Record<string, string | string[]>
     body?: string
   }
 }
@@ -47,7 +47,7 @@ export function checkForRewrite(result: ResponseLike | null): SimpleProxyResult 
 }
 
 export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult | null {
-  if (!result || !result.status)
+  if (!result || result.status == null)
     return null
 
   const location = result.headers?.get?.('location')
@@ -97,11 +97,18 @@ export function handleContinueWithHeaders(result: ResponseLike): SimpleProxyResu
 }
 
 export async function handleDirectResponse(result: ResponseLike): Promise<SimpleProxyResult> {
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string | string[]> = {}
 
   if (result.headers?.forEach) {
     result.headers.forEach((value: string, key: string) => {
-      headers[key] = value
+      const lowerKey = key.toLowerCase()
+      if (headers[lowerKey]) {
+        const existing = headers[lowerKey]
+        headers[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
+      }
+      else {
+        headers[lowerKey] = value
+      }
     })
   }
 
@@ -150,7 +157,7 @@ export async function processProxyResult(result: ResponseLike | null): Promise<S
   if (continueHeader === 'true')
     return handleContinueWithHeaders(result)
 
-  if (result.status)
+  if (result.status != null)
     return await handleDirectResponse(result)
 
   return { continue: true }

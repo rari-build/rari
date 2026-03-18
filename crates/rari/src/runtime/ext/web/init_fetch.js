@@ -24,6 +24,17 @@ function resolveRequestMeta(input, init = {}) {
   }
 }
 
+function extractValidTags(init) {
+  const tags = init?.rari?.tags ?? init?.next?.tags
+  if (tags && Array.isArray(tags)) {
+    return tags
+      .filter(tag => typeof tag === 'string' && tag.trim().length > 0)
+      .map(tag => tag.trim())
+  }
+
+  return []
+}
+
 function generateCacheKey(input, init) {
   const { url, method, headers } = resolveRequestMeta(input, init)
 
@@ -74,7 +85,14 @@ function generateCacheKey(input, init) {
     }
   }
 
-  return `${method}:${url}:${headersStr}:${bodyStr}`
+  const validTags = extractValidTags(init)
+  let tagsStr = ''
+  if (validTags.length > 0) {
+    const normalizedTags = validTags.toSorted((a, b) => a.localeCompare(b))
+    tagsStr = `:tags:${JSON.stringify(normalizedTags)}`
+  }
+
+  return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}`
 }
 
 function shouldCache(input, init, meta) {
@@ -115,7 +133,7 @@ async function fetchWithRustCache(input, init, meta) {
 
   const tags = init?.rari?.tags ?? init?.next?.tags
   if (tags && Array.isArray(tags)) {
-    const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0)
+    const validTags = extractValidTags(init)
     if (validTags.length > 0) {
       options.tags = JSON.stringify(validTags)
     }

@@ -1,4 +1,23 @@
 /* eslint-disable no-use-before-define, no-var, vars-on-top */
+if (!globalThis.React) {
+  globalThis.React = {
+    createElement(type, props, ...children) {
+      const element = {
+        $typeof: Symbol.for('react.transitional.element'),
+        type,
+        props: props || {},
+        key: props?.key || null,
+      }
+      if (children.length > 0)
+        element.props = { ...element.props, children: children.length === 1 ? children[0] : children }
+
+      return element
+    },
+    Fragment: Symbol.for('react.fragment'),
+    Suspense: Symbol.for('react.suspense'),
+  }
+}
+
 if (typeof _jsx === 'undefined')
   var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
 if (typeof _jsxs === 'undefined')

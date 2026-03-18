@@ -28,13 +28,13 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
 }
 
 async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportName?: string): Promise<any> {
-  if (componentInfo.component) {
+  if (componentInfo.component != null) {
     if (exportName && exportName !== 'default') {
       const namedExport = componentInfo.component[exportName]
       return namedExport !== undefined ? namedExport : null
     }
 
-    return componentInfo.component || null
+    return componentInfo.component
   }
 
   if (componentInfo.loadPromise) {
@@ -44,7 +44,7 @@ async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportNam
       return namedExport !== undefined ? namedExport : null
     }
 
-    return componentInfo.component || null
+    return componentInfo.component ?? null
   }
 
   if (componentInfo.loader) {
@@ -93,7 +93,7 @@ export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: 
 }
 
 function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: string): any {
-  if (!componentInfo.component)
+  if (componentInfo.component == null)
     return null
 
   if (!exportName || exportName === 'default')
@@ -116,7 +116,7 @@ function resolveById(id: string, clientComponents: Record<string, ComponentInfo>
   if (!componentInfo)
     return null
 
-  if (componentInfo.component)
+  if (componentInfo.component != null)
     return componentInfo.component
 
   tryLoadComponent(componentInfo)
@@ -171,7 +171,7 @@ function resolveByName(
 
   const componentInfo = clientComponents[componentId] as LazyComponentInfo
 
-  if (componentInfo.component)
+  if (componentInfo.component != null)
     return componentInfo.component
 
   tryLoadComponent(componentInfo)

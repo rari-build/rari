@@ -186,13 +186,14 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
 
     packageJson.scripts = packageJson.scripts || {}
 
-    if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
+    const newStart = config.startScript || 'rari start'
+    if (packageJson.scripts.start && packageJson.scripts.start !== newStart && !packageJson.scripts['start:original']) {
       logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarn('Backing up to start:original and replacing with "rari start"')
+      logWarn(`Backing up to start:original and replacing with "${newStart}"`)
       packageJson.scripts['start:original'] = packageJson.scripts.start
     }
 
-    packageJson.scripts.start = config.startScript || 'rari start'
+    packageJson.scripts.start = newStart
     packageJson.scripts['start:local'] = 'rari start'
     packageJson.scripts[`deploy:${config.providerName.toLowerCase()}`] = config.deployScript
 

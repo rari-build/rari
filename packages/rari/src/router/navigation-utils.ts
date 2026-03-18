@@ -27,7 +27,7 @@ function matchDynamicSegment(
   params: Record<string, string | string[]>,
 ): boolean {
   if (!segmentParam)
-    return true
+    return false
 
   const decoded = safeDecodeURIComponent(actualSegment)
   if (decoded === null)
@@ -44,7 +44,7 @@ function matchCatchAllSegment(
   params: Record<string, string | string[]>,
 ): { success: boolean, newIndex: number } {
   if (!segmentParam)
-    return { success: true, newIndex: actualSegments.length }
+    return { success: false, newIndex: actualIndex }
 
   const decodedSegments: string[] = []
   for (const seg of actualSegments.slice(actualIndex)) {

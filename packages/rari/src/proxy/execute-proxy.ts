@@ -4,6 +4,8 @@ import { RariRequest } from './RariRequest'
 import { processProxyResult } from './shared/utils'
 
 export async function executeProxy(simpleRequest: SimpleRequest): Promise<SimpleProxyResult> {
+  const waitUntilPromises: Promise<unknown>[] = []
+
   try {
     const executor = getProxyExecutor()
 
@@ -19,7 +21,6 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
       headers: new Headers(simpleRequest.headers),
     })
 
-    const waitUntilPromises: Promise<unknown>[] = []
     const event = {
       waitUntil: (promise: Promise<unknown>) => {
         waitUntilPromises.push(promise)
@@ -32,6 +33,13 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
 
     const result = await proxyFn(rariRequest, event)
 
+    return await processProxyResult(result)
+  }
+  catch (error) {
+    console.error('[rari] Proxy: executeProxy failed:', error)
+    return { continue: true }
+  }
+  finally {
     if (waitUntilPromises.length > 0) {
       void Promise.allSettled(waitUntilPromises).then((results) => {
         results.forEach((result, index) => {
@@ -41,11 +49,5 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
         })
       })
     }
-
-    return await processProxyResult(result)
-  }
-  catch (error) {
-    console.error('[rari] Proxy: executeProxy failed:', error)
-    return { continue: true }
   }
 }

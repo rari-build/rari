@@ -250,11 +250,11 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' 
 function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string) {
   return {
     name: 'virtual-sitemap',
-    resolveId(resolveId: string) {
-      if (resolveId === VIRTUAL_SITEMAP_ID)
-        return resolveId
-      if (resolveId.startsWith('.'))
-        return path.resolve(path.dirname(sitemapFile.path), resolveId)
+    resolveId(id: string, importer?: string) {
+      if (id === VIRTUAL_SITEMAP_ID)
+        return id
+      if (id.startsWith('.'))
+        return path.resolve(path.dirname(importer ?? sitemapFile.path), id)
 
       return null
     },
@@ -305,9 +305,17 @@ async function generateMultipleSitemaps(module: any, outDir: string): Promise<vo
   const sitemapDir = path.join(outDir, 'sitemap')
   await fs.mkdir(sitemapDir, { recursive: true })
 
+  const seenSanitizedIds = new Map<string, string>()
+
   for (const { id } of sitemapIds) {
     try {
       const sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
+
+      const existingId = seenSanitizedIds.get(sanitizedId)
+      if (existingId !== undefined) {
+        throw new Error(`Duplicate sanitized sitemap ID "${sanitizedId}": original IDs "${existingId}" and "${id}" collide`)
+      }
+      seenSanitizedIds.set(sanitizedId, String(id))
 
       const sitemapData = typeof module.default === 'function'
         ? await module.default({ id: String(id) })

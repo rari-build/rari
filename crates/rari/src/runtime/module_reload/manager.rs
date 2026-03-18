@@ -133,6 +133,9 @@ impl ModuleReloadManager {
         });
 
         let request = ModuleReloadRequest::new(component_id.clone(), file_path.clone());
+
+        self.debounce_manager.cancel_pending(&component_id).await;
+
         self.debounce_manager.add_pending(component_id.clone(), request, handle).await;
 
         Ok(())
@@ -175,7 +178,7 @@ impl ModuleReloadManager {
         loop {
             attempts += 1;
 
-            match self.reload_module_internal(component_id, file_path).await {
+            match self.reload_module_internal(component_id).await {
                 Ok(_) => return Ok(()),
                 Err(e) if attempts >= max_attempts => {
                     return Err(RariError::module_reload(ModuleReloadError::MaxRetriesExceeded {
@@ -192,11 +195,7 @@ impl ModuleReloadManager {
         }
     }
 
-    async fn reload_module_internal(
-        &self,
-        component_id: &str,
-        _file_path: &Path,
-    ) -> Result<(), RariError> {
+    async fn reload_module_internal(&self, component_id: &str) -> Result<(), RariError> {
         self.runtime.as_ref().ok_or_else(|| {
             RariError::module_reload(ModuleReloadError::RuntimeNotAvailable {
                 message: "Runtime not available".to_string(),
@@ -235,8 +234,14 @@ impl ModuleReloadManager {
             }
 
             for handle in handles {
-                if let Err(e) = handle.await {
-                    error!(error = %e, "Batch reload task failed");
+                match handle.await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        error!(error = %e, "Module reload failed in batch");
+                    }
+                    Err(e) => {
+                        error!(error = %e, "Batch reload task failed");
+                    }
                 }
             }
         }

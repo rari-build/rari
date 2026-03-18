@@ -151,7 +151,20 @@ impl RequestContext {
         let mut guard = fetch_lock.lock().await;
 
         if let Some(result) = guard.as_ref() {
-            return result.clone();
+            let mut cloned_result = result.clone()?;
+
+            let mut tag_set: FxHashSet<String> = cloned_result.tags.iter().cloned().collect();
+            tag_set.extend(tags.iter().cloned());
+            let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
+            merged_tags.sort();
+            cloned_result.tags = merged_tags;
+
+            {
+                let mut cache = self.fetch_cache.lock();
+                cache.put(cache_key.clone(), cloned_result.clone());
+            }
+
+            return Ok(cloned_result);
         }
 
         struct CleanupGuard<'a> {

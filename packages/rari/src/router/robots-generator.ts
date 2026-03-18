@@ -199,7 +199,7 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     const module = await import(dataUrl)
 
-    if (!module || module.default === undefined) {
+    if (!module || module.default == null) {
       throw new Error('Robots file must export a default export (either an object or a function)')
     }
 

@@ -51,9 +51,9 @@ function buildImageUrl(
 
 function extractImageProps(src: string | StaticImageData, width?: number, height?: number, blurDataURL?: string) {
   const imgSrc = typeof src === 'string' ? src : src.src
-  const imgWidth = width || (typeof src !== 'string' ? src.width : undefined)
-  const imgHeight = height || (typeof src !== 'string' ? src.height : undefined)
-  const imgBlurDataURL = blurDataURL || (typeof src !== 'string' ? src.blurDataURL : undefined)
+  const imgWidth = width ?? (typeof src !== 'string' ? src.width : undefined)
+  const imgHeight = height ?? (typeof src !== 'string' ? src.height : undefined)
+  const imgBlurDataURL = blurDataURL ?? (typeof src !== 'string' ? src.blurDataURL : undefined)
 
   return { imgSrc, imgWidth, imgHeight, imgBlurDataURL }
 }
@@ -101,13 +101,18 @@ function useImageLazyLoad(
   loading: 'lazy' | 'eager',
 ) {
   const shouldLoadImmediately = shouldPreload || unoptimized || loading === 'eager'
-  const [isVisible, setIsVisible] = useState(shouldLoadImmediately)
   const prevShouldLoadImmediatelyRef = useRef(shouldLoadImmediately)
 
-  if (shouldLoadImmediately && !prevShouldLoadImmediatelyRef.current) {
-    prevShouldLoadImmediatelyRef.current = true
-    setIsVisible(true)
+  const getInitialVisibility = () => {
+    if (shouldLoadImmediately && !prevShouldLoadImmediatelyRef.current) {
+      prevShouldLoadImmediatelyRef.current = true
+      return true
+    }
+
+    return shouldLoadImmediately
   }
+
+  const [isVisible, setIsVisible] = useState(getInitialVisibility)
 
   useEffect(() => {
     prevShouldLoadImmediatelyRef.current = shouldLoadImmediately
@@ -289,7 +294,7 @@ function OptimizedImage({
   const mainSrc = loader
     ? loader({ src: finalSrc, width: defaultWidth, quality })
     : buildImageUrl(finalSrc, defaultWidth, quality)
-  const shouldUseSrcSet = sizesArray.length > 1 || sizesArray[0] !== defaultWidth
+  const shouldUseSrcSet = !imgWidth || sizesArray.length > 1 || sizesArray[0] !== defaultWidth
 
   const imgElement = (
     <img

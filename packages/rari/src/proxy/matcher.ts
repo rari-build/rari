@@ -71,7 +71,7 @@ function checkHostCondition(
   request: RariRequest,
   key: string,
 ): string | null {
-  return request.rariUrl.hostname === key ? key : null
+  return request.rariUrl.hostname === key ? request.rariUrl.hostname : null
 }
 
 function getConditionActualValue(

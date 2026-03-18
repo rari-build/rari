@@ -133,7 +133,7 @@ describe('matchRouteParams', () => {
       { type: 'dynamic', value: '[]' },
     ]
     const params = matchRouteParams('/blog/[]', segments, '/blog/123')
-    expect(params).toEqual({})
+    expect(params).toBeNull()
   })
 
   it('should handle catch-all without param name', () => {
@@ -142,7 +142,7 @@ describe('matchRouteParams', () => {
       { type: 'catch-all', value: '[...]' },
     ]
     const params = matchRouteParams('/docs/[...]', segments, '/docs/api/guide')
-    expect(params).toEqual({})
+    expect(params).toBeNull()
   })
 
   it('should return null when path is too short', () => {

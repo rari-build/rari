@@ -31,12 +31,15 @@ export interface ImageManifest {
 }
 
 async function processFile(fullPath: string, images: Map<string, ImageUsage>): Promise<void> {
-  const content = await fs.readFile(fullPath, 'utf8')
-
-  if (!content.includes('from \'rari/image\'') && !content.includes('from "rari/image"'))
-    return
-
-  await extractImageUsages(content, fullPath, images)
+  try {
+    const content = await fs.readFile(fullPath, 'utf8')
+    await extractImageUsages(content, fullPath, images)
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`[rari] Image scanner: Failed to process ${fullPath}:`, error)
+    }
+  }
 }
 
 class Semaphore {
@@ -110,7 +113,16 @@ async function scanDirectory(dir: string, images: Map<string, ImageUsage>): Prom
 export async function scanForImageUsage(srcDir: string, additionalDirs: string[] = []): Promise<ImageManifest> {
   const images = new Map<string, ImageUsage>()
 
-  await scanDirectory(srcDir, images)
+  try {
+    await fs.access(srcDir)
+    await scanDirectory(srcDir, images)
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(`Required source directory does not exist: ${srcDir}`)
+    }
+    throw error
+  }
 
   for (const dir of additionalDirs) {
     try {
