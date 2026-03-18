@@ -309,7 +309,10 @@ async function generateMultipleSitemaps(module: any, outDir: string): Promise<vo
 
   for (const { id } of sitemapIds) {
     try {
-      const sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
+      let sanitizedId = String(id).replace(SANITIZE_ID_REGEX, '_')
+
+      if (!sanitizedId || sanitizedId.length === 0)
+        sanitizedId = '_'
 
       const existingId = seenSanitizedIds.get(sanitizedId)
       if (existingId !== undefined) {

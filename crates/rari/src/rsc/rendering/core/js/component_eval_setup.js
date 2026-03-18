@@ -2,11 +2,15 @@
 if (!globalThis.React) {
   globalThis.React = {
     createElement(type, props, ...children) {
+      const propsWithoutKey = props ? { ...props } : {}
+      const key = props && Object.hasOwn(props, 'key') ? props.key : null
+      delete propsWithoutKey.key
+
       const element = {
         $typeof: Symbol.for('react.transitional.element'),
         type,
-        props: props || {},
-        key: props?.key || null,
+        props: propsWithoutKey,
+        key,
       }
       if (children.length > 0)
         element.props = { ...element.props, children: children.length === 1 ? children[0] : children }
@@ -19,9 +23,9 @@ if (!globalThis.React) {
 }
 
 if (typeof _jsx === 'undefined')
-  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || (() => null)
+  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((...args) => globalThis.React.createElement(...args))
 if (typeof _jsxs === 'undefined')
-  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || (() => null)
+  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((...args) => globalThis.React.createElement(...args))
 
 if (typeof globalThis.jsx === 'undefined') {
   globalThis.jsx = function (type, props, key) {
@@ -43,10 +47,13 @@ if (typeof globalThis.jsxs === 'undefined') {
 
 if (typeof globalThis.LoadingSpinner === 'undefined') {
   if (typeof document !== 'undefined' && !document.getElementById('spinner-keyframes')) {
-    const style = document.createElement('style')
-    style.id = 'spinner-keyframes'
-    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'
-    document.head.appendChild(style)
+    const head = document.head || document.getElementsByTagName('head')[0]
+    if (head) {
+      const style = document.createElement('style')
+      style.id = 'spinner-keyframes'
+      style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'
+      head.appendChild(style)
+    }
   }
 
   globalThis.LoadingSpinner = function () {

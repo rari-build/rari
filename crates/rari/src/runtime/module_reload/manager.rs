@@ -233,16 +233,27 @@ impl ModuleReloadManager {
                 handles.push(handle);
             }
 
+            let mut errors = Vec::new();
             for handle in handles {
                 match handle.await {
                     Ok(Ok(())) => {}
                     Ok(Err(e)) => {
                         error!(error = %e, "Module reload failed in batch");
+                        errors.push(e);
                     }
                     Err(e) => {
                         error!(error = %e, "Batch reload task failed");
+                        errors.push(RariError::module_reload(
+                            ModuleReloadError::RuntimeNotAvailable {
+                                message: format!("Task join error: {}", e),
+                            },
+                        ));
                     }
                 }
+            }
+
+            if !errors.is_empty() {
+                return Err(errors.into_iter().next().expect("errors vec is non-empty"));
             }
         }
 

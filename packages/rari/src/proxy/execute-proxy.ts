@@ -23,7 +23,10 @@ export async function executeProxy(simpleRequest: SimpleRequest): Promise<Simple
 
     const event = {
       waitUntil: (promise: Promise<unknown>) => {
-        waitUntilPromises.push(promise)
+        const handledPromise = promise.catch((err) => {
+          return err
+        })
+        waitUntilPromises.push(handledPromise)
       },
     }
 

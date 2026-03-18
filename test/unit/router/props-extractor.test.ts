@@ -22,10 +22,7 @@ describe('mergeMetadata', () => {
 
       const result = mergeMetadata(parent, child)
 
-      expect(result.title).toEqual({
-        template: '%s | My Site',
-        default: 'Page Title | My Site',
-      })
+      expect(result.title).toBe('Page Title | My Site')
     })
 
     it('should not apply template when child title is object', () => {
@@ -383,10 +380,7 @@ describe('mergeMetadata', () => {
 
       const result = mergeMetadata(parent, child)
 
-      expect(result.title).toEqual({
-        template: '%s | My Site',
-        default: 'Page Title | My Site',
-      })
+      expect(result.title).toBe('Page Title | My Site')
       expect(result.description).toBe('Page description')
       expect(result.keywords).toEqual(['page', 'keywords'])
       expect(result.openGraph).toEqual({

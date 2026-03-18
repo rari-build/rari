@@ -131,15 +131,12 @@ async function fetchWithRustCache(input, init, meta) {
     options.cacheTTLMs = String(revalidate * 1000)
   }
 
-  const tags = init?.rari?.tags ?? init?.next?.tags
-  if (tags && Array.isArray(tags)) {
-    const validTags = extractValidTags(init)
-    if (validTags.length > 0) {
-      options.tags = JSON.stringify(validTags)
-    }
+  const validTags = extractValidTags(init)
+  if (validTags.length > 0) {
+    options.tags = JSON.stringify(validTags)
   }
 
-  const timeoutMs = init?.rari?.timeout ?? init?.fetchOptions?.timeout ?? 5000
+  const timeoutMs = (init?.rari?.timeout ?? init?.fetchOptions?.timeout) || 5000
   options.timeout = String(typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 5000)
 
   try {

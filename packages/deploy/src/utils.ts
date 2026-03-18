@@ -144,7 +144,7 @@ export function ensureMinimumNodeEngine(packageJson: any, minVersion: string = M
   return false
 }
 
-export function getRariVersion(cwd: string): string {
+export function getRariVersion(cwd: string = process.cwd()): string {
   const rariPackageJsonPath = join(cwd, 'node_modules/rari/package.json')
 
   if (!existsSync(rariPackageJsonPath)) {

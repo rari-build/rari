@@ -11,8 +11,8 @@ export interface SimpleProxyResult {
     permanent: boolean
   }
   rewrite?: string
-  requestHeaders?: Record<string, string>
-  responseHeaders?: Record<string, string>
+  requestHeaders?: Record<string, string | string[]>
+  responseHeaders?: Record<string, string | string[]>
   response?: {
     status: number
     headers: Record<string, string | string[]>
@@ -65,18 +65,34 @@ export function checkForRedirect(result: ResponseLike | null): SimpleProxyResult
   return null
 }
 
-export function extractProxyHeaders(headers: ResponseLike['headers']): { requestHeaders?: Record<string, string>, responseHeaders?: Record<string, string> } {
-  const requestHeaders: Record<string, string> = {}
-  const responseHeaders: Record<string, string> = {}
+export function extractProxyHeaders(headers: ResponseLike['headers']): { requestHeaders?: Record<string, string | string[]>, responseHeaders?: Record<string, string | string[]> } {
+  const requestHeaders: Record<string, string | string[]> = {}
+  const responseHeaders: Record<string, string | string[]> = {}
 
   if (headers?.forEach) {
     headers.forEach((value: string, key: string) => {
       if (key.startsWith('x-rari-proxy-request-')) {
         const headerName = key.replace('x-rari-proxy-request-', '')
-        requestHeaders[headerName] = value
+        const lowerKey = headerName.toLowerCase()
+
+        if (Object.hasOwn(requestHeaders, lowerKey)) {
+          const existing = requestHeaders[lowerKey]
+          requestHeaders[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
+        }
+        else {
+          requestHeaders[lowerKey] = value
+        }
       }
       else if (!key.startsWith('x-rari-proxy-')) {
-        responseHeaders[key] = value
+        const lowerKey = key.toLowerCase()
+
+        if (Object.hasOwn(responseHeaders, lowerKey)) {
+          const existing = responseHeaders[lowerKey]
+          responseHeaders[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
+        }
+        else {
+          responseHeaders[lowerKey] = value
+        }
       }
     })
   }
@@ -102,7 +118,8 @@ export async function handleDirectResponse(result: ResponseLike): Promise<Simple
   if (result.headers?.forEach) {
     result.headers.forEach((value: string, key: string) => {
       const lowerKey = key.toLowerCase()
-      if (headers[lowerKey]) {
+
+      if (Object.hasOwn(headers, lowerKey)) {
         const existing = headers[lowerKey]
         headers[lowerKey] = Array.isArray(existing) ? [...existing, value] : [existing, value]
       }

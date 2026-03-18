@@ -101,22 +101,7 @@ function useImageLazyLoad(
   loading: 'lazy' | 'eager',
 ) {
   const shouldLoadImmediately = shouldPreload || unoptimized || loading === 'eager'
-  const prevShouldLoadImmediatelyRef = useRef(shouldLoadImmediately)
-
-  const getInitialVisibility = () => {
-    if (shouldLoadImmediately && !prevShouldLoadImmediatelyRef.current) {
-      prevShouldLoadImmediatelyRef.current = true
-      return true
-    }
-
-    return shouldLoadImmediately
-  }
-
-  const [isVisible, setIsVisible] = useState(getInitialVisibility)
-
-  useEffect(() => {
-    prevShouldLoadImmediatelyRef.current = shouldLoadImmediately
-  }, [shouldLoadImmediately])
+  const [hasIntersected, setHasIntersected] = useState(false)
 
   useEffect(() => {
     if (shouldLoadImmediately)
@@ -130,7 +115,7 @@ function useImageLazyLoad(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setIsVisible(true)
+            setHasIntersected(true)
             observer.unobserve(img)
           }
         })
@@ -147,7 +132,7 @@ function useImageLazyLoad(
     }
   }, [imgRef, shouldLoadImmediately])
 
-  return isVisible
+  return shouldLoadImmediately || hasIntersected
 }
 
 function buildImageStyle(
@@ -186,9 +171,17 @@ function buildSrcSetString(
   quality: number,
   format: ImageFormat | undefined,
   loader: ImageProps['loader'],
+  useDprDescriptors: boolean = false,
 ): string {
-  if (loader)
+  if (loader) {
+    if (useDprDescriptors)
+      return sizesArray.map((w, i) => `${loader({ src: finalSrc, width: w, quality })} ${i + 1}x`).join(', ')
+
     return sizesArray.map(w => `${loader({ src: finalSrc, width: w, quality })} ${w}w`).join(', ')
+  }
+
+  if (useDprDescriptors)
+    return sizesArray.map((w, i) => `${buildImageUrl(finalSrc, w, quality, format)} ${i + 1}x`).join(', ')
 
   return sizesArray.map(w => `${buildImageUrl(finalSrc, w, quality, format)} ${w}w`).join(', ')
 }
@@ -290,18 +283,21 @@ function OptimizedImage({
   isVisible: boolean
 }) {
   const defaultWidth = imgWidth || 1920
-  const sizesArray = imgWidth ? [imgWidth] : DEFAULT_DEVICE_SIZES
+  const hasFixedWidth = !!imgWidth
+  const sizesArray = hasFixedWidth ? [imgWidth, imgWidth * 2, imgWidth * 3] : DEFAULT_DEVICE_SIZES
+
   const mainSrc = loader
     ? loader({ src: finalSrc, width: defaultWidth, quality })
     : buildImageUrl(finalSrc, defaultWidth, quality)
-  const shouldUseSrcSet = !imgWidth || sizesArray.length > 1 || sizesArray[0] !== defaultWidth
+
+  const shouldUseSrcSet = true
 
   const imgElement = (
     <img
       ref={imgRef}
       src={isVisible ? mainSrc : undefined}
-      srcSet={isVisible && shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader) : undefined}
-      sizes={shouldUseSrcSet ? sizes : undefined}
+      srcSet={isVisible && shouldUseSrcSet ? buildSrcSetString(sizesArray, finalSrc, quality, undefined, loader, hasFixedWidth) : undefined}
+      sizes={hasFixedWidth ? undefined : sizes}
       alt={alt}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
@@ -323,15 +319,15 @@ function OptimizedImage({
       {isVisible && !loader && DEFAULT_FORMATS.includes('avif') && (
         <source
           type="image/avif"
-          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'avif', loader)}
-          sizes={sizes}
+          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'avif', loader, hasFixedWidth)}
+          sizes={hasFixedWidth ? undefined : sizes}
         />
       )}
       {isVisible && !loader && DEFAULT_FORMATS.includes('webp') && (
         <source
           type="image/webp"
-          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'webp', loader)}
-          sizes={sizes}
+          srcSet={buildSrcSetString(sizesArray, finalSrc, quality, 'webp', loader, hasFixedWidth)}
+          sizes={hasFixedWidth ? undefined : sizes}
         />
       )}
       {imgElement}
