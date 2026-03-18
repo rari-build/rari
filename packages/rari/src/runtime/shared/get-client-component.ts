@@ -178,14 +178,19 @@ function resolveByName(
   clientComponents: Record<string, ComponentInfo>,
   clientComponentNames: Record<string, string>,
 ): any {
-  const componentId = clientComponentNames[id]
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+
+  const componentId = clientComponentNames[baseId]
   if (!componentId || !clientComponents[componentId])
     return null
 
   const componentInfo = clientComponents[componentId] as LazyComponentInfo
+  const component = getComponentFromInfo(componentInfo, exportName)
 
-  if (componentInfo.component != null)
-    return componentInfo.component
+  if (component !== null && component !== undefined)
+    return component
 
   tryLoadComponent(componentInfo)
   return null
@@ -241,11 +246,11 @@ export async function getClientComponentAsync(id: string): Promise<any> {
     }
   }
 
-  const componentId = clientComponentNames[id]
+  const componentId = clientComponentNames[baseId]
   if (componentId) {
     componentInfo = clientComponents[componentId] as LazyComponentInfo
     if (componentInfo)
-      return await ensureComponentLoaded(componentInfo)
+      return await ensureComponentLoaded(componentInfo, exportName)
   }
 
   return null

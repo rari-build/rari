@@ -47,7 +47,11 @@ if (typeof globalThis.jsxs === 'undefined')
   globalThis.jsxs = createJsxDelegate(globalThis['~react']?.jsxRuntime?.jsxs, undefined)
 
 if (typeof globalThis.LoadingSpinner === 'undefined') {
-  if (typeof document !== 'undefined' && !document.getElementById('spinner-keyframes')) {
+  if (
+    typeof document !== 'undefined'
+    && typeof document.getElementById === 'function'
+    && !document.getElementById('spinner-keyframes')
+  ) {
     const head = document.head || document.getElementsByTagName('head')[0]
     if (head) {
       const style = document.createElement('style')
