@@ -216,14 +216,6 @@ export class NavigationErrorHandler {
       retryable: navError.retryable,
     })
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('rari:navigation-error', {
-          detail: navError,
-        }),
-      )
-    }
-
     return navError
   }
 

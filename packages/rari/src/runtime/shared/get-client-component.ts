@@ -49,7 +49,7 @@ async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportNam
 
   if (componentInfo.loader) {
     const loadedComponent = await executeLoader(componentInfo)
-    if (!loadedComponent)
+    if (loadedComponent == null)
       return null
 
     if (exportName && exportName !== 'default') {
@@ -217,8 +217,10 @@ export async function getClientComponentAsync(id: string): Promise<any> {
 
   let componentInfo = clientComponents[id] as LazyComponentInfo
 
-  if (componentInfo)
-    return await ensureComponentLoaded(componentInfo)
+  if (componentInfo) {
+    const exportName = id.includes('#') ? id.slice(id.indexOf('#') + 1) : undefined
+    return await ensureComponentLoaded(componentInfo, exportName)
+  }
 
   if (id.includes('#')) {
     const hashIndex = id.indexOf('#')

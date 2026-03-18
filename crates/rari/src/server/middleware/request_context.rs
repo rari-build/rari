@@ -89,7 +89,7 @@ impl RequestContext {
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout"))
+            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags"))
             .collect();
 
         if cache_relevant_options.is_empty() {

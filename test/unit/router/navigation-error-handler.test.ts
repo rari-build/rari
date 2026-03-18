@@ -304,20 +304,6 @@ describe('NavigationErrorHandler', () => {
       expect(onErrorSpy).toHaveBeenCalledWith(result)
       expect(console.error).toHaveBeenCalled()
     })
-
-    it('should dispatch custom event in browser environment', () => {
-      const dispatchEventSpy = vi.fn()
-      globalThis.window = { dispatchEvent: dispatchEventSpy } as any
-
-      const error = new Error('Test error')
-      const url = 'https://example.com'
-
-      handler.handleError(error, url)
-
-      expect(dispatchEventSpy).toHaveBeenCalled()
-      const event = dispatchEventSpy.mock.calls[0][0]
-      expect(event.type).toBe('rari:navigation-error')
-    })
   })
 
   describe('retry logic', () => {

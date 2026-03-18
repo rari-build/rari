@@ -32,7 +32,10 @@ if (typeof globalThis.jsx === 'undefined') {
     if (!globalThis.React)
       return null
 
-    return globalThis.React.createElement(type, { ...props, key })
+    if (key !== undefined)
+      return globalThis.React.createElement(type, { ...props, key })
+
+    return globalThis.React.createElement(type, props)
   }
 }
 
@@ -41,7 +44,10 @@ if (typeof globalThis.jsxs === 'undefined') {
     if (!globalThis.React)
       return null
 
-    return globalThis.React.createElement(type, { ...props, key })
+    if (key !== undefined)
+      return globalThis.React.createElement(type, { ...props, key })
+
+    return globalThis.React.createElement(type, props)
   }
 }
 
