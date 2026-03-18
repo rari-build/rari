@@ -555,6 +555,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     if (!isMountedRef.current)
       return
 
+    currentRouteRef.current = actualTargetPath
+
     setNavigationState(prev => ({
       ...prev,
       currentRoute: actualTargetPath,
@@ -667,8 +669,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           window.history.replaceState(historyState, '', urlWithHash)
         else
           window.history.pushState(historyState, '', urlWithHash)
-
-        currentRouteRef.current = actualTargetPath
 
         processMetadata(response)
 
