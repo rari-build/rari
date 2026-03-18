@@ -28,34 +28,46 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
 }
 
 async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportName?: string): Promise<any> {
-  if (componentInfo.component) {
-    return exportName && exportName !== 'default'
-      ? componentInfo.component[exportName]
-      : componentInfo.component
+  if (componentInfo.component != null) {
+    if (exportName && exportName !== 'default') {
+      const namedExport = componentInfo.component[exportName]
+      return namedExport !== undefined ? namedExport : null
+    }
+
+    return componentInfo.component
   }
 
   if (componentInfo.loadPromise) {
     await componentInfo.loadPromise
-    return exportName && exportName !== 'default'
-      ? componentInfo.component[exportName]
-      : componentInfo.component
+    if (exportName && exportName !== 'default') {
+      const namedExport = componentInfo.component?.[exportName]
+      return namedExport !== undefined ? namedExport : null
+    }
+
+    return componentInfo.component ?? null
   }
 
   if (componentInfo.loader) {
     const loadedComponent = await executeLoader(componentInfo)
-    return exportName && exportName !== 'default'
-      ? loadedComponent[exportName]
-      : loadedComponent
+    if (loadedComponent == null)
+      return null
+
+    if (exportName && exportName !== 'default') {
+      const namedExport = loadedComponent[exportName]
+      return namedExport !== undefined ? namedExport : null
+    }
+
+    return loadedComponent
   }
 
   return null
 }
 
-function triggerComponentLoad(componentInfo: LazyComponentInfo): void {
-  if (!componentInfo.loader || componentInfo.loading || componentInfo.component || componentInfo.loadPromise)
-    return
+function triggerComponentLoad(componentInfo: LazyComponentInfo): Promise<any> {
+  if (!componentInfo.loader || componentInfo.loading || componentInfo.component != null || componentInfo.loadPromise)
+    return Promise.resolve(null)
 
-  executeLoader(componentInfo)
+  return executeLoader(componentInfo)
 }
 
 export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: string): null {
@@ -80,6 +92,110 @@ export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: 
   return null
 }
 
+function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: string): any {
+  if (componentInfo.component == null)
+    return null
+
+  if (!exportName || exportName === 'default')
+    return componentInfo.component
+
+  return componentInfo.component[exportName]
+}
+
+function tryLoadComponent(componentInfo: LazyComponentInfo): void {
+  if (componentInfo.loader && !componentInfo.loading && !componentInfo.loadPromise) {
+    triggerComponentLoad(componentInfo)
+      .catch(() => {
+        // Error already logged in executeLoader
+      })
+  }
+}
+
+function resolveById(id: string, clientComponents: Record<string, ComponentInfo>): any {
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+
+  const componentInfo = clientComponents[baseId] as LazyComponentInfo
+  if (!componentInfo)
+    return null
+
+  if (componentInfo.component != null) {
+    if (exportName && exportName !== 'default') {
+      const namedExport = componentInfo.component[exportName]
+      return namedExport !== undefined ? namedExport : null
+    }
+
+    return componentInfo.component
+  }
+
+  tryLoadComponent(componentInfo)
+  return null
+}
+
+function resolveByPath(
+  path: string,
+  exportName: string,
+  clientComponents: Record<string, ComponentInfo>,
+  clientComponentPaths: Record<string, string>,
+): any {
+  const componentId = clientComponentPaths[path]
+  if (!componentId || !clientComponents[componentId])
+    return null
+
+  const componentInfo = clientComponents[componentId] as LazyComponentInfo
+  const component = getComponentFromInfo(componentInfo, exportName)
+
+  if (component !== null && component !== undefined)
+    return component
+
+  tryLoadComponent(componentInfo)
+  return null
+}
+
+function resolveByPathWithExport(
+  id: string,
+  clientComponents: Record<string, ComponentInfo>,
+  clientComponentPaths: Record<string, string>,
+): any {
+  const hashIndex = id.indexOf('#')
+  const path = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? '' : id.slice(hashIndex + 1)
+
+  const variants = getPathVariants(path)
+
+  for (const variant of variants) {
+    const result = resolveByPath(variant, exportName, clientComponents, clientComponentPaths)
+    if (result !== null)
+      return result
+  }
+
+  return null
+}
+
+function resolveByName(
+  id: string,
+  clientComponents: Record<string, ComponentInfo>,
+  clientComponentNames: Record<string, string>,
+): any {
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+
+  const componentId = clientComponentNames[baseId]
+  if (!componentId || !clientComponents[componentId])
+    return null
+
+  const componentInfo = clientComponents[componentId] as LazyComponentInfo
+  const component = getComponentFromInfo(componentInfo, exportName)
+
+  if (component !== null && component !== undefined)
+    return component
+
+  tryLoadComponent(componentInfo)
+  return null
+}
+
 export function resolveClientComponent(
   id: string,
   globalAccessor: GlobalAccessor,
@@ -88,90 +204,54 @@ export function resolveClientComponent(
   const clientComponentPaths = globalAccessor['~clientComponentPaths'] || {}
   const clientComponentNames = globalAccessor['~clientComponentNames'] || {}
 
-  if (clientComponents[id]) {
-    const componentInfo = clientComponents[id] as LazyComponentInfo
+  const directResult = resolveById(id, clientComponents)
+  if (directResult !== null)
+    return directResult
 
-    if (componentInfo.component)
-      return componentInfo.component
+  const pathResult = resolveByPathWithExport(id, clientComponents, clientComponentPaths)
+  if (pathResult !== null)
+    return pathResult
 
-    if (componentInfo.loader && !componentInfo.loading && !componentInfo.loadPromise)
-      triggerComponentLoad(componentInfo)
-
-    return null
-  }
-
-  if (id.includes('#')) {
-    const [path, exportName] = id.split('#')
-
-    const componentId = clientComponentPaths[path]
-    if (componentId && clientComponents[componentId]) {
-      const componentInfo = clientComponents[componentId] as LazyComponentInfo
-
-      if (componentInfo.component) {
-        return exportName === 'default' || !exportName
-          ? componentInfo.component
-          : componentInfo.component[exportName]
-      }
-
-      if (componentInfo.loader && !componentInfo.loading && !componentInfo.loadPromise)
-        triggerComponentLoad(componentInfo)
-
-      return null
-    }
-
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
-    const componentIdByNormalizedPath = clientComponentPaths[normalizedPath]
-    if (componentIdByNormalizedPath && clientComponents[componentIdByNormalizedPath]) {
-      const componentInfo = clientComponents[componentIdByNormalizedPath] as LazyComponentInfo
-
-      if (componentInfo.component) {
-        return exportName === 'default' || !exportName
-          ? componentInfo.component
-          : componentInfo.component[exportName]
-      }
-
-      if (componentInfo.loader && !componentInfo.loading && !componentInfo.loadPromise)
-        triggerComponentLoad(componentInfo)
-
-      return null
-    }
-  }
-
-  const componentId = clientComponentNames[id]
-  if (componentId && clientComponents[componentId]) {
-    const componentInfo = clientComponents[componentId] as LazyComponentInfo
-
-    if (componentInfo.component)
-      return componentInfo.component
-
-    if (componentInfo.loader && !componentInfo.loading && !componentInfo.loadPromise)
-      triggerComponentLoad(componentInfo)
-
-    return null
-  }
-
-  return null
+  return resolveByName(id, clientComponents, clientComponentNames)
 }
 
 export function getClientComponent(id: string): any {
   return resolveClientComponent(id, globalThis as unknown as GlobalWithRari)
 }
 
+function getPathVariants(path: string): string[] {
+  return path.startsWith('./') ? [path, path.slice(2)] : [path, `./${path}`]
+}
+
 export async function getClientComponentAsync(id: string): Promise<any> {
   const clientComponents = (globalThis as unknown as GlobalWithRari)['~clientComponents'] || {}
   const clientComponentPaths = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] || {}
+  const clientComponentNames = (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] || {}
 
-  let componentInfo = clientComponents[id] as LazyComponentInfo
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
 
-  if (!componentInfo && id.includes('#')) {
-    const [path] = id.split('#')
-    const componentId = clientComponentPaths[path]
-    if (componentId)
+  let componentInfo = clientComponents[baseId] as LazyComponentInfo
+  if (componentInfo)
+    return await ensureComponentLoaded(componentInfo, exportName)
+
+  const variants = getPathVariants(baseId)
+  for (const variant of variants) {
+    const componentId = clientComponentPaths[variant]
+    if (componentId) {
       componentInfo = clientComponents[componentId] as LazyComponentInfo
+      if (componentInfo)
+        return await ensureComponentLoaded(componentInfo, exportName)
+    }
   }
 
-  if (componentInfo)
-    return await ensureComponentLoaded(componentInfo, id.includes('#') ? id.split('#')[1] : undefined)
+  const componentId = clientComponentNames[baseId]
+  if (componentId) {
+    componentInfo = clientComponents[componentId] as LazyComponentInfo
+    if (componentInfo)
+      return await ensureComponentLoaded(componentInfo, exportName)
+  }
 
   return null
 }

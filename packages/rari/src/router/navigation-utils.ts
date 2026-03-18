@@ -17,6 +17,104 @@ function safeDecodeURIComponent(value: string): string | null {
   }
 }
 
+function matchStaticSegment(actualSegment: string, segmentValue: string): boolean {
+  const decodedActual = safeDecodeURIComponent(actualSegment)
+  const decodedValue = safeDecodeURIComponent(segmentValue)
+
+  if (decodedActual === null || decodedValue === null)
+    return false
+
+  return decodedActual === decodedValue
+}
+
+function matchDynamicSegment(
+  actualSegment: string,
+  segmentParam: string | undefined,
+  params: Record<string, string | string[]>,
+): boolean {
+  if (!segmentParam)
+    return false
+
+  const decoded = safeDecodeURIComponent(actualSegment)
+  if (decoded === null)
+    return false
+
+  params[segmentParam] = decoded
+  return true
+}
+
+function matchCatchAllSegment(
+  actualSegments: string[],
+  actualIndex: number,
+  segmentParam: string | undefined,
+  params: Record<string, string | string[]>,
+): { success: boolean, newIndex: number } {
+  if (!segmentParam)
+    return { success: false, newIndex: actualIndex }
+
+  const decodedSegments: string[] = []
+  for (const seg of actualSegments.slice(actualIndex)) {
+    const decoded = safeDecodeURIComponent(seg)
+    if (decoded === null)
+      return { success: false, newIndex: actualIndex }
+    decodedSegments.push(decoded)
+  }
+
+  params[segmentParam] = decodedSegments
+  return { success: true, newIndex: actualSegments.length }
+}
+
+function handleOptionalCatchAll(
+  actualIndex: number,
+  actualSegmentsLength: number,
+  segmentParam: string | undefined,
+  params: Record<string, string | string[]>,
+): void {
+  if (actualIndex >= actualSegmentsLength && segmentParam) {
+    params[segmentParam] = []
+  }
+}
+
+function processSegment(
+  segment: RouteSegment,
+  actualSegments: string[],
+  actualIndex: number,
+  params: Record<string, string | string[]>,
+): { success: boolean, newIndex: number } {
+  if (actualIndex >= actualSegments.length) {
+    if (segment.type === 'optional-catch-all') {
+      if (!segment.param)
+        return { success: false, newIndex: actualIndex }
+
+      handleOptionalCatchAll(actualIndex, actualSegments.length, segment.param, params)
+      return { success: true, newIndex: actualIndex }
+    }
+
+    return { success: false, newIndex: actualIndex }
+  }
+
+  switch (segment.type) {
+    case 'static':
+      if (!matchStaticSegment(actualSegments[actualIndex], segment.value))
+        return { success: false, newIndex: actualIndex }
+
+      return { success: true, newIndex: actualIndex + 1 }
+
+    case 'dynamic':
+      if (!matchDynamicSegment(actualSegments[actualIndex], segment.param, params))
+        return { success: false, newIndex: actualIndex }
+
+      return { success: true, newIndex: actualIndex + 1 }
+
+    case 'catch-all':
+    case 'optional-catch-all':
+      return matchCatchAllSegment(actualSegments, actualIndex, segment.param, params)
+
+    default:
+      return { success: false, newIndex: actualIndex }
+  }
+}
+
 export function matchRouteParams(
   _routePath: string,
   routeSegments: RouteSegment[],
@@ -27,51 +125,11 @@ export function matchRouteParams(
 
   let actualIndex = 0
 
-  for (let i = 0; i < routeSegments.length; i++) {
-    const segment = routeSegments[i]
-
-    if (actualIndex >= actualSegments.length) {
-      if (segment.type === 'optional-catch-all') {
-        if (segment.param)
-          params[segment.param] = []
-        continue
-      }
-
+  for (const segment of routeSegments) {
+    const result = processSegment(segment, actualSegments, actualIndex, params)
+    if (!result.success)
       return null
-    }
-
-    switch (segment.type) {
-      case 'static':
-        if (actualSegments[actualIndex] !== segment.value)
-          return null
-        actualIndex++
-        break
-
-      case 'dynamic':
-        if (segment.param) {
-          const decoded = safeDecodeURIComponent(actualSegments[actualIndex])
-          if (decoded === null)
-            return null
-          params[segment.param] = decoded
-        }
-        actualIndex++
-        break
-
-      case 'catch-all':
-      case 'optional-catch-all':
-        if (segment.param) {
-          const decodedSegments: string[] = []
-          for (const seg of actualSegments.slice(actualIndex)) {
-            const decoded = safeDecodeURIComponent(seg)
-            if (decoded === null)
-              return null
-            decodedSegments.push(decoded)
-          }
-          params[segment.param] = decodedSegments
-        }
-        actualIndex = actualSegments.length
-        break
-    }
+    actualIndex = result.newIndex
   }
 
   if (actualIndex !== actualSegments.length)

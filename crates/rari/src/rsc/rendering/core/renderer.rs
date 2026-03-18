@@ -225,13 +225,6 @@ globalThis['~errors'].batch.push({{
             .execute_script("extension-checks".to_string(), EXTENSION_CHECKS_SCRIPT.to_string())
             .await?;
 
-        self.runtime
-            .execute_script(
-                "init_react_globals".to_string(),
-                REACT_GLOBALS_SETUP_SCRIPT.to_string(),
-            )
-            .await?;
-
         let html_render_script = include_str!("../layout/js/html_render.js");
         self.runtime
             .execute_script("html_render".to_string(), html_render_script.to_string())
@@ -707,7 +700,7 @@ globalThis['~errors'].batch.push({{
         let render_start = Instant::now();
 
         if !self.initialized {
-            return Err(RariError::internal("ReactDOMServer not initialized"));
+            return Err(RariError::internal("RSC renderer not initialized"));
         }
 
         if self.is_client_reference(component_id).await {
@@ -840,7 +833,7 @@ globalThis['~errors'].batch.push({{
         self.resource_tracker.total_renders.fetch_add(1, Ordering::Relaxed);
 
         if !self.initialized {
-            return Err(RariError::internal("ReactDOMServer not initialized"));
+            return Err(RariError::internal("RSC renderer not initialized"));
         }
 
         if self.is_client_reference(component_id).await {

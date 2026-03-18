@@ -1,6 +1,7 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
+import type { NavItem } from '@/lib/docs-navigation'
 import { usePathname } from 'rari/router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { docsNavigation } from '@/lib/docs-navigation'
@@ -17,6 +18,26 @@ interface SidebarProps {
   version: string
 }
 
+function shouldExpandSection(section: NavItem, pathname: string | null): boolean {
+  if (section.href && pathname?.startsWith(section.href))
+    return true
+
+  if (section.items)
+    return section.items.some(item => item.href && pathname?.startsWith(item.href))
+
+  return false
+}
+
+function shouldExpandItem(item: NavItem, pathname: string | null): boolean {
+  if (item.href && pathname?.startsWith(item.href))
+    return true
+
+  if (item.items)
+    return item.items.some((nested: NavItem) => nested.href && pathname === nested.href)
+
+  return false
+}
+
 const navigation = [
   { href: '/docs/getting-started', label: 'Docs', id: 'docs' },
   {
@@ -30,6 +51,372 @@ const navigation = [
   { href: '/blog', label: 'Blog', id: 'blog' },
   { href: 'https://github.com/sponsors/skiniks', label: 'Become a Sponsor', id: 'sponsor', external: true },
 ]
+
+function NavigationLink({
+  item,
+  isActive,
+  isSponsor,
+}: {
+  item: typeof navigation[0]
+  isActive: boolean
+  isSponsor: boolean
+}) {
+  return (
+    <a
+      href={item.href}
+      {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
+        ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
+        : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+      }`}
+      aria-current={isActive ? 'page' : undefined}
+    >
+      {!isActive && (
+        <span className={`absolute inset-0 ${isSponsor ? 'bg-linear-to-r from-pink-500/10 to-pink-600/10' : 'bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10'} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></span>
+      )}
+      {isSponsor && <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />}
+      <span className="relative z-10">{item.label}</span>
+    </a>
+  )
+}
+
+function EnterpriseItems({
+  item,
+  pathname,
+}: {
+  item: typeof navigation[0]
+  pathname: string | null
+}) {
+  if (!item.items || item.items.length === 0)
+    return null
+
+  return (
+    <div className="mt-1">
+      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
+        {item.items.map(subItem => (
+          <a
+            key={subItem.href}
+            href={subItem.href}
+            className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
+              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+            }`}
+          >
+            {pathname !== subItem.href && (
+              <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            )}
+            <span className="relative z-10 flex items-center">
+              <span className="mr-2 text-gray-400">•</span>
+              {subItem.label}
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function NestedDocItem({
+  nestedItem,
+  pathname,
+}: {
+  nestedItem: NavItem
+  pathname: string | null
+}) {
+  return (
+    <li>
+      <a
+        href={nestedItem.href}
+        className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href
+          ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+          : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+        }`}
+      >
+        {pathname !== nestedItem.href && (
+          <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+        )}
+        <span className="relative z-10 flex items-center">
+          <span className="mr-2 text-gray-400">•</span>
+          {nestedItem.label}
+        </span>
+      </a>
+    </li>
+  )
+}
+
+function DocsSection({
+  section,
+  pathname,
+  expandedSections,
+  toggleSection,
+}: {
+  section: NavItem
+  pathname: string | null
+  expandedSections: Record<string, boolean>
+  toggleSection: (key: string) => void
+}) {
+  const sectionKey = section.href || section.label
+  const isSectionExpanded = expandedSections[sectionKey] ?? true
+  const hasSectionItems = section.items && section.items.length > 0
+  const showSectionChevron = hasSectionItems && section.collapsible === true
+
+  return (
+    <div>
+      <div className="flex items-center">
+        <div className="flex items-center">
+          {section.href
+            ? (
+                <a
+                  href={section.href}
+                  className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
+                    ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+                    : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
+                  }`}
+                >
+                  {pathname !== section.href && (
+                    <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                  )}
+                  <span className="relative z-10">{section.label}</span>
+                </a>
+              )
+            : (
+                <div className="flex-1 px-3 py-2 text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                  {section.label}
+                </div>
+              )}
+          {showSectionChevron && (
+            <button
+              type="button"
+              onClick={() => toggleSection(sectionKey)}
+              className="px-2 py-2 text-gray-300 hover:text-gray-100 cursor-pointer"
+              aria-label={isSectionExpanded ? `Collapse ${section.label} section` : `Expand ${section.label} section`}
+              aria-expanded={isSectionExpanded}
+            >
+              <Chevron isOpen={isSectionExpanded} />
+              <span className="sr-only">
+                {isSectionExpanded ? 'Collapse' : 'Expand'}
+                {' '}
+                {section.label}
+                {' '}
+                section
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+      {hasSectionItems && (showSectionChevron ? isSectionExpanded : true) && section.items && (
+        <ul className="mt-1 space-y-1">
+          {section.items.map(subItem => (
+            <DocsSectionItem
+              key={subItem.href || subItem.label}
+              subItem={subItem}
+              sectionKey={sectionKey}
+              pathname={pathname}
+              expandedSections={expandedSections}
+              toggleSection={toggleSection}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function DocsSectionItem({
+  subItem,
+  sectionKey,
+  pathname,
+  expandedSections,
+  toggleSection,
+}: {
+  subItem: NavItem
+  sectionKey: string
+  pathname: string | null
+  expandedSections: Record<string, boolean>
+  toggleSection: (key: string) => void
+}) {
+  const itemKey = `${sectionKey}-${subItem.href || subItem.label}`
+  const isItemExpanded = expandedSections[itemKey] ?? true
+  const hasSubItems = subItem.items && subItem.items.length > 0
+  const showItemChevron = hasSubItems
+
+  return (
+    <li>
+      <div className="flex items-center">
+        {subItem.href
+          ? (
+              <a
+                href={subItem.href}
+                className={`flex-1 flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
+                  ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
+                  : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
+                }`}
+              >
+                {pathname !== subItem.href && (
+                  <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                )}
+                <span className="relative z-10 flex items-center">
+                  {!hasSubItems && <span className="mr-2 text-gray-400">•</span>}
+                  {subItem.label}
+                </span>
+              </a>
+            )
+          : (
+              <div className="flex-1 flex items-center px-3 py-1.5 text-xs text-gray-400 font-medium">
+                {subItem.label}
+              </div>
+            )}
+        {showItemChevron && (
+          <button
+            type="button"
+            onClick={() => toggleSection(itemKey)}
+            className="px-2 py-1.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            aria-label={isItemExpanded ? `Collapse ${subItem.label} section` : `Expand ${subItem.label} section`}
+            aria-expanded={isItemExpanded}
+          >
+            <Chevron isOpen={isItemExpanded} />
+            <span className="sr-only">
+              {isItemExpanded ? 'Collapse' : 'Expand'}
+              {' '}
+              {subItem.label}
+              {' '}
+              section
+            </span>
+          </button>
+        )}
+      </div>
+      {hasSubItems && (showItemChevron ? isItemExpanded : true) && subItem.items && (
+        <ul className="mt-1 space-y-1">
+          {subItem.items.map(nestedItem => (
+            <NestedDocItem
+              key={`${itemKey}-${nestedItem.href || nestedItem.label}`}
+              nestedItem={nestedItem}
+              pathname={pathname}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+function DocsNavigation({
+  pathname,
+  expandedSections,
+  toggleSection,
+}: {
+  pathname: string | null
+  expandedSections: Record<string, boolean>
+  toggleSection: (key: string) => void
+}) {
+  return (
+    <div className="mt-1">
+      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
+        {docsNavigation.map(section => (
+          <DocsSection
+            key={section.href || section.label}
+            section={section}
+            pathname={pathname}
+            expandedSections={expandedSections}
+            toggleSection={toggleSection}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function NavigationItem({
+  item,
+  pathname,
+  isDocsExpanded,
+  isEnterpriseExpanded,
+  expandedSections,
+  setManualDocsToggle,
+  setManualEnterpriseToggle,
+  toggleSection,
+}: {
+  item: typeof navigation[0]
+  pathname: string | null
+  isDocsExpanded: boolean
+  isEnterpriseExpanded: boolean
+  expandedSections: Record<string, boolean>
+  setManualDocsToggle: Dispatch<SetStateAction<boolean | undefined>>
+  setManualEnterpriseToggle: Dispatch<SetStateAction<boolean | undefined>>
+  toggleSection: (key: string) => void
+}) {
+  const isDocs = item.id === 'docs'
+  const isEnterprise = item.id === 'enterprise'
+  const isSponsor = item.id === 'sponsor'
+  const isActive = isDocs
+    ? pathname === '/docs/getting-started'
+    : isEnterprise
+      ? pathname === item.href
+      : (pathname === item.href || pathname?.startsWith(item.href)) ?? false
+
+  const isDisabled = isDocs && pathname === '/docs/getting-started'
+  const hasItems = 'items' in item && item.items && item.items.length > 0
+
+  return (
+    <li>
+      <div className="flex items-center">
+        {isDisabled
+          ? (
+              <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-gray-400 cursor-not-allowed">
+                {item.label}
+              </div>
+            )
+          : (
+              <NavigationLink item={item} isActive={isActive} isSponsor={isSponsor} />
+            )}
+        {isDocs && (
+          <button
+            type="button"
+            onClick={() => setManualDocsToggle(!isDocsExpanded)}
+            className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
+            aria-expanded={isDocsExpanded}
+          >
+            <Chevron isOpen={isDocsExpanded} />
+            <span className="sr-only">
+              {isDocsExpanded ? 'Collapse' : 'Expand'}
+              {' '}
+              documentation section
+            </span>
+          </button>
+        )}
+        {isEnterprise && (
+          <button
+            type="button"
+            onClick={() => setManualEnterpriseToggle(!isEnterpriseExpanded)}
+            className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
+            aria-label={isEnterpriseExpanded ? 'Collapse enterprise section' : 'Expand enterprise section'}
+            aria-expanded={isEnterpriseExpanded}
+          >
+            <Chevron isOpen={isEnterpriseExpanded} />
+            <span className="sr-only">
+              {isEnterpriseExpanded ? 'Collapse' : 'Expand'}
+              {' '}
+              enterprise section
+            </span>
+          </button>
+        )}
+      </div>
+
+      {isEnterprise && isEnterpriseExpanded && hasItems && (
+        <EnterpriseItems item={item} pathname={pathname} />
+      )}
+
+      {isDocs && isDocsExpanded && (
+        <DocsNavigation
+          pathname={pathname}
+          expandedSections={expandedSections}
+          toggleSection={toggleSection}
+        />
+      )}
+    </li>
+  )
+}
 
 function Chevron({ isOpen }: { isOpen: boolean }) {
   return (
@@ -63,54 +450,20 @@ export default function Sidebar({ version }: SidebarProps) {
 
   const mobileToggleRef = useRef<HTMLInputElement>(null)
 
-  const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : isDocsPage
-  const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : isEnterprisePage
+  const isDocsExpanded = manualDocsToggle !== undefined ? manualDocsToggle : (isDocsPage ?? false)
+  const isEnterpriseExpanded = manualEnterpriseToggle !== undefined ? manualEnterpriseToggle : (isEnterprisePage ?? false)
 
   const expandedSections = useMemo(() => {
     const sections: Record<string, boolean> = {}
 
     docsNavigation.forEach((section) => {
       const sectionKey = section.href || section.label
-
-      if (manualToggles[sectionKey] !== undefined) {
-        sections[sectionKey] = manualToggles[sectionKey]
-      }
-      else {
-        let shouldExpand = false
-        if (section.href && pathname?.startsWith(section.href)) {
-          shouldExpand = true
-        }
-        else if (section.items) {
-          const hasActiveChild = section.items.some(item =>
-            item.href && pathname?.startsWith(item.href),
-          )
-          if (hasActiveChild)
-            shouldExpand = true
-        }
-        sections[sectionKey] = shouldExpand
-      }
+      sections[sectionKey] = manualToggles[sectionKey] ?? shouldExpandSection(section, pathname)
 
       if (section.items) {
         section.items.forEach((item) => {
           const itemKey = `${sectionKey}-${item.href || item.label}`
-
-          if (manualToggles[itemKey] !== undefined) {
-            sections[itemKey] = manualToggles[itemKey]
-          }
-          else {
-            let shouldExpand = false
-            if (item.href && pathname?.startsWith(item.href)) {
-              shouldExpand = true
-            }
-            else if (item.items) {
-              const hasActiveNestedChild = item.items.some(nested =>
-                nested.href && pathname === nested.href,
-              )
-              if (hasActiveNestedChild)
-                shouldExpand = true
-            }
-            sections[itemKey] = shouldExpand
-          }
+          sections[itemKey] = manualToggles[itemKey] ?? shouldExpandItem(item, pathname)
         })
       }
     })
@@ -173,245 +526,19 @@ export default function Sidebar({ version }: SidebarProps) {
           </div>
 
           <ul className="space-y-1">
-            {navigation.map((item) => {
-              const isDocs = item.id === 'docs'
-              const isEnterprise = item.id === 'enterprise'
-              const isSponsor = item.id === 'sponsor'
-              const isActive = isDocs
-                ? pathname === '/docs/getting-started'
-                : isEnterprise
-                  ? pathname === item.href
-                  : pathname === item.href || pathname?.startsWith(item.href)
-
-              const isDisabled = isDocs && pathname === '/docs/getting-started'
-              const hasItems = 'items' in item && item.items && item.items.length > 0
-
-              return (
-                <li key={item.id}>
-                  <div className="flex items-center">
-                    {isDisabled
-                      ? (
-                          <div className="flex-1 block px-3 py-2.5 rounded-md text-sm font-medium text-gray-400 cursor-not-allowed">
-                            {item.label}
-                          </div>
-                        )
-                      : (
-                          <a
-                            href={item.href}
-                            {...(isSponsor ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                            className={`flex-1 ${isSponsor ? 'flex items-center' : 'block'} px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${isActive
-                              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white border-l-2 border-[#fd7e14]'
-                              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
-                            }`}
-                            aria-current={isActive ? 'page' : undefined}
-                          >
-                            {!isActive && (
-                              <span className={`absolute inset-0 ${isSponsor ? 'bg-linear-to-r from-pink-500/10 to-pink-600/10' : 'bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10'} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></span>
-                            )}
-                            {isSponsor && <Heart className="w-4 h-4 mr-2 text-pink-400 relative z-10" />}
-                            <span className="relative z-10">{item.label}</span>
-                          </a>
-                        )}
-                    {isDocs && (
-                      <button
-                        type="button"
-                        onClick={() => setManualDocsToggle(!isDocsExpanded)}
-                        className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
-                        aria-label={isDocsExpanded ? 'Collapse documentation section' : 'Expand documentation section'}
-                        aria-expanded={isDocsExpanded}
-                      >
-                        <Chevron isOpen={isDocsExpanded} />
-                        <span className="sr-only">
-                          {isDocsExpanded ? 'Collapse' : 'Expand'}
-                          {' '}
-                          documentation section
-                        </span>
-                      </button>
-                    )}
-                    {isEnterprise && (
-                      <button
-                        type="button"
-                        onClick={() => setManualEnterpriseToggle(!isEnterpriseExpanded)}
-                        className="px-2 py-2.5 text-gray-300 hover:text-gray-100 cursor-pointer"
-                        aria-label={isEnterpriseExpanded ? 'Collapse enterprise section' : 'Expand enterprise section'}
-                        aria-expanded={isEnterpriseExpanded}
-                      >
-                        <Chevron isOpen={isEnterpriseExpanded} />
-                        <span className="sr-only">
-                          {isEnterpriseExpanded ? 'Collapse' : 'Expand'}
-                          {' '}
-                          enterprise section
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  {isEnterprise && isEnterpriseExpanded && hasItems && (
-                    <div className="mt-1">
-                      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
-                        {item.items!.map(subItem => (
-                          <a
-                            key={subItem.href}
-                            href={subItem.href}
-                            className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
-                              ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                              : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
-                            }`}
-                          >
-                            {pathname !== subItem.href && (
-                              <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                            )}
-                            <span className="relative z-10 flex items-center">
-                              <span className="mr-2 text-gray-400">•</span>
-                              {subItem.label}
-                            </span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isDocs && isDocsExpanded && (
-                    <div className="mt-1">
-                      <div className="space-y-1 ml-2 pl-3 border-l border-[#30363d]">
-                        {docsNavigation.map((section) => {
-                          const sectionKey = section.href || section.label
-                          const isSectionExpanded = expandedSections[sectionKey] !== undefined ? expandedSections[sectionKey] : true
-                          const hasSectionItems = section.items && section.items.length > 0
-                          const showSectionChevron = hasSectionItems && section.label === 'Getting Started'
-
-                          return (
-                            <div key={sectionKey}>
-                              <div className="flex items-center">
-                                {section.href
-                                  ? (
-                                      <a
-                                        href={section.href}
-                                        className={`flex-1 block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative overflow-hidden group ${pathname === section.href
-                                          ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                                          : 'text-gray-300 hover:bg-[#21262d] hover:text-white'
-                                        }`}
-                                      >
-                                        {pathname !== section.href && (
-                                          <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                                        )}
-                                        <span className="relative z-10">{section.label}</span>
-                                      </a>
-                                    )
-                                  : (
-                                      <div className="flex-1 px-3 py-2 text-xs text-gray-400 uppercase tracking-wider font-semibold">
-                                        {section.label}
-                                      </div>
-                                    )}
-                                {showSectionChevron && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSection(sectionKey)}
-                                    className="px-2 py-2 text-gray-300 hover:text-gray-100 cursor-pointer"
-                                    aria-label={isSectionExpanded ? `Collapse ${section.label} section` : `Expand ${section.label} section`}
-                                    aria-expanded={isSectionExpanded}
-                                  >
-                                    <Chevron isOpen={isSectionExpanded} />
-                                    <span className="sr-only">
-                                      {isSectionExpanded ? 'Collapse' : 'Expand'}
-                                      {' '}
-                                      {section.label}
-                                      {' '}
-                                      section
-                                    </span>
-                                  </button>
-                                )}
-                              </div>
-                              {hasSectionItems && (showSectionChevron ? isSectionExpanded : true) && (
-                                <ul className="mt-1 space-y-1">
-                                  {section.items!.map((subItem) => {
-                                    const itemKey = `${sectionKey}-${subItem.href || subItem.label}`
-                                    const isItemExpanded = expandedSections[itemKey] !== undefined ? expandedSections[itemKey] : true
-                                    const hasSubItems = subItem.items && subItem.items.length > 0
-                                    const showItemChevron = hasSubItems
-
-                                    return (
-                                      <li key={subItem.href || subItem.label}>
-                                        <div className="flex items-center">
-                                          {subItem.href
-                                            ? (
-                                                <a
-                                                  href={subItem.href}
-                                                  className={`flex-1 flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === subItem.href
-                                                    ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                                                    : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
-                                                  }`}
-                                                >
-                                                  {pathname !== subItem.href && (
-                                                    <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                                                  )}
-                                                  <span className="relative z-10 flex items-center">
-                                                    {!hasSubItems && <span className="mr-2 text-gray-400">•</span>}
-                                                    {subItem.label}
-                                                  </span>
-                                                </a>
-                                              )
-                                            : (
-                                                <div className="flex-1 flex items-center px-3 py-1.5 text-xs text-gray-400 font-medium">
-                                                  {subItem.label}
-                                                </div>
-                                              )}
-                                          {showItemChevron && (
-                                            <button
-                                              type="button"
-                                              onClick={() => toggleSection(itemKey)}
-                                              className="px-2 py-1.5 text-gray-300 hover:text-gray-100 cursor-pointer"
-                                              aria-label={isItemExpanded ? `Collapse ${subItem.label} section` : `Expand ${subItem.label} section`}
-                                              aria-expanded={isItemExpanded}
-                                            >
-                                              <Chevron isOpen={isItemExpanded} />
-                                              <span className="sr-only">
-                                                {isItemExpanded ? 'Collapse' : 'Expand'}
-                                                {' '}
-                                                {subItem.label}
-                                                {' '}
-                                                section
-                                              </span>
-                                            </button>
-                                          )}
-                                        </div>
-                                        {hasSubItems && (showItemChevron ? isItemExpanded : true) && (
-                                          <ul className="mt-1 space-y-1">
-                                            {subItem.items!.map(nestedItem => (
-                                              <li key={`${itemKey}-${nestedItem.href || nestedItem.label}`}>
-                                                <a
-                                                  href={nestedItem.href}
-                                                  className={`flex items-center px-3 py-1.5 rounded-md text-sm transition-all duration-200 relative overflow-hidden group ${pathname === nestedItem.href
-                                                    ? 'bg-linear-to-r from-[#fd7e14]/20 to-[#e8590c]/20 text-white'
-                                                    : 'text-gray-300 hover:bg-[#21262d] hover:text-gray-100'
-                                                  }`}
-                                                >
-                                                  {pathname !== nestedItem.href && (
-                                                    <span className="absolute inset-0 bg-linear-to-r from-[#fd7e14]/10 to-[#e8590c]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                                                  )}
-                                                  <span className="relative z-10 flex items-center">
-                                                    <span className="mr-2 text-gray-400">•</span>
-                                                    {nestedItem.label}
-                                                  </span>
-                                                </a>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        )}
-                                      </li>
-                                    )
-                                  })}
-                                </ul>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              )
-            })}
+            {navigation.map(item => (
+              <NavigationItem
+                key={item.id}
+                item={item}
+                pathname={pathname}
+                isDocsExpanded={isDocsExpanded}
+                isEnterpriseExpanded={isEnterpriseExpanded}
+                expandedSections={expandedSections}
+                setManualDocsToggle={setManualDocsToggle}
+                setManualEnterpriseToggle={setManualEnterpriseToggle}
+                toggleSection={toggleSection}
+              />
+            ))}
           </ul>
 
           <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">

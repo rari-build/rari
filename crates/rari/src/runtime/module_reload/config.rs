@@ -5,8 +5,6 @@ pub struct ReloadConfig {
     pub reload_timeout_ms: u64,
     pub parallel_reloads: bool,
     pub debounce_delay_ms: u64,
-    pub max_history_size: usize,
-    pub enable_memory_monitoring: bool,
 }
 
 impl Default for ReloadConfig {
@@ -17,8 +15,6 @@ impl Default for ReloadConfig {
             reload_timeout_ms: 5000,
             parallel_reloads: true,
             debounce_delay_ms: 150,
-            max_history_size: 100,
-            enable_memory_monitoring: true,
         }
     }
 }
@@ -31,8 +27,6 @@ impl ReloadConfig {
             reload_timeout_ms: 3000,
             parallel_reloads: true,
             debounce_delay_ms: 200,
-            max_history_size: 50,
-            enable_memory_monitoring: false,
         }
     }
 
@@ -43,8 +37,6 @@ impl ReloadConfig {
             reload_timeout_ms: 10000,
             parallel_reloads: true,
             debounce_delay_ms: 100,
-            max_history_size: 200,
-            enable_memory_monitoring: true,
         }
     }
 

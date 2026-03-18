@@ -8,8 +8,24 @@ export class ProxyExecutor {
   private proxyFn: ProxyFunction | null = null
   private config: ProxyConfig | null = null
   private initialized = false
+  private initializationPromise: Promise<void> | null = null
 
   async loadProxy(proxyModulePath: string): Promise<void> {
+    if (this.initializationPromise) {
+      return this.initializationPromise
+    }
+
+    this.initializationPromise = this.doLoadProxy(proxyModulePath)
+
+    try {
+      await this.initializationPromise
+    }
+    finally {
+      this.initializationPromise = null
+    }
+  }
+
+  private async doLoadProxy(proxyModulePath: string): Promise<void> {
     try {
       const module = await import(proxyModulePath) as ProxyModule
 
@@ -30,6 +46,10 @@ export class ProxyExecutor {
 
   isInitialized(): boolean {
     return this.initialized
+  }
+
+  getProxyFunction(): ProxyFunction | null {
+    return this.proxyFn
   }
 
   async execute(request: Request, options?: {
@@ -132,6 +152,7 @@ export class ProxyExecutor {
     this.proxyFn = null
     this.config = null
     this.initialized = false
+    this.initializationPromise = null
 
     if (typeof require !== 'undefined' && require.cache)
       delete require.cache[require.resolve(proxyModulePath)]

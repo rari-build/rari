@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { Component } from 'react'
+import { clearTimer } from '../shared/timer-utils'
 
 interface ErrorBoundaryWrapperProps {
   errorComponentId: string
@@ -37,10 +38,7 @@ export class ErrorBoundaryWrapper extends Component<
 
   componentWillUnmount(): void {
     this._isMounted = false
-    if (this._pendingTimer) {
-      clearTimeout(this._pendingTimer)
-      this._pendingTimer = null
-    }
+    this._pendingTimer = clearTimer(this._pendingTimer)
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
@@ -78,10 +76,7 @@ export class ErrorBoundaryWrapper extends Component<
   }
 
   reset = (): void => {
-    if (this._pendingTimer) {
-      clearTimeout(this._pendingTimer)
-      this._pendingTimer = null
-    }
+    this._pendingTimer = clearTimer(this._pendingTimer)
 
     this._pendingTimer = setTimeout(() => {
       if (this._isMounted) {

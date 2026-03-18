@@ -1,3 +1,5 @@
+import { clearTimer } from '../shared/timer-utils'
+
 export interface HMRErrorHandlerOptions {
   maxErrors?: number
   resetTimeout?: number
@@ -19,8 +21,7 @@ export class HMRErrorHandler {
     this.errorCount++
     this.lastError = error
 
-    if (this.resetTimer)
-      clearTimeout(this.resetTimer)
+    this.resetTimer = clearTimer(this.resetTimer)
 
     this.resetTimer = setTimeout(() => {
       this.reset()
@@ -33,11 +34,7 @@ export class HMRErrorHandler {
   reset(): void {
     this.errorCount = 0
     this.lastError = null
-
-    if (this.resetTimer) {
-      clearTimeout(this.resetTimer)
-      this.resetTimer = null
-    }
+    this.resetTimer = clearTimer(this.resetTimer)
   }
 
   getErrorCount(): number {
@@ -60,10 +57,6 @@ export class HMRErrorHandler {
   }
 
   dispose(): void {
-    if (this.resetTimer) {
-      clearTimeout(this.resetTimer)
-      this.resetTimer = null
-    }
     this.reset()
   }
 }

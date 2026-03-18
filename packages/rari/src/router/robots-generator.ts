@@ -9,49 +9,73 @@ export interface RobotsGeneratorOptions {
   extensions?: string[]
 }
 
+function normalizeUserAgents(userAgent: string | string[] | undefined): string[] {
+  if (Array.isArray(userAgent))
+    return userAgent
+  if (userAgent)
+    return [userAgent]
+
+  return ['*']
+}
+
+function normalizeArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined)
+    return []
+
+  const arr = Array.isArray(value) ? value : [value]
+  return arr.filter(v => v !== '')
+}
+
+type RobotsRule = Robots extends { rules: infer R }
+  ? R extends (infer T)[] ? T : R
+  : never
+
+function generateRuleLines(rule: RobotsRule): string[] {
+  const lines: string[] = []
+  const userAgents = normalizeUserAgents(rule.userAgent)
+
+  for (const userAgent of userAgents) {
+    lines.push(`User-Agent: ${userAgent}`)
+
+    const allows = normalizeArray(rule.allow)
+    for (const allow of allows)
+      lines.push(`Allow: ${allow}`)
+
+    const disallows = normalizeArray(rule.disallow)
+    for (const disallow of disallows)
+      lines.push(`Disallow: ${disallow}`)
+
+    if (rule.crawlDelay !== undefined)
+      lines.push(`Crawl-delay: ${rule.crawlDelay}`)
+
+    lines.push('')
+  }
+
+  return lines
+}
+
+function generateHostLines(host: string | undefined): string[] {
+  if (!host)
+    return []
+
+  return [`Host: ${host}`, '']
+}
+
+function generateSitemapLines(sitemap: string | string[] | undefined): string[] {
+  const sitemaps = normalizeArray(sitemap)
+  return sitemaps.map(s => `Sitemap: ${s}`)
+}
+
 export function generateRobotsTxt(robots: Robots): string {
   const lines: string[] = []
   const rules = Array.isArray(robots.rules) ? robots.rules : [robots.rules]
 
   for (const rule of rules) {
-    const userAgents = Array.isArray(rule.userAgent)
-      ? rule.userAgent
-      : rule.userAgent
-        ? [rule.userAgent]
-        : ['*']
-
-    for (const userAgent of userAgents) {
-      lines.push(`User-Agent: ${userAgent}`)
-
-      if (rule.allow) {
-        const allows = Array.isArray(rule.allow) ? rule.allow : [rule.allow]
-        for (const allow of allows)
-          lines.push(`Allow: ${allow}`)
-      }
-
-      if (rule.disallow) {
-        const disallows = Array.isArray(rule.disallow) ? rule.disallow : [rule.disallow]
-        for (const disallow of disallows)
-          lines.push(`Disallow: ${disallow}`)
-      }
-
-      if (rule.crawlDelay !== undefined)
-        lines.push(`Crawl-delay: ${rule.crawlDelay}`)
-
-      lines.push('')
-    }
+    lines.push(...generateRuleLines(rule))
   }
 
-  if (robots.host) {
-    lines.push(`Host: ${robots.host}`)
-    lines.push('')
-  }
-
-  if (robots.sitemap) {
-    const sitemaps = Array.isArray(robots.sitemap) ? robots.sitemap : [robots.sitemap]
-    for (const sitemap of sitemaps)
-      lines.push(`Sitemap: ${sitemap}`)
-  }
+  lines.push(...generateHostLines(robots.host))
+  lines.push(...generateSitemapLines(robots.sitemap))
 
   return lines.join('\n')
 }
@@ -174,6 +198,10 @@ export async function generateRobotsFile(options: RobotsGeneratorOptions): Promi
     const code = entryChunk.code
     const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     const module = await import(dataUrl)
+
+    if (!module || module.default == null) {
+      throw new Error('Robots file must export a default export (either an object or a function)')
+    }
 
     let robotsData: Robots
     if (typeof module.default === 'function') {

@@ -2,50 +2,30 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
+import { createOrBackupConfigFile, getRariVersion, logInfo, logSuccess, updateGitignoreForProvider, updatePackageJsonForProvider } from './utils'
 
-export async function createRenderDeployment() {
+export function createRenderDeployment() {
   const cwd = process.cwd()
 
   logInfo('Creating Render deployment configuration...')
 
-  const packageJsonPath = join(cwd, 'package.json')
-  if (!existsSync(packageJsonPath)) {
-    logError('No package.json found. Please run this command from your project root.')
-    process.exit(1)
-  }
+  updatePackageJsonForProvider(cwd, {
+    providerName: 'Render',
+    deployScript: 'echo "Push to GitHub and connect to Render to deploy"',
+    startScript: 'rari start',
+    dependency: getRariVersion(),
+  })
 
-  try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  createRenderYaml(cwd)
 
-    packageJson.scripts = packageJson.scripts || {}
+  updateGitignoreForProvider(cwd, 'Render', '.render')
 
-    if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarn('Backing up to start:original and replacing with "rari start"')
-      packageJson.scripts['start:original'] = packageJson.scripts.start
-    }
+  updateReadmeForRender(cwd)
 
-    packageJson.scripts.start = 'rari start'
-    packageJson.scripts['start:local'] = 'rari start'
-    packageJson.scripts['deploy:render'] = 'echo "Push to GitHub and connect to Render to deploy"'
+  printRenderSuccessMessage()
+}
 
-    ensureMinimumNodeEngine(packageJson)
-
-    if (!packageJson.dependencies || !packageJson.dependencies.rari) {
-      logInfo('Adding rari dependency...')
-      packageJson.dependencies = packageJson.dependencies || {}
-      packageJson.dependencies.rari = '^0.1.0'
-    }
-
-    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
-    logSuccess('Updated package.json for Render deployment')
-  }
-  catch (error) {
-    logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    process.exit(1)
-  }
-
+function createRenderYaml(cwd: string) {
   const renderConfig = `services:
   - type: web
     name: rari-app
@@ -62,71 +42,10 @@ export async function createRenderDeployment() {
         value: info
 `
 
-  const renderYamlPath = join(cwd, 'render.yaml')
-  if (existsSync(renderYamlPath)) {
-    logWarn('render.yaml already exists, backing up to render.yaml.backup')
-    const existingConfig = readFileSync(renderYamlPath, 'utf-8')
-    writeFileSync(join(cwd, 'render.yaml.backup'), existingConfig)
-  }
+  createOrBackupConfigFile(cwd, 'render.yaml', renderConfig)
+}
 
-  writeFileSync(renderYamlPath, renderConfig)
-  logSuccess('Created render.yaml configuration')
-
-  const gitignorePath = join(cwd, '.gitignore')
-  const renderGitignoreEntries = [
-    '',
-    '# Render',
-    '.render/',
-    '',
-  ].join('\n')
-
-  if (existsSync(gitignorePath)) {
-    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-    if (!gitignoreContent.includes('.render/')) {
-      writeFileSync(gitignorePath, gitignoreContent + renderGitignoreEntries)
-      logSuccess('Updated .gitignore with Render entries')
-    }
-  }
-  else {
-    const defaultGitignore = `# Dependencies
-node_modules/
-.pnpm-store/
-
-# Build outputs
-dist/
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# Render
-.render/
-
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Temporary files
-.tmp/
-tmp/
-`
-    writeFileSync(gitignorePath, defaultGitignore)
-    logSuccess('Created .gitignore with Render entries')
-  }
-
+function updateReadmeForRender(cwd: string) {
   const readmePath = join(cwd, 'README.md')
   const renderReadmeSection = `
 ## 🎨 Deploy to Render
@@ -200,7 +119,9 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
     writeFileSync(readmePath, defaultReadme)
     logSuccess('Created README.md with Render deployment instructions')
   }
+}
 
+function printRenderSuccessMessage() {
   console.warn('')
   logSuccess('Render deployment setup complete! 🎉')
   console.warn('')

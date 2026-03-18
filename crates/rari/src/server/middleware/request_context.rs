@@ -5,7 +5,7 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
@@ -19,6 +19,7 @@ pub struct CachedFetchResult {
     pub headers: HeaderMap,
     pub cached_at: Instant,
     pub was_cached: bool,
+    pub tags: Vec<String>,
 }
 type InFlightFetches =
     Arc<DashMap<String, Arc<TokioMutex<Option<Result<CachedFetchResult, RariError>>>>>>;
@@ -74,10 +75,21 @@ impl RequestContext {
         &self.fetch_cache
     }
 
+    fn merge_and_sort_tags(
+        existing: impl IntoIterator<Item = String>,
+        extra: impl IntoIterator<Item = String>,
+    ) -> Vec<String> {
+        let mut tag_set: FxHashSet<String> = existing.into_iter().collect();
+        tag_set.extend(extra);
+        let mut merged: Vec<String> = tag_set.into_iter().collect();
+        merged.sort();
+        merged
+    }
+
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout"))
+            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags"))
             .collect();
 
         if cache_relevant_options.is_empty() {
@@ -113,6 +125,9 @@ impl RequestContext {
     ) -> Result<CachedFetchResult, RariError> {
         let cache_key = Self::generate_cache_key(url, &options);
 
+        let tags: Vec<String> =
+            options.get("tags").and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
+
         {
             let mut cache = self.fetch_cache.lock();
             if let Some(cached) = cache.get(&cache_key) {
@@ -124,6 +139,10 @@ impl RequestContext {
                 if elapsed_ms < ttl_ms as u128 {
                     let mut result = cached.clone();
                     result.was_cached = true;
+                    result.tags = Self::merge_and_sort_tags(result.tags, tags);
+
+                    cache.put(cache_key.clone(), result.clone());
+
                     return Ok(result);
                 }
                 cache.pop(&cache_key);
@@ -138,7 +157,17 @@ impl RequestContext {
         let mut guard = fetch_lock.lock().await;
 
         if let Some(result) = guard.as_ref() {
-            return result.clone();
+            let mut cloned_result = result.clone()?;
+            cloned_result.tags = Self::merge_and_sort_tags(cloned_result.tags, tags);
+
+            {
+                let mut cache = self.fetch_cache.lock();
+                cache.put(cache_key.clone(), cloned_result.clone());
+            }
+
+            *guard = Some(Ok(cloned_result.clone()));
+
+            return Ok(cloned_result);
         }
 
         struct CleanupGuard<'a> {
@@ -157,7 +186,11 @@ impl RequestContext {
             cache_key: cache_key.clone(),
         };
 
-        let fetch_result = self.perform_fetch(url, &options).await;
+        let mut fetch_result = self.perform_fetch(url, &options).await;
+
+        if let Ok(ref mut result) = fetch_result {
+            result.tags = Self::merge_and_sort_tags(std::mem::take(&mut result.tags), tags);
+        }
 
         *guard = Some(fetch_result.clone());
 
@@ -210,6 +243,7 @@ impl RequestContext {
             headers,
             cached_at: Instant::now(),
             was_cached: false,
+            tags: Vec::new(),
         })
     }
 }
@@ -240,6 +274,7 @@ mod tests {
             headers: HeaderMap::new(),
             cached_at: Instant::now(),
             was_cached: false,
+            tags: Vec::new(),
         };
 
         let test_key = format!("https://test-{}.example.com", uuid::Uuid::new_v4());

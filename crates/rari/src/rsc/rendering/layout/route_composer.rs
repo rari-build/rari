@@ -35,7 +35,6 @@ impl RouteComposer {
                 const startTotal = performance.now();
 
                 const React = globalThis.React;
-                const ReactDOMServer = globalThis.ReactDOMServer;
 
                 if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
                 globalThis['~suspense'].discoveredBoundaries = [];

@@ -1,4 +1,4 @@
-import type { ProxyConfig, ProxyMatcher, RariRequest } from './types'
+import type { ProxyConfig, ProxyMatcher, ProxyRuleCondition, RariRequest } from './types'
 import {
   MULTIPLE_SLASHES_REGEX,
   PATH_TRAILING_SLASH_REGEX,
@@ -45,59 +45,96 @@ function pathToRegex(pattern: string): RegExp {
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
+function checkHeaderCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.headers.get(key)
+}
+
+function checkQueryCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.rariUrl.searchParams.get(key)
+}
+
+function checkCookieCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  const cookie = request.cookies.get(key)
+  return cookie ? cookie.value : null
+}
+
+function checkHostCondition(
+  request: RariRequest,
+  key: string,
+): string | null {
+  return request.rariUrl.hostname === key ? request.rariUrl.hostname : null
+}
+
+function getConditionActualValue(
+  request: RariRequest,
+  condition: ProxyRuleCondition,
+): string | null {
+  switch (condition.type) {
+    case 'header':
+      return checkHeaderCondition(request, condition.key)
+    case 'query':
+      return checkQueryCondition(request, condition.key)
+    case 'cookie':
+      return checkCookieCondition(request, condition.key)
+    case 'host':
+      return checkHostCondition(request, condition.key)
+    default:
+      throw new Error(`Unknown condition type: ${(condition as any).type}`)
+  }
+}
+
+function matchesHasCondition(
+  request: RariRequest,
+  condition: ProxyRuleCondition,
+): boolean {
+  const actualValue = getConditionActualValue(request, condition)
+
+  if (actualValue === null)
+    return false
+  if (condition.value !== undefined && actualValue !== condition.value)
+    return false
+
+  return true
+}
+
+function matchesMissingCondition(
+  request: RariRequest,
+  condition: ProxyRuleCondition,
+): boolean {
+  const actualValue = getConditionActualValue(request, condition)
+
+  if (actualValue === null)
+    return true
+  if (condition.value === undefined)
+    return false
+
+  return actualValue !== condition.value
+}
+
 function matchesConditions(
   request: RariRequest,
   matcher: ProxyMatcher,
 ): boolean {
   if (matcher.has) {
     for (const condition of matcher.has) {
-      if (condition.type === 'header') {
-        const headerValue = request.headers.get(condition.key)
-        if (!headerValue)
-          return false
-        if (condition.value && headerValue !== condition.value)
-          return false
-      }
-      else if (condition.type === 'query') {
-        const queryValue = request.rariUrl.searchParams.get(condition.key)
-        if (!queryValue)
-          return false
-        if (condition.value && queryValue !== condition.value)
-          return false
-      }
-      else if (condition.type === 'cookie') {
-        const cookieValue = request.cookies.get(condition.key)
-        if (!cookieValue)
-          return false
-        if (condition.value && cookieValue.value !== condition.value)
-          return false
-      }
+      if (!matchesHasCondition(request, condition))
+        return false
     }
   }
 
   if (matcher.missing) {
     for (const condition of matcher.missing) {
-      if (condition.type === 'header') {
-        const headerValue = request.headers.get(condition.key)
-        if (headerValue) {
-          if (!condition.value || headerValue === condition.value)
-            return false
-        }
-      }
-      else if (condition.type === 'query') {
-        const queryValue = request.rariUrl.searchParams.get(condition.key)
-        if (queryValue) {
-          if (!condition.value || queryValue === condition.value)
-            return false
-        }
-      }
-      else if (condition.type === 'cookie') {
-        const cookieValue = request.cookies.get(condition.key)
-        if (cookieValue) {
-          if (!condition.value || cookieValue.value === condition.value)
-            return false
-        }
-      }
+      if (!matchesMissingCondition(request, condition))
+        return false
     }
   }
 
@@ -113,6 +150,20 @@ export function matchesPattern(pathname: string, pattern: string): boolean {
 }
 
 /* v8 ignore start - requires complex RariRequest mocking */
+function matchesSingleMatcher(
+  request: RariRequest,
+  pathname: string,
+  matcher: string | ProxyMatcher,
+): boolean {
+  if (typeof matcher === 'string')
+    return matchesPattern(pathname, matcher)
+
+  if (!matchesPattern(pathname, matcher.source))
+    return false
+
+  return matchesConditions(request, matcher)
+}
+
 export function shouldRunProxy(
   request: RariRequest,
   config?: ProxyConfig,
@@ -123,20 +174,7 @@ export function shouldRunProxy(
   const pathname = request.rariUrl.pathname
   const matchers = Array.isArray(config.matcher) ? config.matcher : [config.matcher]
 
-  for (const matcher of matchers) {
-    if (typeof matcher === 'string') {
-      if (matchesPattern(pathname, matcher))
-        return true
-    }
-    else {
-      if (matchesPattern(pathname, matcher.source)) {
-        if (matchesConditions(request, matcher))
-          return true
-      }
-    }
-  }
-
-  return false
+  return matchers.some(matcher => matchesSingleMatcher(request, pathname, matcher))
 }
 /* v8 ignore stop */
 

@@ -2,50 +2,30 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
-import { ensureMinimumNodeEngine, logError, logInfo, logSuccess, logWarn } from './utils'
+import { createOrBackupConfigFile, getRariVersion, logInfo, logSuccess, updateGitignoreForProvider, updatePackageJsonForProvider } from './utils'
 
-export async function createRailwayDeployment() {
+export function createRailwayDeployment() {
   const cwd = process.cwd()
 
   logInfo('Creating Railway deployment configuration...')
 
-  const packageJsonPath = join(cwd, 'package.json')
-  if (!existsSync(packageJsonPath)) {
-    logError('No package.json found. Please run this command from your project root.')
-    process.exit(1)
-  }
+  updatePackageJsonForProvider(cwd, {
+    providerName: 'Railway',
+    deployScript: 'echo "Push to GitHub and connect to Railway to deploy"',
+    startScript: 'rari start',
+    dependency: getRariVersion(),
+  })
 
-  try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  createRailwayToml(cwd)
 
-    packageJson.scripts = packageJson.scripts || {}
+  updateGitignoreForProvider(cwd, 'Railway', '.railway')
 
-    if (packageJson.scripts.start && packageJson.scripts.start !== 'rari start') {
-      logWarn(`Existing start script found: "${packageJson.scripts.start}"`)
-      logWarn('Backing up to start:original and replacing with "rari start"')
-      packageJson.scripts['start:original'] = packageJson.scripts.start
-    }
+  updateReadmeForRailway(cwd)
 
-    packageJson.scripts.start = 'rari start'
-    packageJson.scripts['start:local'] = 'rari start'
-    packageJson.scripts['deploy:railway'] = 'echo "Push to GitHub and connect to Railway to deploy"'
+  printRailwaySuccessMessage()
+}
 
-    ensureMinimumNodeEngine(packageJson)
-
-    if (!packageJson.dependencies || !packageJson.dependencies.rari) {
-      logInfo('Adding rari dependency...')
-      packageJson.dependencies = packageJson.dependencies || {}
-      packageJson.dependencies.rari = '^0.1.0'
-    }
-
-    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
-    logSuccess('Updated package.json for Railway deployment')
-  }
-  catch (error) {
-    logError(`Failed to update package.json: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    process.exit(1)
-  }
-
+function createRailwayToml(cwd: string) {
   const railwayConfig = `[build]
 builder = "RAILPACK"
 
@@ -57,71 +37,10 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 `
 
-  const railwayTomlPath = join(cwd, 'railway.toml')
-  if (existsSync(railwayTomlPath)) {
-    logWarn('railway.toml already exists, backing up to railway.toml.backup')
-    const existingConfig = readFileSync(railwayTomlPath, 'utf-8')
-    writeFileSync(join(cwd, 'railway.toml.backup'), existingConfig)
-  }
+  createOrBackupConfigFile(cwd, 'railway.toml', railwayConfig)
+}
 
-  writeFileSync(railwayTomlPath, railwayConfig)
-  logSuccess('Created railway.toml configuration')
-
-  const gitignorePath = join(cwd, '.gitignore')
-  const railwayGitignoreEntries = [
-    '',
-    '# Railway',
-    '.railway/',
-    '',
-  ].join('\n')
-
-  if (existsSync(gitignorePath)) {
-    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-    if (!gitignoreContent.includes('.railway/')) {
-      writeFileSync(gitignorePath, gitignoreContent + railwayGitignoreEntries)
-      logSuccess('Updated .gitignore with Railway entries')
-    }
-  }
-  else {
-    const defaultGitignore = `# Dependencies
-node_modules/
-.pnpm-store/
-
-# Build outputs
-dist/
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# Railway
-.railway/
-
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Temporary files
-.tmp/
-tmp/
-`
-    writeFileSync(gitignorePath, defaultGitignore)
-    logSuccess('Created .gitignore with Railway entries')
-  }
-
+function updateReadmeForRailway(cwd: string) {
   const readmePath = join(cwd, 'README.md')
   const railwayReadmeSection = `
 ## 🚂 Deploy to Railway
@@ -194,7 +113,9 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app.
     writeFileSync(readmePath, defaultReadme)
     logSuccess('Created README.md with Railway deployment instructions')
   }
+}
 
+function printRailwaySuccessMessage() {
   console.warn('')
   logSuccess('Railway deployment setup complete! 🎉')
   console.warn('')

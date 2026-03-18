@@ -295,7 +295,8 @@ pub async fn op_fetch_with_cache(
                     "statusText": http_status_text(result.status),
                     "body": body_str,
                     "headers": headers_obj,
-                    "cached": result.was_cached
+                    "cached": result.was_cached,
+                    "tags": result.tags
                 }))
             }
             Err(e) => {
@@ -305,7 +306,8 @@ pub async fn op_fetch_with_cache(
                     "status": 500,
                     "statusText": "Internal Server Error",
                     "error": e.to_string(),
-                    "cached": false
+                    "cached": false,
+                    "tags": Vec::<String>::new()
                 }))
             }
         }
@@ -317,7 +319,8 @@ pub async fn op_fetch_with_cache(
                 "statusText": http_status_text(status),
                 "body": body,
                 "headers": headers,
-                "cached": false
+                "cached": false,
+                "tags": Vec::<String>::new()
             })),
             Err(e) => {
                 error!("Fetch failed for {}: {}", url, e);
@@ -326,7 +329,8 @@ pub async fn op_fetch_with_cache(
                     "status": 500,
                     "statusText": "Internal Server Error",
                     "error": e,
-                    "cached": false
+                    "cached": false,
+                    "tags": Vec::<String>::new()
                 }))
             }
         }

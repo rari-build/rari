@@ -1,24 +1,5 @@
-interface SimpleRequest {
-  url: string
-  method: string
-  headers: Record<string, string>
-}
-
-interface SimpleProxyResult {
-  continue: boolean
-  redirect?: {
-    destination: string
-    permanent: boolean
-  }
-  rewrite?: string
-  requestHeaders?: Record<string, string>
-  responseHeaders?: Record<string, string>
-  response?: {
-    status: number
-    headers: Record<string, string>
-    body?: string
-  }
-}
+import type { SimpleProxyResult, SimpleRequest } from './shared/utils'
+import { processProxyResult } from './shared/utils'
 
 declare global {
   interface GlobalThis {
@@ -46,6 +27,7 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
         const waitUntilPromises: Promise<unknown>[] = []
         const event = {
           waitUntil: (promise: Promise<unknown>) => {
+            promise.catch(() => {})
             waitUntilPromises.push(promise)
           },
         }
@@ -53,86 +35,16 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
         const result = await proxyModule.proxy(rariRequest, event)
 
         if (waitUntilPromises.length > 0) {
-          Promise.allSettled(waitUntilPromises).catch((error) => {
-            console.error('[rari] Proxy: waitUntil promise failed:', error)
+          Promise.allSettled(waitUntilPromises).then((results) => {
+            results.forEach((result, index) => {
+              if (result.status === 'rejected') {
+                console.error(`[rari] Proxy: waitUntil promise ${index} failed:`, result.reason)
+              }
+            })
           })
         }
 
-        if (!result)
-          return { continue: true }
-
-        const continueHeader = result.headers?.get?.('x-rari-proxy-continue')
-        const rewriteHeader = result.headers?.get?.('x-rari-proxy-rewrite')
-
-        if (rewriteHeader) {
-          return {
-            continue: false,
-            rewrite: rewriteHeader,
-          }
-        }
-
-        const location = result.headers?.get?.('location')
-        if (location && result.status >= 300 && result.status < 400) {
-          return {
-            continue: false,
-            redirect: {
-              destination: location,
-              permanent: result.status === 301 || result.status === 308,
-            },
-          }
-        }
-
-        if (continueHeader === 'true') {
-          const requestHeaders: Record<string, string> = {}
-          const responseHeaders: Record<string, string> = {}
-
-          if (result.headers?.forEach) {
-            result.headers.forEach((value: string, key: string) => {
-              if (key.startsWith('x-rari-proxy-request-')) {
-                const headerName = key.replace('x-rari-proxy-request-', '')
-                requestHeaders[headerName] = value
-              }
-              else if (!key.startsWith('x-rari-proxy-')) {
-                responseHeaders[key] = value
-              }
-            })
-          }
-
-          return {
-            continue: true,
-            requestHeaders: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
-            responseHeaders: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-          }
-        }
-
-        if (result.status) {
-          const headers: Record<string, string> = {}
-          if (result.headers?.forEach) {
-            result.headers.forEach((value: string, key: string) => {
-              headers[key] = value
-            })
-          }
-
-          let body: string | undefined
-          try {
-            if (result.text && typeof result.text === 'function')
-              body = await result.text()
-            else if (result.body)
-              body = String(result.body)
-          }
-          catch {}
-
-          return {
-            continue: false,
-            response: {
-              status: result.status,
-              headers,
-              body,
-            },
-          }
-        }
-
-        return { continue: true }
+        return await processProxyResult(result)
       }
       catch (error) {
         console.error('[rari] Proxy: Proxy execution error:', error)

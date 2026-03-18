@@ -20,6 +20,7 @@ if (!globalThis.process) {
         return '/'
       }
     },
+    // oxlint-disable-next-line @typescript-eslint/no-implied-eval
     nextTick: fn => setTimeout(fn, 0),
     platform: (() => {
       try {

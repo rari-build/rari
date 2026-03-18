@@ -1,25 +1,21 @@
 use crate::error::{ModuleReloadError, RariError};
 use crate::rsc::components::ComponentRegistry;
 use crate::runtime::JsExecutionRuntime;
-use crate::runtime::module_reload::{
-    DebounceManager, ModuleReloadRequest, ReloadConfig, ReloadHistoryEntry, ReloadStats,
-};
+use crate::runtime::module_reload::{DebounceManager, ModuleReloadRequest, ReloadConfig};
 use crate::runtime::utils::DistPathResolver;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, RwLock};
+use std::time::Duration;
+use tokio::sync::Mutex;
 use tracing::error;
 
 pub struct ModuleReloadManager {
     reload_queue: Arc<Mutex<VecDeque<ModuleReloadRequest>>>,
-    reload_stats: Arc<RwLock<ReloadStats>>,
     config: ReloadConfig,
     runtime: Option<Arc<JsExecutionRuntime>>,
     component_registry: Option<Arc<parking_lot::Mutex<ComponentRegistry>>>,
     debounce_manager: DebounceManager,
-    reload_history: Arc<Mutex<VecDeque<ReloadHistoryEntry>>>,
     dist_path_resolver: Option<Arc<DistPathResolver>>,
 }
 
@@ -27,12 +23,10 @@ impl Clone for ModuleReloadManager {
     fn clone(&self) -> Self {
         Self {
             reload_queue: Arc::clone(&self.reload_queue),
-            reload_stats: Arc::clone(&self.reload_stats),
             config: self.config.clone(),
             runtime: self.runtime.clone(),
             component_registry: self.component_registry.clone(),
             debounce_manager: self.debounce_manager.clone(),
-            reload_history: Arc::clone(&self.reload_history),
             dist_path_resolver: self.dist_path_resolver.clone(),
         }
     }
@@ -42,12 +36,10 @@ impl ModuleReloadManager {
     pub fn new(config: ReloadConfig) -> Self {
         Self {
             reload_queue: Arc::new(Mutex::new(VecDeque::new())),
-            reload_stats: Arc::new(RwLock::new(ReloadStats::default())),
             config,
             runtime: None,
             component_registry: None,
             debounce_manager: DebounceManager::new(),
-            reload_history: Arc::new(Mutex::new(VecDeque::new())),
             dist_path_resolver: None,
         }
     }
@@ -55,12 +47,10 @@ impl ModuleReloadManager {
     pub fn with_runtime(config: ReloadConfig, runtime: Arc<JsExecutionRuntime>) -> Self {
         Self {
             reload_queue: Arc::new(Mutex::new(VecDeque::new())),
-            reload_stats: Arc::new(RwLock::new(ReloadStats::default())),
             config,
             runtime: Some(runtime),
             component_registry: None,
             debounce_manager: DebounceManager::new(),
-            reload_history: Arc::new(Mutex::new(VecDeque::new())),
             dist_path_resolver: None,
         }
     }
@@ -89,10 +79,6 @@ impl ModuleReloadManager {
         self.config.enabled
     }
 
-    pub async fn get_stats(&self) -> ReloadStats {
-        self.reload_stats.read().await.clone()
-    }
-
     pub async fn enqueue_reload(&self, request: ModuleReloadRequest) {
         let mut queue = self.reload_queue.lock().await;
         queue.push_back(request);
@@ -115,37 +101,6 @@ impl ModuleReloadManager {
 
     fn clone_for_task(&self) -> Self {
         self.clone()
-    }
-
-    async fn record_reload_stats(&self, success: bool, duration_ms: u64) {
-        let mut stats = self.reload_stats.write().await;
-        stats.record_reload(success, duration_ms);
-    }
-
-    async fn add_to_history(&self, component_id: String, success: bool, duration_ms: u64) {
-        let mut history = self.reload_history.lock().await;
-
-        let entry = ReloadHistoryEntry::new(component_id, success, duration_ms);
-        history.push_back(entry);
-
-        while history.len() > self.config.max_history_size {
-            history.pop_front();
-        }
-    }
-
-    pub async fn get_reload_history(&self) -> Vec<ReloadHistoryEntry> {
-        let history = self.reload_history.lock().await;
-        history.iter().cloned().collect()
-    }
-
-    pub async fn clear_history(&self) {
-        let mut history = self.reload_history.lock().await;
-        history.clear();
-    }
-
-    pub async fn get_memory_usage(&self) -> u64 {
-        let stats = self.reload_stats.read().await;
-        stats.estimated_memory_bytes
     }
 }
 
@@ -178,6 +133,9 @@ impl ModuleReloadManager {
         });
 
         let request = ModuleReloadRequest::new(component_id.clone(), file_path.clone());
+
+        self.debounce_manager.cancel_pending(&component_id).await;
+
         self.debounce_manager.add_pending(component_id.clone(), request, handle).await;
 
         Ok(())
@@ -192,14 +150,7 @@ impl ModuleReloadManager {
             return Ok(());
         }
 
-        let start = Instant::now();
-
         let result = self.reload_with_retry(component_id, file_path).await;
-
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        self.record_reload_stats(result.is_ok(), duration_ms).await;
-        self.add_to_history(component_id.to_string(), result.is_ok(), duration_ms).await;
 
         match &result {
             Ok(_) => {}
@@ -227,7 +178,7 @@ impl ModuleReloadManager {
         loop {
             attempts += 1;
 
-            match self.reload_module_internal(component_id, file_path).await {
+            match self.reload_module_internal(component_id).await {
                 Ok(_) => return Ok(()),
                 Err(e) if attempts >= max_attempts => {
                     return Err(RariError::module_reload(ModuleReloadError::MaxRetriesExceeded {
@@ -244,11 +195,7 @@ impl ModuleReloadManager {
         }
     }
 
-    async fn reload_module_internal(
-        &self,
-        component_id: &str,
-        _file_path: &Path,
-    ) -> Result<(), RariError> {
+    async fn reload_module_internal(&self, component_id: &str) -> Result<(), RariError> {
         self.runtime.as_ref().ok_or_else(|| {
             RariError::module_reload(ModuleReloadError::RuntimeNotAvailable {
                 message: "Runtime not available".to_string(),
@@ -286,10 +233,27 @@ impl ModuleReloadManager {
                 handles.push(handle);
             }
 
+            let mut errors = Vec::new();
             for handle in handles {
-                if let Err(e) = handle.await {
-                    error!(error = %e, "Batch reload task failed");
+                match handle.await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        error!(error = %e, "Module reload failed in batch");
+                        errors.push(e);
+                    }
+                    Err(e) => {
+                        error!(error = %e, "Batch reload task failed");
+                        errors.push(RariError::module_reload(
+                            ModuleReloadError::RuntimeNotAvailable {
+                                message: format!("Task join error: {}", e),
+                            },
+                        ));
+                    }
                 }
+            }
+
+            if !errors.is_empty() {
+                return Err(errors.into_iter().next().expect("errors vec is non-empty"));
             }
         }
 

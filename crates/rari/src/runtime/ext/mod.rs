@@ -27,7 +27,6 @@ mod fs;
 mod http;
 mod io;
 mod kv;
-mod module_reload;
 mod napi;
 mod node;
 mod node_crypto;
@@ -39,7 +38,6 @@ mod rsc_modules;
 mod rsc_renderer;
 mod runtime;
 mod server_functions;
-mod streaming;
 mod web;
 mod webgpu;
 mod webidl;
@@ -80,7 +78,6 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
 
     extensions.extend(rari::extensions(is_snapshot));
     extensions.extend(promise_manager::extensions(is_snapshot));
-    extensions.extend(module_reload::extensions(is_snapshot));
     extensions.extend(rsc_modules::extensions(is_snapshot));
     extensions.extend(server_functions::extensions(is_snapshot));
     extensions.extend(react::extensions(is_snapshot));
@@ -95,7 +92,6 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
         .extend(webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot));
     extensions.extend(websocket::extensions(options.web.clone(), is_snapshot));
     extensions.extend(http::extensions((), is_snapshot));
-    extensions.extend(streaming::extensions(is_snapshot));
     extensions.extend(fetch::extensions(is_snapshot));
     extensions.extend(ffi::extensions(is_snapshot));
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));

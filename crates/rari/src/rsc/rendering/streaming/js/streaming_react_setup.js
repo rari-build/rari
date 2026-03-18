@@ -10,28 +10,6 @@
           globalThis.React = reactModule
       }
 
-      if (typeof React === 'undefined' && typeof require !== 'undefined')
-        globalThis.React = require('react')
-
-      if (typeof React !== 'undefined' && React.createElement && !globalThis['~react']?.patched) {
-        if (!globalThis['~react'])
-          globalThis['~react'] = {}
-        globalThis['~react'].originalCreateElement = React.createElement
-
-        const createElementOverride = function (type, props, ...children) {
-          return globalThis['~react'].originalCreateElement(type, props, ...children)
-        }
-
-        Object.defineProperty(React, 'createElement', {
-          value: createElementOverride,
-          writable: false,
-          enumerable: true,
-          configurable: false,
-        })
-
-        globalThis['~react'].patched = true
-      }
-
       if (typeof React !== 'undefined' && React.Suspense) {
         React['~originalSuspense'] = React.Suspense
 
@@ -72,22 +50,6 @@
           finally {
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
           }
-        }
-      }
-
-      if (typeof React === 'undefined') {
-        globalThis.React = {
-          createElement(type, props, ...children) {
-            return {
-              type,
-              props: props ? { ...props, children: children.length > 0 ? children : props.children } : { children },
-              key: props?.key || null,
-            }
-          },
-          Fragment: Symbol.for('react.fragment'),
-          Suspense(props) {
-            return props.children
-          },
         }
       }
     }
