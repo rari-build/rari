@@ -27,6 +27,7 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
         const waitUntilPromises: Promise<unknown>[] = []
         const event = {
           waitUntil: (promise: Promise<unknown>) => {
+            promise.catch(() => {})
             waitUntilPromises.push(promise)
           },
         }

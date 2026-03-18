@@ -112,12 +112,22 @@ function tryLoadComponent(componentInfo: LazyComponentInfo): void {
 }
 
 function resolveById(id: string, clientComponents: Record<string, ComponentInfo>): any {
-  const componentInfo = clientComponents[id] as LazyComponentInfo
+  const hashIndex = id.indexOf('#')
+  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+
+  const componentInfo = clientComponents[baseId] as LazyComponentInfo
   if (!componentInfo)
     return null
 
-  if (componentInfo.component != null)
+  if (componentInfo.component != null) {
+    if (exportName && exportName !== 'default') {
+      const namedExport = componentInfo.component[exportName]
+      return namedExport !== undefined ? namedExport : null
+    }
+
     return componentInfo.component
+  }
 
   tryLoadComponent(componentInfo)
   return null
@@ -193,11 +203,9 @@ export function resolveClientComponent(
   if (directResult !== null)
     return directResult
 
-  if (id.includes('#')) {
-    const pathResult = resolveByPathWithExport(id, clientComponents, clientComponentPaths)
-    if (pathResult !== null)
-      return pathResult
-  }
+  const pathResult = resolveByPathWithExport(id, clientComponents, clientComponentPaths)
+  if (pathResult !== null)
+    return pathResult
 
   return resolveByName(id, clientComponents, clientComponentNames)
 }

@@ -22,34 +22,25 @@ if (!globalThis.React || typeof globalThis.React.createElement !== 'function') {
   }
 }
 
+function createJsxDelegate(runtimeJsx, globalJsx) {
+  return runtimeJsx || globalJsx || ((type, props, key) => {
+    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
+      return null
+
+    return globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props)
+  })
+}
+
 if (typeof _jsx === 'undefined')
-  var _jsx = globalThis['~react']?.jsxRuntime?.jsx || globalThis.jsx || ((type, props, key) => globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props))
+  var _jsx = createJsxDelegate(globalThis['~react']?.jsxRuntime?.jsx, globalThis.jsx)
 if (typeof _jsxs === 'undefined')
-  var _jsxs = globalThis['~react']?.jsxRuntime?.jsxs || globalThis.jsxs || ((type, props, key) => globalThis.React.createElement(type, key !== undefined ? { ...props, key } : props))
+  var _jsxs = createJsxDelegate(globalThis['~react']?.jsxRuntime?.jsxs, globalThis.jsxs)
 
-if (typeof globalThis.jsx === 'undefined') {
-  globalThis.jsx = function (type, props, key) {
-    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
-      return null
+if (typeof globalThis.jsx === 'undefined')
+  globalThis.jsx = createJsxDelegate(globalThis['~react']?.jsxRuntime?.jsx, undefined)
 
-    if (key !== undefined)
-      return globalThis.React.createElement(type, { ...props, key })
-
-    return globalThis.React.createElement(type, props)
-  }
-}
-
-if (typeof globalThis.jsxs === 'undefined') {
-  globalThis.jsxs = function (type, props, key) {
-    if (!globalThis.React || typeof globalThis.React.createElement !== 'function')
-      return null
-
-    if (key !== undefined)
-      return globalThis.React.createElement(type, { ...props, key })
-
-    return globalThis.React.createElement(type, props)
-  }
-}
+if (typeof globalThis.jsxs === 'undefined')
+  globalThis.jsxs = createJsxDelegate(globalThis['~react']?.jsxRuntime?.jsxs, undefined)
 
 if (typeof globalThis.LoadingSpinner === 'undefined') {
   if (typeof document !== 'undefined' && !document.getElementById('spinner-keyframes')) {

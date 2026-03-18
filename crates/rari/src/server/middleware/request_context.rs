@@ -189,7 +189,7 @@ impl RequestContext {
         let mut fetch_result = self.perform_fetch(url, &options).await;
 
         if let Ok(ref mut result) = fetch_result {
-            result.tags = Self::merge_and_sort_tags(result.tags.clone(), tags);
+            result.tags = Self::merge_and_sort_tags(std::mem::take(&mut result.tags), tags);
         }
 
         *guard = Some(fetch_result.clone());
