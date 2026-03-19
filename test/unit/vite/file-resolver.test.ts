@@ -28,20 +28,9 @@ describe('file-resolver', () => {
       expect(result).toBe(`${basePath}.ts`)
     })
 
-    it('should return null when no extension matches', () => {
+    it('should return null when path or extension not found', () => {
       const basePath = '/test/missing'
       const extensions = ['.tsx', '.ts']
-
-      vi.mocked(fs.existsSync).mockReturnValue(false)
-
-      const result = resolveWithExtensions(basePath, extensions)
-
-      expect(result).toBeNull()
-    })
-
-    it('should return null when path does not exist', () => {
-      const basePath = '/test/directory'
-      const extensions = ['.tsx']
 
       vi.mocked(fs.existsSync).mockReturnValue(false)
 
@@ -88,6 +77,18 @@ describe('file-resolver', () => {
   })
 
   describe('resolveIndexFile', () => {
+    it('should return null when path does not exist', () => {
+      const dirPath = '/test/missing'
+      const extensions = ['.tsx', '.ts']
+
+      vi.mocked(fs.existsSync).mockReturnValueOnce(false)
+
+      const result = resolveIndexFile(dirPath, extensions)
+
+      expect(result).toBeNull()
+      expect(fs.statSync).not.toHaveBeenCalled()
+    })
+
     it('should resolve index file with matching extension', () => {
       const dirPath = '/test/components'
       const extensions = ['.tsx', '.ts', '.jsx', '.js']

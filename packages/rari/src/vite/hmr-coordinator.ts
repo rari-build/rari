@@ -6,7 +6,7 @@ import process from 'node:process'
 import { throwIfNotOk } from '../shared/http-utils'
 import { HMRErrorHandler } from './hmr-error-handler'
 
-const USE_CLIENT_DIRECTIVE_RE = /^["']use client["']\s*(?:;\s*)?(?:\/\/.*)?$/
+const USE_CLIENT_DIRECTIVE_RE = /^(["'])use client\1\s*(?:;\s*)?(?:\/\/.*)?$/
 
 export interface ComponentRebuildResult {
   componentId: string
@@ -269,6 +269,9 @@ export class HMRCoordinator {
       for (const line of lines) {
         const trimmed = line.trim()
 
+        if (!trimmed || trimmed.startsWith('//'))
+          continue
+
         if (inBlockComment) {
           if (trimmed.includes('*/')) {
             inBlockComment = false
@@ -281,9 +284,6 @@ export class HMRCoordinator {
           }
           continue
         }
-
-        if (!trimmed || trimmed.startsWith('//'))
-          continue
 
         if (trimmed.includes('/*')) {
           if (trimmed.includes('*/')) {
