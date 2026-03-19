@@ -188,14 +188,33 @@ export default function NoPreload() {
 
     it('should scan additional directories', async () => {
       const additionalDir = '/test/components'
+      const mockContent = `
+import Image from 'rari/image'
+
+export default function AdditionalComponent() {
+  return <Image src="/additional.jpg" width={1024} quality={85} />
+}
+`
 
       vi.mocked(fs.access).mockResolvedValue(undefined)
-      vi.mocked(fs.readdir).mockResolvedValue([])
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { name: 'component.tsx', isFile: () => true, isDirectory: () => false } as any,
+        ])
+      vi.mocked(fs.readFile).mockResolvedValue(mockContent)
 
-      await scanForImageUsage(mockSrcDir, [additionalDir])
+      const result = await scanForImageUsage(mockSrcDir, [additionalDir])
 
       expect(fs.access).toHaveBeenCalledWith(mockSrcDir)
       expect(fs.access).toHaveBeenCalledWith(additionalDir)
+
+      expect(result.images).toHaveLength(1)
+      expect(result.images[0]).toMatchObject({
+        src: '/additional.jpg',
+        width: 1024,
+        quality: 85,
+      })
     })
 
     it('should handle file read errors gracefully', async () => {

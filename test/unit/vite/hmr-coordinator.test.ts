@@ -228,6 +228,28 @@ describe('HMRCoordinator', () => {
       const filePath = '/test/src/components/Recovery.tsx'
 
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
+        success: false,
+        componentId: 'recovery',
+        bundlePath: '',
+        error: 'Initial build failed',
+      })
+
+      await coordinator.handleServerComponentUpdate(filePath, mockServer)
+      await vi.advanceTimersByTimeAsync(300)
+
+      expect(mockServer.ws.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'custom',
+          event: 'rari:hmr-error',
+          data: expect.objectContaining({
+            msg: expect.stringContaining('Initial build failed'),
+          }),
+        }),
+      )
+
+      vi.mocked(mockServer.ws.send).mockClear()
+
+      vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'recovery',
         bundlePath: '/dist/recovery.js',
@@ -240,7 +262,6 @@ describe('HMRCoordinator', () => {
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
-
       await vi.advanceTimersByTimeAsync(300)
 
       expect(mockServer.ws.send).toHaveBeenCalledWith(

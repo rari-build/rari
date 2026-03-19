@@ -238,10 +238,10 @@ export default function Client() {
       expect(builder.getComponentCount()).toBe(0)
     })
 
-    it('should extract dependencies from component', () => {
+    it('should extract dependencies from component', async () => {
       const filePath = '/test/project/src/components/WithDeps.tsx'
       const code = `import { useState } from 'react'
-import lodash from 'lodash'
+import axios from 'axios'
 
 export default function WithDeps() {
   return <div>Test</div>
@@ -250,12 +250,32 @@ export default function WithDeps() {
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
+      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
+        if (path.includes('manifest.json')) {
+          return JSON.stringify({
+            components: {},
+            actions: {},
+            importMap: { imports: {} },
+            version: '1.0.0',
+            buildTime: new Date().toISOString(),
+          })
+        }
+
+        return code
+      })
+
       builder.addServerComponent(filePath)
 
       expect(builder.getComponentCount()).toBe(1)
+
+      const manifest = await builder.buildServerComponents()
+
+      const componentEntries = Object.values(manifest.components)
+      expect(componentEntries).toHaveLength(1)
+      expect(componentEntries[0].dependencies).toContain('axios')
     })
 
-    it('should detect node imports', () => {
+    it('should detect node imports', async () => {
       const filePath = '/test/project/src/components/NodeImports.tsx'
       const code = `import fs from 'node:fs'
 import path from 'node:path'
@@ -267,9 +287,29 @@ export default function NodeImports() {
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
       vi.mocked(fsSync.readFileSync).mockReturnValue(code)
 
+      vi.mocked(fsSync.promises.readFile).mockImplementation(async (path: any) => {
+        if (path.includes('manifest.json')) {
+          return JSON.stringify({
+            components: {},
+            actions: {},
+            importMap: { imports: {} },
+            version: '1.0.0',
+            buildTime: new Date().toISOString(),
+          })
+        }
+
+        return code
+      })
+
       builder.addServerComponent(filePath)
 
       expect(builder.getComponentCount()).toBe(1)
+
+      const manifest = await builder.buildServerComponents()
+
+      const componentEntries = Object.values(manifest.components)
+      expect(componentEntries).toHaveLength(1)
+      expect(componentEntries[0].hasNodeImports).toBe(true)
     })
   })
 

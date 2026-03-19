@@ -119,7 +119,7 @@ export class ServerComponentBuilder {
     return this.serverComponents.size + this.serverActions.size
   }
 
-  getImportGraph(): Map<string, Set<string>> {
+  getImportGraph(): ReadonlyMap<string, ReadonlySet<string>> {
     const copy = new Map<string, Set<string>>()
     for (const [key, value] of this.fileImporters) {
       copy.set(key, new Set(value))
@@ -128,7 +128,7 @@ export class ServerComponentBuilder {
     return copy
   }
 
-  getHtmlOnlyImports(): Set<string> {
+  getHtmlOnlyImports(): ReadonlySet<string> {
     return new Set(this.htmlOnlyImports)
   }
 

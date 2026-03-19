@@ -148,9 +148,15 @@ describe('file-resolver', () => {
       const dirPath = '/test/components'
       const extensions: string[] = []
 
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true)
+      vi.mocked(fs.statSync).mockReturnValue({
+        isDirectory: () => true,
+      } as any)
+
       const result = resolveIndexFile(dirPath, extensions)
 
       expect(result).toBeNull()
+      expect(fs.existsSync).toHaveBeenCalledWith(dirPath)
     })
 
     it('should handle paths with trailing slash', () => {

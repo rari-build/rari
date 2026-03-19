@@ -327,9 +327,7 @@ describe('alias-resolver', () => {
       const aliases = ['@components', '/src/components'] as any
       const projectRoot = '/project'
 
-      const result = resolveAlias(source, aliases, projectRoot)
-
-      expect(result).toBeNull()
+      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle null projectRoot gracefully', () => {
