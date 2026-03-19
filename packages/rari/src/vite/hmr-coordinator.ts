@@ -258,12 +258,60 @@ export class HMRCoordinator {
       const code = fs.readFileSync(filePath, 'utf-8')
 
       const lines = code.split('\n')
+      let inBlockComment = false
+
       for (const line of lines) {
         const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
+
+        if (inBlockComment) {
+          if (trimmed.includes('*/')) {
+            inBlockComment = false
+            const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
+            if (!afterComment || afterComment.startsWith('//'))
+              continue
+            if (afterComment === '\'use client\'' || afterComment === '"use client"' || afterComment === '\'use client\';' || afterComment === '"use client";')
+              return 'client'
+            break
+          }
           continue
+        }
+
+        if (trimmed.includes('/*')) {
+          if (trimmed.includes('*/')) {
+            const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
+            const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
+
+            if (beforeComment) {
+              if (beforeComment === '\'use client\'' || beforeComment === '"use client"' || beforeComment === '\'use client\';' || beforeComment === '"use client";')
+                return 'client'
+              break
+            }
+
+            if (afterComment && !afterComment.startsWith('//')) {
+              if (afterComment === '\'use client\'' || afterComment === '"use client"' || afterComment === '\'use client\';' || afterComment === '"use client";')
+                return 'client'
+              break
+            }
+            continue
+          }
+          else {
+            const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
+            if (beforeComment) {
+              if (beforeComment === '\'use client\'' || beforeComment === '"use client"' || beforeComment === '\'use client\';' || beforeComment === '"use client";')
+                return 'client'
+              break
+            }
+            inBlockComment = true
+            continue
+          }
+        }
+
+        if (!trimmed || trimmed.startsWith('//'))
+          continue
+
         if (trimmed === '\'use client\'' || trimmed === '"use client"' || trimmed === '\'use client\';' || trimmed === '"use client";')
           return 'client'
+
         break
       }
 

@@ -363,12 +363,28 @@ export default function Component() {
   })
 
   describe('dispose', () => {
-    it('should clear all pending timers', () => {
+    it('should clear all pending timers', async () => {
       const filePath = '/test/src/components/Pending.tsx'
 
-      coordinator.handleServerComponentUpdate(filePath, mockServer)
+      vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
+        success: true,
+        componentId: 'pending',
+        bundlePath: '/dist/pending.js',
+      })
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+        text: async () => JSON.stringify({ success: true }),
+      })
+
+      await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
       coordinator.dispose()
+
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
+
+      expect(mockBuilder.rebuildComponent).not.toHaveBeenCalled()
 
       expect(() => coordinator.dispose()).not.toThrow()
     })
@@ -405,11 +421,16 @@ export default function Component() {
         await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
       }
 
+      expect(coordinator.getErrorCount()).toBe(3)
+
       const errorCalls = (mockServer.ws.send as any).mock.calls.filter(
         (call: any) => call[0]?.event === 'rari:hmr-error',
       )
 
       expect(errorCalls.length).toBe(3)
+
+      const lastErrorCall = errorCalls.at(-1)
+      expect(lastErrorCall[0].data.count).toBe(3)
     })
 
     it('should handle invalid server response', async () => {

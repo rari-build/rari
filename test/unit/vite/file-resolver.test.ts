@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { resolveIndexFile, resolveWithExtensions } from '@rari/vite/file-resolver'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -24,7 +25,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe('/test/component.ts')
+      expect(result).toBe(path.join('/test', 'component.ts'))
     })
 
     it('should return null when no extension matches', () => {
@@ -61,7 +62,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe('/test/component.js')
+      expect(result).toBe(path.join('/test', 'component.js'))
       expect(fs.existsSync).toHaveBeenCalledTimes(4)
     })
 
@@ -82,7 +83,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe('/test/component.tsx')
+      expect(result).toBe(path.join('/test', 'component.tsx'))
     })
   })
 
@@ -102,7 +103,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe('/test/components/index.ts')
+      expect(result).toBe(path.join('/test', 'components', 'index.ts'))
     })
 
     it('should return null when no index file found', () => {
@@ -140,7 +141,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe('/test/components/index.js')
+      expect(result).toBe(path.join('/test', 'components', 'index.js'))
       expect(fs.existsSync).toHaveBeenCalledTimes(5)
     })
 
@@ -173,7 +174,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe('/test/components/index.tsx')
+      expect(result).toBe(path.join('/test', 'components', 'index.tsx'))
     })
 
     it('should prefer tsx over other extensions', () => {
@@ -190,7 +191,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe('/test/components/index.tsx')
+      expect(result).toBe(path.join('/test', 'components', 'index.tsx'))
       expect(fs.existsSync).toHaveBeenCalledTimes(2)
     })
 
@@ -227,7 +228,7 @@ describe('file-resolver', () => {
       } as any)
 
       const indexFile = resolveIndexFile(basePath, extensions)
-      expect(indexFile).toBe('/test/Button/index.tsx')
+      expect(indexFile).toBe(path.join('/test', 'Button', 'index.tsx'))
     })
 
     it('should handle Windows-style paths', () => {

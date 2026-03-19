@@ -330,6 +330,26 @@ describe('alias-resolver', () => {
       expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
     })
 
+    it('should handle non-plain object with custom prototype as aliases', () => {
+      const source = '@components/Button'
+      const aliases = Object.create({ customProp: 'value' })
+      aliases['@components'] = '/src/components'
+      const projectRoot = '/project'
+
+      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+    })
+
+    it('should handle class instance as aliases', () => {
+      const source = '@components/Button'
+      class CustomAliases {
+        '@components' = '/src/components'
+      }
+      const aliases = new CustomAliases() as any
+      const projectRoot = '/project'
+
+      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
+    })
+
     it('should handle null projectRoot gracefully', () => {
       const source = '@components/Button'
       const aliases = {
@@ -390,7 +410,9 @@ describe('alias-resolver', () => {
       const result = resolveAlias(source, aliases, projectRoot)
 
       expect(result).not.toBeNull()
-      expect(result!.endsWith('src/components/Button')).toBe(true)
+      const normalizedResult = path.normalize(result!)
+      const normalizedSuffix = path.normalize('src/components/Button')
+      expect(normalizedResult.endsWith(normalizedSuffix)).toBe(true)
     })
   })
 })

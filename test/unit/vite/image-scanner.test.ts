@@ -9,7 +9,7 @@ describe('image-scanner', () => {
   const mockSrcDir = '/test/src'
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   afterEach(() => {
