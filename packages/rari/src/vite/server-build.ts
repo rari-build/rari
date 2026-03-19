@@ -119,6 +119,19 @@ export class ServerComponentBuilder {
     return this.serverComponents.size + this.serverActions.size
   }
 
+  getImportGraph(): Map<string, Set<string>> {
+    const copy = new Map<string, Set<string>>()
+    for (const [key, value] of this.fileImporters) {
+      copy.set(key, new Set(value))
+    }
+
+    return copy
+  }
+
+  getHtmlOnlyImports(): Set<string> {
+    return new Set(this.htmlOnlyImports)
+  }
+
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
     this.projectRoot = projectRoot
     const rscDir = options.rscDir || 'server'
