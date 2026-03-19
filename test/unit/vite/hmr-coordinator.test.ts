@@ -360,6 +360,36 @@ export default function Component() {
 
       expect(type).toBe('client')
     })
+
+    it('should detect use client with complete and incomplete block comments', () => {
+      const filePath = '/test/src/components/MixedComments.tsx'
+      const code = `/* comment */ 'use client' /*
+
+export default function Component() {
+  return <div>Test</div>
+}`
+
+      vi.mocked(fs.readFileSync).mockReturnValue(code)
+
+      const type = coordinator.detectComponentType(filePath)
+
+      expect(type).toBe('client')
+    })
+
+    it('should detect use client with multiple inline block comments', () => {
+      const filePath = '/test/src/components/MultipleComments.tsx'
+      const code = `/* comment1 */ 'use client' /* comment2 */ /* comment3 */
+
+export default function Component() {
+  return <div>Test</div>
+}`
+
+      vi.mocked(fs.readFileSync).mockReturnValue(code)
+
+      const type = coordinator.detectComponentType(filePath)
+
+      expect(type).toBe('client')
+    })
   })
 
   describe('dispose', () => {

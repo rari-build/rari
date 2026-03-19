@@ -275,6 +275,10 @@ export class HMRCoordinator {
             break
           result = result.substring(0, startIdx) + result.substring(endIdx + 2)
         }
+        if (result.includes('/*')) {
+          const startIdx = result.indexOf('/*')
+          result = result.substring(0, startIdx)
+        }
 
         return result
       }
