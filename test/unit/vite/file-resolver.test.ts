@@ -53,6 +53,10 @@ describe('file-resolver', () => {
 
       expect(result).toBe(`${basePath}.js`)
       expect(fs.existsSync).toHaveBeenCalledTimes(4)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(1, `${basePath}.tsx`)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(2, `${basePath}.ts`)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(3, `${basePath}.jsx`)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(4, `${basePath}.js`)
     })
 
     it('should handle empty extensions array', () => {
@@ -144,6 +148,11 @@ describe('file-resolver', () => {
 
       expect(result).toBe(path.join(dirPath, 'index.js'))
       expect(fs.existsSync).toHaveBeenCalledTimes(5)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(1, dirPath)
+      expect(fs.existsSync).toHaveBeenNthCalledWith(2, path.join(dirPath, 'index.tsx'))
+      expect(fs.existsSync).toHaveBeenNthCalledWith(3, path.join(dirPath, 'index.ts'))
+      expect(fs.existsSync).toHaveBeenNthCalledWith(4, path.join(dirPath, 'index.jsx'))
+      expect(fs.existsSync).toHaveBeenNthCalledWith(5, path.join(dirPath, 'index.js'))
     })
 
     it('should handle empty extensions array', () => {
@@ -257,12 +266,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(basePath, extensions)
 
-      expect(result).not.toBeNull()
-
-      expect(result).toContain('components')
-      expect(result).toContain('index.tsx')
-
-      expect(result!.startsWith('C:')).toBe(true)
+      expect(result).toBe(path.join(basePath, 'index.tsx'))
     })
 
     it('should handle relative paths', () => {

@@ -288,7 +288,9 @@ export class HMRCoordinator {
             const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
             if (!afterComment || afterComment.startsWith('//'))
               continue
-            const cleanAfterComment = stripInlineBlockComments(afterComment)
+            const cleanAfterComment = stripInlineBlockComments(afterComment).trim()
+            if (!cleanAfterComment || cleanAfterComment.startsWith('//'))
+              continue
             if (isUseClientDirective(cleanAfterComment))
               return 'client'
             break
@@ -301,14 +303,12 @@ export class HMRCoordinator {
 
         if (trimmed.includes('/*')) {
           if (trimmed.includes('*/')) {
-            const cleanLine = stripInlineBlockComments(trimmed)
-
-            if (cleanLine.trim()) {
-              if (isUseClientDirective(cleanLine))
-                return 'client'
-              break
-            }
-            continue
+            const cleanLine = stripInlineBlockComments(trimmed).trim()
+            if (!cleanLine || cleanLine.startsWith('//'))
+              continue
+            if (isUseClientDirective(cleanLine))
+              return 'client'
+            break
           }
           else {
             const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
