@@ -9,6 +9,8 @@ vi.mock('@rari/shared/http-utils', () => ({
 }))
 
 describe('HMRCoordinator', () => {
+  const TEST_DEBOUNCE_MS = 300
+
   let coordinator: HMRCoordinator
   let mockBuilder: any
   let mockServer: ViteDevServer
@@ -84,7 +86,7 @@ describe('HMRCoordinator', () => {
 
       await coordinator.handleClientComponentUpdate(filePath, mockServer)
 
-      expect((coordinator as any).errorHandler.getErrorCount()).toBeGreaterThan(0)
+      expect(coordinator.getErrorCount()).toBeGreaterThan(0)
     })
   })
 
@@ -108,7 +110,7 @@ describe('HMRCoordinator', () => {
       await coordinator.handleServerComponentUpdate(filePath1, mockServer)
       await coordinator.handleServerComponentUpdate(filePath2, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockBuilder.rebuildComponent).toHaveBeenCalledTimes(2)
     })
@@ -132,7 +134,7 @@ describe('HMRCoordinator', () => {
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/_rari/hmr',
@@ -166,7 +168,7 @@ describe('HMRCoordinator', () => {
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockServer.hot.send).toHaveBeenCalledWith(
         'rari:server-component-updated',
@@ -189,7 +191,7 @@ describe('HMRCoordinator', () => {
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockServer.ws.send).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -217,7 +219,7 @@ describe('HMRCoordinator', () => {
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(consoleErrorSpy).toHaveBeenCalled()
 
@@ -235,7 +237,7 @@ describe('HMRCoordinator', () => {
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockServer.ws.send).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -262,7 +264,7 @@ describe('HMRCoordinator', () => {
       })
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockServer.ws.send).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -356,7 +358,7 @@ export default function Component() {
 
       const type = coordinator.detectComponentType(filePath)
 
-      expect(type).toBe('server')
+      expect(type).toBe('client')
     })
   })
 
@@ -400,7 +402,7 @@ export default function Component() {
         })
 
         await coordinator.handleServerComponentUpdate(filePath, mockServer)
-        await vi.advanceTimersByTimeAsync(300)
+        await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
       }
 
       const errorCalls = (mockServer.ws.send as any).mock.calls.filter(
@@ -430,7 +432,7 @@ export default function Component() {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(consoleErrorSpy).toHaveBeenCalled()
 
@@ -460,7 +462,7 @@ export default function Component() {
         files.map(file => coordinator.handleServerComponentUpdate(file, mockServer)),
       )
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockBuilder.rebuildComponent).toHaveBeenCalledTimes(3)
     })
@@ -486,7 +488,7 @@ export default function Component() {
 
       await coordinator.handleServerComponentUpdate(filePath, mockServer)
 
-      await vi.advanceTimersByTimeAsync(300)
+      await vi.advanceTimersByTimeAsync(TEST_DEBOUNCE_MS)
 
       expect(mockBuilder.rebuildComponent).toHaveBeenCalledTimes(1)
     })

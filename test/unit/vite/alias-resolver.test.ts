@@ -13,7 +13,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components'))
     })
 
     it('should resolve alias with path', () => {
@@ -25,7 +25,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/Button')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/Button'))
     })
 
     it('should return null when no alias matches', () => {
@@ -61,7 +61,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/Button/index')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/Button/index'))
     })
 
     it('should prefer longer alias matches', () => {
@@ -74,7 +74,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/ui/Button')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/ui/Button'))
     })
 
     it('should handle empty aliases object', () => {
@@ -96,7 +96,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/absolute/path/to/shared')
+      expect(path.normalize(result!)).toBe(path.normalize('/absolute/path/to/shared'))
     })
 
     it('should not match partial alias names', () => {
@@ -137,7 +137,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/ui/components/Button/styles')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/ui/components/Button/styles'))
     })
 
     it('should handle alias with dots', () => {
@@ -149,7 +149,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/lib/utils')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/lib/utils'))
     })
 
     it('should handle multiple aliases', () => {
@@ -160,9 +160,9 @@ describe('alias-resolver', () => {
       }
       const projectRoot = '/project'
 
-      expect(resolveAlias('@components/Button', aliases, projectRoot)).toBe('/src/components/Button')
-      expect(resolveAlias('@utils/helper', aliases, projectRoot)).toBe('/src/utils/helper')
-      expect(resolveAlias('@lib/api', aliases, projectRoot)).toBe('/src/lib/api')
+      expect(path.normalize(resolveAlias('@components/Button', aliases, projectRoot)!)).toBe(path.normalize('/src/components/Button'))
+      expect(path.normalize(resolveAlias('@utils/helper', aliases, projectRoot)!)).toBe(path.normalize('/src/utils/helper'))
+      expect(path.normalize(resolveAlias('@lib/api', aliases, projectRoot)!)).toBe(path.normalize('/src/lib/api'))
     })
 
     it('should handle alias with special characters', () => {
@@ -174,7 +174,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/my-components/Button')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/my-components/Button'))
     })
 
     it('should resolve to absolute path when alias is relative', () => {
@@ -213,7 +213,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/My%20Component')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/My%20Component'))
     })
 
     it('should handle Unicode characters in source', () => {
@@ -225,7 +225,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/µComponent')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/µComponent'))
     })
 
     it('should handle emoji characters in source', () => {
@@ -237,7 +237,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/Button🚀')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/Button🚀'))
     })
 
     it('should handle very long alias keys', () => {
@@ -250,7 +250,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe('/src/components/Component')
+      expect(path.normalize(result!)).toBe(path.normalize('/src/components/Component'))
     })
 
     it('should handle very long paths', () => {
@@ -263,7 +263,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(result).toBe(`${longPath}/Button`)
+      expect(path.normalize(result!)).toBe(path.normalize(`${longPath}/Button`))
     })
 
     it('should handle null source gracefully', () => {
@@ -311,7 +311,7 @@ describe('alias-resolver', () => {
       const aliases = null as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow()
+      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle undefined aliases gracefully', () => {
@@ -319,7 +319,7 @@ describe('alias-resolver', () => {
       const aliases = undefined as any
       const projectRoot = '/project'
 
-      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow()
+      expect(() => resolveAlias(source, aliases, projectRoot)).toThrow(TypeError)
     })
 
     it('should handle array as aliases', () => {

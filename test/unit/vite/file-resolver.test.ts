@@ -193,6 +193,20 @@ describe('file-resolver', () => {
       expect(result).toBe('/test/components/index.tsx')
       expect(fs.existsSync).toHaveBeenCalledTimes(2)
     })
+
+    it('should return null when path exists but is not a directory', () => {
+      const dirPath = '/test/file.txt'
+      const extensions = ['.tsx', '.ts']
+
+      vi.mocked(fs.existsSync).mockReturnValueOnce(true)
+      vi.mocked(fs.statSync).mockReturnValue({
+        isDirectory: () => false,
+      } as any)
+
+      const result = resolveIndexFile(dirPath, extensions)
+
+      expect(result).toBeNull()
+    })
   })
 
   describe('integration scenarios', () => {

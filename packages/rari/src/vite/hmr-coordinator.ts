@@ -37,6 +37,10 @@ export class HMRCoordinator {
     })
   }
 
+  getErrorCount(): number {
+    return this.errorHandler.getErrorCount()
+  }
+
   async handleClientComponentUpdate(
     filePath: string,
     server: ViteDevServer,
@@ -258,7 +262,7 @@ export class HMRCoordinator {
         const trimmed = line.trim()
         if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
           continue
-        if (trimmed === '\'use client\'' || trimmed === '"use client"')
+        if (trimmed === '\'use client\'' || trimmed === '"use client"' || trimmed === '\'use client\';' || trimmed === '"use client";')
           return 'client'
         break
       }

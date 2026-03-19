@@ -96,6 +96,10 @@ export default function MyComponent() {
       await scanForImageUsage(mockSrcDir)
 
       expect(fs.readdir).toHaveBeenCalledTimes(2)
+      expect(fs.readdir).toHaveBeenCalledWith(mockSrcDir, { withFileTypes: true })
+      expect(fs.readdir).toHaveBeenCalledWith(`${mockSrcDir}/src`, { withFileTypes: true })
+      expect(fs.readdir).not.toHaveBeenCalledWith(`${mockSrcDir}/node_modules`, expect.anything())
+      expect(fs.readdir).not.toHaveBeenCalledWith(`${mockSrcDir}/dist`, expect.anything())
     })
 
     it('should handle multiple image components in same file', async () => {
@@ -217,6 +221,24 @@ export default function AdditionalComponent() {
       })
     })
 
+    it('should silently skip non-existent additional directories', async () => {
+      const missingDir = '/test/missing'
+
+      vi.mocked(fs.access)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+      vi.mocked(fs.readdir).mockResolvedValue([])
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const result = await scanForImageUsage(mockSrcDir, [missingDir])
+
+      expect(result).toEqual({ images: [] })
+      expect(consoleSpy).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+
     it('should handle file read errors gracefully', async () => {
       vi.mocked(fs.access).mockResolvedValue(undefined)
       vi.mocked(fs.readdir).mockResolvedValue([
@@ -230,6 +252,12 @@ export default function AdditionalComponent() {
 
       expect(result.images).toHaveLength(0)
       expect(consoleSpy).toHaveBeenCalled()
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Image scanner'),
+        expect.anything(),
+      )
+
+      consoleSpy.mockRestore()
     })
 
     it('should deduplicate images with same src, width, and quality', async () => {

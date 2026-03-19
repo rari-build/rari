@@ -12,6 +12,8 @@ export function resolveAlias(
     throw new TypeError(`Expected aliases to be an object, but received ${aliases}`)
   if (typeof aliases !== 'object' || Array.isArray(aliases))
     throw new TypeError(`Expected aliases to be a plain object, but received ${Array.isArray(aliases) ? 'array' : typeof aliases}`)
+  if (Object.getPrototypeOf(aliases) !== Object.prototype && Object.getPrototypeOf(aliases) !== null)
+    throw new TypeError(`Expected aliases to be a plain object, but received ${aliases.constructor?.name || 'object with custom prototype'}`)
 
   if (typeof projectRoot !== 'string')
     throw new TypeError(`Expected projectRoot to be a string, but received ${typeof projectRoot}`)
