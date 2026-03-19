@@ -243,6 +243,28 @@ describe('file-resolver', () => {
       expect(result).toBe('C:\\test\\component.tsx')
     })
 
+    it('should handle Windows-style paths for index files', () => {
+      const basePath = 'C:\\test\\components'
+      const extensions = ['.tsx', '.ts']
+
+      vi.mocked(fs.existsSync)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true)
+
+      vi.mocked(fs.statSync).mockReturnValue({
+        isDirectory: () => true,
+      } as any)
+
+      const result = resolveIndexFile(basePath, extensions)
+
+      expect(result).not.toBeNull()
+
+      expect(result).toContain('components')
+      expect(result).toContain('index.tsx')
+
+      expect(result!.startsWith('C:')).toBe(true)
+    })
+
     it('should handle relative paths', () => {
       const basePath = './components/Button'
       const extensions = ['.tsx']

@@ -269,9 +269,6 @@ export class HMRCoordinator {
       for (const line of lines) {
         const trimmed = line.trim()
 
-        if (!trimmed || trimmed.startsWith('//'))
-          continue
-
         if (inBlockComment) {
           if (trimmed.includes('*/')) {
             inBlockComment = false
@@ -284,6 +281,9 @@ export class HMRCoordinator {
           }
           continue
         }
+
+        if (!trimmed || trimmed.startsWith('//'))
+          continue
 
         if (trimmed.includes('/*')) {
           if (trimmed.includes('*/')) {
