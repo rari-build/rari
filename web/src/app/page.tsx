@@ -4,7 +4,7 @@ import HeroSection from '@/components/HeroSection'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
 
-export default function HomePage() {
+export default async function HomePage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <HeroSection />
