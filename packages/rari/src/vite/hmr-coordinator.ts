@@ -6,6 +6,8 @@ import process from 'node:process'
 import { throwIfNotOk } from '../shared/http-utils'
 import { HMRErrorHandler } from './hmr-error-handler'
 
+const USE_CLIENT_DIRECTIVE_RE = /^(["'])use client\1\s*(?:;\s*)?(?:\/\/.*)?$/
+
 export interface ComponentRebuildResult {
   componentId: string
   bundlePath: string
@@ -35,6 +37,10 @@ export class HMRCoordinator {
       maxErrors: 5,
       resetTimeout: 30000,
     })
+  }
+
+  getErrorCount(): number {
+    return this.errorHandler.getErrorCount()
   }
 
   async handleClientComponentUpdate(
@@ -254,12 +260,75 @@ export class HMRCoordinator {
       const code = fs.readFileSync(filePath, 'utf-8')
 
       const lines = code.split('\n')
+      let inBlockComment = false
+
+      function isUseClientDirective(value: string): boolean {
+        return USE_CLIENT_DIRECTIVE_RE.test(value.trim())
+      }
+
+      function stripInlineBlockComments(str: string): string {
+        let result = str
+        while (result.includes('/*') && result.includes('*/')) {
+          const startIdx = result.indexOf('/*')
+          const endIdx = result.indexOf('*/', startIdx)
+          if (endIdx === -1)
+            break
+          result = result.substring(0, startIdx) + result.substring(endIdx + 2)
+        }
+        if (result.includes('/*')) {
+          const startIdx = result.indexOf('/*')
+          result = result.substring(0, startIdx)
+        }
+
+        return result
+      }
+
       for (const line of lines) {
         const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
+
+        if (inBlockComment) {
+          if (trimmed.includes('*/')) {
+            inBlockComment = false
+            const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
+            if (!afterComment || afterComment.startsWith('//'))
+              continue
+            const cleanAfterComment = stripInlineBlockComments(afterComment).trim()
+            if (!cleanAfterComment || cleanAfterComment.startsWith('//'))
+              continue
+            if (isUseClientDirective(cleanAfterComment))
+              return 'client'
+            break
+          }
           continue
-        if (trimmed === '\'use client\'' || trimmed === '"use client"')
+        }
+
+        if (!trimmed || trimmed.startsWith('//'))
+          continue
+
+        if (trimmed.includes('/*')) {
+          if (trimmed.includes('*/')) {
+            const cleanLine = stripInlineBlockComments(trimmed).trim()
+            if (!cleanLine || cleanLine.startsWith('//'))
+              continue
+            if (isUseClientDirective(cleanLine))
+              return 'client'
+            break
+          }
+          else {
+            const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
+            if (beforeComment) {
+              if (isUseClientDirective(beforeComment))
+                return 'client'
+              break
+            }
+            inBlockComment = true
+            continue
+          }
+        }
+
+        if (isUseClientDirective(trimmed))
           return 'client'
+
         break
       }
 
