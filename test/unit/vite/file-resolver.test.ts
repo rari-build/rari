@@ -25,7 +25,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe(path.join('/test', 'component.ts'))
+      expect(result).toBe(`${basePath}.ts`)
     })
 
     it('should return null when no extension matches', () => {
@@ -62,7 +62,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe(path.join('/test', 'component.js'))
+      expect(result).toBe(`${basePath}.js`)
       expect(fs.existsSync).toHaveBeenCalledTimes(4)
     })
 
@@ -83,7 +83,7 @@ describe('file-resolver', () => {
 
       const result = resolveWithExtensions(basePath, extensions)
 
-      expect(result).toBe(path.join('/test', 'component.tsx'))
+      expect(result).toBe(basePath)
     })
   })
 

@@ -6,6 +6,8 @@ import process from 'node:process'
 import { throwIfNotOk } from '../shared/http-utils'
 import { HMRErrorHandler } from './hmr-error-handler'
 
+const USE_CLIENT_DIRECTIVE_RE = /^["']use client["']\s*(?:;\s*)?(?:\/\/.*)?$/
+
 export interface ComponentRebuildResult {
   componentId: string
   bundlePath: string
@@ -260,6 +262,10 @@ export class HMRCoordinator {
       const lines = code.split('\n')
       let inBlockComment = false
 
+      function isUseClientDirective(value: string): boolean {
+        return USE_CLIENT_DIRECTIVE_RE.test(value.trim())
+      }
+
       for (const line of lines) {
         const trimmed = line.trim()
 
@@ -269,7 +275,7 @@ export class HMRCoordinator {
             const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
             if (!afterComment || afterComment.startsWith('//'))
               continue
-            if (afterComment === '\'use client\'' || afterComment === '"use client"' || afterComment === '\'use client\';' || afterComment === '"use client";')
+            if (isUseClientDirective(afterComment))
               return 'client'
             break
           }
@@ -282,13 +288,13 @@ export class HMRCoordinator {
             const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
 
             if (beforeComment) {
-              if (beforeComment === '\'use client\'' || beforeComment === '"use client"' || beforeComment === '\'use client\';' || beforeComment === '"use client";')
+              if (isUseClientDirective(beforeComment))
                 return 'client'
               break
             }
 
             if (afterComment && !afterComment.startsWith('//')) {
-              if (afterComment === '\'use client\'' || afterComment === '"use client"' || afterComment === '\'use client\';' || afterComment === '"use client";')
+              if (isUseClientDirective(afterComment))
                 return 'client'
               break
             }
@@ -297,7 +303,7 @@ export class HMRCoordinator {
           else {
             const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
             if (beforeComment) {
-              if (beforeComment === '\'use client\'' || beforeComment === '"use client"' || beforeComment === '\'use client\';' || beforeComment === '"use client";')
+              if (isUseClientDirective(beforeComment))
                 return 'client'
               break
             }
@@ -309,7 +315,7 @@ export class HMRCoordinator {
         if (!trimmed || trimmed.startsWith('//'))
           continue
 
-        if (trimmed === '\'use client\'' || trimmed === '"use client"' || trimmed === '\'use client\';' || trimmed === '"use client";')
+        if (isUseClientDirective(trimmed))
           return 'client'
 
         break
