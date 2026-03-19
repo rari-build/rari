@@ -4,6 +4,10 @@
 
 - Add defensive checks and improve path resolution logic
 
+### 💼 Other
+
+- Rari@0.10.20
+
 ### 🚜 Refactor
 
 - Reorganize deployment and streaming setup code
