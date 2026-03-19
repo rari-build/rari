@@ -103,7 +103,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe(path.join('/test', 'components', 'index.ts'))
+      expect(result).toBe(path.join(dirPath, 'index.ts'))
     })
 
     it('should return null when no index file found', () => {

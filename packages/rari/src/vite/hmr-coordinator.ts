@@ -282,6 +282,9 @@ export class HMRCoordinator {
           continue
         }
 
+        if (!trimmed || trimmed.startsWith('//'))
+          continue
+
         if (trimmed.includes('/*')) {
           if (trimmed.includes('*/')) {
             const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
@@ -311,9 +314,6 @@ export class HMRCoordinator {
             continue
           }
         }
-
-        if (!trimmed || trimmed.startsWith('//'))
-          continue
 
         if (isUseClientDirective(trimmed))
           return 'client'
