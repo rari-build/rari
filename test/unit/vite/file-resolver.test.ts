@@ -142,7 +142,7 @@ describe('file-resolver', () => {
 
       const result = resolveIndexFile(dirPath, extensions)
 
-      expect(result).toBe(path.join('/test', 'components', 'index.js'))
+      expect(result).toBe(path.join(dirPath, 'index.js'))
       expect(fs.existsSync).toHaveBeenCalledTimes(5)
     })
 

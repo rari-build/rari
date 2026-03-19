@@ -266,6 +266,19 @@ export class HMRCoordinator {
         return USE_CLIENT_DIRECTIVE_RE.test(value.trim())
       }
 
+      function stripInlineBlockComments(str: string): string {
+        let result = str
+        while (result.includes('/*') && result.includes('*/')) {
+          const startIdx = result.indexOf('/*')
+          const endIdx = result.indexOf('*/', startIdx)
+          if (endIdx === -1)
+            break
+          result = result.substring(0, startIdx) + result.substring(endIdx + 2)
+        }
+
+        return result
+      }
+
       for (const line of lines) {
         const trimmed = line.trim()
 
@@ -275,7 +288,8 @@ export class HMRCoordinator {
             const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
             if (!afterComment || afterComment.startsWith('//'))
               continue
-            if (isUseClientDirective(afterComment))
+            const cleanAfterComment = stripInlineBlockComments(afterComment)
+            if (isUseClientDirective(cleanAfterComment))
               return 'client'
             break
           }
@@ -287,17 +301,10 @@ export class HMRCoordinator {
 
         if (trimmed.includes('/*')) {
           if (trimmed.includes('*/')) {
-            const beforeComment = trimmed.substring(0, trimmed.indexOf('/*')).trim()
-            const afterComment = trimmed.substring(trimmed.indexOf('*/') + 2).trim()
+            const cleanLine = stripInlineBlockComments(trimmed)
 
-            if (beforeComment) {
-              if (isUseClientDirective(beforeComment))
-                return 'client'
-              break
-            }
-
-            if (afterComment && !afterComment.startsWith('//')) {
-              if (isUseClientDirective(afterComment))
+            if (cleanLine.trim()) {
+              if (isUseClientDirective(cleanLine))
                 return 'client'
               break
             }
