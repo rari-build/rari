@@ -33,6 +33,7 @@ type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspil
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
 const NODE_BUILTIN_PATH: &str = "/node_builtin/";
+const REACT_STUB_PATH: &str = "/react_stub/";
 const FILE_PROTOCOL: &str = "file://";
 const NODE_PROTOCOL: &str = "node";
 const NODE_PREFIX: &str = "node:";
@@ -1083,29 +1084,24 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         specifier_str: &str,
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
+        if specifier_str.contains(REACT_STUB_PATH) {
+            let is_jsx_runtime = specifier_str.contains("jsx-runtime.js")
+                || specifier_str.contains("jsx-dev-runtime.js");
+
+            let stub_content =
+                if is_jsx_runtime { JSX_RUNTIME_STUB.to_string() } else { REACT_STUB.to_string() };
+
+            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
+                ModuleType::JavaScript,
+                ModuleSourceCode::String(stub_content.into()),
+                module_specifier,
+                None,
+            ))));
+        }
+
         if specifier_str.contains(NODE_MODULES_PATH) {
             let parts: Vec<&str> = specifier_str.split(NODE_MODULES_PATH).collect();
             let module_path = parts.get(1).unwrap_or(&"unknown");
-
-            if module_path.starts_with(REACT_MODULE) {
-                if *module_path == "react/jsx-runtime.js"
-                    || module_path.ends_with("/jsx-runtime.js")
-                {
-                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                        ModuleType::JavaScript,
-                        ModuleSourceCode::String(JSX_RUNTIME_STUB.to_string().into()),
-                        module_specifier,
-                        None,
-                    ))));
-                } else {
-                    return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                        ModuleType::JavaScript,
-                        ModuleSourceCode::String(REACT_STUB.to_string().into()),
-                        module_specifier,
-                        None,
-                    ))));
-                }
-            }
 
             let package_name = module_path.split('/').next().unwrap_or(module_path);
 
@@ -1716,11 +1712,24 @@ impl ModuleLoader for RariModuleLoader {
             return self.resolve(&component_specifier, referrer, kind);
         }
 
-        if !specifier.contains("://")
-            && !specifier.starts_with("/")
-            && let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer)
-        {
-            return self.resolve(&resolved_path, referrer, kind);
+        if !specifier.contains("://") && !specifier.starts_with("/") {
+            if specifier == "react" || specifier.starts_with("react/") {
+                let react_url =
+                    if specifier == "react/jsx-runtime" || specifier == "react/jsx-runtime.js" {
+                        "file:///react_stub/jsx-runtime.js".to_string()
+                    } else if specifier == "react/jsx-dev-runtime"
+                        || specifier == "react/jsx-dev-runtime.js"
+                    {
+                        "file:///react_stub/jsx-dev-runtime.js".to_string()
+                    } else {
+                        "file:///react_stub/react.js".to_string()
+                    };
+                return self.resolve(&react_url, referrer, kind);
+            }
+
+            if let Some(resolved_path) = self.resolve_from_node_modules(specifier, referrer) {
+                return self.resolve(&resolved_path, referrer, kind);
+            }
         }
 
         let url = ModuleSpecifier::parse(specifier)
