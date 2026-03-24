@@ -28,6 +28,6 @@
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260324.1",
     "tailwindcss": "^4.2.2",
-    "vite": "^8.0.2"
+    "vite-plus": "^0.1.14"
   }
 }
