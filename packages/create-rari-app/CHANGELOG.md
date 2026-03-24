@@ -1,4 +1,14 @@
+## [create-rari-app@0.4.27] - 2026-03-24
+
+### ⚙️ Miscellaneous Tasks
+
+- *(create-rari-app)* Replace vite with vite-plus, fixes #158
+- *(create-rari-app)* Update vite import to vite-plus
 ## [create-rari-app@0.4.26] - 2026-03-18
+
+### 💼 Other
+
+- Create-rari-app@0.4.26
 
 ### ⚙️ Miscellaneous Tasks
 
