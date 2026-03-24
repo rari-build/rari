@@ -13,6 +13,7 @@ use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::utils::http_utils::{
     extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
 };
+use crate::utils::path_url::path_to_file_url;
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -82,7 +83,7 @@ async fn collect_page_metadata(
                 layout.file_path.cow_replace(".tsx", ".js").cow_replace(".ts", ".js").into_owned();
             let dist_filename = convert_route_path_to_dist_path(&js_filename);
             let file_path = base_path.join("app").join(&dist_filename);
-            if file_path.exists() { Some(format!("file://{}", file_path.display())) } else { None }
+            if file_path.exists() { Some(path_to_file_url(&file_path)) } else { None }
         })
         .collect();
 
@@ -99,7 +100,7 @@ async fn collect_page_metadata(
         return None;
     }
 
-    let page_path = format!("file://{}", page_file_path.display());
+    let page_path = path_to_file_url(&page_file_path);
 
     let renderer = state.renderer.lock().await;
     match renderer

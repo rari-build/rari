@@ -4,6 +4,7 @@ use crate::rsc::utils::dependency_utils::extract_dependencies;
 use crate::server::utils::component_utils::{
     has_use_client_directive, has_use_server_directive, wrap_server_action_module,
 };
+use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use tracing::error;
 
@@ -267,13 +268,9 @@ impl ComponentLoader {
                         if dist_path.exists() {
                             match std::fs::read_to_string(&dist_path) {
                                 Ok(dist_code) => {
-                                    let module_specifier = format!(
-                                        "file://{}",
-                                        dist_path
-                                            .canonicalize()
-                                            .unwrap_or(dist_path.clone())
-                                            .display()
-                                    );
+                                    let canonical_path =
+                                        dist_path.canonicalize().unwrap_or(dist_path.clone());
+                                    let module_specifier = path_to_file_url(&canonical_path);
 
                                     let esm_load_result = renderer
                                         .runtime
@@ -482,10 +479,8 @@ impl ComponentLoader {
                             .cow_replace('\\', "/")
                             .into_owned();
 
-                        let module_specifier = format!(
-                            "file://{}",
-                            path.canonicalize().unwrap_or(path.to_path_buf()).display()
-                        );
+                        let canonical_path = path.canonicalize().unwrap_or(path.to_path_buf());
+                        let module_specifier = path_to_file_url(&canonical_path);
 
                         let esm_load_result = renderer
                             .runtime
@@ -655,10 +650,8 @@ impl ComponentLoader {
                         );
                     }
 
-                    let module_specifier = format!(
-                        "file://{}",
-                        path.canonicalize().unwrap_or(path.to_path_buf()).display()
-                    );
+                    let canonical_path = path.canonicalize().unwrap_or(path.to_path_buf());
+                    let module_specifier = path_to_file_url(&canonical_path);
 
                     let esm_load_result = renderer
                         .runtime

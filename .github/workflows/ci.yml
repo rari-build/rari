@@ -1,0 +1,312 @@
+name: CI
+
+on:
+  merge_group:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  # 7 GiB by default on GitHub, setting to 6 GiB
+  # https://docs.github.com/en/actions/concepts/runners/github-hosted-runners
+  NODE_OPTIONS: --max-old-space-size=6144
+
+# Remove default permissions of GITHUB_TOKEN for security
+# https://docs.github.com/en/actions/tutorials/authenticate-with-github_token
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+jobs:
+  changes:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'packages/**'
+              - 'test/**'
+              - 'examples/**'
+              - 'web/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'vite.config.ts'
+              - 'playwright.config.ts'
+              - 'eslint.config.js'
+              - '.github/workflows/ci.yml'
+            rust:
+              - '.github/workflows/ci.yml'
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - '.clippy.toml'
+              - '.rustfmt.toml'
+
+  rust-check:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --all-features
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: |
+          pnpm --filter=@rari/logger run build
+          pnpm --filter=@rari/deploy run build
+          pnpm --filter=rari run build
+          pnpm --filter=create-rari-app run build
+
+      - name: Typecheck packages
+        run: |
+          pnpm --filter=rari run typecheck
+          pnpm --filter=create-rari-app run typecheck
+
+      - name: Verify dist outputs
+        run: |
+          test -d packages/logger/dist
+          test -d packages/deploy/dist
+          test -d packages/rari/dist
+          test -d packages/create-rari-app/dist
+
+      - name: Cache dist
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          if-no-files-found: error
+          retention-days: 3
+          name: dist
+          path: |
+            packages/logger/dist
+            packages/deploy/dist
+            packages/rari/dist
+            packages/create-rari-app/dist
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  lint-and-test:
+    needs: changes
+    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: |
+          pnpm --filter=@rari/logger run build
+          pnpm --filter=@rari/deploy run build
+          pnpm --filter=rari run build
+          pnpm --filter=create-rari-app run build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test (unit)
+        run: pnpm test:unit:run
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  test-e2e:
+    if: (needs.changes.outputs.src == 'true' || needs.changes.outputs.rust == 'true') && (github.event_name != 'push' || github.ref_name != 'main')
+    runs-on: ${{ matrix.os }}
+    permissions:
+      actions: write
+      contents: read
+    needs:
+      - changes
+      - build
+    strategy:
+      fail-fast: ${{ github.event_name == 'merge_group' }}
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['lts/*']
+        exclude:
+          - os: ${{ github.event_name == 'merge_group' && 'windows-latest' || '' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install fontconfig:x64-windows
+        shell: pwsh
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Prepare Rust binaries (Windows)
+        if: runner.os == 'Windows'
+        run: cargo run --bin prepare-binaries -- --dev
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          VCPKG_ROOT: C:\vcpkg
+
+      - name: Prepare Rust binaries (Unix)
+        if: runner.os != 'Windows'
+        run: cargo run --bin prepare-binaries -- --dev
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Playwright
+        run: pnpm playwright install chromium
+
+      - name: Restore dist cache
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: packages
+
+      - name: Re-link workspace packages
+        run: pnpm install --offline
+
+      - name: Test (e2e)
+        run: pnpm test:e2e
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  ci-ok:
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - rust-check
+      - build
+      - lint-and-test
+      - test-e2e
+    steps:
+      - name: Check required jobs
+        run: |
+          # Fail if any needed job was not successful (skipped counts as success)
+          results=(
+            "${{ needs.changes.result }}"
+            "${{ needs.rust-check.result }}"
+            "${{ needs.build.result }}"
+            "${{ needs.lint-and-test.result }}"
+            "${{ needs.test-e2e.result }}"
+          )
+          for result in "${results[@]}"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "One or more required jobs failed or were cancelled: $result"
+              exit 1
+            fi
+          done
+          echo "All required jobs passed or were skipped."

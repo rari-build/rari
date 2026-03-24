@@ -4,6 +4,7 @@ use super::layout::LayoutEngine;
 use super::rendering::ImageRenderer;
 use super::types::{JsxChild, JsxElement, OgImageEntry};
 use crate::runtime::JsExecutionRuntime;
+use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde_json::Value;
@@ -305,7 +306,8 @@ impl OgImageGenerator {
             .clone();
         drop(server_manifest);
 
-        let module_url = format!("file://{}/dist/{}", self.project_path.display(), bundle_path);
+        let module_path = self.project_path.join("dist").join(&bundle_path);
+        let module_url = path_to_file_url(&module_path);
 
         let params_json = serde_json::to_string(params).map_err(|e| {
             OgImageError::InternalError(format!("Failed to serialize params: {}", e))

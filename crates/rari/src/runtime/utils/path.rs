@@ -1,3 +1,4 @@
+use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
 
@@ -20,7 +21,7 @@ impl DistPathResolver {
 
     pub fn get_dist_url(&self, component_id: &str) -> String {
         let path = self.get_dist_path(component_id);
-        format!("file://{}", path.display())
+        path_to_file_url(&path)
     }
 
     pub fn file_path_to_component_id(&self, file_path: &Path) -> String {

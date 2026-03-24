@@ -4,6 +4,7 @@ use crate::rsc::rendering::streaming::RscStream;
 use crate::server::config::Config;
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::types::request::RenderMode;
+use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use serde_json::Value;
@@ -115,7 +116,7 @@ impl LayoutRenderer {
             return Ok(false);
         }
 
-        let page_path = format!("file://{}", page_file_path.display());
+        let page_path = path_to_file_url(&page_file_path);
 
         let check_script = format!(
             r#"
