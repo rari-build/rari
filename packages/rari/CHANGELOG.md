@@ -1,3 +1,34 @@
+## [rari@0.10.23] - 2026-03-24
+
+### 🐛 Bug Fixes
+
+- Resolve Windows path handling issues in module resolution
+
+### 🚜 Refactor
+
+- *(vite)* Extract use client directive validation logic
+- *(vite)* Reorder comment handling logic in HMR coordinator
+- *(vite)* Improve comment handling and test organization
+- *(vite)* Reorder comment skip logic in HMR coordinator
+- *(vite)* Simplify inline block comment stripping logic
+- *(vite)* Improve comment stripping and enhance test assertions
+- *(vite)* Handle incomplete block comments in directive detection
+
+### 🧪 Testing
+
+- *(vite)* Add comprehensive unit tests for vite plugin
+- *(vite)* Add input validation and improve test coverage
+- *(vite)* Enhance validation and cross-platform path handling
+- *(vite)* Improve block comment handling and cross-platform paths
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.10.23
+## [rari@0.10.22] - 2026-03-19
+
+### 💼 Other
+
+- Rari@0.10.22
 ## [rari@0.10.21] - 2026-03-19
 
 ### 💼 Other
