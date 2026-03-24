@@ -12,6 +12,7 @@ globalThis['~rari'].metadataCollector = {
       try {
         if (globalThis['~rsc'] && typeof globalThis['~rsc'].modules !== 'undefined') {
           const moduleKey = modulePath.replace(FILE_URL_REGEX, 'app/').replace(JS_EXTENSION_REGEX, '')
+
           const module = globalThis['~rsc'].modules[moduleKey]
 
           if (module) {

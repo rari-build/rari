@@ -35,7 +35,7 @@ pub fn create_strict_rate_limit_layer(
 ) -> GovernorLayer<RariIpKeyExtractor, StateInformationMiddleware, Body> {
     let rpm = requests_per_minute.unwrap_or(10);
 
-    let period_secs = if rpm > 0 { 60 / rpm } else { 60 };
+    let period_secs = 60u32.checked_div(rpm).unwrap_or(60);
     let period_secs = period_secs.max(1);
 
     let burst_size = (rpm / 2).max(1);

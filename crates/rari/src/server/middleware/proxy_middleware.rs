@@ -7,6 +7,7 @@ use tower::{Layer, Service};
 use tracing::error;
 
 use crate::server::types::ServerState;
+use crate::utils::path_url::path_to_file_url;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProxyResult {
@@ -236,7 +237,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     } else {
         std::env::current_dir()?.join(executor_path)
     };
-    let executor_specifier = format!("file://{}", executor_absolute.display());
+    let executor_specifier = path_to_file_url(&executor_absolute);
 
     let rari_request_path = std::path::Path::new("node_modules/rari/dist/proxy/RariRequest.mjs");
     let rari_request_absolute = if let Ok(canonical) = rari_request_path.canonicalize() {
@@ -244,7 +245,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     } else {
         std::env::current_dir()?.join(rari_request_path)
     };
-    let rari_request_specifier = format!("file://{}", rari_request_absolute.display());
+    let rari_request_specifier = path_to_file_url(&rari_request_absolute);
 
     let proxy_file_path = std::path::Path::new("dist/server/proxy.js");
     let proxy_absolute = if let Ok(canonical) = proxy_file_path.canonicalize() {
@@ -252,7 +253,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), Box<dyn std::er
     } else {
         std::env::current_dir()?.join(proxy_file_path)
     };
-    let proxy_specifier = format!("file://{}", proxy_absolute.display());
+    let proxy_specifier = path_to_file_url(&proxy_absolute);
 
     let init_script = format!(
         r#"(async function() {{

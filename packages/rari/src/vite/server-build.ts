@@ -3,6 +3,7 @@ import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig, ServerRat
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
   COMPONENT_ID_REGEX as COMPONENT_ID_SANITIZE_REGEX,
@@ -31,6 +32,12 @@ const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
 const EXPORT_LIST_REGEX = /^export\s*\{([^}]+)\};?\s*$/gm
 const EXPORT_VAR_REGEX = /^export\s+(const|let|var)\s+(\w+)/gm
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
+const NODE_PROTOCOL_REGEX = /^node:/
+const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
+
+function pathToFileUrl(filePath: string): string {
+  return pathToFileURL(filePath).href
+}
 
 interface ServerComponentManifest {
   components: Record<
@@ -789,8 +796,16 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
           if (id.startsWith('\0server-action:')) {
             const filePath = id.slice('\0server-action:'.length)
 
+            const relativePath = path.relative(self.projectRoot, filePath)
+            const normalizedRelativePath = relativePath.replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
+            const srcRelativePath = normalizedRelativePath.startsWith('src/') ? normalizedRelativePath.slice(4) : normalizedRelativePath
+            const builtPath = path.join(self.options.outDir, self.options.rscDir, srcRelativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
+            const absoluteBuiltPath = path.resolve(self.projectRoot, builtPath)
+
+            const builtFileUrl = pathToFileUrl(absoluteBuiltPath)
+
             return {
-              code: `export * from ${JSON.stringify(filePath)};`,
+              code: `export * from ${JSON.stringify(builtFileUrl)};`,
               moduleType: 'js',
             }
           }
@@ -976,6 +991,13 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       input: virtualModuleId,
       platform: 'node',
       write: false,
+      external: [
+        NODE_PROTOCOL_REGEX,
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ],
       output: {
         format: 'esm',
         minify: this.options.minify,
@@ -1028,10 +1050,20 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     const aliases = this.options.alias || {}
     for (const [alias, replacement] of Object.entries(aliases)) {
-      const absolutePath = path.isAbsolute(replacement)
+      const aliasTargetPath = path.isAbsolute(replacement)
         ? replacement
         : path.resolve(this.projectRoot, replacement)
-      importMapImports[`${alias}/`] = `file://${absolutePath}/`
+      const srcDir = path.join(this.projectRoot, 'src')
+      const relativeFromSrc = path.relative(srcDir, aliasTargetPath)
+
+      if (relativeFromSrc.startsWith('..'))
+        continue
+
+      const outputPath = path.join(this.options.outDir, this.options.rscDir, relativeFromSrc)
+      const absoluteOutputPath = path.resolve(this.projectRoot, outputPath)
+
+      if (!importMapImports[alias])
+        importMapImports[`${alias}/`] = `${pathToFileUrl(absoluteOutputPath)}/`
     }
 
     const manifest: ServerComponentManifest = {
@@ -1057,7 +1089,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1084,7 +1116,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1108,7 +1140,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
 
       manifest.components[actionId] = {
         id: actionId,
@@ -1199,6 +1231,13 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       input: virtualModuleId,
       platform: 'node',
       write: false,
+      external: [
+        NODE_PROTOCOL_REGEX,
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ],
       output: {
         format: 'esm',
         minify: this.options.minify,
@@ -1665,7 +1704,7 @@ function registerClientReference(clientReference, id, exportName) {
 
     const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
     const fullBundlePath = path.join(this.options.outDir, bundlePath)
-    const moduleSpecifier = `file://${path.resolve(this.projectRoot, fullBundlePath)}`
+    const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
 
     if (!componentData) {
       const code = await fs.promises.readFile(filePath, 'utf-8')

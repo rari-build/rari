@@ -167,7 +167,7 @@ class AppRouteGenerator {
 
       routes.push({
         path: routePath,
-        filePath: path.join(relativePath, pageFile),
+        filePath: path.join(relativePath, pageFile).replace(BACKSLASH_REGEX, '/'),
         segments,
         params,
         isDynamic: params.length > 0,
@@ -179,7 +179,7 @@ class AppRouteGenerator {
       const parentPath = this.getParentPath(relativePath)
       layouts.push({
         path: routePath,
-        filePath: path.join(relativePath, layoutFile),
+        filePath: path.join(relativePath, layoutFile).replace(BACKSLASH_REGEX, '/'),
         parentPath: parentPath ? this.pathToRoute(parentPath) : undefined,
       })
     }
@@ -189,7 +189,7 @@ class AppRouteGenerator {
       const componentId = this.generateComponentId(routePath, 'loading')
       loading.push({
         path: routePath,
-        filePath: path.join(relativePath, loadingFile),
+        filePath: path.join(relativePath, loadingFile).replace(BACKSLASH_REGEX, '/'),
         componentId,
       })
     }
@@ -198,7 +198,7 @@ class AppRouteGenerator {
     if (errorFile) {
       errors.push({
         path: routePath,
-        filePath: path.join(relativePath, errorFile),
+        filePath: path.join(relativePath, errorFile).replace(BACKSLASH_REGEX, '/'),
       })
     }
 
@@ -206,13 +206,13 @@ class AppRouteGenerator {
     if (notFoundFile) {
       notFound.push({
         path: routePath,
-        filePath: path.join(relativePath, notFoundFile),
+        filePath: path.join(relativePath, notFoundFile).replace(BACKSLASH_REGEX, '/'),
       })
     }
 
     const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
     if (ogImageFile) {
-      const filePath = path.join(relativePath, ogImageFile)
+      const filePath = path.join(relativePath, ogImageFile).replace(BACKSLASH_REGEX, '/')
       const fullFilePath = path.join(this.appDir, filePath)
 
       let width: number | undefined
@@ -454,7 +454,7 @@ class AppRouteGenerator {
     relativePath: string,
     fileName: string,
   ): Promise<ApiRouteEntry> {
-    const filePath = path.join(relativePath, fileName)
+    const filePath = path.join(relativePath, fileName).replace(BACKSLASH_REGEX, '/')
     const routePath = this.pathToRoute(relativePath)
     const segments = this.parseRouteSegments(relativePath)
     const params = this.extractParams(segments)

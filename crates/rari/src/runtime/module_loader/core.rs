@@ -9,6 +9,7 @@ use crate::runtime::module_loader::{
     storage::OrderedStorage,
     transpiler::*,
 };
+use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use dashmap::DashMap;
 use deno_core::{
@@ -80,6 +81,21 @@ fn get_import_regex() -> &'static regex::Regex {
 
 fn get_async_file_manager() -> &'static AsyncFileManager {
     ASYNC_FILE_MANAGER.get_or_init(AsyncFileManager::new)
+}
+
+fn file_url_to_path(url: &str) -> Option<PathBuf> {
+    if !url.starts_with(FILE_PROTOCOL) {
+        return None;
+    }
+
+    ModuleSpecifier::parse(url).ok().and_then(|spec| spec.to_file_path().ok()).or_else(|| {
+        url.strip_prefix(FILE_PROTOCOL).map(|path_str| {
+            #[cfg(windows)]
+            let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
+
+            PathBuf::from(path_str)
+        })
+    })
 }
 
 #[derive(Debug)]
@@ -517,18 +533,25 @@ export default {{}};
         referrer_path: &str,
     ) -> Option<String> {
         let start_dir = if !referrer_path.is_empty() {
-            let clean_referrer = referrer_path.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer_path);
+            let clean_referrer_path = if referrer_path.starts_with(FILE_PROTOCOL) {
+                file_url_to_path(referrer_path).unwrap_or_else(|| PathBuf::from(referrer_path))
+            } else {
+                PathBuf::from(referrer_path)
+            };
 
-            if clean_referrer.contains("/rari_component/")
-                || clean_referrer.contains("/rari_internal/")
-                || clean_referrer.contains("/node_builtin/")
+            let clean_referrer_str = clean_referrer_path.to_string_lossy();
+
+            if clean_referrer_str.contains("/rari_component/")
+                || clean_referrer_str.contains("/rari_internal/")
+                || clean_referrer_str.contains("/node_builtin/")
             {
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-            } else if let Some(last_slash) = clean_referrer.rfind('/') {
-                let dir_path = PathBuf::from(&clean_referrer[..last_slash]);
-                dir_path.canonicalize().unwrap_or(dir_path)
             } else {
-                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                let dir_path =
+                    clean_referrer_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    });
+                dir_path.canonicalize().unwrap_or(dir_path)
             }
         } else {
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
@@ -578,9 +601,11 @@ export default {{}};
 
     fn extract_package_base_from_referrer(&self, referrer: &str) -> Option<String> {
         let clean_referrer = if referrer.starts_with(FILE_PROTOCOL) {
-            referrer.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer)
+            file_url_to_path(referrer)
+                .map(|p| p.to_string_lossy().cow_replace('\\', "/").into_owned())
+                .unwrap_or_else(|| referrer.to_string())
         } else {
-            referrer
+            referrer.cow_replace('\\', "/").into_owned()
         };
 
         if clean_referrer.contains("node_modules")
@@ -590,7 +615,7 @@ export default {{}};
             return Some(dir_path.to_string());
         }
 
-        self.module_resolver.get_package_base(clean_referrer)
+        self.module_resolver.get_package_base(&clean_referrer)
     }
 
     fn resolve_relative_up(&self, specifier: &str, package_base: &str) -> String {
@@ -600,12 +625,14 @@ export default {{}};
         } else {
             ""
         };
-        format!("file://{parent_dir}/{remaining}")
+        let full_path = PathBuf::from(parent_dir).join(remaining);
+        path_to_file_url(&full_path)
     }
 
     fn resolve_relative_current(&self, specifier: &str, package_base: &str) -> String {
         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-        format!("file://{package_base}/{remaining}")
+        let full_path = PathBuf::from(package_base).join(remaining);
+        path_to_file_url(&full_path)
     }
 
     fn handle_cached_module(
@@ -667,7 +694,9 @@ export default {{}};
 
             if referrer_str.contains(NODE_MODULES_PATH) {
                 let file_path = if specifier_str.starts_with(FILE_PROTOCOL) {
-                    specifier_str.strip_prefix("file://").unwrap_or(specifier_str)
+                    file_url_to_path(specifier_str)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| specifier_str.to_string())
                 } else if specifier_str.starts_with(RELATIVE_CURRENT_PATH)
                     || specifier_str.starts_with(RELATIVE_UP_PATH)
                 {
@@ -690,7 +719,7 @@ export default {{}};
                     return None;
                 };
 
-                if !std::path::Path::new(file_path).exists() {
+                if !std::path::Path::new(&file_path).exists() {
                     return Some(ModuleLoadResponse::Sync(Err(JsErrorBox::generic(
                         "Module not found",
                     ))));
@@ -776,6 +805,7 @@ export const __esModule = true;
                 None,
             ))));
         }
+
         None
     }
 
@@ -1045,10 +1075,16 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
         if specifier_str.starts_with(FILE_PROTOCOL) && !specifier_str.contains(NODE_BUILTIN_PATH) {
-            let file_path = specifier_str.strip_prefix(FILE_PROTOCOL).unwrap_or(specifier_str);
+            let file_path = match module_specifier.to_file_path() {
+                Ok(path) => path,
+                Err(_) => return None,
+            };
+
+            let file_path_str = file_path.to_string_lossy();
+            let file_path_for_wrapper = file_path_str.cow_replace('\\', "/").into_owned();
 
             let cache = get_async_file_manager().file_cache.read();
-            if let Some((content, _)) = cache.get(file_path) {
+            if let Some((content, _)) = cache.get(file_path_str.as_ref()) {
                 let final_code = content.clone();
                 return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                     ModuleType::JavaScript,
@@ -1059,11 +1095,11 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             }
             drop(cache);
 
-            if let Ok(content) = fs::read_to_string(file_path) {
-                let final_code = if file_path.contains("node_modules")
-                    && self.is_cjs_module(&content, file_path)
+            if let Ok(content) = fs::read_to_string(&file_path) {
+                let final_code = if file_path_str.contains("node_modules")
+                    && self.is_cjs_module(&content, &file_path_str)
                 {
-                    self.wrap_cjs_module(&content, file_path)
+                    self.wrap_cjs_module(&content, &file_path_for_wrapper)
                 } else {
                     content
                 };
@@ -1106,9 +1142,17 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             let package_name = module_path.split('/').next().unwrap_or(module_path);
 
             if let Some(resolved_path) = self.resolve_from_node_modules(package_name, "") {
-                let file_path = resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path);
+                let file_path = if resolved_path.starts_with(FILE_PROTOCOL) {
+                    file_url_to_path(&resolved_path).unwrap_or_else(|| {
+                        PathBuf::from(
+                            resolved_path.strip_prefix(FILE_PROTOCOL).unwrap_or(&resolved_path),
+                        )
+                    })
+                } else {
+                    PathBuf::from(&resolved_path)
+                };
 
-                if let Ok(content) = fs::read_to_string(file_path) {
+                if let Ok(content) = fs::read_to_string(&file_path) {
                     return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
                         ModuleType::JavaScript,
                         ModuleSourceCode::String(content.into()),
@@ -1215,7 +1259,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 return Some(entry_point);
             }
 
-            let fallback_url = format!("file://{}", package_dir.display());
+            let fallback_url = path_to_file_url(&package_dir);
             self.cache_resolved_package(package_name, &fallback_url);
             return Some(fallback_url);
         }
@@ -1273,9 +1317,15 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
     }
 
     fn resolve_subpath_import(&self, specifier: &str, referrer: &str) -> Option<String> {
-        let clean_referrer = referrer.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer);
+        let clean_referrer = if referrer.starts_with(FILE_PROTOCOL) {
+            file_url_to_path(referrer)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| referrer.to_string())
+        } else {
+            referrer.to_string()
+        };
 
-        let mut current_dir = PathBuf::from(clean_referrer);
+        let mut current_dir = PathBuf::from(&clean_referrer);
 
         if !current_dir.pop() {
             current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -1313,7 +1363,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let clean_path = path_str.trim_start_matches("./");
                 let full_path = package_dir.join(clean_path);
                 if full_path.exists() {
-                    return Some(format!("file://{}", full_path.to_string_lossy()));
+                    return Some(path_to_file_url(&full_path));
                 }
             }
             serde_json::Value::Object(obj) => {
@@ -1342,8 +1392,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                 let full_path = package_dir.join(path_str.trim_start_matches("./"));
 
                 if full_path.exists() {
-                    let file_url = format!("file://{}", full_path.to_string_lossy());
-                    return Some(file_url);
+                    return Some(path_to_file_url(&full_path));
                 }
             }
             serde_json::Value::Object(obj) => {
@@ -1389,8 +1438,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         if let Some(module_path) = &package_info.module {
             let full_path = package_dir.join(module_path);
             if full_path.exists() {
-                let file_url = format!("file://{}", full_path.to_string_lossy());
-                return Some(file_url);
+                return Some(path_to_file_url(&full_path));
             }
         }
 
@@ -1398,8 +1446,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         for fallback in &fallbacks {
             let fallback_path = package_dir.join(fallback);
             if fallback_path.exists() {
-                let file_url = format!("file://{}", fallback_path.to_string_lossy());
-                return Some(file_url);
+                return Some(path_to_file_url(&fallback_path));
             }
         }
 
@@ -1415,8 +1462,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
             let clean_path = export_path.trim_start_matches("./");
             let full_path = package_dir.join(clean_path);
             if full_path.exists() {
-                let file_url = format!("file://{}", full_path.to_string_lossy());
-                return Some(file_url);
+                return Some(path_to_file_url(&full_path));
             }
         }
 
@@ -1426,8 +1472,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                     let clean_path = path.trim_start_matches("./");
                     let full_path = package_dir.join(clean_path);
                     if full_path.exists() {
-                        let file_url = format!("file://{}", full_path.to_string_lossy());
-                        return Some(file_url);
+                        return Some(path_to_file_url(&full_path));
                     }
                 }
 
@@ -1440,9 +1485,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                                 let clean_path = path.trim_start_matches("./");
                                 let full_path = package_dir.join(clean_path);
                                 if full_path.exists() {
-                                    let file_url =
-                                        format!("file://{}", full_path.to_string_lossy());
-                                    return Some(file_url);
+                                    return Some(path_to_file_url(&full_path));
                                 }
                             } else if let Some(nested_conditional) = condition_value.as_object() {
                                 let nested_conditions = ["import", "module", "default"];
@@ -1455,10 +1498,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                                         let full_path = package_dir.join(clean_path);
 
                                         if full_path.exists() {
-                                            let file_url =
-                                                format!("file://{}", full_path.to_string_lossy());
-
-                                            return Some(file_url);
+                                            return Some(path_to_file_url(&full_path));
                                         }
                                     }
                                 }
@@ -1475,8 +1515,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
                         let clean_path = path.trim_start_matches("./");
                         let full_path = package_dir.join(clean_path);
                         if full_path.exists() {
-                            let file_url = format!("file://{}", full_path.to_string_lossy());
-                            return Some(file_url);
+                            return Some(path_to_file_url(&full_path));
                         }
                     }
                 }
@@ -1498,7 +1537,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         for file in &default_files {
             let entry_path = package_dir.join(file);
             if entry_path.exists() {
-                return Some(format!("file://{}", entry_path.to_string_lossy()));
+                return Some(path_to_file_url(&entry_path));
             }
         }
 
@@ -1604,11 +1643,8 @@ impl ModuleLoader for RariModuleLoader {
 
                     let resolved_path = if specifier.starts_with("../") {
                         let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
-                        let parent_dir = if source_dir.contains('/') {
-                            source_dir.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
-                        } else {
-                            ""
-                        };
+                        let source_path = Path::new(source_dir);
+                        let parent_dir = source_path.parent().unwrap_or_else(|| Path::new(""));
 
                         let remaining_with_ext = if !remaining.contains('.') {
                             format!("{remaining}.ts")
@@ -1616,7 +1652,7 @@ impl ModuleLoader for RariModuleLoader {
                             remaining.to_string()
                         };
 
-                        format!("file://{parent_dir}/{remaining_with_ext}")
+                        path_to_file_url(&parent_dir.join(remaining_with_ext))
                     } else {
                         let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
 
@@ -1626,7 +1662,7 @@ impl ModuleLoader for RariModuleLoader {
                             remaining.to_string()
                         };
 
-                        format!("file://{source_dir}/{remaining_with_ext}")
+                        path_to_file_url(&Path::new(source_dir).join(remaining_with_ext))
                     };
 
                     let url = ModuleSpecifier::parse(&resolved_path)
@@ -1636,28 +1672,25 @@ impl ModuleLoader for RariModuleLoader {
             }
 
             let referrer_path = if referrer.starts_with(FILE_PROTOCOL) {
-                referrer.strip_prefix(FILE_PROTOCOL).unwrap_or(referrer)
+                file_url_to_path(referrer)
+                    .map(|p| p.to_string_lossy().cow_replace('\\', "/").into_owned())
+                    .unwrap_or_else(|| referrer.to_string())
             } else {
-                referrer
+                referrer.to_string()
             };
 
-            let base_dir = if referrer_path.contains('/') {
-                referrer_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
-            } else {
-                ""
-            };
+            let referrer_path = referrer_path.as_str();
+
+            let base_path = Path::new(referrer_path);
+            let base_dir = base_path.parent().unwrap_or_else(|| Path::new(""));
 
             let resolved_path = if specifier.starts_with("../") {
                 let remaining = specifier.strip_prefix("../").unwrap_or(specifier);
-                let parent_dir = if base_dir.contains('/') {
-                    base_dir.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
-                } else {
-                    ""
-                };
-                format!("file://{parent_dir}/{remaining}")
+                let parent_dir = base_dir.parent().unwrap_or_else(|| Path::new(""));
+                path_to_file_url(&parent_dir.join(remaining))
             } else {
                 let remaining = specifier.strip_prefix("./").unwrap_or(specifier);
-                format!("file://{base_dir}/{remaining}")
+                path_to_file_url(&base_dir.join(remaining))
             };
 
             let url = ModuleSpecifier::parse(&resolved_path)

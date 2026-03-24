@@ -110,15 +110,11 @@ impl App {
     pub async fn handle_key(&mut self, key: KeyCode) -> Result<bool> {
         match &self.screen.clone() {
             Screen::PackageSelection => match key {
-                KeyCode::Up => {
-                    if self.selected_package_idx > 0 {
-                        self.selected_package_idx -= 1;
-                    }
+                KeyCode::Up if self.selected_package_idx > 0 => {
+                    self.selected_package_idx -= 1;
                 }
-                KeyCode::Down => {
-                    if self.selected_package_idx < self.release_units.len() - 1 {
-                        self.selected_package_idx += 1;
-                    }
+                KeyCode::Down if self.selected_package_idx < self.release_units.len() - 1 => {
+                    self.selected_package_idx += 1;
                 }
                 KeyCode::Enter => {
                     let package_idx = self.selected_package_idx;
@@ -134,15 +130,11 @@ impl App {
                 _ => {}
             },
             Screen::VersionSelection { package_idx } => match key {
-                KeyCode::Up => {
-                    if self.selected_version_idx > 0 {
-                        self.selected_version_idx -= 1;
-                    }
+                KeyCode::Up if self.selected_version_idx > 0 => {
+                    self.selected_version_idx -= 1;
                 }
-                KeyCode::Down => {
-                    if self.selected_version_idx < self.version_types.len() - 1 {
-                        self.selected_version_idx += 1;
-                    }
+                KeyCode::Down if self.selected_version_idx < self.version_types.len() - 1 => {
+                    self.selected_version_idx += 1;
                 }
                 KeyCode::Enter => {
                     let release_type = self.version_types[self.selected_version_idx];
@@ -230,16 +222,14 @@ impl App {
                 _ => {}
             },
             Screen::OtpInput { package_idx, version, input } => match key {
-                KeyCode::Char(c) if c.is_ascii_digit() => {
-                    if input.len() < 6 {
-                        let mut new_input = input.clone();
-                        new_input.push(c);
-                        self.screen = Screen::OtpInput {
-                            package_idx: *package_idx,
-                            version: version.clone(),
-                            input: new_input,
-                        };
-                    }
+                KeyCode::Char(c) if c.is_ascii_digit() && input.len() < 6 => {
+                    let mut new_input = input.clone();
+                    new_input.push(c);
+                    self.screen = Screen::OtpInput {
+                        package_idx: *package_idx,
+                        version: version.clone(),
+                        input: new_input,
+                    };
                 }
                 KeyCode::Backspace => {
                     let mut new_input = input.clone();
@@ -272,19 +262,15 @@ impl App {
                 _ => {}
             },
             Screen::Publishing { .. } => match key {
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    if self.publish_step == PublishStep::Done {
-                        return Ok(true);
-                    }
+                KeyCode::Esc | KeyCode::Char('q') if self.publish_step == PublishStep::Done => {
+                    return Ok(true);
                 }
                 _ => {}
             },
             Screen::PostPublish { has_more_packages } => match key {
-                KeyCode::Char('c') | KeyCode::Char('C') => {
-                    if *has_more_packages {
-                        self.selected_package_idx += 1;
-                        self.screen = Screen::PackageSelection;
-                    }
+                KeyCode::Char('c') | KeyCode::Char('C') if *has_more_packages => {
+                    self.selected_package_idx += 1;
+                    self.screen = Screen::PackageSelection;
                 }
                 KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::Enter => {
                     self.screen = Screen::PostRelease {
@@ -307,20 +293,18 @@ impl App {
                         };
                     }
                 }
-                KeyCode::Char('n') | KeyCode::Char('N') => {
-                    if *step == PostReleaseStep::PromptGitHub {
-                        self.screen = Screen::Complete;
-                    }
+                KeyCode::Char('n') | KeyCode::Char('N')
+                    if *step == PostReleaseStep::PromptGitHub =>
+                {
+                    self.screen = Screen::Complete;
                 }
-                KeyCode::Enter => {
-                    if *step == PostReleaseStep::PromptGitHub || *step == PostReleaseStep::Done {
-                        self.screen = Screen::Complete;
-                    }
+                KeyCode::Enter
+                    if *step == PostReleaseStep::PromptGitHub || *step == PostReleaseStep::Done =>
+                {
+                    self.screen = Screen::Complete;
                 }
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    if *step == PostReleaseStep::Done {
-                        self.screen = Screen::Complete;
-                    }
+                KeyCode::Esc | KeyCode::Char('q') if *step == PostReleaseStep::Done => {
+                    self.screen = Screen::Complete;
                 }
                 _ => {}
             },

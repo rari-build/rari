@@ -298,14 +298,14 @@ impl RscSerializer {
 
     fn collect_client_components_from_rsc_tree(&mut self, tree: &RSCTree) {
         match tree {
-            RSCTree::ClientReference { id, .. } => {
-                if id.contains('#') && !self.is_client_component_registered(id) {
-                    let parts: Vec<&str> = id.split('#').collect();
-                    if parts.len() == 2 {
-                        let file_path = parts[0];
-                        let export_name = parts[1];
-                        self.register_client_component(id, file_path, export_name);
-                    }
+            RSCTree::ClientReference { id, .. }
+                if id.contains('#') && !self.is_client_component_registered(id) =>
+            {
+                let parts: Vec<&str> = id.split('#').collect();
+                if parts.len() == 2 {
+                    let file_path = parts[0];
+                    let export_name = parts[1];
+                    self.register_client_component(id, file_path, export_name);
                 }
             }
             RSCTree::ServerElement { children: Some(children), .. } => {
@@ -324,9 +324,8 @@ impl RscSerializer {
                     self.collect_client_components_from_rsc_tree(element);
                 }
             }
-            RSCTree::Primitive(Value::Object(obj)) => {
-                if obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true) {}
-            }
+            RSCTree::Primitive(Value::Object(obj))
+                if obj.get("~rari_lazy").and_then(|v| v.as_bool()) == Some(true) => {}
             _ => {}
         }
     }
