@@ -19,7 +19,6 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:eslint",
-    "@e18e/eslint-plugin": "catalog:eslint",
     "@eslint-react/eslint-plugin": "catalog:eslint",
     "@playwright/test": "catalog:testing",
     "@types/node": "catalog:typescript",
