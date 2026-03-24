@@ -37,50 +37,50 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.392.0"
+deno_core = "0.393.0"
 deno_error = "=0.7.1"
-deno_features = "0.36.0"
-deno_bundle_runtime = "0.26.0"
-deno_runtime = "0.247.0"
-deno_permissions = "0.98.0"
-deno_process = "0.54.0"
+deno_features = "0.37.0"
+deno_bundle_runtime = "0.27.0"
+deno_runtime = "0.248.0"
+deno_permissions = "0.99.0"
+deno_process = "0.55.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.172.0"
-deno_crypto = "0.253.0"
-deno_fetch = "0.263.0"
-deno_web = "0.270.0"
-deno_webidl = "0.239.0"
-deno_webstorage = "0.234.0"
+deno_cache = "0.173.0"
+deno_crypto = "0.254.0"
+deno_fetch = "0.264.0"
+deno_web = "0.271.0"
+deno_webidl = "0.240.0"
+deno_webstorage = "0.235.0"
 
 # === Network & HTTP ===
-deno_http = "0.237.0"
-deno_net = "0.231.0"
-deno_tls = "0.226.0"
-deno_websocket = "0.244.0"
+deno_http = "0.238.0"
+deno_net = "0.232.0"
+deno_tls = "0.227.0"
+deno_websocket = "0.245.0"
 
 # === File System & I/O ===
-deno_fs = "0.149.0"
-deno_io = "0.149.0"
+deno_fs = "0.150.0"
+deno_io = "0.150.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.61.0"
+deno_telemetry = "0.62.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.206.0"
-deno_kv = "0.147.0"
-deno_cron = "0.119.0"
+deno_webgpu = "0.207.0"
+deno_kv = "0.148.0"
+deno_cron = "0.120.0"
 
 # === Node.js Integration ===
-deno_node = "0.177.0"
-deno_node_crypto = "0.9.0"
-deno_node_sqlite = "0.9.0"
-deno_resolver = "0.70.0"
-node_resolver = "0.77.0"
+deno_node = "0.178.0"
+deno_node_crypto = "0.10.0"
+deno_node_sqlite = "0.10.0"
+deno_resolver = "0.71.0"
+node_resolver = "0.78.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.226.0"
-deno_napi = "0.170.0"
+deno_ffi = "0.227.0"
+deno_napi = "0.171.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -176,7 +176,7 @@ sysinfo = "0.38.0"
 # === Development Tools ===
 rustyline = "=17.0.0"
 deno_ast = { version = "=0.53.1", features = [ "transpiling" ] }
-deno_package_json = { version = "0.41.0", default-features = false }
+deno_package_json = { version = "0.42.0", default-features = false }
 deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
