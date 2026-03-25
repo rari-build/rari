@@ -1173,3 +1173,49 @@ fn test_attribute_name_validation() {
     assert!(!is_safe_attribute_name("中onclick"));
     assert!(!is_safe_attribute_name("data中文"));
 }
+
+#[tokio::test]
+async fn test_style_object_numeric_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"width":100,"height":200,"margin":10}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:100px"), "Width should have px suffix: {}", html);
+    assert!(html.contains("height:200px"), "Height should have px suffix: {}", html);
+    assert!(html.contains("margin:10px"), "Margin should have px suffix: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_unitless_properties() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"opacity":0.5,"zIndex":10,"lineHeight":1.5,"flexGrow":2}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {}", html);
+    assert!(html.contains("z-index:10"), "z-index should not have px suffix: {}", html);
+    assert!(html.contains("line-height:1.5"), "line-height should not have px suffix: {}", html);
+    assert!(html.contains("flex-grow:2"), "flex-grow should not have px suffix: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_mixed_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":"50%","height":100,"opacity":0.8,"color":"red"}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:50%"), "String width should be preserved: {}", html);
+    assert!(html.contains("height:100px"), "Numeric height should have px: {}", html);
+    assert!(html.contains("opacity:0.8"), "Opacity should not have px: {}", html);
+    assert!(html.contains("color:red"), "Color string should be preserved: {}", html);
+}

@@ -53,6 +53,37 @@ pub(crate) fn is_safe_attribute_name(name: &str) -> bool {
     name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ':' | '_' | '.'))
 }
 
+const UNITLESS_CSS_PROPERTIES: &[&str] = &[
+    "animation-iteration-count",
+    "box-flex",
+    "box-flex-group",
+    "box-ordinal-group",
+    "column-count",
+    "fill-opacity",
+    "flex",
+    "flex-grow",
+    "flex-positive",
+    "flex-shrink",
+    "flex-negative",
+    "flex-order",
+    "font-weight",
+    "line-clamp",
+    "line-height",
+    "opacity",
+    "order",
+    "orphans",
+    "stop-opacity",
+    "stroke-dasharray",
+    "stroke-dashoffset",
+    "stroke-miterlimit",
+    "stroke-opacity",
+    "stroke-width",
+    "tab-size",
+    "widows",
+    "z-index",
+    "zoom",
+];
+
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     use std::fmt::Write;
 
@@ -83,7 +114,11 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
         } else if v.as_bool().is_some() || v.is_null() {
             None
         } else if let Some(n) = v.as_number() {
-            Some(n.to_string())
+            if UNITLESS_CSS_PROPERTIES.contains(&kebab_key.as_str()) {
+                Some(n.to_string())
+            } else {
+                Some(format!("{}px", n))
+            }
         } else if v.is_object() || v.is_array() {
             Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
         } else {
