@@ -1,8 +1,17 @@
+## [rari@0.10.24] - 2026-03-25
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.10.24
 ## [rari@0.10.23] - 2026-03-24
 
 ### 🐛 Bug Fixes
 
 - Resolve Windows path handling issues in module resolution
+
+### 💼 Other
+
+- Rari@0.10.23
 
 ### 🚜 Refactor
 
