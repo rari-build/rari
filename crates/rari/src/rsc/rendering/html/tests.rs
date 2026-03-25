@@ -1002,7 +1002,7 @@ async fn test_generate_boundary_update_html_empty_content() {
 #[test]
 fn test_escape_html_attribute() {
     let text = r#"Hello "world" & <tag>"#;
-    let escaped = RscHtmlRenderer::escape_html_attribute(text);
+    let escaped = escape_html(text);
 
     assert!(escaped.contains("&amp;"), "Should escape ampersand");
     assert!(escaped.contains("&quot;"), "Should escape quotes");
@@ -1134,4 +1134,42 @@ async fn test_render_rsc_to_html_string_consistent_with_streaming() {
 
     assert!(html.contains("<main"), "Should have main tag from row 0");
     assert!(html.contains("Main Content"), "Should render row 0 content");
+}
+
+#[test]
+fn test_attribute_name_validation() {
+    use super::is_safe_attribute_name;
+
+    assert!(is_safe_attribute_name("id"));
+    assert!(is_safe_attribute_name("class"));
+    assert!(is_safe_attribute_name("data-test"));
+    assert!(is_safe_attribute_name("aria-label"));
+    assert!(is_safe_attribute_name("_private"));
+    assert!(is_safe_attribute_name("custom:attr"));
+    assert!(is_safe_attribute_name("some.attr"));
+    assert!(is_safe_attribute_name("data-test-123"));
+
+    assert!(!is_safe_attribute_name("onclick"));
+    assert!(!is_safe_attribute_name("onClick"));
+    assert!(!is_safe_attribute_name("ONCLICK"));
+    assert!(!is_safe_attribute_name("onload"));
+    assert!(!is_safe_attribute_name("onerror"));
+    assert!(!is_safe_attribute_name("onmouseover"));
+
+    assert!(!is_safe_attribute_name("attr name"));
+    assert!(!is_safe_attribute_name("attr'name"));
+    assert!(!is_safe_attribute_name("attr\"name"));
+    assert!(!is_safe_attribute_name("attr=name"));
+    assert!(!is_safe_attribute_name("attr<name"));
+    assert!(!is_safe_attribute_name("attr>name"));
+    assert!(!is_safe_attribute_name("attr\tname"));
+    assert!(!is_safe_attribute_name("attr\nname"));
+
+    assert!(!is_safe_attribute_name(""));
+    assert!(!is_safe_attribute_name("123attr"));
+    assert!(!is_safe_attribute_name("-attr"));
+
+    assert!(!is_safe_attribute_name("中文"));
+    assert!(!is_safe_attribute_name("中onclick"));
+    assert!(!is_safe_attribute_name("data中文"));
 }
