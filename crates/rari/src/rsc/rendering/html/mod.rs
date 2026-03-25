@@ -626,7 +626,7 @@ impl RscHtmlRenderer {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         return Ok(format!(
                             r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
-                            Self::escape_html_attribute(boundary_id),
+                            escape_html(boundary_id),
                             html
                         ));
                     }
@@ -824,7 +824,7 @@ impl RscHtmlRenderer {
 </script>
 
 "#,
-            Self::escape_html_attribute(boundary_id),
+            escape_html(boundary_id),
             row_id,
             Self::escape_js_string(&rsc_row),
             Self::escape_js_string(boundary_id),
@@ -836,10 +836,6 @@ impl RscHtmlRenderer {
         );
 
         Ok(update_script)
-    }
-
-    fn escape_html_attribute(text: &str) -> String {
-        escape_html_fast(text).into_owned()
     }
 
     fn escape_js_string(text: &str) -> String {
@@ -1166,10 +1162,6 @@ if (typeof window !== 'undefined') {{
         Ok(html.into_bytes())
     }
 
-    fn escape_attribute(text: &str) -> String {
-        escape_html_fast(text).into_owned()
-    }
-
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
@@ -1350,6 +1342,10 @@ if (typeof window !== 'undefined') {{
         tag: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
+            return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+        }
+
         let mut html = HtmlBuilder::with_capacity(256);
         html.write_open_tag(tag);
 
@@ -1471,7 +1467,7 @@ if (typeof window !== 'undefined') {{
   }}
 }})();
 </script>"#,
-            Self::escape_attribute(&boundary_id),
+            escape_html(&boundary_id),
             row_id,
             escaped_row,
             RscHtmlRenderer::escape_js_string(&boundary_id),

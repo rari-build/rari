@@ -1002,7 +1002,7 @@ async fn test_generate_boundary_update_html_empty_content() {
 #[test]
 fn test_escape_html_attribute() {
     let text = r#"Hello "world" & <tag>"#;
-    let escaped = RscHtmlRenderer::escape_html_attribute(text);
+    let escaped = escape_html(text);
 
     assert!(escaped.contains("&amp;"), "Should escape ampersand");
     assert!(escaped.contains("&quot;"), "Should escape quotes");
