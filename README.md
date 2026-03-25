@@ -15,7 +15,7 @@
 
 **rari** is a React Server Components framework running on a Rust runtime. It has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-powered Vite bundling, tsgo type checking). You write standard React — the runtime underneath is Rust instead of Node.
 
-With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 46.5x higher throughput and 9.1x faster response times than Next.js.
+With proper app router support, true server-side rendering, and correct RSC semantics, rari delivers 44.9x higher throughput and 8.7x faster response times than Next.js.
 
 ## Features
 
