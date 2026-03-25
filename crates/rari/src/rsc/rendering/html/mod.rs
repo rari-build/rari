@@ -9,7 +9,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::error;
 
+mod string_builder;
 pub mod tests;
+
+pub use string_builder::{HtmlBuilder, escape_html_fast, escape_html_into};
 
 const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
@@ -17,59 +20,80 @@ const SELF_CLOSING_TAGS: &[&str] = &[
 ];
 
 pub fn escape_html(text: &str) -> String {
-    text.cow_replace('&', "&amp;")
-        .cow_replace('<', "&lt;")
-        .cow_replace('>', "&gt;")
-        .cow_replace('"', "&quot;")
-        .cow_replace('\'', "&#39;")
-        .into_owned()
+    escape_html_fast(text).into_owned()
+}
+
+pub(crate) fn is_safe_attribute_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    if name.len() >= 2 && name[..2].eq_ignore_ascii_case("on") {
+        return false;
+    }
+
+    if name
+        .chars()
+        .any(|c| matches!(c, '\'' | '"' | '=' | '<' | '>' | '\t' | '\n' | '\r' | ' ' | '\0'))
+    {
+        return false;
+    }
+
+    let first_char = name.chars().next().expect("name is not empty");
+    if !first_char.is_ascii_alphabetic() && first_char != '_' {
+        return false;
+    }
+
+    name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ':' | '_' | '.'))
 }
 
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
-    let style_parts: Vec<String> = style_obj
-        .iter()
-        .filter_map(|(k, v)| {
-            let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+    use std::fmt::Write;
+
+    let mut result = String::with_capacity(style_obj.len() * 20);
+    let mut first = true;
+
+    for (k, v) in style_obj {
+        let kebab_key = if k.starts_with("--") {
+            k.clone()
+        } else {
+            let mut kebab_key = String::with_capacity(k.len() + 4);
+            if k.starts_with("ms") && k.as_bytes().get(2).is_some_and(|b| b.is_ascii_uppercase()) {
+                kebab_key.push('-');
+            }
+            for c in k.chars() {
                 if c.is_uppercase() {
-                    acc.push('-');
-                    acc.push(
-                        c.to_lowercase()
-                            .next()
-                            .expect("to_lowercase() always returns at least one character"),
-                    );
+                    kebab_key.push('-');
+                    kebab_key.push(c.to_ascii_lowercase());
                 } else {
-                    acc.push(c);
+                    kebab_key.push(c);
                 }
-                acc
-            });
-            let value_str = if let Some(s) = v.as_str() {
-                Some(s.to_string())
-            } else if v.as_bool().is_some() {
-                None
-            } else if let Some(u) = v.as_u64() {
-                Some(u.to_string())
-            } else if let Some(i) = v.as_i64() {
-                Some(i.to_string())
-            } else if let Some(f) = v.as_f64() {
-                if f.is_finite() {
-                    Some(
-                        format!("{:.10}", f)
-                            .trim_end_matches('0')
-                            .trim_end_matches('.')
-                            .to_string(),
-                    )
-                } else {
-                    Some(f.to_string())
-                }
-            } else if v.is_object() || v.is_array() {
-                Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
-            } else {
-                Some(v.to_string())
-            };
-            value_str.map(|val| format!("{}:{}", kebab_key, val))
-        })
-        .collect();
-    style_parts.join(";")
+            }
+            kebab_key
+        };
+
+        let value_str = if let Some(s) = v.as_str() {
+            Some(s.to_string())
+        } else if v.as_bool().is_some() || v.is_null() {
+            None
+        } else if let Some(n) = v.as_number() {
+            Some(n.to_string())
+        } else if v.is_object() || v.is_array() {
+            Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
+        } else {
+            Some(v.to_string())
+        };
+
+        if let Some(val) = value_str {
+            if !first {
+                result.push(';');
+            }
+            let _ = write!(result, "{}:{}", kebab_key, val);
+            first = false;
+        }
+    }
+
+    result
 }
 
 #[derive(Debug)]
@@ -625,10 +649,13 @@ impl RscHtmlRenderer {
     {
         Box::pin(async move {
             if tag.starts_with("$L") || tag.starts_with("$@") {
-                return Ok(format!(
-                    r#"<div data-client-component="{}" style="display: contents;"></div>"#,
-                    Self::escape_html_attribute(tag)
-                ));
+                let mut html = HtmlBuilder::with_capacity(128);
+                html.write_open_tag("div");
+                html.write_attr("data-client-component", tag);
+                html.write_attr("style", "display: contents;");
+                html.finish_open_tag();
+                html.write_close_tag("div");
+                return Ok(html.build());
             }
 
             let is_suspense_symbol = tag.starts_with('$')
@@ -648,9 +675,8 @@ impl RscHtmlRenderer {
                 return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
             }
 
-            let mut html = String::with_capacity(256);
-            html.push('<');
-            html.push_str(tag);
+            let mut html = HtmlBuilder::with_capacity(256);
+            html.write_open_tag(tag);
 
             if let Some(props_obj) = props.as_object() {
                 for (key, value) in props_obj {
@@ -659,6 +685,10 @@ impl RscHtmlRenderer {
                     }
 
                     if value.is_null() {
+                        continue;
+                    }
+
+                    if !is_safe_attribute_name(key) {
                         continue;
                     }
 
@@ -671,47 +701,30 @@ impl RscHtmlRenderer {
                     if key == "style" && value.is_object() {
                         if let Some(style_obj) = value.as_object() {
                             let style_str = serialize_style_object(style_obj);
-                            html.push_str(&format!(
-                                r#" style="{}""#,
-                                style_str
-                                    .cow_replace('&', "&amp;")
-                                    .cow_replace('"', "&quot;")
-                                    .cow_replace('<', "&lt;")
-                                    .cow_replace('>', "&gt;")
-                                    .into_owned()
-                            ));
+                            html.write_attr("style", &style_str);
                         }
                         continue;
                     }
 
                     if let Some(b) = value.as_bool() {
                         if b {
-                            html.push(' ');
-                            html.push_str(attr_name);
+                            html.write_bool_attr(attr_name);
                         }
                     } else if let Some(s) = value.as_str() {
-                        html.push_str(&format!(
-                            r#" {}="{}""#,
-                            attr_name,
-                            s.cow_replace('&', "&amp;")
-                                .cow_replace('"', "&quot;")
-                                .cow_replace('<', "&lt;")
-                                .cow_replace('>', "&gt;")
-                                .into_owned()
-                        ));
+                        html.write_attr(attr_name, s);
                     } else if value.is_number() {
-                        html.push_str(&format!(r#" {}="{}""#, attr_name, value));
+                        html.write_attr_value(attr_name, value);
                     }
                 }
             }
 
             const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
             if SELF_CLOSING.contains(&tag) {
-                html.push_str(" />");
-                return Ok(html);
+                html.write_self_closing_end();
+                return Ok(html.build());
             }
 
-            html.push('>');
+            html.finish_open_tag();
 
             if let Some(props_obj) = props.as_object()
                 && let Some(children) = props_obj.get("children")
@@ -720,11 +733,9 @@ impl RscHtmlRenderer {
                 html.push_str(&children_html);
             }
 
-            html.push_str("</");
-            html.push_str(tag);
-            html.push('>');
+            html.write_close_tag(tag);
 
-            Ok(html)
+            Ok(html.build())
         })
     }
 
@@ -828,11 +839,7 @@ impl RscHtmlRenderer {
     }
 
     fn escape_html_attribute(text: &str) -> String {
-        text.cow_replace('&', "&amp;")
-            .cow_replace('"', "&quot;")
-            .cow_replace('<', "&lt;")
-            .cow_replace('>', "&gt;")
-            .into_owned()
+        escape_html_fast(text).into_owned()
     }
 
     fn escape_js_string(text: &str) -> String {
@@ -1160,11 +1167,7 @@ if (typeof window !== 'undefined') {{
     }
 
     fn escape_attribute(text: &str) -> String {
-        text.cow_replace('&', "&amp;")
-            .cow_replace('"', "&quot;")
-            .cow_replace('<', "&lt;")
-            .cow_replace('>', "&gt;")
-            .into_owned()
+        escape_html_fast(text).into_owned()
     }
 
     fn rsc_element_to_html<'a>(
@@ -1347,7 +1350,8 @@ if (typeof window !== 'undefined') {{
         tag: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
-        let mut html = format!("<{}", tag);
+        let mut html = HtmlBuilder::with_capacity(256);
+        html.write_open_tag(tag);
 
         if let Some(props) = props {
             for (key, value) in props {
@@ -1356,6 +1360,10 @@ if (typeof window !== 'undefined') {{
                 }
 
                 if value.is_null() {
+                    continue;
+                }
+
+                if !is_safe_attribute_name(key) {
                     continue;
                 }
 
@@ -1368,43 +1376,36 @@ if (typeof window !== 'undefined') {{
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
                         let style_str = serialize_style_object(style_obj);
-                        html.push_str(&format!(
-                            " style=\"{}\"",
-                            Self::escape_attribute(&style_str)
-                        ));
+                        html.write_attr("style", &style_str);
                     }
                     continue;
                 }
 
                 if let Some(b) = value.as_bool() {
                     if b {
-                        html.push_str(&format!(" {}", attr_name));
+                        html.write_bool_attr(attr_name);
                     }
                     continue;
                 }
 
                 if let Some(s) = value.as_str() {
-                    html.push_str(&format!(" {}=\"{}\"", attr_name, Self::escape_attribute(s)));
+                    html.write_attr(attr_name, s);
                     continue;
                 }
 
                 if value.is_number() {
-                    html.push_str(&format!(
-                        " {}=\"{}\"",
-                        attr_name,
-                        Self::escape_attribute(&value.to_string())
-                    ));
+                    html.write_attr_value(attr_name, value);
                 }
             }
         }
 
         const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
         if SELF_CLOSING.contains(&tag) {
-            html.push_str(" />");
-            return Ok(html);
+            html.write_self_closing_end();
+            return Ok(html.build());
         }
 
-        html.push('>');
+        html.finish_open_tag();
 
         if let Some(props) = props
             && let Some(children) = props.get("children")
@@ -1413,9 +1414,9 @@ if (typeof window !== 'undefined') {{
             html.push_str(&children_html);
         }
 
-        html.push_str(&format!("</{}>", tag));
+        html.write_close_tag(tag);
 
-        Ok(html)
+        Ok(html.build())
     }
 
     async fn generate_boundary_replacement(
