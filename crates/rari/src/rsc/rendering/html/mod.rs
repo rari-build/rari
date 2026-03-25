@@ -28,8 +28,14 @@ pub(crate) fn is_safe_attribute_name(name: &str) -> bool {
         return false;
     }
 
-    if name.len() >= 2 && name[..2].eq_ignore_ascii_case("on") {
-        return false;
+    if name.len() >= 2 {
+        let mut chars = name.chars();
+        if let (Some(first), Some(second)) = (chars.next(), chars.next())
+            && (first == 'o' || first == 'O')
+            && (second == 'n' || second == 'N')
+        {
+            return false;
+        }
     }
 
     if name

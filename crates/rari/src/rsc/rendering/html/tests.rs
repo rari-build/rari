@@ -1168,4 +1168,8 @@ fn test_attribute_name_validation() {
     assert!(!is_safe_attribute_name(""));
     assert!(!is_safe_attribute_name("123attr"));
     assert!(!is_safe_attribute_name("-attr"));
+
+    assert!(!is_safe_attribute_name("中文"));
+    assert!(!is_safe_attribute_name("中onclick"));
+    assert!(!is_safe_attribute_name("data中文"));
 }
