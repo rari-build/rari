@@ -1318,7 +1318,7 @@ async fn test_attribute_validation_edge_cases() {
             "a": "single char valid",
             "A": "uppercase valid",
             "_": "underscore only valid",
-            ":": "colon only valid",
+            ":": "colon only - expected invalid",
             "a-b-c": "multiple hyphens valid",
             "a.b.c": "multiple periods valid",
             "a:b:c": "multiple colons valid",
@@ -1462,8 +1462,8 @@ async fn test_render_html_element_validates_tag_names() {
 
     let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
     let result = converter.rsc_element_to_html(&invalid_angle).await;
-    if result.is_ok() {
-        panic!("Tag with angle bracket should be rejected, but got: {:?}", result.unwrap());
+    if let Ok(html) = result {
+        panic!("Tag with angle bracket should be rejected, but got: {:?}", html);
     }
     assert!(result.is_err(), "Tag with angle bracket should be rejected");
 
@@ -1518,4 +1518,95 @@ async fn test_tag_validation_prevents_xss() {
 
         assert!(result.is_err(), "Malicious tag '{}' should be rejected", malicious_tag);
     }
+}
+
+#[tokio::test]
+async fn test_style_object_numeric_values_with_px() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":100,"height":200,"margin":10,"padding":20}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:100px"), "Width should have px suffix: {}", html);
+    assert!(html.contains("height:200px"), "Height should have px suffix: {}", html);
+    assert!(html.contains("margin:10px"), "Margin should have px suffix: {}", html);
+    assert!(html.contains("padding:20px"), "Padding should have px suffix: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_unitless_properties() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"opacity":0.5,"zIndex":10,"lineHeight":1.5,"flexGrow":2}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {}", html);
+    assert!(html.contains("z-index:10"), "z-index should not have px suffix: {}", html);
+    assert!(html.contains("line-height:1.5"), "line-height should not have px suffix: {}", html);
+    assert!(html.contains("flex-grow:2"), "flex-grow should not have px suffix: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_mixed_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":"50%","height":100,"opacity":0.8,"color":"red"}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:50%"), "String width should be preserved: {}", html);
+    assert!(html.contains("height:100px"), "Numeric height should have px: {}", html);
+    assert!(html.contains("opacity:0.8"), "Opacity should not have px: {}", html);
+    assert!(html.contains("color:red"), "Color string should be preserved: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_camel_case_with_numeric() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"fontSize":16,"marginTop":10,"paddingLeft":5,"zIndex":100}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("font-size:16px"), "fontSize should become font-size with px: {}", html);
+    assert!(
+        html.contains("margin-top:10px"),
+        "marginTop should become margin-top with px: {}",
+        html
+    );
+    assert!(
+        html.contains("padding-left:5px"),
+        "paddingLeft should become padding-left with px: {}",
+        html
+    );
+    assert!(html.contains("z-index:100"), "zIndex should become z-index without px: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_float_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":100.5,"opacity":0.75,"lineHeight":1.2}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:100.5px"), "Float width should have px: {}", html);
+    assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {}", html);
+    assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {}", html);
 }

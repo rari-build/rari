@@ -65,6 +65,51 @@ pub fn test_is_valid_attribute_name(name: &str) -> bool {
 }
 
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
+    const UNITLESS_PROPERTIES: &[&str] = &[
+        "animation-iteration-count",
+        "border-image-outset",
+        "border-image-slice",
+        "border-image-width",
+        "box-flex",
+        "box-flex-group",
+        "box-ordinal-group",
+        "column-count",
+        "columns",
+        "flex",
+        "flex-grow",
+        "flex-positive",
+        "flex-shrink",
+        "flex-negative",
+        "flex-order",
+        "grid-area",
+        "grid-row",
+        "grid-row-end",
+        "grid-row-span",
+        "grid-row-start",
+        "grid-column",
+        "grid-column-end",
+        "grid-column-span",
+        "grid-column-start",
+        "font-weight",
+        "line-clamp",
+        "line-height",
+        "opacity",
+        "order",
+        "orphans",
+        "tab-size",
+        "widows",
+        "z-index",
+        "zoom",
+        "fill-opacity",
+        "flood-opacity",
+        "stop-opacity",
+        "stroke-dasharray",
+        "stroke-dashoffset",
+        "stroke-miterlimit",
+        "stroke-opacity",
+        "stroke-width",
+    ];
+
     let style_parts: Vec<String> = style_obj
         .iter()
         .filter_map(|(k, v)| {
@@ -81,22 +126,35 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
                 }
                 acc
             });
+
             let value_str = if let Some(s) = v.as_str() {
                 Some(s.to_string())
             } else if v.is_null() || v.as_bool().is_some() {
                 None
             } else if let Some(u) = v.as_u64() {
-                Some(u.to_string())
+                if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                    Some(u.to_string())
+                } else {
+                    Some(format!("{}px", u))
+                }
             } else if let Some(i) = v.as_i64() {
-                Some(i.to_string())
+                if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                    Some(i.to_string())
+                } else {
+                    Some(format!("{}px", i))
+                }
             } else if let Some(f) = v.as_f64() {
                 if f.is_finite() {
-                    Some(
-                        format!("{:.10}", f)
-                            .trim_end_matches('0')
-                            .trim_end_matches('.')
-                            .to_string(),
-                    )
+                    let formatted = format!("{:.10}", f)
+                        .trim_end_matches('0')
+                        .trim_end_matches('.')
+                        .to_string();
+
+                    if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                        Some(formatted)
+                    } else {
+                        Some(format!("{}px", formatted))
+                    }
                 } else {
                     Some(f.to_string())
                 }
