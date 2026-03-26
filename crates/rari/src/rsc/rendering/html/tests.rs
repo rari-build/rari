@@ -1610,3 +1610,163 @@ async fn test_style_object_float_values() {
     assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {}", html);
     assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {}", html);
 }
+
+#[tokio::test]
+async fn test_boolean_html_attributes_presence_only() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","input",null,{"type":"checkbox","checked":true,"disabled":true,"required":false}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" checked"), "checked=true should render as presence-only: {}", html);
+    assert!(!html.contains("checked=\"true\""), "checked should not have =\"true\": {}", html);
+    assert!(html.contains(" disabled"), "disabled=true should render as presence-only: {}", html);
+    assert!(!html.contains("disabled=\"true\""), "disabled should not have =\"true\": {}", html);
+
+    assert!(!html.contains("required"), "required=false should be omitted: {}", html);
+}
+
+#[tokio::test]
+async fn test_aria_attributes_render_as_strings() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"aria-hidden":true,"aria-expanded":false,"aria-checked":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(
+        html.contains("aria-hidden=\"true\""),
+        "aria-hidden=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-expanded=\"false\""),
+        "aria-expanded=false should render as \"false\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-checked=\"true\""),
+        "aria-checked=true should render as \"true\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_content_editable_and_draggable_as_strings() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"contentEditable":true,"draggable":false,"spellcheck":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(
+        html.contains("contentEditable=\"true\""),
+        "contentEditable=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("draggable=\"false\""),
+        "draggable=false should render as \"false\": {}",
+        html
+    );
+    assert!(
+        html.contains("spellcheck=\"true\""),
+        "spellcheck=true should render as \"true\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_mixed_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","button",null,{"disabled":true,"aria-disabled":true,"aria-pressed":false}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" disabled"), "disabled=true should be presence-only: {}", html);
+    assert!(!html.contains(" disabled="), "disabled should not have a value: {}", html);
+
+    assert!(
+        html.contains("aria-disabled=\"true\""),
+        "aria-disabled=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-pressed=\"false\""),
+        "aria-pressed=false should render as \"false\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_converter_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "input",
+        null,
+        {
+            "type": "checkbox",
+            "checked": true,
+            "disabled": false,
+            "aria-checked": true,
+            "aria-disabled": false
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains(" checked"), "checked=true should be presence-only: {}", html);
+    assert!(!html.contains(" checked="), "checked should not have a value: {}", html);
+    assert!(!html.contains(" disabled"), "disabled=false should be omitted: {}", html);
+
+    assert!(
+        html.contains("aria-checked=\"true\""),
+        "aria-checked=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-disabled=\"false\""),
+        "aria-disabled=false should render as \"false\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_all_html_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"hidden":true,"readonly":true,"required":true,"autofocus":true,"multiple":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" hidden"), "hidden should be presence-only: {}", html);
+    assert!(html.contains(" readonly"), "readonly should be presence-only: {}", html);
+    assert!(html.contains(" required"), "required should be presence-only: {}", html);
+    assert!(html.contains(" autofocus"), "autofocus should be presence-only: {}", html);
+    assert!(html.contains(" multiple"), "multiple should be presence-only: {}", html);
+
+    assert!(
+        !html.contains("=\"true\""),
+        "HTML boolean attributes should not have =\"true\": {}",
+        html
+    );
+}

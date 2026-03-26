@@ -59,6 +59,37 @@ fn is_valid_attribute_name(name: &str) -> bool {
     chars.all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':')
 }
 
+fn is_boolean_html_attribute(name: &str) -> bool {
+    matches!(
+        name,
+        "allowfullscreen"
+            | "async"
+            | "autofocus"
+            | "autoplay"
+            | "checked"
+            | "controls"
+            | "default"
+            | "defer"
+            | "disabled"
+            | "formnovalidate"
+            | "hidden"
+            | "inert"
+            | "ismap"
+            | "itemscope"
+            | "loop"
+            | "multiple"
+            | "muted"
+            | "nomodule"
+            | "novalidate"
+            | "open"
+            | "playsinline"
+            | "readonly"
+            | "required"
+            | "reversed"
+            | "selected"
+    )
+}
+
 #[cfg(test)]
 pub fn test_is_valid_attribute_name(name: &str) -> bool {
     is_valid_attribute_name(name)
@@ -721,7 +752,15 @@ impl RscHtmlRenderer {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
     {
         Box::pin(async move {
-            if tag.starts_with("$L") || tag.starts_with("$@") {
+            if tag.contains('<') || tag.contains('>') || tag.contains('"') || tag.contains('\'') {
+                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+            }
+
+            let is_client_component = tag.starts_with("$L")
+                || tag.starts_with("$@")
+                || tag.contains('#')
+                || tag.contains('/');
+            if is_client_component {
                 return Ok(format!(
                     r#"<div data-client-component="{}" style="display: contents;"></div>"#,
                     Self::escape_html_attribute(tag)
@@ -731,7 +770,7 @@ impl RscHtmlRenderer {
             let is_suspense_symbol = tag.starts_with('$')
                 && tag.len() > 1
                 && tag[1..].chars().all(|c| c.is_ascii_digit());
-            if tag == "react.suspense" || is_suspense_symbol {
+            if tag == "$Sreact.suspense" || tag == "react.suspense" || is_suspense_symbol {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
                     if let Some(children) = children {
@@ -781,9 +820,17 @@ impl RscHtmlRenderer {
                     }
 
                     if let Some(b) = value.as_bool() {
-                        if b {
-                            html.push(' ');
-                            html.push_str(attr_name);
+                        if is_boolean_html_attribute(attr_name) {
+                            if b {
+                                html.push(' ');
+                                html.push_str(attr_name);
+                            }
+                        } else {
+                            html.push_str(&format!(
+                                r#" {}="{}""#,
+                                attr_name,
+                                if b { "true" } else { "false" }
+                            ));
                         }
                     } else if let Some(s) = value.as_str() {
                         html.push_str(&format!(
@@ -1471,8 +1518,16 @@ if (typeof window !== 'undefined') {{
                 }
 
                 if let Some(b) = value.as_bool() {
-                    if b {
-                        html.push_str(&format!(" {}", attr_name));
+                    if is_boolean_html_attribute(attr_name) {
+                        if b {
+                            html.push_str(&format!(" {}", attr_name));
+                        }
+                    } else {
+                        html.push_str(&format!(
+                            " {}=\"{}\"",
+                            attr_name,
+                            if b { "true" } else { "false" }
+                        ));
                     }
                     continue;
                 }
