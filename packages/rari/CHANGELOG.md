@@ -1,5 +1,9 @@
 ## [rari@0.10.24] - 2026-03-25
 
+### 💼 Other
+
+- Rari@0.10.24
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump optional dependencies to 0.10.24
