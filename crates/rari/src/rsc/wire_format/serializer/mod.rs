@@ -2,7 +2,6 @@ use crate::error::RariError;
 use crate::rsc::rendering::streaming::types::RscWireFormatTag;
 use crate::rsc::types::tree::RSCTree;
 use crate::rsc::wire_format::escape::escape_rsc_value;
-use crate::rsc::wire_format::fast_json::FastJson;
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -74,7 +73,6 @@ pub struct RscSerializer {
     pub pending_lazy_promises: Vec<LazyPromiseInfo>,
     pub seen_lazy_promise_ids: FxHashSet<String>,
     module_registration_order: Vec<String>,
-    fast_json: FastJson,
 }
 
 #[derive(Debug, Clone)]
@@ -135,7 +133,6 @@ impl RscSerializer {
             pending_lazy_promises: Vec::new(),
             seen_lazy_promise_ids: FxHashSet::default(),
             module_registration_order: Vec::new(),
-            fast_json: FastJson::new(),
         }
     }
 
@@ -160,14 +157,6 @@ impl RscSerializer {
         self.module_registration_order.clear();
         self.module_map.clear();
         self.row_counter.store(0, Ordering::Relaxed);
-    }
-
-    pub fn cache_stats(&self) -> (u64, u64, f64) {
-        self.fast_json.cache_stats()
-    }
-
-    pub fn clear_prop_cache(&self) {
-        self.fast_json.clear_cache();
     }
 
     pub fn register_client_component(
@@ -386,7 +375,8 @@ impl RscSerializer {
                     error_props.into_iter().collect::<serde_json::Map<String, Value>>(),
                 );
                 let escaped_props = escape_rsc_value(&props_value);
-                let props_json = FastJson::to_string_or(&escaped_props, "{}");
+                let props_json =
+                    serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
                 format!(r#"["$","div",{key_json},{props_json}]"#)
             };
 
@@ -429,13 +419,7 @@ impl RscSerializer {
         let props_value =
             Value::Object(processed_props.into_iter().collect::<serde_json::Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
-
-        let props_map: FxHashMap<String, Value> = if let Value::Object(obj) = escaped_props {
-            obj.into_iter().collect()
-        } else {
-            FxHashMap::default()
-        };
-        let props_json = self.fast_json.serialize_props_cached(&props_map);
+        let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{module_ref}",{key_json},{props_json}]"#)
     }
@@ -561,19 +545,14 @@ impl RscSerializer {
         let key_json = if is_document_element {
             "null".to_string()
         } else {
-            key.map(|k| FastJson::to_string_or(k, "null")).unwrap_or("null".to_string())
+            key.map(|k| serde_json::to_string(k).unwrap_or_else(|_| "null".to_string()))
+                .unwrap_or_else(|| "null".to_string())
         };
 
         let props_value =
             Value::Object(element_props.into_iter().collect::<serde_json::Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
-
-        let props_map: FxHashMap<String, Value> = if let Value::Object(obj) = escaped_props {
-            obj.into_iter().collect()
-        } else {
-            FxHashMap::default()
-        };
-        let props_json = self.fast_json.serialize_props_cached(&props_map);
+        let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
     }

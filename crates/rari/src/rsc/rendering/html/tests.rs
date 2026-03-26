@@ -1002,7 +1002,7 @@ async fn test_generate_boundary_update_html_empty_content() {
 #[test]
 fn test_escape_html_attribute() {
     let text = r#"Hello "world" & <tag>"#;
-    let escaped = escape_html(text);
+    let escaped = RscHtmlRenderer::escape_html_attribute(text);
 
     assert!(escaped.contains("&amp;"), "Should escape ampersand");
     assert!(escaped.contains("&quot;"), "Should escape quotes");
@@ -1137,55 +1137,404 @@ async fn test_render_rsc_to_html_string_consistent_with_streaming() {
 }
 
 #[test]
-fn test_attribute_name_validation() {
-    use super::is_safe_attribute_name;
+fn test_is_valid_attribute_name_valid_names() {
+    assert!(test_is_valid_attribute_name("class"), "class should be valid");
+    assert!(test_is_valid_attribute_name("id"), "id should be valid");
+    assert!(test_is_valid_attribute_name("type"), "type should be valid");
+    assert!(test_is_valid_attribute_name("href"), "href should be valid");
+    assert!(test_is_valid_attribute_name("src"), "src should be valid");
 
-    assert!(is_safe_attribute_name("id"));
-    assert!(is_safe_attribute_name("class"));
-    assert!(is_safe_attribute_name("data-test"));
-    assert!(is_safe_attribute_name("aria-label"));
-    assert!(is_safe_attribute_name("_private"));
-    assert!(is_safe_attribute_name("custom:attr"));
-    assert!(is_safe_attribute_name("some.attr"));
-    assert!(is_safe_attribute_name("data-test-123"));
+    assert!(test_is_valid_attribute_name("data-id"), "data-id should be valid");
+    assert!(test_is_valid_attribute_name("data-test-value"), "data-test-value should be valid");
+    assert!(test_is_valid_attribute_name("data-123"), "data-123 should be valid");
 
-    assert!(!is_safe_attribute_name("onclick"));
-    assert!(!is_safe_attribute_name("onClick"));
-    assert!(!is_safe_attribute_name("ONCLICK"));
-    assert!(!is_safe_attribute_name("onload"));
-    assert!(!is_safe_attribute_name("onerror"));
-    assert!(!is_safe_attribute_name("onmouseover"));
+    assert!(test_is_valid_attribute_name("aria-label"), "aria-label should be valid");
+    assert!(test_is_valid_attribute_name("aria-hidden"), "aria-hidden should be valid");
 
-    assert!(!is_safe_attribute_name("attr name"));
-    assert!(!is_safe_attribute_name("attr'name"));
-    assert!(!is_safe_attribute_name("attr\"name"));
-    assert!(!is_safe_attribute_name("attr=name"));
-    assert!(!is_safe_attribute_name("attr<name"));
-    assert!(!is_safe_attribute_name("attr>name"));
-    assert!(!is_safe_attribute_name("attr\tname"));
-    assert!(!is_safe_attribute_name("attr\nname"));
+    assert!(test_is_valid_attribute_name("_private"), "_private should be valid");
+    assert!(test_is_valid_attribute_name("my_attr"), "my_attr should be valid");
 
-    assert!(!is_safe_attribute_name(""));
-    assert!(!is_safe_attribute_name("123attr"));
-    assert!(!is_safe_attribute_name("-attr"));
+    assert!(test_is_valid_attribute_name("xml:lang"), "xml:lang should be valid");
+    assert!(test_is_valid_attribute_name("xlink:href"), "xlink:href should be valid");
+    assert!(test_is_valid_attribute_name(":colon-start"), ":colon-start should be valid");
 
-    assert!(!is_safe_attribute_name("中文"));
-    assert!(!is_safe_attribute_name("中onclick"));
-    assert!(!is_safe_attribute_name("data中文"));
+    assert!(test_is_valid_attribute_name("ng.model"), "ng.model should be valid");
+    assert!(test_is_valid_attribute_name("v.bind"), "v.bind should be valid");
+
+    assert!(test_is_valid_attribute_name("中文"), "Chinese characters should be valid");
+    assert!(test_is_valid_attribute_name("日本語"), "Japanese characters should be valid");
+    assert!(test_is_valid_attribute_name("한글"), "Korean characters should be valid");
+    assert!(test_is_valid_attribute_name("data-中文"), "data- with Chinese should be valid");
+    assert!(test_is_valid_attribute_name("属性名"), "Chinese attribute name should be valid");
+}
+
+#[test]
+fn test_is_valid_attribute_name_invalid_names() {
+    assert!(!test_is_valid_attribute_name(""), "empty string should be invalid");
+
+    assert!(!test_is_valid_attribute_name("1invalid"), "starting with number should be invalid");
+    assert!(!test_is_valid_attribute_name("-invalid"), "starting with hyphen should be invalid");
+    assert!(!test_is_valid_attribute_name(".invalid"), "starting with period should be invalid");
+    assert!(!test_is_valid_attribute_name("@invalid"), "starting with @ should be invalid");
+    assert!(!test_is_valid_attribute_name("#invalid"), "starting with # should be invalid");
+
+    assert!(!test_is_valid_attribute_name("on click"), "space should be invalid");
+    assert!(!test_is_valid_attribute_name("on=click"), "equals sign should be invalid");
+    assert!(!test_is_valid_attribute_name("on'click"), "single quote should be invalid");
+    assert!(!test_is_valid_attribute_name("on\"click"), "double quote should be invalid");
+    assert!(!test_is_valid_attribute_name("on<click"), "less than should be invalid");
+    assert!(!test_is_valid_attribute_name("on>click"), "greater than should be invalid");
+    assert!(!test_is_valid_attribute_name("on/click"), "slash should be invalid");
+    assert!(!test_is_valid_attribute_name("on\\click"), "backslash should be invalid");
+
+    assert!(!test_is_valid_attribute_name("onclick"), "onclick should be invalid");
+    assert!(!test_is_valid_attribute_name("onClick"), "onClick should be invalid");
+    assert!(!test_is_valid_attribute_name("ONCLICK"), "ONCLICK should be invalid");
+    assert!(!test_is_valid_attribute_name("onload"), "onload should be invalid");
+    assert!(!test_is_valid_attribute_name("onerror"), "onerror should be invalid");
+    assert!(!test_is_valid_attribute_name("onmouseover"), "onmouseover should be invalid");
+    assert!(!test_is_valid_attribute_name("onsubmit"), "onsubmit should be invalid");
+
+    assert!(!test_is_valid_attribute_name("on中文"), "on with Chinese should be invalid");
+
+    assert!(!test_is_valid_attribute_name(":"), "colon only should be invalid");
+    assert!(!test_is_valid_attribute_name("-"), "hyphen only should be invalid");
+    assert!(!test_is_valid_attribute_name("."), "period only should be invalid");
+    assert!(!test_is_valid_attribute_name("::"), "multiple colons only should be invalid");
+    assert!(!test_is_valid_attribute_name("--"), "multiple hyphens only should be invalid");
+    assert!(!test_is_valid_attribute_name(".."), "multiple periods only should be invalid");
+    assert!(!test_is_valid_attribute_name(":-."), "mixed punctuation only should be invalid");
+
+    assert!(
+        !test_is_valid_attribute_name("onclick='alert(1)'"),
+        "injection attempt should be invalid"
+    );
+    assert!(
+        !test_is_valid_attribute_name("on click='alert(1)'data-x"),
+        "complex injection should be invalid"
+    );
+    assert!(
+        !test_is_valid_attribute_name("x onload=alert(1)"),
+        "space-based injection should be invalid"
+    );
 }
 
 #[tokio::test]
-async fn test_style_object_numeric_values() {
+async fn test_render_filters_invalid_attribute_names() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    let rsc_data = r#"0:["$","div",null,{"style":{"width":100,"height":200,"margin":10}}]"#;
+    let rsc_data = r#"0:["$","div",null,{"onclick='alert(1)'":"malicious","class":"safe","on click":"bad","data-valid":"good"}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("class=\"safe\""), "Valid class attribute should be rendered");
+    assert!(html.contains("data-valid=\"good\""), "Valid data attribute should be rendered");
+
+    assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+    assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+    assert!(!html.contains("on click"), "Attribute with space should be filtered");
+}
+
+#[tokio::test]
+async fn test_render_allows_valid_special_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"data-test-id":"123","aria-label":"Description","xml:lang":"en","_private":"value"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("data-test-id=\"123\""), "data- attributes should be allowed");
+    assert!(html.contains("aria-label=\"Description\""), "aria- attributes should be allowed");
+    assert!(html.contains("xml:lang=\"en\""), "XML namespace attributes should be allowed");
+    assert!(
+        html.contains("_private=\"value\""),
+        "Underscore-prefixed attributes should be allowed"
+    );
+}
+
+#[tokio::test]
+async fn test_converter_filters_invalid_attribute_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "button",
+        null,
+        {
+            "type": "button",
+            "class": "btn",
+            "onclick='alert(1)'": "malicious",
+            "on load": "bad",
+            "data-id": "123",
+            "1invalid": "bad",
+            "@bad": "bad"
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains("type=\"button\""), "Valid type attribute should be rendered");
+    assert!(html.contains("class=\"btn\""), "Valid class attribute should be rendered");
+    assert!(html.contains("data-id=\"123\""), "Valid data attribute should be rendered");
+
+    assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+    assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+    assert!(!html.contains("on load"), "Attribute with space should be filtered");
+    assert!(!html.contains("1invalid"), "Attribute starting with number should be filtered");
+    assert!(!html.contains("@bad"), "Attribute starting with @ should be filtered");
+}
+
+#[tokio::test]
+async fn test_attribute_validation_with_classname_mapping() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"className":"container","htmlFor":"input1"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("class=\"container\""), "className should be mapped to class");
+    assert!(html.contains("for=\"input1\""), "htmlFor should be mapped to for");
+}
+
+#[tokio::test]
+async fn test_attribute_validation_edge_cases() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "div",
+        null,
+        {
+            "a": "single char valid",
+            "A": "uppercase valid",
+            "_": "underscore only valid",
+            ":": "colon only - expected invalid",
+            "a-b-c": "multiple hyphens valid",
+            "a.b.c": "multiple periods valid",
+            "a:b:c": "multiple colons valid",
+            "a_b_c": "multiple underscores valid",
+            "": "empty invalid",
+            "-": "hyphen only invalid",
+            ".": "period only invalid"
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains("a=\"single char valid\""), "Single letter should be valid");
+    assert!(html.contains("A=\"uppercase valid\""), "Uppercase letter should be valid");
+    assert!(html.contains("_=\"underscore only valid\""), "Underscore only should be valid");
+    assert!(html.contains("a-b-c=\"multiple hyphens valid\""), "Multiple hyphens should be valid");
+    assert!(html.contains("a.b.c=\"multiple periods valid\""), "Multiple periods should be valid");
+    assert!(html.contains("a:b:c=\"multiple colons valid\""), "Multiple colons should be valid");
+    assert!(
+        html.contains("a_b_c=\"multiple underscores valid\""),
+        "Multiple underscores should be valid"
+    );
+
+    assert!(!html.contains(":=\"colon only"), "Colon only should be invalid");
+    assert!(!html.contains("-=\"hyphen only invalid\""), "Hyphen only should be invalid");
+    assert!(!html.contains(".=\"period only invalid\""), "Period only should be invalid");
+}
+
+#[tokio::test]
+async fn test_style_attribute_not_affected_by_validation() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"color":"red","fontSize":"16px"},"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("style="), "Style attribute should be present");
+    assert!(html.contains("color:red"), "Style should contain color");
+    assert!(
+        html.contains("font-size:16px"),
+        "Style should contain font-size (camelCase converted)"
+    );
+    assert!(html.contains("class=\"test\""), "Other attributes should still work");
+}
+
+#[tokio::test]
+async fn test_unicode_attribute_names_allowed() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"中文":"value1","日本語":"value2","data-한글":"value3"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("中文=\"value1\""), "Chinese attribute should be rendered");
+    assert!(html.contains("日本語=\"value2\""), "Japanese attribute should be rendered");
+    assert!(html.contains("data-한글=\"value3\""), "Korean data attribute should be rendered");
+}
+
+#[tokio::test]
+async fn test_event_handlers_blocked_with_unicode() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"onclick":"alert(1)","onClick":"alert(2)","ONCLICK":"alert(3)","on中文":"bad","中文":"good"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(!html.contains("onclick"), "onclick should be filtered");
+    assert!(!html.contains("onClick"), "onClick should be filtered");
+    assert!(!html.contains("ONCLICK"), "ONCLICK should be filtered");
+    assert!(!html.contains("on中文"), "on with Unicode should be filtered");
+    assert!(!html.contains("alert"), "No alert code should be in output");
+
+    assert!(html.contains("中文=\"good\""), "Valid Unicode attribute should be rendered");
+}
+
+#[tokio::test]
+async fn test_style_object_null_values_omitted() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"display":null,"color":"red","margin":null,"padding":"10px"}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("color:red"), "color should be in style: {}", html);
+    assert!(html.contains("padding:10px"), "padding should be in style: {}", html);
+
+    assert!(!html.contains("display:null"), "display:null should not appear in style: {}", html);
+    assert!(!html.contains("margin:null"), "margin:null should not appear in style: {}", html);
+    assert!(!html.contains("null"), "The word 'null' should not appear in output: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_all_null_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"display":null,"color":null},"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(!html.contains("null"), "Should not contain 'null' string: {}", html);
+
+    assert!(html.contains("class=\"test\""), "Should have class attribute: {}", html);
+}
+
+#[tokio::test]
+async fn test_render_html_element_validates_tag_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let valid_element = serde_json::json!(["$", "div", null, {"class": "test"}]);
+    let result = converter.rsc_element_to_html(&valid_element).await;
+    assert!(result.is_ok(), "Valid tag 'div' should be accepted");
+
+    let valid_custom = serde_json::json!(["$", "custom-element", null, {}]);
+    let result = converter.rsc_element_to_html(&valid_custom).await;
+    assert!(result.is_ok(), "Valid custom element with hyphen should be accepted");
+
+    let valid_namespace = serde_json::json!(["$", "svg:circle", null, {}]);
+    let result = converter.rsc_element_to_html(&valid_namespace).await;
+    assert!(result.is_ok(), "Valid namespaced element should be accepted");
+
+    let invalid_space = serde_json::json!(["$", "div onclick", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_space).await;
+    assert!(result.is_err(), "Tag with space should be rejected");
+    assert!(
+        result.unwrap_err().to_string().contains("Invalid tag name"),
+        "Error should mention invalid tag"
+    );
+
+    let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_angle).await;
+    if let Ok(html) = result {
+        panic!("Tag with angle bracket should be rejected, but got: {:?}", html);
+    }
+    assert!(result.is_err(), "Tag with angle bracket should be rejected");
+
+    let invalid_quote = serde_json::json!(["$", "div\"onclick=\"alert(1)", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_quote).await;
+    assert!(result.is_err(), "Tag with quotes should be rejected");
+}
+
+#[tokio::test]
+async fn test_render_component_to_html_validates_tag_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_ok(), "Valid tag 'div' should be accepted");
+
+    let rsc_data_invalid = r#"0:["$","div onclick",null,{}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data_invalid).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_err(), "Tag with space should be rejected");
+    assert!(
+        result.unwrap_err().to_string().contains("Invalid tag name"),
+        "Error should mention invalid tag"
+    );
+
+    let rsc_data_injection = r#"0:["$","div><script>alert(1)</script",null,{}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data_injection).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_err(), "Tag with injection attempt should be rejected");
+}
+
+#[tokio::test]
+async fn test_tag_validation_prevents_xss() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let xss_attempts = vec![
+        "div onload=alert(1)",
+        "div>script",
+        "div style=xss:expression(alert(1))",
+        "div\nonclick=alert(1)",
+        "div'onclick='alert(1)",
+        "div\"onclick=\"alert(1)",
+    ];
+
+    for malicious_tag in xss_attempts {
+        let element = serde_json::json!(["$", malicious_tag, null, {}]);
+        let result = converter.rsc_element_to_html(&element).await;
+
+        assert!(result.is_err(), "Malicious tag '{}' should be rejected", malicious_tag);
+    }
+}
+
+#[tokio::test]
+async fn test_style_object_numeric_values_with_px() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":100,"height":200,"margin":10,"padding":20}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
     let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
     assert!(html.contains("width:100px"), "Width should have px suffix: {}", html);
     assert!(html.contains("height:200px"), "Height should have px suffix: {}", html);
     assert!(html.contains("margin:10px"), "Margin should have px suffix: {}", html);
+    assert!(html.contains("padding:20px"), "Padding should have px suffix: {}", html);
 }
 
 #[tokio::test]
@@ -1196,6 +1545,7 @@ async fn test_style_object_unitless_properties() {
     let rsc_data =
         r#"0:["$","div",null,{"style":{"opacity":0.5,"zIndex":10,"lineHeight":1.5,"flexGrow":2}}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
     let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
     assert!(html.contains("opacity:0.5"), "Opacity should not have px suffix: {}", html);
@@ -1212,10 +1562,211 @@ async fn test_style_object_mixed_values() {
     let rsc_data =
         r#"0:["$","div",null,{"style":{"width":"50%","height":100,"opacity":0.8,"color":"red"}}]"#;
     let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
     let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
 
     assert!(html.contains("width:50%"), "String width should be preserved: {}", html);
     assert!(html.contains("height:100px"), "Numeric height should have px: {}", html);
     assert!(html.contains("opacity:0.8"), "Opacity should not have px: {}", html);
     assert!(html.contains("color:red"), "Color string should be preserved: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_camel_case_with_numeric() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"fontSize":16,"marginTop":10,"paddingLeft":5,"zIndex":100}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("font-size:16px"), "fontSize should become font-size with px: {}", html);
+    assert!(
+        html.contains("margin-top:10px"),
+        "marginTop should become margin-top with px: {}",
+        html
+    );
+    assert!(
+        html.contains("padding-left:5px"),
+        "paddingLeft should become padding-left with px: {}",
+        html
+    );
+    assert!(html.contains("z-index:100"), "zIndex should become z-index without px: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_float_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"width":100.5,"opacity":0.75,"lineHeight":1.2}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("width:100.5px"), "Float width should have px: {}", html);
+    assert!(html.contains("opacity:0.75"), "Float opacity should not have px: {}", html);
+    assert!(html.contains("line-height:1.2"), "Float line-height should not have px: {}", html);
+}
+
+#[tokio::test]
+async fn test_boolean_html_attributes_presence_only() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","input",null,{"type":"checkbox","checked":true,"disabled":true,"required":false}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" checked"), "checked=true should render as presence-only: {}", html);
+    assert!(!html.contains("checked=\"true\""), "checked should not have =\"true\": {}", html);
+    assert!(html.contains(" disabled"), "disabled=true should render as presence-only: {}", html);
+    assert!(!html.contains("disabled=\"true\""), "disabled should not have =\"true\": {}", html);
+
+    assert!(!html.contains("required"), "required=false should be omitted: {}", html);
+}
+
+#[tokio::test]
+async fn test_aria_attributes_render_as_strings() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"aria-hidden":true,"aria-expanded":false,"aria-checked":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(
+        html.contains("aria-hidden=\"true\""),
+        "aria-hidden=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-expanded=\"false\""),
+        "aria-expanded=false should render as \"false\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-checked=\"true\""),
+        "aria-checked=true should render as \"true\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_content_editable_and_draggable_as_strings() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"contentEditable":true,"draggable":false,"spellcheck":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(
+        html.contains("contentEditable=\"true\""),
+        "contentEditable=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("draggable=\"false\""),
+        "draggable=false should render as \"false\": {}",
+        html
+    );
+    assert!(
+        html.contains("spellcheck=\"true\""),
+        "spellcheck=true should render as \"true\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_mixed_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","button",null,{"disabled":true,"aria-disabled":true,"aria-pressed":false}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" disabled"), "disabled=true should be presence-only: {}", html);
+    assert!(!html.contains(" disabled="), "disabled should not have a value: {}", html);
+
+    assert!(
+        html.contains("aria-disabled=\"true\""),
+        "aria-disabled=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-pressed=\"false\""),
+        "aria-pressed=false should render as \"false\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_converter_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "input",
+        null,
+        {
+            "type": "checkbox",
+            "checked": true,
+            "disabled": false,
+            "aria-checked": true,
+            "aria-disabled": false
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains(" checked"), "checked=true should be presence-only: {}", html);
+    assert!(!html.contains(" checked="), "checked should not have a value: {}", html);
+    assert!(!html.contains(" disabled"), "disabled=false should be omitted: {}", html);
+
+    assert!(
+        html.contains("aria-checked=\"true\""),
+        "aria-checked=true should render as \"true\": {}",
+        html
+    );
+    assert!(
+        html.contains("aria-disabled=\"false\""),
+        "aria-disabled=false should render as \"false\": {}",
+        html
+    );
+}
+
+#[tokio::test]
+async fn test_all_html_boolean_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"hidden":true,"readonly":true,"required":true,"autofocus":true,"multiple":true}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains(" hidden"), "hidden should be presence-only: {}", html);
+    assert!(html.contains(" readonly"), "readonly should be presence-only: {}", html);
+    assert!(html.contains(" required"), "required should be presence-only: {}", html);
+    assert!(html.contains(" autofocus"), "autofocus should be presence-only: {}", html);
+    assert!(html.contains(" multiple"), "multiple should be presence-only: {}", html);
+
+    assert!(
+        !html.contains("=\"true\""),
+        "HTML boolean attributes should not have =\"true\": {}",
+        html
+    );
 }

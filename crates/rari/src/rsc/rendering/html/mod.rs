@@ -9,10 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::error;
 
-mod string_builder;
 pub mod tests;
-
-pub use string_builder::{HtmlBuilder, escape_html_fast, escape_html_into};
 
 const SELF_CLOSING_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
@@ -20,121 +17,187 @@ const SELF_CLOSING_TAGS: &[&str] = &[
 ];
 
 pub fn escape_html(text: &str) -> String {
-    escape_html_fast(text).into_owned()
+    text.cow_replace('&', "&amp;")
+        .cow_replace('<', "&lt;")
+        .cow_replace('>', "&gt;")
+        .cow_replace('"', "&quot;")
+        .cow_replace('\'', "&#39;")
+        .into_owned()
 }
 
-pub(crate) fn is_safe_attribute_name(name: &str) -> bool {
+fn is_valid_attribute_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
 
-    if name.len() >= 2 {
-        let mut chars = name.chars();
-        if let (Some(first), Some(second)) = (chars.next(), chars.next())
-            && (first == 'o' || first == 'O')
-            && (second == 'n' || second == 'N')
-        {
-            return false;
-        }
+    let name_lower = name.cow_to_lowercase();
+    if name_lower.starts_with("on") {
+        return false;
     }
 
     if name
         .chars()
-        .any(|c| matches!(c, '\'' | '"' | '=' | '<' | '>' | '\t' | '\n' | '\r' | ' ' | '\0'))
+        .any(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '"' | '\'' | '=' | '<' | '>' | '/' | '\\'))
     {
         return false;
     }
 
-    let first_char = name.chars().next().expect("name is not empty");
-    if !first_char.is_ascii_alphabetic() && first_char != '_' {
+    if !name.chars().any(|c| c.is_alphanumeric() || c == '_') {
         return false;
     }
 
-    name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ':' | '_' | '.'))
-}
+    let mut chars = name.chars();
 
-const UNITLESS_CSS_PROPERTIES: &[&str] = &[
-    "animation-iteration-count",
-    "box-flex",
-    "box-flex-group",
-    "box-ordinal-group",
-    "column-count",
-    "fill-opacity",
-    "flex",
-    "flex-grow",
-    "flex-positive",
-    "flex-shrink",
-    "flex-negative",
-    "flex-order",
-    "font-weight",
-    "line-clamp",
-    "line-height",
-    "opacity",
-    "order",
-    "orphans",
-    "stop-opacity",
-    "stroke-dasharray",
-    "stroke-dashoffset",
-    "stroke-miterlimit",
-    "stroke-opacity",
-    "stroke-width",
-    "tab-size",
-    "widows",
-    "z-index",
-    "zoom",
-];
-
-fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
-    use std::fmt::Write;
-
-    let mut result = String::with_capacity(style_obj.len() * 20);
-    let mut first = true;
-
-    for (k, v) in style_obj {
-        let kebab_key = if k.starts_with("--") {
-            k.clone()
-        } else {
-            let mut kebab_key = String::with_capacity(k.len() + 4);
-            if k.starts_with("ms") && k.as_bytes().get(2).is_some_and(|b| b.is_ascii_uppercase()) {
-                kebab_key.push('-');
-            }
-            for c in k.chars() {
-                if c.is_uppercase() {
-                    kebab_key.push('-');
-                    kebab_key.push(c.to_ascii_lowercase());
-                } else {
-                    kebab_key.push(c);
-                }
-            }
-            kebab_key
-        };
-
-        let value_str = if let Some(s) = v.as_str() {
-            Some(s.to_string())
-        } else if v.as_bool().is_some() || v.is_null() {
-            None
-        } else if let Some(n) = v.as_number() {
-            if UNITLESS_CSS_PROPERTIES.contains(&kebab_key.as_str()) {
-                Some(n.to_string())
-            } else {
-                Some(format!("{}px", n))
-            }
-        } else if v.is_object() || v.is_array() {
-            Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
-        } else {
-            Some(v.to_string())
-        };
-
-        if let Some(val) = value_str {
-            if !first {
-                result.push(';');
-            }
-            let _ = write!(result, "{}:{}", kebab_key, val);
-            first = false;
+    if let Some(first) = chars.next() {
+        if !(first.is_alphabetic() || first == '_' || first == ':') {
+            return false;
         }
+    } else {
+        return false;
     }
 
-    result
+    chars.all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':')
+}
+
+fn is_boolean_html_attribute(name: &str) -> bool {
+    matches!(
+        name,
+        "allowfullscreen"
+            | "async"
+            | "autofocus"
+            | "autoplay"
+            | "checked"
+            | "controls"
+            | "default"
+            | "defer"
+            | "disabled"
+            | "formnovalidate"
+            | "hidden"
+            | "inert"
+            | "ismap"
+            | "itemscope"
+            | "loop"
+            | "multiple"
+            | "muted"
+            | "nomodule"
+            | "novalidate"
+            | "open"
+            | "playsinline"
+            | "readonly"
+            | "required"
+            | "reversed"
+            | "selected"
+    )
+}
+
+#[cfg(test)]
+pub fn test_is_valid_attribute_name(name: &str) -> bool {
+    is_valid_attribute_name(name)
+}
+
+fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
+    const UNITLESS_PROPERTIES: &[&str] = &[
+        "animation-iteration-count",
+        "border-image-outset",
+        "border-image-slice",
+        "border-image-width",
+        "box-flex",
+        "box-flex-group",
+        "box-ordinal-group",
+        "column-count",
+        "columns",
+        "flex",
+        "flex-grow",
+        "flex-positive",
+        "flex-shrink",
+        "flex-negative",
+        "flex-order",
+        "grid-area",
+        "grid-row",
+        "grid-row-end",
+        "grid-row-span",
+        "grid-row-start",
+        "grid-column",
+        "grid-column-end",
+        "grid-column-span",
+        "grid-column-start",
+        "font-weight",
+        "line-clamp",
+        "line-height",
+        "opacity",
+        "order",
+        "orphans",
+        "tab-size",
+        "widows",
+        "z-index",
+        "zoom",
+        "fill-opacity",
+        "flood-opacity",
+        "stop-opacity",
+        "stroke-dasharray",
+        "stroke-dashoffset",
+        "stroke-miterlimit",
+        "stroke-opacity",
+        "stroke-width",
+    ];
+
+    let style_parts: Vec<String> = style_obj
+        .iter()
+        .filter_map(|(k, v)| {
+            let kebab_key = k.chars().fold(String::new(), |mut acc, c| {
+                if c.is_uppercase() {
+                    acc.push('-');
+                    acc.push(
+                        c.to_lowercase()
+                            .next()
+                            .expect("to_lowercase() always returns at least one character"),
+                    );
+                } else {
+                    acc.push(c);
+                }
+                acc
+            });
+
+            let value_str = if let Some(s) = v.as_str() {
+                Some(s.to_string())
+            } else if v.is_null() || v.as_bool().is_some() {
+                None
+            } else if let Some(u) = v.as_u64() {
+                if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                    Some(u.to_string())
+                } else {
+                    Some(format!("{}px", u))
+                }
+            } else if let Some(i) = v.as_i64() {
+                if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                    Some(i.to_string())
+                } else {
+                    Some(format!("{}px", i))
+                }
+            } else if let Some(f) = v.as_f64() {
+                if f.is_finite() {
+                    let formatted = format!("{:.10}", f)
+                        .trim_end_matches('0')
+                        .trim_end_matches('.')
+                        .to_string();
+
+                    if UNITLESS_PROPERTIES.contains(&kebab_key.as_str()) {
+                        Some(formatted)
+                    } else {
+                        Some(format!("{}px", formatted))
+                    }
+                } else {
+                    None
+                }
+            } else if v.is_object() || v.is_array() {
+                Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
+            } else {
+                Some(v.to_string())
+            };
+            value_str.map(|val| format!("{}:{}", kebab_key, val))
+        })
+        .collect();
+    style_parts.join(";")
 }
 
 #[derive(Debug)]
@@ -667,7 +730,7 @@ impl RscHtmlRenderer {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         return Ok(format!(
                             r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
-                            escape_html(boundary_id),
+                            Self::escape_html_attribute(boundary_id),
                             html
                         ));
                     }
@@ -689,20 +752,25 @@ impl RscHtmlRenderer {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, RariError>> + Send + 'a>>
     {
         Box::pin(async move {
-            if tag.starts_with("$L") || tag.starts_with("$@") {
-                let mut html = HtmlBuilder::with_capacity(128);
-                html.write_open_tag("div");
-                html.write_attr("data-client-component", tag);
-                html.write_attr("style", "display: contents;");
-                html.finish_open_tag();
-                html.write_close_tag("div");
-                return Ok(html.build());
+            if tag.contains('<') || tag.contains('>') || tag.contains('"') || tag.contains('\'') {
+                return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+            }
+
+            let is_client_component = tag.starts_with("$L")
+                || tag.starts_with("$@")
+                || tag.contains('#')
+                || tag.contains('/');
+            if is_client_component {
+                return Ok(format!(
+                    r#"<div data-client-component="{}" style="display: contents;"></div>"#,
+                    Self::escape_html_attribute(tag)
+                ));
             }
 
             let is_suspense_symbol = tag.starts_with('$')
                 && tag.len() > 1
                 && tag[1..].chars().all(|c| c.is_ascii_digit());
-            if tag == "react.suspense" || is_suspense_symbol {
+            if tag == "$Sreact.suspense" || tag == "react.suspense" || is_suspense_symbol {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
                     if let Some(children) = children {
@@ -716,8 +784,9 @@ impl RscHtmlRenderer {
                 return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
             }
 
-            let mut html = HtmlBuilder::with_capacity(256);
-            html.write_open_tag(tag);
+            let mut html = String::with_capacity(256);
+            html.push('<');
+            html.push_str(tag);
 
             if let Some(props_obj) = props.as_object() {
                 for (key, value) in props_obj {
@@ -729,43 +798,59 @@ impl RscHtmlRenderer {
                         continue;
                     }
 
-                    if !is_safe_attribute_name(key) {
-                        continue;
-                    }
-
                     let attr_name = match key.as_str() {
                         "className" => "class",
                         "htmlFor" => "for",
                         _ => key.as_str(),
                     };
 
+                    if !is_valid_attribute_name(attr_name) {
+                        continue;
+                    }
+
                     if key == "style" && value.is_object() {
                         if let Some(style_obj) = value.as_object() {
                             let style_str = serialize_style_object(style_obj);
-                            html.write_attr("style", &style_str);
+                            html.push_str(&format!(
+                                r#" style="{}""#,
+                                Self::escape_html_attribute(&style_str)
+                            ));
                         }
                         continue;
                     }
 
                     if let Some(b) = value.as_bool() {
-                        if b {
-                            html.write_bool_attr(attr_name);
+                        if is_boolean_html_attribute(attr_name) {
+                            if b {
+                                html.push(' ');
+                                html.push_str(attr_name);
+                            }
+                        } else {
+                            html.push_str(&format!(
+                                r#" {}="{}""#,
+                                attr_name,
+                                if b { "true" } else { "false" }
+                            ));
                         }
                     } else if let Some(s) = value.as_str() {
-                        html.write_attr(attr_name, s);
+                        html.push_str(&format!(
+                            r#" {}="{}""#,
+                            attr_name,
+                            Self::escape_html_attribute(s)
+                        ));
                     } else if value.is_number() {
-                        html.write_attr_value(attr_name, value);
+                        html.push_str(&format!(r#" {}="{}""#, attr_name, value));
                     }
                 }
             }
 
             const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
             if SELF_CLOSING.contains(&tag) {
-                html.write_self_closing_end();
-                return Ok(html.build());
+                html.push_str(" />");
+                return Ok(html);
             }
 
-            html.finish_open_tag();
+            html.push('>');
 
             if let Some(props_obj) = props.as_object()
                 && let Some(children) = props_obj.get("children")
@@ -774,9 +859,11 @@ impl RscHtmlRenderer {
                 html.push_str(&children_html);
             }
 
-            html.write_close_tag(tag);
+            html.push_str("</");
+            html.push_str(tag);
+            html.push('>');
 
-            Ok(html.build())
+            Ok(html)
         })
     }
 
@@ -865,7 +952,7 @@ impl RscHtmlRenderer {
 </script>
 
 "#,
-            escape_html(boundary_id),
+            Self::escape_html_attribute(boundary_id),
             row_id,
             Self::escape_js_string(&rsc_row),
             Self::escape_js_string(boundary_id),
@@ -877,6 +964,14 @@ impl RscHtmlRenderer {
         );
 
         Ok(update_script)
+    }
+
+    fn escape_html_attribute(text: &str) -> String {
+        text.cow_replace('&', "&amp;")
+            .cow_replace('"', "&quot;")
+            .cow_replace('<', "&lt;")
+            .cow_replace('>', "&gt;")
+            .into_owned()
     }
 
     fn escape_js_string(text: &str) -> String {
@@ -1369,7 +1464,9 @@ if (typeof window !== 'undefined') {{
 
             let html = format!(
                 "<!--$?--><template id=\"{}\"></template><div data-boundary-id=\"{}\">{}</div><!--/$-->",
-                react_boundary_id, rari_boundary_id, content_html
+                react_boundary_id,
+                RscHtmlRenderer::escape_html_attribute(rari_boundary_id),
+                content_html
             );
 
             Ok(html)
@@ -1387,8 +1484,7 @@ if (typeof window !== 'undefined') {{
             return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
         }
 
-        let mut html = HtmlBuilder::with_capacity(256);
-        html.write_open_tag(tag);
+        let mut html = format!("<{}", tag);
 
         if let Some(props) = props {
             for (key, value) in props {
@@ -1400,49 +1496,68 @@ if (typeof window !== 'undefined') {{
                     continue;
                 }
 
-                if !is_safe_attribute_name(key) {
-                    continue;
-                }
-
                 let attr_name = match key.as_str() {
                     "className" => "class",
                     "htmlFor" => "for",
                     _ => key.as_str(),
                 };
 
+                if !is_valid_attribute_name(attr_name) {
+                    continue;
+                }
+
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
                         let style_str = serialize_style_object(style_obj);
-                        html.write_attr("style", &style_str);
+                        html.push_str(&format!(
+                            " style=\"{}\"",
+                            RscHtmlRenderer::escape_html_attribute(&style_str)
+                        ));
                     }
                     continue;
                 }
 
                 if let Some(b) = value.as_bool() {
-                    if b {
-                        html.write_bool_attr(attr_name);
+                    if is_boolean_html_attribute(attr_name) {
+                        if b {
+                            html.push_str(&format!(" {}", attr_name));
+                        }
+                    } else {
+                        html.push_str(&format!(
+                            " {}=\"{}\"",
+                            attr_name,
+                            if b { "true" } else { "false" }
+                        ));
                     }
                     continue;
                 }
 
                 if let Some(s) = value.as_str() {
-                    html.write_attr(attr_name, s);
+                    html.push_str(&format!(
+                        " {}=\"{}\"",
+                        attr_name,
+                        RscHtmlRenderer::escape_html_attribute(s)
+                    ));
                     continue;
                 }
 
                 if value.is_number() {
-                    html.write_attr_value(attr_name, value);
+                    html.push_str(&format!(
+                        " {}=\"{}\"",
+                        attr_name,
+                        RscHtmlRenderer::escape_html_attribute(&value.to_string())
+                    ));
                 }
             }
         }
 
         const SELF_CLOSING: &[&str] = SELF_CLOSING_TAGS;
         if SELF_CLOSING.contains(&tag) {
-            html.write_self_closing_end();
-            return Ok(html.build());
+            html.push_str(" />");
+            return Ok(html);
         }
 
-        html.finish_open_tag();
+        html.push('>');
 
         if let Some(props) = props
             && let Some(children) = props.get("children")
@@ -1451,9 +1566,9 @@ if (typeof window !== 'undefined') {{
             html.push_str(&children_html);
         }
 
-        html.write_close_tag(tag);
+        html.push_str(&format!("</{}>", tag));
 
-        Ok(html.build())
+        Ok(html)
     }
 
     async fn generate_boundary_replacement(
@@ -1508,7 +1623,7 @@ if (typeof window !== 'undefined') {{
   }}
 }})();
 </script>"#,
-            escape_html(&boundary_id),
+            RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
             escaped_row,
             RscHtmlRenderer::escape_js_string(&boundary_id),
