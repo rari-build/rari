@@ -106,7 +106,6 @@ async-compression = { version = "0.4.41", features = [
 # === Serialization ===
 serde = { workspace = true }
 serde_json = { workspace = true }
-sonic-rs = "0.5.7"
 base64 = "0.22.1"
 rkyv = "0.8.15"
 
