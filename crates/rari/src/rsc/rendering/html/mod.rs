@@ -187,7 +187,7 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
                         Some(format!("{}px", formatted))
                     }
                 } else {
-                    Some(f.to_string())
+                    None
                 }
             } else if v.is_object() || v.is_array() {
                 Some(serde_json::to_string(v).unwrap_or_else(|_| String::from("{}")))
