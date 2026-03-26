@@ -1135,3 +1135,260 @@ async fn test_render_rsc_to_html_string_consistent_with_streaming() {
     assert!(html.contains("<main"), "Should have main tag from row 0");
     assert!(html.contains("Main Content"), "Should render row 0 content");
 }
+
+#[test]
+fn test_is_valid_attribute_name_valid_names() {
+    assert!(test_is_valid_attribute_name("class"), "class should be valid");
+    assert!(test_is_valid_attribute_name("id"), "id should be valid");
+    assert!(test_is_valid_attribute_name("type"), "type should be valid");
+    assert!(test_is_valid_attribute_name("href"), "href should be valid");
+    assert!(test_is_valid_attribute_name("src"), "src should be valid");
+
+    assert!(test_is_valid_attribute_name("data-id"), "data-id should be valid");
+    assert!(test_is_valid_attribute_name("data-test-value"), "data-test-value should be valid");
+    assert!(test_is_valid_attribute_name("data-123"), "data-123 should be valid");
+
+    assert!(test_is_valid_attribute_name("aria-label"), "aria-label should be valid");
+    assert!(test_is_valid_attribute_name("aria-hidden"), "aria-hidden should be valid");
+
+    assert!(test_is_valid_attribute_name("_private"), "_private should be valid");
+    assert!(test_is_valid_attribute_name("my_attr"), "my_attr should be valid");
+
+    assert!(test_is_valid_attribute_name("xml:lang"), "xml:lang should be valid");
+    assert!(test_is_valid_attribute_name("xlink:href"), "xlink:href should be valid");
+    assert!(test_is_valid_attribute_name(":colon-start"), ":colon-start should be valid");
+
+    assert!(test_is_valid_attribute_name("ng.model"), "ng.model should be valid");
+    assert!(test_is_valid_attribute_name("v.bind"), "v.bind should be valid");
+
+    assert!(test_is_valid_attribute_name("中文"), "Chinese characters should be valid");
+    assert!(test_is_valid_attribute_name("日本語"), "Japanese characters should be valid");
+    assert!(test_is_valid_attribute_name("한글"), "Korean characters should be valid");
+    assert!(test_is_valid_attribute_name("data-中文"), "data- with Chinese should be valid");
+    assert!(test_is_valid_attribute_name("属性名"), "Chinese attribute name should be valid");
+}
+
+#[test]
+fn test_is_valid_attribute_name_invalid_names() {
+    assert!(!test_is_valid_attribute_name(""), "empty string should be invalid");
+
+    assert!(!test_is_valid_attribute_name("1invalid"), "starting with number should be invalid");
+    assert!(!test_is_valid_attribute_name("-invalid"), "starting with hyphen should be invalid");
+    assert!(!test_is_valid_attribute_name(".invalid"), "starting with period should be invalid");
+    assert!(!test_is_valid_attribute_name("@invalid"), "starting with @ should be invalid");
+    assert!(!test_is_valid_attribute_name("#invalid"), "starting with # should be invalid");
+
+    assert!(!test_is_valid_attribute_name("on click"), "space should be invalid");
+    assert!(!test_is_valid_attribute_name("on=click"), "equals sign should be invalid");
+    assert!(!test_is_valid_attribute_name("on'click"), "single quote should be invalid");
+    assert!(!test_is_valid_attribute_name("on\"click"), "double quote should be invalid");
+    assert!(!test_is_valid_attribute_name("on<click"), "less than should be invalid");
+    assert!(!test_is_valid_attribute_name("on>click"), "greater than should be invalid");
+    assert!(!test_is_valid_attribute_name("on/click"), "slash should be invalid");
+    assert!(!test_is_valid_attribute_name("on\\click"), "backslash should be invalid");
+
+    assert!(!test_is_valid_attribute_name("onclick"), "onclick should be invalid");
+    assert!(!test_is_valid_attribute_name("onClick"), "onClick should be invalid");
+    assert!(!test_is_valid_attribute_name("ONCLICK"), "ONCLICK should be invalid");
+    assert!(!test_is_valid_attribute_name("onload"), "onload should be invalid");
+    assert!(!test_is_valid_attribute_name("onerror"), "onerror should be invalid");
+    assert!(!test_is_valid_attribute_name("onmouseover"), "onmouseover should be invalid");
+    assert!(!test_is_valid_attribute_name("onsubmit"), "onsubmit should be invalid");
+
+    assert!(!test_is_valid_attribute_name("on中文"), "on with Chinese should be invalid");
+
+    assert!(
+        !test_is_valid_attribute_name("onclick='alert(1)'"),
+        "injection attempt should be invalid"
+    );
+    assert!(
+        !test_is_valid_attribute_name("on click='alert(1)'data-x"),
+        "complex injection should be invalid"
+    );
+    assert!(
+        !test_is_valid_attribute_name("x onload=alert(1)"),
+        "space-based injection should be invalid"
+    );
+}
+
+#[tokio::test]
+async fn test_render_filters_invalid_attribute_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"onclick='alert(1)'":"malicious","class":"safe","on click":"bad","data-valid":"good"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("class=\"safe\""), "Valid class attribute should be rendered");
+    assert!(html.contains("data-valid=\"good\""), "Valid data attribute should be rendered");
+
+    assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+    assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+    assert!(!html.contains("on click"), "Attribute with space should be filtered");
+}
+
+#[tokio::test]
+async fn test_render_allows_valid_special_attributes() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"data-test-id":"123","aria-label":"Description","xml:lang":"en","_private":"value"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("data-test-id=\"123\""), "data- attributes should be allowed");
+    assert!(html.contains("aria-label=\"Description\""), "aria- attributes should be allowed");
+    assert!(html.contains("xml:lang=\"en\""), "XML namespace attributes should be allowed");
+    assert!(
+        html.contains("_private=\"value\""),
+        "Underscore-prefixed attributes should be allowed"
+    );
+}
+
+#[tokio::test]
+async fn test_converter_filters_invalid_attribute_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "button",
+        null,
+        {
+            "type": "button",
+            "class": "btn",
+            "onclick='alert(1)'": "malicious",
+            "on load": "bad",
+            "data-id": "123",
+            "1invalid": "bad",
+            "@bad": "bad"
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains("type=\"button\""), "Valid type attribute should be rendered");
+    assert!(html.contains("class=\"btn\""), "Valid class attribute should be rendered");
+    assert!(html.contains("data-id=\"123\""), "Valid data attribute should be rendered");
+
+    assert!(!html.contains("onclick"), "Invalid onclick attribute should be filtered");
+    assert!(!html.contains("alert(1)"), "Malicious code should not be in output");
+    assert!(!html.contains("on load"), "Attribute with space should be filtered");
+    assert!(!html.contains("1invalid"), "Attribute starting with number should be filtered");
+    assert!(!html.contains("@bad"), "Attribute starting with @ should be filtered");
+}
+
+#[tokio::test]
+async fn test_attribute_validation_with_classname_mapping() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"className":"container","htmlFor":"input1"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("class=\"container\""), "className should be mapped to class");
+    assert!(html.contains("for=\"input1\""), "htmlFor should be mapped to for");
+}
+
+#[tokio::test]
+async fn test_attribute_validation_edge_cases() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let element = serde_json::json!([
+        "$",
+        "div",
+        null,
+        {
+            "a": "single char valid",
+            "A": "uppercase valid",
+            "_": "underscore only valid",
+            ":": "colon only valid",
+            "a-b-c": "multiple hyphens valid",
+            "a.b.c": "multiple periods valid",
+            "a:b:c": "multiple colons valid",
+            "a_b_c": "multiple underscores valid",
+            "": "empty invalid",
+            "-": "hyphen only invalid",
+            ".": "period only invalid"
+        }
+    ]);
+
+    let html = converter.rsc_element_to_html(&element).await.unwrap();
+
+    assert!(html.contains("a=\"single char valid\""), "Single letter should be valid");
+    assert!(html.contains("A=\"uppercase valid\""), "Uppercase letter should be valid");
+    assert!(html.contains("_=\"underscore only valid\""), "Underscore only should be valid");
+    assert!(html.contains(":=\"colon only valid\""), "Colon only should be valid");
+    assert!(html.contains("a-b-c=\"multiple hyphens valid\""), "Multiple hyphens should be valid");
+    assert!(html.contains("a.b.c=\"multiple periods valid\""), "Multiple periods should be valid");
+    assert!(html.contains("a:b:c=\"multiple colons valid\""), "Multiple colons should be valid");
+    assert!(
+        html.contains("a_b_c=\"multiple underscores valid\""),
+        "Multiple underscores should be valid"
+    );
+
+    assert!(!html.contains("-=\"hyphen only invalid\""), "Hyphen only should be invalid");
+    assert!(!html.contains(".=\"period only invalid\""), "Period only should be invalid");
+}
+
+#[tokio::test]
+async fn test_style_attribute_not_affected_by_validation() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data =
+        r#"0:["$","div",null,{"style":{"color":"red","fontSize":"16px"},"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("style="), "Style attribute should be present");
+    assert!(html.contains("color:red"), "Style should contain color");
+    assert!(
+        html.contains("font-size:16px"),
+        "Style should contain font-size (camelCase converted)"
+    );
+    assert!(html.contains("class=\"test\""), "Other attributes should still work");
+}
+
+#[tokio::test]
+async fn test_unicode_attribute_names_allowed() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"中文":"value1","日本語":"value2","data-한글":"value3"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("中文=\"value1\""), "Chinese attribute should be rendered");
+    assert!(html.contains("日本語=\"value2\""), "Japanese attribute should be rendered");
+    assert!(html.contains("data-한글=\"value3\""), "Korean data attribute should be rendered");
+}
+
+#[tokio::test]
+async fn test_event_handlers_blocked_with_unicode() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"onclick":"alert(1)","onClick":"alert(2)","ONCLICK":"alert(3)","on中文":"bad","中文":"good"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(!html.contains("onclick"), "onclick should be filtered");
+    assert!(!html.contains("onClick"), "onClick should be filtered");
+    assert!(!html.contains("ONCLICK"), "ONCLICK should be filtered");
+    assert!(!html.contains("on中文"), "on with Unicode should be filtered");
+    assert!(!html.contains("alert"), "No alert code should be in output");
+
+    assert!(html.contains("中文=\"good\""), "Valid Unicode attribute should be rendered");
+}

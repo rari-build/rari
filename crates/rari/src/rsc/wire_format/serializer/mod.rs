@@ -545,13 +545,14 @@ impl RscSerializer {
         let key_json = if is_document_element {
             "null".to_string()
         } else {
-            key.map(|k| serde_json::to_string(k).unwrap_or_default()).unwrap_or("null".to_string())
+            key.map(|k| serde_json::to_string(k).unwrap_or_else(|_| "null".to_string()))
+                .unwrap_or_else(|| "null".to_string())
         };
 
         let props_value =
             Value::Object(element_props.into_iter().collect::<serde_json::Map<String, Value>>());
         let escaped_props = escape_rsc_value(&props_value);
-        let props_json = serde_json::to_string(&escaped_props).unwrap_or("{}".to_string());
+        let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{tag}",{key_json},{props_json}]"#)
     }

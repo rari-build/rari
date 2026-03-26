@@ -25,6 +25,41 @@ pub fn escape_html(text: &str) -> String {
         .into_owned()
 }
 
+fn is_valid_attribute_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    let name_lower = name.to_lowercase();
+    if name_lower.starts_with("on") {
+        return false;
+    }
+
+    if name
+        .chars()
+        .any(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '"' | '\'' | '=' | '<' | '>' | '/' | '\\'))
+    {
+        return false;
+    }
+
+    let mut chars = name.chars();
+
+    if let Some(first) = chars.next() {
+        if !(first.is_alphabetic() || first == '_' || first == ':') {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    chars.all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':')
+}
+
+#[cfg(test)]
+pub fn test_is_valid_attribute_name(name: &str) -> bool {
+    is_valid_attribute_name(name)
+}
+
 fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>) -> String {
     let style_parts: Vec<String> = style_obj
         .iter()
@@ -668,17 +703,16 @@ impl RscHtmlRenderer {
                         _ => key.as_str(),
                     };
 
+                    if !is_valid_attribute_name(attr_name) {
+                        continue;
+                    }
+
                     if key == "style" && value.is_object() {
                         if let Some(style_obj) = value.as_object() {
                             let style_str = serialize_style_object(style_obj);
                             html.push_str(&format!(
                                 r#" style="{}""#,
-                                style_str
-                                    .cow_replace('&', "&amp;")
-                                    .cow_replace('"', "&quot;")
-                                    .cow_replace('<', "&lt;")
-                                    .cow_replace('>', "&gt;")
-                                    .into_owned()
+                                Self::escape_html_attribute(&style_str)
                             ));
                         }
                         continue;
@@ -693,11 +727,7 @@ impl RscHtmlRenderer {
                         html.push_str(&format!(
                             r#" {}="{}""#,
                             attr_name,
-                            s.cow_replace('&', "&amp;")
-                                .cow_replace('"', "&quot;")
-                                .cow_replace('<', "&lt;")
-                                .cow_replace('>', "&gt;")
-                                .into_owned()
+                            Self::escape_html_attribute(s)
                         ));
                     } else if value.is_number() {
                         html.push_str(&format!(r#" {}="{}""#, attr_name, value));
@@ -1159,14 +1189,6 @@ if (typeof window !== 'undefined') {{
         Ok(html.into_bytes())
     }
 
-    fn escape_attribute(text: &str) -> String {
-        text.cow_replace('&', "&amp;")
-            .cow_replace('"', "&quot;")
-            .cow_replace('<', "&lt;")
-            .cow_replace('>', "&gt;")
-            .into_owned()
-    }
-
     fn rsc_element_to_html<'a>(
         &'a self,
         element: &'a serde_json::Value,
@@ -1365,12 +1387,16 @@ if (typeof window !== 'undefined') {{
                     _ => key.as_str(),
                 };
 
+                if !is_valid_attribute_name(attr_name) {
+                    continue;
+                }
+
                 if key == "style" && value.is_object() {
                     if let Some(style_obj) = value.as_object() {
                         let style_str = serialize_style_object(style_obj);
                         html.push_str(&format!(
                             " style=\"{}\"",
-                            Self::escape_attribute(&style_str)
+                            RscHtmlRenderer::escape_html_attribute(&style_str)
                         ));
                     }
                     continue;
@@ -1384,7 +1410,11 @@ if (typeof window !== 'undefined') {{
                 }
 
                 if let Some(s) = value.as_str() {
-                    html.push_str(&format!(" {}=\"{}\"", attr_name, Self::escape_attribute(s)));
+                    html.push_str(&format!(
+                        " {}=\"{}\"",
+                        attr_name,
+                        RscHtmlRenderer::escape_html_attribute(s)
+                    ));
                     continue;
                 }
 
@@ -1392,7 +1422,7 @@ if (typeof window !== 'undefined') {{
                     html.push_str(&format!(
                         " {}=\"{}\"",
                         attr_name,
-                        Self::escape_attribute(&value.to_string())
+                        RscHtmlRenderer::escape_html_attribute(&value.to_string())
                     ));
                 }
             }
@@ -1470,7 +1500,7 @@ if (typeof window !== 'undefined') {{
   }}
 }})();
 </script>"#,
-            Self::escape_attribute(&boundary_id),
+            RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
             escaped_row,
             RscHtmlRenderer::escape_js_string(&boundary_id),
