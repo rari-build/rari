@@ -30,7 +30,7 @@ fn is_valid_attribute_name(name: &str) -> bool {
         return false;
     }
 
-    let name_lower = name.to_lowercase();
+    let name_lower = name.cow_to_lowercase();
     if name_lower.starts_with("on") {
         return false;
     }
@@ -39,6 +39,10 @@ fn is_valid_attribute_name(name: &str) -> bool {
         .chars()
         .any(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '"' | '\'' | '=' | '<' | '>' | '/' | '\\'))
     {
+        return false;
+    }
+
+    if !name.chars().any(|c| c.is_alphanumeric() || c == '_') {
         return false;
     }
 
@@ -79,7 +83,7 @@ fn serialize_style_object(style_obj: &serde_json::Map<String, serde_json::Value>
             });
             let value_str = if let Some(s) = v.as_str() {
                 Some(s.to_string())
-            } else if v.as_bool().is_some() {
+            } else if v.is_null() || v.as_bool().is_some() {
                 None
             } else if let Some(u) = v.as_u64() {
                 Some(u.to_string())
@@ -1355,7 +1359,9 @@ if (typeof window !== 'undefined') {{
 
             let html = format!(
                 "<!--$?--><template id=\"{}\"></template><div data-boundary-id=\"{}\">{}</div><!--/$-->",
-                react_boundary_id, rari_boundary_id, content_html
+                react_boundary_id,
+                RscHtmlRenderer::escape_html_attribute(rari_boundary_id),
+                content_html
             );
 
             Ok(html)
@@ -1369,6 +1375,10 @@ if (typeof window !== 'undefined') {{
         tag: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
+            return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
+        }
+
         let mut html = format!("<{}", tag);
 
         if let Some(props) = props {

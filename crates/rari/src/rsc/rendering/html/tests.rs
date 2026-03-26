@@ -1197,6 +1197,14 @@ fn test_is_valid_attribute_name_invalid_names() {
 
     assert!(!test_is_valid_attribute_name("on中文"), "on with Chinese should be invalid");
 
+    assert!(!test_is_valid_attribute_name(":"), "colon only should be invalid");
+    assert!(!test_is_valid_attribute_name("-"), "hyphen only should be invalid");
+    assert!(!test_is_valid_attribute_name("."), "period only should be invalid");
+    assert!(!test_is_valid_attribute_name("::"), "multiple colons only should be invalid");
+    assert!(!test_is_valid_attribute_name("--"), "multiple hyphens only should be invalid");
+    assert!(!test_is_valid_attribute_name(".."), "multiple periods only should be invalid");
+    assert!(!test_is_valid_attribute_name(":-."), "mixed punctuation only should be invalid");
+
     assert!(
         !test_is_valid_attribute_name("onclick='alert(1)'"),
         "injection attempt should be invalid"
@@ -1326,7 +1334,6 @@ async fn test_attribute_validation_edge_cases() {
     assert!(html.contains("a=\"single char valid\""), "Single letter should be valid");
     assert!(html.contains("A=\"uppercase valid\""), "Uppercase letter should be valid");
     assert!(html.contains("_=\"underscore only valid\""), "Underscore only should be valid");
-    assert!(html.contains(":=\"colon only valid\""), "Colon only should be valid");
     assert!(html.contains("a-b-c=\"multiple hyphens valid\""), "Multiple hyphens should be valid");
     assert!(html.contains("a.b.c=\"multiple periods valid\""), "Multiple periods should be valid");
     assert!(html.contains("a:b:c=\"multiple colons valid\""), "Multiple colons should be valid");
@@ -1335,6 +1342,7 @@ async fn test_attribute_validation_edge_cases() {
         "Multiple underscores should be valid"
     );
 
+    assert!(!html.contains(":=\"colon only"), "Colon only should be invalid");
     assert!(!html.contains("-=\"hyphen only invalid\""), "Hyphen only should be invalid");
     assert!(!html.contains(".=\"period only invalid\""), "Period only should be invalid");
 }
@@ -1391,4 +1399,123 @@ async fn test_event_handlers_blocked_with_unicode() {
     assert!(!html.contains("alert"), "No alert code should be in output");
 
     assert!(html.contains("中文=\"good\""), "Valid Unicode attribute should be rendered");
+}
+
+#[tokio::test]
+async fn test_style_object_null_values_omitted() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"display":null,"color":"red","margin":null,"padding":"10px"}}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("color:red"), "color should be in style: {}", html);
+    assert!(html.contains("padding:10px"), "padding should be in style: {}", html);
+
+    assert!(!html.contains("display:null"), "display:null should not appear in style: {}", html);
+    assert!(!html.contains("margin:null"), "margin:null should not appear in style: {}", html);
+    assert!(!html.contains("null"), "The word 'null' should not appear in output: {}", html);
+}
+
+#[tokio::test]
+async fn test_style_object_all_null_values() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"style":{"display":null,"color":null},"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(!html.contains("null"), "Should not contain 'null' string: {}", html);
+
+    assert!(html.contains("class=\"test\""), "Should have class attribute: {}", html);
+}
+
+#[tokio::test]
+async fn test_render_html_element_validates_tag_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let valid_element = serde_json::json!(["$", "div", null, {"class": "test"}]);
+    let result = converter.rsc_element_to_html(&valid_element).await;
+    assert!(result.is_ok(), "Valid tag 'div' should be accepted");
+
+    let valid_custom = serde_json::json!(["$", "custom-element", null, {}]);
+    let result = converter.rsc_element_to_html(&valid_custom).await;
+    assert!(result.is_ok(), "Valid custom element with hyphen should be accepted");
+
+    let valid_namespace = serde_json::json!(["$", "svg:circle", null, {}]);
+    let result = converter.rsc_element_to_html(&valid_namespace).await;
+    assert!(result.is_ok(), "Valid namespaced element should be accepted");
+
+    let invalid_space = serde_json::json!(["$", "div onclick", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_space).await;
+    assert!(result.is_err(), "Tag with space should be rejected");
+    assert!(
+        result.unwrap_err().to_string().contains("Invalid tag name"),
+        "Error should mention invalid tag"
+    );
+
+    let invalid_angle = serde_json::json!(["$", "div>script", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_angle).await;
+    if result.is_ok() {
+        panic!("Tag with angle bracket should be rejected, but got: {:?}", result.unwrap());
+    }
+    assert!(result.is_err(), "Tag with angle bracket should be rejected");
+
+    let invalid_quote = serde_json::json!(["$", "div\"onclick=\"alert(1)", null, {}]);
+    let result = converter.rsc_element_to_html(&invalid_quote).await;
+    assert!(result.is_err(), "Tag with quotes should be rejected");
+}
+
+#[tokio::test]
+async fn test_render_component_to_html_validates_tag_names() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:["$","div",null,{"class":"test"}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_ok(), "Valid tag 'div' should be accepted");
+
+    let rsc_data_invalid = r#"0:["$","div onclick",null,{}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data_invalid).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_err(), "Tag with space should be rejected");
+    assert!(
+        result.unwrap_err().to_string().contains("Invalid tag name"),
+        "Error should mention invalid tag"
+    );
+
+    let rsc_data_injection = r#"0:["$","div><script>alert(1)</script",null,{}]"#;
+    let rows = renderer.parse_rsc_wire_format(rsc_data_injection).unwrap();
+    let result = renderer.render_rsc_to_html_string(&rows).await;
+    assert!(result.is_err(), "Tag with injection attempt should be rejected");
+}
+
+#[tokio::test]
+async fn test_tag_validation_prevents_xss() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = Arc::new(RscHtmlRenderer::new(runtime));
+    let converter = RscToHtmlConverter::new(renderer);
+
+    let xss_attempts = vec![
+        "div onload=alert(1)",
+        "div>script",
+        "div style=xss:expression(alert(1))",
+        "div\nonclick=alert(1)",
+        "div'onclick='alert(1)",
+        "div\"onclick=\"alert(1)",
+    ];
+
+    for malicious_tag in xss_attempts {
+        let element = serde_json::json!(["$", malicious_tag, null, {}]);
+        let result = converter.rsc_element_to_html(&element).await;
+
+        assert!(result.is_err(), "Malicious tag '{}' should be rejected", malicious_tag);
+    }
 }
