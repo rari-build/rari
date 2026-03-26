@@ -1,5 +1,9 @@
 ## [create-rari-app@0.4.27] - 2026-03-24
 
+### 💼 Other
+
+- Create-rari-app@0.4.27
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(create-rari-app)* Replace vite with vite-plus, fixes #158
