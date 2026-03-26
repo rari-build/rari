@@ -1,7 +1,7 @@
 import type { LayoutProps, Metadata } from 'rari'
-import { ClientProviders } from '@/components/ClientProviders'
 import Footer from '@/components/Footer'
 import { PostHogPageView } from '@/components/PostHogPageView'
+import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
 
 interface NpmPackageInfo {
@@ -35,7 +35,7 @@ async function fetchRariVersion(): Promise<string> {
 export default async function RootLayout({ children, pathname }: LayoutProps) {
   const version = await fetchRariVersion()
   return (
-    <ClientProviders>
+    <Providers>
       <PostHogPageView pathname={pathname} />
       <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
         <div className="flex min-h-screen">
@@ -48,7 +48,7 @@ export default async function RootLayout({ children, pathname }: LayoutProps) {
           </div>
         </div>
       </div>
-    </ClientProviders>
+    </Providers>
   )
 }
 
