@@ -3,7 +3,7 @@ export const description = 'Build and deploy your rari application to Railway, R
 
 <PageHeader title="Deploying" />
 
-rari applications run on a Rust server with an embedded V8 runtime. The deployment workflow is straightforward: build your app, then start the server.
+Applications run on a Rust server with an embedded V8 runtime. The deployment workflow is straightforward: build your app, then start the server.
 
 ## Building for Production
 
@@ -74,11 +74,11 @@ If you have an existing `start` script, it's backed up to `start:original`.
 4. Railway detects the configuration and deploys automatically
 5. Generate a domain under Settings → Networking
 
-rari auto-detects Railway via the `RAILWAY_ENVIRONMENT` environment variable and binds to `0.0.0.0` with the platform-assigned `PORT`.
+Railway is auto-detected via the `RAILWAY_ENVIRONMENT` environment variable, and the server binds to `0.0.0.0` with the platform-assigned `PORT`.
 
 ### System Dependencies
 
-rari's Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
+The Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
 
 | Variable | Value |
 |---|---|
@@ -119,11 +119,11 @@ The same `package.json` changes apply as with Railway — `scripts.start`, `engi
 4. Render auto-detects the `render.yaml` configuration
 5. Click "Create Web Service"
 
-rari auto-detects Render via the `RENDER` environment variable and binds to `0.0.0.0` with the platform-assigned `PORT`.
+Render is auto-detected via the `RENDER` environment variable, and the server binds to `0.0.0.0` with the platform-assigned `PORT`.
 
 ### System Dependencies
 
-rari's Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency — so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
+The Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency — so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
 
 ## Self-Hosting
 
@@ -168,7 +168,7 @@ EXPOSE 3000
 CMD ["npm", "start"]
 `}</CodeBlock>
 
-rari binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.
+The server binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.
 
 ## Related
 

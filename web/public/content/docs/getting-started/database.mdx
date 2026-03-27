@@ -3,9 +3,9 @@ export const description = "Connect to databases in rari using Server Components
 
 <PageHeader title="Database" />
 
-rari's architecture makes database integration fast and straightforward. Server Components run on the server by default, giving you direct access to databases without API routes. Server Actions let you mutate data from the client while keeping your database credentials secure.
+Database integration is fast and straightforward. Server Components run on the server by default, giving you direct access to databases without API routes. Server Actions let you mutate data from the client while keeping your database credentials secure.
 
-## Why rari for Databases
+## Why This Approach Works
 
 rari's Rust runtime delivers exceptional performance for database-heavy applications:
 
@@ -38,7 +38,7 @@ rari's Rust runtime delivers exceptional performance for database-heavy applicat
 
 ## Database Clients
 
-rari supports any Node.js-compatible database client. Here are the most popular options:
+Any Node.js-compatible database client works here. Here are the most popular options:
 
 ### Postgres Clients
 
@@ -446,7 +446,7 @@ export async function POST(request: Request) {
 
 ## Request Deduplication
 
-rari automatically deduplicates identical `fetch()` requests made during the same render pass. If multiple components fetch the same URL with the same options, only one network request is made.
+Identical `fetch()` requests made during the same render pass are automatically deduplicated. If multiple components fetch the same URL with the same options, only one network request is made.
 
 For database queries and other async operations, use `React.cache()` to manually deduplicate calls:
 
@@ -690,7 +690,7 @@ if (duration > 100) {
 
 ## Other Databases
 
-rari works with any database that has a Node.js client:
+Any database with a Node.js client will work:
 
 ### MySQL
 

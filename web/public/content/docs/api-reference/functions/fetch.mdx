@@ -3,7 +3,7 @@ export const description = 'Enhanced fetch function with automatic request dedup
 
 <PageHeader title="fetch" />
 
-rari extends the native Web `fetch()` API with automatic request deduplication and caching. Use it in Server Components and Route Handlers to fetch data efficiently with built-in performance optimizations powered by Rust.
+The native Web `fetch()` API is extended with automatic request deduplication and caching. Use it in Server Components and Route Handlers to fetch data efficiently with built-in performance optimizations powered by Rust.
 
 ## Import
 
@@ -60,7 +60,7 @@ Standard fetch options plus rari-specific caching options.
 
 ## Caching Options
 
-rari extends the standard `fetch()` options with caching controls:
+The standard `fetch()` options are extended with caching controls:
 
 ### cache
 
@@ -118,7 +118,7 @@ await fetch('https://api.example.com/posts', {
 
 ## Request Deduplication
 
-rari automatically deduplicates identical requests made during the same render pass. If multiple components request the same URL with the same options, only one network request is made.
+Identical requests made during the same render pass are automatically deduplicated. If multiple components request the same URL with the same options, only one network request is made.
 
 <CodeBlock filename="src/app/page.tsx" language="tsx">{`async function UserProfile({ userId }: { userId: string }) {
   // This fetch is deduplicated if called multiple times
@@ -403,7 +403,7 @@ After the revalidation period expires, the next request will fetch fresh data.
 
 ### Cache Storage
 
-rari uses a two-tier caching system:
+A two-tier caching system is used:
 
 1. **Request deduplication**: Identical requests during the same render are deduplicated in memory
 2. **LRU cache**: Successful responses are stored in a global LRU cache (max 1000 entries) with TTL support
