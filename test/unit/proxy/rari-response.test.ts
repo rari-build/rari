@@ -184,11 +184,11 @@ describe('RariResponse', () => {
     it('should generate Set-Cookie header with sameSite', () => {
       const res = new RariResponse()
 
-      res.cookies.set('csrf', 'token', { sameSite: 'strict' })
+      res.cookies.set('session', 'token', { sameSite: 'strict' })
 
       const headers = (res.cookies as any).toSetCookieHeaders()
 
-      expect(headers[0]).toBe('csrf=token; SameSite=strict')
+      expect(headers[0]).toBe('session=token; SameSite=strict')
     })
 
     it('should generate Set-Cookie header with all options', () => {

@@ -1,6 +1,5 @@
 pub mod api_handler;
 pub mod app_handler;
-pub mod csrf_handler;
 pub mod hmr_handlers;
 pub mod og_handler;
 pub mod revalidate_handlers;

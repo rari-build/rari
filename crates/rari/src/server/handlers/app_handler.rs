@@ -466,7 +466,6 @@ async fn render_streaming_response(
         Arc::new(RscHtmlRenderer::new(Arc::clone(&renderer.runtime)))
     };
 
-    let csrf_token = state.csrf_manager.as_ref().map(|m| m.generate_token());
     let asset_tags = asset_links.as_deref().unwrap_or("");
 
     let title = context
@@ -476,34 +475,8 @@ async fn render_streaming_response(
         .map(|t| t.as_str())
         .unwrap_or("rari App");
 
-    let base_shell = if let Some(csrf_token) = &csrf_token {
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-    <meta name="csrf-token" content="{}" />
-    {}
-    <style>
-        .rari-loading {{
-            animation: rari-pulse 1.5s ease-in-out infinite;
-        }}
-        @keyframes rari-pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.5; }}
-        }}
-    </style>
-</head>
-<body>
-<div id="root">
-"#,
-            title, csrf_token, asset_tags
-        )
-    } else {
-        format!(
-            r#"<!DOCTYPE html>
+    let base_shell = format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -523,9 +496,8 @@ async fn render_streaming_response(
 <body>
 <div id="root">
 "#,
-            title, asset_tags
-        )
-    };
+        title, asset_tags
+    );
 
     let base_shell = if let Some(ref metadata) = context.metadata {
         inject_metadata(&base_shell, metadata, state.image_optimizer.as_deref())
@@ -535,7 +507,6 @@ async fn render_streaming_response(
 
     let converter = Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
         base_shell,
-        None,
         body_scripts,
         html_renderer,
     )));
@@ -1219,13 +1190,9 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let converter =
-                        Arc::new(tokio::sync::Mutex::new(RscToHtmlConverter::with_custom_shell(
-                            base_shell,
-                            None,
-                            None,
-                            html_renderer,
-                        )));
+                    let converter = Arc::new(tokio::sync::Mutex::new(
+                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
+                    ));
 
                     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
                     let should_continue_clone = should_continue.clone();

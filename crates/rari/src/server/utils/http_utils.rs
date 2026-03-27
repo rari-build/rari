@@ -130,7 +130,7 @@ pub fn add_api_cors_headers(
         headers.insert(
             "Access-Control-Allow-Headers",
             HeaderValue::from_static(
-                "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming, X-CSRF-Token",
+                "Content-Type, Authorization, Accept, Origin, X-Requested-With, Cache-Control, X-RSC-Streaming",
             ),
         );
     }
@@ -300,17 +300,6 @@ mod tests {
         add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, true, 86400);
 
         assert_eq!(headers.get("Access-Control-Allow-Origin").unwrap(), "https://existing.com");
-    }
-
-    #[test]
-    fn test_add_api_cors_headers_includes_csrf_token() {
-        let mut headers = axum::http::HeaderMap::new();
-        let allowed = vec!["https://example.com".to_string()];
-
-        add_api_cors_headers(&mut headers, Some("https://example.com"), &allowed, true, 86400);
-
-        let allow_headers = headers.get("Access-Control-Allow-Headers").unwrap().to_str().unwrap();
-        assert!(allow_headers.contains("X-CSRF-Token"));
     }
 
     #[test]

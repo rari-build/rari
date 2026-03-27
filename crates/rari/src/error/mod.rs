@@ -1006,14 +1006,13 @@ mod tests {
 
     #[test]
     fn test_to_json_response_forbidden() {
-        let error = RariError::forbidden("CSRF token validation failed: invalid signature");
+        let error = RariError::forbidden("Access denied: invalid token");
         let json = error.to_json_response(false);
 
         assert_eq!(json["code"], "FORBIDDEN");
         assert_eq!(json["status"], 403);
         assert_eq!(json["error"], "Access forbidden");
-        assert!(!json["error"].as_str().unwrap().contains("CSRF"));
-        assert!(!json["error"].as_str().unwrap().contains("signature"));
+        assert!(!json["error"].as_str().unwrap().contains("token"));
     }
 
     #[test]

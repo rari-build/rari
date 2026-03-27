@@ -1781,35 +1781,37 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
       if (entry.name.endsWith('.d.ts'))
         continue
 
-      if (builder.isOnlyImportedByClientComponents(fullPath))
-        continue
-
       try {
+        const code = fs.readFileSync(fullPath, 'utf-8')
+        const lines = code.split('\n')
+        let hasServerDirective = false
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
+            continue
+          if (
+            trimmed === '\'use server\''
+            || trimmed === '"use server"'
+            || trimmed === '\'use server\';'
+            || trimmed === '"use server";'
+          ) {
+            hasServerDirective = true
+            break
+          }
+          if (trimmed)
+            break
+        }
+
+        if (hasServerDirective) {
+          builder.addServerComponent(fullPath)
+          continue
+        }
+
+        if (builder.isOnlyImportedByClientComponents(fullPath))
+          continue
+
         if (builder.isServerComponent(fullPath)) {
           builder.addServerComponent(fullPath)
-        }
-        else {
-          const code = fs.readFileSync(fullPath, 'utf-8')
-          const lines = code.split('\n')
-          let hasServerDirective = false
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-              continue
-            if (
-              trimmed === '\'use server\''
-              || trimmed === '"use server"'
-              || trimmed === '\'use server\';'
-              || trimmed === '"use server";'
-            ) {
-              hasServerDirective = true
-              break
-            }
-            if (trimmed)
-              break
-          }
-          if (hasServerDirective)
-            builder.addServerComponent(fullPath)
         }
       }
       catch (error) {

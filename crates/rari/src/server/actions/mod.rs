@@ -101,33 +101,12 @@ pub async fn handle_server_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    if let Some(csrf_manager) = &state.csrf_manager {
-        if let Some(csrf_token) = headers.get("x-csrf-token") {
-            if let Ok(token_str) = csrf_token.to_str() {
-                if let Err(e) = csrf_manager.validate_token(token_str) {
-                    error!("CSRF token validation failed: {}", e);
-                    let mut response = Json(ServerActionResponse {
-                        success: false,
-                        result: None,
-                        error: Some("CSRF token validation failed".to_string()),
-                        redirect: None,
-                    })
-                    .into_response();
-                    response.headers_mut().insert(
-                        header::CACHE_CONTROL,
-                        "no-store, no-cache, must-revalidate, private"
-                            .parse()
-                            .expect("Valid cache-control header"),
-                    );
-                    *response.status_mut() = StatusCode::FORBIDDEN;
-                    return Ok(response);
-                }
-            } else {
-                error!("Invalid CSRF token header format");
-                return Err(StatusCode::FORBIDDEN);
-            }
-        } else {
-            error!("Missing CSRF token in server action request");
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        let allowed_origins = state.config.cors_config().allowed_origins;
+        if !allowed_origins.is_empty()
+            && !crate::server::utils::http_utils::is_origin_allowed(origin, &allowed_origins)
+        {
+            error!("Invalid origin for server action: {}", origin);
             return Err(StatusCode::FORBIDDEN);
         }
     }
@@ -285,6 +264,16 @@ pub async fn handle_form_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        let allowed_origins = state.config.cors_config().allowed_origins;
+        if !allowed_origins.is_empty()
+            && !crate::server::utils::http_utils::is_origin_allowed(origin, &allowed_origins)
+        {
+            error!("Invalid origin for form action: {}", origin);
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     let form_data = match parse_form_data(&body) {
         Ok(data) => data,
         Err(e) => {
@@ -292,18 +281,6 @@ pub async fn handle_form_action(
             return Err(StatusCode::BAD_REQUEST);
         }
     };
-
-    if let Some(csrf_manager) = &state.csrf_manager {
-        let csrf_token = form_data.get("__csrf_token").ok_or_else(|| {
-            error!("Missing CSRF token in form action");
-            StatusCode::FORBIDDEN
-        })?;
-
-        if let Err(e) = csrf_manager.validate_token(csrf_token) {
-            error!("CSRF token validation failed: {}", e);
-            return Err(StatusCode::FORBIDDEN);
-        }
-    }
 
     let action_id = form_data.get("__action_id").ok_or(StatusCode::BAD_REQUEST)?;
     let export_name = form_data.get("__export_name").ok_or(StatusCode::BAD_REQUEST)?;

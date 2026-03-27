@@ -82,7 +82,6 @@ impl IpRateLimiter {
 #[derive(Clone)]
 pub struct EndpointRateLimiters {
     pub og_generation: Arc<IpRateLimiter>,
-    pub csrf_token: Arc<IpRateLimiter>,
     pub image_optimization: Arc<IpRateLimiter>,
 }
 
@@ -95,13 +94,11 @@ impl EndpointRateLimiters {
         if is_production {
             Self {
                 og_generation: Arc::new(IpRateLimiter::with_capacity(100, 60, 10_000)),
-                csrf_token: Arc::new(IpRateLimiter::with_capacity(300, 60, 10_000)),
                 image_optimization: Arc::new(IpRateLimiter::with_capacity(200, 60, 10_000)),
             }
         } else {
             Self {
                 og_generation: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
-                csrf_token: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
                 image_optimization: Arc::new(IpRateLimiter::with_capacity(1000, 60, 100_000)),
             }
         }
@@ -109,7 +106,6 @@ impl EndpointRateLimiters {
 
     pub fn start_cleanup_tasks(&self) {
         Arc::clone(&self.og_generation).start_cleanup_task();
-        Arc::clone(&self.csrf_token).start_cleanup_task();
         Arc::clone(&self.image_optimization).start_cleanup_task();
     }
 }
@@ -175,7 +171,6 @@ mod tests {
         let limiters = EndpointRateLimiters::new();
 
         assert!(limiters.og_generation.check("test").is_ok());
-        assert!(limiters.csrf_token.check("test").is_ok());
     }
 
     #[test]
@@ -245,7 +240,6 @@ mod tests {
         let limiters = EndpointRateLimiters::for_environment(true);
 
         assert_eq!(limiters.og_generation.capacity(), 10_000);
-        assert_eq!(limiters.csrf_token.capacity(), 10_000);
         assert_eq!(limiters.image_optimization.capacity(), 10_000);
     }
 
@@ -254,7 +248,6 @@ mod tests {
         let limiters = EndpointRateLimiters::for_environment(false);
 
         assert_eq!(limiters.og_generation.capacity(), 100_000);
-        assert_eq!(limiters.csrf_token.capacity(), 100_000);
         assert_eq!(limiters.image_optimization.capacity(), 100_000);
     }
 }

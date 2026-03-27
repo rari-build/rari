@@ -1,5 +1,3 @@
-import './csrf'
-
 export interface ServerActionResponse {
   success: boolean
   result?: any
@@ -32,11 +30,7 @@ export function createServerReference(
         return arg
       })
 
-      const fetchFn = typeof window !== 'undefined' && (window as any).fetchWithCsrf
-        ? (window as any).fetchWithCsrf
-        : fetch
-
-      const response = await fetchFn('/_rari/action', {
+      const response = await fetch('/_rari/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,22 +159,6 @@ export function createFormAction(
       exportNameInput.name = '__export_name'
       exportNameInput.value = exportName
       form.appendChild(exportNameInput)
-
-      if (typeof window !== 'undefined' && (window as any).getCsrfToken) {
-        const csrfToken = (window as any).getCsrfToken()
-        /* v8 ignore start - CSRF token handling */
-        if (csrfToken) {
-          let csrfInput = form.querySelector('input[name="__csrf_token"]') as HTMLInputElement
-          if (!csrfInput) {
-            csrfInput = document.createElement('input')
-            csrfInput.type = 'hidden'
-            csrfInput.name = '__csrf_token'
-            form.appendChild(csrfInput)
-          }
-          csrfInput.value = csrfToken
-        }
-        /* v8 ignore stop */
-      }
 
       form.action = '/_rari/form-action'
       form.method = 'POST'

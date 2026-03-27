@@ -13,6 +13,7 @@ import Github from './icons/Github'
 import Heart from './icons/Heart'
 import Menu from './icons/Menu'
 import Rari from './icons/Rari'
+import SearchBar from './SearchBar'
 
 interface SidebarProps {
   version: string
@@ -523,6 +524,10 @@ export default function Sidebar({ version }: SidebarProps) {
               v
               {version}
             </div>
+          </div>
+
+          <div className="mb-6">
+            <SearchBar />
           </div>
 
           <ul className="space-y-1">
