@@ -2169,7 +2169,7 @@ export class ErrorBoundaryWrapper extends React.Component {
 
 export function defineRariConfig(
   config: UserConfig & { plugins?: Plugin[] },
-): UserConfig {
+): any {
   return {
     plugins: [rari(), ...(config.plugins || [])],
     ...config,

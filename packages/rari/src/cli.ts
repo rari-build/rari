@@ -51,6 +51,25 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
+function walkUpDirectories<T>(callback: (dir: string) => T | null, maxIterations = 20): T | null {
+  let currentDir = process.cwd()
+  const root = resolve('/')
+  let iterations = 0
+
+  while (currentDir !== root && iterations < maxIterations) {
+    iterations++
+    const result = callback(currentDir)
+    if (result !== null)
+      return result
+    const parentDir = resolve(currentDir, '..')
+    if (parentDir === currentDir)
+      break
+    currentDir = parentDir
+  }
+
+  return null
+}
+
 function checkLockFiles(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
   if (existsSync(resolve(dir, 'pnpm-lock.yaml')))
     return 'pnpm'
@@ -86,29 +105,7 @@ function checkPackageJson(dir: string): 'pnpm' | 'yarn' | 'bun' | 'npm' | null {
 }
 
 function detectPackageManager(): 'pnpm' | 'yarn' | 'bun' | 'npm' {
-  let currentDir = process.cwd()
-  const root = resolve('/')
-  let iterations = 0
-  const maxIterations = 20
-
-  while (currentDir !== root && iterations < maxIterations) {
-    iterations++
-
-    const lockFileResult = checkLockFiles(currentDir)
-    if (lockFileResult)
-      return lockFileResult
-
-    const packageJsonResult = checkPackageJson(currentDir)
-    if (packageJsonResult)
-      return packageJsonResult
-
-    const parentDir = resolve(currentDir, '..')
-    if (parentDir === currentDir)
-      break
-    currentDir = parentDir
-  }
-
-  return 'npm'
+  return walkUpDirectories(dir => checkLockFiles(dir) ?? checkPackageJson(dir)) ?? 'npm'
 }
 
 function getPackageExecutor(): string {
@@ -125,6 +122,23 @@ function getPackageExecutor(): string {
     default:
       return isWindows ? 'npx.cmd' : 'npx'
   }
+}
+
+function detectViteBin(): 'vp' | 'vite' {
+  return walkUpDirectories((dir) => {
+    try {
+      const pkgPath = resolve(dir, 'package.json')
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+        if (deps['vite-plus'])
+          return 'vp'
+      }
+    }
+    catch {}
+
+    return null
+  }) ?? 'vite'
 }
 
 function crossPlatformSpawn(command: string, args: string[], options: SpawnOptions = {}) {
@@ -230,7 +244,7 @@ async function runViteBuild() {
   })
 
   logInfo('Building for production...')
-  const buildProcess = crossPlatformSpawn('npx', ['vp', 'build'], {
+  const buildProcess = crossPlatformSpawn('npx', [detectViteBin(), 'build'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
@@ -297,12 +311,13 @@ async function runViteDev() {
   const { existsSync } = await import('node:fs')
   const { resolve } = await import('node:path')
 
+  const viteBin = detectViteBin()
   const distPath = resolve(process.cwd(), 'dist')
 
   if (!existsSync(distPath)) {
     logInfo('First run detected - building project...')
 
-    const buildProcess = crossPlatformSpawn('npx', ['vp', 'build', '--mode', 'development'], {
+    const buildProcess = crossPlatformSpawn('npx', [viteBin, 'build', '--mode', 'development'], {
       stdio: 'inherit',
       cwd: process.cwd(),
     })
@@ -322,8 +337,8 @@ async function runViteDev() {
     })
   }
 
-  logInfo('Starting Vite+ dev server...')
-  const viteProcess = crossPlatformSpawn('npx', ['vp', 'dev'], {
+  logInfo(`Starting Vite${viteBin === 'vp' ? '+' : ''} dev server...`)
+  const viteProcess = crossPlatformSpawn('npx', [viteBin, 'dev'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   })

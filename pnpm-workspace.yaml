@@ -18,6 +18,7 @@ catalogs:
     posthog-js: ^1.364.4
   build:
     rolldown: ^1.0.0-rc.12
+    vite: ^8.0.3
     vite-plus: ^0.1.15
   cli:
     '@clack/prompts': ^1.1.0

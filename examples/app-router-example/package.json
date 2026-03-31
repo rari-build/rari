@@ -7,8 +7,6 @@
     "dev": "rari dev",
     "build": "rari build",
     "start": "rari start",
-    "lint": "vp lint",
-    "lint:fix": "vp lint --fix",
     "typecheck": "tsgo"
   },
   "dependencies": {
@@ -22,6 +20,6 @@
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
     "tailwindcss": "catalog:tailwind",
-    "vite-plus": "catalog:build"
+    "vite": "catalog:build"
   }
 }

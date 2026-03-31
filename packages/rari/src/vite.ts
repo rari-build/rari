@@ -1,3 +1,4 @@
+import { rari as _rari } from './vite/index'
 import './fetch-cache'
 
 export type {
@@ -85,4 +86,8 @@ export type {
   ServerSpamBlockerConfig,
 } from './types/server-config'
 
-export { defineRariConfig, defineRariOptions, rari } from './vite/index'
+export { defineRariConfig, defineRariOptions } from './vite/index'
+
+export function rari(options?: Parameters<typeof _rari>[0]): any[] {
+  return _rari(options)
+}
