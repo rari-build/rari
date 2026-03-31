@@ -85,19 +85,10 @@ impl StreamingRenderer {
 
         if let Some(resolver) = &self.promise_resolver {
             let pending_promises = partial_result.pending_promises.clone();
-
-            for (index, promise) in pending_promises.into_iter().enumerate() {
-                let resolver_clone = Arc::clone(resolver);
-                tokio::spawn(async move {
-                    // Small delay to ensure tasks start in document order
-                    // This ensures the first component's timer starts first
-                    if index > 0 {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(index as u64 * 10))
-                            .await;
-                    }
-                    resolver_clone.resolve_async(promise);
-                });
-            }
+            let resolver_clone = Arc::clone(resolver);
+            tokio::spawn(async move {
+                resolver_clone.resolve_all(pending_promises);
+            });
         }
 
         let chunk_sender_clone = chunk_sender.clone();

@@ -1,6 +1,6 @@
 use crate::error::RariError;
 use crate::runtime::runtime_factory::deno_runtime::DenoRuntime;
-use crate::runtime::runtime_factory::interface::JsRuntimeInterface;
+use crate::runtime::runtime_factory::interface::{AsyncBatchResult, JsRuntimeInterface};
 use rustc_hash::FxHashMap;
 use serde_json::Value as JsonValue;
 use std::future::Future;
@@ -66,6 +66,23 @@ impl JsRuntimeInterface for LazyRuntime {
                 .with_runtime(|runtime| runtime.execute_script(script_name, script_code))
                 .await?
                 .await
+        })
+    }
+
+    fn execute_script_batch(&self, scripts: Vec<(String, String)>) -> AsyncBatchResult {
+        let inner = self.inner.clone();
+        let env_vars = self.env_vars.clone();
+
+        Box::pin(async move {
+            let self_copy = LazyRuntime::new(inner, env_vars);
+            match self_copy.with_runtime(|runtime| runtime.execute_script_batch(scripts)).await {
+                Ok(fut) => fut.await,
+                Err(e) => {
+                    let (err_tx, err_rx) = mpsc::unbounded_channel();
+                    let _ = err_tx.send((0, Err(e)));
+                    err_rx
+                }
+            }
         })
     }
 

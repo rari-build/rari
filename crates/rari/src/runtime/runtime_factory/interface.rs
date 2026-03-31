@@ -4,12 +4,17 @@ use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 
+pub type BatchResultReceiver = mpsc::UnboundedReceiver<(usize, Result<JsonValue, RariError>)>;
+pub type AsyncBatchResult = Pin<Box<dyn Future<Output = BatchResultReceiver> + Send>>;
+
 pub trait JsRuntimeInterface: Send + Sync {
     fn execute_script(
         &self,
         script_name: String,
         script_code: String,
     ) -> Pin<Box<dyn Future<Output = Result<JsonValue, RariError>> + Send>>;
+
+    fn execute_script_batch(&self, scripts: Vec<(String, String)>) -> AsyncBatchResult;
 
     fn execute_function(
         &self,

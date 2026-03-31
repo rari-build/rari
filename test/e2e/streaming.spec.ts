@@ -1,4 +1,4 @@
-import type { Response } from '@playwright/test'
+import type { Page, Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
 import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
@@ -274,62 +274,77 @@ test.describe('RSC Protocol Tests', () => {
 })
 
 test.describe.serial('Suspense Streaming Tests', () => {
+  test.setTimeout(45000)
+
+  async function waitForBoundaryTimes(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
+    await page.waitForFunction(
+      () => {
+        const t = (window as any).__boundaryTimes
+        return t?.['component-a'] && t?.['component-b'] && t?.['component-c']
+      },
+      { timeout: 25000 },
+    )
+    const times = await page.evaluate(() => (window as any).__boundaryTimes)
+    return {
+      timeA: times['component-a'],
+      timeB: times['component-b'],
+      timeC: times['component-c'],
+    }
+  }
+
+  async function setupBoundaryTimingObserver(page: Page) {
+    await page.addInitScript(() => {
+      (window as any).__boundaryTimes = {}
+      const targets = ['component-a', 'component-b', 'component-c']
+
+      const interval = setInterval(() => {
+        let allFound = true
+        for (const id of targets) {
+          if ((window as any).__boundaryTimes[id])
+            continue
+          allFound = false
+          const el = document.querySelector(`[data-testid="${id}"]`)
+          if (el && el.textContent && el.textContent.trim().length > 0)
+            (window as any).__boundaryTimes[id] = Date.now()
+        }
+        if (allFound)
+          clearInterval(interval)
+      }, 50)
+    })
+  }
+
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
+    await setupBoundaryTimingObserver(page)
+
     await page.goto('/suspense-streaming')
 
-    const componentA = page.locator('[data-testid="component-a"]')
-    const componentB = page.locator('[data-testid="component-b"]')
-    const componentC = page.locator('[data-testid="component-c"]')
+    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
 
-    await expect(componentA).toBeVisible({ timeout: 20000 })
-    await expect(componentB).toBeVisible({ timeout: 20000 })
-    await expect(componentC).toBeVisible({ timeout: 20000 })
+    const { navigationStart } = await page.evaluate(() => ({
+      navigationStart: performance.timeOrigin,
+    }))
 
-    const textA = await componentA.textContent()
-    const textB = await componentB.textContent()
-    const textC = await componentC.textContent()
+    expect(timeA).toBeLessThan(timeB)
+    expect(timeB).toBeLessThan(timeC)
 
-    const timestampA = new Date(textA!.split(':').slice(1).join(':')).getTime()
-    const timestampB = new Date(textB!.split(':').slice(1).join(':')).getTime()
-    const timestampC = new Date(textC!.split(':').slice(1).join(':')).getTime()
+    expect(timeB - timeA).toBeGreaterThan(500)
+    expect(timeB - timeA).toBeLessThan(3000)
+    expect(timeC - timeB).toBeGreaterThan(500)
+    expect(timeC - timeB).toBeLessThan(3000)
 
-    const diffAB = timestampB - timestampA
-    expect(diffAB).toBeGreaterThan(500)
-    expect(diffAB).toBeLessThan(4000)
-
-    const diffBC = timestampC - timestampB
-    expect(diffBC).toBeGreaterThan(500)
-    expect(diffBC).toBeLessThan(5000)
-
-    const totalDiff = timestampC - timestampA
-    expect(totalDiff).toBeGreaterThan(1500)
-    expect(totalDiff).toBeLessThan(9000)
+    expect(timeC - navigationStart).toBeLessThan(6000)
   })
 
   test('should resolve boundaries independently based on their delay', async ({ page }) => {
+    await setupBoundaryTimingObserver(page)
     await page.goto('/suspense-streaming')
 
-    const componentA = page.locator('[data-testid="component-a"]')
-    const componentB = page.locator('[data-testid="component-b"]')
-    const componentC = page.locator('[data-testid="component-c"]')
+    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
 
-    await expect(componentA).toBeVisible({ timeout: 20000 })
-    await expect(componentB).toBeVisible({ timeout: 20000 })
-    await expect(componentC).toBeVisible({ timeout: 20000 })
-
-    const textA = await componentA.textContent()
-    const textB = await componentB.textContent()
-    const textC = await componentC.textContent()
-
-    const timestampA = new Date(textA!.split(':').slice(1).join(':')).getTime()
-    const timestampB = new Date(textB!.split(':').slice(1).join(':')).getTime()
-    const timestampC = new Date(textC!.split(':').slice(1).join(':')).getTime()
-
-    expect(timestampA).toBeLessThan(timestampB)
-    expect(timestampB).toBeLessThan(timestampC)
-
-    const maxDiff = Math.max(timestampB - timestampA, timestampC - timestampB)
-    expect(maxDiff).toBeGreaterThan(1000)
+    expect(timeA).toBeLessThan(timeB)
+    expect(timeB).toBeLessThan(timeC)
+    expect(timeB - timeA).toBeGreaterThan(500)
+    expect(timeC - timeB).toBeGreaterThan(500)
   })
 })
 

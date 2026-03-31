@@ -297,24 +297,22 @@ if (typeof window !== 'undefined') {
       const htmlContent = rscToHtml(content)
 
       if (htmlContent) {
-        requestAnimationFrame(() => {
-          const isInDocument = document.contains(boundaryElement)
+        const isInDocument = document.contains(boundaryElement)
 
-          if (isInDocument) {
-            boundaryElement.innerHTML = htmlContent
-            boundaryElement.classList.add('rari-boundary-resolved')
-          }
+        if (isInDocument) {
+          boundaryElement.innerHTML = htmlContent
+          boundaryElement.classList.add('rari-boundary-resolved')
+        }
 
-          window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
-            detail: {
-              boundaryId,
-              rscRow,
-              rowId,
-              element: boundaryElement,
-              wasAttached: isInDocument,
-            },
-          }))
-        })
+        window.dispatchEvent(new CustomEvent('rari:boundary-resolved', {
+          detail: {
+            boundaryId,
+            rscRow,
+            rowId,
+            element: boundaryElement,
+            wasAttached: isInDocument,
+          },
+        }))
       }
     }
     catch (e) {
