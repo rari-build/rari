@@ -7,7 +7,15 @@ import { preloadComponentsFromModules } from './shared/preload-components'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
+const ROW_ID_REGEX = /^\d+$/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const id = setTimeout(resolve, ms)
+    void id
+  })
+}
 const SUSPENSE_TTL_MS = 30000
 const CLEANUP_INTERVAL_MS = SUSPENSE_TTL_MS
 
@@ -134,6 +142,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     typeof window !== 'undefined' && window.location.hash.length > 0,
   )
   const fallbackKeyCounterRef = useRef<number>(0)
+  const hasRenderedInitialShellRef = useRef<boolean>(false)
+  const hasRenderedFinalRef = useRef<boolean>(false)
+  const rowProcessingRef = useRef<Promise<void>>(Promise.resolve())
+  const isNavigatingRef = useRef<boolean>(false)
+  const isInitialPageLoadRef = useRef<boolean>(!!initialPayload)
   const MAX_RETRIES = 3
 
   useEffect(() => {
@@ -807,8 +820,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const detail = customEvent.detail
 
       currentNavigationIdRef.current = detail.navigationId
-      streamingRowsRef.current = null
       shouldScrollToHashRef.current = true
+
+      if (!detail.isStreaming)
+        streamingRowsRef.current = null
+
       clearAllSuspendingPromises()
 
       scrollPositionRef.current = {
@@ -826,7 +842,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             resetFailureTracking()
           }
           else if (detail.isStreaming) {
-            streamingRowsRef.current = []
+            if (currentNavigationIdRef.current === detail.navigationId) {
+              setHmrError(null)
+              if (onNavigateRef.current)
+                onNavigateRef.current(detail)
+            }
+            isNavigatingRef.current = false
+            return
           }
           else {
             await refetchRscPayloadRef.current!(
@@ -918,6 +940,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
+    const handleNavigationStart = (event: Event) => {
+      const customEvent = event as CustomEvent<{ navigationId: number, targetPath: string }>
+      streamingRowsRef.current = []
+      currentNavigationIdRef.current = customEvent.detail.navigationId
+      hasRenderedInitialShellRef.current = false
+      hasRenderedFinalRef.current = false
+      rowProcessingRef.current = Promise.resolve()
+      isNavigatingRef.current = true
+      isInitialPageLoadRef.current = false
+    }
+
     const handleManifestUpdated = async () => {
       try {
         await refetchRscPayloadRef.current!()
@@ -931,7 +964,131 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
-    const handleRscRow = async (event: Event) => {
+    const processRows = async () => {
+      if (!streamingRowsRef.current || streamingRowsRef.current.length === 0)
+        return
+
+      if (isInitialPageLoadRef.current)
+        return
+
+      const navId = currentNavigationIdRef.current
+      const rows = [...streamingRowsRef.current]
+
+      const hasShellContent = rows.some((r) => {
+        const ci = r.indexOf(':')
+        const id = ci > 0 ? r.substring(0, ci).trim() : ''
+        const content = ci > 0 ? r.substring(ci + 1) : ''
+        return ROW_ID_REGEX.test(id) && content.startsWith('[')
+      })
+
+      const hasPageContent = rows.some((r) => {
+        const ci = r.indexOf(':')
+        const id = ci > 0 ? r.substring(0, ci).trim() : ''
+        const content = ci > 0 ? r.substring(ci + 1) : ''
+        if (!ROW_ID_REGEX.test(id) || !content.startsWith('['))
+          return false
+
+        const isReferencedByShell = rows.some((shellRow) => {
+          const sci = shellRow.indexOf(':')
+          const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
+          return shellContent.includes(`"$L${id}"`) || shellContent.includes(`$L${id}`)
+        })
+        return isReferencedByShell
+      })
+
+      if (!hasShellContent && !hasPageContent)
+        return
+
+      if (!hasRenderedInitialShellRef.current && hasShellContent && !hasPageContent) {
+        hasRenderedInitialShellRef.current = true
+
+        const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
+
+        if (!hasSuspenseBoundary) {
+          hasRenderedInitialShellRef.current = true
+        }
+        else {
+          const shellRows = rows.filter((r) => {
+            const ci = r.indexOf(':')
+            const id = ci > 0 ? r.substring(0, ci).trim() : ''
+            return !hasPageContent || !rows.some(sr => sr.includes(`"$L${id}"`))
+          })
+          try {
+            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false)
+            if (currentNavigationIdRef.current === navId) {
+              setRscPayload(shellPayload)
+              setRenderKey(prev => prev + 1)
+            }
+          }
+          catch (error) {
+            console.error('[rari] AppRouter: Failed to parse shell:', error)
+          }
+
+          return
+        }
+      }
+
+      const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
+      if (!hasPageContent && hasSuspenseBoundary)
+        return
+
+      if (hasRenderedFinalRef.current)
+        return
+
+      hasRenderedInitialShellRef.current = true
+
+      try {
+        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false)
+
+        if (hasSuspenseBoundary || hasPageContent) {
+          let attempts = 0
+          const maxAttempts = 20
+          let allModulesLoaded = false
+
+          while (attempts < maxAttempts) {
+            const clientComponents = (globalThis as any)['~clientComponents'] || {}
+            const pendingLoads = Object.values(clientComponents)
+              .filter((comp: any) => comp.loading && comp.loadPromise)
+              .map((comp: any) => comp.loadPromise)
+
+            if (pendingLoads.length === 0) {
+              allModulesLoaded = true
+              break
+            }
+
+            try {
+              await Promise.race([Promise.all(pendingLoads), sleep(50)])
+            }
+            catch {}
+
+            await sleep(10)
+            attempts++
+          }
+
+          if (!allModulesLoaded)
+            console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
+        }
+
+        if (currentNavigationIdRef.current !== navId)
+          return
+
+        if (hasRenderedFinalRef.current)
+          return
+
+        const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
+        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
+
+        hasRenderedFinalRef.current = true
+        setRscPayload(parsedPayload)
+        setRenderKey(prev => prev + 1)
+        streamingRowsRef.current = null
+      }
+      catch (error) {
+        console.error('[rari] AppRouter: Failed to parse streaming RSC row:', error)
+      }
+    }
+
+    const handleRscRow = (event: Event) => {
       const customEvent = event as CustomEvent<{ rscRow: string }>
       const row = customEvent.detail.rscRow
 
@@ -939,31 +1096,18 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         return
 
       if (!streamingRowsRef.current)
-        streamingRowsRef.current = []
+        return
+
+      if (row.trim() === 'STREAM_COMPLETE') {
+        rowProcessingRef.current = rowProcessingRef.current.then(() => processRows())
+        return
+      }
 
       streamingRowsRef.current.push(row)
-
-      try {
-        const wireFormat = streamingRowsRef.current.join('\n')
-        const parsedPayload = await parseRscWireFormatRef.current!(wireFormat, false)
-        const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
-
-        if (isInitialShell) {
-          setRscPayload(parsedPayload)
-          setRenderKey(prev => prev + 1)
-        }
-        else {
-          startTransition(() => {
-            setRscPayload(parsedPayload)
-            setRenderKey(prev => prev + 1)
-          })
-        }
-      }
-      catch (error) {
-        console.error('[rari] AppRouter: Failed to parse streaming RSC row:', error)
-      }
+      rowProcessingRef.current = rowProcessingRef.current.then(() => processRows())
     }
 
+    window.addEventListener('rari:navigation-start', handleNavigationStart)
     window.addEventListener('rari:navigate', handleNavigate)
     window.addEventListener('rari:app-router-rerender', handleAppRouterRerender)
     window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
@@ -973,6 +1117,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return () => {
       clearInterval(cleanupInterval)
       clearAllSuspendingPromises()
+      window.removeEventListener('rari:navigation-start', handleNavigationStart)
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)

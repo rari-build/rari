@@ -205,9 +205,26 @@ pub async fn handle_server_action(
         }
     };
 
+    let cookie_header =
+        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
+            "/_rari/action".to_string(),
+        )
+        .with_cookies(cookie_header),
+    );
+
     let renderer = state.renderer.lock().await;
+
+    if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
+        error!("Failed to set request context for server action: {}", e);
+    }
+
     let result =
         renderer.execute_server_function(&request.id, &request.export_name, &sanitized_args).await;
+
+    let _ = renderer.runtime.clear_request_context().await;
 
     match result {
         Ok(value) => {
@@ -237,6 +254,16 @@ pub async fn handle_server_action(
                     .parse()
                     .expect("Valid cache-control header"),
             );
+
+            for entry in request_context.pending_cookies.iter() {
+                let cookie = entry.value();
+                if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
+                    && let Ok(header_value) = set_cookie_value.parse()
+                {
+                    response.headers_mut().append(header::SET_COOKIE, header_value);
+                }
+            }
+
             Ok(response)
         }
         Err(e) => {
@@ -606,4 +633,38 @@ pub(crate) fn is_reserved_export_name(name: &str) -> bool {
             | "@@iterator"
             | "@@toStringTag"
     )
+}
+
+fn build_set_cookie_header(
+    cookie: &crate::server::middleware::request_context::PendingCookie,
+) -> Result<String, ()> {
+    let mut header = format!("{}={}", cookie.name, cookie.value);
+    if let Some(path) = &cookie.path {
+        header.push_str(&format!("; Path={}", path));
+    }
+    if let Some(domain) = &cookie.domain {
+        header.push_str(&format!("; Domain={}", domain));
+    }
+    if let Some(expires) = &cookie.expires {
+        header.push_str(&format!("; Expires={}", expires));
+    }
+    if let Some(max_age) = cookie.max_age {
+        header.push_str(&format!("; Max-Age={}", max_age));
+    }
+    if cookie.http_only {
+        header.push_str("; HttpOnly");
+    }
+    if cookie.secure {
+        header.push_str("; Secure");
+    }
+    if let Some(same_site) = &cookie.same_site {
+        header.push_str(&format!("; SameSite={}", same_site));
+    }
+    if let Some(priority) = &cookie.priority {
+        header.push_str(&format!("; Priority={}", priority));
+    }
+    if cookie.partitioned {
+        header.push_str("; Partitioned");
+    }
+    Ok(header)
 }

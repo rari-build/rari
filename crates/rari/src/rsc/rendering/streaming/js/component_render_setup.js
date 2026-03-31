@@ -4,6 +4,21 @@ const LOADING_PATH_REGEX = /\/[^/]+$/
 
 if (!globalThis['~render'])
   globalThis['~render'] = {}
+
+function registerBoundary(id, fallback, parentId) {
+  if (!globalThis['~suspense'])
+    globalThis['~suspense'] = {}
+  if (!globalThis['~suspense'].discoveredBoundaries)
+    globalThis['~suspense'].discoveredBoundaries = []
+  if (globalThis['~suspense'].discoveredBoundaries.some(b => b.id === id))
+    return
+  globalThis['~suspense'].discoveredBoundaries.push({
+    id,
+    fallback,
+    parentId,
+  })
+}
+
 globalThis['~render'].componentAsync = async function () {
   try {
     let Component = (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}']?.default)
@@ -53,15 +68,8 @@ globalThis['~render'].componentAsync = async function () {
             globalThis['~suspense'].currentBoundaryId = boundaryId
 
             const safeFallback = props?.fallback || null
-            const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-            if (!globalThis['~suspense'].discoveredBoundaries)
-              globalThis['~suspense'].discoveredBoundaries = []
-            globalThis['~suspense'].discoveredBoundaries.push({
-              id: boundaryId,
-              fallback: serializableFallback,
-              parentId: previousBoundaryId,
-            })
+            registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
             return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId }, ...children)
@@ -76,8 +84,8 @@ globalThis['~render'].componentAsync = async function () {
         || (Component.toString && Component.toString().trim().startsWith('async'))
 
       if (isAsyncFunction) {
-        const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-        const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const boundaryId = globalThis['~suspense']?.currentBoundaryId || 'root_boundary'
+        const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
         let loadingComponent = null
         const componentPath = '{component_id}'
@@ -125,13 +133,7 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        if (!globalThis['~suspense'].discoveredBoundaries)
-          globalThis['~suspense'].discoveredBoundaries = []
-        globalThis['~suspense'].discoveredBoundaries.push({
-          id: boundaryId,
-          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
-          parentId: null,
-        })
+        registerBoundary(boundaryId, fallbackContent, null)
 
         if (!globalThis['~suspense'].pendingPromises)
           globalThis['~suspense'].pendingPromises = []
@@ -173,15 +175,6 @@ globalThis['~render'].componentAsync = async function () {
           globalThis['~render'].streamingResult = initialResult
         }
         globalThis['~render'].initialComplete = true
-
-        globalThis['~render'].deferredAsyncComponents = globalThis['~render'].deferredAsyncComponents || []
-        globalThis['~render'].deferredAsyncComponents.push({
-          component: Component,
-          props,
-          promiseId,
-          boundaryId,
-          componentPath: '{component_id}',
-        })
 
         return
       }
@@ -242,12 +235,7 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        globalThis['~suspense'].discoveredBoundaries = globalThis['~suspense'].discoveredBoundaries || []
-        globalThis['~suspense'].discoveredBoundaries.push({
-          id: boundaryId,
-          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
-          parentId: null,
-        })
+        registerBoundary(boundaryId, fallbackContent, null)
 
         element = fallbackContent
 
@@ -306,13 +294,8 @@ globalThis['~render'].componentAsync = async function () {
           globalThis['~suspense'].currentBoundaryId = boundaryId
 
           const safeFallback = el.props.fallback || null
-          const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-          globalThis['~suspense'].discoveredBoundaries.push({
-            id: boundaryId,
-            fallback: serializableFallback,
-            parentId: previousBoundaryId,
-          })
+          registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
           const processedChildren = el.children.map((child) => {
             try {

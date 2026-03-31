@@ -202,6 +202,53 @@ fn copy_binary_to_platform_package(
         let mut perms = fs::metadata(&dest_path)?.permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&dest_path, perms)?;
+
+        if target_info.platform.starts_with("darwin") {
+            match dest_path.to_str() {
+                Some(path_str) => {
+                    let sign_result =
+                        std::process::Command::new("codesign").args(["-s", "-", path_str]).output();
+                    match sign_result {
+                        Ok(output) if output.status.success() => {
+                            log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
+                        }
+                        Ok(output) => {
+                            log_warning(&format!(
+                                "codesign failed: {}",
+                                String::from_utf8_lossy(&output.stderr)
+                            ));
+                        }
+                        Err(e) => {
+                            log_warning(&format!("codesign not available: {}", e));
+                        }
+                    }
+                }
+                None => {
+                    log_warning(&format!(
+                        "Skipping codesign: path contains invalid UTF-8: {}",
+                        dest_path.display()
+                    ));
+                }
+            }
+
+            let sign_result = std::process::Command::new("codesign")
+                .args(["-s", "-", dest_path.to_str().unwrap_or("")])
+                .output();
+            match sign_result {
+                Ok(output) if output.status.success() => {
+                    log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
+                }
+                Ok(output) => {
+                    log_warning(&format!(
+                        "codesign failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                }
+                Err(e) => {
+                    log_warning(&format!("codesign not available: {}", e));
+                }
+            }
+        }
     }
 
     log_success(&format!("Copied binary to: {}", dest_path.display()));

@@ -36,6 +36,19 @@ else {
         isDeferred: true,
       })
 
+      if (!globalThis['~suspense'])
+        globalThis['~suspense'] = {}
+      if (!globalThis['~suspense'].pendingPromises)
+        globalThis['~suspense'].pendingPromises = []
+
+      globalThis['~suspense'].pendingPromises.push({
+        id: promiseId,
+        boundaryId: promiseId,
+        componentPath: '{route_file_path}#default',
+        componentType: PageComponent,
+        componentProps: pageProps,
+      })
+
       const lazyMarker = {
         '~rari_lazy': true,
         '~rari_promise_id': promiseId,

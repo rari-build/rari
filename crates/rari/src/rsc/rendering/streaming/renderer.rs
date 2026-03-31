@@ -22,6 +22,7 @@ pub struct StreamingRenderer {
     boundary_row_ids: Arc<Mutex<FxHashMap<String, u32>>>,
     rendered_skeleton_ids: Arc<Mutex<FxHashSet<String>>>,
     resolved_boundary_ids: Arc<Mutex<FxHashSet<String>>>,
+    promise_to_row: Arc<Mutex<FxHashMap<String, u32>>>,
 }
 
 impl StreamingRenderer {
@@ -35,6 +36,7 @@ impl StreamingRenderer {
             boundary_row_ids: Arc::new(Mutex::new(FxHashMap::default())),
             rendered_skeleton_ids: Arc::new(Mutex::new(FxHashSet::default())),
             resolved_boundary_ids: Arc::new(Mutex::new(FxHashSet::default())),
+            promise_to_row: Arc::new(Mutex::new(FxHashMap::default())),
         }
     }
 
@@ -44,18 +46,6 @@ impl StreamingRenderer {
         layout_structure: crate::rsc::rendering::layout::LayoutStructure,
     ) -> Result<RscStream, RariError> {
         if !layout_structure.is_valid() {
-            error!(
-                "StreamingRenderer: Invalid layout structure detected, streaming should not have been initiated"
-            );
-
-            error!(
-                "Layout structure details: has_navigation={}, navigation_position={:?}, content_position={:?}, suspense_boundaries={}",
-                layout_structure.has_navigation,
-                layout_structure.navigation_position,
-                layout_structure.content_position,
-                layout_structure.suspense_boundaries.len()
-            );
-
             for boundary in &layout_structure.suspense_boundaries {
                 error!(
                     "  Suspense boundary '{}': parent_path={:?}, is_in_content_area={}",
@@ -68,14 +58,6 @@ impl StreamingRenderer {
             ));
         }
 
-        let boundary_positions: Arc<Mutex<FxHashMap<String, Vec<usize>>>> = Arc::new(Mutex::new(
-            layout_structure
-                .suspense_boundaries
-                .iter()
-                .map(|b| (b.boundary_id.clone(), b.dom_path.clone()))
-                .collect(),
-        ));
-
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
         let (error_sender, error_receiver) = mpsc::unbounded_channel::<BoundaryError>();
         let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunk>(64);
@@ -85,9 +67,14 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
+            Arc::clone(&self.promise_to_row),
         )));
 
         let partial_result = self.render_partial_from_composition(composition_script).await?;
+
+        let boundary_positions: Arc<Mutex<FxHashMap<String, Vec<usize>>>> = Arc::new(Mutex::new(
+            partial_result.boundaries.iter().map(|b| (b.id.clone(), Vec::new())).collect(),
+        ));
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
@@ -96,68 +83,21 @@ impl StreamingRenderer {
             *shared_counter = self.row_counter;
         }
 
-        let stream_complete_chunk = RscStreamChunk {
-            data: b"STREAM_COMPLETE\n".to_vec(),
-            chunk_type: RscChunkType::StreamComplete,
-            row_id: u32::MAX,
-            is_final: false,
-            boundary_id: None,
-        };
-        chunk_sender.send(stream_complete_chunk).await.map_err(|e| {
-            RariError::internal(format!("Failed to send initial stream complete: {}", e))
-        })?;
-
         if let Some(resolver) = &self.promise_resolver {
-            let runtime = Arc::clone(&self.runtime);
-            let resolver_clone = Arc::clone(resolver);
             let pending_promises = partial_result.pending_promises.clone();
 
-            tokio::spawn(async move {
-                let execute_script = DEFERRED_EXECUTION_SCRIPT;
-
-                match runtime
-                    .execute_script(
-                        "<execute_deferred_components>".to_string(),
-                        execute_script.to_string(),
-                    )
-                    .await
-                {
-                    Ok(result) => {
-                        let result_str = result.to_string();
-                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
-                            && let Some(results) = data["results"].as_array()
-                        {
-                            for result in results {
-                                if !result["success"].as_bool().unwrap_or(false) {
-                                    let error_msg = result["error"].as_str().unwrap_or("unknown");
-                                    let error_name =
-                                        result["errorName"].as_str().unwrap_or("UnknownError");
-                                    let component_path =
-                                        result["componentPath"].as_str().unwrap_or("unknown");
-                                    let promise_id =
-                                        result["promiseId"].as_str().unwrap_or("unknown");
-
-                                    error!(
-                                        "Deferred component failed: promiseId={}, component={}, error={} ({})",
-                                        promise_id, component_path, error_msg, error_name
-                                    );
-                                }
-                            }
-                        }
+            for (index, promise) in pending_promises.into_iter().enumerate() {
+                let resolver_clone = Arc::clone(resolver);
+                tokio::spawn(async move {
+                    // Small delay to ensure tasks start in document order
+                    // This ensures the first component's timer starts first
+                    if index > 0 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(index as u64 * 10))
+                            .await;
                     }
-                    Err(e) => {
-                        error!("Failed to execute deferred components: {}", e);
-                    }
-                }
-
-                for promise in pending_promises {
-                    resolver_clone.resolve_async(promise).await;
-                }
-            });
-        } else {
-            return Err(RariError::internal(
-                "No promise resolver available - this should not happen",
-            ));
+                    resolver_clone.resolve_async(promise);
+                });
+            }
         }
 
         let chunk_sender_clone = chunk_sender.clone();
@@ -192,13 +132,6 @@ impl StreamingRenderer {
                         } else {
                             error!(
                                 "DOM path not found for boundary '{}' in boundary_positions map. This may cause incorrect skeleton replacement.",
-                                update.boundary_id
-                            );
-                        }
-
-                        if update.dom_path.is_empty() {
-                            error!(
-                                "DOM path is empty for boundary '{}'. Skeleton replacement may fail without proper targeting.",
                                 update.boundary_id
                             );
                         }
@@ -272,6 +205,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
+            Arc::new(Mutex::new(FxHashMap::default())),
         )));
 
         let suspense_boundaries =
@@ -301,7 +235,7 @@ impl StreamingRenderer {
 
             tokio::spawn(async move {
                 for promise in pending_promises {
-                    resolver_clone.resolve_async(promise).await;
+                    resolver_clone.resolve_async(promise);
                 }
             });
         }
@@ -381,6 +315,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
+            Arc::new(Mutex::new(FxHashMap::default())),
         )));
 
         let partial_result = self.parse_rsc_wire_format(&rsc_wire_format).await?;
@@ -404,37 +339,9 @@ impl StreamingRenderer {
                     error!("Failed to initialize promise tracking: {}", e);
                 }
 
-                match runtime
-                    .execute_script(
-                        "<execute_deferred_components>".to_string(),
-                        DEFERRED_EXECUTION_SCRIPT.to_string(),
-                    )
-                    .await
-                {
-                    Ok(result) => {
-                        let result_str = result.to_string();
-                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
-                            && let Some(results) = data["results"].as_array()
-                        {
-                            for result in results {
-                                if !result["success"].as_bool().unwrap_or(false) {
-                                    error!(
-                                        "Deferred component failed: promiseId={}, error={}",
-                                        result["promiseId"].as_str().unwrap_or("unknown"),
-                                        result["error"].as_str().unwrap_or("unknown")
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to execute deferred components: {}", e);
-                    }
-                }
-
                 if has_promises {
                     for promise in pending_promises {
-                        resolver_clone.resolve_async(promise).await;
+                        resolver_clone.resolve_async(promise);
                     }
                 }
             });
@@ -546,6 +453,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
+            Arc::new(Mutex::new(FxHashMap::default())),
         )));
 
         self.module_path = Some(format!("{component_id}.js"));
@@ -555,41 +463,12 @@ impl StreamingRenderer {
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
         if let Some(resolver) = &self.promise_resolver {
-            let runtime = Arc::clone(&self.runtime);
             let resolver_clone = Arc::clone(resolver);
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
-                match runtime
-                    .execute_script(
-                        "<execute_deferred_components>".to_string(),
-                        DEFERRED_EXECUTION_SCRIPT.to_string(),
-                    )
-                    .await
-                {
-                    Ok(result) => {
-                        let result_str = result.to_string();
-                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&result_str)
-                            && let Some(results) = data["results"].as_array()
-                        {
-                            for result in results {
-                                if !result["success"].as_bool().unwrap_or(false) {
-                                    error!(
-                                        "Deferred component failed: promiseId={}, error={}",
-                                        result["promiseId"].as_str().unwrap_or("unknown"),
-                                        result["error"].as_str().unwrap_or("unknown")
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to execute deferred components: {}", e);
-                    }
-                }
-
                 for promise in pending_promises {
-                    resolver_clone.resolve_async(promise).await;
+                    resolver_clone.resolve_async(promise);
                 }
             });
         } else {
@@ -864,11 +743,19 @@ impl StreamingRenderer {
             .as_array()
             .unwrap_or(&Vec::new())
             .iter()
-            .map(|p| PendingSuspensePromise {
-                id: p["id"].as_str().unwrap_or("unknown").to_string(),
-                boundary_id: p["~boundaryId"].as_str().unwrap_or("root").to_string(),
-                component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
-                promise_handle: p["id"].as_str().unwrap_or("unknown").to_string(),
+            .map(|p| {
+                let promise_id = p["id"].as_str().unwrap_or("unknown");
+                let boundary_id_from_tilde = p["~boundaryId"].as_str();
+                let boundary_id_plain = p["boundaryId"].as_str();
+                let boundary_id =
+                    boundary_id_from_tilde.or(boundary_id_plain).unwrap_or("root").to_string();
+
+                PendingSuspensePromise {
+                    id: promise_id.to_string(),
+                    boundary_id,
+                    component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
+                    promise_handle: promise_id.to_string(),
+                }
             })
             .collect();
 
@@ -967,7 +854,8 @@ impl StreamingRenderer {
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
-                if let Some(bid) = p["~boundaryId"].as_str() {
+                let bid = p["boundaryId"].as_str();
+                if let Some(bid) = bid {
                     *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
                 }
             }
@@ -1029,11 +917,16 @@ impl StreamingRenderer {
             .as_array()
             .unwrap_or(&Vec::new())
             .iter()
-            .map(|p| PendingSuspensePromise {
-                id: p["id"].as_str().unwrap_or("unknown").to_string(),
-                boundary_id: p["~boundaryId"].as_str().unwrap_or("root").to_string(),
-                component_path: p["componentPath"].as_str().unwrap_or("unknown").to_string(),
-                promise_handle: p["id"].as_str().unwrap_or("unknown").to_string(),
+            .map(|p| {
+                let promise_id = p["id"].as_str().unwrap_or("unknown");
+                let boundary_id = p["boundaryId"].as_str().unwrap_or("root").to_string();
+
+                PendingSuspensePromise {
+                    id: promise_id.to_string(),
+                    boundary_id,
+                    component_path: p["componentPath"].as_str().unwrap_or("unknown").to_string(),
+                    promise_handle: promise_id.to_string(),
+                }
             })
             .collect();
 
@@ -1257,6 +1150,23 @@ impl StreamingRenderer {
     ) -> Result<(), RariError> {
         self.validate_lazy_marker_structure(partial_result)?;
 
+        let mut promise_to_row: FxHashMap<String, u32> = FxHashMap::default();
+        for promise in &partial_result.pending_promises {
+            self.row_counter += 1;
+            promise_to_row.insert(promise.id.clone(), self.row_counter);
+        }
+
+        {
+            let mut stored_mapping = self.promise_to_row.lock().await;
+            *stored_mapping = promise_to_row.clone();
+        }
+
+        let mut shell_content = partial_result.initial_content.clone();
+        let import_rows = super::promise_resolver::process_client_components(
+            &mut shell_content,
+            &mut self.row_counter,
+        );
+
         let symbol_row_id = if partial_result.has_suspense {
             self.row_counter += 1;
             let symbol_row_id = self.row_counter;
@@ -1271,14 +1181,24 @@ impl StreamingRenderer {
             None
         };
 
+        for import_row in &import_rows {
+            let import_chunk = RscStreamChunk {
+                data: format!("{}\n", import_row).into_bytes(),
+                chunk_type: RscChunkType::ModuleImport,
+                row_id: 0,
+                is_final: false,
+                boundary_id: None,
+            };
+            sender
+                .send(import_chunk)
+                .await
+                .map_err(|e| RariError::internal(format!("Failed to send import chunk: {e}")))?;
+        }
+
         self.row_counter += 1;
 
-        let shell_chunk = self.create_shell_chunk_with_module(
-            &partial_result.initial_content,
-            0,
-            symbol_row_id,
-            &FxHashMap::default(),
-        )?;
+        let shell_chunk =
+            self.create_shell_chunk_with_module(&shell_content, 0, symbol_row_id, &promise_to_row)?;
         sender
             .send(shell_chunk)
             .await
@@ -1293,6 +1213,12 @@ impl StreamingRenderer {
         _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
     ) {
         for import_row in &update.import_rows {
+            tracing::info!(
+                "Sending import row for boundary {}: {}",
+                update.boundary_id,
+                import_row
+            );
+
             let import_chunk = RscStreamChunk {
                 data: format!("{}\n", import_row).into_bytes(),
                 chunk_type: RscChunkType::ModuleImport,
@@ -1307,6 +1233,13 @@ impl StreamingRenderer {
         }
 
         let update_row = format!("{}:{}\n", update.row_id, update.content);
+
+        tracing::info!(
+            "Sending boundary update for {}: row_id={}, content preview: {}",
+            update.boundary_id,
+            update.row_id,
+            update.content.to_string().chars().take(200).collect::<String>()
+        );
 
         let chunk = RscStreamChunk {
             data: update_row.into_bytes(),
@@ -1410,13 +1343,6 @@ impl StreamingRenderer {
                         && let Some(boundary_id) =
                             props_obj.get("~boundaryId").and_then(|v| v.as_str())
                     {
-                        if let Some(fallback) = props_obj.get("fallback") {
-                            new_props.insert(
-                                "fallback".to_string(),
-                                self.convert_children(fallback, symbol_row_id, boundary_lazy_refs)?,
-                            );
-                        }
-
                         new_props.insert(
                             "~boundaryId".to_string(),
                             serde_json::Value::String(boundary_id.to_string()),
@@ -1447,39 +1373,48 @@ impl StreamingRenderer {
             }
         }
 
-        if let Some(obj) = json.as_object()
-            && let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props"))
-        {
-            let mut converted_props = serde_json::Map::new();
-
-            if let Some(props_obj) = props.as_object() {
-                for (key, value) in props_obj {
-                    if key == "children" {
-                        converted_props.insert(
-                            key.clone(),
-                            self.convert_children(value, symbol_row_id, boundary_lazy_refs)?,
-                        );
-                    } else {
-                        converted_props.insert(key.clone(), value.clone());
-                    }
+        if let Some(obj) = json.as_object() {
+            if obj.get("~rari_lazy").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if let Some(promise_id) = obj.get("~rari_promise_id").and_then(|v| v.as_str())
+                    && let Some(&row_id) = boundary_lazy_refs.get(promise_id)
+                {
+                    return Ok(serde_json::Value::String(format!("$L{}", row_id)));
                 }
+                return Ok(serde_json::Value::Null);
             }
 
-            let final_element_type = if let Some(type_str) = element_type.as_str()
-                && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
-                && let Some(row_id) = symbol_row_id
-            {
-                serde_json::Value::String(format!("${}", row_id))
-            } else {
-                element_type.clone()
-            };
+            if let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props")) {
+                let mut converted_props = serde_json::Map::new();
 
-            return Ok(serde_json::Value::Array(vec![
-                serde_json::Value::String("$".to_string()),
-                final_element_type,
-                serde_json::Value::Null,
-                serde_json::Value::Object(converted_props),
-            ]));
+                if let Some(props_obj) = props.as_object() {
+                    for (key, value) in props_obj {
+                        if key == "children" {
+                            converted_props.insert(
+                                key.clone(),
+                                self.convert_children(value, symbol_row_id, boundary_lazy_refs)?,
+                            );
+                        } else {
+                            converted_props.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+
+                let final_element_type = if let Some(type_str) = element_type.as_str()
+                    && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
+                    && let Some(row_id) = symbol_row_id
+                {
+                    serde_json::Value::String(format!("${}", row_id))
+                } else {
+                    element_type.clone()
+                };
+
+                return Ok(serde_json::Value::Array(vec![
+                    serde_json::Value::String("$".to_string()),
+                    final_element_type,
+                    serde_json::Value::Null,
+                    serde_json::Value::Object(converted_props),
+                ]));
+            }
         }
 
         Ok(json.clone())

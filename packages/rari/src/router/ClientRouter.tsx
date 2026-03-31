@@ -630,6 +630,10 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
     const navigationId = navigationState.navigationId + 1
 
+    window.dispatchEvent(new CustomEvent('rari:navigation-start', {
+      detail: { navigationId, targetPath },
+    }))
+
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current
       try {

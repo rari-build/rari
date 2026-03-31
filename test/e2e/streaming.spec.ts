@@ -273,6 +273,66 @@ test.describe('RSC Protocol Tests', () => {
   })
 })
 
+test.describe.serial('Suspense Streaming Tests', () => {
+  test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
+    await page.goto('/suspense-streaming')
+
+    const componentA = page.locator('[data-testid="component-a"]')
+    const componentB = page.locator('[data-testid="component-b"]')
+    const componentC = page.locator('[data-testid="component-c"]')
+
+    await expect(componentA).toBeVisible({ timeout: 20000 })
+    await expect(componentB).toBeVisible({ timeout: 20000 })
+    await expect(componentC).toBeVisible({ timeout: 20000 })
+
+    const textA = await componentA.textContent()
+    const textB = await componentB.textContent()
+    const textC = await componentC.textContent()
+
+    const timestampA = new Date(textA!.split(':').slice(1).join(':')).getTime()
+    const timestampB = new Date(textB!.split(':').slice(1).join(':')).getTime()
+    const timestampC = new Date(textC!.split(':').slice(1).join(':')).getTime()
+
+    const diffAB = timestampB - timestampA
+    expect(diffAB).toBeGreaterThan(500)
+    expect(diffAB).toBeLessThan(4000)
+
+    const diffBC = timestampC - timestampB
+    expect(diffBC).toBeGreaterThan(500)
+    expect(diffBC).toBeLessThan(5000)
+
+    const totalDiff = timestampC - timestampA
+    expect(totalDiff).toBeGreaterThan(1500)
+    expect(totalDiff).toBeLessThan(9000)
+  })
+
+  test('should resolve boundaries independently based on their delay', async ({ page }) => {
+    await page.goto('/suspense-streaming')
+
+    const componentA = page.locator('[data-testid="component-a"]')
+    const componentB = page.locator('[data-testid="component-b"]')
+    const componentC = page.locator('[data-testid="component-c"]')
+
+    await expect(componentA).toBeVisible({ timeout: 20000 })
+    await expect(componentB).toBeVisible({ timeout: 20000 })
+    await expect(componentC).toBeVisible({ timeout: 20000 })
+
+    const textA = await componentA.textContent()
+    const textB = await componentB.textContent()
+    const textC = await componentC.textContent()
+
+    const timestampA = new Date(textA!.split(':').slice(1).join(':')).getTime()
+    const timestampB = new Date(textB!.split(':').slice(1).join(':')).getTime()
+    const timestampC = new Date(textC!.split(':').slice(1).join(':')).getTime()
+
+    expect(timestampA).toBeLessThan(timestampB)
+    expect(timestampB).toBeLessThan(timestampC)
+
+    const maxDiff = Math.max(timestampB - timestampA, timestampC - timestampB)
+    expect(maxDiff).toBeGreaterThan(1000)
+  })
+})
+
 test.describe('Client-Side Navigation Tests', () => {
   test('should detect rari runtime on page', async ({ page }) => {
     await page.goto('/')

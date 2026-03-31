@@ -189,6 +189,15 @@ impl LayoutRenderer {
 
         Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
 
+        if is_not_found {
+            let rsc_wire_format =
+                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
+
+            Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+            return Ok(rsc_wire_format);
+        }
+
         let promise_result = renderer
             .runtime
             .execute_script("compose_and_render".to_string(), composition_script)
@@ -204,23 +213,12 @@ impl LayoutRenderer {
         };
 
         let rsc_data = result.get("rsc_data").ok_or_else(|| {
-            tracing::error!("Failed to extract RSC data from result: {:?}", result);
+            tracing::error!(
+                "Failed to extract RSC data from result (keys: {:?})",
+                result.as_object().map(|o| o.keys().collect::<Vec<_>>())
+            );
             RariError::internal("No RSC data in render result")
         })?;
-
-        if is_not_found {
-            let rsc_wire_format = {
-                let mut serializer = renderer.serializer.lock();
-                serializer.reset_for_new_request();
-                serializer.serialize_rsc_json(rsc_data).map_err(|e| {
-                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
-                })?
-            };
-
-            Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-            return Ok(rsc_wire_format);
-        }
 
         let (mut rsc_wire_format, pending_promises) = {
             let mut serializer = renderer.serializer.lock();
@@ -345,7 +343,7 @@ impl LayoutRenderer {
         match mode {
             RenderMode::Ssr => {
                 match self
-                    .render_route_to_html_direct(route_match, context, request_context)
+                    .render_route_with_streaming(route_match, context, request_context)
                     .await?
                 {
                     RenderResult::Static(html) => Ok(html),
@@ -360,7 +358,7 @@ impl LayoutRenderer {
         }
     }
 
-    pub async fn render_route_to_html_direct(
+    pub async fn render_route_with_streaming(
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
@@ -394,262 +392,64 @@ impl LayoutRenderer {
             true,
         )?;
 
-        let renderer = self.renderer.lock().await;
+        let renderer_guard = self.renderer.lock().await;
 
         if let Some(ref ctx) = request_context
-            && let Err(e) = renderer.runtime.set_request_context(ctx.clone()).await
+            && let Err(e) = renderer_guard.runtime.set_request_context(ctx.clone()).await
         {
             error!("Failed to set request context: {}", e);
         }
 
         let is_not_found = route_match.not_found.is_some();
 
-        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard, is_not_found).await?;
 
-        let promise_result = renderer
-            .runtime
-            .execute_script("compose_and_render".to_string(), composition_script.clone())
-            .await?;
+        let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
+            Arc::clone(&renderer_guard.runtime),
+        );
 
-        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
-            promise_result
-        } else {
-            renderer
-                .runtime
-                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
-                .await?
-        };
+        let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
 
-        let rsc_data = result.get("rsc_data").ok_or_else(|| {
-            tracing::error!("Failed to extract RSC data from result: {:?}", result);
-            RariError::internal("No RSC data in render result")
-        })?;
+        drop(renderer_guard);
 
-        if !is_not_found {
-            let (rsc_wire_format, pending_promises) = {
-                let mut serializer = renderer.serializer.lock();
+        match streaming_renderer
+            .start_streaming_with_composition(composition_script, layout_structure)
+            .await
+        {
+            Ok(stream) => Ok(RenderResult::Streaming(stream)),
+            Err(e) => {
+                error!("Streaming failed, falling back to static render: {}", e);
 
-                serializer.reset_for_new_request();
+                let renderer = self.renderer.lock().await;
+                let rsc_wire_format = Self::execute_composition_and_serialize(
+                    &renderer,
+                    self.build_composition_script(
+                        route_match,
+                        context,
+                        loading_component_id.as_deref(),
+                        false,
+                    )?,
+                )
+                .await?;
 
-                let wire_format = serializer.serialize_rsc_json(rsc_data).map_err(|e| {
-                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
-                })?;
+                Self::validate_rsc_wire_format(&rsc_wire_format)?;
 
-                let promises = serializer.pending_lazy_promises.clone();
-                serializer.pending_lazy_promises.clear();
-                serializer.seen_lazy_promise_ids.clear();
+                if is_not_found {
+                    return Ok(RenderResult::Static(rsc_wire_format));
+                }
 
-                (wire_format, promises)
-            };
-
-            let runtime_for_task = Arc::clone(&renderer.runtime);
-            let serializer_for_task = Arc::clone(&renderer.serializer);
-
-            drop(renderer);
-
-            if pending_promises.is_empty() {
                 let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(
-                    &runtime_for_task,
+                    &renderer.runtime,
                 ));
+                drop(renderer);
                 let config =
                     Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
                 let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
 
                 self.html_cache.insert(cache_key, html.clone());
-                return Ok(RenderResult::Static(html));
+                Ok(RenderResult::Static(html))
             }
-
-            let wire_lines: Vec<String> = rsc_wire_format.lines().map(|s| s.to_string()).collect();
-
-            let (chunk_sender, chunk_receiver) =
-                mpsc::channel::<crate::rsc::rendering::streaming::RscStreamChunk>(64);
-
-            tokio::spawn(async move {
-                let mut row_id = 0u32;
-
-                for line in wire_lines {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-
-                    row_id += 1;
-
-                    let chunk_type = if line.contains(":I[") {
-                        crate::rsc::rendering::streaming::RscChunkType::ModuleImport
-                    } else {
-                        crate::rsc::rendering::streaming::RscChunkType::InitialShell
-                    };
-
-                    let chunk = crate::rsc::rendering::streaming::RscStreamChunk {
-                        data: format!("{}\n", line).into_bytes(),
-                        chunk_type,
-                        row_id,
-                        is_final: false,
-                        boundary_id: None,
-                    };
-
-                    if chunk_sender.send(chunk).await.is_err() {
-                        break;
-                    }
-                }
-
-                for lazy_promise in pending_promises {
-                    let resolve_script = format!(
-                        "(async () => {{ return await globalThis['~rari'].lazy.resolve('{}'); }})()",
-                        lazy_promise.promise_id
-                    );
-
-                    let result = runtime_for_task
-                        .execute_script(
-                            format!("resolve_promise_{}", lazy_promise.promise_id),
-                            resolve_script,
-                        )
-                        .await;
-
-                    match result {
-                        Ok(result) => {
-                            if let Some(success) = result.get("success").and_then(|v| v.as_bool())
-                                && !success
-                            {
-                                let error_msg = result
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("Unknown error");
-
-                                if error_msg.contains("Promise not found") {
-                                    continue;
-                                }
-
-                                tracing::error!(
-                                    "Failed to resolve lazy promise {}: {}",
-                                    lazy_promise.promise_id,
-                                    error_msg
-                                );
-                                continue;
-                            }
-
-                            let resolved_content = result.get("data").unwrap_or(&result);
-
-                            let wire_format = {
-                                let mut serializer = serializer_for_task.lock();
-                                match serializer.serialize_rsc_json(resolved_content) {
-                                    Ok(wire_format) => wire_format,
-                                    Err(e) => {
-                                        tracing::error!(
-                                            "Failed to serialize resolved content: {}",
-                                            e
-                                        );
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            let lines: Vec<&str> = wire_format.lines().collect();
-                            let mut content_row_id: Option<u32> = None;
-
-                            for line in lines.iter() {
-                                if line.trim().is_empty() {
-                                    continue;
-                                }
-
-                                if let Some(colon_pos) = line.find(':')
-                                    && let Ok(row_id) = line[..colon_pos].parse::<u32>()
-                                {
-                                    let content = &line[colon_pos + 1..];
-
-                                    if !content.starts_with("I[") && content_row_id.is_none() {
-                                        content_row_id = Some(row_id);
-                                        break;
-                                    }
-                                }
-                            }
-
-                            let mut rows_to_send: Vec<(u32, String)> = Vec::new();
-
-                            for line in lines.iter() {
-                                if line.trim().is_empty() {
-                                    continue;
-                                }
-
-                                if let Some(colon_pos) = line.find(':')
-                                    && let Ok(row_id) = line[..colon_pos].parse::<u32>()
-                                {
-                                    let content = &line[colon_pos + 1..];
-
-                                    if Some(row_id) == content_row_id {
-                                        let renumbered_line =
-                                            format!("{}:{}", lazy_promise.lazy_row_id, content);
-                                        rows_to_send
-                                            .push((lazy_promise.lazy_row_id, renumbered_line));
-                                    } else {
-                                        rows_to_send.push((row_id, line.to_string()));
-                                    }
-                                }
-                            }
-
-                            rows_to_send.sort_by_key(|(row_id, _)| *row_id);
-
-                            for (_, line_to_send) in rows_to_send {
-                                let chunk = crate::rsc::rendering::streaming::RscStreamChunk {
-                                    data: format!("{}\n", line_to_send).into_bytes(),
-                                    chunk_type: crate::rsc::rendering::streaming::RscChunkType::BoundaryUpdate,
-                                    row_id: lazy_promise.lazy_row_id,
-                                    is_final: false,
-                                    boundary_id: Some(lazy_promise.promise_id.clone()),
-                                };
-
-                                if chunk_sender.send(chunk).await.is_err() {
-                                    break;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let error_msg = e.to_string();
-                            if error_msg.contains("Promise not found") {
-                                continue;
-                            }
-
-                            tracing::error!(
-                                "Failed to resolve lazy promise {}: {}",
-                                lazy_promise.promise_id,
-                                e
-                            );
-                        }
-                    }
-                }
-
-                let final_chunk = crate::rsc::rendering::streaming::RscStreamChunk {
-                    data: Vec::new(),
-                    chunk_type: crate::rsc::rendering::streaming::RscChunkType::StreamComplete,
-                    row_id: 0,
-                    is_final: true,
-                    boundary_id: None,
-                };
-
-                let _ = chunk_sender.send(final_chunk).await;
-            });
-
-            let stream = crate::rsc::rendering::streaming::RscStream::new(chunk_receiver);
-            return Ok(RenderResult::Streaming(stream));
         }
-
-        let rsc_wire_format = {
-            let mut serializer = renderer.serializer.lock();
-            serializer.reset_for_new_request();
-            serializer
-                .serialize_rsc_json(rsc_data)
-                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?
-        };
-
-        let html_renderer =
-            crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
-        drop(renderer);
-        let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
-
-        self.html_cache.insert(cache_key, html.clone());
-
-        Ok(RenderResult::Static(html))
     }
 
     fn validate_html_structure(html: &str, route_match: &AppRouteMatch) -> Result<(), RariError> {
@@ -665,6 +465,46 @@ impl LayoutRenderer {
         }
 
         Ok(())
+    }
+
+    async fn execute_composition_and_serialize(
+        renderer: &RscRenderer,
+        composition_script: String,
+    ) -> Result<String, RariError> {
+        let promise_result = renderer
+            .runtime
+            .execute_script("compose_and_render".to_string(), composition_script)
+            .await?;
+
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
+            promise_result
+        } else {
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
+        };
+
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
+            tracing::error!(
+                "Failed to extract RSC data from result (keys: {:?})",
+                result.as_object().map(|o| o.keys().collect::<Vec<_>>())
+            );
+            RariError::internal("No RSC data in render result")
+        })?;
+
+        let rsc_wire_format = {
+            let mut serializer = renderer.serializer.lock();
+            serializer.reset_for_new_request();
+            let wire_format = serializer
+                .serialize_rsc_json(rsc_data)
+                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?;
+            serializer.pending_lazy_promises.clear();
+            serializer.seen_lazy_promise_ids.clear();
+            wire_format
+        };
+
+        Ok(rsc_wire_format)
     }
 
     fn validate_rsc_wire_format(rsc_data: &str) -> Result<(), RariError> {
@@ -806,11 +646,25 @@ impl LayoutRenderer {
             }
         });
 
+        let metadata_json = context
+            .metadata
+            .as_ref()
+            .and_then(|m| {
+                serde_json::to_string(m)
+                    .map_err(|e| {
+                        tracing::warn!("Failed to serialize metadata: {}", e);
+                        e
+                    })
+                    .ok()
+            })
+            .unwrap_or_else(|| "{}".to_string());
+
         let script = super::route_composer::RouteComposer::build_composition_script_with_error(
             &page_render_script,
             &layouts,
             &pathname_json,
             error_boundary.as_ref(),
+            &metadata_json,
         );
 
         Ok(script)

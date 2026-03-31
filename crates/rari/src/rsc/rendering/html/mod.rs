@@ -1592,43 +1592,133 @@ if (typeof window !== 'undefined') {{
         }
 
         let row_id = chunk.row_id;
-        let _content_json = parts[1];
+        let content_json = parts[1];
 
         let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
+        let escaped_boundary_id = RscHtmlRenderer::escape_js_string(&boundary_id);
 
+        let rendered_html = match serde_json::from_str::<serde_json::Value>(content_json) {
+            Ok(content) => self.render_json_value_to_simple_html(&content),
+            Err(_) => String::new(),
+        };
+
+        let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         let script = format!(
-            r#"<script data-boundary-id="{}" data-row-id="{}">
+            r#"<!-- Boundary update: {} at {} -->
+<script data-boundary-id="{}" data-row-id="{}">
 (function(){{
+  var timestamp = {};
+
   if(!window['~rari'])window['~rari']={{}};
   if(!window['~rari'].streaming)window['~rari'].streaming={{}};
   if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];
-  if(!window['~rari'].streaming.bufferedEvents)window['~rari'].streaming.bufferedEvents=[];
 
   window['~rari'].streaming.bufferedRows.push('{}');
+
+  window.dispatchEvent(new CustomEvent('rari:rsc-row', {{detail: {{rscRow: '{}'}}}}));
 
   if(window['~rari'].processBoundaryUpdate){{
     window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
   }} else {{
-    window['~rari'].streaming.bufferedEvents.push({{
-      boundaryId: '{}',
-      rscRow: '{}',
-      rowId: '{}'
-    }});
+    if(!window['~rari'].streaming.bufferedEvents)window['~rari'].streaming.bufferedEvents=[];
+    window['~rari'].streaming.bufferedEvents.push({{boundaryId:'{}',rscRow:'{}',rowId:'{}'}});
   }}
+
+  (function updateDOM() {{
+    var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
+    if (boundaryElement) {{
+      boundaryElement.innerHTML = '{}';
+      boundaryElement.setAttribute('data-resolved', 'true');
+      boundaryElement.setAttribute('data-resolved-at', timestamp);
+    }}
+  }})();
 }})();
 </script>"#,
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
+            timestamp,
+            RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
+            timestamp,
             escaped_row,
-            RscHtmlRenderer::escape_js_string(&boundary_id),
+            escaped_row,
+            escaped_boundary_id,
             escaped_row,
             RscHtmlRenderer::escape_js_string(&row_id.to_string()),
-            RscHtmlRenderer::escape_js_string(&boundary_id),
+            escaped_boundary_id,
             escaped_row,
-            RscHtmlRenderer::escape_js_string(&row_id.to_string())
+            RscHtmlRenderer::escape_js_string(&row_id.to_string()),
+            escaped_boundary_id,
+            escaped_html
         );
 
         Ok(script.into_bytes())
+    }
+
+    fn render_json_value_to_simple_html(&self, value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::String(s) => escape_html(s),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Array(arr) => {
+                if arr.len() >= 4
+                    && arr[0].as_str() == Some("$")
+                    && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
+                {
+                    if !tag
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+                    {
+                        return String::new();
+                    }
+
+                    let mut html = format!("<{}", tag);
+
+                    if let Some(props_obj) = props.as_object() {
+                        for (key, value) in props_obj {
+                            if key == "children" {
+                                continue;
+                            }
+                            if key.starts_with("data-") || key == "className" || key == "class" {
+                                let attr_name = if key == "className" { "class" } else { key };
+                                if let Some(val_str) = value.as_str() {
+                                    html.push_str(&format!(
+                                        r#" {}="{}""#,
+                                        attr_name,
+                                        RscHtmlRenderer::escape_html_attribute(val_str)
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    html.push('>');
+
+                    if SELF_CLOSING_TAGS.contains(&tag) {
+                        return html;
+                    }
+
+                    if let Some(props_obj) = props.as_object()
+                        && let Some(children) = props_obj.get("children")
+                    {
+                        html.push_str(&self.render_json_value_to_simple_html(children));
+                    }
+
+                    html.push_str(&format!("</{}>", tag));
+                    return html;
+                }
+
+                arr.iter()
+                    .map(|child| self.render_json_value_to_simple_html(child))
+                    .collect::<Vec<_>>()
+                    .join("")
+            }
+            _ => String::new(),
+        }
     }
 
     async fn generate_error_replacement(

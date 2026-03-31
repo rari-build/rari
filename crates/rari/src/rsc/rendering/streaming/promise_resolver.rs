@@ -9,7 +9,7 @@ use crate::runtime::JsExecutionRuntime;
 use super::constants::PROMISE_RESOLUTION_SCRIPT;
 use super::types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise, RscWireFormatTag};
 
-fn process_client_components(
+pub(super) fn process_client_components(
     content: &mut serde_json::Value,
     row_counter: &mut u32,
 ) -> Vec<String> {
@@ -102,6 +102,7 @@ pub struct BackgroundPromiseResolver {
     update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
     error_sender: mpsc::UnboundedSender<BoundaryError>,
     shared_row_counter: Arc<Mutex<u32>>,
+    promise_to_row: Arc<Mutex<FxHashMap<String, u32>>>,
 }
 
 impl BackgroundPromiseResolver {
@@ -110,6 +111,7 @@ impl BackgroundPromiseResolver {
         update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
         error_sender: mpsc::UnboundedSender<BoundaryError>,
         shared_row_counter: Arc<Mutex<u32>>,
+        promise_to_row: Arc<Mutex<FxHashMap<String, u32>>>,
     ) -> Self {
         Self {
             runtime,
@@ -117,25 +119,27 @@ impl BackgroundPromiseResolver {
             update_sender,
             error_sender,
             shared_row_counter,
+            promise_to_row,
         }
     }
 
-    pub async fn resolve_async(&self, promise: PendingSuspensePromise) {
+    pub fn resolve_async(&self, promise: PendingSuspensePromise) {
         let promise_id = promise.id.clone();
         let boundary_id = promise.boundary_id.clone();
-
-        {
-            let mut active = self.active_promises.lock().await;
-            active.insert(promise_id.clone(), promise.clone());
-        }
 
         let runtime = Arc::clone(&self.runtime);
         let update_sender = self.update_sender.clone();
         let error_sender = self.error_sender.clone();
         let shared_row_counter = Arc::clone(&self.shared_row_counter);
         let active_promises = Arc::clone(&self.active_promises);
+        let promise_to_row_map = Arc::clone(&self.promise_to_row);
 
         tokio::spawn(async move {
+            {
+                let mut active = active_promises.lock().await;
+                active.insert(promise_id.clone(), promise.clone());
+            }
+
             let resolution_script = PROMISE_RESOLUTION_SCRIPT
                 .cow_replace("{promise_id}", &promise_id)
                 .cow_replace("{boundary_id}", &boundary_id)
@@ -153,12 +157,23 @@ impl BackgroundPromiseResolver {
                             if result_data["success"].as_bool().unwrap_or(false) {
                                 let mut content = result_data["content"].clone();
 
-                                let (row_id, import_rows) = {
+                                let row_id = {
+                                    let maybe_row = {
+                                        let promise_map = promise_to_row_map.lock().await;
+                                        promise_map.get(&promise_id).copied()
+                                    };
+                                    if let Some(allocated_row_id) = maybe_row {
+                                        allocated_row_id
+                                    } else {
+                                        let mut counter = shared_row_counter.lock().await;
+                                        *counter += 1;
+                                        *counter
+                                    }
+                                };
+
+                                let import_rows = {
                                     let mut counter = shared_row_counter.lock().await;
-                                    let import_rows =
-                                        process_client_components(&mut content, &mut counter);
-                                    *counter += 1;
-                                    (*counter, import_rows)
+                                    process_client_components(&mut content, &mut counter)
                                 };
 
                                 let update = BoundaryUpdate {

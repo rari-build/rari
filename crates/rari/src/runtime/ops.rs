@@ -209,7 +209,14 @@ pub fn create_error_operation(
 }
 
 pub fn get_streaming_ops() -> Vec<OpDecl> {
-    vec![op_send_chunk_to_rust(), op_internal_log(), op_sanitize_html()]
+    vec![
+        op_send_chunk_to_rust(),
+        op_internal_log(),
+        op_sanitize_html(),
+        op_get_cookies(),
+        op_set_cookie(),
+        op_delete_cookie(),
+    ]
 }
 
 #[op2(fast)]
@@ -365,6 +372,90 @@ async fn perform_simple_fetch(
     let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
 
     Ok((status, body, headers_obj))
+}
+
+#[op2]
+#[string]
+pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
+    let op_state_ref = state.borrow();
+    op_state_ref
+        .try_borrow::<FetchOpState>()
+        .and_then(|s| s.request_context.as_ref())
+        .and_then(|ctx| ctx.cookie_header.as_deref())
+        .unwrap_or("")
+        .to_string()
+}
+
+#[derive(serde::Deserialize)]
+pub struct SetCookieArgs {
+    name: String,
+    value: String,
+    path: Option<String>,
+    domain: Option<String>,
+    expires: Option<String>,
+    #[serde(rename = "maxAge")]
+    max_age: Option<i64>,
+    #[serde(rename = "httpOnly", default)]
+    http_only: bool,
+    #[serde(default)]
+    secure: bool,
+    #[serde(rename = "sameSite")]
+    same_site: Option<String>,
+    priority: Option<String>,
+    #[serde(default)]
+    partitioned: bool,
+}
+
+#[op2]
+pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) {
+    use crate::server::middleware::request_context::PendingCookie;
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    {
+        ctx.pending_cookies.insert(
+            args.name.clone(),
+            PendingCookie {
+                name: args.name,
+                value: args.value,
+                path: args.path,
+                domain: args.domain,
+                expires: args.expires,
+                max_age: args.max_age,
+                http_only: args.http_only,
+                secure: args.secure,
+                same_site: args.same_site,
+                priority: args.priority,
+                partitioned: args.partitioned,
+            },
+        );
+    }
+}
+
+#[op2(fast)]
+pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
+    use crate::server::middleware::request_context::PendingCookie;
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    {
+        ctx.pending_cookies.insert(
+            name.clone(),
+            PendingCookie {
+                name,
+                value: String::new(),
+                path: Some("/".to_string()),
+                domain: None,
+                expires: None,
+                max_age: Some(0),
+                http_only: false,
+                secure: false,
+                same_site: None,
+                priority: None,
+                partitioned: false,
+            },
+        );
+    }
 }
 
 #[cfg(test)]

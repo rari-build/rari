@@ -241,7 +241,7 @@ export default function Client() {
     it('should extract dependencies from component', async () => {
       const filePath = '/test/project/src/components/WithDeps.tsx'
       const code = `import { useState } from 'react'
-import axios from 'axios'
+import { z } from 'zod'
 
 export default function WithDeps() {
   return <div>Test</div>
@@ -272,7 +272,7 @@ export default function WithDeps() {
 
       const componentEntries = Object.values(manifest.components)
       expect(componentEntries).toHaveLength(1)
-      expect(componentEntries[0].dependencies).toContain('axios')
+      expect(componentEntries[0].dependencies).toContain('zod')
     })
 
     it('should detect node imports', async () => {

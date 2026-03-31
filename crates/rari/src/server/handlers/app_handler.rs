@@ -264,7 +264,7 @@ pub async fn render_rsc_navigation_streaming(
         ));
 
     let render_result = match layout_renderer
-        .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
+        .render_route_with_streaming(&route_match, &context, Some(request_context.clone()))
         .await
     {
         Ok(result) => result,
@@ -401,7 +401,7 @@ pub async fn render_synchronous(
     let is_not_found = route_match.not_found.is_some();
 
     match layout_renderer
-        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .render_route_with_streaming(&route_match, &context, Some(request_context))
         .await
     {
         Ok(render_result) => match render_result {
@@ -582,7 +582,7 @@ pub async fn render_streaming_with_layout(
         ));
 
     let render_result = match layout_renderer
-        .render_route_to_html_direct(&route_match, &context, Some(request_context))
+        .render_route_with_streaming(&route_match, &context, Some(request_context))
         .await
     {
         Ok(result) => result,
@@ -759,10 +759,7 @@ pub async fn handle_app_route(
         route_match: &crate::server::routing::AppRouteMatch,
         config: &Config,
     ) -> bool {
-        if route_match.not_found.is_some() {
-            return false;
-        }
-        config.rsc.enable_streaming
+        if route_match.not_found.is_some() { false } else { config.rsc.enable_streaming }
     }
 
     if path.len() > 1 {
@@ -1113,7 +1110,7 @@ pub async fn handle_app_route(
             }
 
             let render_result = match layout_renderer
-                .render_route_to_html_direct(&route_match, &context, Some(request_context.clone()))
+                .render_route_with_streaming(&route_match, &context, Some(request_context.clone()))
                 .await
             {
                 Ok(result) => result,

@@ -60,6 +60,10 @@
       "types": "./dist/router.d.mts",
       "default": "./dist/router.mjs"
     },
+    "./headers": {
+      "types": "./dist/headers.d.mts",
+      "default": "./dist/headers.mjs"
+    },
     "./runtime/actions": {
       "types": "./dist/runtime/actions.d.mts",
       "default": "./dist/runtime/actions.mjs"

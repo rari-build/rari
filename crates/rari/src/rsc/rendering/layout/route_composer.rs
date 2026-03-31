@@ -19,7 +19,13 @@ impl RouteComposer {
         layouts: &[LayoutInfo],
         pathname_json: &str,
     ) -> String {
-        Self::build_composition_script_with_error(page_render_script, layouts, pathname_json, None)
+        Self::build_composition_script_with_error(
+            page_render_script,
+            layouts,
+            pathname_json,
+            None,
+            "{}",
+        )
     }
 
     pub fn build_composition_script_with_error(
@@ -27,6 +33,7 @@ impl RouteComposer {
         layouts: &[LayoutInfo],
         pathname_json: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
+        metadata_json: &str,
     ) -> String {
         let mut script = format!(
             r#"
@@ -39,8 +46,6 @@ impl RouteComposer {
                 if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
                 globalThis['~suspense'].discoveredBoundaries = [];
                 globalThis['~suspense'].pendingPromises = [];
-                if (!globalThis['~render']) globalThis['~render'] = {{}};
-                globalThis['~render'].deferredAsyncComponents = [];
 
                 if (!globalThis['~react']) globalThis['~react'] = {{}};
                 if (!globalThis['~react'].originalCreateElement) {{
@@ -88,7 +93,11 @@ impl RouteComposer {
             current_element = layout_var;
         }
 
-        script.push_str(&Self::generate_rsc_conversion(&current_element, error_boundary));
+        script.push_str(&Self::generate_rsc_conversion(
+            &current_element,
+            error_boundary,
+            metadata_json,
+        ));
 
         script
     }
@@ -123,6 +132,7 @@ impl RouteComposer {
     fn generate_rsc_conversion(
         final_element: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
+        metadata_json: &str,
     ) -> String {
         let wrap_with_error_boundary = error_boundary.is_some();
         let error_component_id_json = error_boundary
@@ -154,22 +164,14 @@ impl RouteComposer {
 
                 timings.total = performance.now() - startTotal;
 
-                const deferredComponents = globalThis['~render']?.deferredAsyncComponents || [];
-                const hasAsync = deferredComponents.length > 0;
-                const deferredCount = deferredComponents.length;
-
                 const result = {{
                     rsc_data: rscData,
                     boundaries: globalThis['~suspense']?.discoveredBoundaries || [],
                     pending_promises: globalThis['~suspense']?.pendingPromises || [],
                     has_suspense: (globalThis['~suspense']?.discoveredBoundaries && globalThis['~suspense'].discoveredBoundaries.length > 0) ||
                                  (globalThis['~suspense']?.pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
-                    metadata: {{
-                        hasAsync: hasAsync,
-                        deferredCount: deferredCount,
-                        executionTime: timings.total
-                    }},
                     timings: timings,
+                    metadata: {metadata_json},
                     success: true
                 }};
 
@@ -186,7 +188,8 @@ impl RouteComposer {
             "#,
             final_element = final_element,
             wrap_with_error_boundary = wrap_with_error_boundary,
-            error_component_id_json = error_component_id_json
+            error_component_id_json = error_component_id_json,
+            metadata_json = metadata_json
         )
     }
 }
@@ -298,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_generate_rsc_conversion() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None);
+        let conversion = RouteComposer::generate_rsc_conversion("finalElement", None, "{}");
 
         assert!(conversion.contains("renderToRsc(finalElement"));
         assert!(conversion.contains("rsc_data: rscData"));
@@ -314,12 +317,21 @@ mod tests {
         };
 
         let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", Some(&error_boundary));
+            RouteComposer::generate_rsc_conversion("finalElement", Some(&error_boundary), "{}");
 
         assert!(conversion.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
         assert!(conversion.contains("src/app/test/error.tsx"));
         assert!(conversion.contains("errorComponentId:"));
         assert!(conversion.contains("rscData = ["));
         assert!(conversion.contains("'$'"));
+    }
+
+    #[test]
+    fn test_generate_rsc_conversion_with_metadata() {
+        let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
+        let conversion =
+            RouteComposer::generate_rsc_conversion("finalElement", None, metadata_json);
+
+        assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
     }
 }

@@ -33,24 +33,41 @@ const markdownTableRegex = /^\|.+\|$/gm
 const mdxExtRegex = /\.mdx$/
 const leadingSlashRegex = /^\//
 
-async function getAllMdxFiles(dir: string, baseDir = dir): Promise<string[]> {
+interface MdxFileResult {
+  files: string[]
+  partial: boolean
+  error?: Error
+}
+
+async function getAllMdxFiles(dir: string, baseDir = dir): Promise<MdxFileResult> {
   const files: string[] = []
+  let partial = false
+  let firstError: Error | undefined
+
   try {
     const entries = await readdir(dir, { withFileTypes: true })
 
     for (const entry of entries) {
       const fullPath = join(dir, entry.name)
       if (entry.isDirectory()) {
-        files.push(...await getAllMdxFiles(fullPath, baseDir))
+        const sub = await getAllMdxFiles(fullPath, baseDir)
+        files.push(...sub.files)
+        if (sub.partial) {
+          partial = true
+          firstError = firstError ?? sub.error
+        }
       }
       else if (entry.name.endsWith('.mdx')) {
         files.push(fullPath.replace(baseDir, '').replace(leadingSlashRegex, ''))
       }
     }
   }
-  catch {}
+  catch (error) {
+    partial = true
+    firstError = error instanceof Error ? error : new Error(String(error))
+  }
 
-  return files
+  return { files, partial, error: firstError }
 }
 
 function extractContent(mdxContent: string): { title: string, content: string, originalContent: string } {
@@ -128,7 +145,13 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
     return []
 
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
-  const mdxFiles = await getAllMdxFiles(contentDir)
+  const { files: mdxFiles, partial, error } = await getAllMdxFiles(contentDir)
+
+  if (partial && mdxFiles.length === 0)
+    throw error ?? new Error('Failed to read documentation directory')
+
+  if (partial)
+    console.warn('Search results may be incomplete due to directory read errors:', error?.message)
 
   const lowerQuery = query.toLowerCase()
   const words = lowerQuery.split(WHITESPACE_REGEX)

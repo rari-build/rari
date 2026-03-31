@@ -13,6 +13,21 @@ use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
+pub struct PendingCookie {
+    pub name: String,
+    pub value: String,
+    pub path: Option<String>,
+    pub domain: Option<String>,
+    pub expires: Option<String>,
+    pub max_age: Option<i64>,
+    pub http_only: bool,
+    pub secure: bool,
+    pub same_site: Option<String>,
+    pub priority: Option<String>,
+    pub partitioned: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct CachedFetchResult {
     pub body: Bytes,
     pub status: u16,
@@ -42,6 +57,8 @@ pub struct RequestContext {
     request_id: String,
     start_time: Instant,
     route_path: String,
+    pub cookie_header: Option<String>,
+    pub pending_cookies: Arc<DashMap<String, PendingCookie>>,
 }
 
 impl RequestContext {
@@ -52,7 +69,14 @@ impl RequestContext {
             request_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
             route_path,
+            cookie_header: None,
+            pending_cookies: Arc::new(DashMap::new()),
         }
+    }
+
+    pub fn with_cookies(mut self, cookie_header: Option<String>) -> Self {
+        self.cookie_header = cookie_header;
+        self
     }
 
     pub fn request_id(&self) -> &str {

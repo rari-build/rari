@@ -23,29 +23,107 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
   const { moduleMap = {} } = options
 
   const reader = stream.getReader()
-  const chunks = []
+  const decoder = new TextDecoder()
+
+  const modules = new Map<string, ModuleData>()
+  const chunks = new Map<string, any>()
+  const symbols = new Map<string, string>()
+
+  let buffer = ''
+  let rootChunkId: string | null = null
+  let rootElement: any = null
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done)
+
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line.trim()) {
+          processStreamRow(line, modules, chunks, symbols)
+
+          if (rootChunkId === null) {
+            const colonIndex = line.indexOf(':')
+            if (colonIndex !== -1) {
+              const rowId = line.slice(0, colonIndex)
+              const content = line.slice(colonIndex + 1)
+
+              if (!content.startsWith('I[') && (!content.startsWith('"$S') || !content.endsWith('"'))) {
+                if (chunks.has(rowId)) {
+                  rootChunkId = rowId
+                  rootElement = chunks.get(rowId)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (done) {
+      if (buffer.trim()) {
+        processStreamRow(buffer, modules, chunks, symbols)
+
+        if (rootChunkId === null) {
+          const colonIndex = buffer.indexOf(':')
+          if (colonIndex !== -1) {
+            const rowId = buffer.slice(0, colonIndex)
+            if (chunks.has(rowId)) {
+              rootChunkId = rowId
+              rootElement = chunks.get(rowId)
+            }
+          }
+        }
+      }
       break
-    chunks.push(value)
+    }
   }
 
-  const combined = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
-  let offset = 0
-  for (const chunk of chunks) {
-    combined.set(chunk, offset)
-    offset += chunk.length
+  await preloadComponentsFromModules(modules)
+
+  return rscToReact(rootElement, modules, moduleMap, symbols, chunks)
+}
+
+const TAG_MODULE_IMPORT = 73
+const TAG_ERROR = 69
+const TAG_TEXT = 84
+const TAG_HINT = 72
+const TAG_DEBUG = 68
+const TAG_CONSOLE = 87
+const TAG_STREAM_CLOSE = 67
+
+function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks: Map<string, any>, symbols: Map<string, string>): void {
+  const colonIndex = line.indexOf(':')
+  if (colonIndex === -1)
+    return
+
+  const rowIdStr = line.slice(0, colonIndex)
+  let content = line.slice(colonIndex + 1)
+
+  const rowId = Number.parseInt(rowIdStr, 10)
+
+  let tag = 0
+  if (content.length > 0) {
+    const firstChar = content.charCodeAt(0)
+    if (
+      firstChar === TAG_MODULE_IMPORT
+      || firstChar === TAG_ERROR
+      || firstChar === TAG_TEXT
+      || firstChar === TAG_HINT
+      || firstChar === TAG_DEBUG
+      || firstChar === TAG_CONSOLE
+      || firstChar === TAG_STREAM_CLOSE
+    ) {
+      tag = firstChar
+      content = content.slice(1)
+    }
   }
 
-  const text = new TextDecoder().decode(combined)
-
-  const parsed = parseWireFormat(text)
-
-  await preloadComponentsFromModules(parsed.modules)
-
-  return rscToReact(parsed.rootElement, parsed.modules, moduleMap, parsed.symbols, parsed.chunks)
+  processRow(rowId, tag, content, modules, chunks, symbols)
 }
 
 export async function createFromFetch(fetchPromise: Promise<Response>, options: CreateFromStreamOptions = {}): Promise<any> {
@@ -62,14 +140,6 @@ export async function createFromFetch(fetchPromise: Promise<Response>, options: 
 const ROW_ID = 0
 const ROW_TAG = 1
 const ROW_CHUNK_BY_NEWLINE = 2
-
-const TAG_MODULE_IMPORT = 73 // 'I'
-const TAG_ERROR = 69 // 'E'
-const TAG_TEXT = 84 // 'T'
-const TAG_HINT = 72 // 'H'
-const TAG_DEBUG = 68 // 'D'
-const TAG_CONSOLE = 87 // 'W'
-const TAG_STREAM_CLOSE = 67 // 'C'
 
 function parseWireFormat(wireFormat: string): ParsedWireFormat {
   const modules = new Map<string, ModuleData>()

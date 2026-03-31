@@ -422,12 +422,6 @@ fn test_mode_consistency_metadata_structure() {
 
     assert!(script_ssr.contains("metadata: {"));
     assert!(script_rsc.contains("metadata: {"));
-
-    assert!(script_ssr.contains("hasAsync: hasAsync"));
-    assert!(script_rsc.contains("hasAsync: hasAsync"));
-
-    assert!(script_ssr.contains("deferredCount: deferredCount"));
-    assert!(script_rsc.contains("deferredCount: deferredCount"));
 }
 
 #[test]

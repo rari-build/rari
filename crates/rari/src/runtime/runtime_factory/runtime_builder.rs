@@ -2,8 +2,8 @@ use crate::error::RariError;
 use crate::runtime::module_loader::RariModuleLoader;
 use crate::runtime::ops::StreamOpState;
 use crate::runtime::runtime_factory::constants::{
-    API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, ENV_INJECTION_SCRIPT,
-    METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
+    API_HANDLER_INIT_SCRIPT, COMPONENT_LOADER_INIT_SCRIPT, COOKIES_INIT_SCRIPT,
+    ENV_INJECTION_SCRIPT, METADATA_COLLECTOR_INIT_SCRIPT, MODULE_CHECK_SCRIPT,
 };
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
@@ -82,6 +82,10 @@ pub fn create_deno_runtime(
         .map_err(|e| {
             RariError::internal(format!("Failed to initialize component loader helper: {e}"))
         })?;
+
+    runtime
+        .execute_script("cookies_init.js", COOKIES_INIT_SCRIPT.to_string())
+        .map_err(|e| RariError::internal(format!("Failed to initialize cookies helper: {e}")))?;
 
     Ok((runtime, module_loader))
 }
