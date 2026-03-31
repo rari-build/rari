@@ -566,7 +566,7 @@ class RscClient {
         return element
 
       if (Array.isArray(element)) {
-        if (element.length >= 3 && element[0] === '$') {
+        if (element.length >= 4 && element[0] === '$') {
           const [, type, key, props] = element
 
           if (type === 'react.suspense' || type === 'suspense') {
