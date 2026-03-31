@@ -20,7 +20,7 @@ async function getSessionId(): Promise<string> {
   const store = await cookies()
   let sessionId = store.get('todo-session')?.value
   if (!sessionId) {
-    sessionId = Math.random().toString(36).slice(2)
+    sessionId = crypto.randomUUID()
     store.set('todo-session', sessionId, { path: '/', httpOnly: true })
   }
 

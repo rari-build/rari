@@ -77,6 +77,7 @@ if (!globalThis.renderToRsc) {
 
             const isAsyncFunction = element.type[Symbol.toStringTag] === 'AsyncFunction'
               || element.type.constructor?.name === 'AsyncFunction'
+              || (typeof element.type.toString === 'function' && element.type.toString().trimStart().startsWith('async '))
 
             if (isAsyncFunction && currentBoundaryId) {
               const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`

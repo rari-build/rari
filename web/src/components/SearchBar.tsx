@@ -77,7 +77,7 @@ export default function SearchBar() {
         setIsOpen(true)
       }
       if (e.key === 'Escape' && isOpen) {
-        setIsOpen(false)
+        handleClose()
       }
       if (isOpen && results.length > 0) {
         if (e.key === 'ArrowDown') {

@@ -74,12 +74,15 @@ impl JsRuntimeInterface for LazyRuntime {
         let env_vars = self.env_vars.clone();
 
         Box::pin(async move {
+            let n = scripts.len();
             let self_copy = LazyRuntime::new(inner, env_vars);
             match self_copy.with_runtime(|runtime| runtime.execute_script_batch(scripts)).await {
                 Ok(fut) => fut.await,
                 Err(e) => {
                     let (err_tx, err_rx) = mpsc::unbounded_channel();
-                    let _ = err_tx.send((0, Err(e)));
+                    for i in 0..n {
+                        let _ = err_tx.send((i, Err(e.clone())));
+                    }
                     err_rx
                 }
             }

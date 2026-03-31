@@ -133,6 +133,8 @@ function detectViteBin(): 'vp' | 'vite' {
         const deps = { ...pkg.dependencies, ...pkg.devDependencies }
         if (deps['vite-plus'])
           return 'vp'
+        if (deps.vite)
+          return 'vite'
       }
     }
     catch {}

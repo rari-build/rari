@@ -167,8 +167,11 @@ impl BackgroundPromiseResolver {
             while received < n {
                 match result_rx.recv().await {
                     Some((idx, result)) => {
+                        if idx >= promises.len() || !received_indices.insert(idx) {
+                            error!("Ignoring invalid or duplicate batch result index {}", idx);
+                            continue;
+                        }
                         received += 1;
-                        received_indices.insert(idx);
                         let promise = &promises[idx];
                         let promise_id = &promise.id;
                         let boundary_id = &promise.boundary_id;

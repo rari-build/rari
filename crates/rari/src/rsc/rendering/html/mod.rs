@@ -1663,12 +1663,20 @@ if (typeof window !== 'undefined') {{
         match value {
             serde_json::Value::String(s) => escape_html(s),
             serde_json::Value::Number(n) => n.to_string(),
-            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Bool(_) => String::new(),
             serde_json::Value::Array(arr) => {
                 if arr.len() >= 4
                     && arr[0].as_str() == Some("$")
                     && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
                 {
+                    if tag.starts_with("$L")
+                        || tag.starts_with("$")
+                            && tag.len() > 1
+                            && !tag.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                    {
+                        return String::new();
+                    }
+
                     if !tag
                         .chars()
                         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
@@ -1678,20 +1686,75 @@ if (typeof window !== 'undefined') {{
 
                     let mut html = format!("<{}", tag);
 
+                    const BOOLEAN_ATTRS: &[&str] = &[
+                        "disabled",
+                        "checked",
+                        "selected",
+                        "readonly",
+                        "required",
+                        "multiple",
+                        "autofocus",
+                        "autoplay",
+                        "controls",
+                        "default",
+                        "defer",
+                        "formnovalidate",
+                        "hidden",
+                        "ismap",
+                        "loop",
+                        "novalidate",
+                        "open",
+                        "reversed",
+                        "scoped",
+                        "seamless",
+                    ];
+
                     if let Some(props_obj) = props.as_object() {
-                        for (key, value) in props_obj {
-                            if key == "children" {
+                        for (key, val) in props_obj {
+                            if key == "children" || key == "~boundaryId" || key == "key" {
                                 continue;
                             }
-                            if key.starts_with("data-") || key == "className" || key == "class" {
-                                let attr_name = if key == "className" { "class" } else { key };
-                                if let Some(val_str) = value.as_str() {
+
+                            let attr_name = if key == "className" {
+                                "class".to_string()
+                            } else if key == "htmlFor" {
+                                "for".to_string()
+                            } else {
+                                key.clone()
+                            };
+
+                            if attr_name.starts_with("on")
+                                && attr_name.len() > 2
+                                && attr_name
+                                    .chars()
+                                    .nth(2)
+                                    .map(|c| c.is_uppercase())
+                                    .unwrap_or(false)
+                            {
+                                continue;
+                            }
+
+                            match val {
+                                serde_json::Value::String(s) => {
+                                    if s.starts_with("$L") {
+                                        continue;
+                                    }
                                     html.push_str(&format!(
                                         r#" {}="{}""#,
                                         attr_name,
-                                        RscHtmlRenderer::escape_html_attribute(val_str)
+                                        RscHtmlRenderer::escape_html_attribute(s)
                                     ));
                                 }
+                                serde_json::Value::Number(n) => {
+                                    html.push_str(&format!(r#" {}="{}""#, attr_name, n));
+                                }
+                                serde_json::Value::Bool(true) => {
+                                    if BOOLEAN_ATTRS.contains(&attr_name.as_str()) {
+                                        html.push_str(&format!(" {}", attr_name));
+                                    }
+                                }
+                                serde_json::Value::Bool(false) => {}
+                                _ => {}
                             }
                         }
                     }

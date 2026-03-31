@@ -114,26 +114,7 @@ impl JsExecutionRuntime {
         &self,
         scripts: Vec<(String, String)>,
     ) -> tokio::sync::mpsc::UnboundedReceiver<(usize, Result<Value, RariError>)> {
-        let runtime = self.runtime.clone();
-        let n = scripts.len();
-        let timeout_ms = self.timeout_ms;
-
-        match tokio::time::timeout(
-            Duration::from_millis(timeout_ms),
-            runtime.execute_script_batch(scripts),
-        )
-        .await
-        {
-            Ok(receiver) => receiver,
-            Err(_) => {
-                let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-                let msg = format!("Script batch execution timed out after {} ms", timeout_ms);
-                for i in 0..n {
-                    let _ = tx.send((i, Err(RariError::timeout(msg.clone()))));
-                }
-                rx
-            }
-        }
+        self.runtime.execute_script_batch(scripts).await
     }
 
     pub async fn collect_metadata(

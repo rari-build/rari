@@ -27,6 +27,23 @@ pub struct PendingCookie {
     pub partitioned: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PendingCookieKey {
+    pub name: String,
+    pub path: Option<String>,
+    pub domain: Option<String>,
+}
+
+impl PendingCookieKey {
+    pub fn new(name: &str, path: Option<&str>, domain: Option<&str>) -> Self {
+        Self {
+            name: name.to_string(),
+            path: path.map(|s| s.to_string()),
+            domain: domain.map(|s| s.to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CachedFetchResult {
     pub body: Bytes,
@@ -58,7 +75,7 @@ pub struct RequestContext {
     start_time: Instant,
     route_path: String,
     pub cookie_header: Option<String>,
-    pub pending_cookies: Arc<DashMap<String, PendingCookie>>,
+    pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
 }
 
 impl RequestContext {

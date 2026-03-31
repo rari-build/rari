@@ -96,20 +96,48 @@ pub struct ServerActionResponse {
     pub redirect: Option<String>,
 }
 
+fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
+    if allowed_origins.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        if !crate::server::utils::http_utils::is_origin_allowed(origin, allowed_origins) {
+            error!("Invalid origin: {}", origin);
+            return Err(StatusCode::FORBIDDEN);
+        }
+        return Ok(());
+    }
+
+    if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
+        if let Ok(referer_url) = url::Url::parse(referer) {
+            let referer_origin =
+                format!("{}://{}", referer_url.scheme(), referer_url.host_str().unwrap_or(""));
+            let referer_origin = if let Some(port) = referer_url.port() {
+                format!("{}:{}", referer_origin, port)
+            } else {
+                referer_origin
+            };
+            if crate::server::utils::http_utils::is_origin_allowed(&referer_origin, allowed_origins)
+            {
+                return Ok(());
+            }
+        }
+        error!("Invalid referer origin: {}", referer);
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    error!("Missing Origin and Referer headers with non-empty allowed_origins");
+    Err(StatusCode::FORBIDDEN)
+}
+
 pub async fn handle_server_action(
     State(state): State<ServerState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        let allowed_origins = state.config.cors_config().allowed_origins;
-        if !allowed_origins.is_empty()
-            && !crate::server::utils::http_utils::is_origin_allowed(origin, &allowed_origins)
-        {
-            error!("Invalid origin for server action: {}", origin);
-            return Err(StatusCode::FORBIDDEN);
-        }
-    }
+    let allowed_origins = state.config.cors_config().allowed_origins;
+    check_origin(&headers, &allowed_origins)?;
 
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
         Ok(req) => req,
@@ -291,15 +319,8 @@ pub async fn handle_form_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        let allowed_origins = state.config.cors_config().allowed_origins;
-        if !allowed_origins.is_empty()
-            && !crate::server::utils::http_utils::is_origin_allowed(origin, &allowed_origins)
-        {
-            error!("Invalid origin for form action: {}", origin);
-            return Err(StatusCode::FORBIDDEN);
-        }
-    }
+    let allowed_origins = state.config.cors_config().allowed_origins;
+    check_origin(&headers, &allowed_origins)?;
 
     let form_data = match parse_form_data(&body) {
         Ok(data) => data,
@@ -333,8 +354,25 @@ pub async fn handle_form_action(
         }
     };
 
+    let cookie_header =
+        headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+
+    let request_context = std::sync::Arc::new(
+        crate::server::middleware::request_context::RequestContext::new(
+            "/_rari/action".to_string(),
+        )
+        .with_cookies(cookie_header),
+    );
+
     let renderer = state.renderer.lock().await;
+
+    if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
+        error!("Failed to set request context for form action: {}", e);
+    }
+
     let result = renderer.execute_server_function(action_id, export_name, &sanitized_args).await;
+
+    let _ = renderer.runtime.clear_request_context().await;
 
     match result {
         Ok(value) => {
@@ -351,12 +389,23 @@ pub async fn handle_form_action(
                 state.response_cache.invalidate_by_tag(&redirect_path).await;
                 state.html_cache.remove(&redirect_path);
 
-                return Response::builder()
+                let mut redirect_response = Response::builder()
                     .status(StatusCode::SEE_OTHER)
                     .header("Location", redirect_url)
                     .header("Cache-Control", "no-store, no-cache, must-revalidate")
                     .body("".into())
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                for entry in request_context.pending_cookies.iter() {
+                    let cookie = entry.value();
+                    if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
+                        && let Ok(header_value) = set_cookie_value.parse()
+                    {
+                        redirect_response.headers_mut().append(header::SET_COOKIE, header_value);
+                    }
+                }
+
+                return Ok(redirect_response);
             }
 
             let redirect_url = headers.get("referer").and_then(|h| h.to_str().ok()).unwrap_or("/");
@@ -372,12 +421,23 @@ pub async fn handle_form_action(
             state.response_cache.invalidate_by_tag(&redirect_path).await;
             state.html_cache.remove(&redirect_path);
 
-            Response::builder()
+            let mut redirect_response = Response::builder()
                 .status(StatusCode::SEE_OTHER)
                 .header("Location", redirect_url)
                 .header("Cache-Control", "no-store, no-cache, must-revalidate")
                 .body("".into())
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            for entry in request_context.pending_cookies.iter() {
+                let cookie = entry.value();
+                if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
+                    && let Ok(header_value) = set_cookie_value.parse()
+                {
+                    redirect_response.headers_mut().append(header::SET_COOKIE, header_value);
+                }
+            }
+
+            Ok(redirect_response)
         }
         Err(e) => {
             error!("Form action execution failed: {}", e);
@@ -639,9 +699,7 @@ fn build_set_cookie_header(
     cookie: &crate::server::middleware::request_context::PendingCookie,
 ) -> Result<String, ()> {
     let mut header = format!("{}={}", cookie.name, cookie.value);
-    if let Some(path) = &cookie.path {
-        header.push_str(&format!("; Path={}", path));
-    }
+    header.push_str(&format!("; Path={}", cookie.path.as_deref().unwrap_or("/")));
     if let Some(domain) = &cookie.domain {
         header.push_str(&format!("; Domain={}", domain));
     }

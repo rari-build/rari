@@ -196,7 +196,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
-            Arc::new(Mutex::new(FxHashMap::default())),
+            Arc::clone(&self.promise_to_row),
         )));
 
         let suspense_boundaries =
@@ -306,7 +306,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
-            Arc::new(Mutex::new(FxHashMap::default())),
+            Arc::clone(&self.promise_to_row),
         )));
 
         let partial_result = self.parse_rsc_wire_format(&rsc_wire_format).await?;
@@ -444,7 +444,7 @@ impl StreamingRenderer {
             update_sender,
             error_sender,
             Arc::clone(&self.shared_row_counter),
-            Arc::new(Mutex::new(FxHashMap::default())),
+            Arc::clone(&self.promise_to_row),
         )));
 
         self.module_path = Some(format!("{component_id}.js"));
@@ -1204,7 +1204,7 @@ impl StreamingRenderer {
         _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
     ) {
         for import_row in &update.import_rows {
-            tracing::info!(
+            tracing::debug!(
                 "Sending import row for boundary {}: {}",
                 update.boundary_id,
                 import_row
@@ -1225,11 +1225,10 @@ impl StreamingRenderer {
 
         let update_row = format!("{}:{}\n", update.row_id, update.content);
 
-        tracing::info!(
-            "Sending boundary update for {}: row_id={}, content preview: {}",
+        tracing::debug!(
+            "Sending boundary update for {}: row_id={}",
             update.boundary_id,
             update.row_id,
-            update.content.to_string().chars().take(200).collect::<String>()
         );
 
         let chunk = RscStreamChunk {

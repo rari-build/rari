@@ -104,7 +104,7 @@ function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks
   const rowIdStr = line.slice(0, colonIndex)
   let content = line.slice(colonIndex + 1)
 
-  const rowId = Number.parseInt(rowIdStr, 10)
+  const rowId = Number.parseInt(rowIdStr, 16)
 
   let tag = 0
   if (content.length > 0) {

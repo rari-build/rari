@@ -34,7 +34,6 @@ test.describe.serial('Server Actions', () => {
     test('should toggle todo completion status', async ({ page }) => {
       await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('completed')
       await page.click('[data-testid="toggle-button-1"]')
-      await page.waitForTimeout(2000)
       await expect(page.locator('[data-testid="todo-status-1"]')).toHaveText('active', { timeout: 10000 })
     })
 

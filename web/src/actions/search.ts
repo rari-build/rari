@@ -24,6 +24,7 @@ const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
 const htmlTagRegex = /<[^>]+>/g
+const angleBracketRegex = /[<>]/g
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
 const listMarkerRegex = /^[->]\s+/gm
@@ -90,6 +91,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(markdownTableRegex, '')
     .replace(markdownLinkRegex, '$1')
     .replace(htmlTagRegex, '')
+    .replace(angleBracketRegex, '')
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
@@ -156,46 +158,48 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   const lowerQuery = query.toLowerCase()
   const words = lowerQuery.split(WHITESPACE_REGEX)
 
-  const results: Array<SearchResult & { score: number }> = []
+  const fileResults = await Promise.all(
+    mdxFiles.map(async (file) => {
+      const fullPath = join(contentDir, file)
+      const fileContent = await readFile(fullPath, 'utf-8')
+      const { title, content, originalContent } = extractContent(fileContent)
 
-  for (const file of mdxFiles) {
-    const fullPath = join(contentDir, file)
-    const fileContent = await readFile(fullPath, 'utf-8')
-    const { title, content, originalContent } = extractContent(fileContent)
+      const lowerTitle = title.toLowerCase()
+      let score = 0
 
-    const lowerTitle = title.toLowerCase()
-    let score = 0
+      if (lowerTitle === lowerQuery)
+        score += 100
+      else if (lowerTitle.startsWith(lowerQuery))
+        score += 50
+      else if (lowerTitle.includes(lowerQuery))
+        score += 25
 
-    if (lowerTitle === lowerQuery)
-      score += 100
-    else if (lowerTitle.startsWith(lowerQuery))
-      score += 50
-    else if (lowerTitle.includes(lowerQuery))
-      score += 25
+      if (content.includes(lowerQuery))
+        score += 15
 
-    if (content.includes(lowerQuery))
-      score += 15
+      for (const word of words) {
+        if (lowerTitle.includes(word))
+          score += 10
+        if (content.includes(word))
+          score += 3
+      }
 
-    for (const word of words) {
-      if (lowerTitle.includes(word))
-        score += 10
-      if (content.includes(word))
-        score += 3
-    }
+      if (score > 0) {
+        return {
+          title,
+          href: `
+/docs/${file.replace('.mdx', '')}`,
+          category: pathToCategory(file),
+          excerpt: extractExcerpt(originalContent, lowerQuery),
+          score,
+        }
+      }
 
-    if (score > 0) {
-      const href = `/docs/${file.replace('.mdx', '')}`
-      const category = pathToCategory(file)
+      return null
+    }),
+  )
 
-      results.push({
-        title,
-        href,
-        category,
-        excerpt: extractExcerpt(originalContent, lowerQuery),
-        score,
-      })
-    }
-  }
+  const results = fileResults.filter((r): r is NonNullable<typeof r> => r !== null)
 
   return results
     .sort((a, b) => b.score - a.score)

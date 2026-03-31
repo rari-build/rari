@@ -377,13 +377,39 @@ async fn perform_simple_fetch(
 #[op2]
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
+    use crate::server::middleware::request_context::PendingCookieKey;
+
     let op_state_ref = state.borrow();
-    op_state_ref
-        .try_borrow::<FetchOpState>()
-        .and_then(|s| s.request_context.as_ref())
-        .and_then(|ctx| ctx.cookie_header.as_deref())
+    let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    else {
+        return String::new();
+    };
+
+    let mut cookies: std::collections::BTreeMap<String, String> = ctx
+        .cookie_header
+        .as_deref()
         .unwrap_or("")
-        .to_string()
+        .split(';')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let name = parts.next()?.trim().to_string();
+            let value = parts.next().unwrap_or("").trim().to_string();
+            if name.is_empty() { None } else { Some((name, value)) }
+        })
+        .collect();
+
+    for entry in ctx.pending_cookies.iter() {
+        let key: &PendingCookieKey = entry.key();
+        let cookie = entry.value();
+        if cookie.max_age == Some(0) {
+            cookies.remove(&key.name);
+        } else {
+            cookies.insert(key.name.clone(), cookie.value.clone());
+        }
+    }
+
+    cookies.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("; ")
 }
 
 #[derive(serde::Deserialize)]
@@ -408,13 +434,13 @@ pub struct SetCookieArgs {
 
 #[op2]
 pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) {
-    use crate::server::middleware::request_context::PendingCookie;
+    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
     let op_state_ref = state.borrow();
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
     {
         ctx.pending_cookies.insert(
-            args.name.clone(),
+            PendingCookieKey::new(&args.name, args.path.as_deref(), args.domain.as_deref()),
             PendingCookie {
                 name: args.name,
                 value: args.value,
@@ -434,13 +460,13 @@ pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) 
 
 #[op2(fast)]
 pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
-    use crate::server::middleware::request_context::PendingCookie;
+    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
     let op_state_ref = state.borrow();
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
     {
         ctx.pending_cookies.insert(
-            name.clone(),
+            PendingCookieKey::new(&name, Some("/"), None),
             PendingCookie {
                 name,
                 value: String::new(),

@@ -89,6 +89,55 @@ type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rat
   define?: ServerBuildOptions['define']
 }
 
+export function getTopLevelDirective(source: string): string | null {
+  let i = 0
+  const len = source.length
+
+  while (i < len) {
+    if (source[i] === ' ' || source[i] === '\t' || source[i] === '\r' || source[i] === '\n') {
+      i++
+      continue
+    }
+
+    if (source[i] === '/' && source[i + 1] === '/') {
+      while (i < len && source[i] !== '\n')
+        i++
+      continue
+    }
+
+    if (source[i] === '/' && source[i + 1] === '*') {
+      i += 2
+      while (i < len - 1 && (source[i] !== '*' || source[i + 1] !== '/'))
+        i++
+      i += 2
+      continue
+    }
+
+    const quote = source[i] === '\'' || source[i] === '"' ? source[i] : null
+    if (quote) {
+      const end = source.indexOf(quote, i + 1)
+      if (end !== -1) {
+        const directive = source.slice(i + 1, end)
+        const charAfter = source[end + 1]
+        if (charAfter === undefined || charAfter === ';' || charAfter === '\n' || charAfter === '\r' || charAfter === ' ' || charAfter === '\t')
+          return directive
+      }
+    }
+
+    return null
+  }
+
+  return null
+}
+
+export function hasTopLevelUseServerDirective(source: string): boolean {
+  return getTopLevelDirective(source) === 'use server'
+}
+
+export function hasTopLevelUseClientDirective(source: string): boolean {
+  return getTopLevelDirective(source) === 'use client'
+}
+
 export class ServerComponentBuilder {
   private serverComponents = new Map<
     string,
@@ -196,36 +245,7 @@ export class ServerComponentBuilder {
 
       const code = fs.readFileSync(filePath, 'utf-8')
 
-      const lines = code.split('\n')
-      let hasClientDirective = false
-      let hasServerDirective = false
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-          continue
-        if (
-          trimmed === '\'use client\''
-          || trimmed === '"use client"'
-          || trimmed === '\'use client\';'
-          || trimmed === '"use client";'
-        ) {
-          hasClientDirective = true
-          break
-        }
-        if (
-          trimmed === '\'use server\''
-          || trimmed === '"use server"'
-          || trimmed === '\'use server\';'
-          || trimmed === '"use server";'
-        ) {
-          hasServerDirective = true
-          break
-        }
-        if (trimmed)
-          break
-      }
-
-      return !hasClientDirective && !hasServerDirective
+      return !hasTopLevelUseClientDirective(code) && !hasTopLevelUseServerDirective(code)
     }
     catch {
       return false
@@ -378,25 +398,7 @@ export class ServerComponentBuilder {
   }
 
   private isServerAction(code: string): boolean {
-    const lines = code.split('\n')
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-        continue
-      if (
-        trimmed === '\'use server\''
-        || trimmed === '"use server"'
-        || trimmed === '\'use server\';'
-        || trimmed === '"use server";'
-      ) {
-        return true
-      }
-
-      if (trimmed)
-        break
-    }
-
-    return false
+    return hasTopLevelUseServerDirective(code)
   }
 
   private extractDependencies(code: string): string[] {
@@ -723,24 +725,11 @@ const ${importName} = (props) => {
 
                 try {
                   const content = fs.readFileSync(pathWithExt, 'utf-8')
-                  const lines = content.split('\n')
-                  for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-                      continue
-                    if (
-                      trimmed === '\'use server\''
-                      || trimmed === '"use server"'
-                      || trimmed === '\'use server\';'
-                      || trimmed === '"use server";'
-                    ) {
-                      const relActionPath = path.relative(self.projectRoot, pathWithExt)
-                      const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
-                      serverActionRefs.set(pathWithExt, actionId)
-                      return { id: `\0server-action:${pathWithExt}` }
-                    }
-                    if (trimmed)
-                      break
+                  if (hasTopLevelUseServerDirective(content)) {
+                    const relActionPath = path.relative(self.projectRoot, pathWithExt)
+                    const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
+                    serverActionRefs.set(pathWithExt, actionId)
+                    return { id: `\0server-action:${pathWithExt}` }
                   }
                 }
                 catch (error) {
@@ -1783,26 +1772,8 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
 
       try {
         const code = fs.readFileSync(fullPath, 'utf-8')
-        const lines = code.split('\n')
-        let hasServerDirective = false
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-            continue
-          if (
-            trimmed === '\'use server\''
-            || trimmed === '"use server"'
-            || trimmed === '\'use server\';'
-            || trimmed === '"use server";'
-          ) {
-            hasServerDirective = true
-            break
-          }
-          if (trimmed)
-            break
-        }
 
-        if (hasServerDirective) {
+        if (hasTopLevelUseServerDirective(code)) {
           builder.addServerComponent(fullPath)
           continue
         }

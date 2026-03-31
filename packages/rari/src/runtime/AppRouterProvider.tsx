@@ -991,7 +991,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const isReferencedByShell = rows.some((shellRow) => {
           const sci = shellRow.indexOf(':')
           const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
-          return shellContent.includes(`"$L${id}"`) || shellContent.includes(`$L${id}`)
+          const refPattern = new RegExp(`"?\\$L${id}"?(?![0-9a-fA-F])`)
+          return refPattern.test(shellContent)
         })
         return isReferencedByShell
       })
@@ -1011,7 +1012,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           const shellRows = rows.filter((r) => {
             const ci = r.indexOf(':')
             const id = ci > 0 ? r.substring(0, ci).trim() : ''
-            return !hasPageContent || !rows.some(sr => sr.includes(`"$L${id}"`))
+            const refPattern = new RegExp(`"\\$L${id}"(?![0-9a-fA-F])`)
+            return !hasPageContent || !rows.some(sr => refPattern.test(sr))
           })
           try {
             const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false)

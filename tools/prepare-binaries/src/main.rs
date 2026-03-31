@@ -230,24 +230,6 @@ fn copy_binary_to_platform_package(
                     ));
                 }
             }
-
-            let sign_result = std::process::Command::new("codesign")
-                .args(["-s", "-", dest_path.to_str().unwrap_or("")])
-                .output();
-            match sign_result {
-                Ok(output) if output.status.success() => {
-                    log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
-                }
-                Ok(output) => {
-                    log_warning(&format!(
-                        "codesign failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    ));
-                }
-                Err(e) => {
-                    log_warning(&format!("codesign not available: {}", e));
-                }
-            }
         }
     }
 

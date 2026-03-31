@@ -704,6 +704,7 @@ impl Config {
             }
         } else {
             let allowed_origins = if let Some(origin) = &self.server.origin {
+                // Explicit origin configured — use only that.
                 vec![origin.clone()]
             } else {
                 vec![
