@@ -1079,16 +1079,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         if (hasRenderedFinalRef.current)
           return
 
-        if (!streamCompleteRef.current)
-          return
-
         const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
         parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
 
-        hasRenderedFinalRef.current = true
         setRscPayload(parsedPayload)
         setRenderKey(prev => prev + 1)
-        streamingRowsRef.current = null
+        if (streamCompleteRef.current) {
+          hasRenderedFinalRef.current = true
+          streamingRowsRef.current = null
+        }
       }
       catch (error) {
         console.error('[rari] AppRouter: Failed to parse streaming RSC row:', error)
@@ -1105,14 +1104,22 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       if (!streamingRowsRef.current)
         return
 
+      const activeNavId = currentNavigationIdRef.current
+
       if (row.trim() === 'STREAM_COMPLETE') {
         streamCompleteRef.current = true
-        rowProcessingRef.current = rowProcessingRef.current.then(() => processRows())
+        rowProcessingRef.current = rowProcessingRef.current.then(() => {
+          if (currentNavigationIdRef.current === activeNavId)
+            return processRows()
+        })
         return
       }
 
       streamingRowsRef.current.push(row)
-      rowProcessingRef.current = rowProcessingRef.current.then(() => processRows())
+      rowProcessingRef.current = rowProcessingRef.current.then(() => {
+        if (currentNavigationIdRef.current === activeNavId)
+          return processRows()
+      })
     }
 
     window.addEventListener('rari:navigation-start', handleNavigationStart)

@@ -545,6 +545,10 @@ async fn execute_scripts_concurrent(
     }
 
     if needs_immediate_restart {
+        let _ = deno_runtime.execute_script(
+            "cleanup_concurrent",
+            r#"(function(){Object.keys(globalThis).forEach(function(k){if(/^__rari_concurrent_\d+__$/.test(k))delete globalThis[k];});delete globalThis['~rari_concurrent'];})()"#.to_string(),
+        );
         return true;
     }
 
@@ -570,7 +574,9 @@ async fn execute_scripts_concurrent(
             }})()"#,
             slot_key, slot_key, slot_key, slot_key, slot_key
         );
-        let _ = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup);
+        if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
+            eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
+        }
     }
 
     let promise_timeout_ms: u64 = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
@@ -584,13 +590,9 @@ async fn execute_scripts_concurrent(
     let mut sent = vec![false; pending.len()];
     let mut remaining = pending.len();
 
-    let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> =
-        pending.iter().map(|_| None).collect();
-    let names: Vec<String> = pending.iter().map(|(_, n, _)| n.clone()).collect();
-
-    for (i, (tx, _, _)) in pending.into_iter().enumerate() {
-        senders[i] = Some(tx);
-    }
+    let (senders, names): (Vec<_>, Vec<_>) =
+        pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
+    let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> = senders;
 
     while remaining > 0 && start.elapsed() < timeout_duration {
         let _ = tokio::time::timeout(
@@ -689,9 +691,9 @@ async fn execute_scripts_concurrent(
     }
 
     let _ = deno_runtime.execute_script(
-        "cleanup_concurrent",
-        r#"(function(){Object.keys(globalThis).forEach(function(k){if(/^__rari_concurrent_\d+__$/.test(k))delete globalThis[k];});delete globalThis['~rari_concurrent'];})()"#.to_string(),
-    );
+            "cleanup_concurrent",
+            r#"(function(){Object.keys(globalThis).forEach(function(k){if(/^__rari_concurrent_\d+__$/.test(k))delete globalThis[k];});delete globalThis['~rari_concurrent'];})()"#.to_string(),
+        );
 
     false
 }

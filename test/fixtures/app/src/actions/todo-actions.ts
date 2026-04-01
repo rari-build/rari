@@ -36,8 +36,11 @@ async function getSessionTodos(sessionId?: string): Promise<{ id: string, todos:
   return { id, todos: sessionStore.get(id)! }
 }
 
-async function setSessionTodos(sessionId: string, todos: Todo[]): Promise<void> {
-  sessionStore.set(sessionId, todos)
+function updateSessionTodos(sessionId: string, updater: (todos: Todo[]) => Todo[]): Todo[] {
+  const current = sessionStore.get(sessionId) ?? DEFAULT_TODOS.map(t => ({ ...t }))
+  const next = updater(current)
+  sessionStore.set(sessionId, next)
+  return next
 }
 
 export async function getTodos() {
@@ -47,9 +50,9 @@ export async function getTodos() {
 
 export async function addTodo(formData: FormData) {
   const text = formData.get('text') as string
-  const { id, todos } = await getSessionTodos()
 
   if (!text?.trim()) {
+    const { todos } = await getSessionTodos()
     return { success: false, error: 'Todo text is required', todos }
   }
 
@@ -60,48 +63,55 @@ export async function addTodo(formData: FormData) {
     createdAt: new Date().toISOString(),
   }
 
-  const updated = [...todos, newTodo]
-  await setSessionTodos(id, updated)
-  return { success: true, todos: updated }
+  const id = await getSessionId()
+  const todos = updateSessionTodos(id, current => [...current, newTodo])
+  return { success: true, todos }
 }
 
 export async function toggleTodo(formData: FormData) {
   const todoId = formData.get('id') as string
-  const { id, todos } = await getSessionTodos()
-  const todo = todos.find(t => t.id === todoId)
+  const id = await getSessionId()
 
-  if (!todo) {
+  let found = false
+  const todos = updateSessionTodos(id, (current) => {
+    const todo = current.find(t => t.id === todoId)
+    if (!todo)
+      return current
+    found = true
+    return current.map(t => t.id === todoId ? { ...t, completed: !t.completed } : t)
+  })
+
+  if (!found)
     return { success: false, error: 'Todo not found', todos }
-  }
 
-  todo.completed = !todo.completed
-  await setSessionTodos(id, todos)
-  return { success: true, todos: [...todos] }
+  return { success: true, todos }
 }
 
 export async function deleteTodo(formData: FormData) {
   const todoId = formData.get('id') as string
-  const { id, todos } = await getSessionTodos()
-  const updated = todos.filter(t => t.id !== todoId)
+  const id = await getSessionId()
 
-  if (updated.length === todos.length) {
+  let found = false
+  const todos = updateSessionTodos(id, (current) => {
+    const next = current.filter(t => t.id !== todoId)
+    found = next.length !== current.length
+    return next
+  })
+
+  if (!found)
     return { success: false, error: 'Todo not found', todos }
-  }
 
-  await setSessionTodos(id, updated)
-  return { success: true, todos: updated }
+  return { success: true, todos }
 }
 
 export async function clearCompleted() {
-  const { id, todos } = await getSessionTodos()
-  const updated = todos.filter(t => !t.completed)
-  await setSessionTodos(id, updated)
-  return { success: true, todos: updated }
+  const id = await getSessionId()
+  const todos = updateSessionTodos(id, current => current.filter(t => !t.completed))
+  return { success: true, todos }
 }
 
 export async function resetTodos() {
   const id = await getSessionId()
-  const reset = DEFAULT_TODOS.map(t => ({ ...t }))
-  await setSessionTodos(id, reset)
-  return { success: true, todos: reset }
+  const todos = updateSessionTodos(id, () => DEFAULT_TODOS.map(t => ({ ...t })))
+  return { success: true, todos }
 }

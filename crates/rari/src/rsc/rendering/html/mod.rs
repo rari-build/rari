@@ -1592,20 +1592,36 @@ if (typeof window !== 'undefined') {{
         }
 
         let row_id = chunk.row_id;
-        let content_json = parts[1];
 
         let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
         let escaped_boundary_id = RscHtmlRenderer::escape_js_string(&boundary_id);
 
-        let rendered_html = match serde_json::from_str::<serde_json::Value>(content_json) {
-            Ok(content) => self.render_json_value_to_simple_html(&content),
-            Err(e) => {
-                tracing::warn!("Failed to parse boundary content JSON: {}", e);
-                r#"<div class="rari-error">Content unavailable</div>"#.to_string()
-            }
-        };
+        let is_page_loading_boundary = boundary_id.contains("_promise_");
 
-        let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
+        let dom_update_script = if is_page_loading_boundary {
+            String::new()
+        } else {
+            let content_json = parts[1];
+            let rendered_html = match serde_json::from_str::<serde_json::Value>(content_json) {
+                Ok(content) => self.render_json_value_to_simple_html(&content),
+                Err(e) => {
+                    tracing::warn!("Failed to parse boundary content JSON: {}", e);
+                    r#"<div class="rari-error">Content unavailable</div>"#.to_string()
+                }
+            };
+            let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
+            format!(
+                r#"
+  (function updateDOM() {{
+    var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
+    if (boundaryElement) {{
+      boundaryElement.innerHTML = '{}';
+      boundaryElement.setAttribute('data-resolved', 'true');
+    }}
+  }})();"#,
+                escaped_boundary_id, escaped_html
+            )
+        };
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1615,8 +1631,6 @@ if (typeof window !== 'undefined') {{
             r#"<!-- Boundary update: {} at {} -->
 <script data-boundary-id="{}" data-row-id="{}">
 (function(){{
-  var timestamp = {};
-
   if(!window['~rari'])window['~rari']={{}};
   if(!window['~rari'].streaming)window['~rari'].streaming={{}};
   if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];
@@ -1630,23 +1644,13 @@ if (typeof window !== 'undefined') {{
   }} else {{
     if(!window['~rari'].streaming.bufferedEvents)window['~rari'].streaming.bufferedEvents=[];
     window['~rari'].streaming.bufferedEvents.push({{boundaryId:'{}',rscRow:'{}',rowId:'{}'}});
-  }}
-
-  (function updateDOM() {{
-    var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
-    if (boundaryElement) {{
-      boundaryElement.innerHTML = '{}';
-      boundaryElement.setAttribute('data-resolved', 'true');
-      boundaryElement.setAttribute('data-resolved-at', timestamp);
-    }}
-  }})();
+  }}{}
 }})();
 </script>"#,
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
             timestamp,
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
-            timestamp,
             escaped_row,
             escaped_row,
             escaped_boundary_id,
@@ -1655,8 +1659,7 @@ if (typeof window !== 'undefined') {{
             escaped_boundary_id,
             escaped_row,
             RscHtmlRenderer::escape_js_string(&row_id.to_string()),
-            escaped_boundary_id,
-            escaped_html
+            dom_update_script,
         );
 
         Ok(script.into_bytes())

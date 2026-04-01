@@ -757,6 +757,12 @@ fn build_set_cookie_header(
     if let Some(max_age) = cookie.max_age {
         header.push_str(&format!("; Max-Age={}", max_age));
     }
+    if matches!(cookie.same_site.as_deref(), Some("None")) && !cookie.secure {
+        return Err(());
+    }
+    if cookie.partitioned && !cookie.secure {
+        return Err(());
+    }
     if cookie.http_only {
         header.push_str("; HttpOnly");
     }

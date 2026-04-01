@@ -672,7 +672,8 @@ impl StreamingRenderer {
         let mut pending_counts: FxHashMap<String, usize> = FxHashMap::default();
         if let Some(pending) = result_data["pending_promises"].as_array() {
             for p in pending {
-                if let Some(bid) = p["~boundaryId"].as_str() {
+                let bid = p["boundaryId"].as_str().or_else(|| p["~boundaryId"].as_str());
+                if let Some(bid) = bid {
                     *pending_counts.entry(bid.to_string()).or_insert(0) += 1;
                 }
             }
@@ -736,10 +737,11 @@ impl StreamingRenderer {
             .iter()
             .map(|p| {
                 let promise_id = p["id"].as_str().unwrap_or("unknown");
-                let boundary_id_from_tilde = p["~boundaryId"].as_str();
-                let boundary_id_plain = p["boundaryId"].as_str();
-                let boundary_id =
-                    boundary_id_from_tilde.or(boundary_id_plain).unwrap_or("root").to_string();
+                let boundary_id = p["boundaryId"]
+                    .as_str()
+                    .or_else(|| p["~boundaryId"].as_str())
+                    .unwrap_or("root")
+                    .to_string();
 
                 PendingSuspensePromise {
                     id: promise_id.to_string(),

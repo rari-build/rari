@@ -195,10 +195,3 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
     return { type: 'div', props: { children: null }, key: null }
   }
 }
-
-globalThis['~suspense'].streaming = true
-globalThis['~suspense'].promises = {}
-globalThis['~suspense'].boundaryProps = {}
-globalThis['~suspense'].discoveredBoundaries = []
-globalThis['~suspense'].pendingPromises = []
-globalThis['~suspense'].currentBoundaryId = null

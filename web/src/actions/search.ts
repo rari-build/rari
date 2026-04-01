@@ -23,10 +23,10 @@ const jsxSelfClosingRegex = /<[A-Z]\w[^>]*\/>/g
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
-const angleBracketRegex = /[<>]/g
+const htmlTagRegex = /<[^>]+>/g
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
-const listMarkerRegex = /^(?:[-*>]|\d+\.)\s+/gm
+const listMarkerRegex = /^[->]\s+/gm
 const propertyDefRegex = /^-\s+\*\*(?:Type|Default|Required):\*\*.+$/gm
 const relatedSectionRegex = /##\s+Related[\s\S]*$/gm
 const markdownTableRegex = /^\|.+\|$/gm
@@ -89,7 +89,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(propertyDefRegex, '')
     .replace(markdownTableRegex, '')
     .replace(markdownLinkRegex, '$1')
-    .replace(angleBracketRegex, '')
+    .replace(htmlTagRegex, '')
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
@@ -101,8 +101,6 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .join(' ')
     .replace(WHITESPACE_REGEX, ' ')
     .trim()
-
-  content = content.replace(angleBracketRegex, '')
 
   if (title && content.toLowerCase().startsWith(title.toLowerCase()))
     content = content.slice(title.length).trim()
@@ -143,8 +141,7 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
 }
 
 export async function searchDocumentation(query: string): Promise<SearchResult[]> {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery)
+  if (!query.trim())
     return []
 
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
@@ -156,54 +153,49 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   if (partial)
     console.warn('Search results may be incomplete due to directory read errors:', error?.message)
 
-  const lowerQuery = normalizedQuery
-  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
+  const lowerQuery = query.toLowerCase()
+  const words = lowerQuery.split(WHITESPACE_REGEX)
 
-  const fileResults = await Promise.all(
-    mdxFiles.map(async (file) => {
-      try {
-        const fullPath = join(contentDir, file)
-        const fileContent = await readFile(fullPath, 'utf-8')
-        const { title, content, originalContent } = extractContent(fileContent)
+  const results: Array<SearchResult & { score: number }> = []
 
-        const lowerTitle = title.toLowerCase()
-        let score = 0
+  for (const file of mdxFiles) {
+    const fullPath = join(contentDir, file)
+    const fileContent = await readFile(fullPath, 'utf-8')
+    const { title, content, originalContent } = extractContent(fileContent)
 
-        if (lowerTitle === lowerQuery)
-          score += 100
-        else if (lowerTitle.startsWith(lowerQuery))
-          score += 50
-        else if (lowerTitle.includes(lowerQuery))
-          score += 25
+    const lowerTitle = title.toLowerCase()
+    let score = 0
 
-        if (content.includes(lowerQuery))
-          score += 15
+    if (lowerTitle === lowerQuery)
+      score += 100
+    else if (lowerTitle.startsWith(lowerQuery))
+      score += 50
+    else if (lowerTitle.includes(lowerQuery))
+      score += 25
 
-        for (const word of words) {
-          if (lowerTitle.includes(word))
-            score += 10
-          if (content.includes(word))
-            score += 3
-        }
+    if (content.includes(lowerQuery))
+      score += 15
 
-        if (score > 0) {
-          return {
-            title,
-            href: `/docs/${file.replace('.mdx', '')}`,
-            category: pathToCategory(file),
-            excerpt: extractExcerpt(originalContent, lowerQuery),
-            score,
-          }
-        }
-      }
-      catch (error) {
-        console.warn(`Skipping unreadable docs file: ${file}`, error)
-        return null
-      }
-    }),
-  )
+    for (const word of words) {
+      if (lowerTitle.includes(word))
+        score += 10
+      if (content.includes(word))
+        score += 3
+    }
 
-  const results = fileResults.filter((r): r is NonNullable<typeof r> => r !== null)
+    if (score > 0) {
+      const href = `/docs/${file.replace('.mdx', '')}`
+      const category = pathToCategory(file)
+
+      results.push({
+        title,
+        href,
+        category,
+        excerpt: extractExcerpt(originalContent, lowerQuery),
+        score,
+      })
+    }
+  }
 
   return results
     .sort((a, b) => b.score - a.score)
