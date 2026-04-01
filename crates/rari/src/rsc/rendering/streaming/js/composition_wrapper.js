@@ -6,6 +6,7 @@
       globalThis['~suspense'] = {}
     globalThis['~suspense'].discoveredBoundaries = []
     globalThis['~suspense'].pendingPromises = []
+    globalThis['~suspense'].currentBoundaryId = null
 
     const compositionResult = await {composition_script}
 

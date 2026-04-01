@@ -1613,10 +1613,13 @@ if (typeof window !== 'undefined') {{
             format!(
                 r#"
   (function updateDOM() {{
-    var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
-    if (boundaryElement) {{
-      boundaryElement.innerHTML = '{}';
-      boundaryElement.setAttribute('data-resolved', 'true');
+    if (window['~rari'] && typeof window['~rari'].processBoundaryUpdate === 'function') {{
+    }} else {{
+      var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
+      if (boundaryElement) {{
+        boundaryElement.innerHTML = '{}';
+        boundaryElement.setAttribute('data-resolved', 'true');
+      }}
     }}
   }})();"#,
                 escaped_boundary_id, escaped_html
@@ -1675,10 +1678,13 @@ if (typeof window !== 'undefined') {{
                     && arr[0].as_str() == Some("$")
                     && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
                 {
-                    if tag.starts_with("$L")
-                        || tag.starts_with("$")
-                            && tag.len() > 1
-                            && !tag.chars().nth(1).map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                    if tag.starts_with("$L") || tag.starts_with("$@") {
+                        return r#"<span data-client-ref="pending"></span>"#.to_string();
+                    }
+
+                    if tag.starts_with("$")
+                        && tag.len() > 1
+                        && !tag.chars().nth(1).map(|c| c.is_ascii_alphanumeric()).unwrap_or(false)
                     {
                         return r#"<span data-client-ref="pending"></span>"#.to_string();
                     }

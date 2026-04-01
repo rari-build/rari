@@ -44,7 +44,11 @@ if (!globalThis.renderToRsc) {
 
         if (typeof element.type === 'string') {
           const props = element.props || {}
-          const { children: propsChildren, ...otherProps } = props
+          const {
+            children: propsChildren,
+            fallback: propsFallback,
+            ...otherProps
+          } = props
 
           const actualChildren = element.children ?? propsChildren
 
@@ -53,17 +57,23 @@ if (!globalThis.renderToRsc) {
             || element.type === '$0'
             || element.type === 'react.suspense'
           const newBoundaryId = isSuspense && props['~boundaryId'] ? props['~boundaryId'] : currentBoundaryId
+          const serializedType = isSuspense ? 'react.suspense' : element.type
 
           const rscProps = {
             ...otherProps,
+            fallback: propsFallback === undefined
+              ? undefined
+              : await globalThis.renderToRsc(propsFallback, clientComponents, currentBoundaryId),
             children: actualChildren == null
               ? undefined
               : await globalThis.renderToRsc(actualChildren, clientComponents, newBoundaryId),
           }
+          if (rscProps.fallback === undefined)
+            delete rscProps.fallback
           if (rscProps.children === undefined)
             delete rscProps.children
 
-          return ['$', element.type, uniqueKey, rscProps]
+          return ['$', serializedType, uniqueKey, rscProps]
         }
         else if (typeof element.type === 'function') {
           try {

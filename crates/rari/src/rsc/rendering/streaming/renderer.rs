@@ -1197,6 +1197,11 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
+
         Ok(())
     }
 

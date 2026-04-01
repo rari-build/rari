@@ -98,7 +98,7 @@ pub struct ServerActionResponse {
 
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
-        tracing::debug!("Origin validation disabled: allowed_origins is empty");
+        tracing::warn!("Origin validation disabled: allowed_origins is empty");
         return Ok(());
     }
 
@@ -711,7 +711,7 @@ fn append_pending_cookies(
     }
 }
 
-fn build_set_cookie_header(
+pub(crate) fn build_set_cookie_header(
     cookie: &crate::server::middleware::request_context::PendingCookie,
 ) -> Result<String, ()> {
     fn is_valid_cookie_name(s: &str) -> bool {
@@ -720,7 +720,7 @@ fn build_set_cookie_header(
     }
 
     fn is_valid_cookie_value(s: &str) -> bool {
-        s.bytes().all(|b| b >= 32 && b != b';' && b != b',' && b != 127)
+        s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
     }
 
     fn is_valid_attr_value(s: &str) -> bool {

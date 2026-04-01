@@ -459,7 +459,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         for (const line of lines) {
           if (line.trim()) {
             window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-              detail: { rscRow: line },
+              detail: { rscRow: line, navigationId },
             }))
           }
         }
@@ -469,7 +469,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
       if (buffer.trim()) {
         window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-          detail: { rscRow: buffer },
+          detail: { rscRow: buffer, navigationId },
         }))
       }
 

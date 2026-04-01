@@ -14,7 +14,54 @@ const DEFAULT_TODOS: Todo[] = [
   { id: '2', text: 'Test Server Actions', completed: false, createdAt: new Date().toISOString() },
 ]
 
-const sessionStore = new Map<string, Todo[]>()
+const MAX_SESSIONS = 1000
+
+class LRUMap<K, V> {
+  private map: Map<K, V>
+  private maxSize: number
+
+  constructor(maxSize: number) {
+    this.map = new Map()
+    this.maxSize = maxSize
+  }
+
+  get(key: K): V | undefined {
+    const value = this.map.get(key)
+    if (value !== undefined) {
+      this.map.delete(key)
+      this.map.set(key, value)
+    }
+
+    return value
+  }
+
+  set(key: K, value: V): void {
+    if (this.map.has(key))
+      this.map.delete(key)
+
+    this.map.set(key, value)
+
+    if (this.map.size > this.maxSize) {
+      const firstKey = this.map.keys().next().value
+      if (firstKey !== undefined)
+        this.map.delete(firstKey)
+    }
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key)
+  }
+
+  delete(key: K): boolean {
+    return this.map.delete(key)
+  }
+
+  get size(): number {
+    return this.map.size
+  }
+}
+
+const sessionStore = new LRUMap<string, Todo[]>(MAX_SESSIONS)
 
 async function getSessionId(): Promise<string> {
   const store = await cookies()

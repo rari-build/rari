@@ -552,10 +552,7 @@ async fn execute_scripts_concurrent(
         return true;
     }
 
-    for (i, (_, _, v8_val_opt)) in pending.iter().enumerate() {
-        if v8_val_opt.is_none() {
-            continue;
-        }
+    for i in 0..pending.len() {
         let slot_key = format!("__rari_concurrent_{}__", i);
         let setup = format!(
             r#"(function() {{
@@ -678,15 +675,8 @@ async fn execute_scripts_concurrent(
         if !sent[i]
             && let Some(tx) = senders[i].take()
         {
-            let timeout_err =
-                Err(RariError::timeout(format!("Promise timed out for '{}'", names[i])));
-            let needs_restart =
-                timeout_err.as_ref().err().map(is_runtime_restart_needed).unwrap_or(false);
-            if needs_restart {
-                let _ = tx.send(Err(create_graceful_error()));
-            } else {
-                let _ = tx.send(timeout_err);
-            }
+            let _ =
+                tx.send(Err(RariError::timeout(format!("Promise timed out for '{}'", names[i]))));
         }
     }
 

@@ -1,7 +1,7 @@
 'use server'
 
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import process from 'node:process'
 import { TITLE_EXPORT_REGEX, WHITESPACE_REGEX } from '@/lib/regex-constants'
 
@@ -26,12 +26,13 @@ const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
 const htmlTagRegex = /<[^>]+>/g
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
-const listMarkerRegex = /^[->]\s+/gm
+const listMarkerRegex = /^(?:[-*>+]|\d+\.)\s+/gm
 const propertyDefRegex = /^-\s+\*\*(?:Type|Default|Required):\*\*.+$/gm
 const relatedSectionRegex = /##\s+Related[\s\S]*$/gm
 const markdownTableRegex = /^\|.+\|$/gm
 const mdxExtRegex = /\.mdx$/
-const leadingSlashRegex = /^\//
+const incompleteOpeningTagRegex = /<[^>]*$/g
+const incompleteClosingTagRegex = /^[^<]*>/g
 
 interface MdxFileResult {
   files: string[]
@@ -58,7 +59,7 @@ async function getAllMdxFiles(dir: string, baseDir = dir): Promise<MdxFileResult
         }
       }
       else if (entry.name.endsWith('.mdx')) {
-        files.push(fullPath.replace(baseDir, '').replace(leadingSlashRegex, ''))
+        files.push(relative(baseDir, fullPath).split(sep).join('/'))
       }
     }
   }
@@ -75,6 +76,11 @@ function extractContent(mdxContent: string): { title: string, content: string, o
   const title = titleMatch ? titleMatch[2] : ''
 
   let content = mdxContent
+  let previousContent = ''
+  const maxIterations = 10
+  let iterations = 0
+
+  content = content
     .replace(relatedSectionRegex, '')
     .replace(exportRegex, '')
     .replace(importRegex, '')
@@ -82,14 +88,28 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(terminalBlockRegex, '')
     .replace(packageManagerTabsRegex, '')
     .replace(pageHeaderRegex, '')
-    .replace(jsxComponentRegex, '$1')
-    .replace(jsxSelfClosingRegex, '')
     .replace(codeBlockContentRegex, '')
-    .replace(inlineCodeRegex, '$1')
     .replace(propertyDefRegex, '')
     .replace(markdownTableRegex, '')
+
+  while (content !== previousContent && iterations < maxIterations) {
+    previousContent = content
+
+    content = content.replace(jsxComponentRegex, '$1')
+
+    content = content.replace(jsxSelfClosingRegex, '')
+
+    content = content.replace(htmlTagRegex, '')
+
+    content = content.replace(incompleteOpeningTagRegex, '')
+    content = content.replace(incompleteClosingTagRegex, '')
+
+    iterations++
+  }
+
+  content = content
+    .replace(inlineCodeRegex, '$1')
     .replace(markdownLinkRegex, '$1')
-    .replace(htmlTagRegex, '')
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
@@ -141,7 +161,8 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
 }
 
 export async function searchDocumentation(query: string): Promise<SearchResult[]> {
-  if (!query.trim())
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery)
     return []
 
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
@@ -153,47 +174,65 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   if (partial)
     console.warn('Search results may be incomplete due to directory read errors:', error?.message)
 
-  const lowerQuery = query.toLowerCase()
-  const words = lowerQuery.split(WHITESPACE_REGEX)
+  const lowerQuery = normalizedQuery
+  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
 
   const results: Array<SearchResult & { score: number }> = []
 
-  for (const file of mdxFiles) {
+  const fileReadPromises = mdxFiles.map(async (file) => {
     const fullPath = join(contentDir, file)
     const fileContent = await readFile(fullPath, 'utf-8')
-    const { title, content, originalContent } = extractContent(fileContent)
+    return { file, fileContent }
+  })
 
-    const lowerTitle = title.toLowerCase()
-    let score = 0
+  const settledResults = await Promise.allSettled(fileReadPromises)
 
-    if (lowerTitle === lowerQuery)
-      score += 100
-    else if (lowerTitle.startsWith(lowerQuery))
-      score += 50
-    else if (lowerTitle.includes(lowerQuery))
-      score += 25
-
-    if (content.includes(lowerQuery))
-      score += 15
-
-    for (const word of words) {
-      if (lowerTitle.includes(word))
-        score += 10
-      if (content.includes(word))
-        score += 3
+  for (const result of settledResults) {
+    if (result.status === 'rejected') {
+      console.warn('Failed to read file during search:', result.reason)
+      continue
     }
 
-    if (score > 0) {
-      const href = `/docs/${file.replace('.mdx', '')}`
-      const category = pathToCategory(file)
+    const { file, fileContent } = result.value
 
-      results.push({
-        title,
-        href,
-        category,
-        excerpt: extractExcerpt(originalContent, lowerQuery),
-        score,
-      })
+    try {
+      const { title, content, originalContent } = extractContent(fileContent)
+
+      const lowerTitle = title.toLowerCase()
+      let score = 0
+
+      if (lowerTitle === lowerQuery)
+        score += 100
+      else if (lowerTitle.startsWith(lowerQuery))
+        score += 50
+      else if (lowerTitle.includes(lowerQuery))
+        score += 25
+
+      if (content.includes(lowerQuery))
+        score += 15
+
+      for (const word of words) {
+        if (lowerTitle.includes(word))
+          score += 10
+        if (content.includes(word))
+          score += 3
+      }
+
+      if (score > 0) {
+        const href = `/docs/${file.replace('.mdx', '')}`
+        const category = pathToCategory(file)
+
+        results.push({
+          title,
+          href,
+          category,
+          excerpt: extractExcerpt(originalContent, lowerQuery),
+          score,
+        })
+      }
+    }
+    catch (extractError) {
+      console.warn(`Failed to extract content from ${file}:`, extractError)
     }
   }
 

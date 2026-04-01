@@ -535,6 +535,24 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
   }
 
+  const getReachableModuleIds = (payload: any): Set<string> => {
+    const reachableIds = new Set<string>()
+
+    if (!payload?.modules)
+      return reachableIds
+
+    for (const [moduleInfo] of payload.modules.entries()) {
+      if (moduleInfo?.id) {
+        reachableIds.add(moduleInfo.id)
+        if (moduleInfo.name && moduleInfo.name !== 'default') {
+          reachableIds.add(`${moduleInfo.id}#${moduleInfo.name}`)
+        }
+      }
+    }
+
+    return reachableIds
+  }
+
   const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
     try {
       const lines = wireFormat.trim().split('\n')
@@ -820,7 +838,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const customEvent = event as CustomEvent<NavigationDetail>
       const detail = customEvent.detail
 
-      currentNavigationIdRef.current = detail.navigationId
+      if (detail.navigationId !== currentNavigationIdRef.current)
+        return
+
       shouldScrollToHashRef.current = true
 
       if (!detail.isStreaming)
@@ -1045,15 +1065,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false)
 
         if (hasSuspenseBoundary || hasPageContent) {
+          const reachableModuleIds = getReachableModuleIds(parsedPayload)
+
           let attempts = 0
           const maxAttempts = 20
           let allModulesLoaded = false
 
           while (attempts < maxAttempts) {
             const clientComponents = (globalThis as any)['~clientComponents'] || {}
-            const pendingLoads = Object.values(clientComponents)
-              .filter((comp: any) => comp.loading && comp.loadPromise)
-              .map((comp: any) => comp.loadPromise)
+
+            const pendingLoads = Object.entries(clientComponents)
+              .filter(([id, comp]: [string, any]) => {
+                const isReachable = reachableModuleIds.size === 0 || reachableModuleIds.has(id)
+                return isReachable && comp.loading && comp.loadPromise
+              })
+              .map(([_, comp]: [string, any]) => comp.loadPromise)
 
             if (pendingLoads.length === 0) {
               allModulesLoaded = true
@@ -1095,8 +1121,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
 
     const handleRscRow = (event: Event) => {
-      const customEvent = event as CustomEvent<{ rscRow: string }>
+      const customEvent = event as CustomEvent<{ rscRow: string, navigationId?: number }>
       const row = customEvent.detail.rscRow
+      const eventNavigationId = customEvent.detail.navigationId
 
       if (!row || !row.trim())
         return
@@ -1105,6 +1132,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         return
 
       const activeNavId = currentNavigationIdRef.current
+
+      if (eventNavigationId !== undefined && eventNavigationId !== activeNavId)
+        return
 
       if (row.trim() === 'STREAM_COMPLETE') {
         streamCompleteRef.current = true
