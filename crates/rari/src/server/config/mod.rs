@@ -70,15 +70,9 @@ impl Default for RedirectConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ActionConfig {
     pub allowed_origins: Vec<String>,
-}
-
-impl Default for ActionConfig {
-    fn default() -> Self {
-        Self { allowed_origins: vec![] }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -744,11 +738,12 @@ impl Config {
         } else if let Some(origin) = &self.server.origin {
             vec![origin.clone()]
         } else {
-            vec![
-                format!("http://{}:{}", self.server.host, self.server.port),
-                format!("http://localhost:{}", self.server.port),
-                format!("http://127.0.0.1:{}", self.server.port),
-            ]
+            tracing::warn!(
+                "No origin configured for server actions in production. \
+                 Set RARI_ORIGIN environment variable or configure action.allowed_origins. \
+                 Origin validation is disabled - relying on browser CORS policy."
+            );
+            vec![]
         }
     }
 

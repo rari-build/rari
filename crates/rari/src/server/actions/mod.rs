@@ -729,11 +729,17 @@ fn append_pending_cookies(
     for entry in pending_cookies.iter() {
         let cookie = entry.value();
         match build_set_cookie_header(cookie) {
-            Ok(set_cookie_value) => {
-                if let Ok(header_value) = set_cookie_value.parse() {
+            Ok(set_cookie_value) => match set_cookie_value.parse() {
+                Ok(header_value) => {
                     headers.append(header::SET_COOKIE, header_value);
                 }
-            }
+                Err(_) => {
+                    tracing::warn!(
+                        "Failed to parse Set-Cookie header for '{}': invalid header value",
+                        cookie.name
+                    );
+                }
+            },
             Err(()) => {
                 tracing::warn!("Skipped invalid cookie '{}': failed validation", cookie.name);
             }
@@ -811,10 +817,10 @@ pub(crate) fn build_set_cookie_header(
         header.push_str(&format!("; SameSite={}", serialized_same_site));
     }
     if let Some(priority) = &cookie.priority {
-        match priority.as_str() {
-            "Low" | "Medium" | "High" => {
-                header.push_str(&format!("; Priority={}", priority));
-            }
+        match priority.cow_to_ascii_lowercase().as_ref() {
+            "low" => header.push_str("; Priority=Low"),
+            "medium" => header.push_str("; Priority=Medium"),
+            "high" => header.push_str("; Priority=High"),
             _ => return Err(()),
         }
     }

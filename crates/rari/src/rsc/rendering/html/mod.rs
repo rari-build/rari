@@ -1671,7 +1671,12 @@ if (typeof window !== 'undefined') {{
 
     fn render_json_value_to_simple_html(&self, value: &serde_json::Value) -> String {
         match value {
-            serde_json::Value::String(s) => escape_html(s),
+            serde_json::Value::String(s) => {
+                if s.starts_with("$L") || s.starts_with("$@") {
+                    return r#"<span data-client-ref="pending"></span>"#.to_string();
+                }
+                escape_html(s)
+            }
             serde_json::Value::Number(n) => n.to_string(),
             serde_json::Value::Bool(_) => String::new(),
             serde_json::Value::Array(arr) => {
@@ -1740,29 +1745,6 @@ if (typeof window !== 'undefined') {{
 
                     let mut html = format!("<{}", tag);
 
-                    const BOOLEAN_ATTRS: &[&str] = &[
-                        "disabled",
-                        "checked",
-                        "selected",
-                        "readonly",
-                        "required",
-                        "multiple",
-                        "autofocus",
-                        "autoplay",
-                        "controls",
-                        "default",
-                        "defer",
-                        "formnovalidate",
-                        "hidden",
-                        "ismap",
-                        "loop",
-                        "novalidate",
-                        "open",
-                        "reversed",
-                        "scoped",
-                        "seamless",
-                    ];
-
                     if let Some(props_obj) = props.as_object() {
                         for (key, val) in props_obj {
                             if key == "children" || key == "~boundaryId" || key == "key" {
@@ -1781,6 +1763,19 @@ if (typeof window !== 'undefined') {{
                                 continue;
                             }
 
+                            if key == "style" && val.is_object() {
+                                if let Some(style_obj) = val.as_object() {
+                                    let style_str = serialize_style_object(style_obj);
+                                    if !style_str.is_empty() {
+                                        html.push_str(&format!(
+                                            r#" style="{}""#,
+                                            RscHtmlRenderer::escape_html_attribute(&style_str)
+                                        ));
+                                    }
+                                }
+                                continue;
+                            }
+
                             match val {
                                 serde_json::Value::String(s) => {
                                     if s.starts_with("$L") {
@@ -1796,7 +1791,7 @@ if (typeof window !== 'undefined') {{
                                     html.push_str(&format!(r#" {}="{}""#, attr_name, n));
                                 }
                                 serde_json::Value::Bool(true)
-                                    if BOOLEAN_ATTRS.contains(&attr_name.as_str()) =>
+                                    if is_boolean_html_attribute(&attr_name) =>
                                 {
                                     html.push_str(&format!(" {}", attr_name));
                                 }

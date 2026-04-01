@@ -88,7 +88,7 @@ if (!globalThis.renderToRsc) {
             try {
               const isAsyncFunction = element.type[Symbol.toStringTag] === 'AsyncFunction'
                 || element.type.constructor?.name === 'AsyncFunction'
-                || (typeof element.type.toString === 'function' && element.type.toString().trimStart().startsWith('async '))
+                || (typeof element.type.toString === 'function' && element.type.toString().trim().startsWith('async'))
 
               if (isAsyncFunction && currentBoundaryId) {
                 const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
@@ -195,14 +195,67 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
       return element
 
     if (element && typeof element === 'object') {
+      const safeProps = {}
+
+      if (element.props) {
+        if (element.props.children !== undefined) {
+          const children = element.props.children
+          if (children === null || children === undefined) {
+            safeProps.children = null
+          }
+          else if (Array.isArray(children)) {
+            safeProps.children = children.map(child => globalThis['~suspense'].safeSerializeElement(child))
+          }
+          else if (typeof children === 'object') {
+            safeProps.children = globalThis['~suspense'].safeSerializeElement(children)
+          }
+          else {
+            safeProps.children = children
+          }
+        }
+        else {
+          safeProps.children = null
+        }
+
+        for (const key in element.props) {
+          if (key === 'children' || key === 'key' || key === 'ref')
+            continue
+
+          const value = element.props[key]
+          if (value === null || value === undefined)
+            continue
+
+          if (
+            key === 'className'
+            || key === 'style'
+            || key === 'href'
+            || key === 'src'
+            || key === 'alt'
+            || key === 'title'
+            || key === 'id'
+            || key === 'type'
+            || key === 'placeholder'
+            || key === 'value'
+            || key === 'disabled'
+            || key === 'checked'
+            || key === 'selected'
+            || key === 'readonly'
+            || key === 'required'
+            || key === 'htmlFor'
+            || key.startsWith('data-')
+            || key.startsWith('aria-')
+          ) {
+            safeProps[key] = value
+          }
+        }
+      }
+      else {
+        safeProps.children = null
+      }
+
       return {
         type: element.type || 'div',
-        props: element.props
-          ? {
-              children: (element.props.children === undefined ? null : element.props.children),
-              ...(element.props.className && { className: element.props.className }),
-            }
-          : { children: null },
+        props: safeProps,
         key: null,
       }
     }

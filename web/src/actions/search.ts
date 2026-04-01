@@ -94,8 +94,6 @@ function extractContent(mdxContent: string): { title: string, content: string, o
 
   let content = mdxContent
   let previousContent = ''
-  const maxIterations = 10
-  let iterations = 0
 
   content = content
     .replace(relatedSectionRegex, '')
@@ -109,7 +107,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(propertyDefRegex, '')
     .replace(markdownTableRegex, '')
 
-  while (content !== previousContent && iterations < maxIterations) {
+  while (content !== previousContent) {
     previousContent = content
 
     content = content.replace(jsxComponentRegex, '$1')
@@ -117,13 +115,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     content = content.replace(jsxSelfClosingRegex, '')
 
     content = content.replace(htmlTagRegex, '')
-
-    content = content.replace(angleBracketRegex, '')
-
-    iterations++
   }
-
-  content = content.replace(angleBracketRegex, '')
 
   content = content
     .replace(inlineCodeRegex, '$1')

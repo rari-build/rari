@@ -571,7 +571,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const getReachableModuleIds = (payload: any): Set<string> => {
     const reachableIds = new Set<string>()
 
-    if (!payload?.modules || !payload?.element)
+    if (!payload?.modules || !payload?.rawElement || !payload?.rows)
       return reachableIds
 
     const visited = new Set<string>()
@@ -612,14 +612,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
-    walkElement(payload.element)
+    walkElement(payload.rawElement)
 
     return reachableIds
   }
 
   const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
     try {
-      const lines = wireFormat.trim().split('\n')
+      const lines = wireFormat.split('\n')
       const modules = new Map()
       const symbols = new Map()
       const rows = new Map()
@@ -634,16 +634,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       let currentLayoutStartLine: number | null = null
 
       for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const line = lines[lineIndex].trim()
+        const line = lines[lineIndex]
+        const trimmedLine = line.trim()
 
-        if (!line)
+        if (!trimmedLine)
           continue
 
         const colonIndex = line.indexOf(':')
         if (colonIndex === -1)
           continue
 
-        const rowId = line.substring(0, colonIndex)
+        const rowId = line.substring(0, colonIndex).trim()
 
         if (!NUMERIC_REGEX.test(rowId)) {
           console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
@@ -738,6 +739,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               rootElement = objectData
             }
           }
+          else if (content.charCodeAt(0) === TAG_TEXT) {
+            const textData = content.slice(1)
+            rows.set(`$L${rowId}`, textData)
+
+            if (rootElement === null)
+              rootElement = textData
+          }
           else if (content.startsWith('"') && !content.startsWith('"$S')) {
             const stringData = JSON.parse(content)
             rows.set(`$L${rowId}`, stringData)
@@ -774,6 +782,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
       }
 
+      const rawElement = rootElement
+
       if (rootElement && Array.isArray(rootElement)) {
         fallbackKeyCounterRef.current = 0
 
@@ -802,6 +812,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       return {
         element: rootElement,
+        rawElement,
+        rows,
         modules,
         symbols,
         wireFormat,
@@ -1164,7 +1176,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
             const pendingLoads = Object.entries(clientComponents)
               .filter(([id, comp]: [string, any]) => {
-                const isReachable = reachableModuleIds.size === 0 || reachableModuleIds.has(id)
+                const isReachable = reachableModuleIds.has(id)
                 return isReachable && comp.loading && comp.loadPromise
               })
               .map(([_, comp]: [string, any]) => comp.loadPromise)
