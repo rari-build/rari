@@ -1077,7 +1077,7 @@ impl RscToHtmlConverter {
 
                 let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
-                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
                 );
                 Ok(script.into_bytes())
@@ -1230,7 +1230,7 @@ if (typeof window !== 'undefined') {{
     if (!window['~rari'].streaming) window['~rari'].streaming = {{}};
     window['~rari'].streaming.complete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
-    window.dispatchEvent(new CustomEvent('rari:rsc-row', {{ detail: {{ rscRow: 'STREAM_COMPLETE' }} }}));
+    window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{ detail: {{ rscRow: 'STREAM_COMPLETE' }} }}));
 }}
 </script>
 </body>
@@ -1578,7 +1578,7 @@ if (typeof window !== 'undefined') {{
                 error!("Boundary update chunk missing boundary_id");
                 let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
                 let script = format!(
-                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
+                    r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
                 );
                 return Ok(script.into_bytes());
@@ -1603,11 +1603,15 @@ if (typeof window !== 'undefined') {{
             String::new()
         } else {
             let content_json = parts[1];
-            let rendered_html = match serde_json::from_str::<serde_json::Value>(content_json) {
-                Ok(content) => self.render_json_value_to_simple_html(&content),
-                Err(e) => {
-                    tracing::warn!("Failed to parse boundary content JSON: {}", e);
-                    r#"<div class="rari-error">Content unavailable</div>"#.to_string()
+            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
+                escape_html(text)
+            } else {
+                match serde_json::from_str::<serde_json::Value>(content_json) {
+                    Ok(content) => self.render_json_value_to_simple_html(&content),
+                    Err(e) => {
+                        tracing::warn!("Failed to parse boundary content JSON: {}", e);
+                        r#"<div class="rari-error">Content unavailable</div>"#.to_string()
+                    }
                 }
             };
             let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
@@ -1641,7 +1645,7 @@ if (typeof window !== 'undefined') {{
 
   window['~rari'].streaming.bufferedRows.push('{}');
 
-  window.dispatchEvent(new CustomEvent('rari:rsc-row', {{detail: {{rscRow: '{}'}}}}));
+  window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{detail: {{rscRow: '{}'}}}}));
 
   if(window['~rari'].processBoundaryUpdate){{
     window['~rari'].processBoundaryUpdate('{}', '{}', '{}');
@@ -1822,6 +1826,26 @@ if (typeof window !== 'undefined') {{
                     .map(|child| self.render_json_value_to_simple_html(child))
                     .collect::<Vec<_>>()
                     .join("")
+            }
+            serde_json::Value::Object(props_obj) => {
+                if let Some(props_type) = props_obj.get("type") {
+                    let resolved_element = serde_json::Value::Array(vec![
+                        serde_json::Value::String("$".to_string()),
+                        props_type.clone(),
+                        props_obj.get("key").cloned().unwrap_or(serde_json::Value::Null),
+                        props_obj
+                            .get("props")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                    ]);
+                    return self.render_json_value_to_simple_html(&resolved_element);
+                }
+
+                if let Some(children) = props_obj.get("children") {
+                    return self.render_json_value_to_simple_html(children);
+                }
+
+                String::new()
             }
             _ => String::new(),
         }

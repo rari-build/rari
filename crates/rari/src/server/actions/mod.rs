@@ -131,7 +131,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                 if referer_host == host {
                     return Ok(());
                 }
-                error!("Referer mismatch: referer={}, host={}", referer, host);
+                error!("Referer mismatch: referer_host={}, host={}", referer_host, host);
             } else {
                 error!("Invalid referer header: failed to parse");
             }
@@ -449,7 +449,6 @@ pub async fn handle_form_action(
                 return Ok(redirect_response);
             }
 
-            let allowed_origins = state.config.action_origins();
             let (redirect_url, redirect_path_opt) =
                 if let Some(referer) = headers.get("referer").and_then(|h| h.to_str().ok()) {
                     if let Ok(parsed) = url::Url::parse(referer) {

@@ -481,24 +481,53 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
     {
+        let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
+            .pending_cookies
+            .iter()
+            .filter(|entry| entry.key().name == name)
+            .map(|entry| (entry.key().path.clone(), entry.key().domain.clone()))
+            .collect();
+
         ctx.pending_cookies.retain(|k, _| k.name != name);
 
-        ctx.pending_cookies.insert(
-            PendingCookieKey::new(&name, Some("/"), None),
-            PendingCookie {
-                name,
-                value: String::new(),
-                path: Some("/".to_string()),
-                domain: None,
-                expires: None,
-                max_age: Some(0),
-                http_only: false,
-                secure: false,
-                same_site: None,
-                priority: None,
-                partitioned: false,
-            },
-        );
+        if cookies_to_delete.is_empty() {
+            ctx.pending_cookies.insert(
+                PendingCookieKey::new(&name, Some("/"), None),
+                PendingCookie {
+                    name,
+                    value: String::new(),
+                    path: Some("/".to_string()),
+                    domain: None,
+                    expires: None,
+                    max_age: Some(0),
+                    http_only: false,
+                    secure: false,
+                    same_site: None,
+                    priority: None,
+                    partitioned: false,
+                },
+            );
+        } else {
+            for (path, domain) in cookies_to_delete {
+                let deletion_path = path.clone().unwrap_or_else(|| "/".to_string());
+                ctx.pending_cookies.insert(
+                    PendingCookieKey::new(&name, Some(&deletion_path), domain.as_deref()),
+                    PendingCookie {
+                        name: name.clone(),
+                        value: String::new(),
+                        path: Some(deletion_path),
+                        domain,
+                        expires: None,
+                        max_age: Some(0),
+                        http_only: false,
+                        secure: false,
+                        same_site: None,
+                        priority: None,
+                        partitioned: false,
+                    },
+                );
+            }
+        }
     }
 }
 

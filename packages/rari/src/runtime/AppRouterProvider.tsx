@@ -325,6 +325,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (!rsc)
       return null
 
+    if (typeof rsc === 'string' && rsc.startsWith('$L') && rows && rows.has(rsc)) {
+      const dereferenced = rows.get(rsc)
+      return rscToReact(dereferenced, modules, layoutPath, symbols, rows)
+    }
+
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
       return rsc
 

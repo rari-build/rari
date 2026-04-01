@@ -112,14 +112,11 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     previousContent = content
 
     content = content.replace(jsxComponentRegex, '$1')
-
     content = content.replace(jsxSelfClosingRegex, '')
-
     content = content.replace(htmlTagRegex, '')
     content = content.replace(angleBracketRegex, '')
+    content = content.replace(scriptMarkerRegex, '')
   }
-
-  content = content.replace(scriptMarkerRegex, '')
 
   content = content
     .replace(inlineCodeRegex, '$1')

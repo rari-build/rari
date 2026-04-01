@@ -748,7 +748,7 @@ impl Config {
         } else if let Some(origin) = &self.server.origin {
             vec![origin.clone()]
         } else {
-            tracing::info!(
+            tracing::warn!(
                 "No origin configured for server actions in production. \
                  Using same-origin validation (comparing origin/referer with host header). \
                  Set RARI_ORIGIN environment variable for explicit origin validation."
