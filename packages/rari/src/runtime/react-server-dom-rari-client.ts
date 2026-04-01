@@ -51,7 +51,7 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
             if (colonIndex !== -1) {
               const rowId = line.slice(0, colonIndex)
               const content = line.slice(colonIndex + 1)
-              const key = Number.parseInt(rowId, 10).toString()
+              const key = Number.parseInt(rowId, 16).toString()
 
               if (!content.startsWith('I[') && (!content.startsWith('"$S') || !content.endsWith('"'))) {
                 if (chunks.has(key)) {
@@ -74,7 +74,7 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
           const colonIndex = buffer.indexOf(':')
           if (colonIndex !== -1) {
             const rowId = buffer.slice(0, colonIndex)
-            const key = Number.parseInt(rowId, 10).toString()
+            const key = Number.parseInt(rowId, 16).toString()
             if (chunks.has(key)) {
               rootChunkId = key
               rootElement = chunks.get(key)
@@ -107,7 +107,7 @@ function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks
   const rowIdStr = line.slice(0, colonIndex)
   let content = line.slice(colonIndex + 1)
 
-  const rowId = Number.parseInt(rowIdStr, 10)
+  const rowId = Number.parseInt(rowIdStr, 16)
 
   let tag = 0
   if (content.length > 0) {

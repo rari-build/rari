@@ -537,6 +537,7 @@ async fn execute_scripts_concurrent(
                 if is_runtime_restart_needed(&err) {
                     needs_immediate_restart = true;
                     let _ = tx.send(Err(create_graceful_error()));
+                    break;
                 } else {
                     let _ = tx.send(Err(err));
                 }
@@ -552,7 +553,22 @@ async fn execute_scripts_concurrent(
         return true;
     }
 
-    for i in 0..pending.len() {
+    let promise_timeout_ms: u64 = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5000);
+
+    let timeout_duration = std::time::Duration::from_millis(promise_timeout_ms);
+    let start = std::time::Instant::now();
+
+    let mut sent = vec![false; pending.len()];
+    let mut remaining = pending.len();
+
+    let (senders, names): (Vec<_>, Vec<_>) =
+        pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
+    let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> = senders;
+
+    for i in 0..senders.len() {
         let slot_key = format!("__rari_concurrent_{}__", i);
         let setup = format!(
             r#"(function() {{
@@ -573,30 +589,39 @@ async fn execute_scripts_concurrent(
         );
         if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
+            if let Some(tx) = senders[i].take() {
+                let _ = tx.send(Err(RariError::js_execution(format!(
+                    "Failed to setup concurrent tracking for '{}': {}",
+                    names[i], e
+                ))));
+            }
+            sent[i] = true;
+            remaining -= 1;
         }
     }
 
-    let promise_timeout_ms: u64 = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(5000);
-
-    let timeout_duration = std::time::Duration::from_millis(promise_timeout_ms);
-    let start = std::time::Instant::now();
-
-    let mut sent = vec![false; pending.len()];
-    let mut remaining = pending.len();
-
-    let (senders, names): (Vec<_>, Vec<_>) =
-        pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
-    let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> = senders;
-
     while remaining > 0 && start.elapsed() < timeout_duration {
-        let _ = tokio::time::timeout(
+        let event_loop_result = tokio::time::timeout(
             std::time::Duration::from_millis(50),
             run_event_loop_with_error_handling(deno_runtime, "concurrent batch"),
         )
         .await;
+
+        if let Ok(Err(e)) = event_loop_result {
+            eprintln!("[rari] Event loop error during concurrent batch: {e}");
+            for i in 0..sent.len() {
+                if !sent[i]
+                    && let Some(tx) = senders[i].take()
+                {
+                    let _ = tx.send(Err(RariError::js_execution(format!(
+                        "Event loop error for '{}': {}",
+                        names[i], e
+                    ))));
+                    sent[i] = true;
+                }
+            }
+            break;
+        }
 
         for i in 0..sent.len() {
             if sent[i] {
@@ -619,7 +644,18 @@ async fn execute_scripts_concurrent(
                         !local.is_null_or_undefined()
                     })
                 }
-                Err(_) => false,
+                Err(e) => {
+                    eprintln!("[rari] Error: status check failed for slot {i}: {e}");
+                    if let Some(tx) = senders[i].take() {
+                        let _ = tx.send(Err(RariError::js_execution(format!(
+                            "Status check failed for '{}': {}",
+                            names[i], e
+                        ))));
+                    }
+                    sent[i] = true;
+                    remaining -= 1;
+                    continue;
+                }
             };
 
             if is_done {

@@ -1230,6 +1230,7 @@ if (typeof window !== 'undefined') {{
     if (!window['~rari'].streaming) window['~rari'].streaming = {{}};
     window['~rari'].streaming.complete = true;
     window.dispatchEvent(new Event('rari:stream-complete'));
+    window.dispatchEvent(new CustomEvent('rari:rsc-row', {{ detail: {{ rscRow: 'STREAM_COMPLETE' }} }}));
 }}
 </script>
 </body>

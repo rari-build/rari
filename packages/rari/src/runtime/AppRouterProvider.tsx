@@ -9,12 +9,32 @@ const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 const ROW_ID_REGEX = /^[0-9a-f]+$/i
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
+const TAG_TEXT = 84
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const id = setTimeout(resolve, ms)
     void id
   })
+}
+
+function isValidFlightPayload(content: string): boolean {
+  if (!content || content.length === 0)
+    return false
+
+  const firstCharCode = content.charCodeAt(0)
+  if (firstCharCode === TAG_TEXT)
+    return true
+
+  if (content.startsWith('['))
+    return true
+  if (content.startsWith('{') && !content.startsWith('E{'))
+    return true
+
+  if (content.startsWith('I[') || content.startsWith('"$S'))
+    return false
+
+  return false
 }
 const SUSPENSE_TTL_MS = 30000
 const CLEANUP_INTERVAL_MS = SUSPENSE_TTL_MS
@@ -541,7 +561,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (!payload?.modules)
       return reachableIds
 
-    for (const [moduleInfo] of payload.modules.entries()) {
+    for (const [, moduleInfo] of payload.modules.entries()) {
       if (moduleInfo?.id) {
         reachableIds.add(moduleInfo.id)
         if (moduleInfo.name && moduleInfo.name !== 'default') {
@@ -1000,14 +1020,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        return ROW_ID_REGEX.test(id) && content.startsWith('[')
+        return ROW_ID_REGEX.test(id) && isValidFlightPayload(content)
       })
 
       const hasPageContent = rows.some((r) => {
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        if (!ROW_ID_REGEX.test(id) || !content.startsWith('['))
+        if (!ROW_ID_REGEX.test(id) || !isValidFlightPayload(content))
           return false
 
         const isReferencedByShell = rows.some((shellRow) => {
@@ -1028,7 +1048,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
 
         if (!hasSuspenseBoundary) {
-          hasRenderedInitialShellRef.current = true
+          // No suspense boundary - initial shell is complete
         }
         else {
           const shellRows = rows.filter((r) => {

@@ -6,6 +6,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
 };
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -123,8 +124,10 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             {
                 return Ok(());
             }
+            error!("Invalid referer origin: {}", referer_origin);
+        } else {
+            error!("Invalid referer header: failed to parse origin");
         }
-        error!("Invalid referer origin: {}", referer);
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -307,6 +310,7 @@ pub async fn handle_server_action(
                     .parse()
                     .expect("Valid cache-control header"),
             );
+            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
             Ok(response)
         }
     }
@@ -435,7 +439,9 @@ pub async fn handle_form_action(
         }
         Err(e) => {
             error!("Form action execution failed: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
+            Ok(response)
         }
     }
 }
@@ -757,7 +763,9 @@ pub(crate) fn build_set_cookie_header(
     if let Some(max_age) = cookie.max_age {
         header.push_str(&format!("; Max-Age={}", max_age));
     }
-    if matches!(cookie.same_site.as_deref(), Some("None")) && !cookie.secure {
+    let normalized_same_site =
+        cookie.same_site.as_deref().map(|value| value.cow_to_ascii_lowercase());
+    if normalized_same_site.as_deref() == Some("none") && !cookie.secure {
         return Err(());
     }
     if cookie.partitioned && !cookie.secure {
@@ -769,13 +777,14 @@ pub(crate) fn build_set_cookie_header(
     if cookie.secure {
         header.push_str("; Secure");
     }
-    if let Some(same_site) = &cookie.same_site {
-        match same_site.as_str() {
-            "Strict" | "Lax" | "None" => {
-                header.push_str(&format!("; SameSite={}", same_site));
-            }
+    if let Some(same_site) = normalized_same_site.as_deref() {
+        let serialized_same_site = match same_site {
+            "strict" => "Strict",
+            "lax" => "Lax",
+            "none" => "None",
             _ => return Err(()),
-        }
+        };
+        header.push_str(&format!("; SameSite={}", serialized_same_site));
     }
     if let Some(priority) = &cookie.priority {
         match priority.as_str() {

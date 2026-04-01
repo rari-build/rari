@@ -83,9 +83,9 @@ impl StreamingRenderer {
             *shared_counter = self.row_counter;
         }
 
-        if let Some(resolver) = &self.promise_resolver {
+        if let Some(resolver) = self.promise_resolver.take() {
             let pending_promises = partial_result.pending_promises.clone();
-            let resolver_clone = Arc::clone(resolver);
+            let resolver_clone = Arc::clone(&resolver);
             tokio::spawn(async move {
                 resolver_clone.resolve_all(pending_promises);
             });
@@ -220,8 +220,8 @@ impl StreamingRenderer {
 
         drop(chunk_sender);
 
-        if let Some(resolver) = &self.promise_resolver {
-            let resolver_clone = Arc::clone(resolver);
+        if let Some(resolver) = self.promise_resolver.take() {
+            let resolver_clone = Arc::clone(&resolver);
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
@@ -313,9 +313,14 @@ impl StreamingRenderer {
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
-        if let Some(resolver) = &self.promise_resolver {
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
+
+        if let Some(resolver) = self.promise_resolver.take() {
             let runtime = Arc::clone(&self.runtime);
-            let resolver_clone = Arc::clone(resolver);
+            let resolver_clone = Arc::clone(&resolver);
             let pending_promises = partial_result.pending_promises.clone();
             let has_promises = !pending_promises.is_empty();
 
@@ -453,8 +458,13 @@ impl StreamingRenderer {
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
-        if let Some(resolver) = &self.promise_resolver {
-            let resolver_clone = Arc::clone(resolver);
+        {
+            let mut shared_counter = self.shared_row_counter.lock().await;
+            *shared_counter = self.row_counter;
+        }
+
+        if let Some(resolver) = self.promise_resolver.take() {
+            let resolver_clone = Arc::clone(&resolver);
             let pending_promises = partial_result.pending_promises.clone();
 
             tokio::spawn(async move {
@@ -1324,8 +1334,12 @@ impl StreamingRenderer {
 
                 let final_props = if let Some(props_obj) = props.as_object() {
                     let mut new_props = serde_json::Map::new();
+                    let is_suspense = matches!(
+                        element_type.as_str(),
+                        Some("react.suspense") | Some("$Sreact.suspense")
+                    );
                     for (k, v) in props_obj {
-                        if k == "children" {
+                        if k == "children" || (is_suspense && k == "fallback") {
                             new_props.insert(
                                 k.clone(),
                                 self.convert_children(v, symbol_row_id, boundary_lazy_refs)?,

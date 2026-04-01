@@ -119,7 +119,7 @@ if (!globalThis.renderToRsc) {
                 if (!globalThis['~suspense'].pendingPromises)
                   globalThis['~suspense'].pendingPromises = []
 
-                const capturedResult = result
+                const capturedResult = Promise.resolve(result).catch(() => {})
                 globalThis['~suspense'].pendingPromises.push({
                   id: promiseId,
                   boundaryId: currentBoundaryId,
@@ -183,6 +183,13 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
     return null
 
   try {
+    if (Array.isArray(element)) {
+      if (element[0] === '$')
+        return element
+
+      return element.map(child => globalThis['~suspense'].safeSerializeElement(child))
+    }
+
     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
       return element
 

@@ -12,6 +12,21 @@ export interface SearchResult {
   excerpt?: string
 }
 
+interface SearchIndexEntry {
+  file: string
+  title: string
+  lowerTitle: string
+  content: string
+  originalContent: string
+  href: string
+  category: string
+}
+
+interface SearchCache {
+  index: SearchIndexEntry[]
+  timestamp: number
+}
+
 const exportRegex = /^export .+$/gm
 const importRegex = /^import .+$/gm
 const codeBlockRegex = /<CodeBlock[^>]*>[\s\S]*?<\/CodeBlock>/gi
@@ -31,8 +46,10 @@ const propertyDefRegex = /^-\s+\*\*(?:Type|Default|Required):\*\*.+$/gm
 const relatedSectionRegex = /##\s+Related[\s\S]*$/gm
 const markdownTableRegex = /^\|.+\|$/gm
 const mdxExtRegex = /\.mdx$/
-const incompleteOpeningTagRegex = /<[^>]*$/g
-const incompleteClosingTagRegex = /^[^<]*>/g
+const angleBracketRegex = /[<>]/g
+
+const CACHE_TTL_MS = 5 * 60 * 1000
+let searchCache: SearchCache | null = null
 
 interface MdxFileResult {
   files: string[]
@@ -101,8 +118,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
 
     content = content.replace(htmlTagRegex, '')
 
-    content = content.replace(incompleteOpeningTagRegex, '')
-    content = content.replace(incompleteClosingTagRegex, '')
+    content = content.replace(angleBracketRegex, '')
 
     iterations++
   }
@@ -113,6 +129,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
+    .replace(angleBracketRegex, '')
 
   content = content
     .split('\n')
@@ -160,24 +177,18 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
   return excerpt
 }
 
-export async function searchDocumentation(query: string): Promise<SearchResult[]> {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery)
-    return []
-
-  const contentDir = join(process.cwd(), 'public', 'content', 'docs')
+async function buildSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
   const { files: mdxFiles, partial, error } = await getAllMdxFiles(contentDir)
 
-  if (partial && mdxFiles.length === 0)
-    throw error ?? new Error('Failed to read documentation directory')
+  if (partial && mdxFiles.length === 0) {
+    console.error('Failed to read documentation directory:', error?.message ?? 'Unknown error')
+    return []
+  }
 
   if (partial)
-    console.warn('Search results may be incomplete due to directory read errors:', error?.message)
+    console.warn('Search index may be incomplete due to directory read errors:', error?.message)
 
-  const lowerQuery = normalizedQuery
-  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
-
-  const results: Array<SearchResult & { score: number }> = []
+  const index: SearchIndexEntry[] = []
 
   const fileReadPromises = mdxFiles.map(async (file) => {
     const fullPath = join(contentDir, file)
@@ -189,7 +200,7 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
 
   for (const result of settledResults) {
     if (result.status === 'rejected') {
-      console.warn('Failed to read file during search:', result.reason)
+      console.warn('Failed to read file during index build:', result.reason)
       continue
     }
 
@@ -197,42 +208,88 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
 
     try {
       const { title, content, originalContent } = extractContent(fileContent)
+      const href = `/docs/${file.replace('.mdx', '')}`
+      const category = pathToCategory(file)
 
-      const lowerTitle = title.toLowerCase()
-      let score = 0
-
-      if (lowerTitle === lowerQuery)
-        score += 100
-      else if (lowerTitle.startsWith(lowerQuery))
-        score += 50
-      else if (lowerTitle.includes(lowerQuery))
-        score += 25
-
-      if (content.includes(lowerQuery))
-        score += 15
-
-      for (const word of words) {
-        if (lowerTitle.includes(word))
-          score += 10
-        if (content.includes(word))
-          score += 3
-      }
-
-      if (score > 0) {
-        const href = `/docs/${file.replace('.mdx', '')}`
-        const category = pathToCategory(file)
-
-        results.push({
-          title,
-          href,
-          category,
-          excerpt: extractExcerpt(originalContent, lowerQuery),
-          score,
-        })
-      }
+      index.push({
+        file,
+        title,
+        lowerTitle: title.toLowerCase(),
+        content,
+        originalContent,
+        href,
+        category,
+      })
     }
     catch (extractError) {
       console.warn(`Failed to extract content from ${file}:`, extractError)
+    }
+  }
+
+  return index
+}
+
+async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
+  const now = Date.now()
+
+  if (searchCache && (now - searchCache.timestamp) < CACHE_TTL_MS)
+    return searchCache.index
+
+  const index = await buildSearchIndex(contentDir)
+
+  searchCache = {
+    index,
+    timestamp: now,
+  }
+
+  return index
+}
+
+export async function searchDocumentation(query: string): Promise<SearchResult[]> {
+  const normalizedQuery = query
+    .trim()
+    .toLowerCase()
+    .replace(WHITESPACE_REGEX, ' ')
+  if (!normalizedQuery)
+    return []
+
+  const contentDir = join(process.cwd(), 'public', 'content', 'docs')
+
+  const index = await getSearchIndex(contentDir)
+
+  const lowerQuery = normalizedQuery
+  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
+
+  const results: Array<SearchResult & { score: number }> = []
+
+  for (const entry of index) {
+    let score = 0
+
+    if (entry.lowerTitle === lowerQuery)
+      score += 100
+    else if (entry.lowerTitle.startsWith(lowerQuery))
+      score += 50
+    else if (entry.lowerTitle.includes(lowerQuery))
+      score += 25
+
+    if (entry.content.includes(lowerQuery))
+      score += 15
+
+    for (const word of words) {
+      if (entry.lowerTitle.includes(word))
+        score += 10
+      if (entry.content.includes(word))
+        score += 3
+    }
+
+    if (score > 0) {
+      results.push({
+        title: entry.title,
+        href: entry.href,
+        category: entry.category,
+        excerpt: extractExcerpt(entry.originalContent, lowerQuery),
+        score,
+      })
     }
   }
 

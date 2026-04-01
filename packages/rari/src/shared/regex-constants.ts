@@ -40,7 +40,7 @@ export const XML_APOS_REGEX = CHAR_ESCAPE_APOS_REGEX
 
 export const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
 export const COMPONENT_ID_REGEX = /[^\w/-]/g
-export const NUMERIC_REGEX = /^\d+$/
+export const NUMERIC_REGEX = /^[0-9a-f]+$/i
 
 export const CAMEL_CASE_REGEX = /([a-z])([A-Z])/g
 export const CAMEL_TO_KEBAB_REGEX = /([A-Z])/g
