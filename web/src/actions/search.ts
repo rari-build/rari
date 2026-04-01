@@ -38,7 +38,6 @@ const jsxSelfClosingRegex = /<[A-Z]\w[^>]*\/>/g
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
-const htmlTagRegex = /<\/?[a-z][a-z0-9:-]*(?:\s[^<>]*)?>/gi
 const scriptMarkerRegex = /\/?\s*script\b/gi
 const strictScriptRegex = /script/gi
 const markdownFormattingRegex = /[*_~]/g
@@ -114,7 +113,6 @@ function extractContent(mdxContent: string): { title: string, content: string, o
 
     content = content.replace(jsxComponentRegex, '$1')
     content = content.replace(jsxSelfClosingRegex, '')
-    content = content.replace(htmlTagRegex, '')
     content = content.replace(angleBracketRegex, '')
     content = content.replace(scriptMarkerRegex, '')
   }
