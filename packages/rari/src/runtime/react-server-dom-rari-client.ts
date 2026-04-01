@@ -51,10 +51,12 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
             if (colonIndex !== -1) {
               const rowId = line.slice(0, colonIndex)
               const content = line.slice(colonIndex + 1)
+              const numericId = Number.parseInt(rowId, 16)
+              const decimalKey = numericId.toString()
 
               if (!content.startsWith('I[') && (!content.startsWith('"$S') || !content.endsWith('"'))) {
-                if (chunks.has(rowId)) {
-                  rootChunkId = rowId
+                if (chunks.has(decimalKey)) {
+                  rootChunkId = decimalKey
                   rootElement = chunks.get(rowId)
                 }
               }

@@ -24,7 +24,7 @@ export async function addTodo(formData: FormData) {
     return { success: false, error: 'Todo text is required', todos }
 
   const newTodo = {
-    id: Date.now().toString(),
+    id: crypto.randomUUID(),
     text: text.trim(),
     completed: false,
     createdAt: new Date().toISOString(),

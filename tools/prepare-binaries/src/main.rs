@@ -204,30 +204,35 @@ fn copy_binary_to_platform_package(
         fs::set_permissions(&dest_path, perms)?;
 
         if target_info.platform.starts_with("darwin") {
-            match dest_path.to_str() {
-                Some(path_str) => {
-                    let sign_result =
-                        std::process::Command::new("codesign").args(["-s", "-", path_str]).output();
-                    match sign_result {
-                        Ok(output) if output.status.success() => {
-                            log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
-                        }
-                        Ok(output) => {
-                            log_warning(&format!(
-                                "codesign failed: {}",
-                                String::from_utf8_lossy(&output.stderr)
-                            ));
-                        }
-                        Err(e) => {
-                            log_warning(&format!("codesign not available: {}", e));
+            if std::env::consts::OS != "macos" {
+                log_warning("Skipping codesign: host OS is not macOS");
+            } else {
+                match dest_path.to_str() {
+                    Some(path_str) => {
+                        let sign_result = std::process::Command::new("codesign")
+                            .args(["-s", "-", path_str])
+                            .output();
+                        match sign_result {
+                            Ok(output) if output.status.success() => {
+                                log_success(&format!("Ad-hoc signed: {}", dest_path.display()));
+                            }
+                            Ok(output) => {
+                                log_warning(&format!(
+                                    "codesign failed: {}",
+                                    String::from_utf8_lossy(&output.stderr)
+                                ));
+                            }
+                            Err(e) => {
+                                log_warning(&format!("codesign not available: {}", e));
+                            }
                         }
                     }
-                }
-                None => {
-                    log_warning(&format!(
-                        "Skipping codesign: path contains invalid UTF-8: {}",
-                        dest_path.display()
-                    ));
+                    None => {
+                        log_warning(&format!(
+                            "Skipping codesign: path contains invalid UTF-8: {}",
+                            dest_path.display()
+                        ));
+                    }
                 }
             }
         }

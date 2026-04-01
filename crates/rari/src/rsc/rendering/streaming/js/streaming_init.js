@@ -69,43 +69,70 @@ if (!globalThis.renderToRsc) {
           try {
             const props = element.props || {}
 
-            if (currentBoundaryId) {
-              if (!globalThis['~suspense'])
-                globalThis['~suspense'] = {}
-              globalThis['~suspense'].currentBoundaryId = currentBoundaryId
-            }
+            if (!globalThis['~suspense'])
+              globalThis['~suspense'] = {}
 
-            const isAsyncFunction = element.type[Symbol.toStringTag] === 'AsyncFunction'
-              || element.type.constructor?.name === 'AsyncFunction'
-              || (typeof element.type.toString === 'function' && element.type.toString().trimStart().startsWith('async '))
+            const previousBoundaryId = globalThis['~suspense'].currentBoundaryId ?? null
+            globalThis['~suspense'].currentBoundaryId = currentBoundaryId
 
-            if (isAsyncFunction && currentBoundaryId) {
-              const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+            try {
+              const isAsyncFunction = element.type[Symbol.toStringTag] === 'AsyncFunction'
+                || element.type.constructor?.name === 'AsyncFunction'
+                || (typeof element.type.toString === 'function' && element.type.toString().trimStart().startsWith('async '))
 
-              if (!globalThis['~suspense'].pendingPromises)
-                globalThis['~suspense'].pendingPromises = []
+              if (isAsyncFunction && currentBoundaryId) {
+                const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
-              globalThis['~suspense'].pendingPromises.push({
-                id: promiseId,
-                boundaryId: currentBoundaryId,
-                componentPath: element.type.name || 'anonymous',
-                componentType: element.type,
-                componentProps: props,
-              })
+                if (!globalThis['~suspense'].pendingPromises)
+                  globalThis['~suspense'].pendingPromises = []
 
-              return {
-                '~rari_lazy': true,
-                '~rari_promise_id': promiseId,
-                '~rari_boundary_id': currentBoundaryId,
+                globalThis['~suspense'].pendingPromises.push({
+                  id: promiseId,
+                  boundaryId: currentBoundaryId,
+                  componentPath: element.type.name || 'anonymous',
+                  componentType: element.type,
+                  componentProps: props,
+                })
+
+                return {
+                  '~rari_lazy': true,
+                  '~rari_promise_id': promiseId,
+                  '~rari_boundary_id': currentBoundaryId,
+                }
               }
+
+              let result = element.type(props)
+
+              if (result && typeof result.then === 'function' && currentBoundaryId) {
+                const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+
+                if (!globalThis['~suspense'].pendingPromises)
+                  globalThis['~suspense'].pendingPromises = []
+
+                const capturedResult = result
+                globalThis['~suspense'].pendingPromises.push({
+                  id: promiseId,
+                  boundaryId: currentBoundaryId,
+                  componentPath: element.type.name || 'anonymous',
+                  componentType: () => capturedResult,
+                  componentProps: props,
+                })
+
+                return {
+                  '~rari_lazy': true,
+                  '~rari_promise_id': promiseId,
+                  '~rari_boundary_id': currentBoundaryId,
+                }
+              }
+
+              if (result && typeof result.then === 'function')
+                result = await result
+
+              return await globalThis.renderToRsc(result, clientComponents, currentBoundaryId)
             }
-
-            let result = element.type(props)
-
-            if (result && typeof result.then === 'function')
-              result = await result
-
-            return await globalThis.renderToRsc(result, clientComponents, currentBoundaryId)
+            finally {
+              globalThis['~suspense'].currentBoundaryId = previousBoundaryId
+            }
           }
           catch (error) {
             console.error('Error rendering function component:', error)
@@ -142,7 +169,7 @@ if (!globalThis['~suspense']) {
 }
 
 globalThis['~suspense'].safeSerializeElement = function (element) {
-  if (!element)
+  if (element == null)
     return null
 
   try {
@@ -169,6 +196,9 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
   }
 }
 
-globalThis['~suspense'].discoveredBoundaries = globalThis['~suspense'].discoveredBoundaries || []
-globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
-globalThis['~suspense'].currentBoundaryId = globalThis['~suspense'].currentBoundaryId ?? null
+globalThis['~suspense'].streaming = true
+globalThis['~suspense'].promises = {}
+globalThis['~suspense'].boundaryProps = {}
+globalThis['~suspense'].discoveredBoundaries = []
+globalThis['~suspense'].pendingPromises = []
+globalThis['~suspense'].currentBoundaryId = null

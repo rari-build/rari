@@ -402,6 +402,13 @@ impl LayoutRenderer {
 
         drop(renderer_guard);
 
+        let fallback_script = self.build_composition_script(
+            route_match,
+            context,
+            loading_component_id.as_deref(),
+            false,
+        )?;
+
         match streaming_renderer
             .start_streaming_with_composition(composition_script, layout_structure)
             .await
@@ -411,16 +418,8 @@ impl LayoutRenderer {
                 error!("Streaming failed, falling back to static render: {}", e);
 
                 let renderer = self.renderer.lock().await;
-                let rsc_wire_format = Self::execute_composition_and_serialize(
-                    &renderer,
-                    self.build_composition_script(
-                        route_match,
-                        context,
-                        loading_component_id.as_deref(),
-                        false,
-                    )?,
-                )
-                .await?;
+                let rsc_wire_format =
+                    Self::execute_composition_and_serialize(&renderer, fallback_script).await?;
 
                 Self::validate_rsc_wire_format(&rsc_wire_format)?;
 

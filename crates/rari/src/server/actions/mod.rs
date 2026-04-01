@@ -247,12 +247,16 @@ pub async fn handle_server_action(
 
     if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
         error!("Failed to set request context for server action: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     let result =
         renderer.execute_server_function(&request.id, &request.export_name, &sanitized_args).await;
 
-    let _ = renderer.runtime.clear_request_context().await;
+    if let Err(e) = renderer.runtime.clear_request_context().await {
+        error!("Failed to clear request context for server action: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
     match result {
         Ok(value) => {
@@ -368,11 +372,15 @@ pub async fn handle_form_action(
 
     if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
         error!("Failed to set request context for form action: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     let result = renderer.execute_server_function(action_id, export_name, &sanitized_args).await;
 
-    let _ = renderer.runtime.clear_request_context().await;
+    if let Err(e) = renderer.runtime.clear_request_context().await {
+        error!("Failed to clear request context for form action: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
     match result {
         Ok(value) => {
@@ -698,12 +706,44 @@ pub(crate) fn is_reserved_export_name(name: &str) -> bool {
 fn build_set_cookie_header(
     cookie: &crate::server::middleware::request_context::PendingCookie,
 ) -> Result<String, ()> {
+    fn is_valid_cookie_name(s: &str) -> bool {
+        !s.is_empty()
+            && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
+    }
+
+    fn is_valid_cookie_value(s: &str) -> bool {
+        s.bytes().all(|b| b >= 32 && b != b';' && b != b',' && b != 127)
+    }
+
+    fn is_valid_attr_value(s: &str) -> bool {
+        !s.is_empty() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
+    }
+
+    if !is_valid_cookie_name(&cookie.name) {
+        return Err(());
+    }
+    if !is_valid_cookie_value(&cookie.value) {
+        return Err(());
+    }
+
+    let path = cookie.path.as_deref().unwrap_or("/");
+    if !is_valid_attr_value(path) {
+        return Err(());
+    }
+
     let mut header = format!("{}={}", cookie.name, cookie.value);
-    header.push_str(&format!("; Path={}", cookie.path.as_deref().unwrap_or("/")));
+    header.push_str(&format!("; Path={}", path));
+
     if let Some(domain) = &cookie.domain {
+        if !is_valid_attr_value(domain) {
+            return Err(());
+        }
         header.push_str(&format!("; Domain={}", domain));
     }
     if let Some(expires) = &cookie.expires {
+        if !is_valid_attr_value(expires) {
+            return Err(());
+        }
         header.push_str(&format!("; Expires={}", expires));
     }
     if let Some(max_age) = cookie.max_age {
@@ -716,10 +756,20 @@ fn build_set_cookie_header(
         header.push_str("; Secure");
     }
     if let Some(same_site) = &cookie.same_site {
-        header.push_str(&format!("; SameSite={}", same_site));
+        match same_site.as_str() {
+            "Strict" | "Lax" | "None" => {
+                header.push_str(&format!("; SameSite={}", same_site));
+            }
+            _ => return Err(()),
+        }
     }
     if let Some(priority) = &cookie.priority {
-        header.push_str(&format!("; Priority={}", priority));
+        match priority.as_str() {
+            "Low" | "Medium" | "High" => {
+                header.push_str(&format!("; Priority={}", priority));
+            }
+            _ => return Err(()),
+        }
     }
     if cookie.partitioned {
         header.push_str("; Partitioned");

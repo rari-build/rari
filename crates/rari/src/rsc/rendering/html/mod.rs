@@ -1599,7 +1599,10 @@ if (typeof window !== 'undefined') {{
 
         let rendered_html = match serde_json::from_str::<serde_json::Value>(content_json) {
             Ok(content) => self.render_json_value_to_simple_html(&content),
-            Err(_) => String::new(),
+            Err(e) => {
+                tracing::warn!("Failed to parse boundary content JSON: {}", e);
+                r#"<div class="rari-error">Content unavailable</div>"#.to_string()
+            }
         };
 
         let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
@@ -1674,7 +1677,7 @@ if (typeof window !== 'undefined') {{
                             && tag.len() > 1
                             && !tag.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
                     {
-                        return String::new();
+                        return r#"<span data-client-ref="pending"></span>"#.to_string();
                     }
 
                     if !tag
@@ -1748,12 +1751,12 @@ if (typeof window !== 'undefined') {{
                                 serde_json::Value::Number(n) => {
                                     html.push_str(&format!(r#" {}="{}""#, attr_name, n));
                                 }
-                                serde_json::Value::Bool(true) => {
-                                    if BOOLEAN_ATTRS.contains(&attr_name.as_str()) {
-                                        html.push_str(&format!(" {}", attr_name));
-                                    }
+                                serde_json::Value::Bool(true)
+                                    if BOOLEAN_ATTRS.contains(&attr_name.as_str()) =>
+                                {
+                                    html.push_str(&format!(" {}", attr_name));
                                 }
-                                serde_json::Value::Bool(false) => {}
+                                serde_json::Value::Bool(_) => {}
                                 _ => {}
                             }
                         }

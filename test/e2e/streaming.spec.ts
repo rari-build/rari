@@ -314,10 +314,19 @@ test.describe.serial('Suspense Streaming Tests', () => {
   }
 
   function assertProgressiveBoundaries(timeA: number, timeB: number, timeC: number) {
+    const gapAB = timeB - timeA
+    const gapBC = timeC - timeB
+    const spanAC = timeC - timeA
+
     expect(timeA).toBeLessThan(timeB)
     expect(timeB).toBeLessThan(timeC)
-    expect(timeB - timeA).toBeGreaterThan(500)
-    expect(timeC - timeB).toBeGreaterThan(500)
+
+    expect(gapAB).toBeGreaterThan(500)
+    expect(gapBC).toBeGreaterThan(500)
+
+    expect(gapAB).toBeLessThan(2500)
+    expect(gapBC).toBeLessThan(2500)
+    expect(spanAC).toBeLessThan(4500)
   }
 
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {

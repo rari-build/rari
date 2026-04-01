@@ -53,7 +53,7 @@ export async function addTodo(formData: FormData) {
   }
 
   const newTodo: Todo = {
-    id: Date.now().toString(),
+    id: crypto.randomUUID(),
     text: text.trim(),
     completed: false,
     createdAt: new Date().toISOString(),

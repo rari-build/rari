@@ -1370,6 +1370,10 @@ impl StreamingRenderer {
                 {
                     return Ok(serde_json::Value::String(format!("$L{}", row_id)));
                 }
+                tracing::warn!(
+                    "Lazy marker with promise_id {:?} not found in boundary_lazy_refs",
+                    obj.get("~rari_promise_id")
+                );
                 return Ok(serde_json::Value::Null);
             }
 

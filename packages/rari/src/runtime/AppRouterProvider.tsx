@@ -7,7 +7,7 @@ import { preloadComponentsFromModules } from './shared/preload-components'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
-const ROW_ID_REGEX = /^\d+$/
+const ROW_ID_REGEX = /^[0-9a-f]+$/i
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 
 function sleep(ms: number): Promise<void> {

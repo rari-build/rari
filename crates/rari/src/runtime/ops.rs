@@ -439,12 +439,13 @@ pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) 
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
     {
+        let path = args.path.or_else(|| Some("/".to_string()));
         ctx.pending_cookies.insert(
-            PendingCookieKey::new(&args.name, args.path.as_deref(), args.domain.as_deref()),
+            PendingCookieKey::new(&args.name, path.as_deref(), args.domain.as_deref()),
             PendingCookie {
                 name: args.name,
                 value: args.value,
-                path: args.path,
+                path,
                 domain: args.domain,
                 expires: args.expires,
                 max_age: args.max_age,
@@ -465,6 +466,8 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
     {
+        ctx.pending_cookies.retain(|k, _| k.name != name);
+
         ctx.pending_cookies.insert(
             PendingCookieKey::new(&name, Some("/"), None),
             PendingCookie {

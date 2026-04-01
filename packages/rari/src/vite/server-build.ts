@@ -257,22 +257,7 @@ export class ServerComponentBuilder {
       if (!fs.existsSync(filePath))
         return false
       const code = fs.readFileSync(filePath, 'utf-8')
-
-      const clientDirectives = [
-        '\'use client\'',
-        '"use client"',
-        '/* @client */',
-        '// @client',
-      ]
-
-      const trimmedCode = code.trim()
-
-      const hasClientDirective = clientDirectives.some(
-        directive =>
-          trimmedCode.startsWith(directive) || code.includes(directive),
-      )
-
-      return hasClientDirective
+      return hasTopLevelUseClientDirective(code)
     }
     catch {
       return false

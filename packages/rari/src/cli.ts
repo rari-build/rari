@@ -51,13 +51,10 @@ loadEnvFile()
 
 const [, , command, ...args] = process.argv
 
-function walkUpDirectories<T>(callback: (dir: string) => T | null, maxIterations = 20): T | null {
+function walkUpDirectories<T>(callback: (dir: string) => T | null): T | null {
   let currentDir = process.cwd()
-  const root = resolve('/')
-  let iterations = 0
 
-  while (currentDir !== root && iterations < maxIterations) {
-    iterations++
+  while (true) {
     const result = callback(currentDir)
     if (result !== null)
       return result
@@ -154,8 +151,13 @@ function crossPlatformSpawn(command: string, args: string[], options: SpawnOptio
     }
     if (executor.includes('pnpm'))
       return spawn(executor, ['exec', ...args], { ...options, shell: isWindows })
-    if (executor.includes('yarn'))
-      return spawn(executor, ['dlx', ...args], { ...options, shell: isWindows })
+    if (executor.includes('yarn')) {
+      const [bin, ...rest] = args
+      const yarnArgs = bin === 'vp'
+        ? ['dlx', '-p', 'vite-plus', 'vp', ...rest]
+        : ['dlx', ...args]
+      return spawn(executor, yarnArgs, { ...options, shell: isWindows })
+    }
   }
 
   if (isWindows && command === 'npx')
