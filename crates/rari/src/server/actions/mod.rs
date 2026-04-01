@@ -99,8 +99,47 @@ pub struct ServerActionResponse {
 
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
-        tracing::warn!("Origin validation disabled: allowed_origins is empty");
-        return Ok(());
+        let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
+            error!("Missing host header in server action request");
+            StatusCode::BAD_REQUEST
+        })?;
+
+        if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+            if let Ok(origin_url) = url::Url::parse(origin) {
+                let origin_host = if let Some(port) = origin_url.port() {
+                    format!("{}:{}", origin_url.host_str().unwrap_or(""), port)
+                } else {
+                    origin_url.host_str().unwrap_or("").to_string()
+                };
+
+                if origin_host == host {
+                    return Ok(());
+                }
+            }
+            error!("Origin mismatch: origin={}, host={}", origin, host);
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
+            if let Ok(referer_url) = url::Url::parse(referer) {
+                let referer_host = if let Some(port) = referer_url.port() {
+                    format!("{}:{}", referer_url.host_str().unwrap_or(""), port)
+                } else {
+                    referer_url.host_str().unwrap_or("").to_string()
+                };
+
+                if referer_host == host {
+                    return Ok(());
+                }
+                error!("Referer mismatch: referer={}, host={}", referer, host);
+            } else {
+                error!("Invalid referer header: failed to parse");
+            }
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        error!("Missing origin and referer headers in server action request");
+        return Err(StatusCode::FORBIDDEN);
     }
 
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {

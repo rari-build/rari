@@ -242,6 +242,9 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
             || key === 'readonly'
             || key === 'required'
             || key === 'htmlFor'
+            || key === 'role'
+            || key === 'name'
+            || key === 'tabIndex'
             || key.startsWith('data-')
             || key.startsWith('aria-')
           ) {

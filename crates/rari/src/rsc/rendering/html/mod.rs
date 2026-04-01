@@ -1801,11 +1801,12 @@ if (typeof window !== 'undefined') {{
                         }
                     }
 
-                    html.push('>');
-
                     if SELF_CLOSING_TAGS.contains(&tag) {
+                        html.push_str(" />");
                         return html;
                     }
+
+                    html.push('>');
 
                     if let Some(props_obj) = props.as_object()
                         && let Some(children) = props_obj.get("children")

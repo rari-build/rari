@@ -38,7 +38,7 @@ const jsxSelfClosingRegex = /<[A-Z]\w[^>]*\/>/g
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
-const htmlTagRegex = /<[^>]+>/g
+const htmlTagRegex = /<\/?[A-Z][A-Z0-9:-]*(?:\s[^<>]*)?>/gi
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
 const listMarkerRegex = /^(?:[-*>+]|\d+\.)\s+/gm
@@ -115,6 +115,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     content = content.replace(jsxSelfClosingRegex, '')
 
     content = content.replace(htmlTagRegex, '')
+    content = content.replace(angleBracketRegex, '')
   }
 
   content = content
@@ -123,7 +124,6 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
-    .replace(angleBracketRegex, '')
 
   content = content
     .split('\n')
@@ -234,7 +234,7 @@ async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
 
   const { index, complete } = await buildSearchIndex(contentDir)
 
-  if (complete || !searchCache) {
+  if (complete) {
     searchCache = {
       index,
       timestamp: Date.now(),

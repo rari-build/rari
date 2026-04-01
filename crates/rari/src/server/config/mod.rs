@@ -623,6 +623,16 @@ impl Config {
                 config.spam_blocker.enabled = enabled;
             }
 
+            if let Some(action_data) = config_data.get("action")
+                && let Some(allowed_origins) =
+                    action_data.get("allowedOrigins").and_then(|v| v.as_array())
+            {
+                config.action.allowed_origins = allowed_origins
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
+            }
+
             if let Some(cache_control_data) = config_data.get("cacheControl")
                 && let Some(routes) = cache_control_data.get("routes").and_then(|v| v.as_object())
             {
@@ -738,10 +748,10 @@ impl Config {
         } else if let Some(origin) = &self.server.origin {
             vec![origin.clone()]
         } else {
-            tracing::warn!(
+            tracing::info!(
                 "No origin configured for server actions in production. \
-                 Set RARI_ORIGIN environment variable or configure action.allowed_origins. \
-                 Origin validation is disabled - relying on browser CORS policy."
+                 Using same-origin validation (comparing origin/referer with host header). \
+                 Set RARI_ORIGIN environment variable for explicit origin validation."
             );
             vec![]
         }

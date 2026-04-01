@@ -7,7 +7,6 @@ import { preloadComponentsFromModules } from './shared/preload-components'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
-const ROW_ID_REGEX = /^[0-9a-f]+$/i
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 const TAG_TEXT = 84
 const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
@@ -1100,14 +1099,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        return ROW_ID_REGEX.test(id) && isValidFlightPayload(content)
+        return NUMERIC_REGEX.test(id) && isValidFlightPayload(content)
       })
 
       const hasPageContent = rows.some((r) => {
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        if (!ROW_ID_REGEX.test(id) || !isValidFlightPayload(content))
+        if (!NUMERIC_REGEX.test(id) || !isValidFlightPayload(content))
           return false
 
         const isReferencedByShell = rows.some((shellRow) => {
