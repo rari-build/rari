@@ -1379,10 +1379,14 @@ impl StreamingRenderer {
 
             if let (Some(element_type), Some(props)) = (obj.get("type"), obj.get("props")) {
                 let mut converted_props = serde_json::Map::new();
+                let is_suspense = matches!(
+                    element_type.as_str(),
+                    Some("react.suspense") | Some("$Sreact.suspense")
+                );
 
                 if let Some(props_obj) = props.as_object() {
                     for (key, value) in props_obj {
-                        if key == "children" {
+                        if key == "children" || (is_suspense && key == "fallback") {
                             converted_props.insert(
                                 key.clone(),
                                 self.convert_children(value, symbol_row_id, boundary_lazy_refs)?,

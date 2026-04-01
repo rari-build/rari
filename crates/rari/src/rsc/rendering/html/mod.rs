@@ -1675,7 +1675,7 @@ if (typeof window !== 'undefined') {{
                     if tag.starts_with("$L")
                         || tag.starts_with("$")
                             && tag.len() > 1
-                            && !tag.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                            && !tag.chars().nth(1).map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
                     {
                         return r#"<span data-client-ref="pending"></span>"#.to_string();
                     }
@@ -1726,14 +1726,7 @@ if (typeof window !== 'undefined') {{
                                 key.clone()
                             };
 
-                            if attr_name.starts_with("on")
-                                && attr_name.len() > 2
-                                && attr_name
-                                    .chars()
-                                    .nth(2)
-                                    .map(|c| c.is_uppercase())
-                                    .unwrap_or(false)
-                            {
+                            if !is_valid_attribute_name(&attr_name) {
                                 continue;
                             }
 

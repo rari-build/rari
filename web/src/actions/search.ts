@@ -23,11 +23,10 @@ const jsxSelfClosingRegex = /<[A-Z]\w[^>]*\/>/g
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
-const htmlTagRegex = /<[^>]+>/g
 const angleBracketRegex = /[<>]/g
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
-const listMarkerRegex = /^[->]\s+/gm
+const listMarkerRegex = /^(?:[-*>]|\d+\.)\s+/gm
 const propertyDefRegex = /^-\s+\*\*(?:Type|Default|Required):\*\*.+$/gm
 const relatedSectionRegex = /##\s+Related[\s\S]*$/gm
 const markdownTableRegex = /^\|.+\|$/gm
@@ -90,7 +89,7 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     .replace(propertyDefRegex, '')
     .replace(markdownTableRegex, '')
     .replace(markdownLinkRegex, '$1')
-    .replace(htmlTagRegex, '')
+    .replace(angleBracketRegex, '')
     .replace(markdownFormattingRegex, '')
     .replace(headingRegex, '')
     .replace(listMarkerRegex, '')
@@ -144,7 +143,8 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
 }
 
 export async function searchDocumentation(query: string): Promise<SearchResult[]> {
-  if (!query.trim())
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery)
     return []
 
   const contentDir = join(process.cwd(), 'public', 'content', 'docs')
@@ -156,8 +156,8 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   if (partial)
     console.warn('Search results may be incomplete due to directory read errors:', error?.message)
 
-  const lowerQuery = query.toLowerCase()
-  const words = lowerQuery.split(WHITESPACE_REGEX)
+  const lowerQuery = normalizedQuery
+  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
 
   const fileResults = await Promise.all(
     mdxFiles.map(async (file) => {
@@ -196,7 +196,8 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
           }
         }
       }
-      catch {
+      catch (error) {
+        console.warn(`Skipping unreadable docs file: ${file}`, error)
         return null
       }
     }),

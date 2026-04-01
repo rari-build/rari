@@ -144,6 +144,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const fallbackKeyCounterRef = useRef<number>(0)
   const hasRenderedInitialShellRef = useRef<boolean>(false)
   const hasRenderedFinalRef = useRef<boolean>(false)
+  const streamCompleteRef = useRef<boolean>(false)
   const rowProcessingRef = useRef<Promise<void>>(Promise.resolve())
   const isNavigatingRef = useRef<boolean>(false)
   const isInitialPageLoadRef = useRef<boolean>(!!initialPayload)
@@ -946,6 +947,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       currentNavigationIdRef.current = customEvent.detail.navigationId
       hasRenderedInitialShellRef.current = false
       hasRenderedFinalRef.current = false
+      streamCompleteRef.current = false
       rowProcessingRef.current = Promise.resolve()
       isNavigatingRef.current = true
       isInitialPageLoadRef.current = false
@@ -1077,6 +1079,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         if (hasRenderedFinalRef.current)
           return
 
+        if (!streamCompleteRef.current)
+          return
+
         const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
         parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
 
@@ -1101,6 +1106,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         return
 
       if (row.trim() === 'STREAM_COMPLETE') {
+        streamCompleteRef.current = true
         rowProcessingRef.current = rowProcessingRef.current.then(() => processRows())
         return
       }

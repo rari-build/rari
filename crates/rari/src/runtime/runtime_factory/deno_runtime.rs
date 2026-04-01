@@ -522,7 +522,9 @@ async fn execute_scripts_concurrent(
                     }
                 });
                 if store_result.is_err() {
-                    pending.push((tx, script_name, None));
+                    let _ = tx.send(Err(RariError::internal(
+                        "Failed to store V8 value in global slot".to_string(),
+                    )));
                 } else {
                     pending.push((tx, script_name, Some(v8_val)));
                 }
@@ -585,17 +587,9 @@ async fn execute_scripts_concurrent(
     let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> =
         pending.iter().map(|_| None).collect();
     let names: Vec<String> = pending.iter().map(|(_, n, _)| n.clone()).collect();
-    let has_v8_val: Vec<bool> = pending.iter().map(|(_, _, v)| v.is_some()).collect();
 
     for (i, (tx, _, _)) in pending.into_iter().enumerate() {
         senders[i] = Some(tx);
-    }
-
-    for i in 0..senders.len() {
-        if !has_v8_val[i] {
-            sent[i] = true;
-            remaining -= 1;
-        }
     }
 
     while remaining > 0 && start.elapsed() < timeout_duration {

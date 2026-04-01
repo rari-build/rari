@@ -94,7 +94,13 @@ export function getTopLevelDirective(source: string): string | null {
   const len = source.length
 
   while (i < len) {
-    if (source[i] === ' ' || source[i] === '\t' || source[i] === '\r' || source[i] === '\n') {
+    if (
+      source[i] === ' '
+      || source[i] === '\t'
+      || source[i] === '\r'
+      || source[i] === '\n'
+      || source[i] === '\uFEFF'
+    ) {
       i++
       continue
     }
@@ -232,7 +238,7 @@ export class ServerComponentBuilder {
     return this.htmlOnlyImports.has(filePath)
   }
 
-  isServerComponent(filePath: string): boolean {
+  isServerComponent(filePath: string, source?: string): boolean {
     if (filePath.includes('node_modules'))
       return false
 
@@ -240,10 +246,9 @@ export class ServerComponentBuilder {
       return false
 
     try {
-      if (!fs.existsSync(filePath))
+      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
+      if (code === null)
         return false
-
-      const code = fs.readFileSync(filePath, 'utf-8')
 
       return !hasTopLevelUseClientDirective(code) && !hasTopLevelUseServerDirective(code)
     }
@@ -352,8 +357,8 @@ export class ServerComponentBuilder {
     return true
   }
 
-  addServerComponent(filePath: string) {
-    const code = fs.readFileSync(filePath, 'utf-8')
+  addServerComponent(filePath: string, source?: string) {
+    const code = source ?? fs.readFileSync(filePath, 'utf-8')
 
     if (this.isServerAction(code)) {
       const dependencies = this.extractDependencies(code)
@@ -368,7 +373,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!this.isServerComponent(filePath))
+    if (!this.isServerComponent(filePath, code))
       return
 
     const dependencies = this.extractDependencies(code)
@@ -1759,16 +1764,15 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
         const code = fs.readFileSync(fullPath, 'utf-8')
 
         if (hasTopLevelUseServerDirective(code)) {
-          builder.addServerComponent(fullPath)
+          builder.addServerComponent(fullPath, code)
           continue
         }
 
         if (builder.isOnlyImportedByClientComponents(fullPath))
           continue
 
-        if (builder.isServerComponent(fullPath)) {
-          builder.addServerComponent(fullPath)
-        }
+        if (builder.isServerComponent(fullPath, code))
+          builder.addServerComponent(fullPath, code)
       }
       catch (error) {
         console.warn(
@@ -1882,7 +1886,7 @@ export function createServerBuildPlugin(
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
-        if (content.includes('use client'))
+        if (hasTopLevelUseClientDirective(content))
           return
 
         await builder.buildServerComponents()

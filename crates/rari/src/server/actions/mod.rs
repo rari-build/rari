@@ -98,6 +98,7 @@ pub struct ServerActionResponse {
 
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
+        tracing::debug!("Origin validation disabled: allowed_origins is empty");
         return Ok(());
     }
 
@@ -287,14 +288,7 @@ pub async fn handle_server_action(
                     .expect("Valid cache-control header"),
             );
 
-            for entry in request_context.pending_cookies.iter() {
-                let cookie = entry.value();
-                if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
-                    && let Ok(header_value) = set_cookie_value.parse()
-                {
-                    response.headers_mut().append(header::SET_COOKIE, header_value);
-                }
-            }
+            append_pending_cookies(response.headers_mut(), &request_context.pending_cookies);
 
             Ok(response)
         }
@@ -404,14 +398,10 @@ pub async fn handle_form_action(
                     .body("".into())
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-                for entry in request_context.pending_cookies.iter() {
-                    let cookie = entry.value();
-                    if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
-                        && let Ok(header_value) = set_cookie_value.parse()
-                    {
-                        redirect_response.headers_mut().append(header::SET_COOKIE, header_value);
-                    }
-                }
+                append_pending_cookies(
+                    redirect_response.headers_mut(),
+                    &request_context.pending_cookies,
+                );
 
                 return Ok(redirect_response);
             }
@@ -436,14 +426,10 @@ pub async fn handle_form_action(
                 .body("".into())
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-            for entry in request_context.pending_cookies.iter() {
-                let cookie = entry.value();
-                if let Ok(set_cookie_value) = build_set_cookie_header(cookie)
-                    && let Ok(header_value) = set_cookie_value.parse()
-                {
-                    redirect_response.headers_mut().append(header::SET_COOKIE, header_value);
-                }
-            }
+            append_pending_cookies(
+                redirect_response.headers_mut(),
+                &request_context.pending_cookies,
+            );
 
             Ok(redirect_response)
         }
@@ -701,6 +687,28 @@ pub(crate) fn is_reserved_export_name(name: &str) -> bool {
             | "@@iterator"
             | "@@toStringTag"
     )
+}
+
+fn append_pending_cookies(
+    headers: &mut axum::http::HeaderMap,
+    pending_cookies: &dashmap::DashMap<
+        crate::server::middleware::request_context::PendingCookieKey,
+        crate::server::middleware::request_context::PendingCookie,
+    >,
+) {
+    for entry in pending_cookies.iter() {
+        let cookie = entry.value();
+        match build_set_cookie_header(cookie) {
+            Ok(set_cookie_value) => {
+                if let Ok(header_value) = set_cookie_value.parse() {
+                    headers.append(header::SET_COOKIE, header_value);
+                }
+            }
+            Err(()) => {
+                tracing::warn!("Skipped invalid cookie '{}': failed validation", cookie.name);
+            }
+        }
+    }
 }
 
 fn build_set_cookie_header(

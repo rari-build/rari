@@ -1,6 +1,6 @@
 if (!globalThis.renderToRsc) {
   globalThis.renderToRsc = async function (element, clientComponents = {}, currentBoundaryId = null) {
-    if (!element)
+    if (element == null || element === false)
       return null
 
     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')

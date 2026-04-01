@@ -377,8 +377,6 @@ async fn perform_simple_fetch(
 #[op2]
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
-    use crate::server::middleware::request_context::PendingCookieKey;
-
     let op_state_ref = state.borrow();
     let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
@@ -399,9 +397,26 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
         })
         .collect();
 
-    for entry in ctx.pending_cookies.iter() {
-        let key: &PendingCookieKey = entry.key();
-        let cookie = entry.value();
+    let mut pending: Vec<_> =
+        ctx.pending_cookies.iter().map(|e| (e.key().clone(), e.value().clone())).collect();
+    pending.sort_by(|(a_key, a_cookie), (b_key, b_cookie)| {
+        let a_is_delete = a_cookie.max_age == Some(0);
+        let b_is_delete = b_cookie.max_age == Some(0);
+        match (a_is_delete, b_is_delete) {
+            (false, true) => std::cmp::Ordering::Less,
+            (true, false) => std::cmp::Ordering::Greater,
+            _ => {
+                let a_path_len = a_key.path.as_deref().unwrap_or("").len();
+                let b_path_len = b_key.path.as_deref().unwrap_or("").len();
+                a_path_len
+                    .cmp(&b_path_len)
+                    .then_with(|| a_key.name.cmp(&b_key.name))
+                    .then_with(|| a_key.domain.cmp(&b_key.domain))
+            }
+        }
+    });
+
+    for (key, cookie) in &pending {
         if cookie.max_age == Some(0) {
             cookies.remove(&key.name);
         } else {
