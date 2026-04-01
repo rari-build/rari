@@ -39,6 +39,7 @@ const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
 const htmlTagRegex = /<\/?[a-z][a-z0-9:-]*(?:\s[^<>]*)?>/gi
+const scriptMarkerRegex = /\/?\s*script\b/gi
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
 const listMarkerRegex = /^(?:[-*>+]|\d+\.)\s+/gm
@@ -117,6 +118,8 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     content = content.replace(htmlTagRegex, '')
     content = content.replace(angleBracketRegex, '')
   }
+
+  content = content.replace(scriptMarkerRegex, '')
 
   content = content
     .replace(inlineCodeRegex, '$1')
