@@ -1685,9 +1685,50 @@ if (typeof window !== 'undefined') {{
 
                     if tag.starts_with("$")
                         && tag.len() > 1
+                        && tag.chars().nth(1).map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    {
+                        if let Some(props_obj) = props.as_object()
+                            && let Some(resolved_type) = props_obj.get("type")
+                        {
+                            if let Some(resolved_props) = props_obj.get("props") {
+                                let resolved_element = serde_json::Value::Array(vec![
+                                    serde_json::Value::String("$".to_string()),
+                                    resolved_type.clone(),
+                                    serde_json::Value::Null,
+                                    resolved_props.clone(),
+                                ]);
+                                return self.render_json_value_to_simple_html(&resolved_element);
+                            } else if let Some(type_str) = resolved_type.as_str() {
+                                let resolved_element = serde_json::Value::Array(vec![
+                                    serde_json::Value::String("$".to_string()),
+                                    serde_json::Value::String(type_str.to_string()),
+                                    serde_json::Value::Null,
+                                    serde_json::Value::Object(serde_json::Map::new()),
+                                ]);
+                                return self.render_json_value_to_simple_html(&resolved_element);
+                            }
+                        }
+                        return r#"<span data-client-ref="pending"></span>"#.to_string();
+                    }
+
+                    if tag.starts_with("$")
+                        && tag.len() > 1
                         && !tag.chars().nth(1).map(|c| c.is_ascii_alphanumeric()).unwrap_or(false)
                     {
                         return r#"<span data-client-ref="pending"></span>"#.to_string();
+                    }
+
+                    if let Some(props_obj) = props.as_object()
+                        && let (Some(props_type), Some(props_props)) =
+                            (props_obj.get("type"), props_obj.get("props"))
+                    {
+                        let resolved_element = serde_json::Value::Array(vec![
+                            serde_json::Value::String("$".to_string()),
+                            props_type.clone(),
+                            props_obj.get("key").cloned().unwrap_or(serde_json::Value::Null),
+                            props_props.clone(),
+                        ]);
+                        return self.render_json_value_to_simple_html(&resolved_element);
                     }
 
                     if !tag

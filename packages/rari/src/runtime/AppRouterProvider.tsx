@@ -10,6 +10,7 @@ const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 const ROW_ID_REGEX = /^[0-9a-f]+$/i
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 const TAG_TEXT = 84
+const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -22,17 +23,29 @@ function isValidFlightPayload(content: string): boolean {
   if (!content || content.length === 0)
     return false
 
+  const firstChar = content.charAt(0)
   const firstCharCode = content.charCodeAt(0)
-  if (firstCharCode === TAG_TEXT)
-    return true
-
-  if (content.startsWith('['))
-    return true
-  if (content.startsWith('{') && !content.startsWith('E{'))
-    return true
 
   if (content.startsWith('I[') || content.startsWith('"$S'))
     return false
+
+  if (firstCharCode === TAG_TEXT)
+    return true
+
+  if (firstChar === '[')
+    return true
+
+  if (firstChar === '{' || content.startsWith('E{'))
+    return true
+
+  if (firstChar === '"')
+    return true
+
+  if (firstChar === '-' || (firstCharCode >= 48 && firstCharCode <= 57))
+    return true
+
+  if (firstChar === 't' || firstChar === 'f' || firstChar === 'n')
+    return true
 
   return false
 }
@@ -558,17 +571,48 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const getReachableModuleIds = (payload: any): Set<string> => {
     const reachableIds = new Set<string>()
 
-    if (!payload?.modules)
+    if (!payload?.modules || !payload?.element)
       return reachableIds
 
-    for (const [, moduleInfo] of payload.modules.entries()) {
-      if (moduleInfo?.id) {
-        reachableIds.add(moduleInfo.id)
-        if (moduleInfo.name && moduleInfo.name !== 'default') {
-          reachableIds.add(`${moduleInfo.id}#${moduleInfo.name}`)
+    const visited = new Set<string>()
+
+    const walkElement = (element: any): void => {
+      if (!element)
+        return
+
+      if (typeof element === 'string' && element.startsWith('$L')) {
+        const moduleInfo = payload.modules.get(element)
+        if (moduleInfo?.id) {
+          reachableIds.add(moduleInfo.id)
+          if (moduleInfo.name && moduleInfo.name !== 'default') {
+            reachableIds.add(`${moduleInfo.id}#${moduleInfo.name}`)
+          }
+        }
+
+        if (payload.rows?.has(element) && !visited.has(element)) {
+          visited.add(element)
+          walkElement(payload.rows.get(element))
+        }
+
+        return
+      }
+
+      if (Array.isArray(element)) {
+        for (const item of element) {
+          walkElement(item)
+        }
+
+        return
+      }
+
+      if (typeof element === 'object' && element !== null) {
+        for (const value of Object.values(element)) {
+          walkElement(value)
         }
       }
     }
+
+    walkElement(payload.element)
 
     return reachableIds
   }
@@ -684,6 +728,30 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
                 rootElement = elementData.length === 1 ? elementData[0] : elementData
               }
             }
+          }
+          else if (content.startsWith('{') || content.startsWith('E{')) {
+            const jsonContent = content.startsWith('E{') ? content.substring(1) : content
+            const objectData = JSON.parse(jsonContent)
+            rows.set(`$L${rowId}`, objectData)
+
+            if (!rootElement) {
+              rootElement = objectData
+            }
+          }
+          else if (content.startsWith('"') && !content.startsWith('"$S')) {
+            const stringData = JSON.parse(content)
+            rows.set(`$L${rowId}`, stringData)
+
+            if (!rootElement) {
+              rootElement = stringData
+            }
+          }
+          else if (PRIMITIVE_JSON_REGEX.test(content)) {
+            const primitiveData = JSON.parse(content)
+            rows.set(`$L${rowId}`, primitiveData)
+
+            if (!rootElement)
+              rootElement = primitiveData
           }
         }
         catch (e) {

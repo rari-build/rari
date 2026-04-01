@@ -119,7 +119,8 @@ if (!globalThis.renderToRsc) {
                 if (!globalThis['~suspense'].pendingPromises)
                   globalThis['~suspense'].pendingPromises = []
 
-                const capturedResult = Promise.resolve(result).catch(() => {})
+                const capturedResult = Promise.resolve(result)
+                capturedResult.catch(() => {})
                 globalThis['~suspense'].pendingPromises.push({
                   id: promiseId,
                   boundaryId: currentBoundaryId,

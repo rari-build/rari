@@ -601,6 +601,8 @@ async fn execute_scripts_concurrent(
     }
 
     while remaining > 0 && start.elapsed() < timeout_duration {
+        tokio::task::yield_now().await;
+
         let event_loop_result = tokio::time::timeout(
             std::time::Duration::from_millis(50),
             run_event_loop_with_error_handling(deno_runtime, "concurrent batch"),
@@ -609,6 +611,18 @@ async fn execute_scripts_concurrent(
 
         if let Ok(Err(e)) = event_loop_result {
             eprintln!("[rari] Event loop error during concurrent batch: {e}");
+
+            if is_runtime_restart_needed(&e) {
+                for i in 0..sent.len() {
+                    if !sent[i]
+                        && let Some(tx) = senders[i].take()
+                    {
+                        let _ = tx.send(Err(create_graceful_error()));
+                    }
+                }
+                return true;
+            }
+
             for i in 0..sent.len() {
                 if !sent[i]
                     && let Some(tx) = senders[i].take()
@@ -662,8 +676,11 @@ async fn execute_scripts_concurrent(
                 let extract = format!(
                     r#"(function() {{
                         const entry = globalThis['~rari_concurrent']['{}'];
-                        if (entry.error) return {{ '~concurrent_error': entry.error }};
-                        return entry.result;
+                        return {{
+                            ok: entry.error === null,
+                            value: entry.result,
+                            error: entry.error
+                        }};
                     }})()"#,
                     slot_key
                 );
@@ -675,16 +692,21 @@ async fn execute_scripts_concurrent(
                                 v8_to_json(scope, local)
                             });
                             match json_result {
-                                Ok(json) => {
-                                    if let JsonValue::Object(ref obj) = json
-                                        && let Some(JsonValue::String(err)) =
-                                            obj.get("~concurrent_error")
-                                    {
-                                        Err(RariError::js_execution(err.clone()))
+                                Ok(JsonValue::Object(obj)) => {
+                                    if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
+                                        Err(RariError::js_execution(
+                                            obj.get("error")
+                                                .and_then(JsonValue::as_str)
+                                                .unwrap_or("Unknown concurrent error")
+                                                .to_string(),
+                                        ))
                                     } else {
-                                        Ok(json)
+                                        Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
                                     }
                                 }
+                                Ok(_) => Err(RariError::internal(
+                                    "Concurrent extraction wrapper was not an object".to_string(),
+                                )),
                                 Err(e) => Err(e),
                             }
                         }

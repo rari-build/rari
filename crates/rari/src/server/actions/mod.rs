@@ -140,7 +140,7 @@ pub async fn handle_server_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    let allowed_origins = state.config.cors_config().allowed_origins;
+    let allowed_origins = state.config.action_origins();
     check_origin(&headers, &allowed_origins)?;
 
     let request: ServerActionRequest = match serde_json::from_slice(&body) {
@@ -321,7 +321,7 @@ pub async fn handle_form_action(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    let allowed_origins = state.config.cors_config().allowed_origins;
+    let allowed_origins = state.config.action_origins();
     check_origin(&headers, &allowed_origins)?;
 
     let form_data = match parse_form_data(&body) {
@@ -410,18 +410,42 @@ pub async fn handle_form_action(
                 return Ok(redirect_response);
             }
 
-            let redirect_url = headers.get("referer").and_then(|h| h.to_str().ok()).unwrap_or("/");
+            let allowed_origins = state.config.action_origins();
+            let (redirect_url, redirect_path_opt) =
+                if let Some(referer) = headers.get("referer").and_then(|h| h.to_str().ok()) {
+                    if let Ok(parsed) = url::Url::parse(referer) {
+                        let referer_origin =
+                            format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+                        let referer_origin = if let Some(port) = parsed.port() {
+                            format!("{}:{}", referer_origin, port)
+                        } else {
+                            referer_origin
+                        };
 
-            let redirect_path = if let Ok(parsed) = url::Url::parse(redirect_url) {
-                parsed.path().to_string()
-            } else if redirect_url.starts_with('/') {
-                redirect_url.split('?').next().unwrap_or(redirect_url).to_string()
-            } else {
-                redirect_url.to_string()
-            };
+                        if crate::server::utils::http_utils::is_origin_allowed(
+                            &referer_origin,
+                            &allowed_origins,
+                        ) {
+                            let path_and_query = if let Some(query) = parsed.query() {
+                                format!("{}?{}", parsed.path(), query)
+                            } else {
+                                parsed.path().to_string()
+                            };
+                            (path_and_query.clone(), Some(parsed.path().to_string()))
+                        } else {
+                            ("/".to_string(), None)
+                        }
+                    } else {
+                        ("/".to_string(), None)
+                    }
+                } else {
+                    ("/".to_string(), None)
+                };
 
-            state.response_cache.invalidate_by_tag(&redirect_path).await;
-            state.html_cache.remove(&redirect_path);
+            if let Some(redirect_path) = redirect_path_opt {
+                state.response_cache.invalidate_by_tag(&redirect_path).await;
+                state.html_cache.remove(&redirect_path);
+            }
 
             let mut redirect_response = Response::builder()
                 .status(StatusCode::SEE_OTHER)
@@ -730,7 +754,7 @@ pub(crate) fn build_set_cookie_header(
     }
 
     fn is_valid_attr_value(s: &str) -> bool {
-        !s.is_empty() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
+        !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
     }
 
     if !is_valid_cookie_name(&cookie.name) {

@@ -123,6 +123,8 @@ function extractContent(mdxContent: string): { title: string, content: string, o
     iterations++
   }
 
+  content = content.replace(angleBracketRegex, '')
+
   content = content
     .replace(inlineCodeRegex, '$1')
     .replace(markdownLinkRegex, '$1')
@@ -177,12 +179,13 @@ function extractExcerpt(content: string, query: string, maxLength = 150): string
   return excerpt
 }
 
-async function buildSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
+async function buildSearchIndex(contentDir: string): Promise<{ index: SearchIndexEntry[], complete: boolean }> {
   const { files: mdxFiles, partial, error } = await getAllMdxFiles(contentDir)
+  let complete = !partial
 
   if (partial && mdxFiles.length === 0) {
     console.error('Failed to read documentation directory:', error?.message ?? 'Unknown error')
-    return []
+    return { index: [], complete: false }
   }
 
   if (partial)
@@ -200,6 +203,7 @@ async function buildSearchIndex(contentDir: string): Promise<SearchIndexEntry[]>
 
   for (const result of settledResults) {
     if (result.status === 'rejected') {
+      complete = false
       console.warn('Failed to read file during index build:', result.reason)
       continue
     }
@@ -222,11 +226,12 @@ async function buildSearchIndex(contentDir: string): Promise<SearchIndexEntry[]>
       })
     }
     catch (extractError) {
+      complete = false
       console.warn(`Failed to extract content from ${file}:`, extractError)
     }
   }
 
-  return index
+  return { index, complete }
 }
 
 async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
@@ -235,21 +240,27 @@ async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
   if (searchCache && (now - searchCache.timestamp) < CACHE_TTL_MS)
     return searchCache.index
 
-  const index = await buildSearchIndex(contentDir)
+  const { index, complete } = await buildSearchIndex(contentDir)
 
-  searchCache = {
-    index,
-    timestamp: now,
+  if (complete || !searchCache) {
+    searchCache = {
+      index,
+      timestamp: Date.now(),
+    }
   }
 
-  return index
+  return complete ? index : searchCache?.index ?? index
 }
 
 export async function searchDocumentation(query: string): Promise<SearchResult[]> {
   const normalizedQuery = query
     .trim()
     .toLowerCase()
+    .replace(inlineCodeRegex, '$1')
+    .replace(markdownFormattingRegex, '')
+    .replace(angleBracketRegex, ' ')
     .replace(WHITESPACE_REGEX, ' ')
+    .trim()
   if (!normalizedQuery)
     return []
 

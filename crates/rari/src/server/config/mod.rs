@@ -71,6 +71,17 @@ impl Default for RedirectConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionConfig {
+    pub allowed_origins: Vec<String>,
+}
+
+impl Default for ActionConfig {
+    fn default() -> Self {
+        Self { allowed_origins: vec![] }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CspConfig {
     pub script_src: Vec<String>,
     pub style_src: Vec<String>,
@@ -339,6 +350,8 @@ pub struct Config {
     pub cors: CorsConfig,
     #[serde(default)]
     pub redirect: RedirectConfig,
+    #[serde(default)]
+    pub action: ActionConfig,
     #[serde(default)]
     pub csp: CspConfig,
     #[serde(default)]
@@ -704,7 +717,6 @@ impl Config {
             }
         } else {
             let allowed_origins = if let Some(origin) = &self.server.origin {
-                // Explicit origin configured — use only that.
                 vec![origin.clone()]
             } else {
                 vec![
@@ -715,6 +727,28 @@ impl Config {
             };
 
             CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+        }
+    }
+
+    pub fn action_origins(&self) -> Vec<String> {
+        if !self.action.allowed_origins.is_empty() {
+            return self.action.allowed_origins.clone();
+        }
+
+        if self.is_development() {
+            vec![
+                format!("http://{}:{}", self.server.host, self.server.port),
+                format!("http://localhost:{}", self.server.port),
+                format!("http://127.0.0.1:{}", self.server.port),
+            ]
+        } else if let Some(origin) = &self.server.origin {
+            vec![origin.clone()]
+        } else {
+            vec![
+                format!("http://{}:{}", self.server.host, self.server.port),
+                format!("http://localhost:{}", self.server.port),
+                format!("http://127.0.0.1:{}", self.server.port),
+            ]
         }
     }
 
