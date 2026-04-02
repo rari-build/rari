@@ -448,8 +448,42 @@ pub struct SetCookieArgs {
 }
 
 #[op2]
-pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) {
+#[serde]
+pub fn op_set_cookie(
+    state: Rc<RefCell<OpState>>,
+    #[serde] args: SetCookieArgs,
+) -> Result<(), JsErrorBox> {
     use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
+
+    if !crate::server::actions::is_valid_cookie_name(&args.name) {
+        return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
+    }
+
+    if !crate::server::actions::is_valid_cookie_value(&args.value) {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie value for '{}': contains invalid characters",
+            args.name
+        )));
+    }
+
+    if let Some(ref path) = args.path
+        && !crate::server::actions::is_valid_attr_value(path)
+    {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie path for '{}': '{}'",
+            args.name, path
+        )));
+    }
+
+    if let Some(ref domain) = args.domain
+        && !crate::server::actions::is_valid_attr_value(domain)
+    {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie domain for '{}': '{}'",
+            args.name, domain
+        )));
+    }
+
     let op_state_ref = state.borrow();
     if let Some(ctx) =
         op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
@@ -472,6 +506,8 @@ pub fn op_set_cookie(state: Rc<RefCell<OpState>>, #[serde] args: SetCookieArgs) 
             },
         );
     }
+
+    Ok(())
 }
 
 #[op2(fast)]

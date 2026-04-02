@@ -8,7 +8,6 @@ use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
 };
 use crate::server::rendering::metadata_injection::inject_metadata;
-use crate::server::rendering::streaming_response::StreamingHtmlResponse;
 use crate::server::routing::app_router::AppRouteMatch;
 use crate::server::utils::http_utils::{
     extract_headers, extract_search_params, get_content_type, merge_vary_with_accept,
@@ -18,7 +17,7 @@ use axum::{
     body::Body,
     extract::{Query, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
@@ -264,7 +263,7 @@ pub async fn render_rsc_navigation_streaming(
         ));
 
     let render_result = match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context.clone()))
+        .render_route_with_streaming(&route_match, &context, Some(request_context.clone()), true)
         .await
     {
         Ok(result) => result,
@@ -289,42 +288,23 @@ pub async fn render_rsc_navigation_streaming(
             )
             .await
         }
-        crate::rsc::rendering::layout::RenderResult::Static(_html) => {
-            match layout_renderer
-                .render_route_by_mode(
-                    &route_match,
-                    &context,
-                    crate::server::types::request::RenderMode::RscNavigation,
-                    Some(request_context),
-                )
-                .await
+        crate::rsc::rendering::layout::RenderResult::Static(rsc_wire_format) => {
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+
+            let mut response_builder = Response::builder()
+                .status(status_code)
+                .header("content-type", "text/x-component")
+                .header("vary", "Accept");
+
+            if let Some(ref metadata) = context.metadata
+                && let Ok(metadata_json) = serde_json::to_string(metadata)
             {
-                Ok(rsc_wire_format) => {
-                    let status_code =
-                        if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-
-                    let mut response_builder = Response::builder()
-                        .status(status_code)
-                        .header("content-type", "text/x-component")
-                        .header("vary", "Accept");
-
-                    if let Some(ref metadata) = context.metadata
-                        && let Ok(metadata_json) = serde_json::to_string(metadata)
-                    {
-                        let encoded_metadata = urlencoding::encode(&metadata_json);
-                        response_builder =
-                            response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
-                    }
-
-                    Ok(response_builder
-                        .body(Body::from(rsc_wire_format))
-                        .expect("Valid RSC response"))
-                }
-                Err(e) => {
-                    error!("Failed to render RSC wire format: {}", e);
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
-                }
+                let encoded_metadata = urlencoding::encode(&metadata_json);
+                response_builder =
+                    response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
             }
+
+            Ok(response_builder.body(Body::from(rsc_wire_format)).expect("Valid RSC response"))
         }
     }
 }
@@ -350,7 +330,6 @@ async fn render_rsc_streaming_response(
                     yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
                 }
                 None => {
-                    yield Ok::<_, std::io::Error>(bytes::Bytes::from("STREAM_COMPLETE\n"));
                     break;
                 }
             }
@@ -402,7 +381,7 @@ pub async fn render_synchronous(
     let is_not_found = route_match.not_found.is_some();
 
     match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context))
+        .render_route_with_streaming(&route_match, &context, Some(request_context), false)
         .await
     {
         Ok(render_result) => match render_result {
@@ -583,7 +562,7 @@ pub async fn render_streaming_with_layout(
         ));
 
     let render_result = match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context))
+        .render_route_with_streaming(&route_match, &context, Some(request_context), false)
         .await
     {
         Ok(result) => result,
@@ -1111,7 +1090,12 @@ pub async fn handle_app_route(
             }
 
             let render_result = match layout_renderer
-                .render_route_with_streaming(&route_match, &context, Some(request_context.clone()))
+                .render_route_with_streaming(
+                    &route_match,
+                    &context,
+                    Some(request_context.clone()),
+                    false,
+                )
                 .await
             {
                 Ok(result) => result,
@@ -1188,53 +1172,35 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let converter = Arc::new(tokio::sync::Mutex::new(
-                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer),
-                    ));
-
-                    let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
-                    let should_continue_clone = should_continue.clone();
+                    let mut converter =
+                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer);
 
                     let mut rsc_stream = stream;
+                    let mut buffered_html = String::new();
 
-                    let html_stream = async_stream::stream! {
-                        while should_continue_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                            match rsc_stream.next_chunk().await {
-                                Some(chunk) => {
-                                    let mut conv = converter.lock().await;
-
-                                    match conv.convert_chunk(chunk).await {
-                                        Ok(html_bytes) => {
-                                            if !html_bytes.is_empty() {
-                                                yield Ok(html_bytes);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            if e.to_string().contains("disconnected") || e.to_string().contains("broken pipe") {
-                                                should_continue_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-                                                break;
-                                            }
-
-                                            error!("Error converting RSC chunk to HTML: {}", e);
-                                            yield Err(e);
-                                        }
-                                    }
-                                }
-                                None => {
-                                    break;
+                    while let Some(chunk) = rsc_stream.next_chunk().await {
+                        match converter.convert_chunk(chunk).await {
+                            Ok(html_bytes) => {
+                                if !html_bytes.is_empty() {
+                                    buffered_html.push_str(&String::from_utf8_lossy(&html_bytes));
                                 }
                             }
+                            Err(e) => {
+                                error!("Error converting RSC chunk to HTML: {}", e);
+                                return render_fallback_html(
+                                    &state,
+                                    path,
+                                    route_match.not_found.is_some(),
+                                )
+                                .await;
+                            }
                         }
-                    };
+                    }
 
-                    let status_code = if route_match.not_found.is_some() {
-                        StatusCode::NOT_FOUND
-                    } else {
-                        StatusCode::OK
-                    };
+                    let final_html = buffered_html;
+                    let etag = response_cache::ResponseCache::generate_etag(final_html.as_bytes());
 
-                    return Ok(StreamingHtmlResponse::with_status(html_stream, status_code)
-                        .into_response());
+                    (final_html, etag)
                 }
             };
 

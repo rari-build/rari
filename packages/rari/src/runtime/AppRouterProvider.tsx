@@ -177,6 +177,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const rowProcessingRef = useRef<Promise<void>>(Promise.resolve())
   const isNavigatingRef = useRef<boolean>(false)
   const isInitialPageLoadRef = useRef<boolean>(!!initialPayload)
+  const pendingStreamingNavigationRef = useRef<NavigationDetail | null>(null)
   const MAX_RETRIES = 3
 
   useEffect(() => {
@@ -947,7 +948,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       startTransition(async () => {
         try {
           if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false, false)
+            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false, true)
 
             if (currentNavigationIdRef.current === detail.navigationId) {
               setRscPayload(parsedPayload)
@@ -958,8 +959,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           else if (detail.isStreaming) {
             if (currentNavigationIdRef.current === detail.navigationId) {
               setHmrError(null)
-              if (onNavigateRef.current)
-                onNavigateRef.current(detail)
+              pendingStreamingNavigationRef.current = detail
             }
             isNavigatingRef.current = false
             return
@@ -1064,6 +1064,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       rowProcessingRef.current = Promise.resolve()
       isNavigatingRef.current = true
       isInitialPageLoadRef.current = false
+      pendingStreamingNavigationRef.current = null
     }
 
     const handleManifestUpdated = async () => {
@@ -1152,7 +1153,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       hasRenderedInitialShellRef.current = true
 
       try {
-        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false, false)
+        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false, true)
 
         if (hasSuspenseBoundary || hasPageContent) {
           const reachableModuleIds = getReachableModuleIds(parsedPayload)
@@ -1223,6 +1224,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         setRscPayload(parsedPayload)
         setRenderKey(prev => prev + 1)
+
+        if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
+          onNavigateRef.current(pendingStreamingNavigationRef.current)
+          pendingStreamingNavigationRef.current = null
+        }
+
         if (streamCompleteRef.current) {
           hasRenderedFinalRef.current = true
           streamingRowsRef.current = null

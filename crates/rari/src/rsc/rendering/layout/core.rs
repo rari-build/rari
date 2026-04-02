@@ -355,6 +355,7 @@ impl LayoutRenderer {
         request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
+        return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
 
@@ -422,6 +423,11 @@ impl LayoutRenderer {
                     Self::execute_composition_and_serialize(&renderer, fallback_script).await?;
 
                 Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+                if return_rsc_on_fallback {
+                    drop(renderer);
+                    return Ok(RenderResult::Static(rsc_wire_format));
+                }
 
                 let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(
                     &renderer.runtime,

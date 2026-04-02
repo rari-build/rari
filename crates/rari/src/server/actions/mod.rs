@@ -820,22 +820,21 @@ fn append_pending_cookies(
     }
 }
 
+pub(crate) fn is_valid_cookie_name(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
+}
+
+pub(crate) fn is_valid_cookie_value(s: &str) -> bool {
+    s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
+}
+
+pub(crate) fn is_valid_attr_value(s: &str) -> bool {
+    !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
+}
+
 pub(crate) fn build_set_cookie_header(
     cookie: &crate::server::middleware::request_context::PendingCookie,
 ) -> Result<String, ()> {
-    fn is_valid_cookie_name(s: &str) -> bool {
-        !s.is_empty()
-            && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
-    }
-
-    fn is_valid_cookie_value(s: &str) -> bool {
-        s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
-    }
-
-    fn is_valid_attr_value(s: &str) -> bool {
-        !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
-    }
-
     if !is_valid_cookie_name(&cookie.name) {
         return Err(());
     }
