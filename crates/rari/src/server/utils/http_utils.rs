@@ -123,7 +123,13 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
                     (origin_url.host_str(), pattern_url.host_str())
                     && let Some(domain) = pattern_host.strip_prefix("test.")
                 {
-                    return origin_host.ends_with(domain) || origin_host == domain;
+                    if origin_host == domain {
+                        return true;
+                    }
+                    if let Some(prefix) = origin_host.strip_suffix(domain) {
+                        return prefix.ends_with('.');
+                    }
+                    return false;
                 }
             }
         }
@@ -243,6 +249,9 @@ mod tests {
         assert!(!is_origin_allowed("https://evil.com", &allowed));
         assert!(!is_origin_allowed("https://example.com.evil.com", &allowed));
         assert!(!is_origin_allowed("http://app.example.com", &allowed));
+
+        assert!(!is_origin_allowed("https://badexample.com", &allowed));
+        assert!(!is_origin_allowed("https://notexample.com", &allowed));
     }
 
     #[test]
@@ -374,6 +383,11 @@ mod tests {
 
         assert!(!is_origin_allowed("https://evil.com", &allowed));
         assert!(!is_origin_allowed("https://example.com.evil.com", &allowed));
+
+        assert!(!is_origin_allowed("https://badexample.com", &allowed));
+        assert!(!is_origin_allowed("http://badexample.com", &allowed));
+        assert!(!is_origin_allowed("https://notexample.com", &allowed));
+        assert!(!is_origin_allowed("https://myexample.com", &allowed));
     }
 
     #[test]

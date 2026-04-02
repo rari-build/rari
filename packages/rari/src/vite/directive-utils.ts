@@ -1,5 +1,9 @@
 function isWhitespace(char: string): boolean {
-  return char === ' ' || char === '\t' || char === '\r' || char === '\n' || char === '\uFEFF'
+  return char === ' ' || char === '\t' || char === '\r' || char === '\n' || char === '\u2028' || char === '\u2029' || char === '\uFEFF'
+}
+
+function isLineTerminator(char: string): boolean {
+  return char === '\r' || char === '\n' || char === '\u2028' || char === '\u2029'
 }
 
 function skipWhitespace(source: string, i: number, len: number): number {
@@ -32,7 +36,7 @@ function skipTrivia(source: string, i: number, len: number): number {
 }
 
 function skipSingleLineComment(source: string, i: number, len: number): number {
-  while (i < len && source[i] !== '\n') {
+  while (i < len && !isLineTerminator(source[i])) {
     i++
   }
 
@@ -126,6 +130,16 @@ export function hasTopLevelUseClientDirective(source: string): boolean {
   return getTopLevelDirective(source) === 'use client'
 }
 
+function isIdentifierPart(char: string | undefined): boolean {
+  return !!char && (
+    (char >= 'a' && char <= 'z')
+    || (char >= 'A' && char <= 'Z')
+    || (char >= '0' && char <= '9')
+    || char === '_'
+    || char === '$'
+  )
+}
+
 export function hasDefaultExport(source: string): boolean {
   let i = 0
   const len = source.length
@@ -164,13 +178,7 @@ export function hasDefaultExport(source: string): boolean {
         const j = skipTrivia(source, afterExport, len)
         if (source.slice(j, j + 7) === 'default') {
           const afterDefault = j + 7
-          if (
-            afterDefault >= len
-            || isWhitespace(source[afterDefault])
-            || (source[afterDefault] === '/' && (source[afterDefault + 1] === '/' || source[afterDefault + 1] === '*'))
-            || source[afterDefault] === '{'
-            || source[afterDefault] === '('
-          ) {
+          if (afterDefault >= len || !isIdentifierPart(source[afterDefault])) {
             return true
           }
         }

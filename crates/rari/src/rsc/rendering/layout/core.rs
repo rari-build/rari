@@ -337,6 +337,8 @@ impl LayoutRenderer {
                         return Ok(RenderResult::Static(rsc_wire_format));
                     }
 
+                    Self::validate_html_structure(&rsc_wire_format, route_match)?;
+
                     let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
                         Arc::clone(&renderer.runtime),
                     );
@@ -359,8 +361,6 @@ impl LayoutRenderer {
         };
 
         if let Some(ctx) = request_context {
-            runtime.set_request_context(Arc::clone(&ctx)).await?;
-
             let result = streaming_operation.await;
 
             match result {
@@ -369,10 +369,7 @@ impl LayoutRenderer {
                         stream.with_request_context(ctx, Arc::clone(&runtime));
                     Ok(RenderResult::Streaming(stream_with_context))
                 }
-                other_result => {
-                    let _ = runtime.clear_request_context().await;
-                    other_result
-                }
+                other_result => other_result,
             }
         } else {
             streaming_operation.await
