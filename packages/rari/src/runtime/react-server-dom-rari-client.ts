@@ -476,11 +476,3 @@ function processProps(props: any, wireModules: Map<string, ModuleData>, moduleMa
 
   return processed
 }
-
-export function encodeReply(value: any): string {
-  return JSON.stringify(value)
-}
-
-export function decodeReply(text: string): any {
-  return JSON.parse(text)
-}

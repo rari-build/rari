@@ -172,13 +172,13 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
 
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
         if let Ok(referer_url) = url::Url::parse(referer) {
+            let (scheme, host, port) = normalize_origin(&referer_url);
             let referer_origin =
-                format!("{}://{}", referer_url.scheme(), referer_url.host_str().unwrap_or(""));
-            let referer_origin = if let Some(port) = referer_url.port() {
-                format!("{}:{}", referer_origin, port)
-            } else {
-                referer_origin
-            };
+                if port == effective_port(&referer_url) && (port == 80 || port == 443) {
+                    format!("{}://{}", scheme, host)
+                } else {
+                    format!("{}://{}:{}", scheme, host, port)
+                };
             if crate::server::utils::http_utils::is_origin_allowed(&referer_origin, allowed_origins)
             {
                 return Ok(());

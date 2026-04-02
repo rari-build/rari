@@ -35,10 +35,6 @@ const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
 
-function pathToFileUrl(filePath: string): string {
-  return pathToFileURL(filePath).href
-}
-
 interface ServerComponentManifest {
   components: Record<
     string,
@@ -781,7 +777,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             const builtPath = path.join(self.options.outDir, self.options.rscDir, srcRelativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
             const absoluteBuiltPath = path.resolve(self.projectRoot, builtPath)
 
-            const builtFileUrl = pathToFileUrl(absoluteBuiltPath)
+            const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
 
             return {
               code: `export * from ${JSON.stringify(builtFileUrl)};`,
@@ -1042,7 +1038,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       const absoluteOutputPath = path.resolve(this.projectRoot, outputPath)
 
       if (!importMapImports[alias])
-        importMapImports[`${alias}/`] = `${pathToFileUrl(absoluteOutputPath)}/`
+        importMapImports[`${alias}/`] = `${pathToFileURL(absoluteOutputPath).href}/`
     }
 
     const manifest: ServerComponentManifest = {
@@ -1068,7 +1064,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1095,7 +1091,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1119,7 +1115,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[actionId] = {
         id: actionId,
@@ -1683,7 +1679,7 @@ function registerClientReference(clientReference, id, exportName) {
 
     const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
     const fullBundlePath = path.join(this.options.outDir, bundlePath)
-    const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+    const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
     if (!componentData) {
       const code = await fs.promises.readFile(filePath, 'utf-8')

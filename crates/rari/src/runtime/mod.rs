@@ -648,7 +648,10 @@ impl JsExecutionRuntime {
 
         match (result, clear_result) {
             (Ok(value), Ok(())) => Ok(value),
-            (Ok(_), Err(clear_err)) => Err(clear_err),
+            (Ok(value), Err(clear_err)) => {
+                error!("Failed to clear request context after successful operation: {}", clear_err);
+                Ok(value)
+            }
             (Err(op_err), Err(clear_err)) => {
                 error!("Failed to clear request context after operation error: {}", clear_err);
                 Err(op_err)
