@@ -184,8 +184,8 @@ globalThis['~render'].componentAsync = async function () {
       element = Component(props)
 
       if (element && typeof element.then === 'function') {
-        const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-        const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const boundaryId = globalThis['~suspense']?.currentBoundaryId || 'root_boundary'
+        const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
         globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
         globalThis['~suspense'].promises[promiseId] = element
@@ -451,8 +451,6 @@ globalThis['~render'].componentAsync = async function () {
     if (!globalThis['~render'].initialComplete)
       globalThis['~render'].initialComplete = true
 
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
     globalThis['~render'].streamingComplete = true
   }
   catch (error) {
@@ -470,8 +468,6 @@ globalThis['~render'].componentAsync = async function () {
     catch {
       globalThis['~render'].streamingResult = errorResult
     }
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
     globalThis['~render'].streamingComplete = true
   }
 };

@@ -318,13 +318,19 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return Math.abs(hash).toString(36)
   }
 
-  function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>): React.ReactNode {
+  function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>, visitedRefs?: Set<string>): React.ReactNode {
     if (rsc == null)
       return null
 
     if (typeof rsc === 'string' && rsc.startsWith('$L') && rows && rows.has(rsc)) {
+      const visited = visitedRefs ?? new Set<string>()
+      if (visited.has(rsc)) {
+        console.warn('[rari] AppRouter: Circular $L reference detected:', rsc)
+        return null
+      }
+      visited.add(rsc)
       const dereferenced = rows.get(rsc)
-      return rscToReact(dereferenced, modules, layoutPath, symbols, rows)
+      return rscToReact(dereferenced, modules, layoutPath, symbols, rows, visited)
     }
 
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
