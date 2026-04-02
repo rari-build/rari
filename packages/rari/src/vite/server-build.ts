@@ -17,7 +17,7 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
-import { hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -578,7 +578,7 @@ const ${importName} = (props) => {
     const self = this
 
     const clientComponentRefs = new Map<string, string>()
-    const serverActionRefs = new Map<string, string>()
+    const serverActionRefs = new Map<string, { actionId: string, hasDefaultExport: boolean }>()
 
     return [
       {
@@ -661,7 +661,8 @@ const ${importName} = (props) => {
                   if (hasTopLevelUseServerDirective(content)) {
                     const relActionPath = path.relative(self.projectRoot, pathWithExt)
                     const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
-                    serverActionRefs.set(pathWithExt, actionId)
+                    const hasDefault = hasDefaultExport(content)
+                    serverActionRefs.set(pathWithExt, { actionId, hasDefaultExport: hasDefault })
                     return { id: `\0server-action:${pathWithExt}` }
                   }
                 }
@@ -726,8 +727,15 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
             const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
 
+            const actionInfo = serverActionRefs.get(filePath)
+            const hasDefault = actionInfo?.hasDefaultExport ?? false
+
+            const exportStatement = hasDefault
+              ? `export * from ${JSON.stringify(builtFileUrl)};\nexport { default } from ${JSON.stringify(builtFileUrl)};`
+              : `export * from ${JSON.stringify(builtFileUrl)};`
+
             return {
-              code: `export * from ${JSON.stringify(builtFileUrl)};`,
+              code: exportStatement,
               moduleType: 'js',
             }
           }

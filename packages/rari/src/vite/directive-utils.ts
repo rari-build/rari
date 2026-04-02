@@ -1,3 +1,5 @@
+const DEFAULT_EXPORT_REGEX = /^\s*export\s+default\s+/m
+
 export function getTopLevelDirective(source: string): string | null {
   let i = 0
   const len = source.length
@@ -33,8 +35,29 @@ export function getTopLevelDirective(source: string): string | null {
       const end = source.indexOf(quote, i + 1)
       if (end !== -1) {
         const directive = source.slice(i + 1, end)
-        const charAfter = source[end + 1]
-        if (charAfter === undefined || charAfter === ';' || charAfter === '\n' || charAfter === '\r' || charAfter === ' ' || charAfter === '\t')
+        let j = end + 1
+        while (j < len) {
+          if (source[j] === ' ' || source[j] === '\t') {
+            j++
+            continue
+          }
+          if (source[j] === '\n' || source[j] === '\r' || source[j] === ';')
+            return directive
+          if (source[j] === '/' && source[j + 1] === '/') {
+            while (j < len && source[j] !== '\n')
+              j++
+            continue
+          }
+          if (source[j] === '/' && source[j + 1] === '*') {
+            j += 2
+            while (j < len - 1 && (source[j] !== '*' || source[j + 1] !== '/'))
+              j++
+            j += 2
+            continue
+          }
+          break
+        }
+        if (j >= len)
           return directive
       }
     }
@@ -51,4 +74,8 @@ export function hasTopLevelUseServerDirective(source: string): boolean {
 
 export function hasTopLevelUseClientDirective(source: string): boolean {
   return getTopLevelDirective(source) === 'use client'
+}
+
+export function hasDefaultExport(source: string): boolean {
+  return DEFAULT_EXPORT_REGEX.test(source)
 }

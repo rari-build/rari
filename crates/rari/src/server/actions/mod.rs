@@ -120,7 +120,12 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             .get("x-forwarded-proto")
             .or_else(|| headers.get("x-forwarded-protocol"))
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("http");
+            .unwrap_or_else(|| {
+                tracing::debug!(
+                    "No x-forwarded-proto header; defaulting to http for origin validation"
+                );
+                "http"
+            });
 
         let server_origin_str = format!("{}://{}", scheme, host);
         let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
@@ -174,7 +179,7 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
         if let Ok(referer_url) = url::Url::parse(referer) {
             let (scheme, host, port) = normalize_origin(&referer_url);
             let referer_origin =
-                if port == effective_port(&referer_url) && (port == 80 || port == 443) {
+                if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
                     format!("{}://{}", scheme, host)
                 } else {
                     format!("{}://{}:{}", scheme, host, port)
@@ -466,7 +471,7 @@ pub async fn handle_form_action(
                 if let Ok(parsed) = url::Url::parse(referer) {
                     let referer_tuple = normalize_origin(&parsed);
 
-                    let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
+                    let server_origin_tuple_opt = {
                         let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
                         let scheme = headers
                             .get("x-forwarded-proto")
@@ -475,29 +480,19 @@ pub async fn handle_form_action(
                             .unwrap_or("http");
                         let server_origin_str = format!("{}://{}", scheme, host);
 
-                        if let Ok(server_origin_url) = url::Url::parse(&server_origin_str) {
-                            let server_origin_tuple = normalize_origin(&server_origin_url);
-                            let is_same = referer_tuple == server_origin_tuple;
+                        url::Url::parse(&server_origin_str).ok().map(|u| normalize_origin(&u))
+                    };
+
+                    let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
+                        if let Some(server_origin_tuple) = &server_origin_tuple_opt {
+                            let is_same = referer_tuple == *server_origin_tuple;
                             (is_same, is_same)
                         } else {
                             (false, false)
                         }
                     } else {
-                        let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
-                        let scheme = headers
-                            .get("x-forwarded-proto")
-                            .or_else(|| headers.get("x-forwarded-protocol"))
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("http");
-                        let server_origin_str = format!("{}://{}", scheme, host);
-
                         let is_same =
-                            if let Ok(server_origin_url) = url::Url::parse(&server_origin_str) {
-                                let server_origin_tuple = normalize_origin(&server_origin_url);
-                                referer_tuple == server_origin_tuple
-                            } else {
-                                false
-                            };
+                            server_origin_tuple_opt.as_ref().is_some_and(|t| referer_tuple == *t);
 
                         let referer_origin = format!(
                             "{}://{}:{}",
@@ -663,7 +658,8 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
         } else if ch == '+' {
             bytes.push(b' ');
         } else {
-            for b in ch.to_string().bytes() {
+            let mut buf = [0u8; 4];
+            for b in ch.encode_utf8(&mut buf).bytes() {
                 bytes.push(b);
             }
         }

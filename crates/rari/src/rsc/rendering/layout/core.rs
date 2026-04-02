@@ -44,23 +44,21 @@ impl LayoutRenderer {
 
     async fn enable_streaming_and_inject_lazy_resolver(
         renderer: &RscRenderer,
-        is_not_found: bool,
     ) -> Result<(), RariError> {
-        if !is_not_found {
-            renderer
-                .runtime
-                .execute_script(
-                    "enable_streaming".to_string(),
-                    "if (!globalThis['~rari']) globalThis['~rari'] = {}; if (!globalThis['~rari'].streaming) globalThis['~rari'].streaming = {}; globalThis['~rari'].streaming.enabled = true;".to_string(),
-                )
-                .await?;
+        renderer
+            .runtime
+            .execute_script(
+                "enable_streaming".to_string(),
+                "if (!globalThis['~rari']) globalThis['~rari'] = {}; if (!globalThis['~rari'].streaming) globalThis['~rari'].streaming = {}; globalThis['~rari'].streaming.enabled = true;".to_string(),
+            )
+            .await?;
 
-            let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-            renderer
-                .runtime
-                .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-                .await?;
-        }
+        let resolve_helper = include_str!("js/resolve_lazy_helper.js");
+        renderer
+            .runtime
+            .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
+            .await?;
+
         Ok(())
     }
 
@@ -182,7 +180,7 @@ impl LayoutRenderer {
         let is_not_found = route_match.not_found.is_some();
 
         let render_operation = async {
-            Self::enable_streaming_and_inject_lazy_resolver(&renderer, false).await?;
+            Self::enable_streaming_and_inject_lazy_resolver(&renderer).await?;
 
             if is_not_found {
                 let rsc_wire_format =
@@ -306,7 +304,7 @@ impl LayoutRenderer {
         let streaming_operation = async {
             let renderer_guard = self.renderer.lock().await;
 
-            Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard, false).await?;
+            Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
 
             let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
                 Arc::clone(&renderer_guard.runtime),
@@ -454,7 +452,11 @@ impl LayoutRenderer {
                                 if line.starts_with(|c: char| c.is_ascii_digit()) {
                                     let row_id_str = &line[..colon_pos];
                                     if row_id_str.parse::<usize>().is_ok() {
-                                        if line.contains("I[") {
+                                        let is_import_reference = line
+                                            .get(colon_pos + 1..)
+                                            .map(|content| content.trim_start().starts_with("I["))
+                                            .unwrap_or(false);
+                                        if is_import_reference {
                                             line.to_string()
                                         } else {
                                             let content = &line[colon_pos + 1..];
