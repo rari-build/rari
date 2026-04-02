@@ -369,7 +369,10 @@ globalThis['~render'].componentAsync = async function () {
 
         if (childArray.length > 0) {
           const processedChildren = childArray.map(child => processSuspenseInStructure(child, parentBoundaryId))
-          el.children = Array.isArray(actualChildren) ? processedChildren : processedChildren[0]
+          return {
+            ...el,
+            children: Array.isArray(actualChildren) ? processedChildren : processedChildren[0],
+          }
         }
 
         return el
