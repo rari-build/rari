@@ -729,7 +729,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               }
             }
 
-            if (!rootElement && Array.isArray(elementData)) {
+            if (rootElement === null && Array.isArray(elementData)) {
               if (elementData[0] === '$') {
                 rootElement = elementData
               }

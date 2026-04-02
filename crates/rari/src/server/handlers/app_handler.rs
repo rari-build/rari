@@ -1172,8 +1172,15 @@ pub async fn handle_app_route(
                         base_shell
                     };
 
-                    let mut converter =
-                        RscToHtmlConverter::with_custom_shell(base_shell, None, html_renderer);
+                    let body_scripts =
+                        crate::server::rendering::html_utils::extract_body_scripts_from_index_html(
+                        )
+                        .await;
+                    let mut converter = RscToHtmlConverter::with_custom_shell(
+                        base_shell,
+                        body_scripts,
+                        html_renderer,
+                    );
 
                     let mut rsc_stream = stream;
                     let mut buffered_html = String::new();

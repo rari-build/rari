@@ -629,7 +629,7 @@ fn convert_form_data_to_args(form_data: &FxHashMap<String, String>) -> Vec<JsonV
 }
 
 fn percent_decode(input: &str) -> Result<String, RariError> {
-    let mut result = String::new();
+    let mut bytes = Vec::new();
     let mut chars = input.chars();
 
     while let Some(ch) = chars.next() {
@@ -643,15 +643,18 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
             let byte = u8::from_str_radix(&hex_str, 16)
                 .map_err(|_| RariError::bad_request("Invalid hex in percent encoding"))?;
 
-            result.push(byte as char);
+            bytes.push(byte);
         } else if ch == '+' {
-            result.push(' ');
+            bytes.push(b' ');
         } else {
-            result.push(ch);
+            for b in ch.to_string().bytes() {
+                bytes.push(b);
+            }
         }
     }
 
-    Ok(result)
+    String::from_utf8(bytes)
+        .map_err(|_| RariError::bad_request("Invalid UTF-8 in percent-decoded data"))
 }
 
 pub(crate) fn validate_and_sanitize_args(
