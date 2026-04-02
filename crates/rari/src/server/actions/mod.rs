@@ -97,6 +97,18 @@ pub struct ServerActionResponse {
     pub redirect: Option<String>,
 }
 
+fn effective_port(url: &url::Url) -> u16 {
+    url.port().unwrap_or_else(|| match url.scheme() {
+        "https" => 443,
+        "http" => 80,
+        _ => 0,
+    })
+}
+
+fn normalize_origin(url: &url::Url) -> (String, String, u16) {
+    (url.scheme().to_string(), url.host_str().unwrap_or("").to_string(), effective_port(url))
+}
+
 fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), StatusCode> {
     if allowed_origins.is_empty() {
         let host = headers.get("host").and_then(|v| v.to_str().ok()).ok_or_else(|| {
@@ -110,48 +122,35 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             .and_then(|v| v.to_str().ok())
             .unwrap_or("http");
 
-        let server_origin = format!("{}://{}", scheme, host);
+        let server_origin_str = format!("{}://{}", scheme, host);
+        let server_origin_url = url::Url::parse(&server_origin_str).map_err(|e| {
+            error!("Failed to parse server origin: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let server_origin_tuple = normalize_origin(&server_origin_url);
 
         if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
             if let Ok(origin_url) = url::Url::parse(origin) {
-                let origin_full = if let Some(port) = origin_url.port() {
-                    format!(
-                        "{}://{}:{}",
-                        origin_url.scheme(),
-                        origin_url.host_str().unwrap_or(""),
-                        port
-                    )
-                } else {
-                    format!("{}://{}", origin_url.scheme(), origin_url.host_str().unwrap_or(""))
-                };
+                let origin_tuple = normalize_origin(&origin_url);
 
-                if origin_full == server_origin {
+                if origin_tuple == server_origin_tuple {
                     return Ok(());
                 }
             }
-            error!("Origin mismatch: origin={}, server_origin={}", origin, server_origin);
+            error!("Origin mismatch: origin={}, server_origin={}", origin, server_origin_str);
             return Err(StatusCode::FORBIDDEN);
         }
 
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
             if let Ok(referer_url) = url::Url::parse(referer) {
-                let referer_origin = if let Some(port) = referer_url.port() {
-                    format!(
-                        "{}://{}:{}",
-                        referer_url.scheme(),
-                        referer_url.host_str().unwrap_or(""),
-                        port
-                    )
-                } else {
-                    format!("{}://{}", referer_url.scheme(), referer_url.host_str().unwrap_or(""))
-                };
+                let referer_tuple = normalize_origin(&referer_url);
 
-                if referer_origin == server_origin {
+                if referer_tuple == server_origin_tuple {
                     return Ok(());
                 }
                 error!(
-                    "Referer mismatch: referer_origin={}, server_origin={}",
-                    referer_origin, server_origin
+                    "Referer mismatch: referer={}, server_origin={}",
+                    referer, server_origin_str
                 );
             } else {
                 error!("Invalid referer header: failed to parse");
@@ -309,18 +308,14 @@ pub async fn handle_server_action(
 
     let renderer = state.renderer.lock().await;
 
-    if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
-        error!("Failed to set request context for server action: {}", e);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    let result =
-        renderer.execute_server_function(&request.id, &request.export_name, &sanitized_args).await;
-
-    if let Err(e) = renderer.runtime.clear_request_context().await {
-        error!("Failed to clear request context for server action: {}", e);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+    let result = renderer
+        .runtime
+        .execute_with_request_context(request_context.clone(), async {
+            renderer
+                .execute_server_function(&request.id, &request.export_name, &sanitized_args)
+                .await
+        })
+        .await;
 
     match result {
         Ok(value) => {
@@ -428,17 +423,12 @@ pub async fn handle_form_action(
 
     let renderer = state.renderer.lock().await;
 
-    if let Err(e) = renderer.runtime.set_request_context(request_context.clone()).await {
-        error!("Failed to set request context for form action: {}", e);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    let result = renderer.execute_server_function(action_id, export_name, &sanitized_args).await;
-
-    if let Err(e) = renderer.runtime.clear_request_context().await {
-        error!("Failed to clear request context for form action: {}", e);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+    let result = renderer
+        .runtime
+        .execute_with_request_context(request_context.clone(), async {
+            renderer.execute_server_function(action_id, export_name, &sanitized_args).await
+        })
+        .await;
 
     match result {
         Ok(value) => {
@@ -474,37 +464,63 @@ pub async fn handle_form_action(
                 headers.get("referer").and_then(|h| h.to_str().ok())
             {
                 if let Ok(parsed) = url::Url::parse(referer) {
-                    let referer_origin =
-                        format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-                    let referer_origin = if let Some(port) = parsed.port() {
-                        format!("{}:{}", referer_origin, port)
-                    } else {
-                        referer_origin
-                    };
+                    let referer_tuple = normalize_origin(&parsed);
 
-                    let is_allowed = if allowed_origins.is_empty() {
+                    let (is_same_origin, is_allowed) = if allowed_origins.is_empty() {
                         let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
                         let scheme = headers
                             .get("x-forwarded-proto")
                             .or_else(|| headers.get("x-forwarded-protocol"))
                             .and_then(|v| v.to_str().ok())
                             .unwrap_or("http");
-                        let server_origin = format!("{}://{}", scheme, host);
-                        referer_origin == server_origin
+                        let server_origin_str = format!("{}://{}", scheme, host);
+
+                        if let Ok(server_origin_url) = url::Url::parse(&server_origin_str) {
+                            let server_origin_tuple = normalize_origin(&server_origin_url);
+                            let is_same = referer_tuple == server_origin_tuple;
+                            (is_same, is_same)
+                        } else {
+                            (false, false)
+                        }
                     } else {
-                        crate::server::utils::http_utils::is_origin_allowed(
+                        let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
+                        let scheme = headers
+                            .get("x-forwarded-proto")
+                            .or_else(|| headers.get("x-forwarded-protocol"))
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("http");
+                        let server_origin_str = format!("{}://{}", scheme, host);
+
+                        let is_same =
+                            if let Ok(server_origin_url) = url::Url::parse(&server_origin_str) {
+                                let server_origin_tuple = normalize_origin(&server_origin_url);
+                                referer_tuple == server_origin_tuple
+                            } else {
+                                false
+                            };
+
+                        let referer_origin = format!(
+                            "{}://{}:{}",
+                            referer_tuple.0, referer_tuple.1, referer_tuple.2
+                        );
+                        let allowed = crate::server::utils::http_utils::is_origin_allowed(
                             &referer_origin,
                             &allowed_origins,
-                        )
+                        );
+                        (is_same, allowed)
                     };
 
                     if is_allowed {
-                        let path_and_query = if let Some(query) = parsed.query() {
-                            format!("{}?{}", parsed.path(), query)
+                        if is_same_origin {
+                            let path_and_query = if let Some(query) = parsed.query() {
+                                format!("{}?{}", parsed.path(), query)
+                            } else {
+                                parsed.path().to_string()
+                            };
+                            (path_and_query.clone(), Some(parsed.path().to_string()))
                         } else {
-                            parsed.path().to_string()
-                        };
-                        (path_and_query.clone(), Some(parsed.path().to_string()))
+                            (referer.to_string(), None)
+                        }
                     } else {
                         ("/".to_string(), None)
                     }

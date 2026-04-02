@@ -1191,12 +1191,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
 
             if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+              hasRenderedFinalRef.current = true
               try {
                 const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
                 const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
-                if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+                if (currentNavigationIdRef.current === navId) {
                   setRscPayload(updatedPayload)
                   setRenderKey(prev => prev + 1)
+
+                  if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
+                    onNavigateRef.current(pendingStreamingNavigationRef.current)
+                    pendingStreamingNavigationRef.current = null
+                  }
+
+                  if (streamCompleteRef.current)
+                    streamingRowsRef.current = null
                 }
               }
               catch (error) {

@@ -947,4 +947,86 @@ mod tests {
         let result = crate::server::actions::build_set_cookie_header(&cookie);
         assert!(result.is_ok(), "Cookie value with exclamation mark (0x21) should be accepted");
     }
+
+    #[test]
+    fn test_origin_comparison_with_default_https_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:443".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit default HTTPS port (443) should match server origin without port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_with_default_http_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "http".parse().unwrap());
+        headers.insert("origin", "http://example.com:80".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit default HTTP port (80) should match server origin without port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_with_explicit_port_in_host() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com:8080".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:8080".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit non-default port should match server origin with same port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_port_mismatch() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com:8080".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:9090".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(result.is_err(), "Origin with different port should not match");
+    }
+
+    #[test]
+    fn test_referer_comparison_with_default_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("referer", "https://example.com:443/some/path".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Referer with explicit default HTTPS port (443) should match server origin without port"
+        );
+    }
 }

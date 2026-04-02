@@ -187,7 +187,7 @@ impl LayoutRenderer {
 
         let is_not_found = route_match.not_found.is_some();
 
-        Self::enable_streaming_and_inject_lazy_resolver(&renderer, is_not_found).await?;
+        Self::enable_streaming_and_inject_lazy_resolver(&renderer, false).await?;
 
         if is_not_found {
             let rsc_wire_format =
@@ -752,7 +752,7 @@ impl LayoutRenderer {
             .and_then(|m| {
                 serde_json::to_string(m)
                     .map_err(|e| {
-                        tracing::warn!("Failed to serialize metadata: {}", e);
+                        tracing::debug!("Failed to serialize metadata: {}", e);
                         e
                     })
                     .ok()
