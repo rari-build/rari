@@ -1144,7 +1144,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
 
       const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
-      if (!hasPageContent && hasSuspenseBoundary)
+      if (!hasPageContent && hasSuspenseBoundary && !streamCompleteRef.current)
         return
 
       if (hasRenderedFinalRef.current)
