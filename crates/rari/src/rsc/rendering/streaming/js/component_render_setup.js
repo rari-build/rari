@@ -141,6 +141,8 @@ globalThis['~render'].componentAsync = async function () {
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
+          componentType: Component,
+          componentProps: props,
         })
 
         const serializedFallback = globalThis['~suspense'].safeSerializeElement(fallbackContent)
@@ -193,6 +195,8 @@ globalThis['~render'].componentAsync = async function () {
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
+          componentType: Component,
+          componentProps: props,
         })
 
         let loadingComponent = null
@@ -311,6 +315,8 @@ globalThis['~render'].componentAsync = async function () {
                     id: promiseId,
                     boundaryId,
                     componentPath: (child.type.name || 'AnonymousComponent'),
+                    componentType: child.type,
+                    componentProps: child.props || {},
                   })
                   return safeFallback
                 }
@@ -330,6 +336,8 @@ globalThis['~render'].componentAsync = async function () {
                   id: promiseId,
                   boundaryId,
                   componentPath: 'ThrownPromise',
+                  componentType: () => error,
+                  componentProps: {},
                 })
                 return safeFallback
               }
@@ -380,6 +388,8 @@ globalThis['~render'].componentAsync = async function () {
             id: promiseId,
             boundaryId,
             componentPath: componentName,
+            componentType: () => suspenseError.promise,
+            componentProps: {},
           })
         }
 

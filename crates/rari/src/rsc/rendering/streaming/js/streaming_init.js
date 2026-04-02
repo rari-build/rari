@@ -70,6 +70,7 @@ if (!globalThis.renderToRsc) {
 
           const rscProps = {
             ...otherProps,
+            ...(isSuspense ? { '~boundaryId': newBoundaryId } : {}),
             fallback: propsFallback === undefined
               ? undefined
               : await globalThis.renderToRsc(propsFallback, clientComponents, currentBoundaryId),

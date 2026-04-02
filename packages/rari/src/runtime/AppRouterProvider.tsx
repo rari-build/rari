@@ -322,7 +322,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>): React.ReactNode {
-    if (!rsc)
+    if (rsc == null)
       return null
 
     if (typeof rsc === 'string' && rsc.startsWith('$L') && rows && rows.has(rsc)) {
@@ -739,7 +739,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             const objectData = JSON.parse(jsonContent)
             rows.set(`$L${rowId}`, objectData)
 
-            if (!rootElement) {
+            if (rootElement === null) {
               rootElement = objectData
             }
           }
@@ -754,7 +754,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             const stringData = JSON.parse(content)
             rows.set(`$L${rowId}`, stringData)
 
-            if (!rootElement) {
+            if (rootElement === null) {
               rootElement = stringData
             }
           }
@@ -762,7 +762,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             const primitiveData = JSON.parse(content)
             rows.set(`$L${rowId}`, primitiveData)
 
-            if (!rootElement)
+            if (rootElement === null)
               rootElement = primitiveData
           }
         }
