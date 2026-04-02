@@ -350,6 +350,7 @@ async fn render_rsc_streaming_response(
                     yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
                 }
                 None => {
+                    yield Ok::<_, std::io::Error>(bytes::Bytes::from("STREAM_COMPLETE\n"));
                     break;
                 }
             }
