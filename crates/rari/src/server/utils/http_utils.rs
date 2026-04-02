@@ -90,13 +90,32 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
         if allowed.contains("*.")
             && let Ok(origin_url) = url::Url::parse(origin)
         {
-            let test_pattern = cow_utils::CowUtils::cow_replace(allowed.as_str(), "*.", "test.");
+            let is_schemeless = !allowed.contains("://");
+
+            let normalized_pattern =
+                if is_schemeless { format!("https://{}", allowed) } else { allowed.clone() };
+
+            let test_pattern =
+                cow_utils::CowUtils::cow_replace(normalized_pattern.as_str(), "*.", "test.");
             if let Ok(pattern_url) = url::Url::parse(test_pattern.as_ref()) {
-                if origin_url.scheme() != pattern_url.scheme() {
+                if !is_schemeless && origin_url.scheme() != pattern_url.scheme() {
                     return false;
                 }
 
-                if origin_url.port_or_known_default() != pattern_url.port_or_known_default() {
+                let pattern_has_explicit_port = allowed.contains(':')
+                    && allowed
+                        .split(':')
+                        .next_back()
+                        .map(|s| s.chars().all(|c| c.is_ascii_digit()))
+                        .unwrap_or(false);
+
+                if pattern_has_explicit_port {
+                    if origin_url.port_or_known_default() != pattern_url.port_or_known_default() {
+                        return false;
+                    }
+                } else if !is_schemeless
+                    && origin_url.port_or_known_default() != pattern_url.port_or_known_default()
+                {
                     return false;
                 }
 
@@ -340,5 +359,45 @@ mod tests {
         assert!(is_origin_allowed("http://127.0.0.1:3000", &allowed));
         assert!(!is_origin_allowed("http://localhost:8080", &allowed));
         assert!(!is_origin_allowed("http://127.0.0.1:8080", &allowed));
+    }
+
+    #[test]
+    fn test_schemeless_wildcard_pattern() {
+        let allowed = vec!["*.example.com".to_string()];
+
+        assert!(is_origin_allowed("https://app.example.com", &allowed));
+        assert!(is_origin_allowed("http://app.example.com", &allowed));
+        assert!(is_origin_allowed("https://api.example.com", &allowed));
+        assert!(is_origin_allowed("http://api.example.com", &allowed));
+        assert!(is_origin_allowed("https://example.com", &allowed));
+        assert!(is_origin_allowed("http://example.com", &allowed));
+
+        assert!(!is_origin_allowed("https://evil.com", &allowed));
+        assert!(!is_origin_allowed("https://example.com.evil.com", &allowed));
+    }
+
+    #[test]
+    fn test_schemeless_vs_scheme_specific_patterns() {
+        let schemeless = vec!["*.example.com".to_string()];
+        assert!(is_origin_allowed("https://app.example.com", &schemeless));
+        assert!(is_origin_allowed("http://app.example.com", &schemeless));
+
+        let https_only = vec!["https://*.example.com".to_string()];
+        assert!(is_origin_allowed("https://app.example.com", &https_only));
+        assert!(!is_origin_allowed("http://app.example.com", &https_only));
+
+        let http_only = vec!["http://*.example.com".to_string()];
+        assert!(is_origin_allowed("http://app.example.com", &http_only));
+        assert!(!is_origin_allowed("https://app.example.com", &http_only));
+    }
+
+    #[test]
+    fn test_schemeless_pattern_with_port() {
+        let allowed = vec!["*.example.com:8080".to_string()];
+
+        assert!(is_origin_allowed("https://app.example.com:8080", &allowed));
+        assert!(is_origin_allowed("http://app.example.com:8080", &allowed));
+        assert!(!is_origin_allowed("https://app.example.com:443", &allowed));
+        assert!(!is_origin_allowed("http://app.example.com:80", &allowed));
     }
 }

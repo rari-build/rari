@@ -156,7 +156,10 @@ export function hasDefaultExport(source: string): boolean {
       const afterExport = i + 6
       if (
         afterExport < len
-        && isWhitespace(source[afterExport])
+        && (
+          isWhitespace(source[afterExport])
+          || (source[afterExport] === '/' && (source[afterExport + 1] === '/' || source[afterExport + 1] === '*'))
+        )
       ) {
         const j = skipTrivia(source, afterExport, len)
         if (source.slice(j, j + 7) === 'default') {

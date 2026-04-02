@@ -263,9 +263,13 @@ impl LayoutRenderer {
         >,
         return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
+        let can_use_html_cache = request_context.is_none();
         let cache_key = utils::generate_cache_key(route_match, context);
 
-        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key) {
+        if can_use_html_cache
+            && !return_rsc_on_fallback
+            && let Some(cached_html) = self.html_cache.get(cache_key)
+        {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -346,7 +350,9 @@ impl LayoutRenderer {
                         return Ok(RenderResult::Static(html));
                     }
 
-                    self.html_cache.insert(cache_key, html.clone());
+                    if can_use_html_cache {
+                        self.html_cache.insert(cache_key, html.clone());
+                    }
                     Ok(RenderResult::Static(html))
                 }
             }
@@ -445,9 +451,6 @@ impl LayoutRenderer {
                 {
                     let error_msg =
                         result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    if error_msg.contains("Promise not found") {
-                        continue;
-                    }
                     return Err(RariError::Internal(
                         format!(
                             "Failed to resolve lazy promise {}: {}",
@@ -471,6 +474,7 @@ impl LayoutRenderer {
                     })?
                 };
 
+                let mut remapped_root_row = false;
                 for line in wire_format.lines() {
                     if line.trim().is_empty() {
                         continue;
@@ -483,9 +487,10 @@ impl LayoutRenderer {
                                     .get(colon_pos + 1..)
                                     .map(|content| content.trim_start().starts_with("I["))
                                     .unwrap_or(false);
-                                if is_import_reference {
+                                if is_import_reference || remapped_root_row {
                                     line.to_string()
                                 } else {
+                                    remapped_root_row = true;
                                     let content = &line[colon_pos + 1..];
                                     format!("{}:{}", lazy_promise.lazy_row_id, content)
                                 }
