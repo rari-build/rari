@@ -265,7 +265,7 @@ impl LayoutRenderer {
     ) -> Result<RenderResult, RariError> {
         let cache_key = utils::generate_cache_key(route_match, context);
 
-        if let Some(cached_html) = self.html_cache.get(cache_key) {
+        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key) {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -353,7 +353,24 @@ impl LayoutRenderer {
         };
 
         if let Some(ctx) = request_context {
-            runtime.execute_with_request_context(ctx, streaming_operation).await
+            runtime.set_request_context(Arc::clone(&ctx)).await?;
+
+            let result = streaming_operation.await;
+
+            match result {
+                Ok(RenderResult::Streaming(stream)) => {
+                    let stream_with_context =
+                        crate::rsc::rendering::streaming::RscStream::with_request_context(
+                            stream.into_receiver(),
+                            ctx,
+                        );
+                    Ok(RenderResult::Streaming(stream_with_context))
+                }
+                other_result => {
+                    let _ = runtime.clear_request_context().await;
+                    other_result
+                }
+            }
         } else {
             streaming_operation.await
         }
@@ -396,7 +413,6 @@ impl LayoutRenderer {
                 if seen_lazy_promise_ids.contains(&lazy_promise.promise_id) {
                     continue;
                 }
-                seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
 
                 let resolve_script = format!(
                     "(async () => {{ return await globalThis['~rari'].lazy.resolve('{}'); }})()",
@@ -409,84 +425,82 @@ impl LayoutRenderer {
                         format!("resolve_promise_{}", lazy_promise.promise_id),
                         resolve_script,
                     )
-                    .await;
-
-                match result {
-                    Ok(result) => {
-                        if let Some(success) = result.get("success").and_then(|v| v.as_bool())
-                            && !success
-                        {
-                            let error_msg = result
-                                .get("error")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("Unknown error");
-                            if error_msg.contains("Promise not found") {
-                                continue;
-                            }
-                            tracing::error!(
-                                "Failed to resolve lazy promise {}: {}",
-                                lazy_promise.promise_id,
-                                error_msg
-                            );
-                            continue;
-                        }
-
-                        let resolved_content = result.get("data").unwrap_or(&result);
-
-                        let wire_format = {
-                            let mut serializer = renderer.serializer.lock();
-                            match serializer.serialize_rsc_json(resolved_content) {
-                                Ok(wf) => wf,
-                                Err(e) => {
-                                    tracing::error!("Failed to serialize resolved content: {}", e);
-                                    continue;
-                                }
-                            }
-                        };
-
-                        for line in wire_format.lines() {
-                            if line.trim().is_empty() {
-                                continue;
-                            }
-                            let line_to_append = if let Some(colon_pos) = line.find(':') {
-                                if line.starts_with(|c: char| c.is_ascii_digit()) {
-                                    let row_id_str = &line[..colon_pos];
-                                    if row_id_str.parse::<usize>().is_ok() {
-                                        let is_import_reference = line
-                                            .get(colon_pos + 1..)
-                                            .map(|content| content.trim_start().starts_with("I["))
-                                            .unwrap_or(false);
-                                        if is_import_reference {
-                                            line.to_string()
-                                        } else {
-                                            let content = &line[colon_pos + 1..];
-                                            format!("{}:{}", lazy_promise.lazy_row_id, content)
-                                        }
-                                    } else {
-                                        line.to_string()
-                                    }
-                                } else {
-                                    line.to_string()
-                                }
-                            } else {
-                                line.to_string()
-                            };
-                            rsc_wire_format.push('\n');
-                            rsc_wire_format.push_str(&line_to_append);
-                        }
-                    }
-                    Err(e) => {
+                    .await
+                    .map_err(|e| {
                         let error_msg = e.to_string();
-                        if error_msg.contains("Promise not found") {
-                            continue;
+                        if !error_msg.contains("Promise not found") {
+                            tracing::error!(
+                                "Failed to execute script for lazy promise {}: {}",
+                                lazy_promise.promise_id,
+                                e
+                            );
                         }
-                        tracing::error!(
+                        e
+                    })?;
+
+                if let Some(success) = result.get("success").and_then(|v| v.as_bool())
+                    && !success
+                {
+                    let error_msg =
+                        result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    if error_msg.contains("Promise not found") {
+                        continue;
+                    }
+                    return Err(RariError::Internal(
+                        format!(
                             "Failed to resolve lazy promise {}: {}",
+                            lazy_promise.promise_id, error_msg
+                        ),
+                        None,
+                    ));
+                }
+
+                let resolved_content = result.get("data").unwrap_or(&result);
+
+                let wire_format = {
+                    let mut serializer = renderer.serializer.lock();
+                    serializer.serialize_rsc_json(resolved_content).map_err(|e| {
+                        tracing::error!(
+                            "Failed to serialize resolved content for promise {}: {}",
                             lazy_promise.promise_id,
                             e
                         );
+                        e
+                    })?
+                };
+
+                for line in wire_format.lines() {
+                    if line.trim().is_empty() {
+                        continue;
                     }
+                    let line_to_append = if let Some(colon_pos) = line.find(':') {
+                        if line.starts_with(|c: char| c.is_ascii_digit()) {
+                            let row_id_str = &line[..colon_pos];
+                            if row_id_str.parse::<usize>().is_ok() {
+                                let is_import_reference = line
+                                    .get(colon_pos + 1..)
+                                    .map(|content| content.trim_start().starts_with("I["))
+                                    .unwrap_or(false);
+                                if is_import_reference {
+                                    line.to_string()
+                                } else {
+                                    let content = &line[colon_pos + 1..];
+                                    format!("{}:{}", lazy_promise.lazy_row_id, content)
+                                }
+                            } else {
+                                line.to_string()
+                            }
+                        } else {
+                            line.to_string()
+                        }
+                    } else {
+                        line.to_string()
+                    };
+                    rsc_wire_format.push('\n');
+                    rsc_wire_format.push_str(&line_to_append);
                 }
+
+                seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
             }
         }
 

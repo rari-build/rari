@@ -5,11 +5,24 @@ use super::types::RscStreamChunk;
 
 pub struct RscStream {
     receiver: mpsc::Receiver<RscStreamChunk>,
+    _request_context_guard:
+        Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
 }
 
 impl RscStream {
     pub fn new(receiver: mpsc::Receiver<RscStreamChunk>) -> Self {
-        Self { receiver }
+        Self { receiver, _request_context_guard: None }
+    }
+
+    pub fn with_request_context(
+        receiver: mpsc::Receiver<RscStreamChunk>,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+    ) -> Self {
+        Self { receiver, _request_context_guard: Some(request_context) }
+    }
+
+    pub(crate) fn into_receiver(self) -> mpsc::Receiver<RscStreamChunk> {
+        self.receiver
     }
 
     pub async fn next_chunk(&mut self) -> Option<RscStreamChunk> {
