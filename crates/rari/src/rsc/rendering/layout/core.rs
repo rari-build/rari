@@ -360,10 +360,7 @@ impl LayoutRenderer {
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
                     let stream_with_context =
-                        crate::rsc::rendering::streaming::RscStream::with_request_context(
-                            stream.into_receiver(),
-                            ctx,
-                        );
+                        stream.with_request_context(ctx, Arc::clone(&runtime));
                     Ok(RenderResult::Streaming(stream_with_context))
                 }
                 other_result => {
@@ -409,11 +406,16 @@ impl LayoutRenderer {
                 break;
             }
 
-            for lazy_promise in pending_promises {
-                if seen_lazy_promise_ids.contains(&lazy_promise.promise_id) {
-                    continue;
-                }
+            let mut batch_seen_ids = rustc_hash::FxHashSet::default();
+            let unique_promises: Vec<_> = pending_promises
+                .into_iter()
+                .filter(|p| {
+                    !seen_lazy_promise_ids.contains(&p.promise_id)
+                        && batch_seen_ids.insert(p.promise_id.clone())
+                })
+                .collect();
 
+            for lazy_promise in unique_promises {
                 let resolve_script = format!(
                     "(async () => {{ return await globalThis['~rari'].lazy.resolve('{}'); }})()",
                     lazy_promise.promise_id

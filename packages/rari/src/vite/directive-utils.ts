@@ -10,6 +10,27 @@ function skipWhitespace(source: string, i: number, len: number): number {
   return i
 }
 
+function skipTrivia(source: string, i: number, len: number): number {
+  while (i < len) {
+    const next = skipWhitespace(source, i, len)
+    if (next !== i) {
+      i = next
+      continue
+    }
+    if (source[i] === '/' && source[i + 1] === '/') {
+      i = skipSingleLineComment(source, i, len)
+      continue
+    }
+    if (source[i] === '/' && source[i + 1] === '*') {
+      i = skipMultiLineComment(source, i, len)
+      continue
+    }
+    break
+  }
+
+  return i
+}
+
 function skipSingleLineComment(source: string, i: number, len: number): number {
   while (i < len && source[i] !== '\n') {
     i++
@@ -137,12 +158,13 @@ export function hasDefaultExport(source: string): boolean {
         afterExport < len
         && isWhitespace(source[afterExport])
       ) {
-        const j = skipWhitespace(source, afterExport, len)
+        const j = skipTrivia(source, afterExport, len)
         if (source.slice(j, j + 7) === 'default') {
           const afterDefault = j + 7
           if (
             afterDefault >= len
             || isWhitespace(source[afterDefault])
+            || (source[afterDefault] === '/' && (source[afterDefault + 1] === '/' || source[afterDefault + 1] === '*'))
             || source[afterDefault] === '{'
             || source[afterDefault] === '('
           ) {
