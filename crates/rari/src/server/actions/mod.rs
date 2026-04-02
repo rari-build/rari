@@ -149,8 +149,8 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
                     return Ok(());
                 }
                 error!(
-                    "Referer mismatch: referer={}, server_origin={}",
-                    referer, server_origin_str
+                    "Referer mismatch: referer_origin={}://{}:{}, server_origin={}",
+                    referer_tuple.0, referer_tuple.1, referer_tuple.2, server_origin_str
                 );
             } else {
                 error!("Invalid referer header: failed to parse");

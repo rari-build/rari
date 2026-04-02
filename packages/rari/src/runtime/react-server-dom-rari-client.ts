@@ -44,21 +44,13 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
 
       for (const line of lines) {
         if (line.trim()) {
-          processStreamRow(line, modules, chunks, symbols)
+          const parsed = processStreamRow(line, modules, chunks, symbols)
 
-          if (rootChunkId === null) {
-            const colonIndex = line.indexOf(':')
-            if (colonIndex !== -1) {
-              const rowId = line.slice(0, colonIndex)
-              const content = line.slice(colonIndex + 1)
-              const key = Number.parseInt(rowId, 10).toString()
-
-              if (!content.startsWith('I[') && (!content.startsWith('"$S') || !content.endsWith('"'))) {
-                if (chunks.has(key)) {
-                  rootChunkId = key
-                  rootElement = chunks.get(key)
-                }
-              }
+          if (rootChunkId === null && parsed) {
+            const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
+            if (shouldSetRoot) {
+              rootChunkId = parsed.key
+              rootElement = chunks.get(parsed.key)
             }
           }
         }
@@ -68,17 +60,13 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
     if (done) {
       buffer += decoder.decode()
       if (buffer.trim()) {
-        processStreamRow(buffer, modules, chunks, symbols)
+        const parsed = processStreamRow(buffer, modules, chunks, symbols)
 
-        if (rootChunkId === null) {
-          const colonIndex = buffer.indexOf(':')
-          if (colonIndex !== -1) {
-            const rowId = buffer.slice(0, colonIndex)
-            const key = Number.parseInt(rowId, 10).toString()
-            if (chunks.has(key)) {
-              rootChunkId = key
-              rootElement = chunks.get(key)
-            }
+        if (rootChunkId === null && parsed) {
+          const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
+          if (shouldSetRoot) {
+            rootChunkId = parsed.key
+            rootElement = chunks.get(parsed.key)
           }
         }
       }
@@ -99,15 +87,29 @@ const TAG_DEBUG = 68
 const TAG_CONSOLE = 87
 const TAG_STREAM_CLOSE = 67
 
-function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks: Map<string, any>, symbols: Map<string, string>): void {
+interface ParsedRow {
+  rowId: number
+  key: string
+  tag: number
+  content: string
+  isModuleImport: boolean
+  isSymbol: boolean
+  shouldSetRoot: boolean
+}
+
+function parseRowAndSelectRoot(
+  line: string,
+  chunks: Map<string, any>,
+): ParsedRow | null {
   const colonIndex = line.indexOf(':')
   if (colonIndex === -1)
-    return
+    return null
 
   const rowIdStr = line.slice(0, colonIndex)
   let content = line.slice(colonIndex + 1)
 
   const rowId = Number.parseInt(rowIdStr, 10)
+  const key = rowId.toString()
 
   let tag = 0
   if (content.length > 0) {
@@ -126,7 +128,28 @@ function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks
     }
   }
 
-  processRow(rowId, tag, content, modules, chunks, symbols)
+  const isModuleImport = tag === TAG_MODULE_IMPORT || content.startsWith('I[')
+  const isSymbol = content.startsWith('"$S') && content.endsWith('"')
+  const shouldSetRoot = !isModuleImport && !isSymbol && chunks.has(key)
+
+  return {
+    rowId,
+    key,
+    tag,
+    content,
+    isModuleImport,
+    isSymbol,
+    shouldSetRoot,
+  }
+}
+
+function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks: Map<string, any>, symbols: Map<string, string>): ParsedRow | null {
+  const parsed = parseRowAndSelectRoot(line, chunks)
+  if (!parsed)
+    return null
+
+  processRow(parsed.rowId, parsed.tag, parsed.content, modules, chunks, symbols)
+  return parsed
 }
 
 export async function createFromFetch(fetchPromise: Promise<Response>, options: CreateFromStreamOptions = {}): Promise<any> {
@@ -199,10 +222,11 @@ function parseWireFormat(wireFormat: string): ParsedWireFormat {
         if (char === '\n') {
           processRow(rowID, rowTag, currentRow, modules, chunks, symbols)
 
-          if (rootChunkId === null && rowTag !== TAG_MODULE_IMPORT && currentRow.trim()) {
-            const isSymbol = currentRow.startsWith('"$S') && currentRow.endsWith('"')
-            if (!isSymbol && chunks.has(rowID.toString()))
-              rootChunkId = rowID.toString()
+          if (rootChunkId === null) {
+            const fullRow = `${rowID}:${rowTag ? String.fromCharCode(rowTag) : ''}${currentRow}`
+            const parsed = parseRowAndSelectRoot(fullRow, chunks)
+            if (parsed?.shouldSetRoot)
+              rootChunkId = parsed.key
           }
 
           rowState = ROW_ID

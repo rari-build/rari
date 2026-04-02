@@ -223,116 +223,7 @@ impl LayoutRenderer {
                 })?
             };
 
-            let mut seen_lazy_promise_ids = rustc_hash::FxHashSet::default();
-
-            loop {
-                let pending_promises = {
-                    let mut serializer = renderer.serializer.lock();
-                    let promises = serializer.pending_lazy_promises.clone();
-                    serializer.pending_lazy_promises.clear();
-                    promises
-                };
-
-                if pending_promises.is_empty() {
-                    break;
-                }
-
-                for lazy_promise in pending_promises {
-                    if seen_lazy_promise_ids.contains(&lazy_promise.promise_id) {
-                        continue;
-                    }
-                    seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
-
-                    let resolve_script = format!(
-                        "(async () => {{ return await globalThis['~rari'].lazy.resolve('{}'); }})()",
-                        lazy_promise.promise_id
-                    );
-
-                    let result = renderer
-                        .runtime
-                        .execute_script(
-                            format!("resolve_promise_{}", lazy_promise.promise_id),
-                            resolve_script,
-                        )
-                        .await;
-
-                    match result {
-                        Ok(result) => {
-                            if let Some(success) = result.get("success").and_then(|v| v.as_bool())
-                                && !success
-                            {
-                                let error_msg = result
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("Unknown error");
-                                if error_msg.contains("Promise not found") {
-                                    continue;
-                                }
-                                tracing::error!(
-                                    "Failed to resolve lazy promise {}: {}",
-                                    lazy_promise.promise_id,
-                                    error_msg
-                                );
-                                continue;
-                            }
-
-                            let resolved_content = result.get("data").unwrap_or(&result);
-
-                            let wire_format = {
-                                let mut serializer = renderer.serializer.lock();
-                                match serializer.serialize_rsc_json(resolved_content) {
-                                    Ok(wf) => wf,
-                                    Err(e) => {
-                                        tracing::error!(
-                                            "Failed to serialize resolved content: {}",
-                                            e
-                                        );
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            for line in wire_format.lines() {
-                                if line.trim().is_empty() {
-                                    continue;
-                                }
-                                let line_to_append = if let Some(colon_pos) = line.find(':') {
-                                    if line.starts_with(|c: char| c.is_ascii_digit()) {
-                                        let row_id_str = &line[..colon_pos];
-                                        if row_id_str.parse::<usize>().is_ok() {
-                                            if line.contains("I[") {
-                                                line.to_string()
-                                            } else {
-                                                let content = &line[colon_pos + 1..];
-                                                format!("{}:{}", lazy_promise.lazy_row_id, content)
-                                            }
-                                        } else {
-                                            line.to_string()
-                                        }
-                                    } else {
-                                        line.to_string()
-                                    }
-                                } else {
-                                    line.to_string()
-                                };
-                                rsc_wire_format.push('\n');
-                                rsc_wire_format.push_str(&line_to_append);
-                            }
-                        }
-                        Err(e) => {
-                            let error_msg = e.to_string();
-                            if error_msg.contains("Promise not found") {
-                                continue;
-                            }
-                            tracing::error!(
-                                "Failed to resolve lazy promise {}: {}",
-                                lazy_promise.promise_id,
-                                e
-                            );
-                        }
-                    }
-                }
-            }
+            Self::resolve_lazy_promises(&renderer, &mut rsc_wire_format).await?;
 
             if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
                 error!("HTML structure validation failed: {}", e);
@@ -485,40 +376,10 @@ impl LayoutRenderer {
         Ok(())
     }
 
-    async fn execute_composition_and_serialize(
+    async fn resolve_lazy_promises(
         renderer: &RscRenderer,
-        composition_script: String,
-    ) -> Result<String, RariError> {
-        let promise_result = renderer
-            .runtime
-            .execute_script("compose_and_render".to_string(), composition_script)
-            .await?;
-
-        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
-            promise_result
-        } else {
-            renderer
-                .runtime
-                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
-                .await?
-        };
-
-        let rsc_data = result.get("rsc_data").ok_or_else(|| {
-            tracing::error!(
-                "Failed to extract RSC data from result (keys: {:?})",
-                result.as_object().map(|o| o.keys().collect::<Vec<_>>())
-            );
-            RariError::internal("No RSC data in render result")
-        })?;
-
-        let mut rsc_wire_format = {
-            let mut serializer = renderer.serializer.lock();
-            serializer.reset_for_new_request();
-            serializer
-                .serialize_rsc_json(rsc_data)
-                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?
-        };
-
+        rsc_wire_format: &mut String,
+    ) -> Result<(), RariError> {
         let mut seen_lazy_promise_ids = rustc_hash::FxHashSet::default();
 
         loop {
@@ -626,6 +487,45 @@ impl LayoutRenderer {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    async fn execute_composition_and_serialize(
+        renderer: &RscRenderer,
+        composition_script: String,
+    ) -> Result<String, RariError> {
+        let promise_result = renderer
+            .runtime
+            .execute_script("compose_and_render".to_string(), composition_script)
+            .await?;
+
+        let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
+            promise_result
+        } else {
+            renderer
+                .runtime
+                .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
+                .await?
+        };
+
+        let rsc_data = result.get("rsc_data").ok_or_else(|| {
+            tracing::error!(
+                "Failed to extract RSC data from result (keys: {:?})",
+                result.as_object().map(|o| o.keys().collect::<Vec<_>>())
+            );
+            RariError::internal("No RSC data in render result")
+        })?;
+
+        let mut rsc_wire_format = {
+            let mut serializer = renderer.serializer.lock();
+            serializer.reset_for_new_request();
+            serializer
+                .serialize_rsc_json(rsc_data)
+                .map_err(|e| RariError::internal(format!("Failed to serialize RSC data: {}", e)))?
+        };
+
+        Self::resolve_lazy_promises(renderer, &mut rsc_wire_format).await?;
 
         Ok(rsc_wire_format)
     }

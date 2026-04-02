@@ -17,6 +17,7 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
+import { hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -83,61 +84,6 @@ type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rat
   spamBlocker?: ServerBuildOptions['spamBlocker']
   cacheControl?: ServerBuildOptions['cacheControl']
   define?: ServerBuildOptions['define']
-}
-
-export function getTopLevelDirective(source: string): string | null {
-  let i = 0
-  const len = source.length
-
-  while (i < len) {
-    if (
-      source[i] === ' '
-      || source[i] === '\t'
-      || source[i] === '\r'
-      || source[i] === '\n'
-      || source[i] === '\uFEFF'
-    ) {
-      i++
-      continue
-    }
-
-    if (source[i] === '/' && source[i + 1] === '/') {
-      while (i < len && source[i] !== '\n')
-        i++
-      continue
-    }
-
-    if (source[i] === '/' && source[i + 1] === '*') {
-      i += 2
-      while (i < len - 1 && (source[i] !== '*' || source[i + 1] !== '/'))
-        i++
-      i += 2
-      continue
-    }
-
-    const quote = source[i] === '\'' || source[i] === '"' ? source[i] : null
-    if (quote) {
-      const end = source.indexOf(quote, i + 1)
-      if (end !== -1) {
-        const directive = source.slice(i + 1, end)
-        const charAfter = source[end + 1]
-        if (charAfter === undefined || charAfter === ';' || charAfter === '\n' || charAfter === '\r' || charAfter === ' ' || charAfter === '\t')
-          return directive
-      }
-    }
-
-    return null
-  }
-
-  return null
-}
-
-export function hasTopLevelUseServerDirective(source: string): boolean {
-  return getTopLevelDirective(source) === 'use server'
-}
-
-export function hasTopLevelUseClientDirective(source: string): boolean {
-  return getTopLevelDirective(source) === 'use client'
 }
 
 export class ServerComponentBuilder {
@@ -253,11 +199,12 @@ export class ServerComponentBuilder {
     }
   }
 
-  private isClientComponent(filePath: string): boolean {
+  private isClientComponent(filePath: string, source?: string): boolean {
     try {
-      if (!fs.existsSync(filePath))
+      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
+      if (code === null)
         return false
-      const code = fs.readFileSync(filePath, 'utf-8')
+
       return hasTopLevelUseClientDirective(code)
     }
     catch {

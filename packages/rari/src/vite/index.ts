@@ -21,6 +21,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
+import { hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
@@ -234,10 +235,7 @@ function scanForClientComponents(srcDir: string, additionalDirs: string[] = []):
       else if (entry.isFile() && TSX_EXT_REGEX.test(entry.name)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf8')
-          if (
-            content.includes('\'use client\'')
-            || content.includes('"use client"')
-          ) {
+          if (hasTopLevelUseClientDirective(content)) {
             clientComponents.add(fullPath)
           }
         }
@@ -287,8 +285,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
     try {
       const code = fs.readFileSync(id, 'utf-8')
-      result.hasUseServer = code.includes('\'use server\'') || code.includes('"use server"')
-      result.hasUseClient = code.includes('\'use client\'') || code.includes('"use client"')
+      result.hasUseServer = hasTopLevelUseServerDirective(code)
+      result.hasUseClient = hasTopLevelUseClientDirective(code)
       directiveCache.set(id, result)
     }
     catch {
@@ -338,8 +336,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
         return false
 
       const code = fs.readFileSync(pathForFsOperations, 'utf-8')
-      const hasClientDirective = hasTopLevelDirective(code, 'use client')
-      const hasServerDirective = hasTopLevelDirective(code, 'use server')
+      const hasClientDirective = hasTopLevelUseClientDirective(code)
+      const hasServerDirective = hasTopLevelUseServerDirective(code)
 
       if (hasServerDirective)
         return false
@@ -384,34 +382,8 @@ export function rari(options: RariOptions = {}): Plugin[] {
     }
   }
 
-  function hasTopLevelDirective(
-    code: string,
-    directive: 'use client' | 'use server',
-  ): boolean {
-    try {
-      const lines = code.split('\n')
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*'))
-          continue
-
-        if (trimmed === `'${directive}'` || trimmed === `"${directive}"`
-          || trimmed === `'${directive}';` || trimmed === `"${directive}";`) { return true }
-
-        break
-      }
-
-      return false
-    }
-    catch {
-      return false
-    }
-  }
-
   function transformServerModule(code: string, id: string): string {
-    const hasUseServer = hasTopLevelDirective(code, 'use server')
+    const hasUseServer = hasTopLevelUseServerDirective(code)
 
     if (!hasUseServer)
       return code
@@ -468,7 +440,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModule(code: string, id: string): string {
-    const isServerFunction = hasTopLevelDirective(code, 'use server')
+    const isServerFunction = hasTopLevelUseServerDirective(code)
     const isServerComp = isServerComponent(id)
 
     if (isServerFunction) {
@@ -521,7 +493,7 @@ if (import.meta.hot) {
       return newCode
     }
 
-    if (!hasTopLevelDirective(code, 'use client'))
+    if (!hasTopLevelUseClientDirective(code))
       return code
 
     const exportedNames = parseExportedNames(code)
@@ -553,7 +525,7 @@ if (import.meta.hot) {
   }
 
   function transformClientModuleForClient(code: string, _id: string): string {
-    if (!hasTopLevelDirective(code, 'use client'))
+    if (!hasTopLevelUseClientDirective(code))
       return code
 
     const exportedNames = parseExportedNames(code)
@@ -942,7 +914,7 @@ if (import.meta.hot) {
 
       const environment = (this as any).environment
 
-      if (hasTopLevelDirective(code, 'use client')) {
+      if (hasTopLevelUseClientDirective(code)) {
         componentTypeCache.set(id, 'client')
         clientComponents.add(id)
 
@@ -1000,7 +972,7 @@ ${clientTransformedCode}`
         }
       }
 
-      if (hasTopLevelDirective(code, 'use server')) {
+      if (hasTopLevelUseServerDirective(code)) {
         componentTypeCache.set(id, 'server')
 
         if (
@@ -1048,16 +1020,14 @@ ${clientTransformedCode}`
         const componentName = getComponentName(importPath)
         const resolvedImportPath = resolveImportToFilePath(importPath, id)
 
-        const importingFileIsClient = hasTopLevelDirective(code, 'use client')
+        const importingFileIsClient = hasTopLevelUseClientDirective(code)
           || componentTypeCache.get(id) === 'client'
           || id.includes('entry-client')
 
         const isClientComponent
           = componentTypeCache.get(resolvedImportPath) === 'client'
             || (fs.existsSync(resolvedImportPath)
-              && fs
-                .readFileSync(resolvedImportPath, 'utf-8')
-                .includes('\'use client\''))
+              && hasTopLevelUseClientDirective(fs.readFileSync(resolvedImportPath, 'utf-8')))
 
         if (isClientComponent) {
           componentTypeCache.set(resolvedImportPath, 'client')
@@ -1156,8 +1126,7 @@ const ${componentName} = registerClientReference(
             || JSX_TEST_REGEX.test(modifiedCode)
 
         if (
-          !modifiedCode.includes('\'use client\'')
-          && !modifiedCode.includes('"use client"')
+          !hasTopLevelUseClientDirective(modifiedCode)
           && hasJsx
         ) {
           if (isDevMode) {
@@ -1255,7 +1224,7 @@ const ${componentName} = registerClientReference(
               if (isAppRouterComponent)
                 continue
 
-              if (component.code.includes('"use server"') || component.code.includes('\'use server\''))
+              if (hasTopLevelUseServerDirective(component.code))
                 continue
 
               const registerResponse = await fetch(
@@ -1778,7 +1747,7 @@ const ${componentName} = registerClientReference(
         if (environment && environment.name === 'client') {
           try {
             const code = fs.readFileSync(id, 'utf-8')
-            if (hasTopLevelDirective(code, 'use server')) {
+            if (hasTopLevelUseServerDirective(code)) {
               return transformClientModule(code, id)
             }
           }
@@ -1805,7 +1774,7 @@ const ${componentName} = registerClientReference(
         const clientComponentsArray = [...allClientComponents].filter((componentPath) => {
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            return hasTopLevelDirective(code, 'use client')
+            return hasTopLevelUseClientDirective(code)
           }
           catch {
             return false
