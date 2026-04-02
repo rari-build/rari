@@ -239,7 +239,7 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        registerBoundary(boundaryId, fallbackContent, null)
+        registerBoundary(boundaryId, fallbackContent, globalThis['~suspense']?.currentBoundaryId || 'root_boundary')
 
         element = fallbackContent
 
@@ -321,7 +321,7 @@ globalThis['~render'].componentAsync = async function () {
                   return safeFallback
                 }
                 else {
-                  return result
+                  return processSuspenseInStructure(result, boundaryId)
                 }
               }
             }
@@ -336,8 +336,8 @@ globalThis['~render'].componentAsync = async function () {
                   id: promiseId,
                   boundaryId,
                   componentPath: 'ThrownPromise',
-                  componentType: () => error,
-                  componentProps: {},
+                  componentType: child.type,
+                  componentProps: child.props || {},
                 })
                 return safeFallback
               }
@@ -388,8 +388,8 @@ globalThis['~render'].componentAsync = async function () {
             id: promiseId,
             boundaryId,
             componentPath: componentName,
-            componentType: () => suspenseError.promise,
-            componentProps: {},
+            componentType: Component,
+            componentProps: props,
           })
         }
 

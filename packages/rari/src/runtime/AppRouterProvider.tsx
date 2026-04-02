@@ -396,7 +396,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       return (rsc as RSCArray).map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
-        if (!element)
+        if (element == null)
           return null
 
         if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
@@ -407,7 +407,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         return element
-      }).filter(Boolean)
+      }).filter(element => element != null)
     }
 
     return rsc
@@ -838,6 +838,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       return existingFetch
 
     const fetchPromise = (async () => {
+      const navigationId = currentNavigationIdRef.current
+
       try {
         const rariServerUrl = (import.meta.env.RARI_SERVER_URL || window.location.origin).replace(PATH_TRAILING_SLASH_REGEX, '')
 
@@ -884,11 +886,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           throw error
         }
 
-        setRscPayload(parsedPayload)
-
-        lastSuccessfulPayloadRef.current = rscWireFormat
-
-        resetFailureTracking()
+        if (currentNavigationIdRef.current === navigationId) {
+          setRscPayload(parsedPayload)
+          lastSuccessfulPayloadRef.current = rscWireFormat
+          resetFailureTracking()
+        }
 
         return parsedPayload
       }
@@ -959,9 +961,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         try {
           if (detail.rscWireFormat) {
             const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
-            setRscPayload(parsedPayload)
-            lastSuccessfulPayloadRef.current = detail.rscWireFormat
-            resetFailureTracking()
+
+            if (currentNavigationIdRef.current === detail.navigationId) {
+              setRscPayload(parsedPayload)
+              lastSuccessfulPayloadRef.current = detail.rscWireFormat
+              resetFailureTracking()
+            }
           }
           else if (detail.isStreaming) {
             if (currentNavigationIdRef.current === detail.navigationId) {
@@ -1165,36 +1170,56 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         if (hasSuspenseBoundary || hasPageContent) {
           const reachableModuleIds = getReachableModuleIds(parsedPayload)
 
-          let attempts = 0
-          const maxAttempts = 20
-          let allModulesLoaded = false
+          const loadClientComponents = async () => {
+            let attempts = 0
+            const maxAttempts = 20
+            let allModulesLoaded = false
 
-          while (attempts < maxAttempts) {
-            const clientComponents = (globalThis as any)['~clientComponents'] || {}
+            while (attempts < maxAttempts) {
+              const clientComponents = (globalThis as any)['~clientComponents'] || {}
 
-            const pendingLoads = Object.entries(clientComponents)
-              .filter(([id, comp]: [string, any]) => {
-                const isReachable = reachableModuleIds.has(id)
-                return isReachable && comp.loading && comp.loadPromise
-              })
-              .map(([_, comp]: [string, any]) => comp.loadPromise)
+              const pendingLoads = Object.entries(clientComponents)
+                .filter(([id, comp]: [string, any]) => {
+                  const isReachable = reachableModuleIds.has(id)
+                  return isReachable && comp.loading && comp.loadPromise
+                })
+                .map(([_, comp]: [string, any]) => comp.loadPromise)
 
-            if (pendingLoads.length === 0) {
-              allModulesLoaded = true
-              break
+              if (pendingLoads.length === 0) {
+                allModulesLoaded = true
+                break
+              }
+
+              try {
+                await Promise.race([Promise.all(pendingLoads), sleep(50)])
+              }
+              catch {}
+
+              await sleep(10)
+              attempts++
             }
 
-            try {
-              await Promise.race([Promise.all(pendingLoads), sleep(50)])
-            }
-            catch {}
+            if (!allModulesLoaded)
+              console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
 
-            await sleep(10)
-            attempts++
+            if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+              try {
+                const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
+                const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
+                if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+                  setRscPayload(updatedPayload)
+                  setRenderKey(prev => prev + 1)
+                }
+              }
+              catch (error) {
+                console.error('[rari] AppRouter: Failed to re-parse after client load:', error)
+              }
+            }
           }
 
-          if (!allModulesLoaded)
-            console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
+          loadClientComponents().catch((error) => {
+            console.error('[rari] AppRouter: Client component loading failed:', error)
+          })
         }
 
         if (currentNavigationIdRef.current !== navId)
