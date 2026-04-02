@@ -61,7 +61,7 @@ globalThis['~render'].componentAsync = async function () {
           }
 
           if (isSuspenseComponent(type)) {
-            const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+            const boundaryId = props?.key || props?.boundaryId || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
             if (!globalThis['~suspense'])
               globalThis['~suspense'] = {}
             const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
@@ -72,7 +72,7 @@ globalThis['~render'].componentAsync = async function () {
             registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
-            return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId }, ...children)
+            return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId, boundaryId }, ...children)
           }
 
           return globalThis['~react'].originalCreateElement(type, props, ...children)
@@ -291,7 +291,7 @@ globalThis['~render'].componentAsync = async function () {
           return el
 
         if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {
-          const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+          const boundaryId = el.props.boundaryId || el.props.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
           if (!globalThis['~suspense'])
             globalThis['~suspense'] = {}
           const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
@@ -321,7 +321,7 @@ globalThis['~render'].componentAsync = async function () {
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis['~clientComponents'] || {}, boundaryId)
+                  return result
                 }
               }
             }

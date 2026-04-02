@@ -40,10 +40,7 @@ function isValidFlightPayload(content: string): boolean {
   if (firstChar === '"')
     return true
 
-  if (firstChar === '-' || (firstCharCode >= 48 && firstCharCode <= 57))
-    return true
-
-  if (firstChar === 't' || firstChar === 'f' || firstChar === 'n')
+  if (PRIMITIVE_JSON_REGEX.test(content))
     return true
 
   return false
@@ -1131,10 +1128,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
 
-        if (!hasSuspenseBoundary) {
-          // No suspense boundary - initial shell is complete
-        }
-        else {
+        if (hasSuspenseBoundary) {
           const shellRows = rows.filter((r) => {
             const ci = r.indexOf(':')
             const id = ci > 0 ? r.substring(0, ci).trim() : ''
@@ -1240,7 +1234,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       const activeNavId = currentNavigationIdRef.current
 
-      if (eventNavigationId !== undefined && eventNavigationId !== activeNavId)
+      if (eventNavigationId == null || eventNavigationId !== activeNavId)
         return
 
       if (row.trim() === 'STREAM_COMPLETE') {
@@ -1325,7 +1319,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   let contentToRender = children
 
-  if (rscPayload?.element) {
+  if (rscPayload?.element != null) {
     const extracted = extractBodyContent(rscPayload.element)
     contentToRender = extracted || rscPayload.element
   }

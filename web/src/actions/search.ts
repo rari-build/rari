@@ -233,10 +233,10 @@ async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
 
   const { index, complete } = await buildSearchIndex(contentDir)
 
-  if (complete) {
+  if (complete || !searchCache) {
     searchCache = {
       index,
-      timestamp: Date.now(),
+      timestamp: now,
     }
   }
 
