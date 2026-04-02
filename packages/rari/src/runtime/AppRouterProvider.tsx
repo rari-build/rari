@@ -377,7 +377,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           const childProps = {
             ...props,
-            children: props.children ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
+            children: props.children === undefined ? undefined : rscToReact(props.children, modules, layoutPath, symbols, rows),
           }
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
@@ -496,7 +496,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             }
           }
           else {
-            processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
+            processed[key] = children === undefined ? undefined : rscToReact(children, modules, layoutPath, symbols, rows)
           }
         }
         else if (key === 'dangerouslySetInnerHTML') {
@@ -624,7 +624,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return reachableIds
   }
 
-  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
+  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false, waitForClientPreload = true) => {
     try {
       const lines = wireFormat.split('\n')
       const modules = new Map()
@@ -774,7 +774,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
       }
 
-      await preloadComponentsFromModules(modules)
+      if (waitForClientPreload)
+        await preloadComponentsFromModules(modules)
 
       if (
         extractBoundaries
@@ -791,30 +792,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       const rawElement = rootElement
 
-      if (rootElement && Array.isArray(rootElement)) {
+      if (rootElement != null) {
         fallbackKeyCounterRef.current = 0
 
-        if (rootElement[0] === '$') {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
-        }
-        else if (Array.isArray(rootElement[0])) {
-          const elements = rootElement
-            .map((el: any) =>
-              Array.isArray(el) && el[0] === '$'
-                ? rscToReact(el, modules, undefined, symbols, rows)
-                : el,
-            )
-            .filter((el: any) => {
-              return (
-                el == null
-                || typeof el === 'string'
-                || typeof el === 'number'
-                || typeof el === 'boolean'
-                || React.isValidElement(el)
-              )
-            })
-          rootElement = elements.length === 1 ? elements[0] : elements
-        }
+        rootElement = rscToReact(rootElement as RSCData, modules, undefined, symbols, rows)
       }
 
       return {
@@ -839,13 +820,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   ) => {
     const pathToFetch = targetPath || window.location.pathname
 
-    const existingFetch = pendingFetchesRef.current.get(pathToFetch)
+    const navigationId = currentNavigationIdRef.current
+    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}`
+    const existingFetch = pendingFetchesRef.current.get(requestKey)
     if (existingFetch)
       return existingFetch
 
     const fetchPromise = (async () => {
-      const navigationId = currentNavigationIdRef.current
-
       try {
         const rariServerUrl = (import.meta.env.RARI_SERVER_URL || window.location.origin).replace(PATH_TRAILING_SLASH_REGEX, '')
 
@@ -914,16 +895,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         throw error
       }
       finally {
-        pendingFetchesRef.current.delete(pathToFetch)
+        pendingFetchesRef.current.delete(requestKey)
       }
     })()
 
-    pendingFetchesRef.current.set(pathToFetch, fetchPromise)
+    pendingFetchesRef.current.set(requestKey, fetchPromise)
 
     return fetchPromise
   }
 
-  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean) => Promise<any>>(parseRscWireFormat)
+  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean, waitForClientPreload?: boolean) => Promise<any>>(parseRscWireFormat)
   const refetchRscPayloadRef = useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<any>>(refetchRscPayload)
   const processPropsRef = useRef<(props: any, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => any>(processProps)
   const rscToReactRef = useRef<(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => React.ReactNode>(rscToReact)
@@ -966,7 +947,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       startTransition(async () => {
         try {
           if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
+            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false, false)
 
             if (currentNavigationIdRef.current === detail.navigationId) {
               setRscPayload(parsedPayload)
@@ -1147,7 +1128,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             return !hasPageContent || !rows.some(sr => refPattern.test(sr))
           })
           try {
-            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false)
+            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false, false)
             if (currentNavigationIdRef.current === navId) {
               setRscPayload(shellPayload)
               setRenderKey(prev => prev + 1)
@@ -1171,7 +1152,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       hasRenderedInitialShellRef.current = true
 
       try {
-        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false)
+        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false, false)
 
         if (hasSuspenseBoundary || hasPageContent) {
           const reachableModuleIds = getReachableModuleIds(parsedPayload)
@@ -1211,7 +1192,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
               try {
                 const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
-                const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
+                const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
                 if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
                   setRscPayload(updatedPayload)
                   setRenderKey(prev => prev + 1)
@@ -1235,7 +1216,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return
 
         const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
-        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
+        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
 
         if (currentNavigationIdRef.current !== navId || hasRenderedFinalRef.current)
           return
@@ -1341,7 +1322,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       for (const child of children) {
         if (child && typeof child === 'object' && child.type === 'body')
-          return child.props?.children || null
+          return child.props?.children ?? null
       }
     }
 
@@ -1352,7 +1333,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   if (rscPayload?.element != null) {
     const extracted = extractBodyContent(rscPayload.element)
-    contentToRender = extracted || rscPayload.element
+    contentToRender = extracted ?? rscPayload.element
   }
 
   if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))

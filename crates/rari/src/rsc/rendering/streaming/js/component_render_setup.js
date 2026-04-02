@@ -61,7 +61,7 @@ globalThis['~render'].componentAsync = async function () {
           }
 
           if (isSuspenseComponent(type)) {
-            const boundaryId = props?.key || props?.boundaryId || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+            const boundaryId = props?.['~boundaryId'] || props?.boundaryId || props?.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
             if (!globalThis['~suspense'])
               globalThis['~suspense'] = {}
             const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
@@ -72,7 +72,7 @@ globalThis['~render'].componentAsync = async function () {
             registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
-            return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId, boundaryId }, ...children)
+            return globalThis['~react'].originalCreateElement('suspense', { ...props, 'key': boundaryId, boundaryId, '~boundaryId': boundaryId }, ...children)
           }
 
           return globalThis['~react'].originalCreateElement(type, props, ...children)
@@ -184,7 +184,8 @@ globalThis['~render'].componentAsync = async function () {
       element = Component(props)
 
       if (element && typeof element.then === 'function') {
-        const boundaryId = globalThis['~suspense']?.currentBoundaryId || 'root_boundary'
+        const parentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
+        const boundaryId = parentBoundaryId || 'root_boundary'
         const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
         globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
@@ -239,7 +240,8 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        registerBoundary(boundaryId, fallbackContent, globalThis['~suspense']?.currentBoundaryId || 'root_boundary')
+        if (!parentBoundaryId)
+          registerBoundary(boundaryId, fallbackContent, null)
 
         element = fallbackContent
 
@@ -287,11 +289,19 @@ globalThis['~render'].componentAsync = async function () {
       }
 
       const processSuspenseInStructure = (el, parentBoundaryId = null) => {
+        if (Array.isArray(el))
+          return el.map(child => processSuspenseInStructure(child, parentBoundaryId))
+
         if (!el || typeof el !== 'object')
           return el
 
-        if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {
-          const boundaryId = el.props.boundaryId || el.props.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const actualChildren = el.children ?? el.props?.children
+        const childArray = actualChildren == null
+          ? []
+          : Array.isArray(actualChildren) ? actualChildren : [actualChildren]
+
+        if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && childArray.length > 0) {
+          const boundaryId = el.props['~boundaryId'] || el.props.boundaryId || el.key || el.props.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
           if (!globalThis['~suspense'])
             globalThis['~suspense'] = {}
           const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
@@ -301,7 +311,7 @@ globalThis['~render'].componentAsync = async function () {
 
           registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
-          const processedChildren = el.children.map((child) => {
+          const processedChildren = childArray.map((child) => {
             try {
               if (child && typeof child === 'object' && child.type && typeof child.type === 'function') {
                 const result = child.type(child.props || null)
@@ -352,13 +362,15 @@ globalThis['~render'].componentAsync = async function () {
 
           return {
             type: 'suspense',
-            props: { ...el.props, key: boundaryId, boundaryId },
-            children: processedChildren,
+            props: { ...el.props, 'key': boundaryId, boundaryId, '~boundaryId': boundaryId },
+            children: Array.isArray(actualChildren) ? processedChildren : processedChildren[0],
           }
         }
 
-        if (el.children && Array.isArray(el.children))
-          el.children = el.children.map(child => processSuspenseInStructure(child, parentBoundaryId))
+        if (childArray.length > 0) {
+          const processedChildren = childArray.map(child => processSuspenseInStructure(child, parentBoundaryId))
+          el.children = Array.isArray(actualChildren) ? processedChildren : processedChildren[0]
+        }
 
         return el
       }
@@ -381,6 +393,8 @@ globalThis['~render'].componentAsync = async function () {
 
         if (isLeafAsyncComponent) {
           const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+          globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
+          globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
           globalThis['~suspense'].promises[promiseId] = suspenseError.promise
 
           const boundaryId = globalThis['~suspense'].currentBoundaryId || 'root_boundary'
