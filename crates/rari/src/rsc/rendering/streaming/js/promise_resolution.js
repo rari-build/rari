@@ -72,7 +72,7 @@
       let rscData
       try {
         if (globalThis.renderToRsc)
-          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {})
+          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
         else
           rscData = resolvedElement
       }

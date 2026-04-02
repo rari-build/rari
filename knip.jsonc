@@ -9,6 +9,9 @@
       "project": [
         "test/**/*.ts"
       ],
+      "ignore": [
+        "test/unit/vite/__mocks__/rolldown.ts"
+      ],
       "ignoreDependencies": [
         "@typescript/native-preview", // Used by TypeScript tooling
         "@typescript-eslint/utils", // Used by antfu eslint config
@@ -59,8 +62,7 @@
         "src/proxy.ts" // Proxy configuration file is used via Vite plugin
       ],
       "ignoreDependencies": [
-        "tailwindcss",
-        "@tailwindcss/vite" // Used by Tailwind CSS
+        "tailwindcss"
       ]
     },
     "web": {

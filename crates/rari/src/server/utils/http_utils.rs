@@ -87,11 +87,26 @@ pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {
             return true;
         }
 
-        if let Some(domain) = allowed.strip_prefix("*.")
+        if allowed.contains("*.")
             && let Ok(origin_url) = url::Url::parse(origin)
-            && let Some(host) = origin_url.host_str()
         {
-            return host.ends_with(domain) || host == domain;
+            let test_pattern = cow_utils::CowUtils::cow_replace(allowed.as_str(), "*.", "test.");
+            if let Ok(pattern_url) = url::Url::parse(test_pattern.as_ref()) {
+                if origin_url.scheme() != pattern_url.scheme() {
+                    return false;
+                }
+
+                if origin_url.port_or_known_default() != pattern_url.port_or_known_default() {
+                    return false;
+                }
+
+                if let (Some(origin_host), Some(pattern_host)) =
+                    (origin_url.host_str(), pattern_url.host_str())
+                    && let Some(domain) = pattern_host.strip_prefix("test.")
+                {
+                    return origin_host.ends_with(domain) || origin_host == domain;
+                }
+            }
         }
 
         false
@@ -201,13 +216,14 @@ mod tests {
 
     #[test]
     fn test_is_origin_allowed_wildcard_subdomain() {
-        let allowed = vec!["*.example.com".to_string()];
+        let allowed = vec!["https://*.example.com".to_string()];
 
         assert!(is_origin_allowed("https://app.example.com", &allowed));
         assert!(is_origin_allowed("https://api.example.com", &allowed));
         assert!(is_origin_allowed("https://example.com", &allowed));
         assert!(!is_origin_allowed("https://evil.com", &allowed));
         assert!(!is_origin_allowed("https://example.com.evil.com", &allowed));
+        assert!(!is_origin_allowed("http://app.example.com", &allowed));
     }
 
     #[test]
@@ -304,10 +320,15 @@ mod tests {
 
     #[test]
     fn test_wildcard_subdomain_with_port() {
-        let allowed = vec!["*.example.com".to_string()];
+        let allowed_https = vec!["https://*.example.com:8080".to_string()];
+        let allowed_http = vec!["http://*.example.com:3000".to_string()];
 
-        assert!(is_origin_allowed("https://app.example.com:8080", &allowed));
-        assert!(is_origin_allowed("http://api.example.com:3000", &allowed));
+        assert!(is_origin_allowed("https://app.example.com:8080", &allowed_https));
+        assert!(is_origin_allowed("http://api.example.com:3000", &allowed_http));
+
+        assert!(!is_origin_allowed("http://app.example.com:8080", &allowed_https));
+
+        assert!(!is_origin_allowed("https://app.example.com:3000", &allowed_https));
     }
 
     #[test]

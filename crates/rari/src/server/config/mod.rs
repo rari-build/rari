@@ -723,11 +723,7 @@ impl Config {
             let allowed_origins = if let Some(origin) = &self.server.origin {
                 vec![origin.clone()]
             } else {
-                vec![
-                    format!("http://{}:{}", self.server.host, self.server.port),
-                    format!("http://localhost:{}", self.server.port),
-                    format!("http://127.0.0.1:{}", self.server.port),
-                ]
+                vec![format!("http://{}:{}", self.server.host, self.server.port)]
             };
 
             CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }

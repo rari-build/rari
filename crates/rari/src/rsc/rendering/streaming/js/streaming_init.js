@@ -1,4 +1,9 @@
 if (!globalThis.renderToRsc) {
+  if (!globalThis['~rsc'])
+    globalThis['~rsc'] = {}
+  if (typeof globalThis['~rsc'].keyCounter === 'undefined')
+    globalThis['~rsc'].keyCounter = 0
+
   globalThis.renderToRsc = async function (element, clientComponents = {}, currentBoundaryId = null) {
     if (element == null || element === false)
       return null
@@ -56,7 +61,11 @@ if (!globalThis.renderToRsc) {
             || element.type === 'Suspense'
             || element.type === '$0'
             || element.type === 'react.suspense'
-          const newBoundaryId = isSuspense && props['~boundaryId'] ? props['~boundaryId'] : currentBoundaryId
+
+          const newBoundaryId = isSuspense
+            ? (props['~boundaryId'] || `boundary:${globalThis['~rsc'].keyCounter++}`)
+            : currentBoundaryId
+
           const serializedType = isSuspense ? 'react.suspense' : element.type
 
           const rscProps = {
@@ -257,7 +266,9 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
       }
 
       return {
-        type: element.type || 'div',
+        type: typeof element.type === 'function'
+          ? (element.type.name || 'div')
+          : (element.type || 'div'),
         props: safeProps,
         key: null,
       }

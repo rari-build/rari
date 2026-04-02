@@ -315,7 +315,7 @@ globalThis['~render'].componentAsync = async function () {
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis['~clientComponents'] || {})
+                  return globalThis.renderToRsc(result, globalThis['~clientComponents'] || {}, boundaryId)
                 }
               }
             }
@@ -398,8 +398,9 @@ globalThis['~render'].componentAsync = async function () {
 
     let rscData
     try {
+      const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
       rscData = globalThis.renderToRsc
-        ? await globalThis.renderToRsc(element, globalThis['~clientComponents'] || {})
+        ? await globalThis.renderToRsc(element, globalThis['~clientComponents'] || {}, currentBoundaryId)
         : element
     }
     catch (rscError) {

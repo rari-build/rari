@@ -49,7 +49,8 @@ if (!globalThis['~rari'].lazy) {
         if (typeof globalThis.renderToRsc === 'function') {
           try {
             const clientComponents = globalThis['~clientComponents'] || {}
-            const rscData = await globalThis.renderToRsc(result, clientComponents)
+            const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
+            const rscData = await globalThis.renderToRsc(result, clientComponents, currentBoundaryId)
 
             const response = {
               success: true,

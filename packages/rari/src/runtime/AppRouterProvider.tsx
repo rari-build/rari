@@ -1212,6 +1212,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
         parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false)
 
+        if (currentNavigationIdRef.current !== navId || hasRenderedFinalRef.current)
+          return
+
         setRscPayload(parsedPayload)
         setRenderKey(prev => prev + 1)
         if (streamCompleteRef.current) {

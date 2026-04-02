@@ -494,13 +494,6 @@ export async function renderApp(): Promise<void> {
       try {
         const stream = new ReadableStream({
           start(controller) {
-            if (getWindow()['~rari']?.streaming?.bufferedRows) {
-              for (const row of getWindow()['~rari'].streaming!.bufferedRows!)
-                controller.enqueue(new TextEncoder().encode(`${row}\n`))
-
-              getWindow()['~rari'].streaming!.bufferedRows = []
-            }
-
             const handleStreamUpdate = (event: Event) => {
               const customEvent = event as CustomEvent
               if (customEvent.detail?.rscRow)
@@ -515,6 +508,14 @@ export async function renderApp(): Promise<void> {
 
             window.addEventListener('rari:html-stream-row', handleStreamUpdate)
             window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+            if (getWindow()['~rari']?.streaming?.bufferedRows) {
+              const snapshot = [...getWindow()['~rari'].streaming!.bufferedRows!]
+              getWindow()['~rari'].streaming!.bufferedRows = []
+
+              for (const row of snapshot)
+                controller.enqueue(new TextEncoder().encode(`${row}\n`))
+            }
 
             if (getWindow()['~rari']?.streaming?.complete)
               handleStreamComplete()

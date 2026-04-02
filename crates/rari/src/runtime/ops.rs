@@ -403,8 +403,8 @@ pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
         let a_is_delete = a_cookie.max_age == Some(0);
         let b_is_delete = b_cookie.max_age == Some(0);
         match (a_is_delete, b_is_delete) {
-            (false, true) => std::cmp::Ordering::Less,
-            (true, false) => std::cmp::Ordering::Greater,
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
             _ => {
                 let a_path_len = a_key.path.as_deref().unwrap_or("").len();
                 let b_path_len = b_key.path.as_deref().unwrap_or("").len();

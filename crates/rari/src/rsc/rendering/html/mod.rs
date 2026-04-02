@@ -1576,7 +1576,7 @@ if (typeof window !== 'undefined') {{
             Some(id) => id.clone(),
             None => {
                 error!("Boundary update chunk missing boundary_id");
-                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
+                let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
                 let script = format!(
                     r#"<script>(function(){{if(!window['~rari'])window['~rari']={{}};if(!window['~rari'].streaming)window['~rari'].streaming={{}};if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];window['~rari'].streaming.bufferedRows.push('{}');window.dispatchEvent(new CustomEvent('rari:html-stream-row',{{detail:{{rscRow:'{}'}}}}));}})();</script>"#,
                     escaped_row, escaped_row
@@ -1585,7 +1585,13 @@ if (typeof window !== 'undefined') {{
             }
         };
 
-        let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
+        let line_for_parsing = rsc_line
+            .strip_suffix("\r\n")
+            .or_else(|| rsc_line.strip_suffix('\n'))
+            .or_else(|| rsc_line.strip_suffix('\r'))
+            .unwrap_or(rsc_line.as_ref());
+
+        let parts: Vec<&str> = line_for_parsing.splitn(2, ':').collect();
 
         if parts.len() != 2 {
             error!("Invalid boundary update format: {}", rsc_line);
@@ -1594,7 +1600,7 @@ if (typeof window !== 'undefined') {{
 
         let row_id = chunk.row_id;
 
-        let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.trim());
+        let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
         let escaped_boundary_id = RscHtmlRenderer::escape_js_string(&boundary_id);
 
         let is_page_loading_boundary = boundary_id.contains("_promise_");

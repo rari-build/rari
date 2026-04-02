@@ -104,34 +104,55 @@ fn check_origin(headers: &HeaderMap, allowed_origins: &[String]) -> Result<(), S
             StatusCode::BAD_REQUEST
         })?;
 
+        let scheme = headers
+            .get("x-forwarded-proto")
+            .or_else(|| headers.get("x-forwarded-protocol"))
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("http");
+
+        let server_origin = format!("{}://{}", scheme, host);
+
         if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
             if let Ok(origin_url) = url::Url::parse(origin) {
-                let origin_host = if let Some(port) = origin_url.port() {
-                    format!("{}:{}", origin_url.host_str().unwrap_or(""), port)
+                let origin_full = if let Some(port) = origin_url.port() {
+                    format!(
+                        "{}://{}:{}",
+                        origin_url.scheme(),
+                        origin_url.host_str().unwrap_or(""),
+                        port
+                    )
                 } else {
-                    origin_url.host_str().unwrap_or("").to_string()
+                    format!("{}://{}", origin_url.scheme(), origin_url.host_str().unwrap_or(""))
                 };
 
-                if origin_host == host {
+                if origin_full == server_origin {
                     return Ok(());
                 }
             }
-            error!("Origin mismatch: origin={}, host={}", origin, host);
+            error!("Origin mismatch: origin={}, server_origin={}", origin, server_origin);
             return Err(StatusCode::FORBIDDEN);
         }
 
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
             if let Ok(referer_url) = url::Url::parse(referer) {
-                let referer_host = if let Some(port) = referer_url.port() {
-                    format!("{}:{}", referer_url.host_str().unwrap_or(""), port)
+                let referer_origin = if let Some(port) = referer_url.port() {
+                    format!(
+                        "{}://{}:{}",
+                        referer_url.scheme(),
+                        referer_url.host_str().unwrap_or(""),
+                        port
+                    )
                 } else {
-                    referer_url.host_str().unwrap_or("").to_string()
+                    format!("{}://{}", referer_url.scheme(), referer_url.host_str().unwrap_or(""))
                 };
 
-                if referer_host == host {
+                if referer_origin == server_origin {
                     return Ok(());
                 }
-                error!("Referer mismatch: referer_host={}, host={}", referer_host, host);
+                error!(
+                    "Referer mismatch: referer_origin={}, server_origin={}",
+                    referer_origin, server_origin
+                );
             } else {
                 error!("Invalid referer header: failed to parse");
             }
@@ -449,36 +470,50 @@ pub async fn handle_form_action(
                 return Ok(redirect_response);
             }
 
-            let (redirect_url, redirect_path_opt) =
-                if let Some(referer) = headers.get("referer").and_then(|h| h.to_str().ok()) {
-                    if let Ok(parsed) = url::Url::parse(referer) {
-                        let referer_origin =
-                            format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-                        let referer_origin = if let Some(port) = parsed.port() {
-                            format!("{}:{}", referer_origin, port)
-                        } else {
-                            referer_origin
-                        };
+            let (redirect_url, redirect_path_opt) = if let Some(referer) =
+                headers.get("referer").and_then(|h| h.to_str().ok())
+            {
+                if let Ok(parsed) = url::Url::parse(referer) {
+                    let referer_origin =
+                        format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+                    let referer_origin = if let Some(port) = parsed.port() {
+                        format!("{}:{}", referer_origin, port)
+                    } else {
+                        referer_origin
+                    };
 
-                        if crate::server::utils::http_utils::is_origin_allowed(
+                    let is_allowed = if allowed_origins.is_empty() {
+                        let host = headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("");
+                        let scheme = headers
+                            .get("x-forwarded-proto")
+                            .or_else(|| headers.get("x-forwarded-protocol"))
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("http");
+                        let server_origin = format!("{}://{}", scheme, host);
+                        referer_origin == server_origin
+                    } else {
+                        crate::server::utils::http_utils::is_origin_allowed(
                             &referer_origin,
                             &allowed_origins,
-                        ) {
-                            let path_and_query = if let Some(query) = parsed.query() {
-                                format!("{}?{}", parsed.path(), query)
-                            } else {
-                                parsed.path().to_string()
-                            };
-                            (path_and_query.clone(), Some(parsed.path().to_string()))
+                        )
+                    };
+
+                    if is_allowed {
+                        let path_and_query = if let Some(query) = parsed.query() {
+                            format!("{}?{}", parsed.path(), query)
                         } else {
-                            ("/".to_string(), None)
-                        }
+                            parsed.path().to_string()
+                        };
+                        (path_and_query.clone(), Some(parsed.path().to_string()))
                     } else {
                         ("/".to_string(), None)
                     }
                 } else {
                     ("/".to_string(), None)
-                };
+                }
+            } else {
+                ("/".to_string(), None)
+            };
 
             if let Some(redirect_path) = redirect_path_opt {
                 state.response_cache.invalidate_by_tag(&redirect_path).await;

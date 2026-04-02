@@ -34,7 +34,8 @@
 
       let rscResult
       if (typeof globalThis.renderToRsc === 'function') {
-        rscResult = globalThis.renderToRsc(element, clientComponents)
+        const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
+        rscResult = globalThis.renderToRsc(element, clientComponents, currentBoundaryId)
       }
       else if (typeof globalThis.traverseToRsc === 'function') {
         rscResult = globalThis.traverseToRsc(element, clientComponents)
