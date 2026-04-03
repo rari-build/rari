@@ -1,4 +1,6 @@
 pub const JS_ENABLE_STREAMING: &str = "if (!globalThis['~rari']) globalThis['~rari'] = {}; if (!globalThis['~rari'].streaming) globalThis['~rari'].streaming = {}; globalThis['~rari'].streaming.enabled = true;";
+pub const JS_DISABLE_STREAMING: &str =
+    "if (globalThis['~rari']?.streaming) globalThis['~rari'].streaming.enabled = false;";
 pub const JS_GET_RESULT: &str = include_str!("js/get_result.js");
 pub const JS_PAGE_RENDER_SIMPLE: &str = include_str!("js/page_render_simple.js");
 pub const JS_PAGE_RENDER_WITH_LOADING: &str = include_str!("js/page_render_with_loading.js");

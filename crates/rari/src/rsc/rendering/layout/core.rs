@@ -59,6 +59,14 @@ impl LayoutRenderer {
         Ok(())
     }
 
+    async fn disable_streaming(renderer: &RscRenderer) -> Result<(), RariError> {
+        renderer
+            .runtime
+            .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
+            .await?;
+        Ok(())
+    }
+
     pub async fn check_page_not_found(
         &self,
         route_match: &AppRouteMatch,
@@ -177,13 +185,20 @@ impl LayoutRenderer {
         let render_operation = async {
             Self::enable_streaming_and_inject_lazy_resolver(&renderer).await?;
 
-            let rsc_wire_format =
-                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-            Self::validate_rsc_wire_format(&rsc_wire_format)?;
+            let result = async {
+                let rsc_wire_format =
+                    Self::execute_composition_and_serialize(&renderer, composition_script).await?;
+                Self::validate_rsc_wire_format(&rsc_wire_format)?;
 
-            Self::validate_html_structure(&rsc_wire_format, route_match)?;
+                Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
-            Ok(rsc_wire_format)
+                Ok(rsc_wire_format)
+            }
+            .await;
+
+            let _ = Self::disable_streaming(&renderer).await;
+
+            result
         };
 
         if let Some(ctx) = request_context {
@@ -269,46 +284,55 @@ impl LayoutRenderer {
 
             drop(renderer_guard);
 
-            match streaming_renderer
+            let streaming_result = streaming_renderer
                 .start_streaming_with_composition(composition_script, layout_structure)
-                .await
-            {
+                .await;
+
+            match streaming_result {
                 Ok(stream) => Ok(RenderResult::Streaming(stream)),
                 Err(e) => {
                     error!("Streaming failed, falling back to static render: {}", e);
 
                     let renderer = self.renderer.lock().await;
-                    let rsc_wire_format =
-                        Self::execute_composition_and_serialize(&renderer, fallback_script).await?;
 
-                    Self::validate_rsc_wire_format(&rsc_wire_format)?;
+                    let fallback_result = async {
+                        let rsc_wire_format =
+                            Self::execute_composition_and_serialize(&renderer, fallback_script)
+                                .await?;
 
-                    if return_rsc_on_fallback {
+                        Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+                        if return_rsc_on_fallback {
+                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
+                            return Ok(RenderResult::Static(rsc_wire_format));
+                        }
+
                         Self::validate_html_structure(&rsc_wire_format, route_match)?;
-                        drop(renderer);
-                        return Ok(RenderResult::Static(rsc_wire_format));
+
+                        let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
+                            Arc::clone(&renderer.runtime),
+                        );
+                        let config = Config::get()
+                            .ok_or_else(|| RariError::internal("Config not available"))?;
+                        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+                        Self::validate_html_structure(&html, route_match)?;
+
+                        let is_not_found = route_match.not_found.is_some();
+                        if is_not_found {
+                            return Ok(RenderResult::Static(html));
+                        }
+
+                        if can_use_html_cache {
+                            self.html_cache.insert(cache_key, html.clone());
+                        }
+                        Ok(RenderResult::Static(html))
                     }
+                    .await;
 
-                    Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                    let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
-                        Arc::clone(&renderer.runtime),
-                    );
+                    let _ = Self::disable_streaming(&renderer).await;
                     drop(renderer);
-                    let config =
-                        Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-                    let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
-                    Self::validate_html_structure(&html, route_match)?;
 
-                    let is_not_found = route_match.not_found.is_some();
-                    if is_not_found {
-                        return Ok(RenderResult::Static(html));
-                    }
-
-                    if can_use_html_cache {
-                        self.html_cache.insert(cache_key, html.clone());
-                    }
-                    Ok(RenderResult::Static(html))
+                    fallback_result
                 }
             }
         };
@@ -337,8 +361,32 @@ impl LayoutRenderer {
         let root_layout_path =
             route_match.layouts.iter().find(|l| l.is_root).map(|l| l.file_path.as_str());
 
-        if html.contains("<div><html")
-            || html.contains("\"div\",null,{\"children\":[\"$\",\"html\"")
+        let trimmed = html.trim_start();
+
+        let first_tag_name = if let Some(tag_start) = trimmed.strip_prefix('<') {
+            if tag_start.starts_with('!') || tag_start.starts_with('?') {
+                if let Some(next_tag_pos) = tag_start.find('<') {
+                    let after_special = &tag_start[next_tag_pos + 1..];
+                    after_special
+                        .split(|c: char| c.is_whitespace() || c == '>' || c == '/')
+                        .next()
+                        .unwrap_or("")
+                } else {
+                    ""
+                }
+            } else {
+                tag_start
+                    .split(|c: char| c.is_whitespace() || c == '>' || c == '/')
+                    .next()
+                    .unwrap_or("")
+            }
+        } else {
+            ""
+        };
+
+        if !first_tag_name.is_empty()
+            && first_tag_name != "html"
+            && (html.contains("<html") || html.contains("\"html\""))
         {
             let error_msg =
                 error_messages::create_wrapped_html_error_message(route_match, root_layout_path);

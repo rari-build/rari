@@ -137,7 +137,7 @@ function hasDirective(source: string, targetDirective: string): boolean {
           return directive === targetDirective
         }
 
-        if (j < len && (isLineTerminator(source[j - 1]) || source[j - 1] === ';')) {
+        if (j < len && (isLineTerminator(source[j]) || source[j] === ';')) {
           continue
         }
 
@@ -307,12 +307,6 @@ function getPreviousNonTriviaChar(source: string, pos: number): string | undefin
 
     if (i >= 1 && source[i] === '/' && source[i - 1] === '/') {
       i -= 2
-      while (i >= 0 && source[i] !== '\n') {
-        i--
-      }
-      if (i < 0) {
-        return undefined
-      }
       continue
     }
 
