@@ -15,7 +15,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.8.3
-    posthog-js: ^1.364.5
+    posthog-js: ^1.364.6
   build:
     rolldown: ^1.0.0-rc.13
     vite: ^8.0.3
