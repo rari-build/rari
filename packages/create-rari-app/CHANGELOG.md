@@ -1,3 +1,17 @@
+## [create-rari-app@0.4.29] - 2026-04-03
+
+### 🚀 Features
+
+- *(rsc)* Upgrade deno dependencies and improve boundary context handling
+
+### 🚜 Refactor
+
+- Remove CSRF protection and add search functionality
+## [create-rari-app@0.4.28] - 2026-03-26
+
+### 💼 Other
+
+- Create-rari-app@0.4.28
 ## [create-rari-app@0.4.27] - 2026-03-24
 
 ### 💼 Other
