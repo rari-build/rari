@@ -351,10 +351,10 @@ impl LayoutRenderer {
                             JS_ENABLE_STREAMING.to_string(),
                         )
                         .await
-                    {
-                        refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-                        return Err(e);
-                    }
+                {
+                    refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    return Err(e);
+                }
 
                 let resolve_helper = include_str!("js/resolve_lazy_helper.js");
                 let injection_result = runtime
@@ -370,12 +370,12 @@ impl LayoutRenderer {
                                 JS_DISABLE_STREAMING.to_string(),
                             )
                             .await
-                        {
-                            tracing::debug!(
-                                "Failed to disable streaming after injection error: {}",
-                                cleanup_err
-                            );
-                        }
+                    {
+                        tracing::debug!(
+                            "Failed to disable streaming after injection error: {}",
+                            cleanup_err
+                        );
+                    }
                     return Err(e);
                 }
 
