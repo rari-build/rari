@@ -30,6 +30,7 @@ pub struct RscRenderer {
     pub(crate) resource_limits: ResourceLimits,
     pub(crate) resource_tracker: Arc<ResourceTracker>,
     pub(crate) serializer: Arc<Mutex<RscSerializer>>,
+    pub(crate) streaming_refcount: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl RscRenderer {
@@ -50,6 +51,7 @@ impl RscRenderer {
             resource_limits,
             resource_tracker: Arc::new(ResourceTracker::new()),
             serializer: Arc::new(Mutex::new(RscSerializer::new())),
+            streaming_refcount: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
     }
 

@@ -890,12 +890,7 @@ pub async fn handle_app_route(
             context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
             match layout_renderer
-                .render_route_by_mode(
-                    &route_match,
-                    &context,
-                    render_mode,
-                    Some(request_context.clone()),
-                )
+                .render_route_by_mode(&route_match, &context, Some(request_context.clone()))
                 .await
             {
                 Ok(rsc_wire_format) => {

@@ -3,7 +3,6 @@ use crate::rsc::rendering::core::RscRenderer;
 use crate::rsc::rendering::streaming::RscStream;
 use crate::server::config::Config;
 use crate::server::routing::app_router::AppRouteMatch;
-use crate::server::types::request::RenderMode;
 use crate::utils::path_url::path_to_file_url;
 use cow_utils::CowUtils;
 use dashmap::DashMap;
@@ -45,10 +44,18 @@ impl LayoutRenderer {
     async fn enable_streaming_and_inject_lazy_resolver(
         renderer: &RscRenderer,
     ) -> Result<(), RariError> {
-        renderer
-            .runtime
-            .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
-            .await?;
+        let prev_count =
+            renderer.streaming_refcount.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        if prev_count == 0
+            && let Err(e) = renderer
+                .runtime
+                .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
+                .await
+        {
+            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            return Err(e);
+        }
 
         let resolve_helper = include_str!("js/resolve_lazy_helper.js");
         let injection_result = renderer
@@ -57,10 +64,16 @@ impl LayoutRenderer {
             .await;
 
         if let Err(e) = injection_result {
-            if let Err(cleanup_err) = renderer
-                .runtime
-                .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
-                .await
+            let new_count =
+                renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            if new_count == 1
+                && let Err(cleanup_err) = renderer
+                    .runtime
+                    .execute_script(
+                        "disable_streaming".to_string(),
+                        JS_DISABLE_STREAMING.to_string(),
+                    )
+                    .await
             {
                 tracing::debug!(
                     "Failed to disable streaming after injection error: {}",
@@ -74,10 +87,15 @@ impl LayoutRenderer {
     }
 
     async fn disable_streaming(renderer: &RscRenderer) -> Result<(), RariError> {
-        renderer
-            .runtime
-            .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
-            .await?;
+        let prev_count =
+            renderer.streaming_refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+        if prev_count == 1 {
+            renderer
+                .runtime
+                .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
+                .await?;
+        }
         Ok(())
     }
 
@@ -264,17 +282,11 @@ impl LayoutRenderer {
         &self,
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
-        mode: RenderMode,
         request_context: Option<
             std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
         >,
     ) -> Result<String, RariError> {
-        match mode {
-            RenderMode::Ssr => self.render_route(route_match, context, request_context).await,
-            RenderMode::RscNavigation => {
-                self.render_route(route_match, context, request_context).await
-            }
-        }
+        self.render_route(route_match, context, request_context).await
     }
 
     pub async fn render_route_with_streaming(
@@ -325,14 +337,50 @@ impl LayoutRenderer {
 
         if let Some(ctx) = request_context {
             let renderer_guard = self.renderer.lock().await;
+            let runtime = Arc::clone(&renderer_guard.runtime);
+            let refcount = Arc::clone(&renderer_guard.streaming_refcount);
+            drop(renderer_guard);
 
             let streaming_operation = async {
-                Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
+                let prev_count = refcount.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+                if prev_count == 0
+                    && let Err(e) = runtime
+                        .execute_script(
+                            "enable_streaming".to_string(),
+                            JS_ENABLE_STREAMING.to_string(),
+                        )
+                        .await
+                    {
+                        refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                        return Err(e);
+                    }
+
+                let resolve_helper = include_str!("js/resolve_lazy_helper.js");
+                let injection_result = runtime
+                    .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
+                    .await;
+
+                if let Err(e) = injection_result {
+                    let new_count = refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    if new_count == 1
+                        && let Err(cleanup_err) = runtime
+                            .execute_script(
+                                "disable_streaming".to_string(),
+                                JS_DISABLE_STREAMING.to_string(),
+                            )
+                            .await
+                        {
+                            tracing::debug!(
+                                "Failed to disable streaming after injection error: {}",
+                                cleanup_err
+                            );
+                        }
+                    return Err(e);
+                }
 
                 let mut streaming_renderer =
-                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(
-                        &renderer_guard.runtime,
-                    ));
+                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(&runtime));
 
                 let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
 
@@ -342,15 +390,20 @@ impl LayoutRenderer {
 
                 match streaming_result {
                     Ok(stream) => {
-                        let runtime = Arc::clone(&renderer_guard.runtime);
+                        let runtime_for_cleanup = Arc::clone(&runtime);
+                        let refcount_for_cleanup = Arc::clone(&refcount);
                         let stream_with_cleanup = stream.with_cleanup(move || {
                             tokio::spawn(async move {
-                                let _ = runtime
-                                    .execute_script(
-                                        "disable_streaming".to_string(),
-                                        crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
-                                    )
-                                    .await;
+                                let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+                                if prev_count == 1 {
+                                    let _ = runtime_for_cleanup
+                                        .execute_script(
+                                            "disable_streaming".to_string(),
+                                            crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                        )
+                                        .await;
+                                }
                             });
                         });
                         Ok(RenderResult::Streaming(stream_with_cleanup))
@@ -358,28 +411,32 @@ impl LayoutRenderer {
                     Err(e) => {
                         error!("Streaming failed, falling back to static render: {}", e);
 
-                        let fallback_result = self
-                            .render_fallback(
-                                &renderer_guard,
-                                fallback_script,
-                                route_match,
-                                return_rsc_on_fallback,
-                                can_use_html_cache,
-                                cache_key,
-                            )
-                            .await;
+                        let prev_count = refcount.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                        if prev_count == 1 {
+                            let _ = runtime
+                                .execute_script(
+                                    "disable_streaming".to_string(),
+                                    JS_DISABLE_STREAMING.to_string(),
+                                )
+                                .await;
+                        }
 
-                        let _ = Self::disable_streaming(&renderer_guard).await;
-
-                        fallback_result
+                        let renderer_guard = self.renderer.lock().await;
+                        self.render_fallback(
+                            &renderer_guard,
+                            fallback_script,
+                            route_match,
+                            return_rsc_on_fallback,
+                            can_use_html_cache,
+                            cache_key,
+                        )
+                        .await
                     }
                 }
             };
 
-            let result = renderer_guard
-                .runtime
-                .execute_with_request_context(Arc::clone(&ctx), streaming_operation)
-                .await;
+            let result =
+                runtime.execute_with_request_context(Arc::clone(&ctx), streaming_operation).await;
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
@@ -402,6 +459,7 @@ impl LayoutRenderer {
                 let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
 
                 let runtime_for_cleanup = Arc::clone(&renderer_guard.runtime);
+                let refcount_for_cleanup = Arc::clone(&renderer_guard.streaming_refcount);
 
                 drop(renderer_guard);
 
@@ -413,12 +471,16 @@ impl LayoutRenderer {
                     Ok(stream) => {
                         let stream_with_cleanup = stream.with_cleanup(move || {
                             tokio::spawn(async move {
-                                let _ = runtime_for_cleanup
-                                    .execute_script(
-                                        "disable_streaming".to_string(),
-                                        crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
-                                    )
-                                    .await;
+                                let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+                                if prev_count == 1 {
+                                    let _ = runtime_for_cleanup
+                                        .execute_script(
+                                            "disable_streaming".to_string(),
+                                            crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                        )
+                                        .await;
+                                }
                             });
                         });
                         Ok(RenderResult::Streaming(stream_with_cleanup))
@@ -427,6 +489,8 @@ impl LayoutRenderer {
                         error!("Streaming failed, falling back to static render: {}", e);
 
                         let renderer = self.renderer.lock().await;
+
+                        let _ = Self::disable_streaming(&renderer).await;
 
                         let fallback_result = self
                             .render_fallback(
@@ -439,7 +503,6 @@ impl LayoutRenderer {
                             )
                             .await;
 
-                        let _ = Self::disable_streaming(&renderer).await;
                         drop(renderer);
 
                         fallback_result

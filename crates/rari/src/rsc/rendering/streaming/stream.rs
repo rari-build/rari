@@ -61,8 +61,10 @@ impl Stream for RscStream {
 
 impl Drop for RscStream {
     fn drop(&mut self) {
-        if let Some(cleanup) = self.cleanup.take() {
-            cleanup();
+        if let Some(cleanup) = self.cleanup.take()
+            && let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(cleanup))
+        {
+            tracing::error!("RscStream cleanup callback panicked: {:?}", e);
         }
     }
 }

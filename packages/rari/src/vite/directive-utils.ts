@@ -121,7 +121,9 @@ function skipJSX(source: string, i: number, len: number): number {
     }
 
     if (source[i] === '/' && source[i + 1] === '>') {
-      return i + 2
+      depth--
+      i += 2
+      continue
     }
 
     if (source[i] === '>') {
@@ -134,7 +136,7 @@ function skipJSX(source: string, i: number, len: number): number {
 
     if (source[i] === '<') {
       const nextChar = source[i + 1]
-      if (nextChar === '/' || nextChar === '.' || isIdentifierPart(nextChar)) {
+      if (nextChar === '/' || nextChar === '.' || nextChar === '>' || isIdentifierStart(nextChar)) {
         if (nextChar === '/') {
           depth--
           i++
@@ -246,6 +248,15 @@ function isIdentifierPart(char: string | undefined): boolean {
   )
 }
 
+function isIdentifierStart(char: string | undefined): boolean {
+  return !!char && (
+    (char >= 'a' && char <= 'z')
+    || (char >= 'A' && char <= 'Z')
+    || char === '_'
+    || char === '$'
+  )
+}
+
 function canPrecedeRegex(char: string | undefined): boolean {
   return !char || char === '(' || char === '[' || char === '{' || char === ','
     || char === ';' || char === '=' || char === ':' || char === '?' || char === '!'
@@ -279,6 +290,19 @@ function getPreviousToken(source: string, pos: number): string | undefined {
 
     if (i >= 1 && source[i] === '/' && source[i - 1] === '/') {
       i -= 2
+      continue
+    }
+
+    let checkPos = i
+    while (checkPos >= 0 && source[checkPos] !== '\n' && source[checkPos] !== '\r') {
+      checkPos--
+    }
+    let afterNewline = checkPos + 1
+    while (afterNewline < i && (source[afterNewline] === ' ' || source[afterNewline] === '\t')) {
+      afterNewline++
+    }
+    if (afterNewline < i && source[afterNewline] === '/' && source[afterNewline + 1] === '/') {
+      i = afterNewline - 1
       continue
     }
 
@@ -387,6 +411,19 @@ function getPreviousNonTriviaChar(source: string, pos: number): string | undefin
       continue
     }
 
+    let checkPos = i
+    while (checkPos >= 0 && source[checkPos] !== '\n' && source[checkPos] !== '\r') {
+      checkPos--
+    }
+    let afterNewline = checkPos + 1
+    while (afterNewline < i && (source[afterNewline] === ' ' || source[afterNewline] === '\t')) {
+      afterNewline++
+    }
+    if (afterNewline < i && source[afterNewline] === '/' && source[afterNewline + 1] === '/') {
+      i = afterNewline - 1
+      continue
+    }
+
     return source[i]
   }
 
@@ -428,7 +465,7 @@ export function hasDefaultExport(source: string): boolean {
 
     if (source[i] === '<') {
       const nextChar = source[i + 1]
-      if (nextChar === '/' || nextChar === '.' || isIdentifierPart(nextChar)) {
+      if (nextChar === '/' || nextChar === '.' || nextChar === '>' || isIdentifierStart(nextChar)) {
         i = skipJSX(source, i, len)
         continue
       }
@@ -442,6 +479,7 @@ export function hasDefaultExport(source: string): boolean {
         afterExport < len
         && (
           isWhitespace(source[afterExport])
+          || source[afterExport] === '{'
           || (source[afterExport] === '/' && (source[afterExport + 1] === '/' || source[afterExport + 1] === '*'))
         )
       ) {
