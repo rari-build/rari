@@ -1,3 +1,58 @@
+## [rari@0.11.0] - 2026-04-03
+
+### 🚀 Features
+
+- *(rsc)* Implement streaming boundary updates with DOM rendering
+- *(cli)* Add vite-plus detection and support dual vite/vite-plus usage
+- *(rsc)* Implement batch promise resolution with concurrent script execution
+- *(rsc)* Enhance HTML rendering with improved attribute handling and streaming
+- *(rsc)* Improve error handling and async component rendering
+- *(rsc)* Improve RSC rendering with better attribute validation and cookie handling
+- *(rsc)* Optimize streaming boundary rendering and promise handling
+- *(rsc)* Improve suspense boundary handling and streaming updates
+- *(rsc)* Improve streaming and promise handling with better serialization
+- *(rsc)* Improve concurrent script execution and promise handling
+- *(rsc)* Improve element serialization and attribute handling
+- *(rsc)* Improve security, accessibility, and HTML rendering
+- *(rsc)* Improve streaming event handling and boundary content rendering
+- *(rsc)* Upgrade deno dependencies and improve boundary context handling
+- *(rsc)* Enhance component context and improve null checks
+- *(rsc)* Improve boundary handling and payload validation
+- *(rsc)* Improve suspense boundary handling and navigation state management
+- *(rsc)* Improve async boundary handling and add circular reference detection
+- *(rsc)* Improve suspense boundary handling and RSC wire format parsing
+- *(rsc)* Add cookie validation and RSC fallback rendering
+- *(rsc)* Add stream completion check to suspense boundary rendering
+- *(rsc)* Refactor lazy promise resolution with circular reference detection
+- *(runtime)* Refactor request context management and improve origin validation
+- *(rsc)* Refactor rendering pipeline with circular reference detection
+- *(rsc)* Extract lazy promise resolution into dedicated method
+- *(rsc)* Refactor streaming setup and improve origin validation
+- *(rsc)* Refactor lazy promise resolution and request context handling
+- *(rsc)* Refactor stream context handling and improve directive parsing
+- *(rsc)* Improve cache validation and origin pattern matching
+- *(rsc)* Refactor request context lifecycle and improve origin validation
+- *(rsc)* Refactor directive parsing and stream context handling
+- *(rsc)* Refactor rendering pipeline and improve error handling
+- *(rsc)* Extract streaming enablement constant and simplify wire format validation
+- *(rsc)* Strengthen error handling and extract regex keywords constant
+- *(rsc)* Add streaming disable capability and improve render error handling
+- *(rsc)* Refactor streaming pipeline and improve error handling
+- *(rsc)* Refactor rendering pipeline with cleanup handlers
+- *(rsc)* Implement streaming reference counting for lifecycle management
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Update element array length validation for RSC protocol
+
+### 🚜 Refactor
+
+- Remove CSRF protection and add search functionality
+## [rari@0.10.25] - 2026-03-26
+
+### 💼 Other
+
+- Rari@0.10.25
 ## [rari@0.10.24] - 2026-03-25
 
 ### 💼 Other
