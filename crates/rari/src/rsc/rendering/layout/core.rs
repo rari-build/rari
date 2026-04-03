@@ -298,6 +298,7 @@ impl LayoutRenderer {
                     let config =
                         Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
                     let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+                    Self::validate_html_structure(&html, route_match)?;
 
                     let is_not_found = route_match.not_found.is_some();
                     if is_not_found {
@@ -398,12 +399,10 @@ impl LayoutRenderer {
                                 e
                             );
                         }
-                        tracing::debug!(
-                            "Skipping failed lazy promise {} to allow partial content rendering",
+                        return Err(RariError::internal(format!(
+                            "Failed to materialize lazy promise {}",
                             lazy_promise.promise_id
-                        );
-                        seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
-                        continue;
+                        )));
                     }
                 };
 
@@ -417,12 +416,10 @@ impl LayoutRenderer {
                         lazy_promise.promise_id,
                         error_msg
                     );
-                    tracing::debug!(
-                        "Skipping failed lazy promise {} to allow partial content rendering",
-                        lazy_promise.promise_id
-                    );
-                    seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
-                    continue;
+                    return Err(RariError::internal(format!(
+                        "Failed to materialize lazy promise {}: {}",
+                        lazy_promise.promise_id, error_msg
+                    )));
                 }
 
                 let resolved_content = result.get("data").unwrap_or(&result);
@@ -440,12 +437,10 @@ impl LayoutRenderer {
                             lazy_promise.promise_id,
                             e
                         );
-                        tracing::debug!(
-                            "Skipping failed lazy promise {} serialization to allow partial content rendering",
-                            lazy_promise.promise_id
-                        );
-                        seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
-                        continue;
+                        return Err(RariError::internal(format!(
+                            "Failed to serialize lazy promise {}: {}",
+                            lazy_promise.promise_id, e
+                        )));
                     }
                 };
 

@@ -1,3 +1,16 @@
+const REGEX_KEYWORDS = new Set([
+  'return',
+  'throw',
+  'case',
+  'typeof',
+  'instanceof',
+  'new',
+  'delete',
+  'void',
+  'in',
+  'of',
+])
+
 function isWhitespace(char: string): boolean {
   return char === ' ' || char === '\t' || char === '\r' || char === '\n' || char === '\u2028' || char === '\u2029' || char === '\uFEFF'
 }
@@ -189,12 +202,6 @@ function getPreviousToken(source: string, pos: number): string | undefined {
 
     if (i >= 1 && source[i] === '/' && source[i - 1] === '/') {
       i -= 2
-      while (i >= 0 && source[i] !== '\n') {
-        i--
-      }
-      if (i < 0) {
-        return undefined
-      }
       continue
     }
 
@@ -226,19 +233,7 @@ function canPrecedeRegexWithKeywords(source: string, pos: number): boolean {
 
   const prevToken = getPreviousToken(source, pos)
   if (prevToken) {
-    const regexKeywords = new Set([
-      'return',
-      'throw',
-      'case',
-      'typeof',
-      'instanceof',
-      'new',
-      'delete',
-      'void',
-      'in',
-      'of',
-    ])
-    return regexKeywords.has(prevToken)
+    return REGEX_KEYWORDS.has(prevToken)
   }
 
   return false
