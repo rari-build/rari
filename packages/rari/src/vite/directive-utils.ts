@@ -94,7 +94,7 @@ function hasDirective(source: string, targetDirective: string): boolean {
       const end = skipString(source, i, len, quote)
       if (end > start) {
         const directive = source.slice(start, end - 1)
-        let j = end + 1
+        let j = end
 
         while (j < len) {
           if (isWhitespace(source[j]) && !isLineTerminator(source[j])) {

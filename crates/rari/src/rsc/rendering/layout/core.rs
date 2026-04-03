@@ -47,10 +47,7 @@ impl LayoutRenderer {
     ) -> Result<(), RariError> {
         renderer
             .runtime
-            .execute_script(
-                "enable_streaming".to_string(),
-                "if (!globalThis['~rari']) globalThis['~rari'] = {}; if (!globalThis['~rari'].streaming) globalThis['~rari'].streaming = {}; globalThis['~rari'].streaming.enabled = true;".to_string(),
-            )
+            .execute_script("enable_streaming".to_string(), JS_ENABLE_STREAMING.to_string())
             .await?;
 
         let resolve_helper = include_str!("js/resolve_lazy_helper.js");
@@ -177,19 +174,12 @@ impl LayoutRenderer {
 
         let renderer = self.renderer.lock().await;
 
-        let is_not_found = route_match.not_found.is_some();
-
         let render_operation = async {
             Self::enable_streaming_and_inject_lazy_resolver(&renderer).await?;
 
-            let rsc_wire_format = if is_not_found {
-                let wire_format =
-                    Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-                Self::validate_rsc_wire_format(&wire_format)?;
-                wire_format
-            } else {
-                Self::execute_composition_and_serialize(&renderer, composition_script).await?
-            };
+            let rsc_wire_format =
+                Self::execute_composition_and_serialize(&renderer, composition_script).await?;
+            Self::validate_rsc_wire_format(&rsc_wire_format)?;
 
             Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
