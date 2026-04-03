@@ -51,10 +51,18 @@ impl LayoutRenderer {
             .await?;
 
         let resolve_helper = include_str!("js/resolve_lazy_helper.js");
-        renderer
+        let injection_result = renderer
             .runtime
             .execute_script("inject_lazy_resolver".to_string(), resolve_helper.to_string())
-            .await?;
+            .await;
+
+        if let Err(e) = injection_result {
+            let _ = renderer
+                .runtime
+                .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
+                .await;
+            return Err(e);
+        }
 
         Ok(())
     }
@@ -271,79 +279,76 @@ impl LayoutRenderer {
             false,
         )?;
 
-        let streaming_operation = async {
+        if let Some(ctx) = request_context {
             let renderer_guard = self.renderer.lock().await;
 
-            Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
+            let streaming_operation = async {
+                Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
 
-            let mut streaming_renderer = crate::rsc::rendering::streaming::StreamingRenderer::new(
-                Arc::clone(&renderer_guard.runtime),
-            );
+                let mut streaming_renderer =
+                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(
+                        &renderer_guard.runtime,
+                    ));
 
-            let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
+                let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
 
-            drop(renderer_guard);
-
-            let streaming_result = streaming_renderer
-                .start_streaming_with_composition(composition_script, layout_structure)
-                .await;
-
-            match streaming_result {
-                Ok(stream) => Ok(RenderResult::Streaming(stream)),
-                Err(e) => {
-                    error!("Streaming failed, falling back to static render: {}", e);
-
-                    let renderer = self.renderer.lock().await;
-
-                    let fallback_result = async {
-                        let rsc_wire_format =
-                            Self::execute_composition_and_serialize(&renderer, fallback_script)
-                                .await?;
-
-                        Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-                        if return_rsc_on_fallback {
-                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
-                            return Ok(RenderResult::Static(rsc_wire_format));
-                        }
-
-                        Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                        let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
-                            Arc::clone(&renderer.runtime),
-                        );
-                        let config = Config::get()
-                            .ok_or_else(|| RariError::internal("Config not available"))?;
-                        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
-                        Self::validate_html_structure(&html, route_match)?;
-
-                        let is_not_found = route_match.not_found.is_some();
-                        if is_not_found {
-                            return Ok(RenderResult::Static(html));
-                        }
-
-                        if can_use_html_cache {
-                            self.html_cache.insert(cache_key, html.clone());
-                        }
-                        Ok(RenderResult::Static(html))
-                    }
+                let streaming_result = streaming_renderer
+                    .start_streaming_with_composition(composition_script, layout_structure)
                     .await;
 
-                    let _ = Self::disable_streaming(&renderer).await;
-                    drop(renderer);
+                match streaming_result {
+                    Ok(stream) => Ok(RenderResult::Streaming(stream)),
+                    Err(e) => {
+                        error!("Streaming failed, falling back to static render: {}", e);
 
-                    fallback_result
+                        let fallback_result = async {
+                            let rsc_wire_format = Self::execute_composition_and_serialize(
+                                &renderer_guard,
+                                fallback_script,
+                            )
+                            .await?;
+
+                            Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+                            if return_rsc_on_fallback {
+                                Self::validate_html_structure(&rsc_wire_format, route_match)?;
+                                return Ok(RenderResult::Static(rsc_wire_format));
+                            }
+
+                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
+
+                            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
+                                Arc::clone(&renderer_guard.runtime),
+                            );
+                            let config = Config::get()
+                                .ok_or_else(|| RariError::internal("Config not available"))?;
+                            let html =
+                                html_renderer.render_to_html(&rsc_wire_format, config).await?;
+                            Self::validate_html_structure(&html, route_match)?;
+
+                            let is_not_found = route_match.not_found.is_some();
+                            if is_not_found {
+                                return Ok(RenderResult::Static(html));
+                            }
+
+                            if can_use_html_cache {
+                                self.html_cache.insert(cache_key, html.clone());
+                            }
+                            Ok(RenderResult::Static(html))
+                        }
+                        .await;
+
+                        let _ = Self::disable_streaming(&renderer_guard).await;
+
+                        fallback_result
+                    }
                 }
-            }
-        };
-
-        if let Some(ctx) = request_context {
-            let runtime = {
-                let renderer = self.renderer.lock().await;
-                Arc::clone(&renderer.runtime)
             };
-            let result =
-                runtime.execute_with_request_context(Arc::clone(&ctx), streaming_operation).await;
+
+            let result = renderer_guard
+                .runtime
+                .execute_with_request_context(Arc::clone(&ctx), streaming_operation)
+                .await;
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
@@ -353,6 +358,74 @@ impl LayoutRenderer {
                 other_result => other_result,
             }
         } else {
+            let streaming_operation = async {
+                let renderer_guard = self.renderer.lock().await;
+
+                Self::enable_streaming_and_inject_lazy_resolver(&renderer_guard).await?;
+
+                let mut streaming_renderer =
+                    crate::rsc::rendering::streaming::StreamingRenderer::new(Arc::clone(
+                        &renderer_guard.runtime,
+                    ));
+
+                let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
+
+                drop(renderer_guard);
+
+                let streaming_result = streaming_renderer
+                    .start_streaming_with_composition(composition_script, layout_structure)
+                    .await;
+
+                match streaming_result {
+                    Ok(stream) => Ok(RenderResult::Streaming(stream)),
+                    Err(e) => {
+                        error!("Streaming failed, falling back to static render: {}", e);
+
+                        let renderer = self.renderer.lock().await;
+
+                        let fallback_result = async {
+                            let rsc_wire_format =
+                                Self::execute_composition_and_serialize(&renderer, fallback_script)
+                                    .await?;
+
+                            Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+                            if return_rsc_on_fallback {
+                                Self::validate_html_structure(&rsc_wire_format, route_match)?;
+                                return Ok(RenderResult::Static(rsc_wire_format));
+                            }
+
+                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
+
+                            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
+                                Arc::clone(&renderer.runtime),
+                            );
+                            let config = Config::get()
+                                .ok_or_else(|| RariError::internal("Config not available"))?;
+                            let html =
+                                html_renderer.render_to_html(&rsc_wire_format, config).await?;
+                            Self::validate_html_structure(&html, route_match)?;
+
+                            let is_not_found = route_match.not_found.is_some();
+                            if is_not_found {
+                                return Ok(RenderResult::Static(html));
+                            }
+
+                            if can_use_html_cache {
+                                self.html_cache.insert(cache_key, html.clone());
+                            }
+                            Ok(RenderResult::Static(html))
+                        }
+                        .await;
+
+                        let _ = Self::disable_streaming(&renderer).await;
+                        drop(renderer);
+
+                        fallback_result
+                    }
+                }
+            };
+
             streaming_operation.await
         }
     }
@@ -362,6 +435,24 @@ impl LayoutRenderer {
             route_match.layouts.iter().find(|l| l.is_root).map(|l| l.file_path.as_str());
 
         let trimmed = html.trim_start();
+
+        if let Some(first_char) = trimmed.chars().next()
+            && first_char.is_ascii_digit()
+        {
+            if trimmed.contains("\"div\"")
+                && trimmed.contains("\"html\"")
+                && let Some(div_pos) = trimmed.find("[\"$\",\"div\"")
+                && let Some(html_pos) = trimmed.find("[\"$\",\"html\"")
+                && div_pos < html_pos
+            {
+                let error_msg = error_messages::create_wrapped_html_error_message(
+                    route_match,
+                    root_layout_path,
+                );
+                return Err(RariError::internal(error_msg));
+            }
+            return Ok(());
+        }
 
         let first_tag_name = if let Some(tag_start) = trimmed.strip_prefix('<') {
             if tag_start.starts_with('!') || tag_start.starts_with('?') {

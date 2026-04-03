@@ -13,7 +13,6 @@ import { rariRouter } from '../router/vite-plugin'
 import {
   BACKSLASH_REGEX,
   COMPONENT_ID_REGEX,
-  EXPORT_DEFAULT_REGEX,
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
   HTTP_PROTOCOL_REGEX,
@@ -21,7 +20,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '../shared/regex-constants'
-import { hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
+import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 import { HMRCoordinator } from './hmr-coordinator'
 import { scanForImageUsage } from './image-scanner'
@@ -366,7 +365,7 @@ export function rari(options: RariOptions = {}): Plugin[] {
 
       if (EXPORT_DEFAULT_FUNCTION_OR_CLASS_REGEX.test(code))
         exportedNames.push('default')
-      else if (EXPORT_DEFAULT_REGEX.test(code))
+      else if (hasDefaultExport(code))
         exportedNames.push('default')
 
       const declarationExports = code.matchAll(EXPORT_DECLARATION_REGEX)
@@ -1790,10 +1789,10 @@ const ${componentName} = registerClientReference(
           let namedExportName = ''
           try {
             const code = fs.readFileSync(componentPath, 'utf-8')
-            const hasDefaultExport = EXPORT_DEFAULT_REGEX.test(code)
+            const hasDefault = hasDefaultExport(code)
             const namedExportMatch = code.match(EXPORT_NAMED_DECLARATION_REGEX)
 
-            if (!hasDefaultExport && namedExportMatch) {
+            if (!hasDefault && namedExportMatch) {
               hasNamedExport = true
               namedExportName = namedExportMatch[1]
             }

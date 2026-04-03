@@ -81,6 +81,78 @@ function skipString(source: string, i: number, len: number, quote: string): numb
   return i
 }
 
+function skipJSX(source: string, i: number, len: number): number {
+  i++
+
+  const isClosingTag = source[i] === '/'
+  if (isClosingTag) {
+    i++
+  }
+
+  while (i < len && (isIdentifierPart(source[i]) || source[i] === '.' || source[i] === '-')) {
+    i++
+  }
+
+  let depth = isClosingTag ? 0 : 1
+
+  while (i < len && depth > 0) {
+    const quote = source[i] === '\'' || source[i] === '"' || source[i] === '`' ? source[i] : null
+    if (quote) {
+      i = skipString(source, i, len, quote)
+      continue
+    }
+
+    if (source[i] === '{') {
+      i++
+      let braceDepth = 1
+      while (i < len && braceDepth > 0) {
+        const quote = source[i] === '\'' || source[i] === '"' || source[i] === '`' ? source[i] : null
+        if (quote) {
+          i = skipString(source, i, len, quote)
+          continue
+        }
+        if (source[i] === '{')
+          braceDepth++
+        if (source[i] === '}')
+          braceDepth--
+        i++
+      }
+      continue
+    }
+
+    if (source[i] === '/' && source[i + 1] === '>') {
+      return i + 2
+    }
+
+    if (source[i] === '>') {
+      i++
+      if (isClosingTag) {
+        depth--
+      }
+      continue
+    }
+
+    if (source[i] === '<') {
+      if (source[i + 1] === '/') {
+        depth--
+        i++
+      }
+      else if (source[i + 1] !== '!') {
+        depth++
+      }
+      i++
+      while (i < len && (isIdentifierPart(source[i]) || source[i] === '.' || source[i] === '-')) {
+        i++
+      }
+      continue
+    }
+
+    i++
+  }
+
+  return i
+}
+
 function hasDirective(source: string, targetDirective: string): boolean {
   let i = 0
   const len = source.length
@@ -349,6 +421,11 @@ export function hasDefaultExport(source: string): boolean {
       }
     }
 
+    if (source[i] === '<') {
+      i = skipJSX(source, i, len)
+      continue
+    }
+
     if (source.slice(i, i + 6) === 'export') {
       const afterExport = i + 6
       if (
@@ -359,10 +436,62 @@ export function hasDefaultExport(source: string): boolean {
         )
       ) {
         const j = skipTrivia(source, afterExport, len)
+
         if (source.slice(j, j + 7) === 'default') {
           const afterDefault = j + 7
           if (afterDefault >= len || !isIdentifierPart(source[afterDefault])) {
             return true
+          }
+        }
+
+        if (source[j] === '{') {
+          let k = j + 1
+          while (k < len) {
+            k = skipTrivia(source, k, len)
+
+            if (source[k] === '}') {
+              break
+            }
+
+            const identStart = k
+            while (k < len && isIdentifierPart(source[k])) {
+              k++
+            }
+            const ident = source.slice(identStart, k)
+
+            if (!ident) {
+              break
+            }
+
+            k = skipTrivia(source, k, len)
+
+            if (source.slice(k, k + 2) === 'as') {
+              const afterAs = k + 2
+              if (afterAs < len && !isIdentifierPart(source[afterAs])) {
+                k = skipTrivia(source, afterAs, len)
+                if (source.slice(k, k + 7) === 'default') {
+                  const afterDefault = k + 7
+                  if (afterDefault >= len || !isIdentifierPart(source[afterDefault])) {
+                    return true
+                  }
+                }
+              }
+            }
+
+            if (ident === 'default') {
+              return true
+            }
+
+            if (source[k] === ',') {
+              k++
+              continue
+            }
+
+            if (source[k] === '}') {
+              break
+            }
+
+            k++
           }
         }
       }

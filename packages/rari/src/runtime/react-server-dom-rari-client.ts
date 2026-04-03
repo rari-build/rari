@@ -31,7 +31,6 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
 
   let buffer = ''
   let rootChunkId: string | null = null
-  let rootElement: any = null
 
   while (true) {
     const { done, value } = await reader.read()
@@ -50,7 +49,6 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
             const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
             if (shouldSetRoot) {
               rootChunkId = parsed.key
-              rootElement = chunks.get(parsed.key)
             }
           }
         }
@@ -66,7 +64,6 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
           const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
           if (shouldSetRoot) {
             rootChunkId = parsed.key
-            rootElement = chunks.get(parsed.key)
           }
         }
       }
@@ -75,6 +72,8 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
   }
 
   await preloadComponentsFromModules(modules)
+
+  const rootElement = rootChunkId ? chunks.get(rootChunkId) : null
 
   return rscToReact(rootElement, modules, moduleMap, symbols, chunks)
 }
