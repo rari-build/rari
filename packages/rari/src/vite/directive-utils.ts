@@ -90,17 +90,18 @@ function hasDirective(source: string, targetDirective: string): boolean {
 
     const quote = source[i] === '\'' || source[i] === '"' ? source[i] : null
     if (quote) {
-      const end = source.indexOf(quote, i + 1)
-      if (end !== -1) {
-        const directive = source.slice(i + 1, end)
+      const start = i + 1
+      const end = skipString(source, i, len, quote)
+      if (end > start) {
+        const directive = source.slice(start, end - 1)
         let j = end + 1
 
         while (j < len) {
-          if (source[j] === ' ' || source[j] === '\t') {
+          if (isWhitespace(source[j]) && !isLineTerminator(source[j])) {
             j++
             continue
           }
-          if (source[j] === '\n' || source[j] === '\r' || source[j] === ';') {
+          if (isLineTerminator(source[j]) || source[j] === ';') {
             if (directive === targetDirective) {
               return true
             }
@@ -123,7 +124,7 @@ function hasDirective(source: string, targetDirective: string): boolean {
           return directive === targetDirective
         }
 
-        if (j < len && (source[j - 1] === '\n' || source[j - 1] === '\r' || source[j - 1] === ';')) {
+        if (j < len && (isLineTerminator(source[j - 1]) || source[j - 1] === ';')) {
           continue
         }
 
@@ -160,6 +161,87 @@ function canPrecedeRegex(char: string | undefined): boolean {
     || char === ';' || char === '=' || char === ':' || char === '?' || char === '!'
     || char === '+' || char === '-' || char === '*' || char === '%' || char === '&'
     || char === '|' || char === '^' || char === '~' || char === '<' || char === '>'
+}
+
+function getPreviousToken(source: string, pos: number): string | undefined {
+  let i = pos - 1
+
+  while (i >= 0) {
+    if (isWhitespace(source[i])) {
+      i--
+      continue
+    }
+
+    if (i >= 1 && source[i] === '/' && source[i - 1] === '*') {
+      i -= 2
+      while (i >= 1) {
+        if (source[i] === '*' && source[i - 1] === '/') {
+          i -= 2
+          break
+        }
+        i--
+      }
+      if (i < 0) {
+        return undefined
+      }
+      continue
+    }
+
+    if (i >= 1 && source[i] === '/' && source[i - 1] === '/') {
+      i -= 2
+      while (i >= 0 && source[i] !== '\n') {
+        i--
+      }
+      if (i < 0) {
+        return undefined
+      }
+      continue
+    }
+
+    break
+  }
+
+  if (i < 0) {
+    return undefined
+  }
+
+  if (!isIdentifierPart(source[i])) {
+    return undefined
+  }
+
+  const end = i
+  while (i >= 0 && isIdentifierPart(source[i])) {
+    i--
+  }
+
+  return source.slice(i + 1, end + 1)
+}
+
+function canPrecedeRegexWithKeywords(source: string, pos: number): boolean {
+  const prevChar = getPreviousNonTriviaChar(source, pos)
+
+  if (canPrecedeRegex(prevChar)) {
+    return true
+  }
+
+  const prevToken = getPreviousToken(source, pos)
+  if (prevToken) {
+    const regexKeywords = new Set([
+      'return',
+      'throw',
+      'case',
+      'typeof',
+      'instanceof',
+      'new',
+      'delete',
+      'void',
+      'in',
+      'of',
+    ])
+    return regexKeywords.has(prevToken)
+  }
+
+  return false
 }
 
 function skipRegex(source: string, i: number, len: number): number {
@@ -213,6 +295,32 @@ function getPreviousNonTriviaChar(source: string, pos: number): string | undefin
       continue
     }
 
+    if (i >= 1 && source[i] === '/' && source[i - 1] === '*') {
+      i -= 2
+      while (i >= 1) {
+        if (source[i] === '*' && source[i - 1] === '/') {
+          i -= 2
+          break
+        }
+        i--
+      }
+      if (i < 0) {
+        return undefined
+      }
+      continue
+    }
+
+    if (i >= 1 && source[i] === '/' && source[i - 1] === '/') {
+      i -= 2
+      while (i >= 0 && source[i] !== '\n') {
+        i--
+      }
+      if (i < 0) {
+        return undefined
+      }
+      continue
+    }
+
     return source[i]
   }
 
@@ -246,8 +354,7 @@ export function hasDefaultExport(source: string): boolean {
     }
 
     if (source[i] === '/' && source[i + 1] !== '/' && source[i + 1] !== '*') {
-      const prevChar = getPreviousNonTriviaChar(source, i)
-      if (canPrecedeRegex(prevChar)) {
+      if (canPrecedeRegexWithKeywords(source, i)) {
         i = skipRegex(source, i, len)
         continue
       }

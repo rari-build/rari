@@ -182,47 +182,14 @@ impl LayoutRenderer {
         let render_operation = async {
             Self::enable_streaming_and_inject_lazy_resolver(&renderer).await?;
 
-            if is_not_found {
-                let rsc_wire_format =
+            let rsc_wire_format = if is_not_found {
+                let wire_format =
                     Self::execute_composition_and_serialize(&renderer, composition_script).await?;
-
-                Self::validate_rsc_wire_format(&rsc_wire_format)?;
-                Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                return Ok(rsc_wire_format);
-            }
-
-            let promise_result = renderer
-                .runtime
-                .execute_script("compose_and_render".to_string(), composition_script)
-                .await?;
-
-            let result = if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
-                promise_result
+                Self::validate_rsc_wire_format(&wire_format)?;
+                wire_format
             } else {
-                renderer
-                    .runtime
-                    .execute_script("get_result".to_string(), JS_GET_RESULT.to_string())
-                    .await?
+                Self::execute_composition_and_serialize(&renderer, composition_script).await?
             };
-
-            let rsc_data = result.get("rsc_data").ok_or_else(|| {
-                tracing::error!(
-                    "Failed to extract RSC data from result (keys: {:?})",
-                    result.as_object().map(|o| o.keys().collect::<Vec<_>>())
-                );
-                RariError::internal("No RSC data in render result")
-            })?;
-
-            let mut rsc_wire_format = {
-                let mut serializer = renderer.serializer.lock();
-                serializer.reset_for_new_request();
-                serializer.serialize_rsc_json(rsc_data).map_err(|e| {
-                    RariError::internal(format!("Failed to serialize RSC data: {}", e))
-                })?
-            };
-
-            Self::resolve_lazy_promises(&renderer, &mut rsc_wire_format).await?;
 
             Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
@@ -356,7 +323,12 @@ impl LayoutRenderer {
         };
 
         if let Some(ctx) = request_context {
-            let result = streaming_operation.await;
+            let runtime = {
+                let renderer = self.renderer.lock().await;
+                Arc::clone(&renderer.runtime)
+            };
+            let result =
+                runtime.execute_with_request_context(Arc::clone(&ctx), streaming_operation).await;
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
@@ -418,14 +390,16 @@ impl LayoutRenderer {
                     lazy_promise.promise_id
                 );
 
-                let result = renderer
+                let result = match renderer
                     .runtime
                     .execute_script(
                         format!("resolve_promise_{}", lazy_promise.promise_id),
                         resolve_script,
                     )
                     .await
-                    .map_err(|e| {
+                {
+                    Ok(result) => result,
+                    Err(e) => {
                         let error_msg = e.to_string();
                         if !error_msg.contains("Promise not found") {
                             tracing::error!(
@@ -434,35 +408,55 @@ impl LayoutRenderer {
                                 e
                             );
                         }
-                        e
-                    })?;
+                        tracing::debug!(
+                            "Skipping failed lazy promise {} to allow partial content rendering",
+                            lazy_promise.promise_id
+                        );
+                        seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
+                        continue;
+                    }
+                };
 
                 if let Some(success) = result.get("success").and_then(|v| v.as_bool())
                     && !success
                 {
                     let error_msg =
                         result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    return Err(RariError::Internal(
-                        format!(
-                            "Failed to resolve lazy promise {}: {}",
-                            lazy_promise.promise_id, error_msg
-                        ),
-                        None,
-                    ));
+                    tracing::error!(
+                        "Failed to resolve lazy promise {}: {}",
+                        lazy_promise.promise_id,
+                        error_msg
+                    );
+                    tracing::debug!(
+                        "Skipping failed lazy promise {} to allow partial content rendering",
+                        lazy_promise.promise_id
+                    );
+                    seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
+                    continue;
                 }
 
                 let resolved_content = result.get("data").unwrap_or(&result);
 
-                let wire_format = {
+                let serialization_result = {
                     let mut serializer = renderer.serializer.lock();
-                    serializer.serialize_rsc_json(resolved_content).map_err(|e| {
+                    serializer.serialize_rsc_json(resolved_content)
+                };
+
+                let wire_format = match serialization_result {
+                    Ok(format) => format,
+                    Err(e) => {
                         tracing::error!(
                             "Failed to serialize resolved content for promise {}: {}",
                             lazy_promise.promise_id,
                             e
                         );
-                        e
-                    })?
+                        tracing::debug!(
+                            "Skipping failed lazy promise {} serialization to allow partial content rendering",
+                            lazy_promise.promise_id
+                        );
+                        seen_lazy_promise_ids.insert(lazy_promise.promise_id.clone());
+                        continue;
+                    }
                 };
 
                 let mut remapped_root_row = false;
