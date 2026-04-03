@@ -37,50 +37,50 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.394.0"
+deno_core = "0.397.0"
 deno_error = "=0.7.1"
-deno_features = "0.38.0"
-deno_bundle_runtime = "0.28.0"
-deno_runtime = "0.249.0"
-deno_permissions = "0.100.0"
-deno_process = "0.56.0"
+deno_features = "0.41.0"
+deno_bundle_runtime = "0.31.0"
+deno_runtime = "0.252.0"
+deno_permissions = "0.103.0"
+deno_process = "0.59.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.174.0"
-deno_crypto = "0.255.0"
-deno_fetch = "0.265.0"
-deno_web = "0.272.0"
-deno_webidl = "0.241.0"
-deno_webstorage = "0.236.0"
+deno_cache = "0.177.0"
+deno_crypto = "0.258.0"
+deno_fetch = "0.268.0"
+deno_web = "0.275.0"
+deno_webidl = "0.244.0"
+deno_webstorage = "0.239.0"
 
 # === Network & HTTP ===
-deno_http = "0.239.0"
-deno_net = "0.233.0"
-deno_tls = "0.228.0"
-deno_websocket = "0.246.0"
+deno_http = "0.242.0"
+deno_net = "0.236.0"
+deno_tls = "0.231.0"
+deno_websocket = "0.249.0"
 
 # === File System & I/O ===
-deno_fs = "0.151.0"
-deno_io = "0.151.0"
+deno_fs = "0.154.0"
+deno_io = "0.154.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.63.0"
+deno_telemetry = "0.66.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.208.0"
-deno_kv = "0.149.0"
-deno_cron = "0.121.0"
+deno_webgpu = "0.211.0"
+deno_kv = "0.152.0"
+deno_cron = "0.124.0"
 
 # === Node.js Integration ===
-deno_node = "0.179.0"
-deno_node_crypto = "0.11.0"
-deno_node_sqlite = "0.11.0"
-deno_resolver = "0.72.0"
-node_resolver = "0.79.0"
+deno_node = "0.182.0"
+deno_node_crypto = "0.14.0"
+deno_node_sqlite = "0.14.0"
+deno_resolver = "0.75.0"
+node_resolver = "0.82.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.228.0"
-deno_napi = "0.172.0"
+deno_ffi = "0.231.0"
+deno_napi = "0.175.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -156,8 +156,8 @@ image = { version = "0.25.10", default-features = false, features = [
 webp = "0.3.1"
 
 # Layout and text rendering
-taffy = "0.9.2"
-parley = "0.7.0"
+taffy = "0.10.0"
+parley = "0.8.0"
 swash = "0.2.6"
 zeno = "0.3.3"
 wuff = "0.2.3"
@@ -170,13 +170,13 @@ hyper-util = { version = "0.1.20", features = [
 ] }
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
-sys_traits = "=0.1.25"
+sys_traits = "=0.1.27"
 sysinfo = "0.38.0"
 
 # === Development Tools ===
 rustyline = "=17.0.0"
 deno_ast = { version = "=0.53.1", features = [ "transpiling" ] }
-deno_package_json = { version = "0.43.0", default-features = false }
+deno_package_json = { version = "0.46.0", default-features = false }
 deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
@@ -203,10 +203,8 @@ rustls = { version = "=0.23.28", default-features = false, features = [
   "std",
   "aws_lc_rs",
 ] }
-hmac = "0.12.1"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 hex = "0.4.3"
-rand = "0.10.0"
 
 [dev-dependencies]
 tracing-test = "0.2.6"

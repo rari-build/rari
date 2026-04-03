@@ -1,6 +1,11 @@
 if (!globalThis.renderToRsc) {
-  globalThis.renderToRsc = async function (element, clientComponents = {}) {
-    if (!element)
+  if (!globalThis['~rsc'])
+    globalThis['~rsc'] = {}
+  if (typeof globalThis['~rsc'].keyCounter === 'undefined')
+    globalThis['~rsc'].keyCounter = 0
+
+  globalThis.renderToRsc = async function (element, clientComponents = {}, currentBoundaryId = null) {
+    if (element == null || element === false)
       return null
 
     if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
@@ -9,7 +14,7 @@ if (!globalThis.renderToRsc) {
     if (Array.isArray(element)) {
       const results = []
       for (const child of element)
-        results.push(await globalThis.renderToRsc(child, clientComponents))
+        results.push(await globalThis.renderToRsc(child, clientComponents, currentBoundaryId))
 
       return results
     }
@@ -31,7 +36,7 @@ if (!globalThis.renderToRsc) {
           if (Array.isArray(actualChildren)) {
             const results = []
             for (const child of actualChildren)
-              results.push(await globalThis.renderToRsc(child, clientComponents))
+              results.push(await globalThis.renderToRsc(child, clientComponents, currentBoundaryId))
 
             if (results.length === 0)
               return null
@@ -39,35 +44,116 @@ if (!globalThis.renderToRsc) {
             return results.length === 1 ? results[0] : results
           }
 
-          return await globalThis.renderToRsc(actualChildren, clientComponents)
+          return await globalThis.renderToRsc(actualChildren, clientComponents, currentBoundaryId)
         }
 
         if (typeof element.type === 'string') {
           const props = element.props || {}
-          const { children: propsChildren, ...otherProps } = props
+          const {
+            children: propsChildren,
+            fallback: propsFallback,
+            ...otherProps
+          } = props
 
           const actualChildren = element.children ?? propsChildren
 
+          const isSuspense = element.type === 'suspense'
+            || element.type === 'Suspense'
+            || element.type === '$0'
+            || element.type === 'react.suspense'
+
+          const newBoundaryId = isSuspense
+            ? (props['~boundaryId'] || `boundary:${globalThis['~rsc'].keyCounter++}`)
+            : currentBoundaryId
+
+          const serializedType = isSuspense ? 'react.suspense' : element.type
+
           const rscProps = {
             ...otherProps,
+            ...(isSuspense ? { '~boundaryId': newBoundaryId } : {}),
+            fallback: propsFallback === undefined
+              ? undefined
+              : await globalThis.renderToRsc(propsFallback, clientComponents, currentBoundaryId),
             children: actualChildren == null
               ? undefined
-              : await globalThis.renderToRsc(actualChildren, clientComponents),
+              : await globalThis.renderToRsc(actualChildren, clientComponents, newBoundaryId),
           }
+          if (rscProps.fallback === undefined)
+            delete rscProps.fallback
           if (rscProps.children === undefined)
             delete rscProps.children
 
-          return ['$', element.type, uniqueKey, rscProps]
+          return ['$', serializedType, uniqueKey, rscProps]
         }
         else if (typeof element.type === 'function') {
           try {
             const props = element.props || {}
-            let result = element.type(props)
 
-            if (result && typeof result.then === 'function')
-              result = await result
+            if (!globalThis['~suspense'])
+              globalThis['~suspense'] = {}
 
-            return await globalThis.renderToRsc(result, clientComponents)
+            const previousBoundaryId = globalThis['~suspense'].currentBoundaryId ?? null
+            globalThis['~suspense'].currentBoundaryId = currentBoundaryId
+
+            try {
+              const isAsyncFunction = element.type[Symbol.toStringTag] === 'AsyncFunction'
+                || element.type.constructor?.name === 'AsyncFunction'
+                || (typeof element.type.toString === 'function' && element.type.toString().trimStart().startsWith('async '))
+
+              if (isAsyncFunction && currentBoundaryId) {
+                const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+
+                if (!globalThis['~suspense'].pendingPromises)
+                  globalThis['~suspense'].pendingPromises = []
+
+                globalThis['~suspense'].pendingPromises.push({
+                  id: promiseId,
+                  boundaryId: currentBoundaryId,
+                  componentPath: element.type.name || 'anonymous',
+                  componentType: element.type,
+                  componentProps: props,
+                })
+
+                return {
+                  '~rari_lazy': true,
+                  '~rari_promise_id': promiseId,
+                  '~rari_boundary_id': currentBoundaryId,
+                }
+              }
+
+              let result = element.type(props)
+
+              if (result && typeof result.then === 'function' && currentBoundaryId) {
+                const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+
+                if (!globalThis['~suspense'].pendingPromises)
+                  globalThis['~suspense'].pendingPromises = []
+
+                const capturedResult = Promise.resolve(result)
+                capturedResult.catch(() => {})
+                globalThis['~suspense'].pendingPromises.push({
+                  id: promiseId,
+                  boundaryId: currentBoundaryId,
+                  componentPath: element.type.name || 'anonymous',
+                  componentType: () => capturedResult,
+                  componentProps: props,
+                })
+
+                return {
+                  '~rari_lazy': true,
+                  '~rari_promise_id': promiseId,
+                  '~rari_boundary_id': currentBoundaryId,
+                }
+              }
+
+              if (result && typeof result.then === 'function')
+                result = await result
+
+              return await globalThis.renderToRsc(result, clientComponents, currentBoundaryId)
+            }
+            finally {
+              globalThis['~suspense'].currentBoundaryId = previousBoundaryId
+            }
           }
           catch (error) {
             console.error('Error rendering function component:', error)
@@ -101,37 +187,97 @@ if (!globalThis['~suspense']) {
     pendingPromises: [],
     currentBoundaryId: null,
   }
+}
 
-  globalThis['~suspense'].safeSerializeElement = function (element) {
-    if (!element)
-      return null
+globalThis['~suspense'].safeSerializeElement = function (element) {
+  if (element == null)
+    return null
 
-    try {
-      if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
+  try {
+    if (Array.isArray(element)) {
+      if (element[0] === '$')
         return element
 
-      if (element && typeof element === 'object') {
-        return {
-          type: element.type || 'div',
-          props: element.props
-            ? {
-                children: (element.props.children === undefined ? null : element.props.children),
-                ...(element.props.className && { className: element.props.className }),
-              }
-            : { children: null },
-          key: null,
+      return element.map(child => globalThis['~suspense'].safeSerializeElement(child))
+    }
+
+    if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean')
+      return element
+
+    if (element && typeof element === 'object') {
+      const safeProps = {}
+
+      if (element.props) {
+        if (element.props.children !== undefined) {
+          const children = element.props.children
+          if (children === null || children === undefined) {
+            safeProps.children = null
+          }
+          else if (Array.isArray(children)) {
+            safeProps.children = children.map(child => globalThis['~suspense'].safeSerializeElement(child))
+          }
+          else if (typeof children === 'object') {
+            safeProps.children = globalThis['~suspense'].safeSerializeElement(children)
+          }
+          else {
+            safeProps.children = children
+          }
+        }
+        else {
+          safeProps.children = null
+        }
+
+        for (const key in element.props) {
+          if (key === 'children' || key === 'key' || key === 'ref')
+            continue
+
+          const value = element.props[key]
+          if (value === null || value === undefined)
+            continue
+
+          if (
+            key === 'className'
+            || key === 'style'
+            || key === 'href'
+            || key === 'src'
+            || key === 'alt'
+            || key === 'title'
+            || key === 'id'
+            || key === 'type'
+            || key === 'placeholder'
+            || key === 'value'
+            || key === 'disabled'
+            || key === 'checked'
+            || key === 'selected'
+            || key === 'readonly'
+            || key === 'required'
+            || key === 'htmlFor'
+            || key === 'role'
+            || key === 'name'
+            || key === 'tabIndex'
+            || key.startsWith('data-')
+            || key.startsWith('aria-')
+          ) {
+            safeProps[key] = value
+          }
         }
       }
+      else {
+        safeProps.children = null
+      }
 
-      return { type: 'div', props: { children: null }, key: null }
+      return {
+        type: typeof element.type === 'function'
+          ? (element.type.name || 'div')
+          : (element.type || 'div'),
+        props: safeProps,
+        key: null,
+      }
     }
-    catch {
-      return { type: 'div', props: { children: null }, key: null }
-    }
+
+    return { type: 'div', props: { children: null }, key: null }
   }
-}
-else {
-  globalThis['~suspense'].discoveredBoundaries = []
-  globalThis['~suspense'].pendingPromises = []
-  globalThis['~suspense'].currentBoundaryId = null
+  catch {
+    return { type: 'div', props: { children: null }, key: null }
+  }
 }

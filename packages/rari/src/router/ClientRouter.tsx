@@ -336,6 +336,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   const abortControllerRef = useRef<AbortController | null>(null)
   const isMountedRef = useRef(true)
   const currentRouteRef = useRef<string>(normalizePath(initialRoute))
+  const navigationIdCounterRef = useRef<number>(0)
 
   const errorHandlerRef = useRef<NavigationErrorHandler>(
     new NavigationErrorHandler({
@@ -459,7 +460,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         for (const line of lines) {
           if (line.trim()) {
             window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-              detail: { rscRow: line },
+              detail: { rscRow: line, navigationId },
             }))
           }
         }
@@ -469,7 +470,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
       if (buffer.trim()) {
         window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-          detail: { rscRow: buffer },
+          detail: { rscRow: buffer, navigationId },
         }))
       }
 
@@ -628,7 +629,12 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     const abortController = new AbortController()
     abortControllerRef.current = abortController
 
-    const navigationId = navigationState.navigationId + 1
+    navigationIdCounterRef.current += 1
+    const navigationId = navigationIdCounterRef.current
+
+    window.dispatchEvent(new CustomEvent('rari:navigation-start', {
+      detail: { navigationId, targetPath },
+    }))
 
     const navigationPromise = (async () => {
       const fromRoute = currentRouteRef.current

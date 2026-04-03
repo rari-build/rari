@@ -642,7 +642,7 @@ impl ImageOptimizer {
         let format_str = params.f.as_deref().unwrap_or("avif");
         hasher.update(format_str.as_bytes());
 
-        format!("{:x}", hasher.finalize())
+        hex::encode(hasher.finalize())
     }
 
     fn validate_url(&self, url_str: &str) -> Result<(), ImageError> {

@@ -17,6 +17,7 @@ import {
   TSX_EXT_REGEX,
 } from '../shared/regex-constants'
 import { resolveAlias } from './alias-resolver'
+import { hasDefaultExport, hasTopLevelUseClientDirective, hasTopLevelUseServerDirective } from './directive-utils'
 import { resolveIndexFile, resolveWithExtensions } from './file-resolver'
 
 const HTML_IMPORT_REGEX = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g
@@ -34,10 +35,6 @@ const EXPORT_VAR_REGEX = /^export\s+(const|let|var)\s+(\w+)/gm
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
-
-function pathToFileUrl(filePath: string): string {
-  return pathToFileURL(filePath).href
-}
 
 interface ServerComponentManifest {
   components: Record<
@@ -183,7 +180,7 @@ export class ServerComponentBuilder {
     return this.htmlOnlyImports.has(filePath)
   }
 
-  isServerComponent(filePath: string): boolean {
+  isServerComponent(filePath: string, source?: string): boolean {
     if (filePath.includes('node_modules'))
       return false
 
@@ -191,68 +188,24 @@ export class ServerComponentBuilder {
       return false
 
     try {
-      if (!fs.existsSync(filePath))
+      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
+      if (code === null)
         return false
 
-      const code = fs.readFileSync(filePath, 'utf-8')
-
-      const lines = code.split('\n')
-      let hasClientDirective = false
-      let hasServerDirective = false
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-          continue
-        if (
-          trimmed === '\'use client\''
-          || trimmed === '"use client"'
-          || trimmed === '\'use client\';'
-          || trimmed === '"use client";'
-        ) {
-          hasClientDirective = true
-          break
-        }
-        if (
-          trimmed === '\'use server\''
-          || trimmed === '"use server"'
-          || trimmed === '\'use server\';'
-          || trimmed === '"use server";'
-        ) {
-          hasServerDirective = true
-          break
-        }
-        if (trimmed)
-          break
-      }
-
-      return !hasClientDirective && !hasServerDirective
+      return !hasTopLevelUseClientDirective(code) && !hasTopLevelUseServerDirective(code)
     }
     catch {
       return false
     }
   }
 
-  private isClientComponent(filePath: string): boolean {
+  private isClientComponent(filePath: string, source?: string): boolean {
     try {
-      if (!fs.existsSync(filePath))
+      const code = source ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null)
+      if (code === null)
         return false
-      const code = fs.readFileSync(filePath, 'utf-8')
 
-      const clientDirectives = [
-        '\'use client\'',
-        '"use client"',
-        '/* @client */',
-        '// @client',
-      ]
-
-      const trimmedCode = code.trim()
-
-      const hasClientDirective = clientDirectives.some(
-        directive =>
-          trimmedCode.startsWith(directive) || code.includes(directive),
-      )
-
-      return hasClientDirective
+      return hasTopLevelUseClientDirective(code)
     }
     catch {
       return false
@@ -347,8 +300,8 @@ export class ServerComponentBuilder {
     return true
   }
 
-  addServerComponent(filePath: string) {
-    const code = fs.readFileSync(filePath, 'utf-8')
+  addServerComponent(filePath: string, source?: string) {
+    const code = source ?? fs.readFileSync(filePath, 'utf-8')
 
     if (this.isServerAction(code)) {
       const dependencies = this.extractDependencies(code)
@@ -363,7 +316,7 @@ export class ServerComponentBuilder {
       return
     }
 
-    if (!this.isServerComponent(filePath))
+    if (!this.isServerComponent(filePath, code))
       return
 
     const dependencies = this.extractDependencies(code)
@@ -378,25 +331,7 @@ export class ServerComponentBuilder {
   }
 
   private isServerAction(code: string): boolean {
-    const lines = code.split('\n')
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-        continue
-      if (
-        trimmed === '\'use server\''
-        || trimmed === '"use server"'
-        || trimmed === '\'use server\';'
-        || trimmed === '"use server";'
-      ) {
-        return true
-      }
-
-      if (trimmed)
-        break
-    }
-
-    return false
+    return hasTopLevelUseServerDirective(code)
   }
 
   private extractDependencies(code: string): string[] {
@@ -643,7 +578,7 @@ const ${importName} = (props) => {
     const self = this
 
     const clientComponentRefs = new Map<string, string>()
-    const serverActionRefs = new Map<string, string>()
+    const serverActionRefs = new Map<string, { actionId: string, hasDefaultExport: boolean }>()
 
     return [
       {
@@ -723,24 +658,12 @@ const ${importName} = (props) => {
 
                 try {
                   const content = fs.readFileSync(pathWithExt, 'utf-8')
-                  const lines = content.split('\n')
-                  for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-                      continue
-                    if (
-                      trimmed === '\'use server\''
-                      || trimmed === '"use server"'
-                      || trimmed === '\'use server\';'
-                      || trimmed === '"use server";'
-                    ) {
-                      const relActionPath = path.relative(self.projectRoot, pathWithExt)
-                      const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
-                      serverActionRefs.set(pathWithExt, actionId)
-                      return { id: `\0server-action:${pathWithExt}` }
-                    }
-                    if (trimmed)
-                      break
+                  if (hasTopLevelUseServerDirective(content)) {
+                    const relActionPath = path.relative(self.projectRoot, pathWithExt)
+                    const actionId = relActionPath.startsWith('..') ? pathWithExt : relActionPath
+                    const hasDefault = hasDefaultExport(content)
+                    serverActionRefs.set(pathWithExt, { actionId, hasDefaultExport: hasDefault })
+                    return { id: `\0server-action:${pathWithExt}` }
                   }
                 }
                 catch (error) {
@@ -802,10 +725,17 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
             const builtPath = path.join(self.options.outDir, self.options.rscDir, srcRelativePath.replace(TS_JS_EXTENSION_REGEX, '.js'))
             const absoluteBuiltPath = path.resolve(self.projectRoot, builtPath)
 
-            const builtFileUrl = pathToFileUrl(absoluteBuiltPath)
+            const builtFileUrl = pathToFileURL(absoluteBuiltPath).href
+
+            const actionInfo = serverActionRefs.get(filePath)
+            const hasDefault = actionInfo?.hasDefaultExport ?? false
+
+            const exportStatement = hasDefault
+              ? `export * from ${JSON.stringify(builtFileUrl)};\nexport { default } from ${JSON.stringify(builtFileUrl)};`
+              : `export * from ${JSON.stringify(builtFileUrl)};`
 
             return {
-              code: `export * from ${JSON.stringify(builtFileUrl)};`,
+              code: exportStatement,
               moduleType: 'js',
             }
           }
@@ -1063,7 +993,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
       const absoluteOutputPath = path.resolve(this.projectRoot, outputPath)
 
       if (!importMapImports[alias])
-        importMapImports[`${alias}/`] = `${pathToFileUrl(absoluteOutputPath)}/`
+        importMapImports[`${alias}/`] = `${pathToFileURL(absoluteOutputPath).href}/`
     }
 
     const manifest: ServerComponentManifest = {
@@ -1089,7 +1019,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1116,7 +1046,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[componentId] = {
         id: componentId,
@@ -1140,7 +1070,7 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
       await this.buildSingleComponent(filePath, fullBundlePath)
 
-      const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+      const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
       manifest.components[actionId] = {
         id: actionId,
@@ -1704,7 +1634,7 @@ function registerClientReference(clientReference, id, exportName) {
 
     const componentData = this.serverComponents.get(filePath) || this.serverActions.get(filePath)
     const fullBundlePath = path.join(this.options.outDir, bundlePath)
-    const moduleSpecifier = pathToFileUrl(path.resolve(this.projectRoot, fullBundlePath))
+    const moduleSpecifier = pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href
 
     if (!componentData) {
       const code = await fs.promises.readFile(filePath, 'utf-8')
@@ -1781,36 +1711,19 @@ export function scanDirectory(dir: string, builder: ServerComponentBuilder, isTo
       if (entry.name.endsWith('.d.ts'))
         continue
 
-      if (builder.isOnlyImportedByClientComponents(fullPath))
-        continue
-
       try {
-        if (builder.isServerComponent(fullPath)) {
-          builder.addServerComponent(fullPath)
+        const code = fs.readFileSync(fullPath, 'utf-8')
+
+        if (hasTopLevelUseServerDirective(code)) {
+          builder.addServerComponent(fullPath, code)
+          continue
         }
-        else {
-          const code = fs.readFileSync(fullPath, 'utf-8')
-          const lines = code.split('\n')
-          let hasServerDirective = false
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (trimmed.startsWith('//') || trimmed.startsWith('/*') || !trimmed)
-              continue
-            if (
-              trimmed === '\'use server\''
-              || trimmed === '"use server"'
-              || trimmed === '\'use server\';'
-              || trimmed === '"use server";'
-            ) {
-              hasServerDirective = true
-              break
-            }
-            if (trimmed)
-              break
-          }
-          if (hasServerDirective)
-            builder.addServerComponent(fullPath)
-        }
+
+        if (builder.isOnlyImportedByClientComponents(fullPath))
+          continue
+
+        if (builder.isServerComponent(fullPath, code))
+          builder.addServerComponent(fullPath, code)
       }
       catch (error) {
         console.warn(
@@ -1924,7 +1837,7 @@ export function createServerBuildPlugin(
 
       try {
         const content = await fs.promises.readFile(file, 'utf-8')
-        if (content.includes('use client'))
+        if (hasTopLevelUseClientDirective(content))
           return
 
         await builder.buildServerComponents()

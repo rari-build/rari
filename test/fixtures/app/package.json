@@ -20,6 +20,6 @@
     "@types/react-dom": "catalog:react",
     "@typescript/native-preview": "catalog:typescript",
     "tailwindcss": "catalog:tailwind",
-    "vite-plus": "catalog:build"
+    "vite": "catalog:build"
   }
 }

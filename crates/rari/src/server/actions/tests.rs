@@ -805,4 +805,228 @@ mod tests {
         assert_eq!(dev_config.max_array_length, 5_000);
         assert_eq!(dev_config.max_string_length, 50_000);
     }
+
+    use crate::server::middleware::request_context::PendingCookie;
+
+    #[test]
+    fn test_cookie_value_rejects_double_quote() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value\"with\"quotes".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_err(), "Cookie value with double-quote should be rejected");
+    }
+
+    #[test]
+    fn test_cookie_value_rejects_backslash() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value\\with\\backslash".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_err(), "Cookie value with backslash should be rejected");
+    }
+
+    #[test]
+    fn test_cookie_value_rejects_space() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value with spaces".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_err(), "Cookie value with space should be rejected");
+    }
+
+    #[test]
+    fn test_cookie_value_accepts_valid_characters() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "abc123-_~!#$%&'()*+./:<=>?@[]^`{|}".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_ok(), "Cookie value with valid RFC 6265 characters should be accepted");
+    }
+
+    #[test]
+    fn test_cookie_value_rejects_control_characters() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value\x00with\x1Fcontrol".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_err(), "Cookie value with control characters should be rejected");
+    }
+
+    #[test]
+    fn test_cookie_value_rejects_del_character() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value\x7Fwith_del".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_err(), "Cookie value with DEL character (0x7F) should be rejected");
+    }
+
+    #[test]
+    fn test_cookie_value_accepts_exclamation_mark() {
+        let cookie = PendingCookie {
+            name: "session".to_string(),
+            value: "value!".to_string(),
+            path: Some("/".to_string()),
+            domain: None,
+            max_age: None,
+            expires: None,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            priority: None,
+            partitioned: false,
+        };
+
+        let result = crate::server::actions::build_set_cookie_header(&cookie);
+        assert!(result.is_ok(), "Cookie value with exclamation mark (0x21) should be accepted");
+    }
+
+    #[test]
+    fn test_origin_comparison_with_default_https_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:443".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit default HTTPS port (443) should match server origin without port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_with_default_http_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "http".parse().unwrap());
+        headers.insert("origin", "http://example.com:80".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit default HTTP port (80) should match server origin without port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_with_explicit_port_in_host() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com:8080".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:8080".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Origin with explicit non-default port should match server origin with same port"
+        );
+    }
+
+    #[test]
+    fn test_origin_comparison_port_mismatch() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com:8080".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("origin", "https://example.com:9090".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(result.is_err(), "Origin with different port should not match");
+    }
+
+    #[test]
+    fn test_referer_comparison_with_default_port() {
+        use crate::server::actions::check_origin;
+        use axum::http::HeaderMap;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert("referer", "https://example.com:443/some/path".parse().unwrap());
+
+        let result = check_origin(&headers, &[]);
+        assert!(
+            result.is_ok(),
+            "Referer with explicit default HTTPS port (443) should match server origin without port"
+        );
+    }
 }

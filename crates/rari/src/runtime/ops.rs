@@ -209,7 +209,14 @@ pub fn create_error_operation(
 }
 
 pub fn get_streaming_ops() -> Vec<OpDecl> {
-    vec![op_send_chunk_to_rust(), op_internal_log(), op_sanitize_html()]
+    vec![
+        op_send_chunk_to_rust(),
+        op_internal_log(),
+        op_sanitize_html(),
+        op_get_cookies(),
+        op_set_cookie(),
+        op_delete_cookie(),
+    ]
 }
 
 #[op2(fast)]
@@ -365,6 +372,199 @@ async fn perform_simple_fetch(
     let body = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
 
     Ok((status, body, headers_obj))
+}
+
+#[op2]
+#[string]
+pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
+    let op_state_ref = state.borrow();
+    let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    else {
+        return String::new();
+    };
+
+    let mut cookies: std::collections::BTreeMap<String, String> = ctx
+        .cookie_header
+        .as_deref()
+        .unwrap_or("")
+        .split(';')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let name = parts.next()?.trim().to_string();
+            let value = parts.next().unwrap_or("").trim().to_string();
+            if name.is_empty() { None } else { Some((name, value)) }
+        })
+        .collect();
+
+    let mut pending: Vec<_> =
+        ctx.pending_cookies.iter().map(|e| (e.key().clone(), e.value().clone())).collect();
+    pending.sort_by(|(a_key, a_cookie), (b_key, b_cookie)| {
+        let a_is_delete = a_cookie.max_age == Some(0);
+        let b_is_delete = b_cookie.max_age == Some(0);
+        match (a_is_delete, b_is_delete) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => {
+                let a_path_len = a_key.path.as_deref().unwrap_or("").len();
+                let b_path_len = b_key.path.as_deref().unwrap_or("").len();
+                a_path_len
+                    .cmp(&b_path_len)
+                    .then_with(|| a_key.name.cmp(&b_key.name))
+                    .then_with(|| a_key.domain.cmp(&b_key.domain))
+            }
+        }
+    });
+
+    for (key, cookie) in &pending {
+        if cookie.max_age == Some(0) {
+            cookies.remove(&key.name);
+        } else {
+            cookies.insert(key.name.clone(), cookie.value.clone());
+        }
+    }
+
+    cookies.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("; ")
+}
+
+#[derive(serde::Deserialize)]
+pub struct SetCookieArgs {
+    name: String,
+    value: String,
+    path: Option<String>,
+    domain: Option<String>,
+    expires: Option<String>,
+    #[serde(rename = "maxAge")]
+    max_age: Option<i64>,
+    #[serde(rename = "httpOnly", default)]
+    http_only: bool,
+    #[serde(default)]
+    secure: bool,
+    #[serde(rename = "sameSite")]
+    same_site: Option<String>,
+    priority: Option<String>,
+    #[serde(default)]
+    partitioned: bool,
+}
+
+#[op2]
+#[serde]
+pub fn op_set_cookie(
+    state: Rc<RefCell<OpState>>,
+    #[serde] args: SetCookieArgs,
+) -> Result<(), JsErrorBox> {
+    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
+
+    if !crate::server::actions::is_valid_cookie_name(&args.name) {
+        return Err(JsErrorBox::type_error(format!("Invalid cookie name: '{}'", args.name)));
+    }
+
+    if !crate::server::actions::is_valid_cookie_value(&args.value) {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie value for '{}': contains invalid characters",
+            args.name
+        )));
+    }
+
+    if let Some(ref path) = args.path
+        && !crate::server::actions::is_valid_attr_value(path)
+    {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie path for '{}': '{}'",
+            args.name, path
+        )));
+    }
+
+    if let Some(ref domain) = args.domain
+        && !crate::server::actions::is_valid_attr_value(domain)
+    {
+        return Err(JsErrorBox::type_error(format!(
+            "Invalid cookie domain for '{}': '{}'",
+            args.name, domain
+        )));
+    }
+
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    {
+        let path = args.path.or_else(|| Some("/".to_string()));
+        ctx.pending_cookies.insert(
+            PendingCookieKey::new(&args.name, path.as_deref(), args.domain.as_deref()),
+            PendingCookie {
+                name: args.name,
+                value: args.value,
+                path,
+                domain: args.domain,
+                expires: args.expires,
+                max_age: args.max_age,
+                http_only: args.http_only,
+                secure: args.secure,
+                same_site: args.same_site,
+                priority: args.priority,
+                partitioned: args.partitioned,
+            },
+        );
+    }
+
+    Ok(())
+}
+
+#[op2(fast)]
+pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
+    use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    {
+        let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
+            .pending_cookies
+            .iter()
+            .filter(|entry| entry.key().name == name)
+            .map(|entry| (entry.key().path.clone(), entry.key().domain.clone()))
+            .collect();
+
+        ctx.pending_cookies.retain(|k, _| k.name != name);
+
+        if cookies_to_delete.is_empty() {
+            ctx.pending_cookies.insert(
+                PendingCookieKey::new(&name, Some("/"), None),
+                PendingCookie {
+                    name,
+                    value: String::new(),
+                    path: Some("/".to_string()),
+                    domain: None,
+                    expires: None,
+                    max_age: Some(0),
+                    http_only: false,
+                    secure: false,
+                    same_site: None,
+                    priority: None,
+                    partitioned: false,
+                },
+            );
+        } else {
+            for (path, domain) in cookies_to_delete {
+                let deletion_path = path.clone().unwrap_or_else(|| "/".to_string());
+                ctx.pending_cookies.insert(
+                    PendingCookieKey::new(&name, Some(&deletion_path), domain.as_deref()),
+                    PendingCookie {
+                        name: name.clone(),
+                        value: String::new(),
+                        path: Some(deletion_path),
+                        domain,
+                        expires: None,
+                        max_age: Some(0),
+                        http_only: false,
+                        secure: false,
+                        same_site: None,
+                        priority: None,
+                        partitioned: false,
+                    },
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]

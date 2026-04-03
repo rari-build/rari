@@ -23,29 +23,132 @@ export async function createFromReadableStream(stream: ReadableStream<Uint8Array
   const { moduleMap = {} } = options
 
   const reader = stream.getReader()
-  const chunks = []
+  const decoder = new TextDecoder()
+
+  const modules = new Map<string, ModuleData>()
+  const chunks = new Map<string, any>()
+  const symbols = new Map<string, string>()
+
+  let buffer = ''
+  let rootChunkId: string | null = null
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done)
+
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line.trim()) {
+          const parsed = processStreamRow(line, modules, chunks, symbols)
+
+          if (rootChunkId === null && parsed) {
+            const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
+            if (shouldSetRoot) {
+              rootChunkId = parsed.key
+            }
+          }
+        }
+      }
+    }
+
+    if (done) {
+      buffer += decoder.decode()
+      if (buffer.trim()) {
+        const parsed = processStreamRow(buffer, modules, chunks, symbols)
+
+        if (rootChunkId === null && parsed) {
+          const shouldSetRoot = !parsed.isModuleImport && !parsed.isSymbol && chunks.has(parsed.key)
+          if (shouldSetRoot) {
+            rootChunkId = parsed.key
+          }
+        }
+      }
       break
-    chunks.push(value)
+    }
   }
 
-  const combined = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
-  let offset = 0
-  for (const chunk of chunks) {
-    combined.set(chunk, offset)
-    offset += chunk.length
+  await preloadComponentsFromModules(modules)
+
+  const rootElement = rootChunkId ? chunks.get(rootChunkId) : null
+
+  return rscToReact(rootElement, modules, moduleMap, symbols, chunks)
+}
+
+const TAG_MODULE_IMPORT = 73
+const TAG_ERROR = 69
+const TAG_TEXT = 84
+const TAG_HINT = 72
+const TAG_DEBUG = 68
+const TAG_CONSOLE = 87
+const TAG_STREAM_CLOSE = 67
+
+interface ParsedRow {
+  rowId: number
+  key: string
+  tag: number
+  content: string
+  isModuleImport: boolean
+  isSymbol: boolean
+  shouldSetRoot: boolean
+}
+
+function parseRowAndSelectRoot(
+  line: string,
+  chunks: Map<string, any>,
+): ParsedRow | null {
+  const colonIndex = line.indexOf(':')
+  if (colonIndex === -1)
+    return null
+
+  const rowIdStr = line.slice(0, colonIndex)
+  let content = line.slice(colonIndex + 1)
+
+  const rowId = Number.parseInt(rowIdStr, 10)
+  const key = rowId.toString()
+
+  let tag = 0
+  if (content.length > 0) {
+    const firstChar = content.charCodeAt(0)
+    if (
+      firstChar === TAG_MODULE_IMPORT
+      || firstChar === TAG_ERROR
+      || firstChar === TAG_TEXT
+      || firstChar === TAG_HINT
+      || firstChar === TAG_DEBUG
+      || firstChar === TAG_CONSOLE
+      || firstChar === TAG_STREAM_CLOSE
+    ) {
+      tag = firstChar
+      content = content.slice(1)
+    }
   }
 
-  const text = new TextDecoder().decode(combined)
+  const isModuleImport = tag === TAG_MODULE_IMPORT || content.startsWith('I[')
+  const isSymbol = content.startsWith('"$S') && content.endsWith('"')
+  const shouldSetRoot = !isModuleImport && !isSymbol && chunks.has(key)
 
-  const parsed = parseWireFormat(text)
+  return {
+    rowId,
+    key,
+    tag,
+    content,
+    isModuleImport,
+    isSymbol,
+    shouldSetRoot,
+  }
+}
 
-  await preloadComponentsFromModules(parsed.modules)
+function processStreamRow(line: string, modules: Map<string, ModuleData>, chunks: Map<string, any>, symbols: Map<string, string>): ParsedRow | null {
+  const parsed = parseRowAndSelectRoot(line, chunks)
+  if (!parsed)
+    return null
 
-  return rscToReact(parsed.rootElement, parsed.modules, moduleMap, parsed.symbols, parsed.chunks)
+  processRow(parsed.rowId, parsed.tag, parsed.content, modules, chunks, symbols)
+  return parsed
 }
 
 export async function createFromFetch(fetchPromise: Promise<Response>, options: CreateFromStreamOptions = {}): Promise<any> {
@@ -62,14 +165,6 @@ export async function createFromFetch(fetchPromise: Promise<Response>, options: 
 const ROW_ID = 0
 const ROW_TAG = 1
 const ROW_CHUNK_BY_NEWLINE = 2
-
-const TAG_MODULE_IMPORT = 73 // 'I'
-const TAG_ERROR = 69 // 'E'
-const TAG_TEXT = 84 // 'T'
-const TAG_HINT = 72 // 'H'
-const TAG_DEBUG = 68 // 'D'
-const TAG_CONSOLE = 87 // 'W'
-const TAG_STREAM_CLOSE = 67 // 'C'
 
 function parseWireFormat(wireFormat: string): ParsedWireFormat {
   const modules = new Map<string, ModuleData>()
@@ -95,11 +190,7 @@ function parseWireFormat(wireFormat: string): ParsedWireFormat {
         }
         else {
           if (charCode >= 48 && charCode <= 57)
-            rowID = (rowID << 4) | (charCode - 48)
-          else if (charCode >= 97 && charCode <= 102)
-            rowID = (rowID << 4) | (charCode - 87)
-          else if (charCode >= 65 && charCode <= 70)
-            rowID = (rowID << 4) | (charCode - 55)
+            rowID = (rowID * 10) + (charCode - 48)
           i++
         }
         break
@@ -130,10 +221,11 @@ function parseWireFormat(wireFormat: string): ParsedWireFormat {
         if (char === '\n') {
           processRow(rowID, rowTag, currentRow, modules, chunks, symbols)
 
-          if (rootChunkId === null && rowTag !== TAG_MODULE_IMPORT && currentRow.trim()) {
-            const isSymbol = currentRow.startsWith('"$S') && currentRow.endsWith('"')
-            if (!isSymbol && chunks.has(rowID.toString()))
-              rootChunkId = rowID.toString()
+          if (rootChunkId === null) {
+            const fullRow = `${rowID}:${rowTag ? String.fromCharCode(rowTag) : ''}${currentRow}`
+            const parsed = parseRowAndSelectRoot(fullRow, chunks)
+            if (parsed?.shouldSetRoot)
+              rootChunkId = parsed.key
           }
 
           rowState = ROW_ID
@@ -406,12 +498,4 @@ function processProps(props: any, wireModules: Map<string, ModuleData>, moduleMa
   }
 
   return processed
-}
-
-export function encodeReply(value: any): string {
-  return JSON.stringify(value)
-}
-
-export function decodeReply(text: string): any {
-  return JSON.parse(text)
 }

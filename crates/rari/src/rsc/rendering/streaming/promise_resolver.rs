@@ -1,5 +1,5 @@
 use cow_utils::CowUtils;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::error;
@@ -9,7 +9,7 @@ use crate::runtime::JsExecutionRuntime;
 use super::constants::PROMISE_RESOLUTION_SCRIPT;
 use super::types::{BoundaryError, BoundaryUpdate, PendingSuspensePromise, RscWireFormatTag};
 
-fn process_client_components(
+pub(super) fn process_client_components(
     content: &mut serde_json::Value,
     row_counter: &mut u32,
 ) -> Vec<String> {
@@ -102,6 +102,7 @@ pub struct BackgroundPromiseResolver {
     update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
     error_sender: mpsc::UnboundedSender<BoundaryError>,
     shared_row_counter: Arc<Mutex<u32>>,
+    promise_to_row: Arc<Mutex<FxHashMap<String, u32>>>,
 }
 
 impl BackgroundPromiseResolver {
@@ -110,6 +111,7 @@ impl BackgroundPromiseResolver {
         update_sender: mpsc::UnboundedSender<BoundaryUpdate>,
         error_sender: mpsc::UnboundedSender<BoundaryError>,
         shared_row_counter: Arc<Mutex<u32>>,
+        promise_to_row: Arc<Mutex<FxHashMap<String, u32>>>,
     ) -> Self {
         Self {
             runtime,
@@ -117,16 +119,17 @@ impl BackgroundPromiseResolver {
             update_sender,
             error_sender,
             shared_row_counter,
+            promise_to_row,
         }
     }
 
-    pub async fn resolve_async(&self, promise: PendingSuspensePromise) {
-        let promise_id = promise.id.clone();
-        let boundary_id = promise.boundary_id.clone();
+    pub fn resolve_async(&self, promise: PendingSuspensePromise) {
+        self.resolve_all(vec![promise]);
+    }
 
-        {
-            let mut active = self.active_promises.lock().await;
-            active.insert(promise_id.clone(), promise.clone());
+    pub fn resolve_all(&self, promises: Vec<PendingSuspensePromise>) {
+        if promises.is_empty() {
+            return;
         }
 
         let runtime = Arc::clone(&self.runtime);
@@ -134,80 +137,171 @@ impl BackgroundPromiseResolver {
         let error_sender = self.error_sender.clone();
         let shared_row_counter = Arc::clone(&self.shared_row_counter);
         let active_promises = Arc::clone(&self.active_promises);
+        let promise_to_row_map = Arc::clone(&self.promise_to_row);
 
         tokio::spawn(async move {
-            let resolution_script = PROMISE_RESOLUTION_SCRIPT
-                .cow_replace("{promise_id}", &promise_id)
-                .cow_replace("{boundary_id}", &boundary_id)
-                .cow_replace("{component_path}", &promise.component_path)
-                .into_owned();
+            {
+                let mut active = active_promises.lock().await;
+                for p in &promises {
+                    active.insert(p.id.clone(), p.clone());
+                }
+            }
 
-            let script_name = format!("<promise_resolution_{promise_id}>");
+            let scripts: Vec<(String, String)> = promises
+                .iter()
+                .map(|p| {
+                    let script = PROMISE_RESOLUTION_SCRIPT
+                        .cow_replace("{promise_id}", &p.id)
+                        .cow_replace("{boundary_id}", &p.boundary_id)
+                        .cow_replace("{component_path}", &p.component_path)
+                        .into_owned();
+                    (format!("<promise_resolution_{}>", p.id), script)
+                })
+                .collect();
 
-            match runtime.execute_script(script_name.clone(), resolution_script).await {
-                Ok(result) => {
-                    let result_string = result.to_string();
+            let mut result_rx = runtime.execute_script_batch(scripts).await;
+            let n = promises.len();
+            let mut received = 0;
+            let mut received_indices = FxHashSet::default();
 
-                    match serde_json::from_str::<serde_json::Value>(&result_string) {
-                        Ok(result_data) => {
-                            if result_data["success"].as_bool().unwrap_or(false) {
-                                let mut content = result_data["content"].clone();
+            while received < n {
+                match result_rx.recv().await {
+                    Some((idx, result)) => {
+                        if idx >= promises.len() || !received_indices.insert(idx) {
+                            error!("Ignoring invalid or duplicate batch result index {}", idx);
+                            continue;
+                        }
+                        received += 1;
+                        let promise = &promises[idx];
+                        let promise_id = &promise.id;
+                        let boundary_id = &promise.boundary_id;
 
-                                let (row_id, import_rows) = {
-                                    let mut counter = shared_row_counter.lock().await;
-                                    let import_rows =
-                                        process_client_components(&mut content, &mut counter);
-                                    *counter += 1;
-                                    (*counter, import_rows)
-                                };
-
-                                let update = BoundaryUpdate {
-                                    boundary_id: boundary_id.clone(),
-                                    content,
-                                    row_id,
-                                    dom_path: Vec::new(),
-                                    import_rows,
-                                };
-
-                                if let Err(e) = update_sender.send(update) {
-                                    error!(
-                                        "Failed to send boundary update for {}: {}",
-                                        boundary_id, e
-                                    );
+                        match result {
+                            Ok(result_val) => {
+                                let result_string = result_val.to_string();
+                                match serde_json::from_str::<serde_json::Value>(&result_string) {
+                                    Ok(result_data) => {
+                                        if result_data["success"].as_bool().unwrap_or(false) {
+                                            let mut content = result_data["content"].clone();
+                                            let row_id = {
+                                                let maybe_row = {
+                                                    let map = promise_to_row_map.lock().await;
+                                                    map.get(promise_id).copied()
+                                                };
+                                                if let Some(id) = maybe_row {
+                                                    id
+                                                } else {
+                                                    let mut counter =
+                                                        shared_row_counter.lock().await;
+                                                    *counter += 1;
+                                                    *counter
+                                                }
+                                            };
+                                            let import_rows = {
+                                                let mut counter = shared_row_counter.lock().await;
+                                                process_client_components(
+                                                    &mut content,
+                                                    &mut counter,
+                                                )
+                                            };
+                                            let update = BoundaryUpdate {
+                                                boundary_id: boundary_id.clone(),
+                                                content,
+                                                row_id,
+                                                dom_path: Vec::new(),
+                                                import_rows,
+                                            };
+                                            if let Err(e) = update_sender.send(update) {
+                                                error!(
+                                                    "Failed to send boundary update for {}: {}",
+                                                    boundary_id, e
+                                                );
+                                            }
+                                        } else {
+                                            let error_message = result_data["error"]
+                                                .as_str()
+                                                .unwrap_or("Unknown error");
+                                            let error_name = result_data["errorName"]
+                                                .as_str()
+                                                .unwrap_or("UnknownError");
+                                            let error_stack = result_data["errorStack"]
+                                                .as_str()
+                                                .unwrap_or("No stack trace");
+                                            let error_context = &result_data["errorContext"];
+                                            error!(
+                                                "Promise resolution failed for boundary {}: {} (Name: {}, Phase: {}, Component: {}, Promise: {}, Stack: {})",
+                                                boundary_id,
+                                                error_message,
+                                                error_name,
+                                                error_context["phase"]
+                                                    .as_str()
+                                                    .unwrap_or("unknown"),
+                                                error_context["componentPath"]
+                                                    .as_str()
+                                                    .unwrap_or("unknown"),
+                                                error_context["promiseId"]
+                                                    .as_str()
+                                                    .unwrap_or("unknown"),
+                                                error_stack
+                                            );
+                                            let row_id = {
+                                                let mut counter = shared_row_counter.lock().await;
+                                                *counter += 1;
+                                                *counter
+                                            };
+                                            if let Err(e) = error_sender.send(BoundaryError {
+                                                boundary_id: boundary_id.clone(),
+                                                error_message: error_message.to_string(),
+                                                row_id,
+                                            }) {
+                                                error!(
+                                                    "Failed to send boundary error for {}: {}",
+                                                    boundary_id, e
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to parse promise resolution result for {}: {} - Raw: {}",
+                                            boundary_id, e, result_string
+                                        );
+                                        let row_id = {
+                                            let mut counter = shared_row_counter.lock().await;
+                                            *counter += 1;
+                                            *counter
+                                        };
+                                        if let Err(e) = error_sender.send(BoundaryError {
+                                            boundary_id: boundary_id.clone(),
+                                            error_message: format!(
+                                                "Failed to parse promise result: {}",
+                                                e
+                                            ),
+                                            row_id,
+                                        }) {
+                                            error!(
+                                                "Failed to send boundary error for {}: {}",
+                                                boundary_id, e
+                                            );
+                                        }
+                                    }
                                 }
-                            } else {
-                                let error_message =
-                                    result_data["error"].as_str().unwrap_or("Unknown error");
-                                let error_name =
-                                    result_data["errorName"].as_str().unwrap_or("UnknownError");
-                                let error_stack =
-                                    result_data["errorStack"].as_str().unwrap_or("No stack trace");
-                                let error_context = &result_data["errorContext"];
-
+                            }
+                            Err(e) => {
                                 error!(
-                                    "Promise resolution failed for boundary {}: {} (Name: {}, Phase: {}, Component: {}, Promise: {}, Stack: {})",
-                                    boundary_id,
-                                    error_message,
-                                    error_name,
-                                    error_context["phase"].as_str().unwrap_or("unknown"),
-                                    error_context["componentPath"].as_str().unwrap_or("unknown"),
-                                    error_context["promiseId"].as_str().unwrap_or("unknown"),
-                                    error_stack
+                                    "Failed to execute promise resolution script for boundary {}: {}",
+                                    boundary_id, e
                                 );
-
                                 let row_id = {
                                     let mut counter = shared_row_counter.lock().await;
                                     *counter += 1;
                                     *counter
                                 };
-
-                                let error_update = BoundaryError {
+                                if let Err(e) = error_sender.send(BoundaryError {
                                     boundary_id: boundary_id.clone(),
-                                    error_message: error_message.to_string(),
+                                    error_message: format!("Failed to execute promise: {}", e),
                                     row_id,
-                                };
-
-                                if let Err(e) = error_sender.send(error_update) {
+                                }) {
                                     error!(
                                         "Failed to send boundary error for {}: {}",
                                         boundary_id, e
@@ -215,53 +309,36 @@ impl BackgroundPromiseResolver {
                                 }
                             }
                         }
-                        Err(e) => {
+                    }
+                    None => break,
+                }
+            }
+
+            if received < n {
+                let mut counter = shared_row_counter.lock().await;
+                for (idx, promise) in promises.iter().enumerate() {
+                    if !received_indices.contains(&idx) {
+                        *counter += 1;
+                        if let Err(e) = error_sender.send(BoundaryError {
+                            boundary_id: promise.boundary_id.clone(),
+                            error_message: "Promise channel closed before result arrived"
+                                .to_string(),
+                            row_id: *counter,
+                        }) {
                             error!(
-                                "Failed to parse promise resolution result for {}: {} - Raw result: {} - Script: {}",
-                                boundary_id, e, result_string, script_name
+                                "Failed to send boundary error for {}: {}",
+                                promise.boundary_id, e
                             );
-
-                            let row_id = {
-                                let mut counter = shared_row_counter.lock().await;
-                                *counter += 1;
-                                *counter
-                            };
-
-                            let error_update = BoundaryError {
-                                boundary_id: boundary_id.clone(),
-                                error_message: format!("Failed to parse promise result: {}", e),
-                                row_id,
-                            };
-
-                            let _ = error_sender.send(error_update);
                         }
                     }
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to execute promise resolution script {} for boundary {}: {}",
-                        script_name, boundary_id, e
-                    );
-
-                    let row_id = {
-                        let mut counter = shared_row_counter.lock().await;
-                        *counter += 1;
-                        *counter
-                    };
-
-                    let error_update = BoundaryError {
-                        boundary_id: boundary_id.clone(),
-                        error_message: format!("Failed to execute promise: {}", e),
-                        row_id,
-                    };
-
-                    let _ = error_sender.send(error_update);
                 }
             }
 
             {
                 let mut active = active_promises.lock().await;
-                active.remove(&promise_id);
+                for p in &promises {
+                    active.remove(&p.id);
+                }
             }
         });
     }

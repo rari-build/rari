@@ -1,16 +1,14 @@
 // oxlint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/await-thenable, @typescript-eslint/no-base-to-string
+/* eslint-disable no-undef, style/object-curly-spacing */
 (async function () {
   try {
     if (!globalThis['~suspense'])
       globalThis['~suspense'] = {}
     globalThis['~suspense'].discoveredBoundaries = []
     globalThis['~suspense'].pendingPromises = []
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
-    globalThis['~render'].deferredAsyncComponents = []
+    globalThis['~suspense'].currentBoundaryId = null
 
-    // eslint-disable-next-line no-undef
-    const compositionResult = await { composition_script }
+    const compositionResult = await {composition_script}
 
     if (!compositionResult)
       throw new Error('Composition script returned null/undefined')
@@ -38,7 +36,6 @@
       pending_promises: pendingPromises,
       has_suspense: (safeBoundaries && safeBoundaries.length > 0)
         || (pendingPromises && pendingPromises.length > 0),
-      metadata: compositionResult.metadata,
       error: null,
       error_stack: null,
     }

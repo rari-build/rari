@@ -394,122 +394,107 @@ impl ApiRouteHandler {
                 route_match.route.path.clone(),
             ));
 
-        self.runtime.set_request_context(request_context).await.map_err(|e| {
-            error!(
-                route_path = %route_match.route.path,
-                method = %route_match.method,
-                error = %e,
-                "Failed to set request context"
-            );
-            RariError::js_execution(format!("Failed to set request context: {e}"))
-        })?;
-
-        let result = async {
-            let dist_path = Self::resolve_dist_path(&route_match.route.file_path)?;
-            let canonical_path = dist_path.canonicalize().map_err(|e| {
-                RariError::io(format!(
-                    "Failed to canonicalize API route path {}: {e}",
-                    dist_path.display()
-                ))
-            })?;
-            let module_specifier = url::Url::from_file_path(&canonical_path)
-                .map_err(|_| {
-                    RariError::configuration(format!(
-                        "Failed to create file URL from path: {}",
-                        canonical_path.display()
-                    ))
-                })?
-                .to_string();
-
-            if let Err(e) = self
-                .runtime
-                .add_module_to_loader_only(&module_specifier, handler.code.clone())
-                .await
-            {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    module_id = %handler.module_id,
-                    error = %e,
-                    "Failed to add API route module to loader"
-                );
-                return Err(RariError::js_execution(format!(
-                    "Failed to add module to loader: {e}"
-                )));
-            }
-
-            let component_id = dist_path
-                .strip_prefix(Path::new("dist").join("server"))
-                .map_err(|_| {
-                    RariError::configuration(format!(
-                        "Failed to derive component_id from dist path: {}",
+        self.runtime
+            .execute_with_request_context(request_context, async {
+                let dist_path = Self::resolve_dist_path(&route_match.route.file_path)?;
+                let canonical_path = dist_path.canonicalize().map_err(|e| {
+                    RariError::io(format!(
+                        "Failed to canonicalize API route path {}: {e}",
                         dist_path.display()
                     ))
-                })?
-                .with_extension("")
-                .to_string_lossy()
-                .cow_replace('\\', "/")
-                .into_owned();
+                })?;
+                let module_specifier = url::Url::from_file_path(&canonical_path)
+                    .map_err(|_| {
+                        RariError::configuration(format!(
+                            "Failed to create file URL from path: {}",
+                            canonical_path.display()
+                        ))
+                    })?
+                    .to_string();
 
-            let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    component_id = %component_id,
-                    error = %e,
-                    "Failed to load API route as ES module"
-                );
-                RariError::js_execution(format!("Failed to load ES module: {e}"))
-            })?;
-
-            if let Err(e) = self.runtime.evaluate_module(module_id).await {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    module_id = module_id,
-                    error = %e,
-                    "Failed to evaluate API route module"
-                );
-                return Err(RariError::js_execution(format!("Failed to evaluate module: {e}")));
-            }
-
-            let result = self
-                .execute_handler_from_namespace(
-                    &route_match.method,
-                    &request_obj,
-                    &module_specifier,
-                )
-                .await
-                .map_err(|e| {
+                if let Err(e) = self
+                    .runtime
+                    .add_module_to_loader_only(&module_specifier, handler.code.clone())
+                    .await
+                {
                     error!(
                         route_path = %route_match.route.path,
                         method = %route_match.method,
                         module_id = %handler.module_id,
                         error = %e,
-                        "Handler execution failed"
+                        "Failed to add API route module to loader"
                     );
-                    RariError::js_execution(format!("Handler execution failed: {e}"))
+                    return Err(RariError::js_execution(format!(
+                        "Failed to add module to loader: {e}"
+                    )));
+                }
+
+                let component_id = dist_path
+                    .strip_prefix(Path::new("dist").join("server"))
+                    .map_err(|_| {
+                        RariError::configuration(format!(
+                            "Failed to derive component_id from dist path: {}",
+                            dist_path.display()
+                        ))
+                    })?
+                    .with_extension("")
+                    .to_string_lossy()
+                    .cow_replace('\\', "/")
+                    .into_owned();
+
+                let module_id = self.runtime.load_es_module(&component_id).await.map_err(|e| {
+                    error!(
+                        route_path = %route_match.route.path,
+                        method = %route_match.method,
+                        component_id = %component_id,
+                        error = %e,
+                        "Failed to load API route as ES module"
+                    );
+                    RariError::js_execution(format!("Failed to load ES module: {e}"))
                 })?;
 
-            let response = self.create_response(result).await.map_err(|e| {
-                error!(
-                    route_path = %route_match.route.path,
-                    method = %route_match.method,
-                    error = %e,
-                    "Failed to create response from handler result"
-                );
-                e
-            })?;
+                if let Err(e) = self.runtime.evaluate_module(module_id).await {
+                    error!(
+                        route_path = %route_match.route.path,
+                        method = %route_match.method,
+                        module_id = module_id,
+                        error = %e,
+                        "Failed to evaluate API route module"
+                    );
+                    return Err(RariError::js_execution(format!("Failed to evaluate module: {e}")));
+                }
 
-            Ok(response)
-        }
-        .await;
+                let result = self
+                    .execute_handler_from_namespace(
+                        &route_match.method,
+                        &request_obj,
+                        &module_specifier,
+                    )
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            route_path = %route_match.route.path,
+                            method = %route_match.method,
+                            module_id = %handler.module_id,
+                            error = %e,
+                            "Handler execution failed"
+                        );
+                        RariError::js_execution(format!("Handler execution failed: {e}"))
+                    })?;
 
-        if let Err(e) = self.runtime.clear_request_context().await {
-            error!("Failed to clear request context: {}", e);
-        }
+                let response = self.create_response(result).await.map_err(|e| {
+                    error!(
+                        route_path = %route_match.route.path,
+                        method = %route_match.method,
+                        error = %e,
+                        "Failed to create response from handler result"
+                    );
+                    e
+                })?;
 
-        result
+                Ok(response)
+            })
+            .await
     }
 
     fn create_request_object(

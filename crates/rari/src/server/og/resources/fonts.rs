@@ -1,6 +1,6 @@
 use parley::{
     FontContext as ParleyFontContext, GenericFamily,
-    fontique::{Blob, Collection, CollectionOptions, FallbackKey, Script},
+    fontique::{Blob, Collection, CollectionOptions, FallbackKey, Script, ScriptExt},
 };
 use std::borrow::Cow;
 use std::sync::Arc;

@@ -12,6 +12,7 @@ export default defineConfig({
       'image/index': 'src/image/index.ts',
       'og/index': 'src/og/index.ts',
       'mdx': 'src/mdx.ts',
+      'headers': 'src/headers.ts',
       'runtime/actions': 'src/runtime/actions.ts',
       'runtime/entry-client': 'src/runtime/entry-client.ts',
       'runtime/react-server-dom-rari-client': 'src/runtime/react-server-dom-rari-client.ts',

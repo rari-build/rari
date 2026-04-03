@@ -1,92 +1,60 @@
 (function () {
+  const promiseId = '{promise_id}'
+  const boundaryId = '{boundary_id}'
+
   const safeSerializeError = function (error, phase) {
-    const errorObj = {
+    return {
       success: false,
-      boundary_id: '{boundary_id}',
-      errorContext: {
-        phase,
-        promiseId: '{promise_id}',
-        componentPath: '{component_path}',
-        availablePromises: Object.keys(globalThis['~suspense']?.promises || {}),
-      },
+      boundary_id: boundaryId,
+      errorContext: { phase, promiseId, componentPath: '{component_path}' },
+      errorName: error?.name ?? 'UnknownError',
+      error: error?.message ?? (error != null ? String(error) : 'Unknown error'),
+      errorStack: error?.stack || 'No stack trace available',
     }
-
-    try {
-      errorObj.errorName = error.name || 'UnknownError'
-    }
-    catch {
-      errorObj.errorName = 'UnknownError'
-    }
-
-    try {
-      errorObj.error = error.message || String(error) || 'Unknown error'
-    }
-    catch {
-      errorObj.error = 'Error message unavailable'
-    }
-
-    try {
-      errorObj.errorStack = error.stack || 'No stack trace available'
-    }
-    catch {
-      errorObj.errorStack = 'Stack trace unavailable'
-    }
-
-    try {
-      const additionalProps = {}
-      for (const key in error) {
-        if (Object.hasOwn(error, key) && key !== 'name' && key !== 'message' && key !== 'stack') {
-          try {
-            const value = error[key]
-            if (value !== undefined && value !== null
-              && typeof value !== 'function' && typeof value !== 'symbol') { additionalProps[key] = String(value) }
-          }
-          catch {
-          }
-        }
-      }
-      if (Object.keys(additionalProps).length > 0)
-        errorObj.additionalErrorProps = additionalProps
-    }
-    catch {
-    }
-
-    return errorObj
   }
 
   try {
-    const promiseId = '{promise_id}'
-    const boundaryId = '{boundary_id}'
+    const pendingPromises = globalThis['~suspense']?.pendingPromises || []
+    const pendingInfo = pendingPromises.find(p => p.id === promiseId)
 
-    let promise = globalThis['~suspense']?.promises[promiseId]
-
-    if (!promise) {
-      const pendingPromises = globalThis['~suspense']?.pendingPromises || []
-      const pendingPromise = pendingPromises.find(p => p.id === promiseId)
-
-      if (pendingPromise && pendingPromise.componentType) {
-        try {
-          promise = pendingPromise.componentType(pendingPromise.componentProps)
-        }
-        catch (callError) {
-          return Promise.resolve(safeSerializeError(callError, 'component_execution'))
-        }
-      }
-    }
-
-    if (!promise) {
+    if (!pendingInfo) {
       return Promise.resolve({
         success: false,
         boundary_id: boundaryId,
-        error: `Promise not found: ${promiseId}`,
+        error: `Pending promise info not found: ${promiseId}`,
         errorName: 'PromiseNotFound',
-        errorStack: 'No stack trace (promise not registered)',
-        errorContext: {
-          phase: 'promise_resolution',
-          promiseId,
-          componentPath: '{component_path}',
-          availablePromises: Object.keys(globalThis['~suspense']?.promises || {}),
-        },
+        errorStack: 'No stack trace',
+        errorContext: { phase: 'component_type_check', promiseId, componentPath: '{component_path}' },
+      })
+    }
+
+    let promise
+    if (pendingInfo.componentType && typeof pendingInfo.componentType === 'function') {
+      try {
+        promise = pendingInfo.componentType(pendingInfo.componentProps || {})
+      }
+      catch (error) {
+        return Promise.resolve(safeSerializeError(error, 'component_invocation'))
+      }
+    }
+    else {
+      return Promise.resolve({
+        success: false,
+        boundary_id: boundaryId,
+        error: 'Component type is not a function',
+        errorName: 'TypeError',
+        errorStack: 'No stack trace',
+      })
+    }
+
+    if (!promise || typeof promise.then !== 'function') {
+      return Promise.resolve({
+        success: false,
+        boundary_id: boundaryId,
+        error: 'Component did not return a promise',
+        errorName: 'TypeError',
+        errorStack: 'No stack trace',
+        errorContext: { phase: 'promise_validation', promiseId, componentPath: '{component_path}' },
       })
     }
 
@@ -97,21 +65,14 @@
           boundary_id: boundaryId,
           error: 'Promise resolved to null/undefined',
           errorName: 'InvalidPromiseResolution',
-          errorStack: 'No stack trace (invalid resolution)',
-          errorContext: {
-            phase: 'promise_resolution',
-            promiseId,
-            componentPath: '{component_path}',
-            resolvedType: typeof resolvedElement,
-            resolvedValue: String(resolvedElement),
-          },
+          errorStack: 'No stack trace',
         }
       }
 
       let rscData
       try {
         if (globalThis.renderToRsc)
-          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {})
+          rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
         else
           rscData = resolvedElement
       }

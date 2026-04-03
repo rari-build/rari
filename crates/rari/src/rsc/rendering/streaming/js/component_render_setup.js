@@ -4,6 +4,21 @@ const LOADING_PATH_REGEX = /\/[^/]+$/
 
 if (!globalThis['~render'])
   globalThis['~render'] = {}
+
+function registerBoundary(id, fallback, parentId) {
+  if (!globalThis['~suspense'])
+    globalThis['~suspense'] = {}
+  if (!globalThis['~suspense'].discoveredBoundaries)
+    globalThis['~suspense'].discoveredBoundaries = []
+  if (globalThis['~suspense'].discoveredBoundaries.some(b => b.id === id))
+    return
+  globalThis['~suspense'].discoveredBoundaries.push({
+    id,
+    fallback,
+    parentId,
+  })
+}
+
 globalThis['~render'].componentAsync = async function () {
   try {
     let Component = (globalThis['~rsc']?.modules && globalThis['~rsc'].modules['{component_id}']?.default)
@@ -46,25 +61,18 @@ globalThis['~render'].componentAsync = async function () {
           }
 
           if (isSuspenseComponent(type)) {
-            const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+            const boundaryId = props?.['~boundaryId'] || props?.boundaryId || props?.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
             if (!globalThis['~suspense'])
               globalThis['~suspense'] = {}
             const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
             globalThis['~suspense'].currentBoundaryId = boundaryId
 
             const safeFallback = props?.fallback || null
-            const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-            if (!globalThis['~suspense'].discoveredBoundaries)
-              globalThis['~suspense'].discoveredBoundaries = []
-            globalThis['~suspense'].discoveredBoundaries.push({
-              id: boundaryId,
-              fallback: serializableFallback,
-              parentId: previousBoundaryId,
-            })
+            registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
             globalThis['~suspense'].currentBoundaryId = previousBoundaryId
-            return globalThis['~react'].originalCreateElement('suspense', { ...props, key: boundaryId }, ...children)
+            return globalThis['~react'].originalCreateElement('suspense', { ...props, 'key': boundaryId, boundaryId, '~boundaryId': boundaryId }, ...children)
           }
 
           return globalThis['~react'].originalCreateElement(type, props, ...children)
@@ -76,8 +84,8 @@ globalThis['~render'].componentAsync = async function () {
         || (Component.toString && Component.toString().trim().startsWith('async'))
 
       if (isAsyncFunction) {
-        const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-        const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const boundaryId = globalThis['~suspense']?.currentBoundaryId || 'root_boundary'
+        const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
         let loadingComponent = null
         const componentPath = '{component_id}'
@@ -125,13 +133,7 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        if (!globalThis['~suspense'].discoveredBoundaries)
-          globalThis['~suspense'].discoveredBoundaries = []
-        globalThis['~suspense'].discoveredBoundaries.push({
-          id: boundaryId,
-          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
-          parentId: null,
-        })
+        registerBoundary(boundaryId, fallbackContent, null)
 
         if (!globalThis['~suspense'].pendingPromises)
           globalThis['~suspense'].pendingPromises = []
@@ -139,6 +141,8 @@ globalThis['~render'].componentAsync = async function () {
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
+          componentType: Component,
+          componentProps: props,
         })
 
         const serializedFallback = globalThis['~suspense'].safeSerializeElement(fallbackContent)
@@ -174,23 +178,15 @@ globalThis['~render'].componentAsync = async function () {
         }
         globalThis['~render'].initialComplete = true
 
-        globalThis['~render'].deferredAsyncComponents = globalThis['~render'].deferredAsyncComponents || []
-        globalThis['~render'].deferredAsyncComponents.push({
-          component: Component,
-          props,
-          promiseId,
-          boundaryId,
-          componentPath: '{component_id}',
-        })
-
         return
       }
 
       element = Component(props)
 
       if (element && typeof element.then === 'function') {
-        const boundaryId = `async_boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-        const promiseId = `async_promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const parentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
+        const boundaryId = parentBoundaryId || 'root_boundary'
+        const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
         globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
         globalThis['~suspense'].promises[promiseId] = element
@@ -200,6 +196,8 @@ globalThis['~render'].componentAsync = async function () {
           id: promiseId,
           boundaryId,
           componentPath: '{component_id}',
+          componentType: Component,
+          componentProps: props,
         })
 
         let loadingComponent = null
@@ -242,12 +240,8 @@ globalThis['~render'].componentAsync = async function () {
           })
         }
 
-        globalThis['~suspense'].discoveredBoundaries = globalThis['~suspense'].discoveredBoundaries || []
-        globalThis['~suspense'].discoveredBoundaries.push({
-          id: boundaryId,
-          fallback: globalThis['~suspense'].safeSerializeElement(fallbackContent),
-          parentId: null,
-        })
+        if (!parentBoundaryId)
+          registerBoundary(boundaryId, fallbackContent, null)
 
         element = fallbackContent
 
@@ -295,26 +289,29 @@ globalThis['~render'].componentAsync = async function () {
       }
 
       const processSuspenseInStructure = (el, parentBoundaryId = null) => {
+        if (Array.isArray(el))
+          return el.map(child => processSuspenseInStructure(child, parentBoundaryId))
+
         if (!el || typeof el !== 'object')
           return el
 
-        if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && el.children) {
-          const boundaryId = `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+        const actualChildren = el.children ?? el.props?.children
+        const childArray = actualChildren == null
+          ? []
+          : Array.isArray(actualChildren) ? actualChildren : [actualChildren]
+
+        if ((el.type === 'suspense' || !el.type) && el.props && el.props.fallback && childArray.length > 0) {
+          const boundaryId = el.props['~boundaryId'] || el.props.boundaryId || el.key || el.props.key || `boundary_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
           if (!globalThis['~suspense'])
             globalThis['~suspense'] = {}
           const previousBoundaryId = globalThis['~suspense'].currentBoundaryId
           globalThis['~suspense'].currentBoundaryId = boundaryId
 
           const safeFallback = el.props.fallback || null
-          const serializableFallback = globalThis['~suspense'].safeSerializeElement(safeFallback)
 
-          globalThis['~suspense'].discoveredBoundaries.push({
-            id: boundaryId,
-            fallback: serializableFallback,
-            parentId: previousBoundaryId,
-          })
+          registerBoundary(boundaryId, safeFallback, previousBoundaryId)
 
-          const processedChildren = el.children.map((child) => {
+          const processedChildren = childArray.map((child) => {
             try {
               if (child && typeof child === 'object' && child.type && typeof child.type === 'function') {
                 const result = child.type(child.props || null)
@@ -328,11 +325,13 @@ globalThis['~render'].componentAsync = async function () {
                     id: promiseId,
                     boundaryId,
                     componentPath: (child.type.name || 'AnonymousComponent'),
+                    componentType: child.type,
+                    componentProps: child.props || {},
                   })
                   return safeFallback
                 }
                 else {
-                  return globalThis.renderToRsc(result, globalThis['~clientComponents'] || {})
+                  return processSuspenseInStructure(result, boundaryId)
                 }
               }
             }
@@ -347,6 +346,8 @@ globalThis['~render'].componentAsync = async function () {
                   id: promiseId,
                   boundaryId,
                   componentPath: 'ThrownPromise',
+                  componentType: child.type,
+                  componentProps: child.props || {},
                 })
                 return safeFallback
               }
@@ -361,13 +362,18 @@ globalThis['~render'].componentAsync = async function () {
 
           return {
             type: 'suspense',
-            props: { ...el.props, key: boundaryId, boundaryId },
-            children: processedChildren,
+            props: { ...el.props, 'key': boundaryId, boundaryId, '~boundaryId': boundaryId },
+            children: Array.isArray(actualChildren) ? processedChildren : processedChildren[0],
           }
         }
 
-        if (el.children && Array.isArray(el.children))
-          el.children = el.children.map(child => processSuspenseInStructure(child, parentBoundaryId))
+        if (childArray.length > 0) {
+          const processedChildren = childArray.map(child => processSuspenseInStructure(child, parentBoundaryId))
+          return {
+            ...el,
+            children: Array.isArray(actualChildren) ? processedChildren : processedChildren[0],
+          }
+        }
 
         return el
       }
@@ -390,6 +396,8 @@ globalThis['~render'].componentAsync = async function () {
 
         if (isLeafAsyncComponent) {
           const promiseId = `promise_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+          globalThis['~suspense'].promises = globalThis['~suspense'].promises || {}
+          globalThis['~suspense'].pendingPromises = globalThis['~suspense'].pendingPromises || []
           globalThis['~suspense'].promises[promiseId] = suspenseError.promise
 
           const boundaryId = globalThis['~suspense'].currentBoundaryId || 'root_boundary'
@@ -397,6 +405,8 @@ globalThis['~render'].componentAsync = async function () {
             id: promiseId,
             boundaryId,
             componentPath: componentName,
+            componentType: Component,
+            componentProps: props,
           })
         }
 
@@ -415,8 +425,9 @@ globalThis['~render'].componentAsync = async function () {
 
     let rscData
     try {
+      const currentBoundaryId = globalThis['~suspense']?.currentBoundaryId || null
       rscData = globalThis.renderToRsc
-        ? await globalThis.renderToRsc(element, globalThis['~clientComponents'] || {})
+        ? await globalThis.renderToRsc(element, globalThis['~clientComponents'] || {}, currentBoundaryId)
         : element
     }
     catch (rscError) {
@@ -457,8 +468,6 @@ globalThis['~render'].componentAsync = async function () {
     if (!globalThis['~render'].initialComplete)
       globalThis['~render'].initialComplete = true
 
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
     globalThis['~render'].streamingComplete = true
   }
   catch (error) {
@@ -476,8 +485,6 @@ globalThis['~render'].componentAsync = async function () {
     catch {
       globalThis['~render'].streamingResult = errorResult
     }
-    if (!globalThis['~render'])
-      globalThis['~render'] = {}
     globalThis['~render'].streamingComplete = true
   }
 };

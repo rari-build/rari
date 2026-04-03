@@ -84,20 +84,6 @@ describe('actions', () => {
       })
     })
 
-    it('should use fetchWithCsrf when available', async () => {
-      const mockFetchWithCsrf = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true, result: 'ok' }),
-      })
-      ;(window as any).fetchWithCsrf = mockFetchWithCsrf
-
-      const serverAction = createServerReference('testFn', 'module-123', 'exportName')
-      await serverAction('arg')
-
-      expect(mockFetchWithCsrf).toHaveBeenCalled()
-      expect(fetch).not.toHaveBeenCalled()
-    })
-
     it('should throw error when response is not ok', async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
@@ -400,37 +386,6 @@ describe('actions', () => {
         name: '__export_name',
         value: 'exportName',
       })
-    })
-
-    it('should add CSRF token when available', () => {
-      ;(window as any).getCsrfToken = vi.fn().mockReturnValue('csrf-token-123')
-      const action = vi.fn().mockResolvedValue('result')
-
-      const formAction = createFormAction('module-123', 'exportName', action)
-      formAction.enhance(mockForm)
-
-      expect(mockInputs).toHaveLength(3)
-      expect(mockInputs[2]).toMatchObject({
-        type: 'hidden',
-        name: '__csrf_token',
-        value: 'csrf-token-123',
-      })
-    })
-
-    it('should update existing CSRF token input', () => {
-      const existingCsrfInput = {
-        type: 'hidden',
-        name: '__csrf_token',
-        value: 'old-token',
-      }
-      vi.mocked(mockForm.querySelector).mockReturnValue(existingCsrfInput as any)
-      ;(window as any).getCsrfToken = vi.fn().mockReturnValue('new-token')
-      const action = vi.fn().mockResolvedValue('result')
-
-      const formAction = createFormAction('module-123', 'exportName', action)
-      formAction.enhance(mockForm)
-
-      expect(existingCsrfInput.value).toBe('new-token')
     })
 
     it('should set form action and method', () => {

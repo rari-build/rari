@@ -1,4 +1,4 @@
-import type { Response } from '@playwright/test'
+import type { Page, Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
 import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
@@ -270,6 +270,88 @@ test.describe('RSC Protocol Tests', () => {
 
     await expect(page).toHaveURL(URL_PATTERNS.NESTED_DEEP)
     await expect(page.locator('h1')).toBeVisible()
+  })
+})
+
+test.describe.serial('Suspense Streaming Tests', () => {
+  test.setTimeout(45000)
+
+  async function waitForBoundaryTimes(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
+    await page.waitForFunction(
+      () => {
+        const t = (window as any).__boundaryTimes
+        return t?.['component-a'] && t?.['component-b'] && t?.['component-c']
+      },
+      { timeout: 25000 },
+    )
+    const times = await page.evaluate(() => (window as any).__boundaryTimes)
+    return {
+      timeA: times['component-a'],
+      timeB: times['component-b'],
+      timeC: times['component-c'],
+    }
+  }
+
+  async function setupBoundaryTimingObserver(page: Page) {
+    await page.addInitScript(() => {
+      (window as any).__boundaryTimes = {}
+      const targets = ['component-a', 'component-b', 'component-c']
+
+      const interval = setInterval(() => {
+        let allFound = true
+        for (const id of targets) {
+          if ((window as any).__boundaryTimes[id])
+            continue
+          allFound = false
+          const el = document.querySelector(`[data-testid="${id}"]`)
+          if (el && el.textContent && el.textContent.trim().length > 0)
+            (window as any).__boundaryTimes[id] = Date.now()
+        }
+        if (allFound)
+          clearInterval(interval)
+      }, 50)
+    })
+  }
+
+  function assertProgressiveBoundaries(timeA: number, timeB: number, timeC: number) {
+    const gapAB = timeB - timeA
+    const gapBC = timeC - timeB
+    const spanAC = timeC - timeA
+
+    expect(timeA).toBeLessThan(timeB)
+    expect(timeB).toBeLessThan(timeC)
+
+    expect(gapAB).toBeGreaterThan(500)
+    expect(gapBC).toBeGreaterThan(500)
+
+    expect(gapAB).toBeLessThan(2500)
+    expect(gapBC).toBeLessThan(2500)
+    expect(spanAC).toBeLessThan(4500)
+  }
+
+  test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
+    await setupBoundaryTimingObserver(page)
+
+    await page.goto('/suspense-streaming')
+
+    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
+
+    const { navigationStart } = await page.evaluate(() => ({
+      navigationStart: performance.timeOrigin,
+    }))
+
+    assertProgressiveBoundaries(timeA, timeB, timeC)
+
+    expect(timeC - navigationStart).toBeLessThan(25000)
+  })
+
+  test('should resolve boundaries independently based on their delay', async ({ page }) => {
+    await setupBoundaryTimingObserver(page)
+    await page.goto('/suspense-streaming')
+
+    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
+
+    assertProgressiveBoundaries(timeA, timeB, timeC)
   })
 })
 

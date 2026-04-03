@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tracing::error;
 
 pub mod bridge;
 pub mod ext;
@@ -108,6 +109,13 @@ impl JsExecutionRuntime {
                 self.timeout_ms
             ))),
         }
+    }
+
+    pub async fn execute_script_batch(
+        &self,
+        scripts: Vec<(String, String)>,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<(usize, Result<Value, RariError>)> {
+        self.runtime.execute_script_batch(scripts).await
     }
 
     pub async fn collect_metadata(
@@ -621,6 +629,34 @@ impl JsExecutionRuntime {
                 "Clearing request context timed out after {} ms",
                 self.timeout_ms
             ))),
+        }
+    }
+
+    pub async fn execute_with_request_context<F, T>(
+        &self,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        operation: F,
+    ) -> Result<T, RariError>
+    where
+        F: std::future::Future<Output = Result<T, RariError>>,
+    {
+        self.set_request_context(request_context).await?;
+
+        let result = operation.await;
+
+        let clear_result = self.clear_request_context().await;
+
+        match (result, clear_result) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Ok(value), Err(clear_err)) => {
+                error!("Failed to clear request context after successful operation: {}", clear_err);
+                Ok(value)
+            }
+            (Err(op_err), Err(clear_err)) => {
+                error!("Failed to clear request context after operation error: {}", clear_err);
+                Err(op_err)
+            }
+            (Err(op_err), Ok(())) => Err(op_err),
         }
     }
 }

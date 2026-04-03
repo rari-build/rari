@@ -6,7 +6,6 @@ use crate::server::cache::response_cache;
 use crate::server::config::Config;
 use crate::server::handlers::api_handler::{api_cors_preflight, handle_api_route};
 use crate::server::handlers::app_handler::handle_app_route;
-use crate::server::handlers::csrf_handler::get_csrf_token;
 use crate::server::handlers::hmr_handlers::handle_hmr_action;
 use crate::server::handlers::revalidate_handlers::revalidate_by_path;
 use crate::server::handlers::route_info_handler::get_route_info;
@@ -154,8 +153,6 @@ impl Server {
         let cache_config = response_cache::CacheConfig::from_env(config.is_production());
         let response_cache = Arc::new(response_cache::ResponseCache::new(cache_config));
 
-        let csrf_manager = Self::initialize_csrf_manager().map(Arc::new);
-
         let og_generator = {
             let runtime = js_runtime.clone();
             let generator = Arc::new(crate::server::og::OgImageGenerator::with_capacity(
@@ -191,7 +188,6 @@ impl Server {
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
             response_cache,
-            csrf_manager,
             og_generator,
             project_root,
             endpoint_rate_limiters,
@@ -232,16 +228,6 @@ impl Server {
         Ok(Self { router, config, listener, address: socket_addr })
     }
 
-    fn initialize_csrf_manager() -> Option<crate::server::security::csrf::CsrfTokenManager> {
-        use crate::server::security::csrf::CsrfTokenManager;
-
-        if let Ok(secret) = std::env::var("RARI_CSRF_SECRET") {
-            Some(CsrfTokenManager::new(secret.into_bytes()))
-        } else {
-            None
-        }
-    }
-
     async fn build_router(config: &Config, mut state: ServerState) -> Result<Router, RariError> {
         let small_body_limit = DefaultBodyLimit::max(100 * 1024);
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
@@ -269,7 +255,6 @@ impl Server {
             .route("/_rari/stream", post(stream_component))
             .route("/_rari/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
-            .route("/_rari/csrf-token", get(get_csrf_token))
             .route("/_rari/route-info", post(get_route_info))
             .layer(small_body_limit)
             .route("/_rari/action", post(handle_server_action))

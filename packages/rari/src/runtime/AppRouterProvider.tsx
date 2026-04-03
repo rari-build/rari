@@ -8,6 +8,43 @@ import { preloadComponentsFromModules } from './shared/preload-components'
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
+const TAG_TEXT = 84
+const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const id = setTimeout(resolve, ms)
+    void id
+  })
+}
+
+function isValidFlightPayload(content: string): boolean {
+  if (!content || content.length === 0)
+    return false
+
+  const firstChar = content.charAt(0)
+  const firstCharCode = content.charCodeAt(0)
+
+  if (content.startsWith('I[') || content.startsWith('"$S'))
+    return false
+
+  if (firstCharCode === TAG_TEXT)
+    return true
+
+  if (firstChar === '[')
+    return true
+
+  if (firstChar === '{' || content.startsWith('E{'))
+    return true
+
+  if (firstChar === '"')
+    return true
+
+  if (PRIMITIVE_JSON_REGEX.test(content))
+    return true
+
+  return false
+}
 const SUSPENSE_TTL_MS = 30000
 const CLEANUP_INTERVAL_MS = SUSPENSE_TTL_MS
 
@@ -134,6 +171,13 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     typeof window !== 'undefined' && window.location.hash.length > 0,
   )
   const fallbackKeyCounterRef = useRef<number>(0)
+  const hasRenderedInitialShellRef = useRef<boolean>(false)
+  const hasRenderedFinalRef = useRef<boolean>(false)
+  const streamCompleteRef = useRef<boolean>(false)
+  const rowProcessingRef = useRef<Promise<void>>(Promise.resolve())
+  const isNavigatingRef = useRef<boolean>(false)
+  const isInitialPageLoadRef = useRef<boolean>(!!initialPayload)
+  const pendingStreamingNavigationRef = useRef<NavigationDetail | null>(null)
   const MAX_RETRIES = 3
 
   useEffect(() => {
@@ -275,9 +319,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return Math.abs(hash).toString(36)
   }
 
-  function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>): React.ReactNode {
-    if (!rsc)
+  function rscToReact(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>, visitedRefs?: Set<string>): React.ReactNode {
+    if (rsc == null)
       return null
+
+    if (typeof rsc === 'string' && rsc.startsWith('$L') && rows && rows.has(rsc)) {
+      const visited = visitedRefs ?? new Set<string>()
+      if (visited.has(rsc)) {
+        console.warn('[rari] AppRouter: Circular $L reference detected:', rsc)
+        return null
+      }
+      visited.add(rsc)
+      const dereferenced = rows.get(rsc)
+      return rscToReact(dereferenced, modules, layoutPath, symbols, rows, visited)
+    }
 
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
       return rsc
@@ -323,7 +378,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
           const childProps = {
             ...props,
-            children: props.children ? rscToReact(props.children, modules, layoutPath, symbols, rows) : undefined,
+            children: props.children === undefined ? undefined : rscToReact(props.children, modules, layoutPath, symbols, rows),
           }
 
           const element = React.createElement(Component, { key: effectiveKey, ...childProps })
@@ -348,7 +403,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       return (rsc as RSCArray).map((child, index) => {
         const element = rscToReact(child, modules, layoutPath, symbols, rows)
-        if (!element)
+        if (element == null)
           return null
 
         if (typeof element === 'object' && React.isValidElement(element) && !element.key) {
@@ -359,7 +414,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
 
         return element
-      }).filter(Boolean)
+      }).filter(element => element != null)
     }
 
     return rsc
@@ -442,7 +497,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             }
           }
           else {
-            processed[key] = children ? rscToReact(children, modules, layoutPath, symbols, rows) : undefined
+            processed[key] = children === undefined ? undefined : rscToReact(children, modules, layoutPath, symbols, rows)
           }
         }
         else if (key === 'dangerouslySetInnerHTML') {
@@ -521,9 +576,58 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     }
   }
 
-  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false) => {
+  const getReachableModuleIds = (payload: any): Set<string> => {
+    const reachableIds = new Set<string>()
+
+    if (!payload?.modules || !payload?.rawElement || !payload?.rows)
+      return reachableIds
+
+    const visited = new Set<string>()
+
+    const walkElement = (element: any): void => {
+      if (!element)
+        return
+
+      if (typeof element === 'string' && element.startsWith('$L')) {
+        const moduleInfo = payload.modules.get(element)
+        if (moduleInfo?.id) {
+          reachableIds.add(moduleInfo.id)
+          if (moduleInfo.name && moduleInfo.name !== 'default') {
+            reachableIds.add(`${moduleInfo.id}#${moduleInfo.name}`)
+          }
+        }
+
+        if (payload.rows?.has(element) && !visited.has(element)) {
+          visited.add(element)
+          walkElement(payload.rows.get(element))
+        }
+
+        return
+      }
+
+      if (Array.isArray(element)) {
+        for (const item of element) {
+          walkElement(item)
+        }
+
+        return
+      }
+
+      if (typeof element === 'object' && element !== null) {
+        for (const value of Object.values(element)) {
+          walkElement(value)
+        }
+      }
+    }
+
+    walkElement(payload.rawElement)
+
+    return reachableIds
+  }
+
+  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false, waitForClientPreload = true) => {
     try {
-      const lines = wireFormat.trim().split('\n')
+      const lines = wireFormat.split('\n')
       const modules = new Map()
       const symbols = new Map()
       const rows = new Map()
@@ -538,16 +642,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       let currentLayoutStartLine: number | null = null
 
       for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const line = lines[lineIndex].trim()
+        const line = lines[lineIndex]
+        const trimmedLine = line.trim()
 
-        if (!line)
+        if (!trimmedLine)
           continue
 
         const colonIndex = line.indexOf(':')
         if (colonIndex === -1)
           continue
 
-        const rowId = line.substring(0, colonIndex)
+        const rowId = line.substring(0, colonIndex).trim()
 
         if (!NUMERIC_REGEX.test(rowId)) {
           console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
@@ -624,7 +729,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               }
             }
 
-            if (!rootElement && Array.isArray(elementData)) {
+            if (rootElement === null && Array.isArray(elementData)) {
               if (elementData[0] === '$') {
                 rootElement = elementData
               }
@@ -633,13 +738,45 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
               }
             }
           }
+          else if (content.startsWith('{') || content.startsWith('E{')) {
+            const jsonContent = content.startsWith('E{') ? content.substring(1) : content
+            const objectData = JSON.parse(jsonContent)
+            rows.set(`$L${rowId}`, objectData)
+
+            if (rootElement === null) {
+              rootElement = objectData
+            }
+          }
+          else if (content.charCodeAt(0) === TAG_TEXT) {
+            const textData = content.slice(1)
+            rows.set(`$L${rowId}`, textData)
+
+            if (rootElement === null)
+              rootElement = textData
+          }
+          else if (content.startsWith('"') && !content.startsWith('"$S')) {
+            const stringData = JSON.parse(content)
+            rows.set(`$L${rowId}`, stringData)
+
+            if (rootElement === null) {
+              rootElement = stringData
+            }
+          }
+          else if (PRIMITIVE_JSON_REGEX.test(content)) {
+            const primitiveData = JSON.parse(content)
+            rows.set(`$L${rowId}`, primitiveData)
+
+            if (rootElement === null)
+              rootElement = primitiveData
+          }
         }
         catch (e) {
           console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
         }
       }
 
-      await preloadComponentsFromModules(modules)
+      if (waitForClientPreload)
+        await preloadComponentsFromModules(modules)
 
       if (
         extractBoundaries
@@ -654,34 +791,18 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         })
       }
 
-      if (rootElement && Array.isArray(rootElement)) {
+      const rawElement = rootElement
+
+      if (rootElement != null) {
         fallbackKeyCounterRef.current = 0
 
-        if (rootElement[0] === '$') {
-          rootElement = rscToReact(rootElement, modules, undefined, symbols, rows)
-        }
-        else if (Array.isArray(rootElement[0])) {
-          const elements = rootElement
-            .map((el: any) =>
-              Array.isArray(el) && el[0] === '$'
-                ? rscToReact(el, modules, undefined, symbols, rows)
-                : el,
-            )
-            .filter((el: any) => {
-              return (
-                el == null
-                || typeof el === 'string'
-                || typeof el === 'number'
-                || typeof el === 'boolean'
-                || React.isValidElement(el)
-              )
-            })
-          rootElement = elements.length === 1 ? elements[0] : elements
-        }
+        rootElement = rscToReact(rootElement as RSCData, modules, undefined, symbols, rows)
       }
 
       return {
         element: rootElement,
+        rawElement,
+        rows,
         modules,
         symbols,
         wireFormat,
@@ -700,7 +821,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   ) => {
     const pathToFetch = targetPath || window.location.pathname
 
-    const existingFetch = pendingFetchesRef.current.get(pathToFetch)
+    const navigationId = currentNavigationIdRef.current
+    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}`
+    const existingFetch = pendingFetchesRef.current.get(requestKey)
     if (existingFetch)
       return existingFetch
 
@@ -751,11 +874,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           throw error
         }
 
-        setRscPayload(parsedPayload)
-
-        lastSuccessfulPayloadRef.current = rscWireFormat
-
-        resetFailureTracking()
+        if (currentNavigationIdRef.current === navigationId) {
+          setRscPayload(parsedPayload)
+          lastSuccessfulPayloadRef.current = rscWireFormat
+          resetFailureTracking()
+        }
 
         return parsedPayload
       }
@@ -773,16 +896,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         throw error
       }
       finally {
-        pendingFetchesRef.current.delete(pathToFetch)
+        pendingFetchesRef.current.delete(requestKey)
       }
     })()
 
-    pendingFetchesRef.current.set(pathToFetch, fetchPromise)
+    pendingFetchesRef.current.set(requestKey, fetchPromise)
 
     return fetchPromise
   }
 
-  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean) => Promise<any>>(parseRscWireFormat)
+  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean, waitForClientPreload?: boolean) => Promise<any>>(parseRscWireFormat)
   const refetchRscPayloadRef = useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<any>>(refetchRscPayload)
   const processPropsRef = useRef<(props: any, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => any>(processProps)
   const rscToReactRef = useRef<(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => React.ReactNode>(rscToReact)
@@ -806,9 +929,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const customEvent = event as CustomEvent<NavigationDetail>
       const detail = customEvent.detail
 
-      currentNavigationIdRef.current = detail.navigationId
-      streamingRowsRef.current = null
+      if (detail.navigationId !== currentNavigationIdRef.current)
+        return
+
       shouldScrollToHashRef.current = true
+
+      if (!detail.isStreaming)
+        streamingRowsRef.current = null
+
       clearAllSuspendingPromises()
 
       scrollPositionRef.current = {
@@ -820,13 +948,21 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       startTransition(async () => {
         try {
           if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false)
-            setRscPayload(parsedPayload)
-            lastSuccessfulPayloadRef.current = detail.rscWireFormat
-            resetFailureTracking()
+            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false, true)
+
+            if (currentNavigationIdRef.current === detail.navigationId) {
+              setRscPayload(parsedPayload)
+              lastSuccessfulPayloadRef.current = detail.rscWireFormat
+              resetFailureTracking()
+            }
           }
           else if (detail.isStreaming) {
-            streamingRowsRef.current = []
+            if (currentNavigationIdRef.current === detail.navigationId) {
+              setHmrError(null)
+              pendingStreamingNavigationRef.current = detail
+            }
+            isNavigatingRef.current = false
+            return
           }
           else {
             await refetchRscPayloadRef.current!(
@@ -918,6 +1054,19 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
+    const handleNavigationStart = (event: Event) => {
+      const customEvent = event as CustomEvent<{ navigationId: number, targetPath: string }>
+      streamingRowsRef.current = []
+      currentNavigationIdRef.current = customEvent.detail.navigationId
+      hasRenderedInitialShellRef.current = false
+      hasRenderedFinalRef.current = false
+      streamCompleteRef.current = false
+      rowProcessingRef.current = Promise.resolve()
+      isNavigatingRef.current = true
+      isInitialPageLoadRef.current = false
+      pendingStreamingNavigationRef.current = null
+    }
+
     const handleManifestUpdated = async () => {
       try {
         await refetchRscPayloadRef.current!()
@@ -931,32 +1080,168 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
-    const handleRscRow = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ rscRow: string }>
-      const row = customEvent.detail.rscRow
-
-      if (!row || !row.trim())
+    const processRows = async () => {
+      if (!streamingRowsRef.current || streamingRowsRef.current.length === 0)
         return
 
-      if (!streamingRowsRef.current)
-        streamingRowsRef.current = []
+      if (isInitialPageLoadRef.current)
+        return
 
-      streamingRowsRef.current.push(row)
+      const navId = currentNavigationIdRef.current
+      const rows = [...streamingRowsRef.current]
+
+      const hasShellContent = rows.some((r) => {
+        const ci = r.indexOf(':')
+        const id = ci > 0 ? r.substring(0, ci).trim() : ''
+        const content = ci > 0 ? r.substring(ci + 1) : ''
+        return NUMERIC_REGEX.test(id) && isValidFlightPayload(content)
+      })
+
+      const hasPageContent = rows.some((r) => {
+        const ci = r.indexOf(':')
+        const id = ci > 0 ? r.substring(0, ci).trim() : ''
+        const content = ci > 0 ? r.substring(ci + 1) : ''
+        if (!NUMERIC_REGEX.test(id) || !isValidFlightPayload(content))
+          return false
+
+        const isReferencedByShell = rows.some((shellRow) => {
+          const sci = shellRow.indexOf(':')
+          const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
+          const refPattern = new RegExp(`"?\\$L${id}"?(?![0-9a-fA-F])`)
+          return refPattern.test(shellContent)
+        })
+        return isReferencedByShell
+      })
+
+      if (!hasShellContent && !hasPageContent)
+        return
+
+      if (!hasRenderedInitialShellRef.current && hasShellContent && !hasPageContent) {
+        hasRenderedInitialShellRef.current = true
+
+        const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
+
+        if (hasSuspenseBoundary) {
+          const shellRows = rows.filter((r) => {
+            const ci = r.indexOf(':')
+            const id = ci > 0 ? r.substring(0, ci).trim() : ''
+            const refPattern = new RegExp(`"\\$L${id}"(?![0-9a-fA-F])`)
+            return !hasPageContent || !rows.some(sr => refPattern.test(sr))
+          })
+          try {
+            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false, false)
+            if (currentNavigationIdRef.current === navId) {
+              setRscPayload(shellPayload)
+              setRenderKey(prev => prev + 1)
+            }
+          }
+          catch (error) {
+            console.error('[rari] AppRouter: Failed to parse shell:', error)
+          }
+
+          return
+        }
+      }
+
+      const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
+      if (!hasPageContent && hasSuspenseBoundary && !streamCompleteRef.current)
+        return
+
+      if (hasRenderedFinalRef.current)
+        return
+
+      hasRenderedInitialShellRef.current = true
 
       try {
-        const wireFormat = streamingRowsRef.current.join('\n')
-        const parsedPayload = await parseRscWireFormatRef.current!(wireFormat, false)
-        const isInitialShell = streamingRowsRef.current.length <= 2 && wireFormat.includes('~boundaryId')
+        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false, true)
 
-        if (isInitialShell) {
-          setRscPayload(parsedPayload)
-          setRenderKey(prev => prev + 1)
-        }
-        else {
-          startTransition(() => {
-            setRscPayload(parsedPayload)
-            setRenderKey(prev => prev + 1)
+        if (hasSuspenseBoundary || hasPageContent) {
+          const reachableModuleIds = getReachableModuleIds(parsedPayload)
+
+          const loadClientComponents = async () => {
+            let attempts = 0
+            const maxAttempts = 20
+            let allModulesLoaded = false
+
+            while (attempts < maxAttempts) {
+              const clientComponents = (globalThis as any)['~clientComponents'] || {}
+
+              const pendingLoads = Object.entries(clientComponents)
+                .filter(([id, comp]: [string, any]) => {
+                  const isReachable = reachableModuleIds.has(id)
+                  return isReachable && comp.loading && comp.loadPromise
+                })
+                .map(([_, comp]: [string, any]) => comp.loadPromise)
+
+              if (pendingLoads.length === 0) {
+                allModulesLoaded = true
+                break
+              }
+
+              try {
+                await Promise.race([Promise.all(pendingLoads), sleep(50)])
+              }
+              catch {}
+
+              await sleep(10)
+              attempts++
+            }
+
+            if (!allModulesLoaded)
+              console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
+
+            if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+              hasRenderedFinalRef.current = true
+              try {
+                const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
+                const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
+                if (currentNavigationIdRef.current === navId) {
+                  setRscPayload(updatedPayload)
+                  setRenderKey(prev => prev + 1)
+
+                  if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
+                    onNavigateRef.current(pendingStreamingNavigationRef.current)
+                    pendingStreamingNavigationRef.current = null
+                  }
+
+                  if (streamCompleteRef.current)
+                    streamingRowsRef.current = null
+                }
+              }
+              catch (error) {
+                console.error('[rari] AppRouter: Failed to re-parse after client load:', error)
+              }
+            }
+          }
+
+          loadClientComponents().catch((error) => {
+            console.error('[rari] AppRouter: Client component loading failed:', error)
           })
+        }
+
+        if (currentNavigationIdRef.current !== navId)
+          return
+
+        if (hasRenderedFinalRef.current)
+          return
+
+        const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
+        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
+
+        if (currentNavigationIdRef.current !== navId || hasRenderedFinalRef.current)
+          return
+
+        setRscPayload(parsedPayload)
+        setRenderKey(prev => prev + 1)
+
+        if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
+          onNavigateRef.current(pendingStreamingNavigationRef.current)
+          pendingStreamingNavigationRef.current = null
+        }
+
+        if (streamCompleteRef.current) {
+          hasRenderedFinalRef.current = true
+          streamingRowsRef.current = null
         }
       }
       catch (error) {
@@ -964,6 +1249,39 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
     }
 
+    const handleRscRow = (event: Event) => {
+      const customEvent = event as CustomEvent<{ rscRow: string, navigationId?: number }>
+      const row = customEvent.detail.rscRow
+      const eventNavigationId = customEvent.detail.navigationId
+
+      if (!row || !row.trim())
+        return
+
+      if (!streamingRowsRef.current)
+        return
+
+      const activeNavId = currentNavigationIdRef.current
+
+      if (eventNavigationId == null || eventNavigationId !== activeNavId)
+        return
+
+      if (row.trim() === 'STREAM_COMPLETE') {
+        streamCompleteRef.current = true
+        rowProcessingRef.current = rowProcessingRef.current.then(() => {
+          if (currentNavigationIdRef.current === activeNavId)
+            return processRows()
+        })
+        return
+      }
+
+      streamingRowsRef.current.push(row)
+      rowProcessingRef.current = rowProcessingRef.current.then(() => {
+        if (currentNavigationIdRef.current === activeNavId)
+          return processRows()
+      })
+    }
+
+    window.addEventListener('rari:navigation-start', handleNavigationStart)
     window.addEventListener('rari:navigate', handleNavigate)
     window.addEventListener('rari:app-router-rerender', handleAppRouterRerender)
     window.addEventListener('rari:rsc-invalidate', handleRscInvalidate)
@@ -973,6 +1291,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return () => {
       clearInterval(cleanupInterval)
       clearAllSuspendingPromises()
+      window.removeEventListener('rari:navigation-start', handleNavigationStart)
       window.removeEventListener('rari:navigate', handleNavigate)
       window.removeEventListener('rari:app-router-rerender', handleAppRouterRerender)
       window.removeEventListener('rari:rsc-invalidate', handleRscInvalidate)
@@ -1019,7 +1338,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       for (const child of children) {
         if (child && typeof child === 'object' && child.type === 'body')
-          return child.props?.children || null
+          return child.props?.children ?? null
       }
     }
 
@@ -1028,9 +1347,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   let contentToRender = children
 
-  if (rscPayload?.element) {
+  if (rscPayload?.element != null) {
     const extracted = extractBodyContent(rscPayload.element)
-    contentToRender = extracted || rscPayload.element
+    contentToRender = extracted ?? rscPayload.element
   }
 
   if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))

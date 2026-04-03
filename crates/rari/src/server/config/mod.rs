@@ -70,6 +70,11 @@ impl Default for RedirectConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ActionConfig {
+    pub allowed_origins: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CspConfig {
     pub script_src: Vec<String>,
@@ -339,6 +344,8 @@ pub struct Config {
     pub cors: CorsConfig,
     #[serde(default)]
     pub redirect: RedirectConfig,
+    #[serde(default)]
+    pub action: ActionConfig,
     #[serde(default)]
     pub csp: CspConfig,
     #[serde(default)]
@@ -616,6 +623,16 @@ impl Config {
                 config.spam_blocker.enabled = enabled;
             }
 
+            if let Some(action_data) = config_data.get("action")
+                && let Some(allowed_origins) =
+                    action_data.get("allowedOrigins").and_then(|v| v.as_array())
+            {
+                config.action.allowed_origins = allowed_origins
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
+            }
+
             if let Some(cache_control_data) = config_data.get("cacheControl")
                 && let Some(routes) = cache_control_data.get("routes").and_then(|v| v.as_object())
             {
@@ -710,6 +727,29 @@ impl Config {
             };
 
             CorsConfig { allowed_origins, allow_credentials: true, max_age: 86400 }
+        }
+    }
+
+    pub fn action_origins(&self) -> Vec<String> {
+        if !self.action.allowed_origins.is_empty() {
+            return self.action.allowed_origins.clone();
+        }
+
+        if self.is_development() {
+            vec![
+                format!("http://{}:{}", self.server.host, self.server.port),
+                format!("http://localhost:{}", self.server.port),
+                format!("http://127.0.0.1:{}", self.server.port),
+            ]
+        } else if let Some(origin) = &self.server.origin {
+            vec![origin.clone()]
+        } else {
+            tracing::warn!(
+                "No origin configured for server actions in production. \
+                 Using same-origin validation (comparing origin/referer with host header). \
+                 Set RARI_ORIGIN environment variable for explicit origin validation."
+            );
+            vec![]
         }
     }
 
