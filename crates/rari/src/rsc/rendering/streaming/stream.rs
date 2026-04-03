@@ -1,5 +1,4 @@
 use futures::Stream;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use super::types::RscStreamChunk;
@@ -18,7 +17,6 @@ impl RscStream {
     pub fn with_request_context(
         mut self,
         request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
-        _runtime: Arc<crate::runtime::JsExecutionRuntime>,
     ) -> Self {
         self._request_context_guard = Some(request_context);
         self

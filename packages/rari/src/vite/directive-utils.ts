@@ -68,7 +68,7 @@ function skipString(source: string, i: number, len: number, quote: string): numb
   return i
 }
 
-export function getTopLevelDirective(source: string): string | null {
+function hasDirective(source: string, targetDirective: string): boolean {
   let i = 0
   const len = source.length
 
@@ -94,13 +94,19 @@ export function getTopLevelDirective(source: string): string | null {
       if (end !== -1) {
         const directive = source.slice(i + 1, end)
         let j = end + 1
+
         while (j < len) {
           if (source[j] === ' ' || source[j] === '\t') {
             j++
             continue
           }
-          if (source[j] === '\n' || source[j] === '\r' || source[j] === ';')
-            return directive
+          if (source[j] === '\n' || source[j] === '\r' || source[j] === ';') {
+            if (directive === targetDirective) {
+              return true
+            }
+            i = j + 1
+            break
+          }
           if (source[j] === '/' && source[j + 1] === '/') {
             j = skipSingleLineComment(source, j, len)
             continue
@@ -109,25 +115,34 @@ export function getTopLevelDirective(source: string): string | null {
             j = skipMultiLineComment(source, j, len)
             continue
           }
-          break
+
+          return false
         }
-        if (j >= len)
-          return directive
+
+        if (j >= len) {
+          return directive === targetDirective
+        }
+
+        if (j < len && (source[j - 1] === '\n' || source[j - 1] === '\r' || source[j - 1] === ';')) {
+          continue
+        }
+
+        return false
       }
     }
 
-    return null
+    return false
   }
 
-  return null
+  return false
 }
 
 export function hasTopLevelUseServerDirective(source: string): boolean {
-  return getTopLevelDirective(source) === 'use server'
+  return hasDirective(source, 'use server')
 }
 
 export function hasTopLevelUseClientDirective(source: string): boolean {
-  return getTopLevelDirective(source) === 'use client'
+  return hasDirective(source, 'use client')
 }
 
 function isIdentifierPart(char: string | undefined): boolean {
@@ -138,6 +153,70 @@ function isIdentifierPart(char: string | undefined): boolean {
     || char === '_'
     || char === '$'
   )
+}
+
+function canPrecedeRegex(char: string | undefined): boolean {
+  return !char || char === '(' || char === '[' || char === '{' || char === ','
+    || char === ';' || char === '=' || char === ':' || char === '?' || char === '!'
+    || char === '+' || char === '-' || char === '*' || char === '%' || char === '&'
+    || char === '|' || char === '^' || char === '~' || char === '<' || char === '>'
+}
+
+function skipRegex(source: string, i: number, len: number): number {
+  i++
+  let inCharClass = false
+
+  while (i < len) {
+    if (source[i] === '\\') {
+      i += 2
+      continue
+    }
+
+    if (inCharClass) {
+      if (source[i] === ']') {
+        inCharClass = false
+      }
+      i++
+      continue
+    }
+
+    if (source[i] === '[') {
+      inCharClass = true
+      i++
+      continue
+    }
+
+    if (source[i] === '/') {
+      i++
+      while (i < len && isIdentifierPart(source[i])) {
+        i++
+      }
+
+      return i
+    }
+
+    if (isLineTerminator(source[i])) {
+      return i
+    }
+
+    i++
+  }
+
+  return i
+}
+
+function getPreviousNonTriviaChar(source: string, pos: number): string | undefined {
+  let i = pos - 1
+  while (i >= 0) {
+    if (isWhitespace(source[i])) {
+      i--
+      continue
+    }
+
+    return source[i]
+  }
+
+  return undefined
 }
 
 export function hasDefaultExport(source: string): boolean {
@@ -164,6 +243,14 @@ export function hasDefaultExport(source: string): boolean {
     if (quote) {
       i = skipString(source, i, len, quote)
       continue
+    }
+
+    if (source[i] === '/' && source[i + 1] !== '/' && source[i + 1] !== '*') {
+      const prevChar = getPreviousNonTriviaChar(source, i)
+      if (canPrecedeRegex(prevChar)) {
+        i = skipRegex(source, i, len)
+        continue
+      }
     }
 
     if (source.slice(i, i + 6) === 'export') {

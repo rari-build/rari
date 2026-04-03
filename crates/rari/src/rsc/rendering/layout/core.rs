@@ -187,6 +187,7 @@ impl LayoutRenderer {
                     Self::execute_composition_and_serialize(&renderer, composition_script).await?;
 
                 Self::validate_rsc_wire_format(&rsc_wire_format)?;
+                Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
                 return Ok(rsc_wire_format);
             }
@@ -223,9 +224,7 @@ impl LayoutRenderer {
 
             Self::resolve_lazy_promises(&renderer, &mut rsc_wire_format).await?;
 
-            if let Err(e) = Self::validate_html_structure(&rsc_wire_format, route_match) {
-                error!("HTML structure validation failed: {}", e);
-            }
+            Self::validate_html_structure(&rsc_wire_format, route_match)?;
 
             Ok(rsc_wire_format)
         };
@@ -300,11 +299,6 @@ impl LayoutRenderer {
             false,
         )?;
 
-        let runtime = {
-            let renderer_guard = self.renderer.lock().await;
-            Arc::clone(&renderer_guard.runtime)
-        };
-
         let streaming_operation = async {
             let renderer_guard = self.renderer.lock().await;
 
@@ -333,6 +327,7 @@ impl LayoutRenderer {
                     Self::validate_rsc_wire_format(&rsc_wire_format)?;
 
                     if return_rsc_on_fallback {
+                        Self::validate_html_structure(&rsc_wire_format, route_match)?;
                         drop(renderer);
                         return Ok(RenderResult::Static(rsc_wire_format));
                     }
@@ -365,8 +360,7 @@ impl LayoutRenderer {
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
-                    let stream_with_context =
-                        stream.with_request_context(ctx, Arc::clone(&runtime));
+                    let stream_with_context = stream.with_request_context(ctx);
                     Ok(RenderResult::Streaming(stream_with_context))
                 }
                 other_result => other_result,
