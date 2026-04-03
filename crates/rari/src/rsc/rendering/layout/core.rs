@@ -57,10 +57,16 @@ impl LayoutRenderer {
             .await;
 
         if let Err(e) = injection_result {
-            let _ = renderer
+            if let Err(cleanup_err) = renderer
                 .runtime
                 .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
-                .await;
+                .await
+            {
+                tracing::debug!(
+                    "Failed to disable streaming after injection error: {}",
+                    cleanup_err
+                );
+            }
             return Err(e);
         }
 
@@ -73,6 +79,44 @@ impl LayoutRenderer {
             .execute_script("disable_streaming".to_string(), JS_DISABLE_STREAMING.to_string())
             .await?;
         Ok(())
+    }
+
+    async fn render_fallback(
+        &self,
+        renderer: &RscRenderer,
+        fallback_script: String,
+        route_match: &AppRouteMatch,
+        return_rsc_on_fallback: bool,
+        can_use_html_cache: bool,
+        cache_key: u64,
+    ) -> Result<RenderResult, RariError> {
+        let rsc_wire_format =
+            Self::execute_composition_and_serialize(renderer, fallback_script).await?;
+
+        Self::validate_rsc_wire_format(&rsc_wire_format)?;
+
+        if return_rsc_on_fallback {
+            Self::validate_html_structure(&rsc_wire_format, route_match)?;
+            return Ok(RenderResult::Static(rsc_wire_format));
+        }
+
+        Self::validate_html_structure(&rsc_wire_format, route_match)?;
+
+        let html_renderer =
+            crate::rsc::rendering::html::RscHtmlRenderer::new(Arc::clone(&renderer.runtime));
+        let config = Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
+        let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+        Self::validate_html_structure(&html, route_match)?;
+
+        let is_not_found = route_match.not_found.is_some();
+        if is_not_found {
+            return Ok(RenderResult::Static(html));
+        }
+
+        if can_use_html_cache {
+            self.html_cache.insert(cache_key, html.clone());
+        }
+        Ok(RenderResult::Static(html))
     }
 
     pub async fn check_page_not_found(
@@ -297,46 +341,33 @@ impl LayoutRenderer {
                     .await;
 
                 match streaming_result {
-                    Ok(stream) => Ok(RenderResult::Streaming(stream)),
+                    Ok(stream) => {
+                        let runtime = Arc::clone(&renderer_guard.runtime);
+                        let stream_with_cleanup = stream.with_cleanup(move || {
+                            tokio::spawn(async move {
+                                let _ = runtime
+                                    .execute_script(
+                                        "disable_streaming".to_string(),
+                                        crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                    )
+                                    .await;
+                            });
+                        });
+                        Ok(RenderResult::Streaming(stream_with_cleanup))
+                    }
                     Err(e) => {
                         error!("Streaming failed, falling back to static render: {}", e);
 
-                        let fallback_result = async {
-                            let rsc_wire_format = Self::execute_composition_and_serialize(
+                        let fallback_result = self
+                            .render_fallback(
                                 &renderer_guard,
                                 fallback_script,
+                                route_match,
+                                return_rsc_on_fallback,
+                                can_use_html_cache,
+                                cache_key,
                             )
-                            .await?;
-
-                            Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-                            if return_rsc_on_fallback {
-                                Self::validate_html_structure(&rsc_wire_format, route_match)?;
-                                return Ok(RenderResult::Static(rsc_wire_format));
-                            }
-
-                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
-                                Arc::clone(&renderer_guard.runtime),
-                            );
-                            let config = Config::get()
-                                .ok_or_else(|| RariError::internal("Config not available"))?;
-                            let html =
-                                html_renderer.render_to_html(&rsc_wire_format, config).await?;
-                            Self::validate_html_structure(&html, route_match)?;
-
-                            let is_not_found = route_match.not_found.is_some();
-                            if is_not_found {
-                                return Ok(RenderResult::Static(html));
-                            }
-
-                            if can_use_html_cache {
-                                self.html_cache.insert(cache_key, html.clone());
-                            }
-                            Ok(RenderResult::Static(html))
-                        }
-                        .await;
+                            .await;
 
                         let _ = Self::disable_streaming(&renderer_guard).await;
 
@@ -370,6 +401,8 @@ impl LayoutRenderer {
 
                 let layout_structure = crate::rsc::rendering::layout::LayoutStructure::new();
 
+                let runtime_for_cleanup = Arc::clone(&renderer_guard.runtime);
+
                 drop(renderer_guard);
 
                 let streaming_result = streaming_renderer
@@ -377,46 +410,34 @@ impl LayoutRenderer {
                     .await;
 
                 match streaming_result {
-                    Ok(stream) => Ok(RenderResult::Streaming(stream)),
+                    Ok(stream) => {
+                        let stream_with_cleanup = stream.with_cleanup(move || {
+                            tokio::spawn(async move {
+                                let _ = runtime_for_cleanup
+                                    .execute_script(
+                                        "disable_streaming".to_string(),
+                                        crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
+                                    )
+                                    .await;
+                            });
+                        });
+                        Ok(RenderResult::Streaming(stream_with_cleanup))
+                    }
                     Err(e) => {
                         error!("Streaming failed, falling back to static render: {}", e);
 
                         let renderer = self.renderer.lock().await;
 
-                        let fallback_result = async {
-                            let rsc_wire_format =
-                                Self::execute_composition_and_serialize(&renderer, fallback_script)
-                                    .await?;
-
-                            Self::validate_rsc_wire_format(&rsc_wire_format)?;
-
-                            if return_rsc_on_fallback {
-                                Self::validate_html_structure(&rsc_wire_format, route_match)?;
-                                return Ok(RenderResult::Static(rsc_wire_format));
-                            }
-
-                            Self::validate_html_structure(&rsc_wire_format, route_match)?;
-
-                            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(
-                                Arc::clone(&renderer.runtime),
-                            );
-                            let config = Config::get()
-                                .ok_or_else(|| RariError::internal("Config not available"))?;
-                            let html =
-                                html_renderer.render_to_html(&rsc_wire_format, config).await?;
-                            Self::validate_html_structure(&html, route_match)?;
-
-                            let is_not_found = route_match.not_found.is_some();
-                            if is_not_found {
-                                return Ok(RenderResult::Static(html));
-                            }
-
-                            if can_use_html_cache {
-                                self.html_cache.insert(cache_key, html.clone());
-                            }
-                            Ok(RenderResult::Static(html))
-                        }
-                        .await;
+                        let fallback_result = self
+                            .render_fallback(
+                                &renderer,
+                                fallback_script,
+                                route_match,
+                                return_rsc_on_fallback,
+                                can_use_html_cache,
+                                cache_key,
+                            )
+                            .await;
 
                         let _ = Self::disable_streaming(&renderer).await;
                         drop(renderer);

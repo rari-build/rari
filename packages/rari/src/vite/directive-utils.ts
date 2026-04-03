@@ -133,17 +133,22 @@ function skipJSX(source: string, i: number, len: number): number {
     }
 
     if (source[i] === '<') {
-      if (source[i + 1] === '/') {
-        depth--
+      const nextChar = source[i + 1]
+      if (nextChar === '/' || nextChar === '.' || isIdentifierPart(nextChar)) {
+        if (nextChar === '/') {
+          depth--
+          i++
+        }
+        else if (nextChar !== '!') {
+          depth++
+        }
         i++
-      }
-      else if (source[i + 1] !== '!') {
-        depth++
+        while (i < len && (isIdentifierPart(source[i]) || source[i] === '.' || source[i] === '-')) {
+          i++
+        }
+        continue
       }
       i++
-      while (i < len && (isIdentifierPart(source[i]) || source[i] === '.' || source[i] === '-')) {
-        i++
-      }
       continue
     }
 
@@ -422,7 +427,12 @@ export function hasDefaultExport(source: string): boolean {
     }
 
     if (source[i] === '<') {
-      i = skipJSX(source, i, len)
+      const nextChar = source[i + 1]
+      if (nextChar === '/' || nextChar === '.' || isIdentifierPart(nextChar)) {
+        i = skipJSX(source, i, len)
+        continue
+      }
+      i++
       continue
     }
 
@@ -465,20 +475,23 @@ export function hasDefaultExport(source: string): boolean {
 
             k = skipTrivia(source, k, len)
 
+            let hasAlias = false
             if (source.slice(k, k + 2) === 'as') {
+              hasAlias = true
               const afterAs = k + 2
               if (afterAs < len && !isIdentifierPart(source[afterAs])) {
                 k = skipTrivia(source, afterAs, len)
-                if (source.slice(k, k + 7) === 'default') {
-                  const afterDefault = k + 7
-                  if (afterDefault >= len || !isIdentifierPart(source[afterDefault])) {
-                    return true
-                  }
+                const aliasStart = k
+                while (k < len && isIdentifierPart(source[k])) {
+                  k++
                 }
+                const alias = source.slice(aliasStart, k)
+                if (alias === 'default')
+                  return true
               }
             }
 
-            if (ident === 'default') {
+            if (!hasAlias && ident === 'default') {
               return true
             }
 
