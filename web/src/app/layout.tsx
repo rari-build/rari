@@ -1,6 +1,7 @@
 import type { LayoutProps, Metadata } from 'rari'
 import { Suspense } from 'react'
 import Footer from '@/components/Footer'
+import FooterSkeleton from '@/components/FooterSkeleton'
 import { PostHogPageView } from '@/components/PostHogPageView'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
@@ -48,7 +49,9 @@ export default async function RootLayout({ children, pathname }: LayoutProps) {
             <main className="flex-1 min-w-0 bg-[#0d1117] rounded-b-md overflow-hidden">
               {children}
             </main>
-            <Footer />
+            <Suspense fallback={<FooterSkeleton />}>
+              <Footer />
+            </Suspense>
           </div>
         </div>
       </div>
