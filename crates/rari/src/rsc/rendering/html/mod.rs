@@ -1603,47 +1603,88 @@ if (typeof window !== 'undefined') {{
         let escaped_row = RscHtmlRenderer::escape_js_string(rsc_line.as_ref());
         let escaped_boundary_id = RscHtmlRenderer::escape_js_string(&boundary_id);
 
-        let is_page_loading_boundary = boundary_id.contains("_promise_");
+        let dom_update_script = format!(
+            r#"
+  if(!window['~rari'].processBoundaryUpdate){{
+    var el=document.querySelector('[data-boundary-id="{}"]');
+    if(el){{
+      try{{
+        var colonIndex='{}'.indexOf(':');
+        if(colonIndex!==-1){{
+          var contentStr='{}'.substring(colonIndex+1);
+          if(!contentStr.startsWith('I[')){{
+            var content=JSON.parse(contentStr);
 
-        let dom_update_script = if is_page_loading_boundary {
-            String::new()
-        } else {
-            let content_json = parts[1];
-            let rendered_html = if let Some(text) = content_json.strip_prefix('T') {
-                escape_html(text)
-            } else {
-                match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => self.render_json_value_to_simple_html(&content),
-                    Err(e) => {
-                        tracing::warn!("Failed to parse boundary content JSON: {}", e);
-                        r#"<div class="rari-error">Content unavailable</div>"#.to_string()
-                    }
-                }
-            };
-            let escaped_html = RscHtmlRenderer::escape_js_string(&rendered_html);
-            format!(
-                r#"
-  (function updateDOM() {{
-    if (window['~rari'] && typeof window['~rari'].processBoundaryUpdate === 'function') {{
-    }} else {{
-      var boundaryElement = document.querySelector('[data-boundary-id="{}"]');
-      if (boundaryElement) {{
-        boundaryElement.innerHTML = '{}';
-        boundaryElement.setAttribute('data-resolved', 'true');
+            function hasClientComponents(element){{
+              if(!element)return false;
+              if(typeof element==='string')return element.startsWith('$L');
+              if(Array.isArray(element)){{
+                if(element.length>=4&&element[0]==='$'){{
+                  var tag=element[1];
+                  if(typeof tag==='string'&&tag.startsWith('$L'))return true;
+                  var props=element[3];
+                  if(props&&props.children)return hasClientComponents(props.children);
+                }}
+                return element.some(hasClientComponents);
+              }}
+              return false;
+            }}
+
+            if(hasClientComponents(content))return;
+
+            function rscToHtml(element){{
+              if(!element)return '';
+              if(typeof element==='string'||typeof element==='number'){{
+                return String(element).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              }}
+              if(Array.isArray(element)){{
+                if(element.length>=4&&element[0]==='$'){{
+                  var tag=element[1];
+                  var props=element[3];
+                  if(typeof tag==='string'&&!tag.startsWith('$')){{
+                    var html='<'+tag;
+                    if(props){{
+                      for(var key in props){{
+                        if(key!=='children'&&key!=='~boundaryId'){{
+                          var attrName=key==='className'?'class':key;
+                          if(typeof props[key]==='string'||typeof props[key]==='number'){{
+                            html+=' '+attrName+'="'+String(props[key]).replace(/"/g,'&quot;')+'"';
+                          }}
+                        }}
+                      }}
+                    }}
+                    html+='>';
+                    if(props&&props.children){{
+                      html+=rscToHtml(props.children);
+                    }}
+                    html+='</'+tag+'>';
+                    return html;
+                  }}
+                }}
+                return element.map(rscToHtml).join('');
+              }}
+              return '';
+            }}
+            var htmlContent=rscToHtml(content);
+            if(htmlContent){{
+              el.innerHTML=htmlContent;
+              el.classList.add('rari-boundary-resolved');
+              el.setAttribute('data-resolved','true');
+            }}
+          }}
+        }}
+      }}catch(e){{
+        console.error('[rari] Progressive update error:',e);
       }}
     }}
-  }})();"#,
-                escaped_boundary_id, escaped_html
-            )
-        };
+  }}"#,
+            RscHtmlRenderer::escape_js_string(&boundary_id),
+            escaped_row,
+            escaped_row
+        );
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
         let script = format!(
-            r#"<!-- Boundary update: {} at {} -->
-<script data-boundary-id="{}" data-row-id="{}">
+            r#"<script data-boundary-id="{}" data-row-id="{}">
 (function(){{
   if(!window['~rari'])window['~rari']={{}};
   if(!window['~rari'].streaming)window['~rari'].streaming={{}};
@@ -1662,8 +1703,6 @@ if (typeof window !== 'undefined') {{
 }})();
 </script>"#,
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
-            timestamp,
-            RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
             escaped_row,
             escaped_row,
@@ -1677,184 +1716,6 @@ if (typeof window !== 'undefined') {{
         );
 
         Ok(script.into_bytes())
-    }
-
-    fn render_json_value_to_simple_html(&self, value: &serde_json::Value) -> String {
-        match value {
-            serde_json::Value::String(s) => {
-                if s.starts_with("$L") || s.starts_with("$@") {
-                    return r#"<span data-client-ref="pending"></span>"#.to_string();
-                }
-                escape_html(s)
-            }
-            serde_json::Value::Number(n) => n.to_string(),
-            serde_json::Value::Bool(_) => String::new(),
-            serde_json::Value::Array(arr) => {
-                if arr.len() >= 4
-                    && arr[0].as_str() == Some("$")
-                    && let (Some(tag), Some(props)) = (arr[1].as_str(), arr.get(3))
-                {
-                    if tag.starts_with("$L") || tag.starts_with("$@") {
-                        return r#"<span data-client-ref="pending"></span>"#.to_string();
-                    }
-
-                    if tag.starts_with("$")
-                        && tag.len() > 1
-                        && tag.chars().nth(1).map(|c| c.is_ascii_digit()).unwrap_or(false)
-                    {
-                        if let Some(props_obj) = props.as_object()
-                            && let Some(resolved_type) = props_obj.get("type")
-                        {
-                            if let Some(resolved_props) = props_obj.get("props") {
-                                let resolved_element = serde_json::Value::Array(vec![
-                                    serde_json::Value::String("$".to_string()),
-                                    resolved_type.clone(),
-                                    serde_json::Value::Null,
-                                    resolved_props.clone(),
-                                ]);
-                                return self.render_json_value_to_simple_html(&resolved_element);
-                            } else if let Some(type_str) = resolved_type.as_str() {
-                                let resolved_element = serde_json::Value::Array(vec![
-                                    serde_json::Value::String("$".to_string()),
-                                    serde_json::Value::String(type_str.to_string()),
-                                    serde_json::Value::Null,
-                                    serde_json::Value::Object(serde_json::Map::new()),
-                                ]);
-                                return self.render_json_value_to_simple_html(&resolved_element);
-                            }
-                        }
-                        return r#"<span data-client-ref="pending"></span>"#.to_string();
-                    }
-
-                    if tag.starts_with("$")
-                        && tag.len() > 1
-                        && !tag.chars().nth(1).map(|c| c.is_ascii_alphanumeric()).unwrap_or(false)
-                    {
-                        return r#"<span data-client-ref="pending"></span>"#.to_string();
-                    }
-
-                    if let Some(props_obj) = props.as_object()
-                        && let (Some(props_type), Some(props_props)) =
-                            (props_obj.get("type"), props_obj.get("props"))
-                    {
-                        let resolved_element = serde_json::Value::Array(vec![
-                            serde_json::Value::String("$".to_string()),
-                            props_type.clone(),
-                            props_obj.get("key").cloned().unwrap_or(serde_json::Value::Null),
-                            props_props.clone(),
-                        ]);
-                        return self.render_json_value_to_simple_html(&resolved_element);
-                    }
-
-                    if !tag
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
-                    {
-                        return String::new();
-                    }
-
-                    let mut html = format!("<{}", tag);
-
-                    if let Some(props_obj) = props.as_object() {
-                        for (key, val) in props_obj {
-                            if key == "children" || key == "~boundaryId" || key == "key" {
-                                continue;
-                            }
-
-                            let attr_name = if key == "className" {
-                                "class".to_string()
-                            } else if key == "htmlFor" {
-                                "for".to_string()
-                            } else {
-                                key.clone()
-                            };
-
-                            if !is_valid_attribute_name(&attr_name) {
-                                continue;
-                            }
-
-                            if key == "style" && val.is_object() {
-                                if let Some(style_obj) = val.as_object() {
-                                    let style_str = serialize_style_object(style_obj);
-                                    if !style_str.is_empty() {
-                                        html.push_str(&format!(
-                                            r#" style="{}""#,
-                                            RscHtmlRenderer::escape_html_attribute(&style_str)
-                                        ));
-                                    }
-                                }
-                                continue;
-                            }
-
-                            match val {
-                                serde_json::Value::String(s) => {
-                                    if s.starts_with("$L") {
-                                        continue;
-                                    }
-                                    html.push_str(&format!(
-                                        r#" {}="{}""#,
-                                        attr_name,
-                                        RscHtmlRenderer::escape_html_attribute(s)
-                                    ));
-                                }
-                                serde_json::Value::Number(n) => {
-                                    html.push_str(&format!(r#" {}="{}""#, attr_name, n));
-                                }
-                                serde_json::Value::Bool(true)
-                                    if is_boolean_html_attribute(&attr_name) =>
-                                {
-                                    html.push_str(&format!(" {}", attr_name));
-                                }
-                                serde_json::Value::Bool(_) => {}
-                                _ => {}
-                            }
-                        }
-                    }
-
-                    if SELF_CLOSING_TAGS.contains(&tag) {
-                        html.push_str(" />");
-                        return html;
-                    }
-
-                    html.push('>');
-
-                    if let Some(props_obj) = props.as_object()
-                        && let Some(children) = props_obj.get("children")
-                    {
-                        html.push_str(&self.render_json_value_to_simple_html(children));
-                    }
-
-                    html.push_str(&format!("</{}>", tag));
-                    return html;
-                }
-
-                arr.iter()
-                    .map(|child| self.render_json_value_to_simple_html(child))
-                    .collect::<Vec<_>>()
-                    .join("")
-            }
-            serde_json::Value::Object(props_obj) => {
-                if let Some(props_type) = props_obj.get("type") {
-                    let resolved_element = serde_json::Value::Array(vec![
-                        serde_json::Value::String("$".to_string()),
-                        props_type.clone(),
-                        props_obj.get("key").cloned().unwrap_or(serde_json::Value::Null),
-                        props_obj
-                            .get("props")
-                            .cloned()
-                            .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
-                    ]);
-                    return self.render_json_value_to_simple_html(&resolved_element);
-                }
-
-                if let Some(children) = props_obj.get("children") {
-                    return self.render_json_value_to_simple_html(children);
-                }
-
-                String::new()
-            }
-            _ => String::new(),
-        }
     }
 
     async fn generate_error_replacement(

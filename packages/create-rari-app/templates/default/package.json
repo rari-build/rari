@@ -23,11 +23,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260401.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260407.1",
     "tailwindcss": "^4.2.2",
-    "vite-plus": "^0.1.15"
+    "vite-plus": "^0.1.16"
   }
 }

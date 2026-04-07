@@ -4,6 +4,7 @@ use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -230,12 +231,6 @@ pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> 
     crate::rsc::rendering::sanitizer::sanitize_component_output(html)
 }
 
-#[derive(Default)]
-pub struct FetchOpState {
-    pub request_context:
-        Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
-}
-
 fn http_status_text(status: u16) -> &'static str {
     match status {
         200 => "OK",
@@ -286,8 +281,8 @@ pub async fn op_fetch_with_cache(
     let request_context = {
         let op_state_ref = state.borrow();
         op_state_ref
-            .try_borrow::<FetchOpState>()
-            .and_then(|fetch_state| fetch_state.request_context.clone())
+            .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+            .cloned()
     };
 
     if let Some(ctx) = request_context {
@@ -378,8 +373,8 @@ async fn perform_simple_fetch(
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
     let op_state_ref = state.borrow();
-    let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    let Some(ctx) = op_state_ref
+        .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     else {
         return String::new();
     };
@@ -486,7 +481,7 @@ pub fn op_set_cookie(
 
     let op_state_ref = state.borrow();
     if let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     {
         let path = args.path.or_else(|| Some("/".to_string()));
         ctx.pending_cookies.insert(
@@ -515,7 +510,7 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
     let op_state_ref = state.borrow();
     if let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     {
         let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
             .pending_cookies
@@ -609,5 +604,35 @@ mod tests {
         assert!(error_op.contains("\"type\":\"error\""));
         assert!(error_op.contains("\"message\":\"Test error\""));
         assert!(error_op.contains("\"stack\":\"stack trace\""));
+    }
+}
+
+#[op2]
+#[serde]
+pub fn op_cache_get(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+) -> Option<serde_json::Value> {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
+    } else {
+        None
+    }
+}
+
+#[op2]
+pub fn op_cache_set(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+    #[serde] value: serde_json::Value,
+) {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.insert(cache_key, value);
     }
 }

@@ -659,6 +659,18 @@ impl JsExecutionRuntime {
             (Err(op_err), Ok(())) => Err(op_err),
         }
     }
+
+    pub async fn execute_with_persistent_request_context<F, T>(
+        &self,
+        request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        operation: F,
+    ) -> Result<T, RariError>
+    where
+        F: std::future::Future<Output = Result<T, RariError>>,
+    {
+        self.set_request_context(request_context).await?;
+        operation.await
+    }
 }
 
 impl From<crate::error::RariError> for JsError {

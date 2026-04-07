@@ -282,28 +282,18 @@ impl DenoRuntime {
                                         request_context,
                                         result_tx,
                                     } => {
-                                        use crate::runtime::ops::FetchOpState;
                                         let op_state = deno_runtime.op_state();
                                         let mut op_state_borrow = op_state.borrow_mut();
-                                        if let Some(fetch_state) =
-                                            op_state_borrow.try_borrow_mut::<FetchOpState>()
-                                        {
-                                            fetch_state.request_context = Some(request_context);
-                                        }
+                                        op_state_borrow.put(request_context);
                                         let _ = result_tx.send(Ok(()));
                                         Ok::<(), RariError>(())
                                     }
                                     JsRequest::ClearRequestContext {
                                         result_tx,
                                     } => {
-                                        use crate::runtime::ops::FetchOpState;
                                         let op_state = deno_runtime.op_state();
                                         let mut op_state_borrow = op_state.borrow_mut();
-                                        if let Some(fetch_state) =
-                                            op_state_borrow.try_borrow_mut::<FetchOpState>()
-                                        {
-                                            fetch_state.request_context = None;
-                                        }
+                                        op_state_borrow.try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
                                         let _ = result_tx.send(Ok(()));
                                         Ok::<(), RariError>(())
                                     }

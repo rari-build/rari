@@ -1100,17 +1100,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const hasPageContent = rows.some((r) => {
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
-        const content = ci > 0 ? r.substring(ci + 1) : ''
-        if (!NUMERIC_REGEX.test(id) || !isValidFlightPayload(content))
-          return false
-
-        const isReferencedByShell = rows.some((shellRow) => {
-          const sci = shellRow.indexOf(':')
-          const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
-          const refPattern = new RegExp(`"?\\$L${id}"?(?![0-9a-fA-F])`)
-          return refPattern.test(shellContent)
-        })
-        return isReferencedByShell
+        return id === '1' && NUMERIC_REGEX.test(id)
       })
 
       if (!hasShellContent && !hasPageContent)
