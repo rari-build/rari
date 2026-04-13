@@ -31,6 +31,11 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             name: rari-win32-x64.exe
+            vcpkg_triplet: x64-windows
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+            name: rari-win32-arm64.exe
+            vcpkg_triplet: arm64-windows
 
     steps:
       - name: Checkout
@@ -57,7 +62,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          vcpkg install fontconfig:x64-windows
+          vcpkg install fontconfig:${{ matrix.vcpkg_triplet }}
         shell: pwsh
 
       - name: Cache cargo registry
@@ -90,7 +95,7 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
           VCPKG_ROOT: C:\vcpkg
 
       - name: Build binary (Unix)
@@ -135,6 +140,8 @@ jobs:
             binary: rari-darwin-arm64
           - platform: win32-x64
             binary: rari-win32-x64.exe
+          - platform: win32-arm64
+            binary: rari-win32-arm64.exe
 
     steps:
       - name: Checkout
@@ -161,7 +168,7 @@ jobs:
 
           BINARY_FILE=$(find platform-binary -name "*rari*" -type f | head -1)
 
-          if [[ "${{ matrix.platform }}" == "win32-x64" ]]; then
+          if [[ "${{ matrix.platform }}" == win32-* ]]; then
             cp "${BINARY_FILE}" "${PACKAGE_DIR}/bin/rari.exe"
             chmod +x "${PACKAGE_DIR}/bin/rari.exe"
           else
@@ -215,6 +222,12 @@ jobs:
               OS_NAME="Windows"
               ARCH="x64"
               DESCRIPTION="x86_64 Windows systems"
+              ;;
+            win32-arm64)
+              PLATFORM_NAME="Windows ARM64"
+              OS_NAME="Windows"
+              ARCH="ARM64"
+              DESCRIPTION="ARM64 Windows systems"
               ;;
           esac
 

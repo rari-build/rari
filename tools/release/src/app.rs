@@ -66,6 +66,7 @@ impl App {
             Package::load("rari-darwin-x64", "packages/rari-darwin-x64", false).await?,
             Package::load("rari-linux-arm64", "packages/rari-linux-arm64", false).await?,
             Package::load("rari-linux-x64", "packages/rari-linux-x64", false).await?,
+            Package::load("rari-win32-arm64", "packages/rari-win32-arm64", false).await?,
             Package::load("rari-win32-x64", "packages/rari-win32-x64", false).await?,
         ];
 

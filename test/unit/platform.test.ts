@@ -63,6 +63,14 @@ describe('platform', () => {
       expect(instructions).toContain('rari-win32-x64')
     })
 
+    it('should return installation instructions for win32-arm64', () => {
+      mockPlatform('win32', 'arm64')
+
+      const instructions = getInstallationInstructions()
+
+      expect(instructions).toContain('rari-win32-arm64')
+    })
+
     it('should throw error for unsupported platform', () => {
       mockPlatform('freebsd' as any, 'x64')
 
@@ -86,6 +94,7 @@ describe('platform', () => {
       { platform: 'darwin', arch: 'arm64', expected: 'rari-darwin-arm64' },
       { platform: 'linux', arch: 'x64', expected: 'rari-linux-x64' },
       { platform: 'linux', arch: 'arm64', expected: 'rari-linux-arm64' },
+      { platform: 'win32', arch: 'arm64', expected: 'rari-win32-arm64' },
       { platform: 'win32', arch: 'x64', expected: 'rari-win32-x64' },
     ])('should handle $platform-$arch', ({ platform, arch, expected }) => {
       mockPlatform(platform as any, arch as any)

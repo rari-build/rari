@@ -9,6 +9,7 @@ packages:
   - '!packages/rari-darwin-x64'
   - '!packages/rari-linux-arm64'
   - '!packages/rari-linux-x64'
+  - '!packages/rari-win32-arm64'
   - '!packages/rari-win32-x64'
   - test/fixtures/*
   - web
