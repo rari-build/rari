@@ -307,11 +307,16 @@ pub async fn run_event_loop_with_promise_timeout(
     let start_time = std::time::Instant::now();
 
     while start_time.elapsed() < timeout_duration {
-        let _ = tokio::time::timeout(
+        match tokio::time::timeout(
             std::time::Duration::from_millis(10),
             run_event_loop_with_error_handling(runtime, "promise tick"),
         )
-        .await;
+        .await
+        {
+            Err(_elapsed) => {}
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e),
+        }
 
         if let Ok(is_complete) = check_promise_completion(runtime)
             && is_complete

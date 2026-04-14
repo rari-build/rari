@@ -67,7 +67,7 @@ fn test_parse_rsc_line_invalid_row_id() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    let result = renderer.parse_rsc_line("abc:{}");
+    let result = renderer.parse_rsc_line("xyz:{}");
     assert!(result.is_err());
     let err_msg = format!("{:?}", result.unwrap_err());
     assert!(err_msg.contains("Invalid row ID"));
@@ -1567,4 +1567,20 @@ async fn test_all_html_boolean_attributes() {
         "HTML boolean attributes should not have =\"true\": {}",
         html
     );
+}
+
+#[tokio::test]
+async fn test_hexadecimal_row_id_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"a:["$","div",null,{"children":"Row 10"}]
+1f:["$","span",null,{"children":"Row 31"}]
+0:["$","div",null,{"children":["$a","$1f"]}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
+    assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
 }

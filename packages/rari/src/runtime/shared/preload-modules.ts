@@ -2,7 +2,7 @@ import { getClientComponentAsync } from './get-client-component'
 
 export async function preloadModulesFromWireFormat(wireFormat: string): Promise<void> {
   const lines = wireFormat.split('\n')
-  const moduleIds: string[] = []
+  const moduleIds = new Set<string>()
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -21,15 +21,18 @@ export async function preloadModulesFromWireFormat(wireFormat: string): Promise<
         const importData = JSON.parse(jsonContent)
 
         if (typeof importData === 'object' && !Array.isArray(importData) && importData.id) {
-          moduleIds.push(importData.id)
+          const moduleId = importData.name && importData.name !== 'default'
+            ? `${importData.id}#${importData.name}`
+            : importData.id
+          moduleIds.add(moduleId)
         }
       }
       catch {}
     }
   }
 
-  if (moduleIds.length > 0) {
-    await Promise.all(moduleIds.map(async (id) => {
+  if (moduleIds.size > 0) {
+    await Promise.all(Array.from(moduleIds, async (id) => {
       try {
         const component = await getClientComponentAsync(id)
         if (!component)

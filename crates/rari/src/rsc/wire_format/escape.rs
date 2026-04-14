@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_escape_unescape_roundtrip() {
-        let test_cases = vec!["hello", "$L999", "$double", "$$triple", "", "no dollar"];
+        let test_cases = vec!["hello", "$L999", "$double", "$$triple", "", "no dollar", "$"];
 
         for case in test_cases {
             let escaped = escape_rsc_string(case);

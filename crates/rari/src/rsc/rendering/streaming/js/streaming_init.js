@@ -20,7 +20,8 @@ if (!globalThis['~suspense']) {
     currentBoundaryId: null,
     renderGeneration: globalThis['~rsc'].renderGeneration,
   }
-} else {
+}
+else {
   globalThis['~suspense'].renderGeneration = globalThis['~rsc'].renderGeneration
 }
 

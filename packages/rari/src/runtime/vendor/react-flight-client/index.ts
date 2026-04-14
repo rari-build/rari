@@ -66,7 +66,7 @@ export function createFromFetch<T>(
     },
     (e) => {
       if (isAbortError(e)) {
-        response._closed = true
+        close(response)
         return
       }
       reportGlobalError(response, e)
@@ -97,7 +97,7 @@ function startReadingFromStream(
 
   function error(e: any) {
     if (isAbortError(e)) {
-      response._closed = true
+      close(response)
       return
     }
     reportGlobalError(response, e)

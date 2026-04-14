@@ -110,14 +110,11 @@ async fn execute_as_module(
 
     match eval_result {
         Ok(_) => {
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_millis(10),
-                run_event_loop_with_error_handling(
-                    runtime,
-                    &format!("module execution for '{script_name}'"),
-                ),
+            run_event_loop_with_error_handling(
+                runtime,
+                &format!("module execution for '{script_name}'"),
             )
-            .await;
+            .await?;
         }
         Err(eval_err) => {
             if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
@@ -205,7 +202,7 @@ async fn execute_as_script(
             if is_promise_result {
                 handle_promise_result(runtime, script_name, _global_v8_val).await
             } else {
-                handle_non_promise_result(runtime, _global_v8_val)
+                handle_non_promise_result(runtime, _global_v8_val).await
             }
         }
         Err(e) => {
@@ -296,10 +293,12 @@ async fn handle_promise_result(
     }
 }
 
-fn handle_non_promise_result(
+async fn handle_non_promise_result(
     runtime: &mut JsRuntime,
     _global_v8_val: deno_core::v8::Global<deno_core::v8::Value>,
 ) -> Result<JsonValue, RariError> {
+    run_event_loop_with_error_handling(runtime, "non-promise script result").await?;
+
     let json_result = with_scope!(runtime, |scope| {
         let local_v8_val = deno_core::v8::Local::new(scope, _global_v8_val);
         v8_to_json(scope, local_v8_val)

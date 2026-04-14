@@ -646,6 +646,20 @@ fn check_pending_batches(
         if batch.start.elapsed() >= batch.timeout {
             for i in 0..batch.sent.len() {
                 if !batch.sent[i] {
+                    let slot_key = format!("__rari_b{}_{}__", batch.batch_id, i);
+                    let cleanup = format!(
+                        r#"(function() {{
+                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                delete globalThis['~rari_concurrent']['{}'];
+                            }}
+                            if (globalThis['{}']) {{
+                                delete globalThis['{}'];
+                            }}
+                        }})()"#,
+                        slot_key, slot_key, slot_key, slot_key
+                    );
+                    let _ = deno_runtime.execute_script(format!("cleanup_timeout_{i}"), cleanup);
+
                     if let Some(tx) = batch.senders[i].take() {
                         let _ = tx.send(Err(RariError::timeout(format!(
                             "Promise timed out for '{}'",

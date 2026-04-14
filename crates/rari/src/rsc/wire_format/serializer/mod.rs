@@ -512,7 +512,7 @@ impl RscSerializer {
                         {
                             element_props.insert(
                                 "children".to_string(),
-                                Value::String(format!("${}", original.lazy_row_id)),
+                                Value::String(format!("${:x}", original.lazy_row_id)),
                             );
                         } else {
                             element_props.insert("children".to_string(), Value::Null);
@@ -531,7 +531,7 @@ impl RscSerializer {
 
                         element_props.insert(
                             "children".to_string(),
-                            Value::String(format!("${}", lazy_row_id)),
+                            Value::String(format!("${:x}", lazy_row_id)),
                         );
                     }
                 } else {

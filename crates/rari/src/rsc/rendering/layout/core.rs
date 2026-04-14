@@ -685,9 +685,9 @@ impl LayoutRenderer {
                         continue;
                     }
                     let line_to_append = if let Some(colon_pos) = line.find(':') {
-                        if line.starts_with(|c: char| c.is_ascii_digit()) {
+                        if line.starts_with(|c: char| c.is_ascii_hexdigit()) {
                             let row_id_str = &line[..colon_pos];
-                            if row_id_str.parse::<usize>().is_ok() {
+                            if usize::from_str_radix(row_id_str, 16).is_ok() {
                                 let is_import_reference = line
                                     .get(colon_pos + 1..)
                                     .map(|content| content.trim_start().starts_with("I["))

@@ -1,4 +1,3 @@
-/* eslint-disable react/purity */
 import type { Metadata } from 'rari'
 import Counter from '@/components/Counter'
 import TodoList from '@/components/TodoList'
@@ -28,6 +27,7 @@ export default async function InteractivePage() {
         <p className="text-gray-600 leading-relaxed">
           This text is rendered on the server at
           {' '}
+          {/* eslint-disable-next-line react/purity */}
           <strong>{new Date().toISOString()}</strong>
           . The Counter and TodoList
           above are client components that hydrate on the client.

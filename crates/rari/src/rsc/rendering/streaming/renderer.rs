@@ -1232,11 +1232,6 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
-        {
-            let mut root_id = self.root_row_id.lock().await;
-            *root_id = Some(0);
-        }
-
         Ok(())
     }
 
@@ -1367,7 +1362,7 @@ impl StreamingRenderer {
                     && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
                     && let Some(row_id) = symbol_row_id
                 {
-                    serde_json::Value::String(format!("${}", row_id))
+                    serde_json::Value::String(format!("${:x}", row_id))
                 } else {
                     element_type.clone()
                 };
@@ -1458,7 +1453,7 @@ impl StreamingRenderer {
                     && (type_str == "react.suspense" || type_str == "$Sreact.suspense")
                     && let Some(row_id) = symbol_row_id
                 {
-                    serde_json::Value::String(format!("${}", row_id))
+                    serde_json::Value::String(format!("${:x}", row_id))
                 } else {
                     element_type.clone()
                 };

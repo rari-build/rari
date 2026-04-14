@@ -11,7 +11,7 @@ import { createRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
-import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
+import { createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
 import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
 import { preloadModulesFromWireFormat } from './shared/preload-modules'

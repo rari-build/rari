@@ -1664,8 +1664,8 @@ const ${componentName} = registerClientReference(
         return 'virtual:rsc-integration.ts'
       if (id === 'virtual:rari-entry-client' || id === 'virtual:rari-entry-client.ts')
         return 'virtual:rari-entry-client.ts'
-      if (id === 'virtual:react-server-dom-rari-client' || id === 'virtual:react-server-dom-rari-client.ts')
-        return 'virtual:react-server-dom-rari-client.ts'
+      if (id === 'virtual:react-flight-client' || id === 'virtual:react-flight-client.ts')
+        return 'virtual:react-flight-client.ts'
       if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
@@ -2016,11 +2016,11 @@ export class ErrorBoundaryWrapper extends React.Component {
         const code = await loadRscClientRuntime()
         return code.replace(
           RSC_CLIENT_IMPORT_REGEX,
-          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
+          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-flight-client.ts${quote}`,
         )
       }
 
-      if (id === 'virtual:react-server-dom-rari-client.ts') {
+      if (id === 'virtual:react-flight-client.ts') {
         return {
           code: `export * from 'rari/runtime/vendor/react-flight-client'`,
         }

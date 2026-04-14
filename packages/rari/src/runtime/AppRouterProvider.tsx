@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 // @ts-expect-error - virtual module resolved by Vite
-import { createFromFetch, createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
+import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
 import { preloadModulesFromWireFormat } from './shared/preload-modules'
 
@@ -743,7 +743,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         setHmrError(null)
       }
-      catch {
+      catch (error) {
+        console.error('HMR refetch error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -763,7 +764,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setRenderKey(prev => prev + 1)
         setHmrError(null)
       }
-      catch {
+      catch (error) {
+        console.error('RSC invalidate error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -787,7 +789,8 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         await refetchRscPayloadRef.current!()
         setHmrError(null)
       }
-      catch {
+      catch (error) {
+        console.error('Manifest update error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -910,7 +913,9 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           streamingRowsRef.current = null
         }
       }
-      catch {}
+      catch (error) {
+        console.error('Process rows error:', error instanceof Error ? error.message : String(error))
+      }
     }
 
     const handleRscRow = (event: Event) => {

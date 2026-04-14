@@ -947,7 +947,7 @@ class RscClient {
     let rootElement = null
 
     // @ts-expect-error - toSorted not available in this TypeScript version, but works at runtime
-    const elementKeys = elements.keys().toSorted((a: string, b: string) => Number.parseInt(a) - Number.parseInt(b))
+    const elementKeys = elements.keys().toSorted((a: string, b: string) => Number.parseInt(a, 16) - Number.parseInt(b, 16))
     for (const key of elementKeys) {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {

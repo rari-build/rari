@@ -39,7 +39,7 @@ fn collect_client_components(
                 && !component_map.contains_key(type_str)
             {
                 *row_counter += 1;
-                let module_ref = format!("${:x}", row_counter);
+                let module_ref = format!("$L{:x}", row_counter);
 
                 let (file_path, export_name) = if let Some(idx) = type_str.find('#') {
                     (&type_str[..idx], &type_str[idx + 1..])

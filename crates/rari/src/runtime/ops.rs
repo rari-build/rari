@@ -103,7 +103,16 @@ pub async fn op_send_chunk_to_rust(
                 "async": async_module
             });
 
-            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let row_id_num: u32 = match row_id.parse() {
+                Ok(num) => num,
+                Err(e) => {
+                    error!(
+                        "op_send_chunk_to_rust: invalid row_id '{}' for module reference: {}",
+                        row_id, e
+                    );
+                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+                }
+            };
             let rsc_row = format!("{:x}:M{}", row_id_num, module_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -111,7 +120,16 @@ pub async fn op_send_chunk_to_rust(
             }
         }
         (Some(sender), RscStreamOperation::ReactElement { row_id, element }) => {
-            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let row_id_num: u32 = match row_id.parse() {
+                Ok(num) => num,
+                Err(e) => {
+                    error!(
+                        "op_send_chunk_to_rust: invalid row_id '{}' for React element: {}",
+                        row_id, e
+                    );
+                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+                }
+            };
             let rsc_row = format!("{:x}:J{}", row_id_num, element);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -119,7 +137,16 @@ pub async fn op_send_chunk_to_rust(
             }
         }
         (Some(sender), RscStreamOperation::Symbol { row_id, symbol_ref }) => {
-            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let row_id_num: u32 = match row_id.parse() {
+                Ok(num) => num,
+                Err(e) => {
+                    error!(
+                        "op_send_chunk_to_rust: invalid row_id '{}' for symbol reference: {}",
+                        row_id, e
+                    );
+                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+                }
+            };
             let rsc_row = format!("{:x}:S\"{}\"", row_id_num, symbol_ref);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -139,7 +166,16 @@ pub async fn op_send_chunk_to_rust(
                 "digest": digest
             });
 
-            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let row_id_num: u32 = match row_id.parse() {
+                Ok(num) => num,
+                Err(e) => {
+                    error!(
+                        "op_send_chunk_to_rust: invalid row_id '{}' for error message: {}",
+                        row_id, e
+                    );
+                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+                }
+            };
             let rsc_row = format!("{:x}:E{}", row_id_num, error_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {

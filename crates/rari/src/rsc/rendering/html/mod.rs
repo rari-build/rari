@@ -447,8 +447,7 @@ impl RscHtmlRenderer {
         let (id_str, data_str) = line.split_at(colon_pos);
         let data_str = &data_str[1..];
 
-        let id = id_str
-            .parse::<u32>()
+        let id = u32::from_str_radix(id_str, 16)
             .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
 
         if data_str.starts_with('I') {
@@ -885,6 +884,15 @@ impl RscHtmlRenderer {
                 {
                     return self.render_row(row_id, row_map, row_cache).await;
                 }
+
+                if s.starts_with('$')
+                    && s.len() > 1
+                    && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+                    && let Ok(row_id) = u32::from_str_radix(&s[1..], 16)
+                {
+                    return self.render_row(row_id, row_map, row_cache).await;
+                }
+
                 return Ok(escape_html(s));
             }
 
@@ -1188,16 +1196,7 @@ impl RscToHtmlConverter {
             && *max_id > 0
         {
             let row_0 = format!("0:\"${:x}\"\n", max_id);
-            tracing::info!("Inserting row 0 at beginning: {:?}", row_0);
-            tracing::info!(
-                "Payload before insert (first 100 chars): {:?}",
-                &rsc_payload.chars().take(100).collect::<String>()
-            );
             rsc_payload.insert_str(0, &row_0);
-            tracing::info!(
-                "Payload after insert (first 100 chars): {:?}",
-                &rsc_payload.chars().take(100).collect::<String>()
-            );
         }
 
         let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
@@ -1299,7 +1298,10 @@ if (typeof window !== 'undefined') {{
                     return Ok(cached);
                 }
 
-                if s.starts_with('$') && s.len() > 1 && s[1..].chars().all(|c| c.is_ascii_digit()) {
+                if s.starts_with('$')
+                    && s.len() > 1
+                    && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+                {
                     let row_id: u32 = u32::from_str_radix(&s[1..], 16).map_err(|_| {
                         RariError::internal(format!("Invalid chunk reference: {}", s))
                     })?;

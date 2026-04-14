@@ -609,17 +609,12 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         )
 
         const [response] = await Promise.all([
-          fetchPromise,
+          rscFetchPromise,
           routeInfoPromise.catch(() => undefined),
         ])
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
-
-        if (!response.ok && response.status !== 404) {
-          pendingNavigationsRef.current.delete(targetPath)
           return
         }
 
@@ -696,7 +691,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       NAVIGATION_DEBOUNCE_MS,
       {
         leading: true,
-        trailing: false,
+        trailing: true,
         maxWait: NAVIGATION_MAX_WAIT_MS,
       },
     )

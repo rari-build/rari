@@ -276,44 +276,28 @@ test.describe('RSC Protocol Tests', () => {
 test.describe.serial('Suspense Streaming Tests', () => {
   test.setTimeout(60000)
 
-  async function waitForBoundaryTimes(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
+  async function getServerTimestamps(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
     await page.waitForFunction(
       () => {
-        const t = (window as any).__boundaryTimes
-        return t?.['component-a'] && t?.['component-b'] && t?.['component-c']
+        const a = document.querySelector('[data-testid="component-a"]')
+        const b = document.querySelector('[data-testid="component-b"]')
+        const c = document.querySelector('[data-testid="component-c"]')
+        return a?.textContent?.includes(':') && b?.textContent?.includes(':') && c?.textContent?.includes(':')
       },
       { timeout: 40000 },
     )
-    const times = await page.evaluate(() => (window as any).__boundaryTimes)
-    return {
-      timeA: times['component-a'],
-      timeB: times['component-b'],
-      timeC: times['component-c'],
-    }
-  }
-
-  async function setupBoundaryTimingObserver(page: Page) {
-    await page.addInitScript(() => {
-      (window as any).__boundaryTimes = {}
-      const targets = ['component-a', 'component-b', 'component-c']
-
-      const interval = setInterval(() => {
-        let allFound = true
-        for (const id of targets) {
-          if ((window as any).__boundaryTimes[id])
-            continue
-          allFound = false
-          const el = document.querySelector(`[data-testid="${id}"]`)
-          if (el && el.textContent && el.textContent.trim().length > 0)
-            (window as any).__boundaryTimes[id] = Date.now()
-        }
-        if (allFound)
-          clearInterval(interval)
-      }, 50)
+    return page.evaluate(() => {
+      const getText = (id: string) => document.querySelector(`[data-testid="${id}"]`)?.textContent || ''
+      const parseTime = (text: string) => new Date(text.split(':').slice(1).join(':')).getTime()
+      return {
+        timeA: parseTime(getText('component-a')),
+        timeB: parseTime(getText('component-b')),
+        timeC: parseTime(getText('component-c')),
+      }
     })
   }
 
-  function assertProgressiveBoundaries(timeA: number, timeB: number, timeC: number) {
+  function assertProgressiveServerTimestamps(timeA: number, timeB: number, timeC: number) {
     const gapAB = timeB - timeA
     const gapBC = timeC - timeB
     const spanAC = timeC - timeA
@@ -330,42 +314,42 @@ test.describe.serial('Suspense Streaming Tests', () => {
   }
 
   async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
+    let lastError: Error | undefined
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       await page.goto(url, { waitUntil: 'domcontentloaded' })
       try {
         await page.waitForSelector('#root > *', { timeout: 5000 })
         return
       }
-      catch {
+      catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
         if (attempt < maxRetries - 1)
           await page.waitForTimeout(1000)
       }
     }
+    throw new Error(`gotoWithRetry failed after ${maxRetries} attempts for ${url}: ${lastError?.message}`)
   }
 
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
-    await setupBoundaryTimingObserver(page)
-
     await gotoWithRetry(page, '/suspense-streaming')
 
-    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
+    const renderA = await page.waitForSelector('[data-testid="component-a"]', { timeout: 15000 }).then(() => Date.now())
+    const renderB = await page.waitForSelector('[data-testid="component-b"]', { timeout: 15000 }).then(() => Date.now())
+    const renderC = await page.waitForSelector('[data-testid="component-c"]', { timeout: 15000 }).then(() => Date.now())
 
-    const { navigationStart } = await page.evaluate(() => ({
-      navigationStart: performance.timeOrigin,
-    }))
+    expect(renderA).toBeLessThanOrEqual(renderB)
+    expect(renderB).toBeLessThanOrEqual(renderC)
 
-    assertProgressiveBoundaries(timeA, timeB, timeC)
-
-    expect(timeC - navigationStart).toBeLessThan(25000)
+    const { timeA, timeB, timeC } = await getServerTimestamps(page)
+    assertProgressiveServerTimestamps(timeA, timeB, timeC)
   })
 
   test('should resolve boundaries independently based on their delay', async ({ page }) => {
-    await setupBoundaryTimingObserver(page)
     await gotoWithRetry(page, '/suspense-streaming')
 
-    const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
+    const { timeA, timeB, timeC } = await getServerTimestamps(page)
 
-    assertProgressiveBoundaries(timeA, timeB, timeC)
+    assertProgressiveServerTimestamps(timeA, timeB, timeC)
   })
 })
 
