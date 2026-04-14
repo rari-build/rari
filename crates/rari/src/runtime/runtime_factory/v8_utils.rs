@@ -305,6 +305,9 @@ pub async fn run_event_loop_with_promise_timeout(
 ) -> Result<(), RariError> {
     let timeout_duration = std::time::Duration::from_millis(timeout_ms);
     let start_time = std::time::Instant::now();
+    let initial_delay_ms = 1;
+    let max_delay_ms = 50;
+    let mut current_delay_ms = initial_delay_ms;
 
     while start_time.elapsed() < timeout_duration {
         match tokio::time::timeout(
@@ -324,7 +327,9 @@ pub async fn run_event_loop_with_promise_timeout(
             break;
         }
 
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(current_delay_ms)).await;
+
+        current_delay_ms = (current_delay_ms * 2).min(max_delay_ms);
     }
     Ok(())
 }

@@ -193,6 +193,8 @@ impl RscSerializer {
         self.output_lines.clear();
         self.serialized_modules.clear();
 
+        let _reserved_row_0 = self.get_next_row_id();
+
         self.add_module_import_lines();
 
         let element_id = self.get_next_row_id();
@@ -210,6 +212,8 @@ impl RscSerializer {
         self.output_lines.clear();
         self.serialized_modules.clear();
         self.module_registration_order.clear();
+
+        let _reserved_row_0 = self.get_next_row_id();
 
         self.collect_client_components_from_rsc_tree(tree);
         self.add_module_import_lines();
@@ -237,6 +241,8 @@ impl RscSerializer {
         self.output_lines.clear();
 
         if !is_lazy_resolution {
+            let _reserved_row_0 = self.get_next_row_id();
+
             self.serialized_modules.clear();
             self.module_registration_order.clear();
         }
@@ -268,8 +274,13 @@ impl RscSerializer {
         if let Some(row_id) = suspense_symbol_row_id {
             let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
             let replace = format!("\"${:x}\"", row_id);
+            let symbol_declaration = format!("{:x}:\"$Sreact.suspense\"", row_id);
 
             for i in 1..self.output_lines.len() {
+                if self.output_lines[i] == symbol_declaration {
+                    continue;
+                }
+
                 for search in &searches {
                     if self.output_lines[i].contains(search) {
                         self.output_lines[i] =
@@ -1373,7 +1384,7 @@ impl RscSerializer {
         let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
 
-        Ok(format!("$L{}", element_id))
+        Ok(format!("$L{:x}", element_id))
     }
 
     pub fn emit_suspense_boundary_with_refs(
@@ -1397,7 +1408,7 @@ impl RscSerializer {
         ]);
 
         let boundary_line = format!(
-            "{}:{}",
+            "{:x}:{}",
             boundary_row_id,
             serde_json::to_string(&boundary_data).map_err(|e| RariError::internal(format!(
                 "Failed to serialize Suspense boundary: {}",
@@ -1407,7 +1418,7 @@ impl RscSerializer {
 
         self.output_lines.push(boundary_line);
 
-        Ok(format!("$L{}", boundary_row_id))
+        Ok(format!("$L{:x}", boundary_row_id))
     }
 }
 

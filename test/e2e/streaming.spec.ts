@@ -316,8 +316,8 @@ test.describe.serial('Suspense Streaming Tests', () => {
   async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
     let lastError: Error | undefined
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      await page.goto(url, { waitUntil: 'domcontentloaded' })
       try {
+        await page.goto(url, { waitUntil: 'domcontentloaded' })
         await page.waitForSelector('#root > *', { timeout: 5000 })
         return
       }
@@ -333,9 +333,11 @@ test.describe.serial('Suspense Streaming Tests', () => {
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
     await gotoWithRetry(page, '/suspense-streaming')
 
-    const renderA = await page.waitForSelector('[data-testid="component-a"]', { timeout: 15000 }).then(() => Date.now())
-    const renderB = await page.waitForSelector('[data-testid="component-b"]', { timeout: 15000 }).then(() => Date.now())
-    const renderC = await page.waitForSelector('[data-testid="component-c"]', { timeout: 15000 }).then(() => Date.now())
+    const [renderA, renderB, renderC] = await Promise.all([
+      page.waitForSelector('[data-testid="component-a"]', { timeout: 15000 }).then(() => Date.now()),
+      page.waitForSelector('[data-testid="component-b"]', { timeout: 15000 }).then(() => Date.now()),
+      page.waitForSelector('[data-testid="component-c"]', { timeout: 15000 }).then(() => Date.now()),
+    ])
 
     expect(renderA).toBeLessThanOrEqual(renderB)
     expect(renderB).toBeLessThanOrEqual(renderC)

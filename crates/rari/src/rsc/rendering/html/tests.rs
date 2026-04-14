@@ -920,6 +920,23 @@ async fn test_render_rsc_to_html_string_backward_references() {
 }
 
 #[tokio::test]
+async fn test_render_rsc_to_html_string_hex_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:"$La"
+a:["$","div",null,{"children":"Content from row 10 (hex a)"}]
+b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
+10:["$","p",null,{"children":"Content from row 16 (hex 10)"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<div"), "Should have div from row a (10)");
+    assert!(html.contains("Content from row 10"), "Should resolve $La reference to row 10");
+}
+
+#[tokio::test]
 async fn test_render_rsc_to_html_string_consistent_with_streaming() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);

@@ -58,6 +58,18 @@ impl StreamOpState {
     }
 }
 
+fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
+    if !row_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}", row_id, context);
+        return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+    }
+
+    u32::from_str_radix(row_id, 16).map_err(|e| {
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}: {}", row_id, context, e);
+        JsErrorBox::generic(format!("Invalid row_id: {}", row_id))
+    })
+}
+
 #[allow(clippy::disallowed_methods)]
 #[op2]
 pub async fn op_send_chunk_to_rust(
@@ -103,16 +115,7 @@ pub async fn op_send_chunk_to_rust(
                 "async": async_module
             });
 
-            let row_id_num: u32 = match row_id.parse() {
-                Ok(num) => num,
-                Err(e) => {
-                    error!(
-                        "op_send_chunk_to_rust: invalid row_id '{}' for module reference: {}",
-                        row_id, e
-                    );
-                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
-                }
-            };
+            let row_id_num = parse_hex_row_id(&row_id, "module reference")?;
             let rsc_row = format!("{:x}:M{}", row_id_num, module_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -120,16 +123,7 @@ pub async fn op_send_chunk_to_rust(
             }
         }
         (Some(sender), RscStreamOperation::ReactElement { row_id, element }) => {
-            let row_id_num: u32 = match row_id.parse() {
-                Ok(num) => num,
-                Err(e) => {
-                    error!(
-                        "op_send_chunk_to_rust: invalid row_id '{}' for React element: {}",
-                        row_id, e
-                    );
-                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
-                }
-            };
+            let row_id_num = parse_hex_row_id(&row_id, "React element")?;
             let rsc_row = format!("{:x}:J{}", row_id_num, element);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -137,16 +131,7 @@ pub async fn op_send_chunk_to_rust(
             }
         }
         (Some(sender), RscStreamOperation::Symbol { row_id, symbol_ref }) => {
-            let row_id_num: u32 = match row_id.parse() {
-                Ok(num) => num,
-                Err(e) => {
-                    error!(
-                        "op_send_chunk_to_rust: invalid row_id '{}' for symbol reference: {}",
-                        row_id, e
-                    );
-                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
-                }
-            };
+            let row_id_num = parse_hex_row_id(&row_id, "symbol reference")?;
             let rsc_row = format!("{:x}:S\"{}\"", row_id_num, symbol_ref);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
@@ -166,16 +151,7 @@ pub async fn op_send_chunk_to_rust(
                 "digest": digest
             });
 
-            let row_id_num: u32 = match row_id.parse() {
-                Ok(num) => num,
-                Err(e) => {
-                    error!(
-                        "op_send_chunk_to_rust: invalid row_id '{}' for error message: {}",
-                        row_id, e
-                    );
-                    return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
-                }
-            };
+            let row_id_num = parse_hex_row_id(&row_id, "error message")?;
             let rsc_row = format!("{:x}:E{}", row_id_num, error_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {

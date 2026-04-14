@@ -8,12 +8,14 @@ pub fn escape_rsc_string(value: &str) -> String {
     if value.len() >= 2 && value.starts_with('$') {
         let prefix = &value[0..2];
         let rest = &value[2..];
-
-        if matches!(
+        let is_prefixed_ref = matches!(
             prefix,
             "$L" | "$@" | "$F" | "$T" | "$S" | "$W" | "$Q" | "$K" | "$Y" | "$i" | "$h"
-        ) && (rest.is_empty() || rest.chars().next().is_some_and(|c| c.is_ascii_digit()))
-        {
+        ) && (rest.is_empty()
+            || rest.chars().next().is_some_and(|c| c.is_ascii_hexdigit()));
+        let is_plain_hex_ref = value[1..].chars().all(|c| c.is_ascii_hexdigit());
+
+        if is_prefixed_ref || is_plain_hex_ref {
             return value.to_string();
         }
 
@@ -93,6 +95,8 @@ mod tests {
     fn test_escape_rsc_string() {
         assert_eq!(escape_rsc_string("hello"), "hello");
         assert_eq!(escape_rsc_string("$"), "$$");
+        assert_eq!(escape_rsc_string("$La"), "$La");
+        assert_eq!(escape_rsc_string("$1f"), "$1f");
         assert_eq!(escape_rsc_string("$L999"), "$L999");
         assert_eq!(escape_rsc_string("$@123"), "$@123");
         assert_eq!(escape_rsc_string("$F456"), "$F456");
@@ -117,7 +121,8 @@ mod tests {
 
     #[test]
     fn test_escape_unescape_roundtrip() {
-        let test_cases = vec!["hello", "$L999", "$double", "$$triple", "", "no dollar", "$"];
+        let test_cases =
+            vec!["hello", "$L999", "$La", "$1f", "$double", "$$triple", "", "no dollar", "$"];
 
         for case in test_cases {
             let escaped = escape_rsc_string(case);

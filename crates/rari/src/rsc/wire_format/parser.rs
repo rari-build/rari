@@ -246,7 +246,7 @@ impl RscWireFormatParser {
                 let promise_ref = PromiseRef {
                     promise_id: promise_id.clone(),
                     boundary_id: String::new(),
-                    element_ref: format!("$L{}", row_id),
+                    element_ref: format!("$L{:x}", row_id),
                 };
 
                 promises.push(promise_ref);

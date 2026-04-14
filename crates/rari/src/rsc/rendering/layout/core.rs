@@ -688,15 +688,18 @@ impl LayoutRenderer {
                         if line.starts_with(|c: char| c.is_ascii_hexdigit()) {
                             let row_id_str = &line[..colon_pos];
                             if usize::from_str_radix(row_id_str, 16).is_ok() {
-                                let is_import_reference = line
-                                    .get(colon_pos + 1..)
-                                    .map(|content| content.trim_start().starts_with("I["))
-                                    .unwrap_or(false);
-                                if is_import_reference || remapped_root_row {
+                                let content = line.get(colon_pos + 1..).unwrap_or("");
+                                let content_trimmed = content.trim_start();
+
+                                let is_import_or_symbol = content_trimmed.starts_with("I[")
+                                    || content_trimmed.starts_with("I{")
+                                    || content_trimmed.starts_with("\"$S")
+                                    || content_trimmed.starts_with("\"react.suspense");
+
+                                if is_import_or_symbol || remapped_root_row {
                                     line.to_string()
                                 } else {
                                     remapped_root_row = true;
-                                    let content = &line[colon_pos + 1..];
                                     format!("{:x}:{}", lazy_promise.lazy_row_id, content)
                                 }
                             } else {

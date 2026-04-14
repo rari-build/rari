@@ -19,7 +19,7 @@ import { preloadModulesFromWireFormat } from './shared/preload-modules'
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
-const MODULE_REF_REGEX_ENTRY = /^\$[0-9a-f]+$/i
+const MODULE_REF_REGEX_ENTRY = /^\$L?[0-9a-f]+$/i
 
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']

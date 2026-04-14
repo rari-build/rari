@@ -640,6 +640,15 @@ impl RscHtmlRenderer {
         self.render_row(root_row_id, &row_map, &mut row_cache).await
     }
 
+    fn parse_reference(ref_str: &str) -> Result<u32, RariError> {
+        if let Some(stripped) = ref_str.strip_prefix("$L").or_else(|| ref_str.strip_prefix("$@")) {
+            u32::from_str_radix(stripped, 16)
+                .map_err(|_| RariError::internal(format!("Invalid row reference: {}", ref_str)))
+        } else {
+            Err(RariError::internal(format!("Invalid reference format: {}", ref_str)))
+        }
+    }
+
     fn render_row<'a>(
         &'a self,
         row_id: u32,
@@ -673,9 +682,8 @@ impl RscHtmlRenderer {
         Box::pin(async move {
             match element {
                 RscElement::Text(text) => {
-                    if let Some(stripped) =
-                        text.strip_prefix("$L").or_else(|| text.strip_prefix("$@"))
-                        && let Ok(row_id) = stripped.parse::<u32>()
+                    if (text.starts_with("$L") || text.starts_with("$@"))
+                        && let Ok(row_id) = Self::parse_reference(text)
                     {
                         return self.render_row(row_id, row_map, row_cache).await;
                     }
@@ -704,9 +712,8 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Reference(ref_str) => {
-                    if let Some(stripped) =
-                        ref_str.strip_prefix("$L").or_else(|| ref_str.strip_prefix("$@"))
-                        && let Ok(row_id) = stripped.parse::<u32>()
+                    if (ref_str.starts_with("$L") || ref_str.starts_with("$@"))
+                        && let Ok(row_id) = Self::parse_reference(ref_str)
                     {
                         return self.render_row(row_id, row_map, row_cache).await;
                     }
@@ -714,8 +721,8 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
-                    if let Some(stripped) = children_ref.strip_prefix("$L")
-                        && let Ok(row_id) = stripped.parse::<u32>()
+                    if children_ref.starts_with("$L")
+                        && let Ok(row_id) = Self::parse_reference(children_ref)
                     {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         if !html.is_empty() {
@@ -723,8 +730,8 @@ impl RscHtmlRenderer {
                         }
                     }
 
-                    if let Some(stripped) = fallback_ref.strip_prefix("$L")
-                        && let Ok(row_id) = stripped.parse::<u32>()
+                    if fallback_ref.starts_with("$L")
+                        && let Ok(row_id) = Self::parse_reference(fallback_ref)
                     {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         return Ok(format!(
@@ -1290,10 +1297,9 @@ if (typeof window !== 'undefined') {{
     {
         Box::pin(async move {
             if let Some(s) = element.as_str() {
-                if let Some(stripped) = s.strip_prefix("$L") {
-                    let row_id: u32 = stripped.parse().map_err(|_| {
-                        RariError::internal(format!("Invalid row reference: {}", s))
-                    })?;
+                if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
+                    && let Ok(row_id) = u32::from_str_radix(stripped, 16)
+                {
                     let cached = self.row_cache.get(&row_id).cloned().unwrap_or_default();
                     return Ok(cached);
                 }
@@ -1627,13 +1633,29 @@ if (typeof window !== 'undefined') {{
             String::new()
         };
 
-        let rsc_buffer_script = format!(
+        let mut rsc_buffer_script = format!(
             "<script data-rsc-boundary=\"{}\" data-row-id=\"{}\">\n(function(){{\n  if(!window['~rari'])window['~rari']={{}};\n  if(!window['~rari'].streaming)window['~rari'].streaming={{}};\n  if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];\n  window['~rari'].streaming.bufferedRows.push('{}');\n  window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{detail: {{rscRow: '{}'}}}}));\n}})();\n</script>",
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
             escaped_row,
             escaped_row,
         );
+
+        let bridge_script = r#"<script>
+(function(){
+  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
+  if(!window['~rari'])window['~rari']={};
+  window['~rari'].streamingBridgeInstalled=true;
+  window.addEventListener('rari:html-stream-row',function(e){
+    var detail=e.detail;
+    if(!detail||!detail.rscRow)return;
+    var navigationId=window['~rari']&&window['~rari'].navigationId;
+    window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
+  });
+})();
+</script>"#;
+
+        rsc_buffer_script = format!("{}{}", bridge_script, rsc_buffer_script);
 
         let output = format!("{}{}", rsc_buffer_script, dom_swap_html);
 

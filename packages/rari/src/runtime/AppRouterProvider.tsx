@@ -1,5 +1,6 @@
 'use client'
 
+import type { GlobalWithRari } from './shared/types'
 import * as React from 'react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 // @ts-expect-error - virtual module resolved by Vite
@@ -775,6 +776,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       const customEvent = event as CustomEvent<{ navigationId: number, targetPath: string }>
       streamingRowsRef.current = []
       currentNavigationIdRef.current = customEvent.detail.navigationId
+
+      if (typeof window !== 'undefined') {
+        const globalWindow = window as unknown as GlobalWithRari
+        if (!globalWindow['~rari'])
+          globalWindow['~rari'] = {} as GlobalWithRari['~rari']
+        globalWindow['~rari'].navigationId = customEvent.detail.navigationId
+      }
+
       hasRenderedInitialShellRef.current = false
       hasRenderedFinalRef.current = false
       streamCompleteRef.current = false
@@ -810,20 +819,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        return NUMERIC_REGEX.test(id) && isValidFlightPayload(content)
+        return HEX_REGEX.test(id) && isValidFlightPayload(content)
       })
 
       const hasPageContent = rows.some((r) => {
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        if (!NUMERIC_REGEX.test(id) || !isValidFlightPayload(content))
+        if (!HEX_REGEX.test(id) || !isValidFlightPayload(content))
           return false
 
         const isReferencedByShell = rows.some((shellRow) => {
           const sci = shellRow.indexOf(':')
           const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
-          const refPattern = new RegExp(`"?\\$L${id}"?(?![0-9a-fA-F])`)
+          const refPattern = new RegExp(`"?\\$L?${id}"?(?![0-9a-fA-F])`)
           return refPattern.test(shellContent)
         })
         return isReferencedByShell
@@ -838,16 +847,23 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
 
         if (hasSuspenseBoundary) {
-          const shellRows = rows.filter((r) => {
-            const ci = r.indexOf(':')
-            const id = ci > 0 ? r.substring(0, ci).trim() : ''
-            const refPattern = new RegExp(`"\\$L${id}"(?![0-9a-fA-F])`)
-            return !hasPageContent || !rows.some(sr => refPattern.test(sr))
-          })
-          const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'))
-          if (currentNavigationIdRef.current === navId) {
-            setRscPayload(shellPayload)
-            setRenderKey(prev => prev + 1)
+          try {
+            const shellRows = rows.filter((r) => {
+              const ci = r.indexOf(':')
+              const id = ci > 0 ? r.substring(0, ci).trim() : ''
+              const refPattern = new RegExp(`"\\$L?${id}"(?![0-9a-fA-F])`)
+              return !hasPageContent || !rows.some(sr => refPattern.test(sr))
+            })
+            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'))
+            if (currentNavigationIdRef.current === navId) {
+              setRscPayload(shellPayload)
+              setRenderKey(prev => prev + 1)
+            }
+          }
+          catch (error) {
+            console.error('[rari] Failed to parse shell payload:', error)
+            hasRenderedInitialShellRef.current = false
+            rowProcessingRef.current = Promise.resolve()
           }
 
           return
@@ -870,10 +886,10 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           await sleep(50)
 
           if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
-            hasRenderedFinalRef.current = true
             const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
             const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'))
             if (currentNavigationIdRef.current === navId) {
+              hasRenderedFinalRef.current = true
               setRscPayload(updatedPayload)
               setRenderKey(prev => prev + 1)
 

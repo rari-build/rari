@@ -10,20 +10,18 @@ if (typeof globalThis['~rsc'].renderGeneration === 'undefined')
   globalThis['~rsc'].renderGeneration = 0
 globalThis['~rsc'].renderGeneration++
 
-if (!globalThis['~suspense']) {
-  globalThis['~suspense'] = {
-    streaming: true,
-    promises: {},
-    boundaryProps: {},
-    discoveredBoundaries: [],
-    pendingPromises: [],
-    currentBoundaryId: null,
-    renderGeneration: globalThis['~rsc'].renderGeneration,
-  }
-}
-else {
-  globalThis['~suspense'].renderGeneration = globalThis['~rsc'].renderGeneration
-}
+if (!globalThis['~suspense'])
+  globalThis['~suspense'] = {}
+
+Object.assign(globalThis['~suspense'], {
+  streaming: true,
+  promises: {},
+  boundaryProps: {},
+  discoveredBoundaries: [],
+  pendingPromises: [],
+  currentBoundaryId: null,
+  renderGeneration: globalThis['~rsc'].renderGeneration,
+})
 
 globalThis['~suspense'].safeSerializeElement = function (element) {
   if (element == null)

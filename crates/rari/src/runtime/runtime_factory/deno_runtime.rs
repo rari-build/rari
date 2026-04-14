@@ -516,9 +516,9 @@ async fn setup_concurrent_batch(
         .unwrap_or(5000);
 
     let mut sent = vec![false; pending.len()];
-    let remaining = pending.len();
+    let mut remaining = pending.len();
 
-    let (senders, names): (Vec<_>, Vec<_>) =
+    let (mut senders, names): (Vec<_>, Vec<_>) =
         pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
 
     for (i, sent_item) in sent.iter_mut().enumerate().take(senders.len()) {
@@ -543,6 +543,14 @@ async fn setup_concurrent_batch(
         if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
             *sent_item = true;
+
+            remaining = remaining.saturating_sub(1);
+
+            if let Some(sender) = senders[i].take() {
+                let _ = sender.send(Err(RariError::internal(format!(
+                    "Failed to setup concurrent tracking: {e}"
+                ))));
+            }
         }
     }
 

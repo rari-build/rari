@@ -390,10 +390,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const getRouteInfo = async (route: string): Promise<RouteInfoResponse> => {
-    return routeInfoCache.get(route)
-  }
-
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
   const handleSameRouteNavigation = (targetPath: string, hash: string) => {
@@ -549,8 +545,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     cancelAllPendingNavigations()
     cancelNavigation()
 
-    const routeInfoPromise = getRouteInfo(targetPath)
-
     const abortController = new AbortController()
     abortControllerRef.current = abortController
 
@@ -608,10 +602,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           abortController,
         )
 
-        const [response] = await Promise.all([
-          rscFetchPromise,
-          routeInfoPromise.catch(() => undefined),
-        ])
+        const response = await rscFetchPromise
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
@@ -620,6 +611,12 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
+
+        if (abortController.signal.aborted) {
+          cleanupAbortedNavigation(targetPath, navigationId)
+          return
+        }
+
         if (actualTargetPath !== targetPath) {
           const redirectUrl = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
           window.history.replaceState(
