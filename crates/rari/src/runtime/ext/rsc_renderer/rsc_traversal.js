@@ -67,6 +67,10 @@ async function traverseToRsc(element, clientComponents = {}, depth = 0) {
     || typeof element === 'number'
     || typeof element === 'boolean'
   ) {
+    if (typeof element === 'string' && element.length > 0 && element[0] === '$') {
+      return `$${element}`
+    }
+
     return element
   }
 

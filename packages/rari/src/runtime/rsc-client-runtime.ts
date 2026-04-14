@@ -12,8 +12,8 @@ import {
   HTML_QUOTE_REGEX,
   NEWLINE_REGEX,
 } from '../shared/regex-constants'
-import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
+import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './vendor/react-flight-client'
 
 function resolveRariServerUrl(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
@@ -761,8 +761,10 @@ class RscClient {
       }
     }
 
+    // eslint-disable-next-line react/component-hook-factories
     const StreamingWrapper = (): any => {
-      const [, setRenderTrigger] = useState(0)
+      // eslint-disable-next-line react/use-state
+      const setRenderTrigger = useState(0)[1]
 
       useEffect(() => {
         streamingComponent = {
@@ -778,7 +780,7 @@ class RscClient {
         return () => {
           streamingComponent = null
         }
-      }, [])
+      }, [setRenderTrigger])
 
       const renderWithBoundaryUpdates = (element: any): any => {
         if (!element)
@@ -1198,6 +1200,7 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
     globalRefreshCounter = windowWithRari['~rari'].hmr!.refreshCounters[componentName]!
   }
 
+  // eslint-disable-next-line react/component-hook-factories
   const ServerComponent = (props: any): any => {
     const [mountKey, setMountKey] = useState(globalRefreshCounter)
 

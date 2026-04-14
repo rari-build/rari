@@ -310,10 +310,12 @@ export function createHttpRuntimeClient(options?: {
   return new HttpRuntimeClient(options)
 }
 
+function LoadingBoundaryWrapper({ children, fallback }: { children: ReactNode, fallback: ReactElement }) {
+  return React.createElement(Suspense, { fallback }, children)
+}
+
 export function createLoadingBoundary(fallback: ReactElement) {
-  return function LoadingBoundary({ children }: { children: ReactNode }) {
-    return React.createElement(Suspense, { fallback }, children)
-  }
+  return ({ children }: { children: ReactNode }) => React.createElement(LoadingBoundaryWrapper, { fallback, children })
 }
 
 export class ErrorBoundary extends Component<
@@ -374,10 +376,12 @@ export class ErrorBoundary extends Component<
   }
 }
 
+function ErrorBoundaryWrapperComponent({ children, fallback }: { children: ReactNode, fallback?: (error: Error, reset: () => void) => ReactElement }) {
+  return React.createElement(ErrorBoundary, { fallback }, children)
+}
+
 export function createErrorBoundary(fallback?: (error: Error, reset: () => void) => ReactElement) {
-  return function ErrorBoundaryWrapper({ children }: { children: ReactNode }) {
-    return React.createElement(ErrorBoundary, { fallback }, children)
-  }
+  return ({ children }: { children: ReactNode }) => React.createElement(ErrorBoundaryWrapperComponent, { fallback, children })
 }
 
 export function NotFound() {

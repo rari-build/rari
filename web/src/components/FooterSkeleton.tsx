@@ -1,4 +1,5 @@
 export default function FooterSkeleton() {
+  // eslint-disable-next-line react/purity
   const currentYear = new Date().getFullYear()
 
   return (

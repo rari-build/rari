@@ -1,6 +1,21 @@
+/* eslint-disable no-undef, style/object-curly-spacing */
+// oxlint-disable typescript/no-base-to-string
 (function () {
   const promiseId = '{promise_id}'
   const boundaryId = '{boundary_id}'
+  const capturedGeneration = {render_generation}
+  const currentGeneration = globalThis['~suspense']?.renderGeneration || 0
+
+  if (capturedGeneration !== currentGeneration) {
+    return Promise.resolve({
+      success: false,
+      boundary_id: boundaryId,
+      error: `Stale render generation (expected ${String(capturedGeneration)}, current ${currentGeneration})`,
+      errorName: 'StaleRenderError',
+      errorStack: 'No stack trace',
+      stale: true,
+    })
+  }
 
   const safeSerializeError = function (error, phase) {
     return {
@@ -59,6 +74,18 @@
     }
 
     return promise.then(async (resolvedElement) => {
+      const genAfterResolve = globalThis['~suspense']?.renderGeneration || 0
+      if (genAfterResolve > capturedGeneration) {
+        return {
+          success: false,
+          boundary_id: boundaryId,
+          error: `Stale render after resolve (captured ${String(capturedGeneration)}, current ${genAfterResolve})`,
+          errorName: 'StaleRenderError',
+          errorStack: 'No stack trace',
+          stale: true,
+        }
+      }
+
       if (resolvedElement === undefined || resolvedElement === null) {
         return {
           success: false,
@@ -71,6 +98,13 @@
 
       let rscData
       try {
+        if (globalThis['~suspense']) {
+          globalThis['~suspense'].pendingPromises = []
+          globalThis['~suspense'].discoveredBoundaries = []
+          globalThis['~suspense'].promises = {}
+          globalThis['~suspense'].currentBoundaryId = null
+        }
+
         if (globalThis.renderToRsc)
           rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
         else

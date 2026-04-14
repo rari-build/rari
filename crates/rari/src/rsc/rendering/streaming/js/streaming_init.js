@@ -6,6 +6,10 @@ if (typeof globalThis['~rsc'].keyCounter === 'undefined')
 if (typeof React === 'undefined')
   throw new TypeError('React is not available in streaming context. This suggests the runtime was not properly initialized with React extensions.')
 
+if (typeof globalThis['~rsc'].renderGeneration === 'undefined')
+  globalThis['~rsc'].renderGeneration = 0
+globalThis['~rsc'].renderGeneration++
+
 if (!globalThis['~suspense']) {
   globalThis['~suspense'] = {
     streaming: true,
@@ -14,7 +18,10 @@ if (!globalThis['~suspense']) {
     discoveredBoundaries: [],
     pendingPromises: [],
     currentBoundaryId: null,
+    renderGeneration: globalThis['~rsc'].renderGeneration,
   }
+} else {
+  globalThis['~suspense'].renderGeneration = globalThis['~rsc'].renderGeneration
 }
 
 globalThis['~suspense'].safeSerializeElement = function (element) {

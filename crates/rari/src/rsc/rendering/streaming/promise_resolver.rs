@@ -39,7 +39,7 @@ fn collect_client_components(
                 && !component_map.contains_key(type_str)
             {
                 *row_counter += 1;
-                let module_ref = format!("$L{}", row_counter);
+                let module_ref = format!("${:x}", row_counter);
 
                 let (file_path, export_name) = if let Some(idx) = type_str.find('#') {
                     (&type_str[..idx], &type_str[idx + 1..])
@@ -48,7 +48,11 @@ fn collect_client_components(
                 };
 
                 #[allow(clippy::disallowed_methods)]
-                let import_data = serde_json::json!([file_path, ["default"], export_name]);
+                let import_data = serde_json::json!({
+                    "id": file_path,
+                    "chunks": [],
+                    "name": export_name
+                });
                 let import_row = RscWireFormatTag::ModuleImport
                     .format_row(*row_counter, &import_data.to_string());
                 import_rows.push(import_row.trim_end().to_string());
@@ -154,6 +158,7 @@ impl BackgroundPromiseResolver {
                         .cow_replace("{promise_id}", &p.id)
                         .cow_replace("{boundary_id}", &p.boundary_id)
                         .cow_replace("{component_path}", &p.component_path)
+                        .cow_replace("{render_generation}", &p.render_generation.to_string())
                         .into_owned();
                     (format!("<promise_resolution_{}>", p.id), script)
                 })
@@ -181,6 +186,14 @@ impl BackgroundPromiseResolver {
                                 let result_string = result_val.to_string();
                                 match serde_json::from_str::<serde_json::Value>(&result_string) {
                                     Ok(result_data) => {
+                                        if result_data
+                                            .get("stale")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false)
+                                        {
+                                            continue;
+                                        }
+
                                         if result_data["success"].as_bool().unwrap_or(false) {
                                             let mut content = result_data["content"].clone();
                                             let row_id = {

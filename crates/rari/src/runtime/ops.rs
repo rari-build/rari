@@ -103,21 +103,24 @@ pub async fn op_send_chunk_to_rust(
                 "async": async_module
             });
 
-            let rsc_row = format!("{row_id}:M{module_data}");
+            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let rsc_row = format!("{:x}:M{}", row_id_num, module_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for module reference.");
             }
         }
         (Some(sender), RscStreamOperation::ReactElement { row_id, element }) => {
-            let rsc_row = format!("{row_id}:J{element}");
+            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let rsc_row = format!("{:x}:J{}", row_id_num, element);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for React element.");
             }
         }
         (Some(sender), RscStreamOperation::Symbol { row_id, symbol_ref }) => {
-            let rsc_row = format!("{row_id}:S\"{symbol_ref}\"");
+            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let rsc_row = format!("{:x}:S\"{}\"", row_id_num, symbol_ref);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for symbol reference.");
@@ -136,7 +139,8 @@ pub async fn op_send_chunk_to_rust(
                 "digest": digest
             });
 
-            let rsc_row = format!("{row_id}:E{error_data}");
+            let row_id_num: u32 = row_id.parse().unwrap_or(0);
+            let rsc_row = format!("{:x}:E{}", row_id_num, error_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for error message.");

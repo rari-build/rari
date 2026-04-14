@@ -5,6 +5,7 @@ import Discord from './icons/Discord'
 import Github from './icons/Github'
 
 export default async function Footer() {
+  // eslint-disable-next-line react/purity
   const currentYear = new Date().getFullYear()
   const stars = await getRepoStars()
   const commitHash = await getLatestCommitHash()

@@ -214,8 +214,10 @@ impl LayoutRenderer {
         );
 
         let renderer = self.renderer.lock().await;
-        let result =
-            renderer.runtime.execute_script("check_not_found".to_string(), check_script).await?;
+        let runtime = renderer.runtime.clone();
+        drop(renderer);
+
+        let result = runtime.execute_script("check_not_found".to_string(), check_script).await?;
 
         let not_found = result.get("notFound").and_then(|v| v.as_bool()).unwrap_or(false);
 
@@ -393,18 +395,19 @@ impl LayoutRenderer {
                         let runtime_for_cleanup = Arc::clone(&runtime);
                         let refcount_for_cleanup = Arc::clone(&refcount);
                         let stream_with_cleanup = stream.with_cleanup(move || {
-                            tokio::spawn(async move {
-                                let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                            let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
-                                if prev_count == 1 {
-                                    let _ = runtime_for_cleanup
+                            if prev_count == 1 {
+                                let rt = runtime_for_cleanup.clone();
+                                tokio::spawn(async move {
+                                    let _ = rt
                                         .execute_script(
                                             "disable_streaming".to_string(),
                                             crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
-                                }
-                            });
+                                });
+                            }
                         });
                         Ok(RenderResult::Streaming(stream_with_cleanup))
                     }
@@ -441,19 +444,18 @@ impl LayoutRenderer {
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
-                    let runtime_for_cleanup = runtime.clone();
-                    let stream_with_context = stream
-                        .with_request_context(ctx)
-                        .with_cleanup(move || {
-                            tokio::spawn(async move {
-                                if let Err(e) = runtime_for_cleanup.clear_request_context().await {
-                                    tracing::error!("Failed to clear request context after stream completion: {}", e);
-                                }
-                            });
-                        });
+                    let stream_with_context = stream.with_request_context(ctx);
                     Ok(RenderResult::Streaming(stream_with_context))
                 }
-                other_result => other_result,
+                other_result => {
+                    if let Err(e) = runtime.clear_request_context().await {
+                        tracing::error!(
+                            "Failed to clear request context after non-streaming result: {}",
+                            e
+                        );
+                    }
+                    other_result
+                }
             }
         } else {
             let streaming_operation = async {
@@ -695,7 +697,7 @@ impl LayoutRenderer {
                                 } else {
                                     remapped_root_row = true;
                                     let content = &line[colon_pos + 1..];
-                                    format!("{}:{}", lazy_promise.lazy_row_id, content)
+                                    format!("{:x}:{}", lazy_promise.lazy_row_id, content)
                                 }
                             } else {
                                 line.to_string()

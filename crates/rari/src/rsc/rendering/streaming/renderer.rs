@@ -19,6 +19,7 @@ pub struct StreamingRenderer {
     row_counter: u32,
     module_path: Option<String>,
     shared_row_counter: Arc<Mutex<u32>>,
+    root_row_id: Arc<Mutex<Option<u32>>>,
     boundary_row_ids: Arc<Mutex<FxHashMap<String, u32>>>,
     rendered_skeleton_ids: Arc<Mutex<FxHashSet<String>>>,
     resolved_boundary_ids: Arc<Mutex<FxHashSet<String>>>,
@@ -33,6 +34,7 @@ impl StreamingRenderer {
             row_counter: 0,
             module_path: None,
             shared_row_counter: Arc::new(Mutex::new(0)),
+            root_row_id: Arc::new(Mutex::new(None)),
             boundary_row_ids: Arc::new(Mutex::new(FxHashMap::default())),
             rendered_skeleton_ids: Arc::new(Mutex::new(FxHashSet::default())),
             resolved_boundary_ids: Arc::new(Mutex::new(FxHashSet::default())),
@@ -141,7 +143,9 @@ impl StreamingRenderer {
                         )
                         .await;
                     }
-                    else => break,
+                    else => {
+                        break;
+                    },
                 }
             }
 
@@ -155,9 +159,7 @@ impl StreamingRenderer {
                 boundary_id: None,
             };
 
-            if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                error!("Failed to send stream completion signal: {}", e);
-            }
+            let _ = chunk_sender_clone.send(final_chunk).await;
         });
 
         Ok(RscStream::new(chunk_receiver))
@@ -285,9 +287,7 @@ impl StreamingRenderer {
                 boundary_id: None,
             };
 
-            if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                error!("Failed to send stream completion signal: {}", e);
-            }
+            let _ = chunk_sender_clone.send(final_chunk).await;
         });
 
         Ok(RscStream::new(chunk_receiver))
@@ -480,6 +480,7 @@ impl StreamingRenderer {
 
         let chunk_sender_clone = chunk_sender.clone();
         let boundary_rows_map = Arc::clone(&self.boundary_row_ids);
+        let root_row_id = Arc::clone(&self.root_row_id);
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
             let mut error_receiver = error_receiver;
@@ -505,17 +506,12 @@ impl StreamingRenderer {
                 }
             }
 
-            let final_chunk = RscStreamChunk {
-                data: b"STREAM_COMPLETE\n".to_vec(),
-                chunk_type: RscChunkType::StreamComplete,
-                row_id: u32::MAX,
-                is_final: true,
-                boundary_id: None,
+            let root_id = {
+                let root = root_row_id.lock().await;
+                *root
             };
 
-            if let Err(e) = chunk_sender_clone.send(final_chunk).await {
-                error!("Failed to send stream completion signal: {}", e);
-            }
+            Self::send_row_0_and_complete(&chunk_sender_clone, root_id).await;
         });
 
         Ok(RscStream::new(chunk_receiver))
@@ -546,6 +542,17 @@ impl StreamingRenderer {
             .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
+
+        let render_generation = self
+            .runtime
+            .execute_script(
+                "<get_render_generation>".to_string(),
+                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
+            )
+            .await
+            .ok()
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
 
         let setup_script = COMPONENT_RENDER_SETUP_SCRIPT
             .cow_replace("{component_id}", component_id)
@@ -758,6 +765,7 @@ impl StreamingRenderer {
                     boundary_id,
                     component_path: p["componentPath"].as_str().unwrap_or(component_id).to_string(),
                     promise_handle: promise_id.to_string(),
+                    render_generation,
                 }
             })
             .collect();
@@ -815,6 +823,17 @@ impl StreamingRenderer {
                     e
                 ))
             })?;
+
+        let render_generation = self
+            .runtime
+            .execute_script(
+                "<get_render_generation>".to_string(),
+                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
+            )
+            .await
+            .ok()
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
 
         let wrapped_script = COMPOSITION_WRAPPER_SCRIPT
             .cow_replace("{composition_script}", &composition_script)
@@ -929,6 +948,7 @@ impl StreamingRenderer {
                     boundary_id,
                     component_path: p["componentPath"].as_str().unwrap_or("unknown").to_string(),
                     promise_handle: promise_id.to_string(),
+                    render_generation,
                 }
             })
             .collect();
@@ -998,6 +1018,7 @@ impl StreamingRenderer {
                     boundary_id: promise.boundary_id.clone(),
                     component_path: format!("async_component_{}", promise.promise_id),
                     promise_handle: promise.element_ref.clone(),
+                    render_generation: 0,
                 };
 
                 pending_promises.push(pending_promise);
@@ -1172,17 +1193,25 @@ impl StreamingRenderer {
 
         let symbol_row_id = if partial_result.has_suspense {
             self.row_counter += 1;
-            let symbol_row_id = self.row_counter;
-            let symbol_chunk =
-                self.create_symbol_reference_chunk(symbol_row_id, "react.suspense")?;
+            Some(self.row_counter)
+        } else {
+            None
+        };
+
+        let max_row_id = self.row_counter;
+
+        let shell_chunk =
+            self.create_shell_chunk_with_module(&shell_content, 0, symbol_row_id, &promise_to_row)?;
+
+        self.row_counter = max_row_id;
+
+        if let Some(symbol_id) = symbol_row_id {
+            let symbol_chunk = self.create_symbol_reference_chunk(symbol_id, "react.suspense")?;
             sender
                 .send(symbol_chunk)
                 .await
                 .map_err(|e| RariError::internal(format!("Failed to send symbol chunk: {e}")))?;
-            Some(symbol_row_id)
-        } else {
-            None
-        };
+        }
 
         for import_row in &import_rows {
             let import_chunk = RscStreamChunk {
@@ -1198,18 +1227,14 @@ impl StreamingRenderer {
                 .map_err(|e| RariError::internal(format!("Failed to send import chunk: {e}")))?;
         }
 
-        self.row_counter += 1;
-
-        let shell_chunk =
-            self.create_shell_chunk_with_module(&shell_content, 0, symbol_row_id, &promise_to_row)?;
         sender
             .send(shell_chunk)
             .await
             .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
         {
-            let mut shared_counter = self.shared_row_counter.lock().await;
-            *shared_counter = self.row_counter;
+            let mut root_id = self.root_row_id.lock().await;
+            *root_id = Some(0);
         }
 
         Ok(())
@@ -1221,12 +1246,6 @@ impl StreamingRenderer {
         _boundary_rows_map: Arc<Mutex<FxHashMap<String, u32>>>,
     ) {
         for import_row in &update.import_rows {
-            tracing::debug!(
-                "Sending import row for boundary {}: {}",
-                update.boundary_id,
-                import_row
-            );
-
             let import_chunk = RscStreamChunk {
                 data: format!("{}\n", import_row).into_bytes(),
                 chunk_type: RscChunkType::ModuleImport,
@@ -1240,13 +1259,7 @@ impl StreamingRenderer {
             }
         }
 
-        let update_row = format!("{}:{}\n", update.row_id, update.content);
-
-        tracing::debug!(
-            "Sending boundary update for {}: row_id={}",
-            update.boundary_id,
-            update.row_id,
-        );
+        let update_row = format!("{:x}:{}\n", update.row_id, update.content);
 
         let chunk = RscStreamChunk {
             data: update_row.into_bytes(),
@@ -1267,6 +1280,33 @@ impl StreamingRenderer {
         }
     }
 
+    async fn send_row_0_and_complete(
+        sender: &mpsc::Sender<RscStreamChunk>,
+        root_row_id: Option<u32>,
+    ) {
+        if let Some(row_id) = root_row_id {
+            let row_0_chunk = RscStreamChunk {
+                data: format!("0:\"${:x}\"\n", row_id).into_bytes(),
+                chunk_type: RscChunkType::BoundaryUpdate,
+                row_id: 0,
+                is_final: false,
+                boundary_id: None,
+            };
+
+            let _ = sender.send(row_0_chunk).await;
+        }
+
+        let final_chunk = RscStreamChunk {
+            data: b"STREAM_COMPLETE\n".to_vec(),
+            chunk_type: RscChunkType::StreamComplete,
+            row_id: u32::MAX,
+            is_final: true,
+            boundary_id: None,
+        };
+
+        let _ = sender.send(final_chunk).await;
+    }
+
     async fn send_boundary_error(sender: &mpsc::Sender<RscStreamChunk>, error: BoundaryError) {
         #[allow(clippy::disallowed_methods)]
         let error_data = serde_json::json!({
@@ -1274,7 +1314,7 @@ impl StreamingRenderer {
             "error": error.error_message,
         });
 
-        let error_row = format!("{}:E{}\n", error.row_id, error_data);
+        let error_row = format!("{:x}:E{}\n", error.row_id, error_data);
 
         let chunk = RscStreamChunk {
             data: error_row.into_bytes(),
@@ -1295,17 +1335,17 @@ impl StreamingRenderer {
     fn create_shell_chunk_with_module(
         &self,
         content: &serde_json::Value,
-        _module_row_id: u32,
+        root_row_id: u32,
         symbol_row_id: Option<u32>,
         boundary_lazy_refs: &FxHashMap<String, u32>,
     ) -> Result<RscStreamChunk, RariError> {
         let rsc_element = self.json_to_rsc_element(content, symbol_row_id, boundary_lazy_refs)?;
-        let row = format!("{}:{}\n", self.row_counter, rsc_element);
+        let row = format!("{:x}:{}\n", root_row_id, rsc_element);
 
         Ok(RscStreamChunk {
             data: row.into_bytes(),
             chunk_type: RscChunkType::InitialShell,
-            row_id: self.row_counter,
+            row_id: root_row_id,
             is_final: false,
             boundary_id: None,
         })
@@ -1387,14 +1427,10 @@ impl StreamingRenderer {
         if let Some(obj) = json.as_object() {
             if obj.get("~rari_lazy").and_then(|v| v.as_bool()).unwrap_or(false) {
                 if let Some(promise_id) = obj.get("~rari_promise_id").and_then(|v| v.as_str())
-                    && let Some(&row_id) = boundary_lazy_refs.get(promise_id)
+                    && let Some(&promise_row_id) = boundary_lazy_refs.get(promise_id)
                 {
-                    return Ok(serde_json::Value::String(format!("$L{}", row_id)));
+                    return Ok(serde_json::Value::String(format!("${:x}", promise_row_id)));
                 }
-                tracing::warn!(
-                    "Lazy marker with promise_id {:?} not found in boundary_lazy_refs",
-                    obj.get("~rari_promise_id")
-                );
                 return Ok(serde_json::Value::Null);
             }
 
@@ -1449,15 +1485,17 @@ impl StreamingRenderer {
             serde_json::Value::Array(arr) => {
                 let mut converted = Vec::new();
                 for child in arr {
-                    converted.push(self.json_to_rsc_element(
-                        child,
-                        symbol_row_id,
-                        boundary_lazy_refs,
-                    )?);
+                    let converted_child =
+                        self.json_to_rsc_element(child, symbol_row_id, boundary_lazy_refs)?;
+                    converted.push(converted_child);
                 }
                 Ok(serde_json::Value::Array(converted))
             }
-            _ => self.json_to_rsc_element(children, symbol_row_id, boundary_lazy_refs),
+            _ => {
+                let result =
+                    self.json_to_rsc_element(children, symbol_row_id, boundary_lazy_refs)?;
+                Ok(result)
+            }
         }
     }
 
@@ -1466,7 +1504,7 @@ impl StreamingRenderer {
         row_id: u32,
         symbol_name: &str,
     ) -> Result<RscStreamChunk, RariError> {
-        let symbol_row = format!("{}:\"$S{}\"\n", row_id, symbol_name);
+        let symbol_row = format!("{:x}:\"$S{}\"\n", row_id, symbol_name);
 
         Ok(RscStreamChunk {
             data: symbol_row.into_bytes(),

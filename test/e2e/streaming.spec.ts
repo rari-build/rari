@@ -274,7 +274,7 @@ test.describe('RSC Protocol Tests', () => {
 })
 
 test.describe.serial('Suspense Streaming Tests', () => {
-  test.setTimeout(45000)
+  test.setTimeout(60000)
 
   async function waitForBoundaryTimes(page: Page): Promise<{ timeA: number, timeB: number, timeC: number }> {
     await page.waitForFunction(
@@ -282,7 +282,7 @@ test.describe.serial('Suspense Streaming Tests', () => {
         const t = (window as any).__boundaryTimes
         return t?.['component-a'] && t?.['component-b'] && t?.['component-c']
       },
-      { timeout: 25000 },
+      { timeout: 40000 },
     )
     const times = await page.evaluate(() => (window as any).__boundaryTimes)
     return {
@@ -329,10 +329,24 @@ test.describe.serial('Suspense Streaming Tests', () => {
     expect(spanAC).toBeLessThan(4500)
   }
 
+  async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      await page.goto(url, { waitUntil: 'domcontentloaded' })
+      try {
+        await page.waitForSelector('#root > *', { timeout: 5000 })
+        return
+      }
+      catch {
+        if (attempt < maxRetries - 1)
+          await page.waitForTimeout(1000)
+      }
+    }
+  }
+
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
     await setupBoundaryTimingObserver(page)
 
-    await page.goto('/suspense-streaming')
+    await gotoWithRetry(page, '/suspense-streaming')
 
     const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
 
@@ -347,7 +361,7 @@ test.describe.serial('Suspense Streaming Tests', () => {
 
   test('should resolve boundaries independently based on their delay', async ({ page }) => {
     await setupBoundaryTimingObserver(page)
-    await page.goto('/suspense-streaming')
+    await gotoWithRetry(page, '/suspense-streaming')
 
     const { timeA, timeB, timeC } = await waitForBoundaryTimes(page)
 

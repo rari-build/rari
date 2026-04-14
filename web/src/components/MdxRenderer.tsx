@@ -43,7 +43,7 @@ function PageHeaderWithFilePath({ filePath, ...props }: ComponentProps<typeof Pa
 function createMdxComponents(filePath: string, mdxComponents: Record<string, any>) {
   return {
     ...mdxComponents,
-    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} />,
+    PageHeader: (props: any) => <PageHeaderWithFilePath {...props} filePath={filePath} />, // eslint-disable-line react/component-hook-factories
     h2: (props: any) => <Heading level={2} {...props} />,
     h3: (props: any) => <Heading level={3} {...props} />,
     h4: (props: any) => <Heading level={4} {...props} />,
@@ -57,6 +57,7 @@ export default async function MdxRenderer({
   className = '',
   pathname,
 }: MdxRendererProps) {
+  // eslint-disable-next-line react/error-boundaries
   try {
     const content = findContentFile(filePath)
     if (!content)
@@ -103,6 +104,7 @@ export default async function MdxRenderer({
     )
   }
   catch (error) {
+    // eslint-disable-next-line react/purity
     console.error('Error in MdxRenderer:', error)
     return <NotFoundPage />
   }

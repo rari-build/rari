@@ -300,19 +300,18 @@ fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> 
 
 pub async fn run_event_loop_with_promise_timeout(
     runtime: &mut JsRuntime,
-    script_name: &str,
+    _script_name: &str,
     timeout_ms: u64,
 ) -> Result<(), RariError> {
     let timeout_duration = std::time::Duration::from_millis(timeout_ms);
     let start_time = std::time::Instant::now();
-    let check_interval = std::time::Duration::from_millis(5);
 
     while start_time.elapsed() < timeout_duration {
-        run_event_loop_with_error_handling(
-            runtime,
-            &format!("promise resolution iteration for '{script_name}'"),
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            run_event_loop_with_error_handling(runtime, "promise tick"),
         )
-        .await?;
+        .await;
 
         if let Ok(is_complete) = check_promise_completion(runtime)
             && is_complete
@@ -320,7 +319,7 @@ pub async fn run_event_loop_with_promise_timeout(
             break;
         }
 
-        tokio::time::sleep(check_interval).await;
+        tokio::task::yield_now().await;
     }
     Ok(())
 }

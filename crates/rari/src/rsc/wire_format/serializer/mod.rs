@@ -197,8 +197,11 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_element_to_standard_format(element);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        let root_ref = format!("0:\"${:x}\"", element_id);
+        self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
     }
@@ -213,8 +216,11 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(tree);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        let root_ref = format!("0:\"${:x}\"", element_id);
+        self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
     }
@@ -239,7 +245,7 @@ impl RscSerializer {
 
         let suspense_symbol_row_id = if has_suspense {
             let row_id = self.get_next_row_id();
-            let symbol_line = format!("{}:\"$Sreact.suspense\"", row_id);
+            let symbol_line = format!("{:x}:\"$Sreact.suspense\"", row_id);
             self.output_lines.push(symbol_line);
             self.suspense_symbol_row_id = Some(row_id);
             Some(row_id)
@@ -251,12 +257,17 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(&rsc_tree);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        if !is_lazy_resolution {
+            let root_ref = format!("0:\"${:x}\"", element_id);
+            self.output_lines.insert(0, root_ref);
+        }
 
         if let Some(row_id) = suspense_symbol_row_id {
             let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
-            let replace = format!("\"${}\"", row_id);
+            let replace = format!("\"${:x}\"", row_id);
 
             for i in 1..self.output_lines.len() {
                 for search in &searches {
@@ -501,7 +512,7 @@ impl RscSerializer {
                         {
                             element_props.insert(
                                 "children".to_string(),
-                                Value::String(format!("$L{}", original.lazy_row_id)),
+                                Value::String(format!("${}", original.lazy_row_id)),
                             );
                         } else {
                             element_props.insert("children".to_string(), Value::Null);
@@ -520,7 +531,7 @@ impl RscSerializer {
 
                         element_props.insert(
                             "children".to_string(),
-                            Value::String(format!("$L{}", lazy_row_id)),
+                            Value::String(format!("${}", lazy_row_id)),
                         );
                     }
                 } else {
@@ -619,16 +630,19 @@ impl RscSerializer {
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
 
-        let chunk_name = module_ref.metadata.get("chunk").map(|s| s.as_str()).unwrap_or("default");
         let export_name = module_ref.exports.first().map(|s| s.as_str()).unwrap_or("default");
 
-        let module_data = serde_json::json!([module_ref.path, [chunk_name], export_name]);
+        let module_data = serde_json::json!({
+            "id": module_ref.path,
+            "chunks": [],
+            "name": export_name
+        });
 
         let import_line =
             RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
         self.output_lines.push(import_line.trim_end().to_string());
 
-        self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
+        self.serialized_modules.insert(component_id.to_string(), format!("${:x}", module_id));
     }
 
     fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
@@ -1286,7 +1300,7 @@ impl RscSerializer {
             }
         ]);
 
-        let boundary_line = format!("{boundary_row_id}:{boundary_data}");
+        let boundary_line = format!("{:x}:{}", boundary_row_id, boundary_data);
         self.output_lines.push(boundary_line);
 
         boundary_id.to_string()
@@ -1356,7 +1370,7 @@ impl RscSerializer {
 
         let element_data = format!(r#"["$","{}",{},{}]"#, element.tag, key_json, props_json);
 
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
 
         Ok(format!("$L{}", element_id))

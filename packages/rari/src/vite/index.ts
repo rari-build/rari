@@ -47,7 +47,7 @@ const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
 const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
-const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g
+const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
 const COMPONENTS_PREFIX_REGEX = /^components\//
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
@@ -2020,8 +2020,11 @@ export class ErrorBoundaryWrapper extends React.Component {
         )
       }
 
-      if (id === 'virtual:react-server-dom-rari-client.ts')
-        return await loadRuntimeFile('react-server-dom-rari-client.mjs')
+      if (id === 'virtual:react-server-dom-rari-client.ts') {
+        return {
+          code: `export * from 'rari/runtime/vendor/react-flight-client'`,
+        }
+      }
 
       if (id.endsWith('.mjs') && fs.existsSync(id)) {
         try {

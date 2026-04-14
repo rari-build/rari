@@ -1,6 +1,10 @@
 use serde_json::Value;
 
 pub fn escape_rsc_string(value: &str) -> String {
+    if value == "$" {
+        return "$$".to_string();
+    }
+
     if value.len() >= 2 && value.starts_with('$') {
         let prefix = &value[0..2];
         let rest = &value[2..];
@@ -88,6 +92,7 @@ mod tests {
     #[test]
     fn test_escape_rsc_string() {
         assert_eq!(escape_rsc_string("hello"), "hello");
+        assert_eq!(escape_rsc_string("$"), "$$");
         assert_eq!(escape_rsc_string("$L999"), "$L999");
         assert_eq!(escape_rsc_string("$@123"), "$@123");
         assert_eq!(escape_rsc_string("$F456"), "$F456");

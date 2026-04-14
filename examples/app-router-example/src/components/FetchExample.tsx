@@ -1,3 +1,4 @@
+/* eslint-disable react/purity */
 export default async function FetchExample() {
   const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
 

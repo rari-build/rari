@@ -24,6 +24,44 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::error;
 
+fn sort_rsc_rows(wire_format: &str) -> String {
+    let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
+
+    for row in wire_format.lines() {
+        if let Some(colon_pos) = row.find(':') {
+            if let Ok(row_id) = u32::from_str_radix(&row[..colon_pos], 16) {
+                rows_with_ids.push((row_id, row.to_string()));
+            } else {
+                rows_with_ids.push((u32::MAX, row.to_string()));
+            }
+        } else {
+            rows_with_ids.push((u32::MAX, row.to_string()));
+        }
+    }
+
+    rows_with_ids.sort_by_key(|(id, _)| *id);
+
+    let mut sorted =
+        rows_with_ids.iter().map(|(_, row)| row.as_str()).collect::<Vec<_>>().join("\n");
+
+    if !sorted.is_empty() && !sorted.ends_with('\n') {
+        sorted.push('\n');
+    }
+
+    let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
+
+    if !has_row_0
+        && let Some((max_id, _)) =
+            rows_with_ids.iter().filter(|(id, _)| *id != u32::MAX).max_by_key(|(id, _)| *id)
+        && *max_id > 0
+    {
+        let row_0 = format!("0:\"${:x}\"\n", max_id);
+        sorted.insert_str(0, &row_0);
+    }
+
+    sorted
+}
+
 fn wrap_html_with_metadata(
     html_content: String,
     metadata: Option<&PageMetadata>,
@@ -102,8 +140,10 @@ async fn collect_page_metadata(
     let page_path = path_to_file_url(&page_file_path);
 
     let renderer = state.renderer.lock().await;
-    match renderer
-        .runtime
+    let runtime = renderer.runtime.clone();
+    drop(renderer);
+
+    match runtime
         .collect_metadata(
             layout_paths,
             page_path.clone(),
@@ -291,6 +331,8 @@ pub async fn render_rsc_navigation_streaming(
         crate::rsc::rendering::layout::RenderResult::Static(rsc_wire_format) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
+            let sorted_wire_format = sort_rsc_rows(&rsc_wire_format);
+
             let mut response_builder = Response::builder()
                 .status(status_code)
                 .header("content-type", "text/x-component")
@@ -304,7 +346,7 @@ pub async fn render_rsc_navigation_streaming(
                     response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
             }
 
-            Ok(response_builder.body(Body::from(rsc_wire_format)).expect("Valid RSC response"))
+            Ok(response_builder.body(Body::from(sorted_wire_format)).expect("Valid RSC response"))
         }
     }
 }
@@ -327,7 +369,9 @@ async fn render_rsc_streaming_response(
             match rsc_stream.next_chunk().await {
                 Some(chunk) => {
                     let data = String::from_utf8_lossy(&chunk.data).to_string();
-                    yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
+                    if data.trim() != "STREAM_COMPLETE" {
+                        yield Ok::<_, std::io::Error>(bytes::Bytes::from(data));
+                    }
                 }
                 None => {
                     break;
@@ -843,13 +887,14 @@ pub async fn handle_app_route(
             if use_streaming {
                 context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
-                return render_rsc_navigation_streaming(
+                let result = render_rsc_navigation_streaming(
                     Arc::new(state),
                     route_match,
                     context,
                     accept_encoding,
                 )
                 .await;
+                return result;
             }
             let cache_key = response_cache::ResponseCache::generate_cache_key_with_mode(
                 path,

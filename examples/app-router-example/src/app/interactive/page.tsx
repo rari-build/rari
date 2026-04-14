@@ -1,3 +1,4 @@
+/* eslint-disable react/purity */
 import type { Metadata } from 'rari'
 import Counter from '@/components/Counter'
 import TodoList from '@/components/TodoList'

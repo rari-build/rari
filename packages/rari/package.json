@@ -84,6 +84,10 @@
       "types": "./dist/runtime/rsc-client-runtime.d.mts",
       "default": "./dist/runtime/rsc-client-runtime.mjs"
     },
+    "./runtime/vendor/react-flight-client": {
+      "types": "./dist/runtime/vendor/react-flight-client/index.d.mts",
+      "default": "./dist/runtime/vendor/react-flight-client/index.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"

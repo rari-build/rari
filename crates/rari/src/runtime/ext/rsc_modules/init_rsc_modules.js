@@ -1,4 +1,3 @@
-/* eslint-disable e18e/prefer-static-regex */
 (function initializeRscModules() {
   const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
   const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
