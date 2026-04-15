@@ -1408,7 +1408,7 @@ if (!globalThis["${componentId}"]) {
         const resolvedPath = this.resolveImportPath(importPath, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
-          componentId = path.relative(this.projectRoot, resolvedPath)
+          componentId = path.relative(this.projectRoot, resolvedPath).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
         }
       }
 
