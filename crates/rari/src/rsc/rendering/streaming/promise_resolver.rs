@@ -41,10 +41,13 @@ fn collect_client_components(
                 *row_counter += 1;
                 let module_ref = format!("$L{:x}", row_counter);
 
-                let (file_path, export_name) = if let Some(idx) = type_str.find('#') {
-                    (&type_str[..idx], &type_str[idx + 1..])
+                let normalized_type_str = type_str.cow_replace('\\', "/");
+                let type_str_normalized = normalized_type_str.as_ref();
+
+                let (file_path, export_name) = if let Some(idx) = type_str_normalized.find('#') {
+                    (&type_str_normalized[..idx], &type_str_normalized[idx + 1..])
                 } else {
-                    (type_str, "default")
+                    (type_str_normalized, "default")
                 };
 
                 #[allow(clippy::disallowed_methods)]
@@ -57,7 +60,7 @@ fn collect_client_components(
                     .format_row(*row_counter, &import_data.to_string());
                 import_rows.push(import_row.trim_end().to_string());
 
-                component_map.insert(type_str.to_string(), module_ref);
+                component_map.insert(type_str_normalized.to_string(), module_ref);
             }
 
             for item in arr {
