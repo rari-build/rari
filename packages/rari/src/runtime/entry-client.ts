@@ -323,9 +323,10 @@ export async function renderApp(): Promise<void> {
         if (!response.ok && response.status !== 404)
           throw new Error(`Failed to fetch RSC data: ${response.status}`)
 
-        const stream = response.body
+        if (!response.body)
+          throw new Error('RSC response has no body')
 
-        element = await createFromReadableStream(stream)
+        element = await createFromReadableStream(response.body)
       }
       catch (e) {
         if (e instanceof Promise)

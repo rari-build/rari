@@ -13,7 +13,7 @@ const STALE_PAYLOAD_THRESHOLD_MS = 5000
 const TAG_TEXT = 84
 const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
 const HEX_REGEX = /^[0-9a-f]+$/i
-const MODULE_REF_REGEX = /^\$[0-9a-f]+$/i
+const MODULE_REF_REGEX = /^\$L?[0-9a-f]+$/i
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {

@@ -29,7 +29,14 @@ impl RscStream {
     where
         F: FnOnce() + Send + 'static,
     {
-        self.cleanup = Some(Box::new(cleanup));
+        if let Some(existing_cleanup) = self.cleanup.take() {
+            self.cleanup = Some(Box::new(move || {
+                existing_cleanup();
+                cleanup();
+            }));
+        } else {
+            self.cleanup = Some(Box::new(cleanup));
+        }
         self
     }
 

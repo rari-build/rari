@@ -2119,7 +2119,24 @@ export class ErrorBoundaryWrapper extends React.Component {
           })))
         }
 
-        return { html, tags }
+        let modifiedHtml = html
+
+        modifiedHtml = modifiedHtml.replace(
+          /^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm,
+          '',
+        )
+
+        modifiedHtml = modifiedHtml.replace(
+          /^\s*import\s+["']virtual:rari-entry-client["'];?\s*$/gm,
+          '',
+        )
+
+        modifiedHtml = modifiedHtml.replace(
+          /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
+          '',
+        )
+
+        return { html: modifiedHtml, tags }
       },
     },
 

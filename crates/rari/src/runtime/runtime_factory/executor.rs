@@ -110,14 +110,26 @@ async fn execute_as_module(
 
     match eval_result {
         Ok(_) => {
-            let _ = tokio::time::timeout(
+            match tokio::time::timeout(
                 std::time::Duration::from_millis(10),
                 run_event_loop_with_error_handling(
                     runtime,
                     &format!("module execution for '{script_name}'"),
                 ),
             )
-            .await;
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    return Err(e);
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        "Event loop timeout (10ms) during module execution for '{}'",
+                        script_name
+                    );
+                }
+            }
         }
         Err(eval_err) => {
             if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {

@@ -1284,7 +1284,9 @@ impl StreamingRenderer {
         sender: &mpsc::Sender<RscStreamChunk>,
         root_row_id: Option<u32>,
     ) {
-        if let Some(row_id) = root_row_id {
+        if let Some(row_id) = root_row_id
+            && row_id != 0
+        {
             let row_0_chunk = RscStreamChunk {
                 data: format!("0:\"${:x}\"\n", row_id).into_bytes(),
                 chunk_type: RscChunkType::BoundaryUpdate,

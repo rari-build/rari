@@ -1119,7 +1119,7 @@ impl RscSerializer {
                 data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
 
             let base64_data = base64_encode(&bytes);
-            let chunk_line = format!("{}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
+            let chunk_line = format!("{:x}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
             self.output_lines.push(chunk_line);
 
             Value::String(format!("${:x}", chunk_id))
