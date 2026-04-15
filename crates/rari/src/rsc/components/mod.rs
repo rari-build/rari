@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,7 @@ impl ComponentRegistry {
         transformed_source: String,
         dependencies: ComponentDependencies,
     ) -> Result<(), String> {
-        let component_id = id.to_string();
+        let component_id = id.cow_replace('\\', "/").into_owned();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
         self.components.insert(
@@ -136,7 +137,8 @@ impl ComponentRegistry {
     }
 
     pub fn get_component(&self, id: &str) -> Option<&TransformedComponent> {
-        self.components.get(id)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref())
     }
 
     pub fn get_component_mut(&mut self, id: &str) -> Option<&mut TransformedComponent> {
@@ -258,7 +260,8 @@ impl ComponentRegistry {
     }
 
     pub fn is_component_registered(&self, id: &str) -> bool {
-        self.components.contains_key(id)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.contains_key(normalized_id.as_ref())
     }
 
     pub fn list_component_ids(&self) -> Vec<String> {
@@ -296,15 +299,19 @@ impl ComponentRegistry {
     }
 
     pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        let normalized_file_path = file_path.cow_replace('\\', "/");
+
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_client_reference = true;
-            component.client_reference_path = Some(file_path.to_string());
+            component.client_reference_path = Some(normalized_file_path.into_owned());
             component.client_reference_export = Some(export_name.to_string());
         }
     }
 
     pub fn is_client_reference(&self, id: &str) -> bool {
-        self.components.get(id).map(|c| c.is_client_reference).unwrap_or(false)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).map(|c| c.is_client_reference).unwrap_or(false)
     }
 
     pub fn get_client_reference_info(&self, id: &str) -> Option<(String, String)> {
