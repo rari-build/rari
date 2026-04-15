@@ -33,6 +33,7 @@ pub fn generate_cache_key(route_match: &AppRouteMatch, context: &LayoutRenderCon
 
 pub fn create_component_id(file_path: &str) -> String {
     let path = file_path
+        .cow_replace('\\', "/")
         .cow_replace(".tsx", "")
         .cow_replace(".ts", "")
         .cow_replace(".jsx", "")
