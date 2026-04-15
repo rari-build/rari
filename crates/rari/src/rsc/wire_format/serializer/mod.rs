@@ -167,24 +167,28 @@ impl RscSerializer {
     ) {
         let chunk_name = "main".to_string();
 
+        let normalized_component_id = component_id.cow_replace('\\', "/").into_owned();
+        let normalized_file_path = file_path.cow_replace('\\', "/").into_owned();
+
         let module_ref = ModuleReference::new(
-            component_id.to_string(),
-            file_path.to_string(),
+            normalized_component_id.clone(),
+            normalized_file_path,
             ModuleReferenceType::ClientComponent,
         )
         .with_export(export_name.to_string())
         .with_metadata("chunk", &chunk_name);
 
-        if !self.module_map.contains_key(component_id) {
-            self.module_registration_order.push(component_id.to_string());
+        if !self.module_map.contains_key(&normalized_component_id) {
+            self.module_registration_order.push(normalized_component_id.clone());
         }
 
-        self.module_map.insert(component_id.to_string(), module_ref);
+        self.module_map.insert(normalized_component_id, module_ref);
     }
 
     pub fn is_client_component_registered(&self, component_id: &str) -> bool {
+        let normalized_component_id = component_id.cow_replace('\\', "/");
         self.module_map
-            .get(component_id)
+            .get(normalized_component_id.as_ref())
             .map(|module_ref| module_ref.reference_type == ModuleReferenceType::ClientComponent)
             .unwrap_or(false)
     }
@@ -323,6 +327,9 @@ impl RscSerializer {
             RSCTree::ClientReference { id, .. }
                 if id.contains('#') && !self.is_client_component_registered(id) =>
             {
+                let normalized_id = id.cow_replace('\\', "/");
+                let id = normalized_id.as_ref();
+
                 let parts: Vec<&str> = id.split('#').collect();
                 if parts.len() == 2 {
                     let file_path = parts[0];
@@ -377,6 +384,9 @@ impl RscSerializer {
         key: Option<&str>,
         props: &FxHashMap<String, Value>,
     ) -> String {
+        let normalized_id = id.cow_replace('\\', "/");
+        let id = normalized_id.as_ref();
+
         let create_error_placeholder =
             |id: &str, key: Option<&str>, props: &FxHashMap<String, Value>| {
                 let key_json = key
@@ -472,6 +482,9 @@ impl RscSerializer {
     }
 
     fn parse_and_register_component(&mut self, id: &str) -> Option<String> {
+        let normalized_id = id.cow_replace('\\', "/");
+        let id = normalized_id.as_ref();
+
         if !id.contains('#') {
             return None;
         }
@@ -485,11 +498,11 @@ impl RscSerializer {
             return None;
         }
 
-        let file_path = parts[0];
+        let file_path = parts[0].cow_replace('\\', "/");
         let export_name = parts[1];
 
         if !self.is_client_component_registered(id) {
-            self.register_client_component(id, file_path, export_name);
+            self.register_client_component(id, &file_path, export_name);
         }
 
         if !self.serialized_modules.contains_key(id)
