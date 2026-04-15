@@ -52,7 +52,37 @@ if (typeof window !== 'undefined') {
 
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
+}
 
+interface ParsedImportRow {
+  id: string
+  chunks: string[]
+  name: string
+}
+
+function parseImportRow(content: string): ParsedImportRow | null {
+  if (!content.startsWith('I{'))
+    return null
+
+  try {
+    const importData = JSON.parse(content.substring(1))
+    if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
+      return {
+        id: importData.id,
+        chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
+        name: importData.name || 'default',
+      }
+    }
+    console.error('[rari] Invalid import data format, expected object:', importData)
+  }
+  catch (e) {
+    console.error('[rari] Failed to parse import row:', content, e)
+  }
+
+  return null
+}
+
+if (typeof window !== 'undefined') {
   ; (globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
@@ -69,25 +99,10 @@ if (typeof window !== 'undefined') {
       const actualRowId = rscRow.substring(0, colonIndex)
       const contentStr = rscRow.substring(colonIndex + 1)
 
-      if (contentStr.startsWith('I{')) {
-        try {
-          const importData = JSON.parse(contentStr.substring(1))
-          if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
-            const moduleKey = `$L${actualRowId}`
-                  ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
-              id: importData.id,
-              chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
-              name: importData.name || 'default',
-            })
-          }
-          else {
-            console.error('[rari] Invalid import data format, expected object:', importData)
-          }
-        }
-        catch (e) {
-          console.error('[rari] Failed to parse import row:', contentStr, e)
-        }
-
+      const importRow = parseImportRow(contentStr)
+      if (importRow) {
+        const moduleKey = `$L${actualRowId}`
+            ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, importRow)
         return
       }
 
@@ -685,23 +700,9 @@ class RscClient {
               const rowId = line.substring(0, colonIndex)
               const content = line.substring(colonIndex + 1)
 
-              if (content.startsWith('I{')) {
-                try {
-                  const importData = JSON.parse(content.substring(1))
-                  if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
-                    modules.set(`$L${rowId}`, {
-                      id: importData.id,
-                      chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
-                      name: importData.name || 'default',
-                    })
-                  }
-                  else {
-                    console.error('Invalid import data format, expected object:', importData)
-                  }
-                }
-                catch (e) {
-                  console.error('Failed to parse import row:', content, e)
-                }
+              const importRow = parseImportRow(content)
+              if (importRow) {
+                modules.set(`$L${rowId}`, importRow)
               }
               else if (content.startsWith('E{')) {
                 try {
@@ -768,7 +769,7 @@ class RscClient {
     // eslint-disable-next-line react/component-hook-factories
     const StreamingWrapper = (): any => {
       // eslint-disable-next-line react/use-state
-      const setRenderTrigger = useState(0)[1]
+      const [, setRenderTrigger] = useState(0)
 
       useEffect(() => {
         streamingComponent = {
@@ -911,19 +912,9 @@ class RscClient {
         continue
 
       try {
-        if (rest.startsWith('I{')) {
-          const data = rest.substring(1)
-          const importData = JSON.parse(data)
-          if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
-            modules.set(`$L${rowId}`, {
-              id: importData.id,
-              chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
-              name: importData.name || 'default',
-            })
-          }
-          else {
-            console.error('Invalid import data format, expected object:', importData)
-          }
+        const importRow = parseImportRow(rest)
+        if (importRow) {
+          modules.set(`$L${rowId}`, importRow)
         }
         else if (rest.startsWith('E{')) {
           const data = rest.substring(1)

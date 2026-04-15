@@ -1114,13 +1114,9 @@ mod tests {
         props.insert(
             "data".to_string(),
             json!({
-                "$map": [
-                    ["key1", {"nested": "value1"}],
-                    ["key2", {"nested": "value2"}],
-                    ["key3", {"nested": "value3"}],
-                    ["key4", {"nested": "value4"}],
-                    ["key5", {"nested": "value5"}]
-                ]
+                "map": {"$map": [["key1", "value1"], ["key2", "value2"]]},
+                "set": {"$set": ["a", "b", "c"]},
+                "promise": {"$promise": {"status": "pending", "value": null}}
             }),
         );
         props.insert("className".to_string(), json!("container"));
@@ -1134,19 +1130,17 @@ mod tests {
         for line in result.lines() {
             if let Some(colon_pos) = line.find(':') {
                 let row_id = line[..colon_pos].to_string();
-                if row_id != "0" {
-                    assert!(
-                        row_ids.insert(row_id.clone()),
-                        "Row ID collision detected: '{}' appears multiple times in output",
-                        row_id
-                    );
-                }
+                assert!(
+                    row_ids.insert(row_id.clone()),
+                    "Row ID collision detected: '{}' appears multiple times in output",
+                    row_id
+                );
             }
         }
 
         assert!(
-            !row_ids.is_empty(),
-            "Expected at least 1 unique row ID (excluding row 0) for element with outlined map, got {}",
+            row_ids.len() >= 3,
+            "Expected multiple unique row IDs for outlined payload, got {}",
             row_ids.len()
         );
     }

@@ -42,6 +42,18 @@ impl StreamingRenderer {
         }
     }
 
+    async fn get_render_generation(&self) -> u32 {
+        self.runtime
+            .execute_script(
+                "<get_render_generation>".to_string(),
+                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
+            )
+            .await
+            .ok()
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32
+    }
+
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
@@ -548,16 +560,7 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
 
-        let render_generation = self
-            .runtime
-            .execute_script(
-                "<get_render_generation>".to_string(),
-                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
-            )
-            .await
-            .ok()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
+        let render_generation = self.get_render_generation().await;
 
         let setup_script = COMPONENT_RENDER_SETUP_SCRIPT
             .cow_replace("{component_id}", component_id)
@@ -829,16 +832,7 @@ impl StreamingRenderer {
                 ))
             })?;
 
-        let render_generation = self
-            .runtime
-            .execute_script(
-                "<get_render_generation>".to_string(),
-                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
-            )
-            .await
-            .ok()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
+        let render_generation = self.get_render_generation().await;
 
         let wrapped_script = COMPOSITION_WRAPPER_SCRIPT
             .cow_replace("{composition_script}", &composition_script)
@@ -983,16 +977,7 @@ impl StreamingRenderer {
             RariError::internal(format!("RSC parsing failed: {}", e))
         })?;
 
-        let render_generation = self
-            .runtime
-            .execute_script(
-                "<get_render_generation>".to_string(),
-                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
-            )
-            .await
-            .ok()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
+        let render_generation = self.get_render_generation().await;
 
         let boundaries = parser.find_suspense_boundaries();
         let promises = parser.find_promises();
