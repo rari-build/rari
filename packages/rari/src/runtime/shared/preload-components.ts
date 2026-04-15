@@ -6,11 +6,13 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
   const loadPromises: Promise<any>[] = []
 
   for (const [, moduleData] of modules) {
+    const normalizedId = moduleData.id.replace(BACKSLASH_REGEX, '/')
     const lookupKeys = [
+      normalizedId,
+      `${normalizedId}#${moduleData.name || 'default'}`,
+      normalizedId.replace(SRC_PREFIX_REGEX, ''),
       moduleData.id,
       `${moduleData.id}#${moduleData.name || 'default'}`,
-      moduleData.id.replace(SRC_PREFIX_REGEX, ''),
-      moduleData.id.replace(BACKSLASH_REGEX, '/'),
     ]
 
     for (const key of lookupKeys) {

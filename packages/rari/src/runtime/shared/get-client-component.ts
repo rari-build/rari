@@ -204,15 +204,17 @@ export function resolveClientComponent(
   const clientComponentPaths = globalAccessor['~clientComponentPaths'] || {}
   const clientComponentNames = globalAccessor['~clientComponentNames'] || {}
 
-  const directResult = resolveById(id, clientComponents)
+  const normalizedId = id.replace(/\\/g, '/')
+
+  const directResult = resolveById(normalizedId, clientComponents)
   if (directResult !== null)
     return directResult
 
-  const pathResult = resolveByPathWithExport(id, clientComponents, clientComponentPaths)
+  const pathResult = resolveByPathWithExport(normalizedId, clientComponents, clientComponentPaths)
   if (pathResult !== null)
     return pathResult
 
-  return resolveByName(id, clientComponents, clientComponentNames)
+  return resolveByName(normalizedId, clientComponents, clientComponentNames)
 }
 
 export function getClientComponent(id: string): any {
@@ -228,9 +230,11 @@ export async function getClientComponentAsync(id: string): Promise<any> {
   const clientComponentPaths = (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'] || {}
   const clientComponentNames = (globalThis as unknown as GlobalWithRari)['~clientComponentNames'] || {}
 
-  const hashIndex = id.indexOf('#')
-  const baseId = hashIndex === -1 ? id : id.slice(0, hashIndex)
-  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+  const normalizedId = id.replace(/\\/g, '/')
+
+  const hashIndex = normalizedId.indexOf('#')
+  const baseId = hashIndex === -1 ? normalizedId : normalizedId.slice(0, hashIndex)
+  const exportName = hashIndex === -1 ? undefined : normalizedId.slice(hashIndex + 1)
 
   let componentInfo = clientComponents[baseId] as LazyComponentInfo
   if (componentInfo)

@@ -24,9 +24,10 @@ export async function preloadModulesFromWireFormat(
         const importData = JSON.parse(jsonContent)
 
         if (typeof importData === 'object' && !Array.isArray(importData) && importData.id) {
+          const normalizedImportId = importData.id.replace(/\\/g, '/')
           const moduleId = importData.name && importData.name !== 'default'
-            ? `${importData.id}#${importData.name}`
-            : importData.id
+            ? `${normalizedImportId}#${importData.name}`
+            : normalizedImportId
 
           if (!preloadedModuleIds || !preloadedModuleIds.has(moduleId))
             moduleIds.add(moduleId)

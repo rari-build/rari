@@ -104,8 +104,12 @@ function setupPartialHydration(): void {
 
               if (mod) {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
+                const normalizedClientKey = clientKey.replace(/\\/g, '/')
+                const normalizedModId = mod.id.replace(/\\/g, '/')
                 let clientComponent = null
-                const componentInfo = getGlobalThis()['~clientComponents'][clientKey]
+                const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
+                  || getGlobalThis()['~clientComponents'][normalizedModId]
+                  || getGlobalThis()['~clientComponents'][clientKey]
                   || getGlobalThis()['~clientComponents'][mod.id]
 
                 if (componentInfo) {
