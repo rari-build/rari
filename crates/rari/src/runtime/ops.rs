@@ -52,7 +52,7 @@ pub struct StreamOpState {
 
 impl StreamOpState {
     pub fn get_next_row_id(&mut self) -> String {
-        let id = self.row_counter.to_string();
+        let id = format!("{:x}", self.row_counter);
         self.row_counter += 1;
         id
     }

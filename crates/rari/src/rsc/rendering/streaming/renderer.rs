@@ -1232,6 +1232,11 @@ impl StreamingRenderer {
             .await
             .map_err(|e| RariError::internal(format!("Failed to send shell chunk: {e}")))?;
 
+        {
+            let mut root_id = self.root_row_id.lock().await;
+            *root_id = Some(0);
+        }
+
         Ok(())
     }
 

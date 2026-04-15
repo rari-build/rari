@@ -21,6 +21,18 @@ import 'virtual:rsc-integration.ts'
 
 const MODULE_REF_REGEX_ENTRY = /^\$L?[0-9a-f]+$/i
 
+function getModuleByRef(modules: Map<string, any>, ref: string): any {
+  const direct = modules.get(ref)
+  if (direct)
+    return direct
+
+  const alternate = ref.startsWith('$L')
+    ? `$${ref.slice(2)}`
+    : `$L${ref.slice(1)}`
+
+  return modules.get(alternate)
+}
+
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']
 }
@@ -88,7 +100,7 @@ function setupPartialHydration(): void {
 
           if (typeof type === 'string') {
             if (type.startsWith('$') && MODULE_REF_REGEX_ENTRY.test(type)) {
-              const mod = modules.get(type)
+              const mod = getModuleByRef(modules, type)
 
               if (mod) {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
@@ -627,7 +639,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
       }
 
       if (typeof type === 'string' && type.startsWith('$') && MODULE_REF_REGEX_ENTRY.test(type)) {
-        const moduleInfo = modules.get(type)
+        const moduleInfo = getModuleByRef(modules, type)
         if (moduleInfo) {
           const componentInfo = getGlobalThis()['~clientComponents'][moduleInfo.id]
           if (componentInfo) {

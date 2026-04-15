@@ -887,7 +887,7 @@ impl RscHtmlRenderer {
 
             if let Some(s) = json.as_str() {
                 if let Some(stripped) = s.strip_prefix("$L").or_else(|| s.strip_prefix("$@"))
-                    && let Ok(row_id) = stripped.parse::<u32>()
+                    && let Ok(row_id) = u32::from_str_radix(stripped, 16)
                 {
                     return self.render_row(row_id, row_map, row_cache).await;
                 }
@@ -1167,6 +1167,19 @@ impl RscToHtmlConverter {
     </style>
 </head>
 <body>
+<script>
+(function(){{
+  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
+  if(!window['~rari'])window['~rari']={{}};
+  window['~rari'].streamingBridgeInstalled=true;
+  window.addEventListener('rari:html-stream-row',function(e){{
+    var detail=e.detail;
+    if(!detail||!detail.rscRow)return;
+    var navigationId=window['~rari']&&window['~rari'].navigationId;
+    window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:detail.rscRow,navigationId:navigationId}}}}));
+  }});
+}})();
+</script>
 <div id="root">"#,
             asset_tags
         )
@@ -1633,29 +1646,13 @@ if (typeof window !== 'undefined') {{
             String::new()
         };
 
-        let mut rsc_buffer_script = format!(
+        let rsc_buffer_script = format!(
             "<script data-rsc-boundary=\"{}\" data-row-id=\"{}\">\n(function(){{\n  if(!window['~rari'])window['~rari']={{}};\n  if(!window['~rari'].streaming)window['~rari'].streaming={{}};\n  if(!window['~rari'].streaming.bufferedRows)window['~rari'].streaming.bufferedRows=[];\n  window['~rari'].streaming.bufferedRows.push('{}');\n  window.dispatchEvent(new CustomEvent('rari:html-stream-row', {{detail: {{rscRow: '{}'}}}}));\n}})();\n</script>",
             RscHtmlRenderer::escape_html_attribute(&boundary_id),
             row_id,
             escaped_row,
             escaped_row,
         );
-
-        let bridge_script = r#"<script>
-(function(){
-  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
-  if(!window['~rari'])window['~rari']={};
-  window['~rari'].streamingBridgeInstalled=true;
-  window.addEventListener('rari:html-stream-row',function(e){
-    var detail=e.detail;
-    if(!detail||!detail.rscRow)return;
-    var navigationId=window['~rari']&&window['~rari'].navigationId;
-    window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
-  });
-})();
-</script>"#;
-
-        rsc_buffer_script = format!("{}{}", bridge_script, rsc_buffer_script);
 
         let output = format!("{}{}", rsc_buffer_script, dom_swap_html);
 

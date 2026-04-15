@@ -1110,31 +1110,37 @@ mod tests {
     fn test_row_id_collision_check() {
         let mut serializer = RscSerializer::new();
 
-        let mut props = FxHashMap::default();
-        props.insert("children".to_string(), json!("Test"));
-
-        let element = SerializedReactElement::create_html_element("div", Some(props));
-        let result = serializer.serialize_to_rsc_format(&element);
-
-        println!("\n=== Serialized Output ===");
-        for (i, line) in result.lines().enumerate() {
-            println!("Line {}: {}", i, line);
+        let mut elements = Vec::new();
+        for i in 0..10 {
+            let mut props = FxHashMap::default();
+            props.insert("children".to_string(), json!(format!("Element {}", i)));
+            let element = SerializedReactElement::create_html_element("div", Some(props));
+            elements.push(element);
         }
 
-        let lines: Vec<&str> = result.lines().collect();
         let mut row_ids = rustc_hash::FxHashSet::default();
-        let mut collision_found = false;
 
-        for line in &lines {
-            if let Some(colon_pos) = line.find(':') {
-                let row_id = &line[..colon_pos];
-                if !row_ids.insert(row_id) {
-                    println!("\n!!! COLLISION: Row ID '{}' appears multiple times !!!", row_id);
-                    collision_found = true;
+        for element in &elements {
+            let result = serializer.serialize_to_rsc_format(element);
+
+            for line in result.lines() {
+                if let Some(colon_pos) = line.find(':') {
+                    let row_id = line[..colon_pos].to_string();
+                    if row_id != "0" {
+                        assert!(
+                            row_ids.insert(row_id.clone()),
+                            "Row ID collision detected: '{}' appears multiple times in output",
+                            row_id
+                        );
+                    }
                 }
             }
         }
 
-        assert!(!collision_found, "Row ID collision detected!");
+        assert!(
+            row_ids.len() >= 5,
+            "Expected at least 5 unique row IDs (excluding row 0), got {}",
+            row_ids.len()
+        );
     }
 }

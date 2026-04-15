@@ -190,6 +190,22 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     onNavigateRef.current = onNavigate
   }, [onNavigate])
 
+  useEffect(() => {
+    if (rscPayload?.element != null) {
+      const isThenable = rscPayload.element && typeof rscPayload.element === 'object'
+        && 'status' in rscPayload.element && 'value' in rscPayload.element
+
+      if (isThenable) {
+        const status = (rscPayload.element as any).status
+        if (status === 'rejected') {
+          const reason = (rscPayload.element as any).reason
+          if (reason)
+            console.error('[rari] AppRouter: Flight payload rejected:', reason)
+        }
+      }
+    }
+  }, [rscPayload])
+
   const saveFormState = () => {
     if (typeof document === 'undefined')
       return

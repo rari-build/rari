@@ -653,7 +653,7 @@ impl RscSerializer {
             RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
         self.output_lines.push(import_line.trim_end().to_string());
 
-        self.serialized_modules.insert(component_id.to_string(), format!("${:x}", module_id));
+        self.serialized_modules.insert(component_id.to_string(), format!("$L{:x}", module_id));
     }
 
     fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
