@@ -28,7 +28,6 @@
     "eslint": "catalog:eslint",
     "eslint-plugin-de-morgan": "catalog:eslint",
     "eslint-plugin-oxlint": "catalog:eslint",
-    "eslint-plugin-react-hooks": "catalog:eslint",
     "eslint-plugin-react-refresh": "catalog:eslint",
     "knip": "catalog:eslint",
     "vite-plus": "catalog:build"

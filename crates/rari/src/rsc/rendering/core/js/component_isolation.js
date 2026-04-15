@@ -1,4 +1,3 @@
-/* eslint-disable e18e/prefer-static-regex */
 // oxlint-disable @typescript-eslint/no-floating-promises
 (async function initializeComponentIsolation() {
   const FN_MATCH_REGEX = /(\w+)\s*\(/
