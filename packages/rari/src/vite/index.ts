@@ -2131,10 +2131,14 @@ export class ErrorBoundaryWrapper extends React.Component {
           '',
         )
 
-        modifiedHtml = modifiedHtml.replace(
-          /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
-          '',
-        )
+        let previousHtml: string
+        do {
+          previousHtml = modifiedHtml
+          modifiedHtml = modifiedHtml.replace(
+            /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
+            '',
+          )
+        } while (modifiedHtml !== previousHtml)
 
         return { html: modifiedHtml, tags }
       },

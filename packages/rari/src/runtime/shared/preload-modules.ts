@@ -1,6 +1,9 @@
 import { getClientComponentAsync } from './get-client-component'
 
-export async function preloadModulesFromWireFormat(wireFormat: string): Promise<void> {
+export async function preloadModulesFromWireFormat(
+  wireFormat: string,
+  preloadedModuleIds?: Set<string>,
+): Promise<void> {
   const lines = wireFormat.split('\n')
   const moduleIds = new Set<string>()
 
@@ -24,7 +27,9 @@ export async function preloadModulesFromWireFormat(wireFormat: string): Promise<
           const moduleId = importData.name && importData.name !== 'default'
             ? `${importData.id}#${importData.name}`
             : importData.id
-          moduleIds.add(moduleId)
+
+          if (!preloadedModuleIds || !preloadedModuleIds.has(moduleId))
+            moduleIds.add(moduleId)
         }
       }
       catch {}
@@ -37,6 +42,9 @@ export async function preloadModulesFromWireFormat(wireFormat: string): Promise<
         const component = await getClientComponentAsync(id)
         if (!component)
           console.warn(`[rari] Failed to preload component: ${id}`)
+
+        if (preloadedModuleIds)
+          preloadedModuleIds.add(id)
       }
       catch (error) {
         console.error(`[rari] Error preloading component ${id}:`, error)

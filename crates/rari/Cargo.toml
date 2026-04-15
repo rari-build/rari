@@ -87,7 +87,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = "0.3.32"
 futures-util = "0.3.32"
-tokio = { version = "1.50.0", features = [
+tokio = { version = "1.52.0", features = [
   "rt-multi-thread",
   "macros",
   "sync",
@@ -116,7 +116,7 @@ reqwest = { version = "0.13.2", default-features = false, features = [
   "rustls",
   "blocking",
 ] }
-axum = { version = "0.8.8", features = [
+axum = { version = "0.8.9", features = [
   "ws",
   "macros"
 ] }
@@ -140,9 +140,9 @@ dashmap = "6.1.0"
 parking_lot = "0.12.5"
 smallvec = "1.15.1"
 regex = { workspace = true }
-rustc-hash = "2.1.1"
-lru = "0.16.3"
-uuid = { version = "1.22.0", features = [ "v4" ] }
+rustc-hash = "2.1.2"
+lru = "0.17.0"
+uuid = { version = "1.23.0", features = [ "v4" ] }
 thiserror = "2.0.18"
 
 # === Image Processing & Layout ===
@@ -156,9 +156,9 @@ image = { version = "0.25.10", default-features = false, features = [
 webp = "0.3.1"
 
 # Layout and text rendering
-taffy = "0.10.0"
+taffy = "0.10.1"
 parley = "0.8.0"
-swash = "0.2.6"
+swash = "0.2.7"
 zeno = "0.3.3"
 wuff = "0.2.3"
 resvg = "0.47.0"
@@ -171,7 +171,7 @@ hyper-util = { version = "0.1.20", features = [
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
 sys_traits = "=0.1.27"
-sysinfo = "0.38.0"
+sysinfo = "0.38.4"
 
 # === Development Tools ===
 rustyline = "=17.0.0"

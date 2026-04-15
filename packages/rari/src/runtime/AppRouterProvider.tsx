@@ -49,6 +49,19 @@ function isValidFlightPayload(content: string): boolean {
 
   return false
 }
+
+function isFallbackFlightPayload(content: string): boolean {
+  if (!content || content.length === 0)
+    return false
+
+  if (content.includes('"fallback"') || content.includes('$Lfallback'))
+    return true
+
+  if (content.startsWith('E{'))
+    return true
+
+  return false
+}
 const SUSPENSE_TTL_MS = 30000
 const CLEANUP_INTERVAL_MS = SUSPENSE_TTL_MS
 
@@ -165,6 +178,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const streamingRowsRef = useRef<string[] | null>(null)
+  const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
@@ -526,7 +540,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   }
 
   const parseRscWireFormat = async (wireFormat: string) => {
-    await preloadModulesFromWireFormat(wireFormat)
+    await preloadModulesFromWireFormat(wireFormat, preloadedModuleIdsRef.current)
 
     const stream = new ReadableStream({
       start(controller) {
@@ -723,6 +737,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         return
       }
 
+      if (!parsedPayload && detail.isStreaming
+        && currentNavigationIdRef.current === detail.navigationId) {
+        pendingStreamingNavigationRef.current = detail
+        return
+      }
+
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
         setRscPayload(parsedPayload)
         if (detail.rscWireFormat)
@@ -791,6 +811,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const handleNavigationStart = (event: Event) => {
       const customEvent = event as CustomEvent<{ navigationId: number, targetPath: string }>
       streamingRowsRef.current = []
+      preloadedModuleIdsRef.current.clear()
       currentNavigationIdRef.current = customEvent.detail.navigationId
 
       if (typeof window !== 'undefined') {
@@ -847,7 +868,12 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         const isReferencedByShell = rows.some((shellRow) => {
           const sci = shellRow.indexOf(':')
+          const shellId = sci > 0 ? shellRow.substring(0, sci).trim() : ''
           const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
+
+          if (!HEX_REGEX.test(shellId) || !isValidFlightPayload(shellContent) || isFallbackFlightPayload(shellContent))
+            return false
+
           const refPattern = new RegExp(`"?\\$L?${id}"?(?![0-9a-fA-F])`)
           return refPattern.test(shellContent)
         })

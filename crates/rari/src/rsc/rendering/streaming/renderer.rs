@@ -297,6 +297,11 @@ impl StreamingRenderer {
         &mut self,
         rsc_wire_format: String,
     ) -> Result<RscStream, RariError> {
+        self.runtime
+            .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
+            .await
+            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
+
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
         let (error_sender, error_receiver) = mpsc::unbounded_channel::<BoundaryError>();
         let (chunk_sender, chunk_receiver) = mpsc::channel::<RscStreamChunk>(64);
@@ -978,6 +983,17 @@ impl StreamingRenderer {
             RariError::internal(format!("RSC parsing failed: {}", e))
         })?;
 
+        let render_generation = self
+            .runtime
+            .execute_script(
+                "<get_render_generation>".to_string(),
+                "(function() { return globalThis['~rsc'] && globalThis['~rsc'].renderGeneration || 0; })()".to_string(),
+            )
+            .await
+            .ok()
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+
         let boundaries = parser.find_suspense_boundaries();
         let promises = parser.find_promises();
 
@@ -1018,7 +1034,7 @@ impl StreamingRenderer {
                     boundary_id: promise.boundary_id.clone(),
                     component_path: format!("async_component_{}", promise.promise_id),
                     promise_handle: promise.element_ref.clone(),
-                    render_generation: 0,
+                    render_generation,
                 };
 
                 pending_promises.push(pending_promise);

@@ -69,17 +69,19 @@ if (typeof window !== 'undefined') {
       const actualRowId = rscRow.substring(0, colonIndex)
       const contentStr = rscRow.substring(colonIndex + 1)
 
-      if (contentStr.startsWith('I[')) {
+      if (contentStr.startsWith('I{')) {
         try {
           const importData = JSON.parse(contentStr.substring(1))
-          if (Array.isArray(importData) && importData.length >= 3) {
-            const [path, chunks, exportName] = importData
+          if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
             const moduleKey = `$L${actualRowId}`
                   ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
-              id: path,
-              chunks: Array.isArray(chunks) ? chunks : [chunks],
-              name: exportName || 'default',
+              id: importData.id,
+              chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
+              name: importData.name || 'default',
             })
+          }
+          else {
+            console.error('[rari] Invalid import data format, expected object:', importData)
           }
         }
         catch (e) {
@@ -683,16 +685,18 @@ class RscClient {
               const rowId = line.substring(0, colonIndex)
               const content = line.substring(colonIndex + 1)
 
-              if (content.startsWith('I[')) {
+              if (content.startsWith('I{')) {
                 try {
                   const importData = JSON.parse(content.substring(1))
-                  if (Array.isArray(importData) && importData.length >= 3) {
-                    const [path, chunks, exportName] = importData
+                  if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
                     modules.set(`$L${rowId}`, {
-                      id: path,
-                      chunks: Array.isArray(chunks) ? chunks : [chunks],
-                      name: exportName || 'default',
+                      id: importData.id,
+                      chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
+                      name: importData.name || 'default',
                     })
+                  }
+                  else {
+                    console.error('Invalid import data format, expected object:', importData)
                   }
                 }
                 catch (e) {
@@ -907,16 +911,18 @@ class RscClient {
         continue
 
       try {
-        if (rest.startsWith('I[')) {
+        if (rest.startsWith('I{')) {
           const data = rest.substring(1)
           const importData = JSON.parse(data)
-          if (Array.isArray(importData) && importData.length >= 3) {
-            const [path, chunks, exportName] = importData
+          if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
             modules.set(`$L${rowId}`, {
-              id: path,
-              chunks: Array.isArray(chunks) ? chunks : [chunks],
-              name: exportName || 'default',
+              id: importData.id,
+              chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
+              name: importData.name || 'default',
             })
+          }
+          else {
+            console.error('Invalid import data format, expected object:', importData)
           }
         }
         else if (rest.startsWith('E{')) {

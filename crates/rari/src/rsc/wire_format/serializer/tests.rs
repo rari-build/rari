@@ -1110,22 +1110,22 @@ mod tests {
     fn test_row_id_collision_check() {
         let mut serializer = RscSerializer::new();
 
-        let mut child_elements = Vec::new();
-        for i in 0..5 {
-            let mut child_props = FxHashMap::default();
-            child_props.insert("children".to_string(), json!(format!("Child {}", i)));
-            child_elements
-                .push(SerializedReactElement::create_html_element("span", Some(child_props)));
-        }
-
-        let mut parent_props = FxHashMap::default();
-        parent_props.insert(
-            "children".to_string(),
-            json!(["Child 0", "Child 1", "Child 2", "Child 3", "Child 4"]),
+        let mut props = FxHashMap::default();
+        props.insert(
+            "data".to_string(),
+            json!({
+                "$map": [
+                    ["key1", {"nested": "value1"}],
+                    ["key2", {"nested": "value2"}],
+                    ["key3", {"nested": "value3"}],
+                    ["key4", {"nested": "value4"}],
+                    ["key5", {"nested": "value5"}]
+                ]
+            }),
         );
-        parent_props.insert("className".to_string(), json!("container"));
+        props.insert("className".to_string(), json!("container"));
 
-        let parent_element = SerializedReactElement::create_html_element("div", Some(parent_props));
+        let parent_element = SerializedReactElement::create_html_element("div", Some(props));
 
         let result = serializer.serialize_to_rsc_format(&parent_element);
 
