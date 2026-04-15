@@ -193,7 +193,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   useEffect(() => {
     if (rscPayload?.element != null) {
       const isThenable = rscPayload.element && typeof rscPayload.element === 'object'
-        && 'status' in rscPayload.element && 'value' in rscPayload.element
+        && 'status' in rscPayload.element
 
       if (isThenable) {
         const status = (rscPayload.element as any).status
@@ -1050,7 +1050,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
   if (rscPayload?.element != null) {
     const isThenable = rscPayload.element && typeof rscPayload.element === 'object'
-      && 'status' in rscPayload.element && 'value' in rscPayload.element
+      && 'status' in rscPayload.element
 
     if (isThenable) {
       const status = (rscPayload.element as any).status

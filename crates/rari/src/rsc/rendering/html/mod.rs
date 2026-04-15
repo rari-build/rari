@@ -1143,7 +1143,37 @@ impl RscToHtmlConverter {
 
     fn generate_html_shell(&self) -> Vec<u8> {
         if let Some(custom_shell) = &self.custom_shell {
-            return custom_shell.as_bytes().to_vec();
+            let bridge_script = r#"<script>
+(function(){
+  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
+  if(!window['~rari'])window['~rari']={};
+  window['~rari'].streamingBridgeInstalled=true;
+  window.addEventListener('rari:html-stream-row',function(e){
+    var detail=e.detail;
+    if(!detail||!detail.rscRow)return;
+    var navigationId=window['~rari']&&window['~rari'].navigationId;
+    window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
+  });
+})();
+</script>"#;
+
+            let custom_shell_with_bridge = if let Some(body_pos) = custom_shell.find("<body") {
+                if let Some(body_end) = custom_shell[body_pos..].find('>') {
+                    let insert_pos = body_pos + body_end + 1;
+                    format!(
+                        "{}{}{}",
+                        &custom_shell[..insert_pos],
+                        bridge_script,
+                        &custom_shell[insert_pos..]
+                    )
+                } else {
+                    format!("{}{}", custom_shell, bridge_script)
+                }
+            } else {
+                format!("{}{}", custom_shell, bridge_script)
+            };
+
+            return custom_shell_with_bridge.as_bytes().to_vec();
         }
 
         let asset_tags = self.asset_links.as_deref().unwrap_or("");

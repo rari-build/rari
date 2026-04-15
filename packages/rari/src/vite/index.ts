@@ -2097,19 +2097,29 @@ export class ErrorBoundaryWrapper extends React.Component {
             imports.push(importPath)
         }
 
+        const tags = []
+
+        tags.push({
+          tag: 'script',
+          attrs: {
+            type: 'module',
+          },
+          children: 'import \'virtual:rari-entry-client\';',
+          injectTo: 'head-prepend' as const,
+        })
+
         if (imports.length > 0) {
-          const tags = imports.map(importPath => ({
+          tags.push(...imports.map(importPath => ({
             tag: 'script',
             attrs: {
               type: 'module',
               src: importPath,
             },
             injectTo: 'head-prepend' as const,
-          }))
-          return { html, tags }
+          })))
         }
 
-        return html
+        return { html, tags }
       },
     },
 

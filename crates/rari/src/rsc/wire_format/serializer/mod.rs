@@ -1007,7 +1007,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$Q{:x}", chunk_id))
@@ -1020,7 +1020,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$W{:x}", chunk_id))
@@ -1033,7 +1033,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$K{:x}", chunk_id))
@@ -1046,7 +1046,7 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$@{:x}", chunk_id))
@@ -1058,7 +1058,7 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(function_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "{}".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$F{:x}", chunk_id))
@@ -1071,7 +1071,7 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$Y{:x}", chunk_id))
@@ -1083,7 +1083,7 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(iterator_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$i{:x}", chunk_id))
@@ -1144,7 +1144,7 @@ impl RscSerializer {
             let base64_data = base64_encode(&bytes);
             let blob_model = serde_json::json!([blob_type, base64_data]);
             let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
-            let chunk_line = format!("{}:{}", chunk_id, blob_json);
+            let chunk_line = format!("{:x}:{}", chunk_id, blob_json);
             self.output_lines.push(chunk_line);
 
             Value::String(format!("$B{:x}", chunk_id))

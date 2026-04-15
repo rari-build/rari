@@ -14,8 +14,15 @@ pub fn escape_rsc_string(value: &str) -> String {
                 && rest.chars().all(|c| c.is_ascii_hexdigit());
         let is_symbolic_prefixed_ref = matches!(prefix, "$S" | "$T" | "$h");
         let is_plain_hex_ref = value[1..].chars().all(|c| c.is_ascii_hexdigit());
+        let is_scalar_marker = value.starts_with("$D")
+            || value.starts_with("$n")
+            || matches!(value, "$NaN" | "$Infinity" | "$-Infinity" | "$-0" | "$undefined");
 
-        if is_numeric_prefixed_ref || is_symbolic_prefixed_ref || is_plain_hex_ref {
+        if is_numeric_prefixed_ref
+            || is_symbolic_prefixed_ref
+            || is_plain_hex_ref
+            || is_scalar_marker
+        {
             return value.to_string();
         }
 
