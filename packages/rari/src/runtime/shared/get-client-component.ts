@@ -207,14 +207,17 @@ export function resolveClientComponent(
   const normalizedId = id.replace(/\\/g, '/')
 
   const directResult = resolveById(normalizedId, clientComponents)
+    || (normalizedId !== id ? resolveById(id, clientComponents) : null)
   if (directResult !== null)
     return directResult
 
   const pathResult = resolveByPathWithExport(normalizedId, clientComponents, clientComponentPaths)
+    || (normalizedId !== id ? resolveByPathWithExport(id, clientComponents, clientComponentPaths) : null)
   if (pathResult !== null)
     return pathResult
 
   return resolveByName(normalizedId, clientComponents, clientComponentNames)
+    || (normalizedId !== id ? resolveByName(id, clientComponents, clientComponentNames) : null)
 }
 
 export function getClientComponent(id: string): any {
@@ -239,6 +242,14 @@ export async function getClientComponentAsync(id: string): Promise<any> {
   let componentInfo = clientComponents[baseId] as LazyComponentInfo
   if (componentInfo)
     return await ensureComponentLoaded(componentInfo, exportName)
+
+  if (normalizedId !== id) {
+    const origHashIndex = id.indexOf('#')
+    const origBaseId = origHashIndex === -1 ? id : id.slice(0, origHashIndex)
+    componentInfo = clientComponents[origBaseId] as LazyComponentInfo
+    if (componentInfo)
+      return await ensureComponentLoaded(componentInfo, exportName)
+  }
 
   const variants = getPathVariants(baseId)
   for (const variant of variants) {
