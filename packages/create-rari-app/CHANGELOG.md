@@ -4,6 +4,10 @@
 
 - *(rsc)* Optimize boundary update streaming with progressive HTML rendering
 - *(rsc)* Implement streaming bridge and hexadecimal chunk encoding
+
+### 💼 Other
+
+- Create-rari-app@0.5.0
 ## [create-rari-app@0.4.29] - 2026-04-03
 
 ### 🚀 Features
