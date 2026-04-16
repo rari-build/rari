@@ -142,6 +142,7 @@ function setupPartialHydration(): void {
                       React.createElement(ClientComponentLoader, {
                         key,
                         componentInfo,
+                        exportName: mod.name,
                         childProps: processedProps,
                       }),
                     )
@@ -600,14 +601,17 @@ function injectHeadContent(headElement: any): void {
   }
 }
 
-function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: any, childProps: any }) {
+function ClientComponentLoader({ componentInfo, exportName, childProps }: { componentInfo: any, exportName?: string, childProps: any }) {
   if (!componentInfo.loadPromise)
     return null
 
   React.use(componentInfo.loadPromise)
 
   if (componentInfo.component) {
-    const Component = componentInfo.component
+    const Component = getComponentFromInfo(componentInfo, exportName)
+    if (!Component)
+      return null
+
     return React.createElement(Component, childProps)
   }
 
@@ -700,6 +704,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
                 React.createElement(ClientComponentLoader, {
                   key,
                   componentInfo,
+                  exportName: moduleInfo.name,
                   childProps,
                 }),
               )
