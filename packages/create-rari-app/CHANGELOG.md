@@ -1,8 +1,18 @@
+## [create-rari-app@0.5.0] - 2026-04-16
+
+### 🚀 Features
+
+- *(rsc)* Optimize boundary update streaming with progressive HTML rendering
+- *(rsc)* Implement streaming bridge and hexadecimal chunk encoding
 ## [create-rari-app@0.4.29] - 2026-04-03
 
 ### 🚀 Features
 
 - *(rsc)* Upgrade deno dependencies and improve boundary context handling
+
+### 💼 Other
+
+- Create-rari-app@0.4.29
 
 ### 🚜 Refactor
 
