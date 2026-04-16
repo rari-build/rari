@@ -775,7 +775,7 @@ impl RscHtmlRenderer {
 
             let is_suspense_symbol = tag.starts_with('$')
                 && tag.len() > 1
-                && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
+                && tag[1..].chars().all(|c| c.is_ascii_digit());
             if tag == "$Sreact.suspense" || tag == "react.suspense" || is_suspense_symbol {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
@@ -1233,12 +1233,12 @@ impl RscToHtmlConverter {
             }
         }
 
-        rows_with_ids.sort_by_key(|(id, _)| *id);
+        rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
 
         let mut rsc_payload =
             rows_with_ids.iter().map(|(_, row)| format!("{}\n", row)).collect::<Vec<_>>().join("");
 
-        let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
+        let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
 
         if !has_row_0
             && let Some((max_id, _)) =
@@ -1363,7 +1363,7 @@ if (typeof window !== 'undefined') {{
                 }
 
                 if let Some(colon_pos) = s.find(':')
-                    && s[..colon_pos].chars().all(|c| c.is_ascii_hexdigit())
+                    && s[..colon_pos].chars().all(|c| c.is_ascii_digit())
                 {
                     let after_colon = &s[colon_pos + 1..];
                     if !after_colon.is_empty()
@@ -1384,7 +1384,7 @@ if (typeof window !== 'undefined') {{
 
                     let is_suspense_symbol = element_type.starts_with('$')
                         && element_type.len() > 1
-                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
+                        && element_type[1..].chars().all(|c| c.is_ascii_digit());
 
                     let is_client_component = element_type.starts_with("$L")
                         || element_type.contains('#')

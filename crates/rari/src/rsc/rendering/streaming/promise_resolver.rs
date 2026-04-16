@@ -34,7 +34,7 @@ fn collect_client_components(
             if arr.len() >= 4
                 && arr[0].as_str() == Some("$")
                 && let Some(type_str) = arr[1].as_str()
-                && (type_str.contains('/') || type_str.contains('\\') || type_str.contains('#'))
+                && (type_str.contains('/') || type_str.contains('#'))
                 && !type_str.starts_with("$L")
             {
                 let normalized_type_str = type_str.cow_replace('\\', "/");

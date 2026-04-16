@@ -632,28 +632,6 @@ impl JsExecutionRuntime {
         }
     }
 
-    pub async fn clear_request_context_if_matches(
-        &self,
-        expected_context: std::sync::Arc<
-            crate::server::middleware::request_context::RequestContext,
-        >,
-    ) -> Result<(), RariError> {
-        let runtime = self.runtime.clone();
-
-        match tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.clear_request_context_if_matches(expected_context),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => Err(RariError::timeout(format!(
-                "Clearing request context (if matches) timed out after {} ms",
-                self.timeout_ms
-            ))),
-        }
-    }
-
     pub async fn execute_with_request_context<F, T>(
         &self,
         request_context: std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
