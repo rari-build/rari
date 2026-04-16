@@ -736,18 +736,14 @@ impl RscHtmlRenderer {
                 }
 
                 RscElement::Suspense { fallback_ref, children_ref, boundary_id, props: _ } => {
-                    if children_ref.starts_with("$L")
-                        && let Ok(row_id) = Self::parse_reference(children_ref)
-                    {
+                    if let Ok(row_id) = Self::parse_reference(children_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         if !html.is_empty() {
                             return Ok(html);
                         }
                     }
 
-                    if fallback_ref.starts_with("$L")
-                        && let Ok(row_id) = Self::parse_reference(fallback_ref)
-                    {
+                    if let Ok(row_id) = Self::parse_reference(fallback_ref) {
                         let html = self.render_row(row_id, row_map, row_cache).await?;
                         return Ok(format!(
                             r#"<div data-boundary-id="{}" class="rari-suspense-boundary">{}</div>"#,
@@ -1156,9 +1152,8 @@ impl RscToHtmlConverter {
             .to_vec()
     }
 
-    fn generate_html_shell(&self) -> Vec<u8> {
-        if let Some(custom_shell) = &self.custom_shell {
-            let bridge_script = r#"<script>
+    fn streaming_bridge_script() -> &'static str {
+        r#"<script>
 (function(){
   if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
   if(!window['~rari'])window['~rari']={};
@@ -1170,7 +1165,29 @@ impl RscToHtmlConverter {
     window.dispatchEvent(new CustomEvent('rari:rsc-row',{detail:{rscRow:detail.rscRow,navigationId:navigationId}}));
   });
 })();
-</script>"#;
+</script>"#
+    }
+
+    fn contains_client_reference(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Array(arr) => {
+                if arr.len() == 4
+                    && arr[0] == "$"
+                    && let Some(id) = arr[1].as_str()
+                    && (id.starts_with("$L") || id.contains('#'))
+                {
+                    return true;
+                }
+                arr.iter().any(Self::contains_client_reference)
+            }
+            serde_json::Value::Object(obj) => obj.values().any(Self::contains_client_reference),
+            _ => false,
+        }
+    }
+
+    fn generate_html_shell(&self) -> Vec<u8> {
+        if let Some(custom_shell) = &self.custom_shell {
+            let bridge_script = Self::streaming_bridge_script();
 
             let custom_shell_with_bridge = if let Some(body_pos) = custom_shell.find("<body") {
                 if let Some(body_end) = custom_shell[body_pos..].find('>') {
@@ -1192,6 +1209,7 @@ impl RscToHtmlConverter {
         }
 
         let asset_tags = self.asset_links.as_deref().unwrap_or("");
+        let bridge_script = Self::streaming_bridge_script();
 
         format!(
             r#"<!DOCTYPE html>
@@ -1212,21 +1230,9 @@ impl RscToHtmlConverter {
     </style>
 </head>
 <body>
-<script>
-(function(){{
-  if(window['~rari']&&window['~rari'].streamingBridgeInstalled)return;
-  if(!window['~rari'])window['~rari']={{}};
-  window['~rari'].streamingBridgeInstalled=true;
-  window.addEventListener('rari:html-stream-row',function(e){{
-    var detail=e.detail;
-    if(!detail||!detail.rscRow)return;
-    var navigationId=window['~rari']&&window['~rari'].navigationId;
-    window.dispatchEvent(new CustomEvent('rari:rsc-row',{{detail:{{rscRow:detail.rscRow,navigationId:navigationId}}}}));
-  }});
-}})();
-</script>
+{}
 <div id="root">"#,
-            asset_tags
+            asset_tags, bridge_script
         )
         .as_bytes()
         .to_vec()
@@ -1672,10 +1678,16 @@ if (typeof window !== 'undefined') {{
                 escape_html(text)
             } else {
                 match serde_json::from_str::<serde_json::Value>(content_json) {
-                    Ok(content) => match self.rsc_element_to_html(&content).await {
-                        Ok(html) if !html.is_empty() => html,
-                        _ => String::new(),
-                    },
+                    Ok(content) => {
+                        if Self::contains_client_reference(&content) {
+                            String::new()
+                        } else {
+                            match self.rsc_element_to_html(&content).await {
+                                Ok(html) if !html.is_empty() => html,
+                                _ => String::new(),
+                            }
+                        }
+                    }
                     Err(_) => String::new(),
                 }
             };

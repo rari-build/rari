@@ -607,4 +607,152 @@ mod tests {
         assert!(!registry.is_client_reference("NonExistent"));
         assert!(registry.get_client_reference_info("NonExistent").is_none());
     }
+
+    #[test]
+    fn test_path_normalization_with_backslashes() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("a\\b", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component with backslash");
+
+        assert!(registry.is_component_registered("a/b"));
+        assert!(registry.is_component_registered("a\\b"));
+        assert!(registry.get_component("a/b").is_some());
+        assert!(registry.get_component("a\\b").is_some());
+
+        let component = registry.get_component("a/b").unwrap();
+        assert_eq!(component.id, "a/b");
+    }
+
+    #[test]
+    fn test_path_normalization_with_mixed_separators() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("a/b\\c", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component with mixed separators");
+
+        assert!(registry.is_component_registered("a/b/c"));
+        assert!(registry.is_component_registered("a/b\\c"));
+        assert!(registry.is_component_registered("a\\b/c"));
+        assert!(registry.is_component_registered("a\\b\\c"));
+
+        let component = registry.get_component("a/b/c").unwrap();
+        assert_eq!(component.id, "a/b/c");
+    }
+
+    #[test]
+    fn test_dependency_normalization_with_backslashes() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "ComponentA",
+                "source A",
+                "transformed A".to_string(),
+                smallvec!["utils\\ComponentB".to_string(), "lib/ComponentC".to_string()],
+            )
+            .expect("Failed to register ComponentA");
+
+        registry
+            .register_component(
+                "utils/ComponentB",
+                "source B",
+                "transformed B".to_string(),
+                smallvec!["lib\\ComponentC".to_string()],
+            )
+            .expect("Failed to register ComponentB");
+
+        registry
+            .register_component(
+                "lib\\ComponentC",
+                "source C",
+                "transformed C".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register ComponentC");
+
+        let deps_a = registry.get_dependencies("ComponentA").unwrap();
+        assert!(deps_a.contains(&"utils/ComponentB".to_string()));
+        assert!(deps_a.contains(&"lib/ComponentC".to_string()));
+
+        let deps_b = registry.get_dependencies("utils\\ComponentB").unwrap();
+        assert!(deps_b.contains(&"lib/ComponentC".to_string()));
+
+        let dependents_c = registry.get_dependents("lib/ComponentC").unwrap();
+        assert!(dependents_c.contains(&"ComponentA".to_string()));
+        assert!(dependents_c.contains(&"utils/ComponentB".to_string()));
+    }
+
+    #[test]
+    fn test_module_info_normalization() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "components\\Button",
+                "source",
+                "transformed".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register component");
+
+        registry.set_module_info("components\\Button", "file:///button.js".to_string(), 42);
+
+        assert!(registry.has_module_info("components/Button"));
+        assert!(registry.has_module_info("components\\Button"));
+        assert_eq!(registry.get_module_id("components/Button"), Some(42));
+        assert_eq!(registry.get_module_id("components\\Button"), Some(42));
+        assert_eq!(registry.get_module_specifier("components/Button"), Some("file:///button.js"));
+    }
+
+    #[test]
+    fn test_client_reference_normalization() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("ui\\Button", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component");
+
+        registry.register_client_reference("ui\\Button", "src\\components\\Button.tsx", "default");
+
+        assert!(registry.is_client_reference("ui/Button"));
+        assert!(registry.is_client_reference("ui\\Button"));
+
+        let info = registry.get_client_reference_info("ui/Button").unwrap();
+        assert_eq!(info.0, "src/components/Button.tsx");
+        assert_eq!(info.1, "default");
+
+        let info2 = registry.get_client_reference_info("ui\\Button").unwrap();
+        assert_eq!(info2.0, "src/components/Button.tsx");
+        assert_eq!(info2.1, "default");
+    }
+
+    #[test]
+    fn test_component_operations_with_normalized_paths() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "app\\components\\Header",
+                "source",
+                "transformed".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register component");
+
+        registry.mark_component_loaded("app/components\\Header");
+        assert!(registry.is_component_loaded("app\\components/Header"));
+
+        registry.mark_component_initially_loaded("app\\components\\Header");
+        assert!(registry.has_been_initially_loaded("app/components/Header"));
+
+        registry.mark_module_stale("app/components\\Header");
+        assert!(registry.is_module_stale("app\\components\\Header"));
+
+        registry.remove_component("app\\components/Header");
+        assert!(!registry.is_component_registered("app/components/Header"));
+        assert!(!registry.is_component_registered("app\\components\\Header"));
+    }
 }
