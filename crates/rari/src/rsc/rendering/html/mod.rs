@@ -1233,12 +1233,12 @@ impl RscToHtmlConverter {
             }
         }
 
-        rows_with_ids.sort_by_key(|(id, _)| if *id == 0 { u32::MAX - 1 } else { *id });
+        rows_with_ids.sort_by_key(|(id, _)| *id);
 
         let mut rsc_payload =
             rows_with_ids.iter().map(|(_, row)| format!("{}\n", row)).collect::<Vec<_>>().join("");
 
-        let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
+        let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
         if !has_row_0
             && let Some((max_id, _)) =
