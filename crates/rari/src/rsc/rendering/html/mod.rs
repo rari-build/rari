@@ -1175,15 +1175,24 @@ impl RscToHtmlConverter {
     fn contains_client_reference(value: &serde_json::Value) -> bool {
         match value {
             serde_json::Value::Array(arr) => {
-                if arr.len() == 4
+                if arr.len() >= 4
                     && arr[0] == "$"
                     && let Some(id) = arr[1].as_str()
-                    && (id.starts_with("$L")
+                {
+                    if id.starts_with("$L")
                         || id.starts_with("$@")
                         || id.contains('#')
-                        || id.contains('/'))
-                {
-                    return true;
+                        || id.contains('/')
+                    {
+                        return true;
+                    }
+
+                    if id.starts_with('$')
+                        && id.len() > 1
+                        && id[1..].chars().all(|c| c.is_ascii_hexdigit())
+                    {
+                        return true;
+                    }
                 }
                 arr.iter().any(Self::contains_client_reference)
             }

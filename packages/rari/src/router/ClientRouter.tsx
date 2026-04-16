@@ -591,8 +591,15 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           return response
         })
 
+        const response = await rscFetchPromise
+
+        if (abortController.signal.aborted) {
+          cleanupAbortedNavigation(targetPath, navigationId)
+          return
+        }
+
         handleNonStreamingResponse(
-          rscFetchPromise,
+          Promise.resolve(response),
           fromRoute,
           targetPath,
           navigationId,
@@ -601,13 +608,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           {},
           abortController,
         )
-
-        const response = await rscFetchPromise
-
-        if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
 
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
