@@ -12,7 +12,7 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
   componentInfo.loading = true
   componentInfo.loadPromise = componentInfo.loader!()
     .then((module: any) => {
-      componentInfo.component = module.default ?? module
+      componentInfo.component = module
       componentInfo.registered = true
       componentInfo.loading = false
       return module
@@ -62,7 +62,7 @@ export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: 
   if (componentInfo.loader && !componentInfo.loading) {
     componentInfo.loading = true
     componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-      componentInfo.component = module.default ?? module
+      componentInfo.component = module
       componentInfo.registered = true
       componentInfo.loading = false
       return module

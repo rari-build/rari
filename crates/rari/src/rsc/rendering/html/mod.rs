@@ -641,7 +641,11 @@ impl RscHtmlRenderer {
     }
 
     fn parse_reference(ref_str: &str) -> Result<u32, RariError> {
-        if let Some(stripped) = ref_str.strip_prefix("$L").or_else(|| ref_str.strip_prefix("$@")) {
+        if let Some(stripped) = ref_str
+            .strip_prefix("$L")
+            .or_else(|| ref_str.strip_prefix("$@"))
+            .or_else(|| ref_str.strip_prefix("$"))
+        {
             u32::from_str_radix(stripped, 16)
                 .map_err(|_| RariError::internal(format!("Invalid row reference: {}", ref_str)))
         } else {
@@ -1174,7 +1178,10 @@ impl RscToHtmlConverter {
                 if arr.len() == 4
                     && arr[0] == "$"
                     && let Some(id) = arr[1].as_str()
-                    && (id.starts_with("$L") || id.contains('#'))
+                    && (id.starts_with("$L")
+                        || id.starts_with("$@")
+                        || id.contains('#')
+                        || id.contains('/'))
                 {
                     return true;
                 }

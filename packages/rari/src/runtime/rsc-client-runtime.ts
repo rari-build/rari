@@ -371,8 +371,14 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     registered: true,
   }
 
-    ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined') {
+    (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  }
+
+  const fullId = `${id}#${exportName}`
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
   ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][fullId] = componentInfo
 
   ; (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
