@@ -47,7 +47,7 @@ const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
 const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
 const IMPORT_PATH_REGEX = /import\s+["']([^"']+)["']/g
-const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/|rari\/)react-server-dom-rari-client\.mjs\2/g
+const RSC_CLIENT_IMPORT_REGEX = /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
 const COMPONENTS_PREFIX_REGEX = /^components\//
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
@@ -1664,8 +1664,8 @@ const ${componentName} = registerClientReference(
         return 'virtual:rsc-integration.ts'
       if (id === 'virtual:rari-entry-client' || id === 'virtual:rari-entry-client.ts')
         return 'virtual:rari-entry-client.ts'
-      if (id === 'virtual:react-server-dom-rari-client' || id === 'virtual:react-server-dom-rari-client.ts')
-        return 'virtual:react-server-dom-rari-client.ts'
+      if (id === 'virtual:react-flight-client' || id === 'virtual:react-flight-client.ts')
+        return 'virtual:react-flight-client.ts'
       if (id === 'virtual:app-router-provider' || id === 'virtual:app-router-provider.tsx')
         return 'virtual:app-router-provider.tsx'
       if (id === 'virtual:error-boundary-wrapper' || id === 'virtual:error-boundary-wrapper.tsx')
@@ -1803,6 +1803,8 @@ const ${componentName} = registerClientReference(
             }
           }
 
+          const componentName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
+
           const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
           const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
             ? normalizedPath
@@ -1814,6 +1816,7 @@ const ${componentName} = registerClientReference(
           return `  "${registrationPath}": {
     id: "${componentId}",
     path: "${registrationPath}",
+    exportName: "${componentName}",
     type: "client",
     loader: () => ${importStatement},
     component: null,
@@ -1855,6 +1858,8 @@ ${lazyLoaderRegistry}
 for (const [path, config] of Object.entries(lazyComponentRegistry)) {
   globalThis['~clientComponents'][path] = config;
   globalThis['~clientComponents'][config.id] = config;
+  const fullId = path + '#' + config.exportName;
+  globalThis['~clientComponents'][fullId] = config;
   globalThis['~clientComponentPaths'][path] = config.id;
 }
 `
@@ -2016,12 +2021,15 @@ export class ErrorBoundaryWrapper extends React.Component {
         const code = await loadRscClientRuntime()
         return code.replace(
           RSC_CLIENT_IMPORT_REGEX,
-          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-server-dom-rari-client.ts${quote}`,
+          (match, whitespace, quote) => `from${whitespace}${quote}virtual:react-flight-client.ts${quote}`,
         )
       }
 
-      if (id === 'virtual:react-server-dom-rari-client.ts')
-        return await loadRuntimeFile('react-server-dom-rari-client.mjs')
+      if (id === 'virtual:react-flight-client.ts') {
+        return {
+          code: `export * from 'rari/runtime/vendor/react-flight-client'`,
+        }
+      }
 
       if (id.endsWith('.mjs') && fs.existsSync(id)) {
         try {
@@ -2094,19 +2102,50 @@ export class ErrorBoundaryWrapper extends React.Component {
             imports.push(importPath)
         }
 
+        const tags = []
+
+        tags.push({
+          tag: 'script',
+          attrs: {
+            type: 'module',
+          },
+          children: 'import \'virtual:rari-entry-client\';',
+          injectTo: 'head-prepend' as const,
+        })
+
         if (imports.length > 0) {
-          const tags = imports.map(importPath => ({
+          tags.push(...imports.map(importPath => ({
             tag: 'script',
             attrs: {
               type: 'module',
               src: importPath,
             },
             injectTo: 'head-prepend' as const,
-          }))
-          return { html, tags }
+          })))
         }
 
-        return html
+        let modifiedHtml = html
+
+        modifiedHtml = modifiedHtml.replace(
+          /^\s*import\s+["']\/src\/[^"']+["'];?\s*$/gm,
+          '',
+        )
+
+        modifiedHtml = modifiedHtml.replace(
+          /^\s*import\s+["']virtual:rari-entry-client["'];?\s*$/gm,
+          '',
+        )
+
+        let previousHtml: string
+        do {
+          previousHtml = modifiedHtml
+          modifiedHtml = modifiedHtml.replace(
+            /<script\s+type=["']module["'][^>]*>\s*<\/script>/gi,
+            '',
+          )
+        } while (modifiedHtml !== previousHtml)
+
+        return { html: modifiedHtml, tags }
       },
     },
 

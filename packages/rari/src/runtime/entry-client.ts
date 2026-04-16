@@ -11,12 +11,27 @@ import { createRoot } from 'react-dom/client'
 // @ts-expect-error - virtual module resolved by Vite
 import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
-import { createFromReadableStream } from 'virtual:react-server-dom-rari-client.ts'
+import { createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
-import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
+import { getClientComponent, getClientComponentAsync, getComponentFromInfo } from './shared/get-client-component'
+import { preloadModulesFromWireFormat } from './shared/preload-modules'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
+
+const MODULE_REF_REGEX_ENTRY = /^\$L?[0-9a-f]+$/i
+
+function getModuleByRef(modules: Map<string, any>, ref: string): any {
+  const direct = modules.get(ref)
+  if (direct)
+    return direct
+
+  const alternate = ref.startsWith('$L')
+    ? `$${ref.slice(2)}`
+    : `$L${ref.slice(1)}`
+
+  return modules.get(alternate)
+}
 
 function getRariGlobal(): GlobalWithRari['~rari'] {
   return (globalThis as unknown as GlobalWithRari)['~rari']
@@ -28,84 +43,6 @@ function getGlobalThis(): GlobalWithRari {
 
 function getWindow(): WindowWithRari {
   return window as unknown as WindowWithRari
-}
-
-function createSsrManifest(): any {
-  return {
-    moduleMap: new Proxy({}, {
-      get(_target, moduleId: string | symbol) {
-        return new Proxy({}, {
-          get(_moduleTarget, exportName: string | symbol) {
-            return {
-              id: `${String(moduleId)}#${String(exportName)}`,
-              chunks: [],
-              name: String(exportName),
-            }
-          },
-        })
-      },
-    }),
-    moduleLoading: new Proxy({}, {
-      get(_target, moduleId: string | symbol) {
-        return new Proxy({}, {
-          get(_moduleTarget, exportName: string | symbol) {
-            const fn = async () => {
-              try {
-                const moduleIdStr = String(moduleId)
-                const exportNameStr = String(exportName)
-                const componentKey = `${moduleIdStr}#${exportNameStr}`
-
-                if (getGlobalThis()['~clientComponents']?.[componentKey]?.component) {
-                  return getGlobalThis()['~clientComponents'][componentKey].component
-                }
-
-                if (getGlobalThis()['~clientComponents']?.[moduleIdStr]?.component) {
-                  const component = getGlobalThis()['~clientComponents'][moduleIdStr].component
-                  return exportNameStr === 'default' ? component : component?.[exportNameStr]
-                }
-
-                const componentInfo = getGlobalThis()['~clientComponents']?.[componentKey]
-                  || getGlobalThis()['~clientComponents']?.[moduleIdStr]
-
-                if (componentInfo?.loader) {
-                  if (!componentInfo.loadPromise) {
-                    componentInfo.loading = true
-                    componentInfo.loadPromise = componentInfo.loader()
-                      .then((module: any) => {
-                        componentInfo.component = module.default || module
-                        componentInfo.registered = true
-                        componentInfo.loading = false
-                        return module
-                      })
-                      .catch((loadError) => {
-                        componentInfo.loading = false
-                        componentInfo.loadPromise = undefined
-                        console.error(`[rari] Failed to lazy load ${moduleIdStr}#${exportNameStr}:`, loadError)
-                        throw loadError
-                      })
-                  }
-                  const module = await componentInfo.loadPromise
-                  const resolved = module.default || module
-                  return exportNameStr === 'default'
-                    ? resolved
-                    : (resolved?.[exportNameStr] ?? resolved)
-                }
-
-                console.warn(`[rari] Module ${moduleIdStr}#${exportNameStr} not found in client components registry`)
-                return null
-              }
-              catch (error) {
-                console.error(`[rari] Failed to load ${String(moduleId)}#${String(exportName)}:`, error)
-                return null
-              }
-            }
-
-            return fn
-          },
-        })
-      },
-    }),
-  }
 }
 
 if (typeof getRariGlobal() === 'undefined')
@@ -162,26 +99,34 @@ function setupPartialHydration(): void {
             delete processedProps['~boundaryId']
 
           if (typeof type === 'string') {
-            if (type.startsWith('$L')) {
-              const mod = modules.get(type)
+            if (type.startsWith('$') && MODULE_REF_REGEX_ENTRY.test(type)) {
+              const mod = getModuleByRef(modules, type)
 
               if (mod) {
                 const clientKey = `${mod.id}#${mod.name || 'default'}`
+                const normalizedClientKey = clientKey.replace(/\\/g, '/')
+                const normalizedModId = mod.id.replace(/\\/g, '/')
                 let clientComponent = null
-                const componentInfo = getGlobalThis()['~clientComponents'][clientKey]
-                  || getGlobalThis()['~clientComponents'][mod.id]
+
+                const isDefaultExport = !mod.name || mod.name === 'default'
+                const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
+                  || getGlobalThis()['~clientComponents'][clientKey]
+                  || (isDefaultExport && (
+                    getGlobalThis()['~clientComponents'][normalizedModId]
+                    || getGlobalThis()['~clientComponents'][mod.id]
+                  ))
 
                 if (componentInfo) {
                   if (componentInfo.component) {
-                    clientComponent = componentInfo.component
+                    clientComponent = getComponentFromInfo(componentInfo, mod.name)
                   }
                   else if (componentInfo.loader && !componentInfo.loading) {
                     componentInfo.loading = true
                     componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-                      componentInfo.component = module.default || module
+                      componentInfo.component = module
                       componentInfo.registered = true
                       componentInfo.loading = false
-                      return componentInfo.component
+                      return module
                     }).catch((error: Error) => {
                       componentInfo.loading = false
                       componentInfo.loadPromise = undefined
@@ -197,6 +142,7 @@ function setupPartialHydration(): void {
                       React.createElement(ClientComponentLoader, {
                         key,
                         componentInfo,
+                        exportName: mod.name,
                         childProps: processedProps,
                       }),
                     )
@@ -386,11 +332,10 @@ export async function renderApp(): Promise<void> {
         if (!response.ok && response.status !== 404)
           throw new Error(`Failed to fetch RSC data: ${response.status}`)
 
-        const stream = response.body
+        if (!response.body)
+          throw new Error('RSC response has no body')
 
-        const ssrManifest = createSsrManifest()
-
-        element = await createFromReadableStream(stream, ssrManifest)
+        element = await createFromReadableStream(response.body)
       }
       catch (e) {
         if (e instanceof Promise)
@@ -431,6 +376,8 @@ export async function renderApp(): Promise<void> {
       try {
         const payloadJson = payloadScript.textContent
 
+        await preloadModulesFromWireFormat(payloadJson)
+
         const hasBufferedRows = getWindow()['~rari']?.streaming?.bufferedRows && getWindow()['~rari'].streaming!.bufferedRows!.length > 0
         const isStreaming = getWindow()['~rari']?.streaming?.complete === undefined || hasBufferedRows
 
@@ -468,9 +415,7 @@ export async function renderApp(): Promise<void> {
             },
           })
 
-          const ssrManifest = createSsrManifest()
-
-          element = await createFromReadableStream(stream, ssrManifest)
+          element = await createFromReadableStream(stream)
         }
         else {
           const stream = new ReadableStream({
@@ -480,13 +425,12 @@ export async function renderApp(): Promise<void> {
             },
           })
 
-          const ssrManifest = createSsrManifest()
-
-          element = await createFromReadableStream(stream, ssrManifest)
+          element = await createFromReadableStream(stream)
         }
       }
       catch (e) {
         console.error('[rari] Failed to parse embedded RSC payload:', e)
+        console.error('[rari] Error stack:', e instanceof Error ? e.stack : 'no stack')
         element = null
       }
     }
@@ -522,9 +466,7 @@ export async function renderApp(): Promise<void> {
           },
         })
 
-        const ssrManifest = createSsrManifest()
-
-        element = await createFromReadableStream(stream, ssrManifest)
+        element = await createFromReadableStream(stream)
       }
       catch (e) {
         console.error('[rari] Failed to process streaming RSC payload:', e)
@@ -659,14 +601,17 @@ function injectHeadContent(headElement: any): void {
   }
 }
 
-function ClientComponentLoader({ componentInfo, childProps }: { componentInfo: any, childProps: any }) {
+function ClientComponentLoader({ componentInfo, exportName, childProps }: { componentInfo: any, exportName?: string, childProps: any }) {
   if (!componentInfo.loadPromise)
     return null
 
   React.use(componentInfo.loadPromise)
 
   if (componentInfo.component) {
-    const Component = componentInfo.component
+    const Component = getComponentFromInfo(componentInfo, exportName)
+    if (!Component)
+      return null
+
     return React.createElement(Component, childProps)
   }
 
@@ -706,13 +651,24 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
         return null
       }
 
-      if (typeof type === 'string' && type.startsWith('$L')) {
-        const moduleInfo = modules.get(type)
+      if (typeof type === 'string' && type.startsWith('$') && MODULE_REF_REGEX_ENTRY.test(type)) {
+        const moduleInfo = getModuleByRef(modules, type)
         if (moduleInfo) {
-          const componentInfo = getGlobalThis()['~clientComponents'][moduleInfo.id]
+          const clientKey = `${moduleInfo.id}#${moduleInfo.name || 'default'}`
+          const normalizedClientKey = clientKey.replace(/\\/g, '/')
+          const normalizedModuleId = moduleInfo.id.replace(/\\/g, '/')
+
+          const isDefaultExport = !moduleInfo.name || moduleInfo.name === 'default'
+          const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
+            || getGlobalThis()['~clientComponents'][clientKey]
+            || (isDefaultExport && (
+              getGlobalThis()['~clientComponents'][normalizedModuleId]
+              || getGlobalThis()['~clientComponents'][moduleInfo.id]
+            ))
+
           if (componentInfo) {
             if (componentInfo.component) {
-              const Component = componentInfo.component
+              const Component = getComponentFromInfo(componentInfo, moduleInfo.name)
               const childProps = props !== null && typeof props === 'object'
                 ? {
                     ...props,
@@ -724,7 +680,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             else if (componentInfo.loader && !componentInfo.loading) {
               componentInfo.loading = true
               componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-                componentInfo.component = module.default || module
+                componentInfo.component = module
                 componentInfo.registered = true
                 componentInfo.loading = false
               }).catch((error: Error) => {
@@ -748,6 +704,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
                 React.createElement(ClientComponentLoader, {
                   key,
                   componentInfo,
+                  exportName: moduleInfo.name,
                   childProps,
                 }),
               )

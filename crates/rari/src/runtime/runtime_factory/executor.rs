@@ -110,11 +110,26 @@ async fn execute_as_module(
 
     match eval_result {
         Ok(_) => {
-            run_event_loop_with_error_handling(
-                runtime,
-                &format!("module execution for '{script_name}'"),
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(10),
+                run_event_loop_with_error_handling(
+                    runtime,
+                    &format!("module execution for '{script_name}'"),
+                ),
             )
-            .await?;
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    return Err(e);
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        "Event loop timeout (10ms) during module execution for '{}'",
+                        script_name
+                    );
+                }
+            }
         }
         Err(eval_err) => {
             if eval_err.to_string().contains(MODULE_ALREADY_EVALUATED_ERROR) {
@@ -194,12 +209,6 @@ async fn execute_as_script(
 ) -> Result<JsonValue, RariError> {
     match runtime.execute_script("script", script_code.to_string()) {
         Ok(_global_v8_val) => {
-            run_event_loop_with_error_handling(
-                runtime,
-                &format!("initial simple exec for '{script_name}'"),
-            )
-            .await?;
-
             let is_promise_result = with_scope!(runtime, |scope| {
                 let local_v8_val = deno_core::v8::Local::new(scope, &_global_v8_val);
                 is_promise(scope, local_v8_val)

@@ -12,8 +12,8 @@ import {
   HTML_QUOTE_REGEX,
   NEWLINE_REGEX,
 } from '../shared/regex-constants'
-import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './react-server-dom-rari-client'
 import { getClientComponent as getClientComponentShared } from './shared/get-client-component'
+import { createFromFetch as rariCreateFromFetch, createFromReadableStream as rariCreateFromReadableStream } from './vendor/react-flight-client'
 
 function resolveRariServerUrl(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.RARI_SERVER_URL)
@@ -52,7 +52,59 @@ if (typeof window !== 'undefined') {
 
   if (!(window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations)
     (window as unknown as WindowWithRari)['~rari'].pendingBoundaryHydrations = new Map()
+}
 
+interface ParsedImportRow {
+  id: string
+  chunks: string[]
+  name: string
+}
+
+function parseImportRow(content: string): ParsedImportRow | null {
+  if (!content.startsWith('I{'))
+    return null
+
+  try {
+    const importData = JSON.parse(content.substring(1))
+    if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
+      if (typeof importData.id !== 'string') {
+        console.error('[rari] Invalid import data: id must be a string:', importData)
+        return null
+      }
+
+      let chunks: string[]
+      if (typeof importData.chunks === 'string') {
+        chunks = [importData.chunks]
+      }
+      else if (Array.isArray(importData.chunks)) {
+        chunks = importData.chunks.filter((chunk: any) => typeof chunk === 'string')
+      }
+      else {
+        console.error('[rari] Invalid import data: chunks must be a string or array:', importData)
+        return null
+      }
+
+      if (chunks.length === 0) {
+        console.error('[rari] Invalid import data: chunks array is empty:', importData)
+        return null
+      }
+
+      return {
+        id: importData.id,
+        chunks,
+        name: importData.name || 'default',
+      }
+    }
+    console.error('[rari] Invalid import data format, expected object:', importData)
+  }
+  catch (e) {
+    console.error('[rari] Failed to parse import row:', content, e)
+  }
+
+  return null
+}
+
+if (typeof window !== 'undefined') {
   ; (globalThis as unknown as GlobalWithRari)['~rari'].processBoundaryUpdate = function (boundaryId: string, rscRow: string, rowId: string): void {
     const boundaryElement = document.querySelector(`[data-boundary-id="${boundaryId}"]`)
 
@@ -69,23 +121,10 @@ if (typeof window !== 'undefined') {
       const actualRowId = rscRow.substring(0, colonIndex)
       const contentStr = rscRow.substring(colonIndex + 1)
 
-      if (contentStr.startsWith('I[')) {
-        try {
-          const importData = JSON.parse(contentStr.substring(1))
-          if (Array.isArray(importData) && importData.length >= 3) {
-            const [path, chunks, exportName] = importData
-            const moduleKey = `$L${actualRowId}`
-                  ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, {
-              id: path,
-              chunks: Array.isArray(chunks) ? chunks : [chunks],
-              name: exportName || 'default',
-            })
-          }
-        }
-        catch (e) {
-          console.error('[rari] Failed to parse import row:', contentStr, e)
-        }
-
+      const importRow = parseImportRow(contentStr)
+      if (importRow) {
+        const moduleKey = `$L${actualRowId}`
+            ; (window as unknown as WindowWithRari)['~rari'].boundaryModules?.set(moduleKey, importRow)
         return
       }
 
@@ -354,8 +393,14 @@ export function registerClientComponent(componentFunction: any, id: string, expo
     registered: true,
   }
 
-    ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
+  if (typeof (globalThis as unknown as GlobalWithRari)['~clientComponents'] === 'undefined') {
+    (globalThis as unknown as GlobalWithRari)['~clientComponents'] = {}
+  }
+
+  const fullId = `${id}#${exportName}`
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][componentId] = componentInfo
   ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][id] = componentInfo
+  ; (globalThis as unknown as GlobalWithRari)['~clientComponents'][fullId] = componentInfo
 
   ; (globalThis as unknown as GlobalWithRari)['~clientComponentPaths'][id] = componentId
 
@@ -683,21 +728,9 @@ class RscClient {
               const rowId = line.substring(0, colonIndex)
               const content = line.substring(colonIndex + 1)
 
-              if (content.startsWith('I[')) {
-                try {
-                  const importData = JSON.parse(content.substring(1))
-                  if (Array.isArray(importData) && importData.length >= 3) {
-                    const [path, chunks, exportName] = importData
-                    modules.set(`$L${rowId}`, {
-                      id: path,
-                      chunks: Array.isArray(chunks) ? chunks : [chunks],
-                      name: exportName || 'default',
-                    })
-                  }
-                }
-                catch (e) {
-                  console.error('Failed to parse import row:', content, e)
-                }
+              const importRow = parseImportRow(content)
+              if (importRow) {
+                modules.set(`$L${rowId}`, importRow)
               }
               else if (content.startsWith('E{')) {
                 try {
@@ -761,7 +794,9 @@ class RscClient {
       }
     }
 
+    // eslint-disable-next-line react/component-hook-factories
     const StreamingWrapper = (): any => {
+      // eslint-disable-next-line react/use-state
       const [, setRenderTrigger] = useState(0)
 
       useEffect(() => {
@@ -778,7 +813,7 @@ class RscClient {
         return () => {
           streamingComponent = null
         }
-      }, [])
+      }, [setRenderTrigger])
 
       const renderWithBoundaryUpdates = (element: any): any => {
         if (!element)
@@ -905,17 +940,9 @@ class RscClient {
         continue
 
       try {
-        if (rest.startsWith('I[')) {
-          const data = rest.substring(1)
-          const importData = JSON.parse(data)
-          if (Array.isArray(importData) && importData.length >= 3) {
-            const [path, chunks, exportName] = importData
-            modules.set(`$L${rowId}`, {
-              id: path,
-              chunks: Array.isArray(chunks) ? chunks : [chunks],
-              name: exportName || 'default',
-            })
-          }
+        const importRow = parseImportRow(rest)
+        if (importRow) {
+          modules.set(`$L${rowId}`, importRow)
         }
         else if (rest.startsWith('E{')) {
           const data = rest.substring(1)
@@ -944,8 +971,9 @@ class RscClient {
 
     let rootElement = null
 
-    // @ts-expect-error - toSorted not available in this TypeScript version, but works at runtime
-    const elementKeys = elements.keys().toSorted((a: string, b: string) => Number.parseInt(a) - Number.parseInt(b))
+    const elementKeys = Array.from(elements.keys()).sort(
+      (a, b) => Number.parseInt(a, 16) - Number.parseInt(b, 16),
+    )
     for (const key of elementKeys) {
       const element = elements.get(key)
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
@@ -1198,6 +1226,7 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
     globalRefreshCounter = windowWithRari['~rari'].hmr!.refreshCounters[componentName]!
   }
 
+  // eslint-disable-next-line react/component-hook-factories
   const ServerComponent = (props: any): any => {
     const [mountKey, setMountKey] = useState(globalRefreshCounter)
 

@@ -6,6 +6,7 @@ use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde_json::Value as JsonValue;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
@@ -76,6 +77,7 @@ pub struct RequestContext {
     route_path: String,
     pub cookie_header: Option<String>,
     pub pending_cookies: Arc<DashMap<PendingCookieKey, PendingCookie>>,
+    pub function_cache: Arc<DashMap<String, JsonValue>>,
 }
 
 impl RequestContext {
@@ -88,6 +90,7 @@ impl RequestContext {
             route_path,
             cookie_header: None,
             pending_cookies: Arc::new(DashMap::new()),
+            function_cache: Arc::new(DashMap::new()),
         }
     }
 

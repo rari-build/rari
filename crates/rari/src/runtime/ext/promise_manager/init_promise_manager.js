@@ -1,4 +1,3 @@
-/* eslint-disable e18e/prefer-static-regex */
 (function initializePromiseManager() {
   const PROMISE_PATTERN_REGEX = /Promise\s*\{\s*<?(\w+)\(([^)]*)\)/i
   const OBJECT_PROMISE_REGEX = /\[object promise\]/i

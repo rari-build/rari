@@ -44,6 +44,7 @@ export interface ComponentInfo {
 export interface GlobalWithRari {
   '~rari': {
     isDevelopment?: boolean
+    navigationId?: number
     AppRouterProvider?: any
     ClientRouter?: any
     getClientComponent?: (id: string) => any
@@ -61,6 +62,7 @@ export interface GlobalWithRari {
       complete?: boolean
       bufferedRows: string[]
       bufferedEvents: any[]
+      streamingBridgeInstalled?: boolean
     }
     hmr?: {
       refreshCounters: Record<string, number>

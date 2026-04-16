@@ -4,6 +4,7 @@ use deno_error::JsErrorBox;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -51,10 +52,22 @@ pub struct StreamOpState {
 
 impl StreamOpState {
     pub fn get_next_row_id(&mut self) -> String {
-        let id = self.row_counter.to_string();
+        let id = format!("{:x}", self.row_counter);
         self.row_counter += 1;
         id
     }
+}
+
+fn parse_hex_row_id(row_id: &str, context: &str) -> Result<u32, JsErrorBox> {
+    if !row_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}", row_id, context);
+        return Err(JsErrorBox::generic(format!("Invalid row_id: {}", row_id)));
+    }
+
+    u32::from_str_radix(row_id, 16).map_err(|e| {
+        error!("op_send_chunk_to_rust: invalid row_id '{}' for {}: {}", row_id, context, e);
+        JsErrorBox::generic(format!("Invalid row_id: {}", row_id))
+    })
 }
 
 #[allow(clippy::disallowed_methods)]
@@ -102,21 +115,24 @@ pub async fn op_send_chunk_to_rust(
                 "async": async_module
             });
 
-            let rsc_row = format!("{row_id}:M{module_data}");
+            let row_id_num = parse_hex_row_id(&row_id, "module reference")?;
+            let rsc_row = format!("{:x}:M{}", row_id_num, module_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for module reference.");
             }
         }
         (Some(sender), RscStreamOperation::ReactElement { row_id, element }) => {
-            let rsc_row = format!("{row_id}:J{element}");
+            let row_id_num = parse_hex_row_id(&row_id, "React element")?;
+            let rsc_row = format!("{:x}:J{}", row_id_num, element);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for React element.");
             }
         }
         (Some(sender), RscStreamOperation::Symbol { row_id, symbol_ref }) => {
-            let rsc_row = format!("{row_id}:S\"{symbol_ref}\"");
+            let row_id_num = parse_hex_row_id(&row_id, "symbol reference")?;
+            let rsc_row = format!("{:x}:S\"{}\"", row_id_num, symbol_ref);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for symbol reference.");
@@ -135,7 +151,8 @@ pub async fn op_send_chunk_to_rust(
                 "digest": digest
             });
 
-            let rsc_row = format!("{row_id}:E{error_data}");
+            let row_id_num = parse_hex_row_id(&row_id, "error message")?;
+            let rsc_row = format!("{:x}:E{}", row_id_num, error_data);
 
             if sender.send(Ok(rsc_row.into_bytes())).await.is_err() {
                 error!("op_send_chunk_to_rust: receiver dropped for error message.");
@@ -230,12 +247,6 @@ pub fn op_sanitize_html(#[string] html: &str, #[string] _component_id: &str) -> 
     crate::rsc::rendering::sanitizer::sanitize_component_output(html)
 }
 
-#[derive(Default)]
-pub struct FetchOpState {
-    pub request_context:
-        Option<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>,
-}
-
 fn http_status_text(status: u16) -> &'static str {
     match status {
         200 => "OK",
@@ -286,8 +297,8 @@ pub async fn op_fetch_with_cache(
     let request_context = {
         let op_state_ref = state.borrow();
         op_state_ref
-            .try_borrow::<FetchOpState>()
-            .and_then(|fetch_state| fetch_state.request_context.clone())
+            .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+            .cloned()
     };
 
     if let Some(ctx) = request_context {
@@ -378,8 +389,8 @@ async fn perform_simple_fetch(
 #[string]
 pub fn op_get_cookies(state: Rc<RefCell<OpState>>) -> String {
     let op_state_ref = state.borrow();
-    let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+    let Some(ctx) = op_state_ref
+        .try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     else {
         return String::new();
     };
@@ -486,7 +497,7 @@ pub fn op_set_cookie(
 
     let op_state_ref = state.borrow();
     if let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     {
         let path = args.path.or_else(|| Some("/".to_string()));
         ctx.pending_cookies.insert(
@@ -515,7 +526,7 @@ pub fn op_delete_cookie(state: Rc<RefCell<OpState>>, #[string] name: String) {
     use crate::server::middleware::request_context::{PendingCookie, PendingCookieKey};
     let op_state_ref = state.borrow();
     if let Some(ctx) =
-        op_state_ref.try_borrow::<FetchOpState>().and_then(|s| s.request_context.as_ref())
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
     {
         let cookies_to_delete: Vec<(Option<String>, Option<String>)> = ctx
             .pending_cookies
@@ -609,5 +620,35 @@ mod tests {
         assert!(error_op.contains("\"type\":\"error\""));
         assert!(error_op.contains("\"message\":\"Test error\""));
         assert!(error_op.contains("\"stack\":\"stack trace\""));
+    }
+}
+
+#[op2]
+#[serde]
+pub fn op_cache_get(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+) -> Option<serde_json::Value> {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.get(&cache_key).map(|entry| entry.value().clone())
+    } else {
+        None
+    }
+}
+
+#[op2]
+pub fn op_cache_set(
+    state: Rc<RefCell<OpState>>,
+    #[string] cache_key: String,
+    #[serde] value: serde_json::Value,
+) {
+    let op_state_ref = state.borrow();
+    if let Some(ctx) =
+        op_state_ref.try_borrow::<Arc<crate::server::middleware::request_context::RequestContext>>()
+    {
+        ctx.function_cache.insert(cache_key, value);
     }
 }

@@ -214,8 +214,10 @@ impl LayoutRenderer {
         );
 
         let renderer = self.renderer.lock().await;
-        let result =
-            renderer.runtime.execute_script("check_not_found".to_string(), check_script).await?;
+        let runtime = renderer.runtime.clone();
+        drop(renderer);
+
+        let result = runtime.execute_script("check_not_found".to_string(), check_script).await?;
 
         let not_found = result.get("notFound").and_then(|v| v.as_bool()).unwrap_or(false);
 
@@ -393,18 +395,19 @@ impl LayoutRenderer {
                         let runtime_for_cleanup = Arc::clone(&runtime);
                         let refcount_for_cleanup = Arc::clone(&refcount);
                         let stream_with_cleanup = stream.with_cleanup(move || {
-                            tokio::spawn(async move {
-                                let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                            let prev_count = refcount_for_cleanup.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
-                                if prev_count == 1 {
-                                    let _ = runtime_for_cleanup
+                            if prev_count == 1 {
+                                let rt = runtime_for_cleanup.clone();
+                                tokio::spawn(async move {
+                                    let _ = rt
                                         .execute_script(
                                             "disable_streaming".to_string(),
                                             crate::rsc::rendering::layout::constants::JS_DISABLE_STREAMING.to_string(),
                                         )
                                         .await;
-                                }
-                            });
+                                });
+                            }
                         });
                         Ok(RenderResult::Streaming(stream_with_cleanup))
                     }
@@ -435,15 +438,39 @@ impl LayoutRenderer {
                 }
             };
 
-            let result =
-                runtime.execute_with_request_context(Arc::clone(&ctx), streaming_operation).await;
+            let result = runtime
+                .execute_with_persistent_request_context(Arc::clone(&ctx), streaming_operation)
+                .await;
 
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
-                    let stream_with_context = stream.with_request_context(ctx);
+                    let runtime_for_cleanup = Arc::clone(&runtime);
+                    let ctx_clone = Arc::clone(&ctx);
+                    let stream_with_context = stream
+                        .with_request_context(ctx)
+                        .with_cleanup(move || {
+                            let runtime = Arc::clone(&runtime_for_cleanup);
+                            let ctx = Arc::clone(&ctx_clone);
+                            tokio::spawn(async move {
+                                if let Err(e) = runtime.clear_request_context_if_matches(ctx).await {
+                                    tracing::error!(
+                                        "Failed to clear request context after streaming completion: {}",
+                                        e
+                                    );
+                                }
+                            });
+                        });
                     Ok(RenderResult::Streaming(stream_with_context))
                 }
-                other_result => other_result,
+                other_result => {
+                    if let Err(e) = runtime.clear_request_context().await {
+                        tracing::error!(
+                            "Failed to clear request context after non-streaming result: {}",
+                            e
+                        );
+                    }
+                    other_result
+                }
             }
         } else {
             let streaming_operation = async {
@@ -673,19 +700,26 @@ impl LayoutRenderer {
                         continue;
                     }
                     let line_to_append = if let Some(colon_pos) = line.find(':') {
-                        if line.starts_with(|c: char| c.is_ascii_digit()) {
+                        if line.starts_with(|c: char| c.is_ascii_hexdigit()) {
                             let row_id_str = &line[..colon_pos];
-                            if row_id_str.parse::<usize>().is_ok() {
-                                let is_import_reference = line
-                                    .get(colon_pos + 1..)
-                                    .map(|content| content.trim_start().starts_with("I["))
-                                    .unwrap_or(false);
-                                if is_import_reference || remapped_root_row {
+                            if usize::from_str_radix(row_id_str, 16).is_ok() {
+                                let content = line.get(colon_pos + 1..).unwrap_or("");
+                                let content_trimmed = content.trim_start();
+
+                                let is_import_or_symbol = content_trimmed.starts_with("I[")
+                                    || content_trimmed.starts_with("I{")
+                                    || content_trimmed.starts_with("\"$S")
+                                    || content_trimmed.starts_with("\"react.suspense");
+
+                                let is_reference = content_trimmed.starts_with("\"$")
+                                    && content_trimmed.len() > 2
+                                    && !content_trimmed.starts_with("\"$S");
+
+                                if is_import_or_symbol || is_reference || remapped_root_row {
                                     line.to_string()
                                 } else {
                                     remapped_root_row = true;
-                                    let content = &line[colon_pos + 1..];
-                                    format!("{}:{}", lazy_promise.lazy_row_id, content)
+                                    format!("{:x}:{}", lazy_promise.lazy_row_id, content)
                                 }
                             } else {
                                 line.to_string()

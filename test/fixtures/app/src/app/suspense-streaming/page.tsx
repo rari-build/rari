@@ -25,6 +25,7 @@ export default function SuspenseStreamingPage(_params: PageProps) {
 
 async function SlowComponent({ name, delay }: SlowProps) {
   await new Promise(resolve => setTimeout(resolve, delay))
+  // eslint-disable-next-line react/purity
   const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>

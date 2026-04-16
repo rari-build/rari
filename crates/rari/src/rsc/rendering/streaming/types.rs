@@ -14,6 +14,7 @@ pub struct PendingSuspensePromise {
     pub boundary_id: String,
     pub component_path: String,
     pub promise_handle: String,
+    pub render_generation: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -100,8 +101,8 @@ impl RscWireFormatTag {
 
     pub fn format_row(&self, row_id: u32, data: &str) -> String {
         match self.tag_char() {
-            Some(tag) => format!("{}:{}{}\n", row_id, tag, data),
-            None => format!("{}:{}\n", row_id, data),
+            Some(tag) => format!("{:x}:{}{}\n", row_id, tag, data),
+            None => format!("{:x}:{}\n", row_id, data),
         }
     }
 }

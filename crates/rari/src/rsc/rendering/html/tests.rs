@@ -67,7 +67,7 @@ fn test_parse_rsc_line_invalid_row_id() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
 
-    let result = renderer.parse_rsc_line("abc:{}");
+    let result = renderer.parse_rsc_line("xyz:{}");
     assert!(result.is_err());
     let err_msg = format!("{:?}", result.unwrap_err());
     assert!(err_msg.contains("Invalid row ID"));
@@ -830,208 +830,6 @@ async fn test_render_suspense_inline_children() {
 }
 
 #[tokio::test]
-async fn test_generate_boundary_update_html_simple() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "div", null, {"children": "Resolved Content"}]);
-    let boundary_id = "boundary_123";
-    let row_id = 42;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should generate boundary update HTML successfully");
-
-    let html = result.unwrap();
-
-    assert!(html.starts_with("<script"), "Should be a script tag");
-    assert!(html.contains("</script>"), "Should close script tag");
-
-    assert!(
-        html.contains(r#"data-boundary-id="boundary_123""#),
-        "Should have boundary ID data attribute with tilde"
-    );
-    assert!(html.contains(r#"data-row-id="42""#), "Should have row ID data attribute");
-
-    assert!(html.contains("window['~rari']"), "Should reference window['~rari'] namespace");
-    assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate function");
-
-    assert!(html.contains("'boundary_123'"), "Should pass boundary ID to function");
-
-    assert!(html.contains("42"), "Should pass row ID to function");
-
-    assert!(html.contains(r#"42:["#), "Should include RSC row with row ID");
-    assert!(html.contains("Resolved Content"), "Should include the content in RSC format");
-}
-
-#[tokio::test]
-async fn test_generate_boundary_update_html_with_special_characters() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "div", null, {
-        "children": "Content with 'quotes' and \"double\" and \n newlines"
-    }]);
-    let boundary_id = "boundary_special";
-    let row_id = 1;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should handle special characters");
-
-    let html = result.unwrap();
-
-    assert!(html.contains("\\'"), "Should escape single quotes for JavaScript");
-    assert!(html.contains("\\\""), "Should escape double quotes for JavaScript");
-    assert!(html.contains("\\n"), "Should escape newlines for JavaScript");
-
-    assert!(html.starts_with("<script"), "Should be a script tag");
-    assert!(html.contains("</script>"), "Should close script tag");
-
-    assert!(html.contains(r#"1:["#), "Should include RSC row with row ID");
-}
-
-#[tokio::test]
-async fn test_generate_boundary_update_html_with_nested_elements() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "div", null, {
-        "className": "container",
-        "children": ["$", "span", null, {
-            "children": "Nested Content"
-        }]
-    }]);
-    let boundary_id = "boundary_nested";
-    let row_id = 5;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should handle nested elements");
-
-    let html = result.unwrap();
-
-    assert!(html.contains("container"), "Should include className in RSC data");
-    assert!(html.contains("Nested Content"), "Should include nested content in RSC data");
-
-    assert!(html.starts_with("<script"), "Should be a script tag");
-    assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate");
-
-    assert!(html.contains(r#"5:["#), "Should include RSC row with row ID");
-    assert!(
-        html.contains(r#"\\"span\\""#) || html.contains("span"),
-        "Should include nested span in RSC format"
-    );
-}
-
-#[tokio::test]
-async fn test_generate_boundary_update_html_with_attributes() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "button", null, {
-        "type": "button",
-        "className": "btn btn-primary",
-        "disabled": true,
-        "children": "Click Me"
-    }]);
-    let boundary_id = "boundary_button";
-    let row_id = 10;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should handle attributes");
-
-    let html = result.unwrap();
-
-    assert!(
-        html.contains("type") || html.contains(r#"\\"type\\""#),
-        "Should have type in RSC data"
-    );
-    assert!(html.contains("button"), "Should have button value in RSC data");
-    assert!(
-        html.contains("className") || html.contains(r#"\\"className\\""#),
-        "Should have className in RSC data"
-    );
-    assert!(html.contains("btn btn-primary"), "Should have class value in RSC data");
-    assert!(html.contains("disabled"), "Should have disabled in RSC data");
-    assert!(html.contains("Click Me"), "Should have button text in RSC data");
-
-    assert!(html.starts_with("<script"), "Should be a script tag");
-    assert!(html.contains("processBoundaryUpdate"), "Should call processBoundaryUpdate");
-
-    assert!(html.contains(r#"10:["#), "Should include RSC row with row ID");
-}
-
-#[tokio::test]
-async fn test_generate_boundary_update_html_boundary_id_escaping() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "div", null, {"children": "Content"}]);
-    let boundary_id = "boundary_with_\"quotes\"_and_<tags>";
-    let row_id = 1;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should handle special characters in boundary ID");
-
-    let html = result.unwrap();
-
-    assert!(html.contains("&quot;"), "Should escape quotes in data attribute");
-    assert!(html.contains("&lt;"), "Should escape < in data attribute");
-    assert!(html.contains("&gt;"), "Should escape > in data attribute");
-
-    assert!(html.contains("\\'") || html.contains("\\\""), "Should escape quotes in JS string");
-}
-
-#[tokio::test]
-async fn test_generate_boundary_update_html_empty_content() {
-    let runtime = Arc::new(JsExecutionRuntime::new(None));
-    let renderer = RscHtmlRenderer::new(runtime);
-
-    let content_rsc = serde_json::json!(["$", "div", null, {}]);
-    let boundary_id = "boundary_empty";
-    let row_id = 1;
-
-    let result = renderer.generate_boundary_update_html(boundary_id, &content_rsc, row_id).await;
-    assert!(result.is_ok(), "Should handle empty content");
-
-    let html = result.unwrap();
-
-    assert!(html.contains("<script"), "Should have script tag");
-    assert!(html.contains("processBoundaryUpdate"), "Should call update function");
-    assert!(html.contains("boundary_empty"), "Should include boundary ID");
-}
-
-#[test]
-fn test_escape_html_attribute() {
-    let text = r#"Hello "world" & <tag>"#;
-    let escaped = RscHtmlRenderer::escape_html_attribute(text);
-
-    assert!(escaped.contains("&amp;"), "Should escape ampersand");
-    assert!(escaped.contains("&quot;"), "Should escape quotes");
-    assert!(escaped.contains("&lt;"), "Should escape less than");
-    assert!(escaped.contains("&gt;"), "Should escape greater than");
-}
-
-#[test]
-fn test_escape_js_string() {
-    let text = "Line 1\nLine 2\rLine 3\tTabbed";
-    let escaped = RscHtmlRenderer::escape_js_string(text);
-
-    assert!(escaped.contains("\\n"), "Should escape newlines");
-    assert!(escaped.contains("\\r"), "Should escape carriage returns");
-    assert!(escaped.contains("\\t"), "Should escape tabs");
-
-    let text_with_quotes = r#"Single 'quotes' and "double" quotes"#;
-    let escaped_quotes = RscHtmlRenderer::escape_js_string(text_with_quotes);
-
-    assert!(escaped_quotes.contains("\\'"), "Should escape single quotes");
-    assert!(escaped_quotes.contains("\\\""), "Should escape double quotes");
-
-    let text_with_backslash = r"Path\to\file";
-    let escaped_backslash = RscHtmlRenderer::escape_js_string(text_with_backslash);
-
-    assert!(escaped_backslash.contains("\\\\"), "Should escape backslashes");
-}
-
-#[tokio::test]
 async fn test_render_rsc_to_html_string_row_0_as_root() {
     let runtime = Arc::new(JsExecutionRuntime::new(None));
     let renderer = RscHtmlRenderer::new(runtime);
@@ -1119,6 +917,23 @@ async fn test_render_rsc_to_html_string_backward_references() {
     assert!(html.contains("<div"), "Should have div from row 0");
     assert!(html.contains("Child Content"), "Should resolve $L1 reference");
     assert!(html.contains("<span"), "Should have span from row 1");
+}
+
+#[tokio::test]
+async fn test_render_rsc_to_html_string_hex_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"0:"$La"
+a:["$","div",null,{"children":"Content from row 10 (hex a)"}]
+b:["$","span",null,{"children":"Content from row 11 (hex b)"}]
+10:["$","p",null,{"children":"Content from row 16 (hex 10)"}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("<div"), "Should have div from row a (10)");
+    assert!(html.contains("Content from row 10"), "Should resolve $La reference to row 10");
 }
 
 #[tokio::test]
@@ -1769,4 +1584,20 @@ async fn test_all_html_boolean_attributes() {
         "HTML boolean attributes should not have =\"true\": {}",
         html
     );
+}
+
+#[tokio::test]
+async fn test_hexadecimal_row_id_references() {
+    let runtime = Arc::new(JsExecutionRuntime::new(None));
+    let renderer = RscHtmlRenderer::new(runtime);
+
+    let rsc_data = r#"a:["$","div",null,{"children":"Row 10"}]
+1f:["$","span",null,{"children":"Row 31"}]
+0:["$","div",null,{"children":["$a","$1f"]}]"#;
+
+    let rows = renderer.parse_rsc_wire_format(rsc_data).unwrap();
+    let html = renderer.render_rsc_to_html_string(&rows).await.unwrap();
+
+    assert!(html.contains("Row 10"), "Should render content from row 10 (hex 'a'): {}", html);
+    assert!(html.contains("Row 31"), "Should render content from row 31 (hex '1f'): {}", html);
 }

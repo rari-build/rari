@@ -305,22 +305,40 @@ pub async fn run_event_loop_with_promise_timeout(
 ) -> Result<(), RariError> {
     let timeout_duration = std::time::Duration::from_millis(timeout_ms);
     let start_time = std::time::Instant::now();
-    let check_interval = std::time::Duration::from_millis(5);
+    let poll_interval = std::time::Duration::from_millis(10);
 
     while start_time.elapsed() < timeout_duration {
-        run_event_loop_with_error_handling(
-            runtime,
-            &format!("promise resolution iteration for '{script_name}'"),
+        match tokio::time::timeout(
+            poll_interval,
+            run_event_loop_with_error_handling(
+                runtime,
+                &format!("promise resolution for '{script_name}'"),
+            ),
         )
-        .await?;
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                return Err(e);
+            }
+            Err(_elapsed) => {}
+        }
 
         if let Ok(is_complete) = check_promise_completion(runtime)
             && is_complete
         {
-            break;
+            return Ok(());
         }
 
-        tokio::time::sleep(check_interval).await;
+        let remaining = timeout_duration.saturating_sub(start_time.elapsed());
+        let sleep_duration = std::cmp::min(poll_interval, remaining);
+        if sleep_duration > std::time::Duration::ZERO {
+            tokio::time::sleep(sleep_duration).await;
+        }
     }
-    Ok(())
+
+    Err(RariError::js_execution(format!(
+        "Promise resolution timeout ({}ms) for '{}'",
+        timeout_ms, script_name
+    )))
 }

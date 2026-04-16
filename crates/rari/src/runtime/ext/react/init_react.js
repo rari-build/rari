@@ -1,4 +1,4 @@
-/* eslint-disable react/no-unnecessary-use-prefix */
+/* eslint-disable no-undef , react/no-unnecessary-use-prefix */
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {
@@ -42,6 +42,53 @@ if (typeof globalThis.React === 'undefined') {
       }
 
       return usable
+    },
+    cache(fn) {
+      const hasOps = typeof Deno?.core?.ops?.op_cache_get === 'function'
+        && typeof Deno?.core?.ops?.op_cache_set === 'function'
+
+      if (!hasOps) {
+        return fn
+      }
+
+      const ops = Deno.core.ops
+
+      function generateCacheKey(fn, args) {
+        const fnName = fn.name || 'anonymous'
+        const argsKey = JSON.stringify(args, (_, value) => {
+          if (typeof value === 'function')
+            return '[Function]'
+          if (value instanceof Error)
+            return `[Error: ${value.message}]`
+          if (value instanceof Date)
+            return value.toISOString()
+          if (value instanceof RegExp)
+            return value.toString()
+          if (typeof value === 'symbol')
+            return value.toString()
+          if (typeof value === 'bigint')
+            return value.toString()
+
+          return value
+        })
+
+        return `${fnName}:${argsKey}`
+      }
+
+      return async function cachedFunction(...args) {
+        const cacheKey = generateCacheKey(fn, args)
+
+        const cached = ops.op_cache_get(cacheKey)
+        if (cached !== null && cached !== undefined) {
+          return cached
+        }
+
+        const result = await fn(...args)
+
+        ops.op_cache_set(cacheKey, result)
+
+        return result
+      }
     },
   }
 }

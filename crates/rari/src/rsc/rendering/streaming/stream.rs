@@ -29,7 +29,35 @@ impl RscStream {
     where
         F: FnOnce() + Send + 'static,
     {
-        self.cleanup = Some(Box::new(cleanup));
+        if let Some(existing_cleanup) = self.cleanup.take() {
+            self.cleanup = Some(Box::new(move || {
+                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    existing_cleanup();
+                })) {
+                    tracing::error!(
+                        "Panic in existing cleanup handler: {:?}",
+                        e.downcast_ref::<&str>()
+                            .copied()
+                            .or_else(|| e.downcast_ref::<String>().map(|s| s.as_str()))
+                            .unwrap_or("unknown panic")
+                    );
+                }
+
+                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    cleanup();
+                })) {
+                    tracing::error!(
+                        "Panic in cleanup handler: {:?}",
+                        e.downcast_ref::<&str>()
+                            .copied()
+                            .or_else(|| e.downcast_ref::<String>().map(|s| s.as_str()))
+                            .unwrap_or("unknown panic")
+                    );
+                }
+            }));
+        } else {
+            self.cleanup = Some(Box::new(cleanup));
+        }
         self
     }
 

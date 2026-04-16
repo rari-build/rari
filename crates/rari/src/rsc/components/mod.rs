@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,10 @@ impl ComponentRegistry {
         }
     }
 
+    fn normalize_id(id: &str) -> std::borrow::Cow<'_, str> {
+        id.cow_replace('\\', "/")
+    }
+
     pub fn register_component(
         &mut self,
         id: &str,
@@ -68,8 +73,28 @@ impl ComponentRegistry {
         transformed_source: String,
         dependencies: ComponentDependencies,
     ) -> Result<(), String> {
-        let component_id = id.to_string();
+        let component_id = Self::normalize_id(id).into_owned();
+        let dependencies: ComponentDependencies =
+            dependencies.into_iter().map(|dep| Self::normalize_id(&dep).into_owned()).collect();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
+
+        if let Some(existing) = self.components.get(&component_id)
+            && let Some(old_specifier) = &existing.module_specifier
+        {
+            self.specifier_to_id.remove(old_specifier);
+        }
+
+        if let Some(old_deps) = self.dependency_graph.get(&component_id) {
+            let removed_deps: FxHashSet<_> = old_deps.difference(&deps_set).cloned().collect();
+            for dep in removed_deps {
+                if let Some(dependents) = self.reverse_dependency_graph.get_mut(&dep) {
+                    dependents.remove(&component_id);
+                    if dependents.is_empty() {
+                        self.reverse_dependency_graph.remove(&dep);
+                    }
+                }
+            }
+        }
 
         self.components.insert(
             component_id.clone(),
@@ -104,43 +129,51 @@ impl ComponentRegistry {
     }
 
     pub fn mark_component_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_loaded = true;
         }
     }
 
     pub fn mark_component_not_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_loaded = false;
         }
     }
 
     pub fn mark_component_initially_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.initially_loaded = true;
         }
     }
 
     pub fn mark_component_not_initially_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.initially_loaded = false;
         }
     }
 
     pub fn has_been_initially_loaded(&self, id: &str) -> bool {
-        self.components.get(id).is_some_and(|c| c.initially_loaded)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.initially_loaded)
     }
 
     pub fn is_component_loaded(&self, id: &str) -> bool {
-        self.components.get(id).is_some_and(|c| c.is_loaded)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.is_loaded)
     }
 
     pub fn get_component(&self, id: &str) -> Option<&TransformedComponent> {
-        self.components.get(id)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref())
     }
 
     pub fn get_component_mut(&mut self, id: &str) -> Option<&mut TransformedComponent> {
-        self.components.get_mut(id)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get_mut(normalized_id.as_ref())
     }
 
     pub fn get_all_components(&self) -> &FxHashMap<String, TransformedComponent> {
@@ -217,36 +250,48 @@ impl ComponentRegistry {
     }
 
     pub fn get_dependencies(&self, component_id: &str) -> Option<ComponentDependencies> {
-        self.dependency_graph.get(component_id).map(|deps| deps.iter().cloned().collect())
+        let normalized_id = Self::normalize_id(component_id);
+        self.dependency_graph.get(normalized_id.as_ref()).map(|deps| deps.iter().cloned().collect())
     }
 
     pub fn get_dependents(&self, component_id: &str) -> Option<ComponentDependencies> {
-        self.reverse_dependency_graph.get(component_id).map(|deps| deps.iter().cloned().collect())
+        let normalized_id = Self::normalize_id(component_id);
+        self.reverse_dependency_graph
+            .get(normalized_id.as_ref())
+            .map(|deps| deps.iter().cloned().collect())
     }
 
     pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
+            if let Some(old_specifier) = &component.module_specifier {
+                self.specifier_to_id.remove(old_specifier);
+            }
+
             component.module_id = Some(module_id);
             component.module_specifier = Some(specifier.clone());
             component.is_loaded = true;
 
-            self.specifier_to_id.insert(specifier, id.to_string());
+            self.specifier_to_id.insert(specifier, normalized_id.into_owned());
         }
     }
 
     pub fn has_module_info(&self, id: &str) -> bool {
+        let normalized_id = Self::normalize_id(id);
         self.components
-            .get(id)
+            .get(normalized_id.as_ref())
             .map(|c| c.module_id.is_some() && c.module_specifier.is_some())
             .unwrap_or(false)
     }
 
     pub fn get_module_id(&self, id: &str) -> Option<usize> {
-        self.components.get(id).and_then(|c| c.module_id)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_id)
     }
 
     pub fn get_module_specifier(&self, id: &str) -> Option<&str> {
-        self.components.get(id).and_then(|c| c.module_specifier.as_deref())
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_specifier.as_deref())
     }
 
     pub fn get_by_specifier(&self, specifier: &str) -> Option<TransformedComponent> {
@@ -258,7 +303,8 @@ impl ComponentRegistry {
     }
 
     pub fn is_component_registered(&self, id: &str) -> bool {
-        self.components.contains_key(id)
+        let normalized_id = Self::normalize_id(id);
+        self.components.contains_key(normalized_id.as_ref())
     }
 
     pub fn list_component_ids(&self) -> Vec<String> {
@@ -266,13 +312,15 @@ impl ComponentRegistry {
     }
 
     pub fn mark_module_stale(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_stale = true;
         }
     }
 
     pub fn is_module_stale(&self, id: &str) -> bool {
-        self.components.get(id).map(|c| c.is_stale).unwrap_or(false)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).map(|c| c.is_stale).unwrap_or(false)
     }
 
     pub fn get_stale_modules(&self) -> Vec<String> {
@@ -284,7 +332,8 @@ impl ComponentRegistry {
     }
 
     pub fn update_module_reload_timestamp(&mut self, id: &str, timestamp: Instant) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.last_reload_timestamp = Some(timestamp);
             component.is_stale = false;
             component.reload_attempt_count += 1;
@@ -292,23 +341,29 @@ impl ComponentRegistry {
     }
 
     pub fn get_module_reload_timestamp(&self, id: &str) -> Option<Instant> {
-        self.components.get(id).and_then(|c| c.last_reload_timestamp)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.last_reload_timestamp)
     }
 
     pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = Self::normalize_id(id);
+        let normalized_file_path = Self::normalize_id(file_path);
+
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_client_reference = true;
-            component.client_reference_path = Some(file_path.to_string());
+            component.client_reference_path = Some(normalized_file_path.into_owned());
             component.client_reference_export = Some(export_name.to_string());
         }
     }
 
     pub fn is_client_reference(&self, id: &str) -> bool {
-        self.components.get(id).map(|c| c.is_client_reference).unwrap_or(false)
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).map(|c| c.is_client_reference).unwrap_or(false)
     }
 
     pub fn get_client_reference_info(&self, id: &str) -> Option<(String, String)> {
-        self.components.get(id).and_then(|c| {
+        let normalized_id = Self::normalize_id(id);
+        self.components.get(normalized_id.as_ref()).and_then(|c| {
             if c.is_client_reference {
                 c.client_reference_path
                     .as_ref()
@@ -321,17 +376,21 @@ impl ComponentRegistry {
     }
 
     pub fn find_dependency_code(&self, id: &str) -> Option<String> {
-        if let Some(component) = self.components.get(id) {
+        let normalized_id = Self::normalize_id(id);
+
+        if let Some(component) = self.components.get(normalized_id.as_ref()) {
             return Some(component.source.clone());
         }
 
-        let normalized_id = self.normalize_component_id(id);
-        if let Some(component) = self.components.get(&normalized_id) {
+        let further_normalized_id = self.normalize_component_id(normalized_id.as_ref());
+        if let Some(component) = self.components.get(&further_normalized_id) {
             return Some(component.source.clone());
         }
 
         for (component_id, component) in &self.components {
-            if component_id.ends_with(&normalized_id) {
+            if component_id.ends_with(&format!("/{further_normalized_id}"))
+                || component_id == &further_normalized_id
+            {
                 return Some(component.source.clone());
             }
         }
@@ -340,10 +399,11 @@ impl ComponentRegistry {
     }
 
     pub fn remove_component(&mut self, id: &str) {
-        if let Some(component) = self.components.remove(id) {
-            self.dependency_graph.remove(id);
+        let normalized_id = Self::normalize_id(id);
+        if let Some(component) = self.components.remove(normalized_id.as_ref()) {
+            self.dependency_graph.remove(normalized_id.as_ref());
             for (_, dependents) in self.reverse_dependency_graph.iter_mut() {
-                dependents.remove(id);
+                dependents.remove(normalized_id.as_ref());
             }
             if let Some(specifier) = &component.module_specifier {
                 self.specifier_to_id.remove(specifier);
@@ -546,5 +606,153 @@ mod tests {
 
         assert!(!registry.is_client_reference("NonExistent"));
         assert!(registry.get_client_reference_info("NonExistent").is_none());
+    }
+
+    #[test]
+    fn test_path_normalization_with_backslashes() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("a\\b", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component with backslash");
+
+        assert!(registry.is_component_registered("a/b"));
+        assert!(registry.is_component_registered("a\\b"));
+        assert!(registry.get_component("a/b").is_some());
+        assert!(registry.get_component("a\\b").is_some());
+
+        let component = registry.get_component("a/b").unwrap();
+        assert_eq!(component.id, "a/b");
+    }
+
+    #[test]
+    fn test_path_normalization_with_mixed_separators() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("a/b\\c", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component with mixed separators");
+
+        assert!(registry.is_component_registered("a/b/c"));
+        assert!(registry.is_component_registered("a/b\\c"));
+        assert!(registry.is_component_registered("a\\b/c"));
+        assert!(registry.is_component_registered("a\\b\\c"));
+
+        let component = registry.get_component("a/b/c").unwrap();
+        assert_eq!(component.id, "a/b/c");
+    }
+
+    #[test]
+    fn test_dependency_normalization_with_backslashes() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "ComponentA",
+                "source A",
+                "transformed A".to_string(),
+                smallvec!["utils\\ComponentB".to_string(), "lib/ComponentC".to_string()],
+            )
+            .expect("Failed to register ComponentA");
+
+        registry
+            .register_component(
+                "utils/ComponentB",
+                "source B",
+                "transformed B".to_string(),
+                smallvec!["lib\\ComponentC".to_string()],
+            )
+            .expect("Failed to register ComponentB");
+
+        registry
+            .register_component(
+                "lib\\ComponentC",
+                "source C",
+                "transformed C".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register ComponentC");
+
+        let deps_a = registry.get_dependencies("ComponentA").unwrap();
+        assert!(deps_a.contains(&"utils/ComponentB".to_string()));
+        assert!(deps_a.contains(&"lib/ComponentC".to_string()));
+
+        let deps_b = registry.get_dependencies("utils\\ComponentB").unwrap();
+        assert!(deps_b.contains(&"lib/ComponentC".to_string()));
+
+        let dependents_c = registry.get_dependents("lib/ComponentC").unwrap();
+        assert!(dependents_c.contains(&"ComponentA".to_string()));
+        assert!(dependents_c.contains(&"utils/ComponentB".to_string()));
+    }
+
+    #[test]
+    fn test_module_info_normalization() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "components\\Button",
+                "source",
+                "transformed".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register component");
+
+        registry.set_module_info("components\\Button", "file:///button.js".to_string(), 42);
+
+        assert!(registry.has_module_info("components/Button"));
+        assert!(registry.has_module_info("components\\Button"));
+        assert_eq!(registry.get_module_id("components/Button"), Some(42));
+        assert_eq!(registry.get_module_id("components\\Button"), Some(42));
+        assert_eq!(registry.get_module_specifier("components/Button"), Some("file:///button.js"));
+    }
+
+    #[test]
+    fn test_client_reference_normalization() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component("ui\\Button", "source", "transformed".to_string(), smallvec![])
+            .expect("Failed to register component");
+
+        registry.register_client_reference("ui\\Button", "src\\components\\Button.tsx", "default");
+
+        assert!(registry.is_client_reference("ui/Button"));
+        assert!(registry.is_client_reference("ui\\Button"));
+
+        let info = registry.get_client_reference_info("ui/Button").unwrap();
+        assert_eq!(info.0, "src/components/Button.tsx");
+        assert_eq!(info.1, "default");
+
+        let info2 = registry.get_client_reference_info("ui\\Button").unwrap();
+        assert_eq!(info2.0, "src/components/Button.tsx");
+        assert_eq!(info2.1, "default");
+    }
+
+    #[test]
+    fn test_component_operations_with_normalized_paths() {
+        let mut registry = ComponentRegistry::new();
+
+        registry
+            .register_component(
+                "app\\components\\Header",
+                "source",
+                "transformed".to_string(),
+                smallvec![],
+            )
+            .expect("Failed to register component");
+
+        registry.mark_component_loaded("app/components\\Header");
+        assert!(registry.is_component_loaded("app\\components/Header"));
+
+        registry.mark_component_initially_loaded("app\\components\\Header");
+        assert!(registry.has_been_initially_loaded("app/components/Header"));
+
+        registry.mark_module_stale("app/components\\Header");
+        assert!(registry.is_module_stale("app\\components\\Header"));
+
+        registry.remove_component("app\\components/Header");
+        assert!(!registry.is_component_registered("app/components/Header"));
+        assert!(!registry.is_component_registered("app\\components\\Header"));
     }
 }

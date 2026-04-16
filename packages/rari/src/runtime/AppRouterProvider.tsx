@@ -1,15 +1,19 @@
 'use client'
 
+import type { GlobalWithRari } from './shared/types'
 import * as React from 'react'
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+// @ts-expect-error - virtual module resolved by Vite
+import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX, PATH_TRAILING_SLASH_REGEX } from '../shared/regex-constants'
-import { preloadComponentsFromModules } from './shared/preload-components'
+import { preloadModulesFromWireFormat } from './shared/preload-modules'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
-const TRAILING_SEMICOLON_REGEX = /^[;\s]*$/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 const TAG_TEXT = 84
 const PRIMITIVE_JSON_REGEX = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
+const HEX_REGEX = /^[0-9a-f]+$/i
+const MODULE_REF_REGEX = /^\$L?[0-9a-f]+$/i
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -25,7 +29,7 @@ function isValidFlightPayload(content: string): boolean {
   const firstChar = content.charAt(0)
   const firstCharCode = content.charCodeAt(0)
 
-  if (content.startsWith('I[') || content.startsWith('"$S'))
+  if (content.startsWith('I[') || content.startsWith('I{') || content.startsWith('"$S'))
     return false
 
   if (firstCharCode === TAG_TEXT)
@@ -41,6 +45,19 @@ function isValidFlightPayload(content: string): boolean {
     return true
 
   if (PRIMITIVE_JSON_REGEX.test(content))
+    return true
+
+  return false
+}
+
+function isFallbackFlightPayload(content: string): boolean {
+  if (!content || content.length === 0)
+    return false
+
+  if (content.includes('"fallback"') || content.includes('$Lfallback'))
+    return true
+
+  if (content.startsWith('E{'))
     return true
 
   return false
@@ -73,6 +90,8 @@ interface NavigationDetail {
   routeInfo?: any
   abortSignal?: AbortSignal
   rscWireFormat?: string
+  rscResponse?: Response
+  rscResponsePromise?: Promise<Response>
   isStreaming?: boolean
 }
 
@@ -154,11 +173,12 @@ function LazyContent({ contentRef, rowsDataRef, modulesDataRef, symbolsDataRef, 
 
 export function AppRouterProvider({ children, initialPayload, onNavigate }: AppRouterProviderProps) {
   const [rscPayload, setRscPayload] = useState(initialPayload)
-  const [, setRenderKey] = useState(0)
+  // eslint-disable-next-line react/use-state
+  const setRenderKey = useState(0)[1]
   const scrollPositionRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
   const formDataRef = useRef<Map<string, FormData>>(new Map())
   const streamingRowsRef = useRef<string[] | null>(null)
-  const [, startTransition] = useTransition()
+  const preloadedModuleIdsRef = useRef<Set<string>>(new Set())
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
@@ -183,6 +203,22 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   useEffect(() => {
     onNavigateRef.current = onNavigate
   }, [onNavigate])
+
+  useEffect(() => {
+    if (rscPayload?.element != null) {
+      const isThenable = rscPayload.element && typeof rscPayload.element === 'object'
+        && 'status' in rscPayload.element
+
+      if (isThenable) {
+        const status = (rscPayload.element as any).status
+        if (status === 'rejected') {
+          const reason = (rscPayload.element as any).reason
+          if (reason)
+            console.error('[rari] AppRouter: Flight payload rejected:', reason)
+        }
+      }
+    }
+  }, [rscPayload])
 
   const saveFormState = () => {
     if (typeof document === 'undefined')
@@ -234,16 +270,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
     if (failureHistoryRef.current.length > 10)
       failureHistoryRef.current.shift()
-
-    console.error('[rari] HMR: Failure detected', {
-      type,
-      details,
-      filePath,
-      consecutiveFailures: consecutiveFailuresRef.current,
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date(failure.timestamp).toISOString(),
-    })
 
     if (consecutiveFailuresRef.current >= MAX_RETRIES - 1)
       setHmrError(failure)
@@ -323,15 +349,17 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     if (rsc == null)
       return null
 
-    if (typeof rsc === 'string' && rsc.startsWith('$L') && rows && rows.has(rsc)) {
-      const visited = visitedRefs ?? new Set<string>()
-      if (visited.has(rsc)) {
-        console.warn('[rari] AppRouter: Circular $L reference detected:', rsc)
-        return null
+    if (typeof rsc === 'string' && rsc.startsWith('$') && rsc.length > 1 && HEX_REGEX.test(rsc.substring(1))) {
+      if (rows && rows.has(rsc)) {
+        const visited = visitedRefs ?? new Set<string>()
+        if (visited.has(rsc)) {
+          console.warn('[rari] AppRouter: Circular $ reference detected:', rsc)
+          return null
+        }
+        visited.add(rsc)
+        const dereferenced = rows.get(rsc)
+        return rscToReact(dereferenced, modules, layoutPath, symbols, rows, visited)
       }
-      visited.add(rsc)
-      const dereferenced = rows.get(rsc)
-      return rscToReact(dereferenced, modules, layoutPath, symbols, rows, visited)
     }
 
     if (typeof rsc === 'string' || typeof rsc === 'number' || typeof rsc === 'boolean')
@@ -360,16 +388,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }
 
-        if (typeof resolvedType === 'string' && resolvedType.startsWith('$L')) {
+        if (typeof resolvedType === 'string' && resolvedType.startsWith('$') && MODULE_REF_REGEX.test(resolvedType)) {
           const moduleInfo = modules.get(resolvedType)
 
-          if (!moduleInfo)
+          if (!moduleInfo) {
+            console.warn('[rari] AppRouter: Module not found for reference:', resolvedType, 'Available modules:', Array.from(modules.keys()))
             return null
+          }
 
           const Component = (globalThis as any)['~clientComponents']?.[moduleInfo.id]?.component
 
-          if (!Component)
+          if (!Component) {
+            console.warn('[rari] AppRouter: Component not loaded:', moduleInfo.id)
             return null
+          }
 
           if (typeof Component !== 'function')
             return null
@@ -386,16 +418,11 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return element
         }
 
-        if (!resolvedType || (typeof resolvedType !== 'string' && typeof resolvedType !== 'function')) {
-          console.error('[rari] AppRouter: Invalid component type:', {
-            type: resolvedType,
-            typeOf: typeof resolvedType,
-            serverKey,
-            props,
-            rscData: rsc,
-          })
+        if (!resolvedType || (typeof resolvedType !== 'string' && typeof resolvedType !== 'function'))
           return null
-        }
+
+        if (typeof resolvedType === 'string' && resolvedType.startsWith('$'))
+          return null
 
         const processedProps = processProps(props, modules, layoutPath, symbols, rows)
         return React.createElement(resolvedType, serverKey ? { ...processedProps, key: serverKey } : processedProps)
@@ -471,20 +498,20 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       symbolsDataRef.current = symbols
 
     const processed: any = {}
-    for (const key in props) {
-      if (Object.hasOwn(props, key)) {
-        if (key === 'children') {
+    for (const propKey in props) {
+      if (Object.hasOwn(props, propKey)) {
+        if (propKey === 'children') {
           const children = props.children
 
-          if (typeof children === 'string' && children.startsWith('$L')) {
+          if (typeof children === 'string' && children.startsWith('$') && children.length > 1 && HEX_REGEX.test(children.substring(1))) {
             if (rows && rows.has(children)) {
               const rowData = rows.get(children)
               pendingRefsRef.current.delete(children)
-              processed[key] = rscToReact(rowData, modules, layoutPath, symbols, rows)
+              processed[propKey] = rscToReact(rowData, modules, layoutPath, symbols, rows)
             }
             else {
               pendingRefsRef.current.add(children)
-              processed[key] = React.createElement(LazyContent, {
+              processed[propKey] = React.createElement(LazyContent, {
                 key: `lazy-${children}`,
                 contentRef: children,
                 rowsDataRef,
@@ -497,14 +524,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
             }
           }
           else {
-            processed[key] = children === undefined ? undefined : rscToReact(children, modules, layoutPath, symbols, rows)
+            processed[propKey] = children === undefined ? undefined : rscToReact(children, modules, layoutPath, symbols, rows)
           }
         }
-        else if (key === 'dangerouslySetInnerHTML') {
-          processed[key] = props[key]
+        else if (propKey === 'dangerouslySetInnerHTML') {
+          processed[propKey] = props[propKey]
         }
         else {
-          processed[key] = rscToReact(props[key], modules, layoutPath, symbols, rows)
+          processed[propKey] = rscToReact(props[propKey], modules, layoutPath, symbols, rows)
         }
       }
     }
@@ -512,307 +539,31 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return processed
   }
 
-  const sanitizeJsonString = (input: string, type: 'array' | 'object'): string | null => {
-    try {
-      const openChar = type === 'array' ? '[' : '{'
-      const closeChar = type === 'array' ? ']' : '}'
+  const parseRscWireFormat = async (wireFormat: string) => {
+    await preloadModulesFromWireFormat(wireFormat, preloadedModuleIdsRef.current)
 
-      let depth = 0
-      let jsonEnd = -1
-      let inString = false
-      let escapeNext = false
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(wireFormat))
+        controller.close()
+      },
+    })
 
-      for (let i = 0; i < input.length; i++) {
-        const char = input[i]
+    const elementPromise = createFromReadableStream(stream)
 
-        if (escapeNext) {
-          escapeNext = false
-          continue
-        }
+    const element = await elementPromise
 
-        if (char === '\\') {
-          escapeNext = true
-          continue
-        }
-
-        if (char === '"' && !escapeNext) {
-          inString = !inString
-          continue
-        }
-
-        if (inString)
-          continue
-
-        if (char === openChar) {
-          depth++
-        }
-        else if (char === closeChar) {
-          depth--
-          if (depth === 0) {
-            jsonEnd = i + 1
-            break
-          }
-        }
-      }
-
-      if (jsonEnd === -1)
-        return null
-
-      const validJson = input.substring(0, jsonEnd)
-
-      const afterJson = input.substring(jsonEnd).trim()
-      if (afterJson.length > 0 && !TRAILING_SEMICOLON_REGEX.test(afterJson)) {
-        console.warn('[rari] Sanitized corrupted JSON (possible userscript injection):', {
-          extracted: validJson.substring(0, 100),
-          discarded: afterJson.substring(0, 50),
-        })
-      }
-
-      return validJson
-    }
-    catch (error) {
-      console.error('[rari] Failed to sanitize JSON:', error)
-      return null
+    return {
+      element,
+      rawElement: element,
+      wireFormat,
     }
   }
 
-  const getReachableModuleIds = (payload: any): Set<string> => {
-    const reachableIds = new Set<string>()
+  const parseRscResponse = (responsePromise: Promise<Response>) => {
+    const element = createFromFetch(responsePromise)
 
-    if (!payload?.modules || !payload?.rawElement || !payload?.rows)
-      return reachableIds
-
-    const visited = new Set<string>()
-
-    const walkElement = (element: any): void => {
-      if (!element)
-        return
-
-      if (typeof element === 'string' && element.startsWith('$L')) {
-        const moduleInfo = payload.modules.get(element)
-        if (moduleInfo?.id) {
-          reachableIds.add(moduleInfo.id)
-          if (moduleInfo.name && moduleInfo.name !== 'default') {
-            reachableIds.add(`${moduleInfo.id}#${moduleInfo.name}`)
-          }
-        }
-
-        if (payload.rows?.has(element) && !visited.has(element)) {
-          visited.add(element)
-          walkElement(payload.rows.get(element))
-        }
-
-        return
-      }
-
-      if (Array.isArray(element)) {
-        for (const item of element) {
-          walkElement(item)
-        }
-
-        return
-      }
-
-      if (typeof element === 'object' && element !== null) {
-        for (const value of Object.values(element)) {
-          walkElement(value)
-        }
-      }
-    }
-
-    walkElement(payload.rawElement)
-
-    return reachableIds
-  }
-
-  const parseRscWireFormat = async (wireFormat: string, extractBoundaries = false, waitForClientPreload = true) => {
-    try {
-      const lines = wireFormat.split('\n')
-      const modules = new Map()
-      const symbols = new Map()
-      const rows = new Map()
-      let rootElement = null
-      const layoutBoundaries: Array<{
-        layoutPath: string
-        startLine: number
-        endLine: number
-        props: any
-      }> = []
-      let currentLayoutPath: string | null = null
-      let currentLayoutStartLine: number | null = null
-
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const line = lines[lineIndex]
-        const trimmedLine = line.trim()
-
-        if (!trimmedLine)
-          continue
-
-        const colonIndex = line.indexOf(':')
-        if (colonIndex === -1)
-          continue
-
-        const rowId = line.substring(0, colonIndex).trim()
-
-        if (!NUMERIC_REGEX.test(rowId)) {
-          console.warn('[rari] AppRouter: Invalid row ID (non-numeric), skipping line:', line.substring(0, 50))
-          continue
-        }
-
-        const content = line.substring(colonIndex + 1)
-
-        try {
-          if (content.startsWith('"$S')) {
-            const symbolName = content.slice(1, -1)
-            symbols.set(`$${rowId}`, symbolName)
-            continue
-          }
-
-          if (content.startsWith('I[')) {
-            const jsonContent = content.substring(1)
-            const sanitized = sanitizeJsonString(jsonContent, 'array')
-
-            if (!sanitized) {
-              console.warn('[rari] AppRouter: Could not sanitize import line, skipping:', line.substring(0, 80))
-              continue
-            }
-
-            const importData = JSON.parse(sanitized)
-            if (Array.isArray(importData) && importData.length >= 3) {
-              const [path, chunks, exportName] = importData
-              modules.set(`$L${rowId}`, {
-                id: path,
-                chunks: Array.isArray(chunks) ? chunks : [chunks],
-                name: exportName || 'default',
-              })
-
-              if (extractBoundaries && path.includes('layout')) {
-                if (currentLayoutPath !== null && currentLayoutStartLine !== null) {
-                  layoutBoundaries.push({
-                    layoutPath: currentLayoutPath,
-                    startLine: currentLayoutStartLine,
-                    endLine: lineIndex - 1,
-                    props: {},
-                  })
-                }
-
-                currentLayoutPath = path
-                currentLayoutStartLine = lineIndex
-              }
-            }
-          }
-          else if (content.startsWith('[')) {
-            const elementData = JSON.parse(content)
-            rows.set(`$L${rowId}`, elementData)
-
-            if (
-              extractBoundaries
-              && Array.isArray(elementData)
-              && elementData.length >= 4
-              && typeof elementData[1] === 'string'
-              && elementData[1].startsWith('$L')
-            ) {
-              const moduleRef = elementData[1]
-              const moduleInfo = modules.get(moduleRef)
-
-              if (moduleInfo && moduleInfo.id.includes('layout')) {
-                const props = elementData[3] || {}
-
-                if (currentLayoutPath && currentLayoutStartLine !== null) {
-                  const existingBoundary = layoutBoundaries.find(
-                    b => b.layoutPath === currentLayoutPath && b.startLine === currentLayoutStartLine,
-                  )
-
-                  if (existingBoundary)
-                    existingBoundary.props = props
-                }
-              }
-            }
-
-            if (rootElement === null && Array.isArray(elementData)) {
-              if (elementData[0] === '$') {
-                rootElement = elementData
-              }
-              else if (Array.isArray(elementData[0]) && elementData[0][0] === '$') {
-                rootElement = elementData.length === 1 ? elementData[0] : elementData
-              }
-            }
-          }
-          else if (content.startsWith('{') || content.startsWith('E{')) {
-            const jsonContent = content.startsWith('E{') ? content.substring(1) : content
-            const objectData = JSON.parse(jsonContent)
-            rows.set(`$L${rowId}`, objectData)
-
-            if (rootElement === null) {
-              rootElement = objectData
-            }
-          }
-          else if (content.charCodeAt(0) === TAG_TEXT) {
-            const textData = content.slice(1)
-            rows.set(`$L${rowId}`, textData)
-
-            if (rootElement === null)
-              rootElement = textData
-          }
-          else if (content.startsWith('"') && !content.startsWith('"$S')) {
-            const stringData = JSON.parse(content)
-            rows.set(`$L${rowId}`, stringData)
-
-            if (rootElement === null) {
-              rootElement = stringData
-            }
-          }
-          else if (PRIMITIVE_JSON_REGEX.test(content)) {
-            const primitiveData = JSON.parse(content)
-            rows.set(`$L${rowId}`, primitiveData)
-
-            if (rootElement === null)
-              rootElement = primitiveData
-          }
-        }
-        catch (e) {
-          console.error('[rari] AppRouter: Failed to parse RSC line:', line, e)
-        }
-      }
-
-      if (waitForClientPreload)
-        await preloadComponentsFromModules(modules)
-
-      if (
-        extractBoundaries
-        && currentLayoutPath !== null
-        && currentLayoutStartLine !== null
-      ) {
-        layoutBoundaries.push({
-          layoutPath: currentLayoutPath,
-          startLine: currentLayoutStartLine,
-          endLine: lines.length - 1,
-          props: {},
-        })
-      }
-
-      const rawElement = rootElement
-
-      if (rootElement != null) {
-        fallbackKeyCounterRef.current = 0
-
-        rootElement = rscToReact(rootElement as RSCData, modules, undefined, symbols, rows)
-      }
-
-      return {
-        element: rootElement,
-        rawElement,
-        rows,
-        modules,
-        symbols,
-        wireFormat,
-        layoutBoundaries: extractBoundaries ? layoutBoundaries : undefined,
-      }
-    }
-    catch (error) {
-      console.error('[rari] AppRouter: Failed to parse RSC wire format:', error)
-      throw error
-    }
+    return { element }
   }
 
   const refetchRscPayload = async (
@@ -861,7 +612,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
         let parsedPayload
         try {
-          parsedPayload = await parseRscWireFormat(rscWireFormat, false)
+          parsedPayload = await parseRscWireFormat(rscWireFormat)
         }
         catch (parseError) {
           const error = parseError instanceof Error ? parseError : new Error(String(parseError))
@@ -892,7 +643,6 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           )
         }
 
-        console.error('[rari] AppRouter: Error fetching RSC payload:', error)
         throw error
       }
       finally {
@@ -905,16 +655,14 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     return fetchPromise
   }
 
-  const parseRscWireFormatRef = useRef<(wireFormat: string, extractBoundaries?: boolean, waitForClientPreload?: boolean) => Promise<any>>(parseRscWireFormat)
+  const parseRscWireFormatRef = useRef<(wireFormat: string) => Promise<any>>(parseRscWireFormat)
+  const parseRscResponseRef = useRef<(responsePromise: Promise<Response>) => any>(parseRscResponse)
   const refetchRscPayloadRef = useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<any>>(refetchRscPayload)
-  const processPropsRef = useRef<(props: any, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => any>(processProps)
-  const rscToReactRef = useRef<(rsc: RSCData, modules: Map<string, ModuleRecord>, layoutPath?: string, symbols?: Map<string, string>, rows?: Map<string, RSCData>) => React.ReactNode>(rscToReact)
 
   useEffect(() => {
     parseRscWireFormatRef.current = parseRscWireFormat
+    parseRscResponseRef.current = parseRscResponse
     refetchRscPayloadRef.current = refetchRscPayload
-    processPropsRef.current = processProps
-    rscToReactRef.current = rscToReact
   })
 
   useEffect(() => {
@@ -945,68 +693,76 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
       saveFormState()
 
-      startTransition(async () => {
-        try {
-          if (detail.rscWireFormat) {
-            const parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat, false, true)
+      let parsedPayload: any = null
+      let parseError: Error | null = null
 
-            if (currentNavigationIdRef.current === detail.navigationId) {
-              setRscPayload(parsedPayload)
-              lastSuccessfulPayloadRef.current = detail.rscWireFormat
-              resetFailureTracking()
-            }
-          }
-          else if (detail.isStreaming) {
-            if (currentNavigationIdRef.current === detail.navigationId) {
-              setHmrError(null)
-              pendingStreamingNavigationRef.current = detail
-            }
-            isNavigatingRef.current = false
-            return
-          }
-          else {
-            await refetchRscPayloadRef.current!(
-              detail.to,
-              detail.abortSignal,
-            )
-          }
-
-          if (currentNavigationIdRef.current === detail.navigationId) {
-            setRenderKey(prev => prev + 1)
-            setHmrError(null)
-
-            if (onNavigateRef.current)
-              onNavigateRef.current(detail)
-          }
+      try {
+        if (detail.rscResponsePromise) {
+          parsedPayload = parseRscResponseRef.current!(detail.rscResponsePromise)
         }
-        catch (error) {
-          if (error instanceof Error && error.name === 'AbortError')
-            return
-
-          console.error('[rari] AppRouter: Navigation failed:', error)
-
-          window.dispatchEvent(new CustomEvent('rari:navigate-error', {
-            detail: {
-              from: detail.from,
-              to: detail.to,
-              error,
-              navigationId: detail.navigationId,
-            },
-          }))
-
-          if (consecutiveFailuresRef.current >= MAX_RETRIES)
-            handleFallbackReload()
+        else if (detail.rscResponse) {
+          parsedPayload = parseRscResponseRef.current!(Promise.resolve(detail.rscResponse))
         }
-        finally {
-          const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0
-          if (!detail.options?.historyKey && !hasHash) {
-            requestAnimationFrame(() => {
-              if (detail.options?.scroll !== false)
-                window.scrollTo(0, 0)
-            })
-          }
+        else if (detail.rscWireFormat) {
+          parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat)
         }
-      })
+        else if (!detail.isStreaming) {
+          parsedPayload = await refetchRscPayloadRef.current!(
+            detail.to,
+            detail.abortSignal,
+          )
+        }
+      }
+      catch (error) {
+        if (error instanceof Error && error.name === 'AbortError')
+          return
+        parseError = error as Error
+      }
+
+      if (parseError) {
+        console.error('[rari] AppRouter: Navigation failed:', parseError)
+
+        window.dispatchEvent(new CustomEvent('rari:navigate-error', {
+          detail: {
+            from: detail.from,
+            to: detail.to,
+            error: parseError,
+            navigationId: detail.navigationId,
+          },
+        }))
+
+        if (consecutiveFailuresRef.current >= MAX_RETRIES)
+          handleFallbackReload()
+
+        return
+      }
+
+      if (!parsedPayload && detail.isStreaming
+        && currentNavigationIdRef.current === detail.navigationId) {
+        pendingStreamingNavigationRef.current = detail
+        return
+      }
+
+      if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
+        setRscPayload(parsedPayload)
+        if (detail.rscWireFormat)
+          lastSuccessfulPayloadRef.current = detail.rscWireFormat
+
+        resetFailureTracking()
+        setRenderKey(prev => prev + 1)
+        setHmrError(null)
+
+        if (onNavigateRef.current)
+          onNavigateRef.current(detail)
+      }
+
+      const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0
+      if (!detail.options?.historyKey && !hasHash) {
+        requestAnimationFrame(() => {
+          if (detail.options?.scroll !== false)
+            window.scrollTo(0, 0)
+        })
+      }
     }
 
     const handleAppRouterRerender = async () => {
@@ -1025,8 +781,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[rari] AppRouter: HMR update failed:', error)
-
+        console.error('HMR refetch error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -1047,8 +802,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[rari] AppRouter: RSC invalidation failed:', error)
-
+        console.error('RSC invalidate error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -1057,7 +811,16 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
     const handleNavigationStart = (event: Event) => {
       const customEvent = event as CustomEvent<{ navigationId: number, targetPath: string }>
       streamingRowsRef.current = []
+      preloadedModuleIdsRef.current.clear()
       currentNavigationIdRef.current = customEvent.detail.navigationId
+
+      if (typeof window !== 'undefined') {
+        const globalWindow = window as unknown as GlobalWithRari
+        if (!globalWindow['~rari'])
+          globalWindow['~rari'] = {} as GlobalWithRari['~rari']
+        globalWindow['~rari'].navigationId = customEvent.detail.navigationId
+      }
+
       hasRenderedInitialShellRef.current = false
       hasRenderedFinalRef.current = false
       streamCompleteRef.current = false
@@ -1073,8 +836,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         setHmrError(null)
       }
       catch (error) {
-        console.error('[rari] AppRouter: Manifest update failed:', error)
-
+        console.error('Manifest update error:', error instanceof Error ? error.message : String(error))
         if (consecutiveFailuresRef.current >= MAX_RETRIES)
           handleFallbackReload()
       }
@@ -1094,20 +856,25 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        return NUMERIC_REGEX.test(id) && isValidFlightPayload(content)
+        return HEX_REGEX.test(id) && isValidFlightPayload(content)
       })
 
       const hasPageContent = rows.some((r) => {
         const ci = r.indexOf(':')
         const id = ci > 0 ? r.substring(0, ci).trim() : ''
         const content = ci > 0 ? r.substring(ci + 1) : ''
-        if (!NUMERIC_REGEX.test(id) || !isValidFlightPayload(content))
+        if (!HEX_REGEX.test(id) || !isValidFlightPayload(content))
           return false
 
         const isReferencedByShell = rows.some((shellRow) => {
           const sci = shellRow.indexOf(':')
+          const shellId = sci > 0 ? shellRow.substring(0, sci).trim() : ''
           const shellContent = sci > 0 ? shellRow.substring(sci + 1) : ''
-          const refPattern = new RegExp(`"?\\$L${id}"?(?![0-9a-fA-F])`)
+
+          if (!HEX_REGEX.test(shellId) || !isValidFlightPayload(shellContent) || isFallbackFlightPayload(shellContent))
+            return false
+
+          const refPattern = new RegExp(`"?\\$L?${id}"?(?![0-9a-fA-F])`)
           return refPattern.test(shellContent)
         })
         return isReferencedByShell
@@ -1122,21 +889,23 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         const hasSuspenseBoundary = rows.some(r => r.includes('"$Sreact.suspense"') || r.includes('react.suspense'))
 
         if (hasSuspenseBoundary) {
-          const shellRows = rows.filter((r) => {
-            const ci = r.indexOf(':')
-            const id = ci > 0 ? r.substring(0, ci).trim() : ''
-            const refPattern = new RegExp(`"\\$L${id}"(?![0-9a-fA-F])`)
-            return !hasPageContent || !rows.some(sr => refPattern.test(sr))
-          })
           try {
-            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'), false, false)
+            const shellRows = rows.filter((r) => {
+              const ci = r.indexOf(':')
+              const id = ci > 0 ? r.substring(0, ci).trim() : ''
+              const refPattern = new RegExp(`"\\$L?${id}"(?![0-9a-fA-F])`)
+              return !hasPageContent || !rows.some(sr => refPattern.test(sr))
+            })
+            const shellPayload = await parseRscWireFormatRef.current!(shellRows.join('\n'))
             if (currentNavigationIdRef.current === navId) {
               setRscPayload(shellPayload)
               setRenderKey(prev => prev + 1)
             }
           }
           catch (error) {
-            console.error('[rari] AppRouter: Failed to parse shell:', error)
+            console.error('[rari] Failed to parse shell payload:', error)
+            hasRenderedInitialShellRef.current = false
+            rowProcessingRef.current = Promise.resolve()
           }
 
           return
@@ -1153,70 +922,28 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       hasRenderedInitialShellRef.current = true
 
       try {
-        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'), false, true)
+        let parsedPayload = await parseRscWireFormatRef.current!(rows.join('\n'))
 
         if (hasSuspenseBoundary || hasPageContent) {
-          const reachableModuleIds = getReachableModuleIds(parsedPayload)
+          await sleep(50)
 
-          const loadClientComponents = async () => {
-            let attempts = 0
-            const maxAttempts = 20
-            let allModulesLoaded = false
-
-            while (attempts < maxAttempts) {
-              const clientComponents = (globalThis as any)['~clientComponents'] || {}
-
-              const pendingLoads = Object.entries(clientComponents)
-                .filter(([id, comp]: [string, any]) => {
-                  const isReachable = reachableModuleIds.has(id)
-                  return isReachable && comp.loading && comp.loadPromise
-                })
-                .map(([_, comp]: [string, any]) => comp.loadPromise)
-
-              if (pendingLoads.length === 0) {
-                allModulesLoaded = true
-                break
-              }
-
-              try {
-                await Promise.race([Promise.all(pendingLoads), sleep(50)])
-              }
-              catch {}
-
-              await sleep(10)
-              attempts++
-            }
-
-            if (!allModulesLoaded)
-              console.warn('[rari] AppRouter: Module load timeout, rendering anyway')
-
-            if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+          if (currentNavigationIdRef.current === navId && !hasRenderedFinalRef.current) {
+            const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
+            const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'))
+            if (currentNavigationIdRef.current === navId) {
               hasRenderedFinalRef.current = true
-              try {
-                const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
-                const updatedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
-                if (currentNavigationIdRef.current === navId) {
-                  setRscPayload(updatedPayload)
-                  setRenderKey(prev => prev + 1)
+              setRscPayload(updatedPayload)
+              setRenderKey(prev => prev + 1)
 
-                  if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
-                    onNavigateRef.current(pendingStreamingNavigationRef.current)
-                    pendingStreamingNavigationRef.current = null
-                  }
+              if (pendingStreamingNavigationRef.current && onNavigateRef.current) {
+                onNavigateRef.current(pendingStreamingNavigationRef.current)
+                pendingStreamingNavigationRef.current = null
+              }
 
-                  if (streamCompleteRef.current)
-                    streamingRowsRef.current = null
-                }
-              }
-              catch (error) {
-                console.error('[rari] AppRouter: Failed to re-parse after client load:', error)
-              }
+              if (streamCompleteRef.current)
+                streamingRowsRef.current = null
             }
           }
-
-          loadClientComponents().catch((error) => {
-            console.error('[rari] AppRouter: Client component loading failed:', error)
-          })
         }
 
         if (currentNavigationIdRef.current !== navId)
@@ -1226,7 +953,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           return
 
         const latestRows = streamingRowsRef.current ? [...streamingRowsRef.current] : rows
-        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'), false, false)
+        parsedPayload = await parseRscWireFormatRef.current!(latestRows.join('\n'))
 
         if (currentNavigationIdRef.current !== navId || hasRenderedFinalRef.current)
           return
@@ -1245,7 +972,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         }
       }
       catch (error) {
-        console.error('[rari] AppRouter: Failed to parse streaming RSC row:', error)
+        console.error('Process rows error:', error instanceof Error ? error.message : String(error))
       }
     }
 
@@ -1298,7 +1025,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       window.removeEventListener('rari:app-router-manifest-updated', handleManifestUpdated)
       window.removeEventListener('rari:rsc-row', handleRscRow)
     }
-  }, [])
+  }, []) // eslint-disable-line react/exhaustive-deps
 
   useEffect(() => {
     if (typeof window === 'undefined')
@@ -1348,19 +1075,32 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
   let contentToRender = children
 
   if (rscPayload?.element != null) {
-    const extracted = extractBodyContent(rscPayload.element)
-    contentToRender = extracted ?? rscPayload.element
+    const isThenable = rscPayload.element && typeof rscPayload.element === 'object'
+      && 'status' in rscPayload.element
+
+    if (isThenable) {
+      const status = (rscPayload.element as any).status
+
+      if (status === 'fulfilled') {
+        contentToRender = (rscPayload.element as any).value
+      }
+      else if (status === 'rejected') {
+        contentToRender = children
+      }
+      else {
+        contentToRender = React.use(rscPayload.element as any)
+      }
+    }
+    else {
+      const extracted = extractBodyContent(rscPayload.element)
+      contentToRender = extracted ?? rscPayload.element
+    }
   }
 
   if (Array.isArray(contentToRender) && contentToRender.length === 1 && React.isValidElement(contentToRender[0]))
     contentToRender = contentToRender[0]
   else if (Array.isArray(contentToRender) && contentToRender.length > 0 && contentToRender.every(item => React.isValidElement(item) || item == null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'))
     contentToRender = React.createElement(React.Fragment, null, ...contentToRender)
-
-  if (contentToRender && typeof contentToRender === 'object' && !React.isValidElement(contentToRender)) {
-    console.error('[rari] AppRouter: Invalid content to render:', contentToRender)
-    contentToRender = children
-  }
 
   return (
     <>

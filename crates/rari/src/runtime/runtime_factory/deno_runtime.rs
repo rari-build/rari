@@ -1,6 +1,5 @@
 use crate::error::RariError;
 use crate::runtime::module_loader::RariModuleLoader;
-use crate::runtime::ops::StreamOpState;
 use crate::runtime::runtime_factory::constants::*;
 use crate::runtime::runtime_factory::executor::{execute_script, execute_script_for_streaming};
 use crate::runtime::runtime_factory::interface::{AsyncBatchResult, JsRuntimeInterface};
@@ -21,6 +20,16 @@ type PendingScript = (
     Option<deno_core::v8::Global<deno_core::v8::Value>>,
 );
 
+struct PendingBatch {
+    senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>>,
+    names: Vec<String>,
+    sent: Vec<bool>,
+    remaining: usize,
+    start: std::time::Instant,
+    timeout: std::time::Duration,
+    batch_id: u64,
+}
+
 enum JsRequest {
     ExecuteScript {
         script_name: String,
@@ -34,7 +43,6 @@ enum JsRequest {
     ExecuteScriptForStreaming {
         script_name: String,
         script_code: String,
-        stream_id: String,
         result_tx: oneshot::Sender<Result<JsonValue, RariError>>,
         chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
     },
@@ -70,6 +78,11 @@ enum JsRequest {
     ClearRequestContext {
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
+    ClearRequestContextIfMatches {
+        expected_context:
+            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
 }
 
 pub struct DenoRuntime {
@@ -86,7 +99,7 @@ impl DenoRuntime {
                 .build()
                 .expect("Failed to create Tokio runtime");
 
-            let _ = runtime.block_on(async {
+            runtime.block_on(async {
                 loop {
                     let (mut deno_runtime, module_loader) =
                         match create_deno_runtime(env_vars.clone()) {
@@ -101,230 +114,82 @@ impl DenoRuntime {
                         };
 
                     let mut continue_processing = true;
+                    let mut pending_batches: Vec<PendingBatch> = Vec::new();
+                    let mut batch_id_counter: u64 = 0;
+
                     while continue_processing {
-                        match request_receiver.recv().await {
-                            Some(request) => {
-                                let result = match request {
-                                    JsRequest::ExecuteScript {
-                                        script_name,
-                                        script_code,
-                                        result_tx,
-                                    } => {
-                                        let result = execute_script(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            &script_name,
-                                            &script_code,
-                                        )
-                                        .await;
-
-                                        if let Err(e) = &result
-                                            && is_runtime_restart_needed(e)
-                                        {
-                                            let graceful_error = create_graceful_error();
-                                            let _ = result_tx.send(Err(graceful_error));
-                                            break;
+                        if !pending_batches.is_empty() {
+                            tokio::select! {
+                                biased;
+                                request = request_receiver.recv() => {
+                                    match request {
+                                        Some(req) => {
+                                            let result = handle_js_request(
+                                                req,
+                                                &mut deno_runtime,
+                                                &module_loader,
+                                                &mut continue_processing,
+                                                &mut pending_batches,
+                                                &mut batch_id_counter,
+                                            ).await;
+                                            if let Err(e) = result {
+                                                eprintln!("[rari] Error processing request: {e}");
+                                                break;
+                                            }
                                         }
-
-                                        let _ = result_tx.send(result);
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::ExecuteScriptBatch {
-                                        scripts,
-                                        result_tx,
-                                    } => {
-                                        let batch: Vec<ScriptBatchItem> = scripts
-                                            .into_iter()
-                                            .enumerate()
-                                            .map(|(i, (name, code))| {
-                                                let (tx, rx) = oneshot::channel::<Result<JsonValue, RariError>>();
-                                                let result_tx_clone = result_tx.clone();
-                                                tokio::spawn(async move {
-                                                    let result = rx.await.unwrap_or_else(|_| Err(create_graceful_error()));
-                                                    let _ = result_tx_clone.send((i, result));
-                                                });
-                                                (name, code, tx)
-                                            })
-                                            .collect();
-
-                                        let needs_restart = execute_scripts_concurrent(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            batch,
-                                        )
-                                        .await;
-                                        if needs_restart {
-                                            break;
+                                        None => {
+                                            continue_processing = false;
                                         }
-                                        Ok::<(), RariError>(())
                                     }
-                                    JsRequest::ExecuteScriptForStreaming {
-                                        script_name,
-                                        script_code,
-                                        stream_id,
-                                        result_tx,
-                                        chunk_sender,
-                                    } => {
-                                        let sender_for_op_state = chunk_sender.clone();
-                         deno_runtime.op_state().borrow_mut().put(StreamOpState {
-                                            chunk_sender: Some(sender_for_op_state),
-                                            current_stream_id: Some(stream_id.clone()),
-                                            row_counter: 0,
-                                        });
-
-                                        let result = execute_script_for_streaming(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            &script_name,
-                                            &script_code,
-                                            chunk_sender,
-                                        )
-                                        .await;
-
-                                        let _ = result_tx.send(result.map(|_| JsonValue::Null));
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::AddModuleToLoader {
-                                        component_id,
-                                        result_tx,
-                                    } => {
-                                        let specifier_opt =
-                                            module_loader.get_component_specifier(&component_id);
-
-                                        if specifier_opt.is_some() {
-                                            let _ = result_tx.send(Ok(()));
-                                        } else {
-                                            let _ = result_tx.send(Err(RariError::js_execution(
-                                                format!(
-                                                    "Component specifier not found in loader for AddModuleToLoader: {component_id}"
-                                                ),
-                                            )));
-                                        }
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::LoadEsModule {
-                                        component_id,
-                                        result_tx,
-                                    } => {
-                                        handle_load_es_module(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            &component_id,
-                                            result_tx,
-                                        )
-                                        .await
-                                    }
-                                    JsRequest::EvaluateModule {
-                                        module_id,
-                                        result_tx,
-                                    } => {
-                                        handle_evaluate_module(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            module_id,
-                                            result_tx,
-                                            &mut continue_processing,
-                                        )
-                                        .await
-                                    }
-                                    JsRequest::GetModuleNamespace {
-                                        module_id,
-                                        result_tx,
-                                    } => {
-                                        handle_get_module_namespace(
-                                            &mut deno_runtime,
-                                            &module_loader,
-                                            module_id,
-                                            result_tx,
-                                        )
-                                        .await
-                                    }
-                                    JsRequest::AddModuleToLoaderOnly {
-                                        specifier,
-                                        code,
-                                        result_tx,
-                                    } => {
-                                        module_loader.set_module_code(specifier.clone(), code.clone());
-
-                                        let component_id =
-                                            extract_component_id_from_specifier(&specifier);
-
-                                        let is_hmr_specifier = specifier.contains("/rari_hmr/");
-
-                                        let existing_specifier = module_loader
-                                            .component_specifiers
-                                            .get(&component_id)
-                                            .map(|entry| entry.clone());
-
-                                        let has_existing_hmr_mapping = existing_specifier
-                                            .as_ref()
-                                            .map(|spec| spec.contains("/rari_hmr/"))
-                                            .unwrap_or(false);
-
-                                        if is_hmr_specifier || !has_existing_hmr_mapping {
-                                            module_loader
-                                                .component_specifiers
-                                                .insert(component_id.clone(), specifier.clone());
-                                        }
-
-                                        let _ = result_tx.send(Ok(()));
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::ClearModuleLoaderCaches {
-                                        component_id,
-                                        result_tx,
-                                    } => {
-                                        module_loader.clear_component_caches(&component_id);
-                                        let _ = result_tx.send(Ok(()));
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::SetRequestContext {
-                                        request_context,
-                                        result_tx,
-                                    } => {
-                                        use crate::runtime::ops::FetchOpState;
-                                        let op_state = deno_runtime.op_state();
-                                        let mut op_state_borrow = op_state.borrow_mut();
-                                        if let Some(fetch_state) =
-                                            op_state_borrow.try_borrow_mut::<FetchOpState>()
-                                        {
-                                            fetch_state.request_context = Some(request_context);
-                                        }
-                                        let _ = result_tx.send(Ok(()));
-                                        Ok::<(), RariError>(())
-                                    }
-                                    JsRequest::ClearRequestContext {
-                                        result_tx,
-                                    } => {
-                                        use crate::runtime::ops::FetchOpState;
-                                        let op_state = deno_runtime.op_state();
-                                        let mut op_state_borrow = op_state.borrow_mut();
-                                        if let Some(fetch_state) =
-                                            op_state_borrow.try_borrow_mut::<FetchOpState>()
-                                        {
-                                            fetch_state.request_context = None;
-                                        }
-                                        let _ = result_tx.send(Ok(()));
-                                        Ok::<(), RariError>(())
-                                    }
-                                };
-
-                                if let Err(e) = result {
-                                    eprintln!("[rari] Error processing request: {e}");
-                                    break;
                                 }
-
-                                if let Err(e) = deno_runtime
-                                    .run_event_loop(PollEventLoopOptions::default())
-                                    .await
-                                {
-                                    eprintln!("[rari] Event loop error: {e}. Restarting runtime.");
+                                event_loop_result = tokio::time::timeout(
+                                    std::time::Duration::from_millis(50),
+                                    crate::runtime::runtime_factory::v8_utils::run_event_loop_with_error_handling(
+                                        &mut deno_runtime, "concurrent batch"
+                                    ),
+                                ) => {
+                                    if let Ok(Err(e)) = event_loop_result {
+                                        eprintln!("[rari] Event loop error: {e}");
+                                        if is_runtime_restart_needed(&e) {
+                                            for batch in pending_batches.drain(..) {
+                                                for sender in batch.senders.into_iter().flatten() {
+                                                    let _ = sender.send(Err(create_graceful_error()));
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
                                 }
                             }
-                            None => {
-                                return Ok::<(), RariError>(());
+
+                            check_pending_batches(&mut deno_runtime, &mut pending_batches);
+                            pending_batches.retain(|b| b.remaining > 0 && b.start.elapsed() < b.timeout);
+                        } else {
+                            match request_receiver.recv().await {
+                                Some(req) => {
+                                    let result = handle_js_request(
+                                        req,
+                                        &mut deno_runtime,
+                                        &module_loader,
+                                        &mut continue_processing,
+                                        &mut pending_batches,
+                                        &mut batch_id_counter,
+                                    ).await;
+                                    if let Err(e) = result {
+                                        eprintln!("[rari] Error processing request: {e}");
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    continue_processing = false;
+                                }
                             }
                         }
+
+                        let _ = tokio::time::timeout(
+                            std::time::Duration::from_millis(10),
+                            deno_runtime.run_event_loop(PollEventLoopOptions::default()),
+                        ).await;
                     }
 
                     println!("[rari] Restarting JS runtime due to error or forced restart");
@@ -481,35 +346,158 @@ async fn handle_get_module_namespace(
     Ok::<(), RariError>(())
 }
 
-async fn execute_scripts_concurrent(
+async fn handle_js_request(
+    request: JsRequest,
     deno_runtime: &mut deno_core::JsRuntime,
     module_loader: &std::rc::Rc<RariModuleLoader>,
+    continue_processing: &mut bool,
+    pending_batches: &mut Vec<PendingBatch>,
+    batch_id_counter: &mut u64,
+) -> Result<(), RariError> {
+    match request {
+        JsRequest::ExecuteScript { script_name, script_code, result_tx } => {
+            let result =
+                execute_script(deno_runtime, module_loader, &script_name, &script_code).await;
+            if let Err(e) = &result
+                && is_runtime_restart_needed(e)
+            {
+                let _ = result_tx.send(Err(create_graceful_error()));
+                return Err(RariError::internal("Runtime restart needed".to_string()));
+            }
+            let _ = result_tx.send(result);
+        }
+        JsRequest::ExecuteScriptBatch { scripts, result_tx } => {
+            let batch: Vec<ScriptBatchItem> = scripts
+                .into_iter()
+                .enumerate()
+                .map(|(i, (name, code))| {
+                    let (tx, rx) = oneshot::channel::<Result<JsonValue, RariError>>();
+                    let result_tx_clone = result_tx.clone();
+                    tokio::spawn(async move {
+                        let result = rx.await.unwrap_or_else(|_| Err(create_graceful_error()));
+                        let _ = result_tx_clone.send((i, result));
+                    });
+                    (name, code, tx)
+                })
+                .collect();
+
+            if let Some(pending_batch) =
+                setup_concurrent_batch(deno_runtime, batch, batch_id_counter).await
+            {
+                pending_batches.push(pending_batch);
+            }
+        }
+        JsRequest::ExecuteScriptForStreaming {
+            script_name,
+            script_code,
+            result_tx,
+            chunk_sender,
+        } => {
+            let sender_for_op_state = chunk_sender.clone();
+            deno_runtime.op_state().borrow_mut().put(crate::runtime::ops::StreamOpState {
+                chunk_sender: Some(sender_for_op_state),
+                current_stream_id: None,
+                row_counter: 0,
+            });
+            let result = execute_script_for_streaming(
+                deno_runtime,
+                module_loader,
+                &script_name,
+                &script_code,
+                chunk_sender,
+            )
+            .await;
+            let _ = result_tx.send(result.map(|_| JsonValue::Null));
+        }
+        JsRequest::AddModuleToLoader { component_id, result_tx } => {
+            let specifier_opt = module_loader.get_component_specifier(&component_id);
+            if specifier_opt.is_some() {
+                let _ = result_tx.send(Ok(()));
+            } else {
+                let _ = result_tx.send(Err(RariError::js_execution(format!(
+                    "Component specifier not found in loader for AddModuleToLoader: {component_id}"
+                ))));
+            }
+        }
+        JsRequest::LoadEsModule { component_id, result_tx } => {
+            handle_load_es_module(deno_runtime, module_loader, &component_id, result_tx).await?;
+        }
+        JsRequest::EvaluateModule { module_id, result_tx } => {
+            handle_evaluate_module(
+                deno_runtime,
+                module_loader,
+                module_id,
+                result_tx,
+                continue_processing,
+            )
+            .await?;
+        }
+        JsRequest::GetModuleNamespace { module_id, result_tx } => {
+            handle_get_module_namespace(deno_runtime, module_loader, module_id, result_tx).await?;
+        }
+        JsRequest::AddModuleToLoaderOnly { specifier, code, result_tx } => {
+            module_loader.set_module_code(specifier.clone(), code.clone());
+            let component_id = extract_component_id_from_specifier(&specifier);
+            let is_hmr_specifier = specifier.contains("/rari_hmr/");
+            let existing_specifier =
+                module_loader.component_specifiers.get(&component_id).map(|entry| entry.clone());
+            let has_existing_hmr_mapping = existing_specifier
+                .as_ref()
+                .map(|spec| spec.contains("/rari_hmr/"))
+                .unwrap_or(false);
+            if is_hmr_specifier || !has_existing_hmr_mapping {
+                module_loader.component_specifiers.insert(component_id.clone(), specifier.clone());
+            }
+            let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::ClearModuleLoaderCaches { component_id, result_tx } => {
+            module_loader.clear_component_caches(&component_id);
+            let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::SetRequestContext { request_context, result_tx } => {
+            deno_runtime.op_state().borrow_mut().put(request_context);
+            let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::ClearRequestContext { result_tx } => {
+            deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+            let _ = result_tx.send(Ok(()));
+        }
+        JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
+            let should_clear = {
+                let op_state = deno_runtime.op_state();
+                let borrowed = op_state.borrow();
+                if let Some(current_context) = borrowed.try_borrow::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>() {
+                    std::sync::Arc::ptr_eq(current_context, &expected_context)
+                } else {
+                    false
+                }
+            };
+
+            if should_clear {
+                deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+            }
+            let _ = result_tx.send(Ok(()));
+        }
+    }
+    Ok(())
+}
+
+async fn setup_concurrent_batch(
+    deno_runtime: &mut deno_core::JsRuntime,
     batch: Vec<ScriptBatchItem>,
-) -> bool /* needs_restart */ {
-    use crate::runtime::runtime_factory::v8_utils::{
-        run_event_loop_with_error_handling, v8_to_json,
-    };
+    batch_id_counter: &mut u64,
+) -> Option<PendingBatch> {
     use crate::with_scope;
 
-    if batch.len() == 1 {
-        let (name, code, tx) = batch.into_iter().next().expect("batch has exactly one item");
-        let result = execute_script(deno_runtime, module_loader, &name, &code).await;
-        let needs_restart = result.as_ref().err().map(is_runtime_restart_needed).unwrap_or(false);
-        if needs_restart {
-            let _ = tx.send(Err(create_graceful_error()));
-        } else {
-            let _ = tx.send(result);
-        }
-        return needs_restart;
-    }
+    *batch_id_counter += 1;
+    let batch_id = *batch_id_counter;
 
     let mut pending: Vec<PendingScript> = Vec::with_capacity(batch.len());
-    let mut needs_immediate_restart = false;
 
     for (script_name, script_code, tx) in batch {
         match deno_runtime.execute_script(script_name.clone(), script_code.clone()) {
             Ok(v8_val) => {
-                let slot_key = format!("__rari_concurrent_{}__", pending.len());
+                let slot_key = format!("__rari_b{}_{}__", batch_id, pending.len());
                 let store_result = with_scope!(deno_runtime, |scope| {
                     let local_val = deno_core::v8::Local::new(scope, &v8_val);
                     let context = scope.get_current_context();
@@ -534,23 +522,13 @@ async fn execute_scripts_concurrent(
                     "Failed to execute script '{}': {}",
                     script_name, e
                 ));
-                if is_runtime_restart_needed(&err) {
-                    needs_immediate_restart = true;
-                    let _ = tx.send(Err(create_graceful_error()));
-                    break;
-                } else {
-                    let _ = tx.send(Err(err));
-                }
+                let _ = tx.send(Err(err));
             }
         }
     }
 
-    if needs_immediate_restart {
-        let _ = deno_runtime.execute_script(
-            "cleanup_concurrent",
-            r#"(function(){Object.keys(globalThis).forEach(function(k){if(/^__rari_concurrent_\d+__$/.test(k))delete globalThis[k];});delete globalThis['~rari_concurrent'];})()"#.to_string(),
-        );
-        return true;
+    if pending.is_empty() {
+        return None;
     }
 
     let promise_timeout_ms: u64 = std::env::var("RARI_PROMISE_RESOLUTION_TIMEOUT_MS")
@@ -558,18 +536,14 @@ async fn execute_scripts_concurrent(
         .and_then(|s| s.parse().ok())
         .unwrap_or(5000);
 
-    let timeout_duration = std::time::Duration::from_millis(promise_timeout_ms);
-    let start = std::time::Instant::now();
-
     let mut sent = vec![false; pending.len()];
     let mut remaining = pending.len();
 
-    let (senders, names): (Vec<_>, Vec<_>) =
+    let (mut senders, names): (Vec<_>, Vec<_>) =
         pending.into_iter().map(|(tx, name, _)| (Some(tx), name)).unzip();
-    let mut senders: Vec<Option<oneshot::Sender<Result<JsonValue, RariError>>>> = senders;
 
-    for i in 0..senders.len() {
-        let slot_key = format!("__rari_concurrent_{}__", i);
+    for (i, sent_item) in sent.iter_mut().enumerate().take(senders.len()) {
+        let slot_key = format!("__rari_b{}_{}__", batch_id, i);
         let setup = format!(
             r#"(function() {{
                 if (!globalThis['~rari_concurrent']) globalThis['~rari_concurrent'] = {{}};
@@ -589,60 +563,46 @@ async fn execute_scripts_concurrent(
         );
         if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
-            if let Some(tx) = senders[i].take() {
-                let _ = tx.send(Err(RariError::js_execution(format!(
-                    "Failed to setup concurrent tracking for '{}': {}",
-                    names[i], e
+            let cleanup = format!("delete globalThis['{}']", slot_key);
+            let _ = deno_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
+
+            *sent_item = true;
+
+            remaining = remaining.saturating_sub(1);
+
+            if let Some(sender) = senders[i].take() {
+                let _ = sender.send(Err(RariError::internal(format!(
+                    "Failed to setup concurrent tracking: {e}"
                 ))));
             }
-            sent[i] = true;
-            remaining -= 1;
         }
     }
 
-    while remaining > 0 && start.elapsed() < timeout_duration {
-        tokio::task::yield_now().await;
+    Some(PendingBatch {
+        senders,
+        names,
+        sent,
+        remaining,
+        start: std::time::Instant::now(),
+        timeout: std::time::Duration::from_millis(promise_timeout_ms),
+        batch_id,
+    })
+}
 
-        let event_loop_result = tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            run_event_loop_with_error_handling(deno_runtime, "concurrent batch"),
-        )
-        .await;
+fn check_pending_batches(
+    deno_runtime: &mut deno_core::JsRuntime,
+    pending_batches: &mut [PendingBatch],
+) {
+    use crate::runtime::runtime_factory::v8_utils::v8_to_json;
+    use crate::with_scope;
 
-        if let Ok(Err(e)) = event_loop_result {
-            eprintln!("[rari] Event loop error during concurrent batch: {e}");
-
-            if is_runtime_restart_needed(&e) {
-                for i in 0..sent.len() {
-                    if !sent[i]
-                        && let Some(tx) = senders[i].take()
-                    {
-                        let _ = tx.send(Err(create_graceful_error()));
-                    }
-                }
-                return true;
-            }
-
-            for i in 0..sent.len() {
-                if !sent[i]
-                    && let Some(tx) = senders[i].take()
-                {
-                    let _ = tx.send(Err(RariError::js_execution(format!(
-                        "Event loop error for '{}': {}",
-                        names[i], e
-                    ))));
-                    sent[i] = true;
-                }
-            }
-            break;
-        }
-
-        for i in 0..sent.len() {
-            if sent[i] {
+    for batch in pending_batches.iter_mut() {
+        for i in 0..batch.sent.len() {
+            if batch.sent[i] {
                 continue;
             }
 
-            let slot_key = format!("__rari_concurrent_{}__", i);
+            let slot_key = format!("__rari_b{}_{}__", batch.batch_id, i);
             let check = format!(
                 r#"(function() {{
                     const e = globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}'];
@@ -651,99 +611,168 @@ async fn execute_scripts_concurrent(
                 slot_key
             );
 
-            let is_done = match deno_runtime.execute_script(format!("check_slot_{i}"), check) {
-                Ok(result) => {
-                    with_scope!(deno_runtime, |scope| {
-                        let local = deno_core::v8::Local::new(scope, result);
-                        !local.is_null_or_undefined()
-                    })
+            let check_result = deno_runtime.execute_script(format!("check_slot_{i}"), check);
+
+            if let Err(e) = check_result {
+                let cleanup = format!(
+                    r#"(function() {{
+                        if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                            delete globalThis['~rari_concurrent']['{}'];
+                        }}
+                        if (globalThis['{}']) {{
+                            delete globalThis['{}'];
+                        }}
+                    }})()"#,
+                    slot_key, slot_key, slot_key, slot_key
+                );
+                let _ = deno_runtime.execute_script(format!("cleanup_check_error_{i}"), cleanup);
+
+                if let Some(tx) = batch.senders[i].take() {
+                    let _ = tx.send(Err(RariError::js_execution(format!(
+                        "Failed to check status for '{}': {}",
+                        batch.names[i], e
+                    ))));
                 }
-                Err(e) => {
-                    eprintln!("[rari] Error: status check failed for slot {i}: {e}");
-                    if let Some(tx) = senders[i].take() {
-                        let _ = tx.send(Err(RariError::js_execution(format!(
-                            "Status check failed for '{}': {}",
-                            names[i], e
-                        ))));
-                    }
-                    sent[i] = true;
-                    remaining -= 1;
-                    continue;
-                }
-            };
+                batch.sent[i] = true;
+                batch.remaining -= 1;
+                continue;
+            }
+
+            let check_value = check_result.expect("check_result is Ok after error check");
+            let is_done = with_scope!(deno_runtime, |scope| {
+                let local = deno_core::v8::Local::new(scope, check_value);
+                !local.is_null_or_undefined()
+            });
 
             if is_done {
                 let extract = format!(
                     r#"(function() {{
                         const entry = globalThis['~rari_concurrent']['{}'];
+                        delete globalThis['~rari_concurrent']['{}'];
+                        delete globalThis['{}'];
                         return {{
                             ok: entry.error === null,
                             value: entry.result,
                             error: entry.error
                         }};
                     }})()"#,
-                    slot_key
+                    slot_key, slot_key, slot_key
                 );
-                let result =
-                    match deno_runtime.execute_script(format!("extract_concurrent_{i}"), extract) {
-                        Ok(extracted) => {
-                            let json_result = with_scope!(deno_runtime, |scope| {
-                                let local = deno_core::v8::Local::new(scope, extracted);
-                                v8_to_json(scope, local)
-                            });
-                            match json_result {
-                                Ok(JsonValue::Object(obj)) => {
-                                    if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
-                                        Err(RariError::js_execution(
-                                            obj.get("error")
-                                                .and_then(JsonValue::as_str)
-                                                .unwrap_or("Unknown concurrent error")
-                                                .to_string(),
-                                        ))
-                                    } else {
-                                        Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
-                                    }
+                let result = match deno_runtime
+                    .execute_script(format!("extract_concurrent_{i}"), extract)
+                {
+                    Ok(extracted) => {
+                        let json_result = with_scope!(deno_runtime, |scope| {
+                            let local = deno_core::v8::Local::new(scope, extracted);
+                            v8_to_json(scope, local)
+                        });
+                        match json_result {
+                            Ok(JsonValue::Object(obj)) => {
+                                if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
+                                    Err(RariError::js_execution(
+                                        obj.get("error")
+                                            .and_then(JsonValue::as_str)
+                                            .unwrap_or("Unknown concurrent error")
+                                            .to_string(),
+                                    ))
+                                } else {
+                                    Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
                                 }
-                                Ok(_) => Err(RariError::internal(
+                            }
+                            Ok(_) => {
+                                let cleanup = format!(
+                                    r#"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                                delete globalThis['~rari_concurrent']['{}'];
+                                            }}
+                                            if (globalThis['{}']) {{
+                                                delete globalThis['{}'];
+                                            }}
+                                        }})()"#,
+                                    slot_key, slot_key, slot_key, slot_key
+                                );
+                                let _ = deno_runtime
+                                    .execute_script(format!("cleanup_extract_shape_{i}"), cleanup);
+                                Err(RariError::internal(
                                     "Concurrent extraction wrapper was not an object".to_string(),
-                                )),
-                                Err(e) => Err(e),
+                                ))
+                            }
+                            Err(e) => {
+                                let cleanup = format!(
+                                    r#"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                                delete globalThis['~rari_concurrent']['{}'];
+                                            }}
+                                            if (globalThis['{}']) {{
+                                                delete globalThis['{}'];
+                                            }}
+                                        }})()"#,
+                                    slot_key, slot_key, slot_key, slot_key
+                                );
+                                let _ = deno_runtime
+                                    .execute_script(format!("cleanup_extract_json_{i}"), cleanup);
+                                Err(e)
                             }
                         }
-                        Err(e) => Err(RariError::js_execution(format!(
+                    }
+                    Err(e) => {
+                        let cleanup = format!(
+                            r#"(function() {{
+                                    if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                        delete globalThis['~rari_concurrent']['{}'];
+                                    }}
+                                    if (globalThis['{}']) {{
+                                        delete globalThis['{}'];
+                                    }}
+                                }})()"#,
+                            slot_key, slot_key, slot_key, slot_key
+                        );
+                        let _ = deno_runtime
+                            .execute_script(format!("cleanup_extract_error_{i}"), cleanup);
+                        Err(RariError::js_execution(format!(
                             "Failed to extract result for '{}': {}",
-                            names[i], e
-                        ))),
-                    };
+                            batch.names[i], e
+                        )))
+                    }
+                };
 
-                if let Some(tx) = senders[i].take() {
+                if let Some(tx) = batch.senders[i].take() {
                     let _ = tx.send(result);
                 }
-                sent[i] = true;
-                remaining -= 1;
+                batch.sent[i] = true;
+                batch.remaining -= 1;
             }
         }
 
-        if remaining > 0 {
-            tokio::task::yield_now().await;
+        if batch.start.elapsed() >= batch.timeout {
+            for i in 0..batch.sent.len() {
+                if !batch.sent[i] {
+                    let slot_key = format!("__rari_b{}_{}__", batch.batch_id, i);
+                    let cleanup = format!(
+                        r#"(function() {{
+                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                delete globalThis['~rari_concurrent']['{}'];
+                            }}
+                            if (globalThis['{}']) {{
+                                delete globalThis['{}'];
+                            }}
+                        }})()"#,
+                        slot_key, slot_key, slot_key, slot_key
+                    );
+                    let _ = deno_runtime.execute_script(format!("cleanup_timeout_{i}"), cleanup);
+
+                    if let Some(tx) = batch.senders[i].take() {
+                        let _ = tx.send(Err(RariError::timeout(format!(
+                            "Promise timed out for '{}'",
+                            batch.names[i]
+                        ))));
+                    }
+                    batch.sent[i] = true;
+                    batch.remaining -= 1;
+                }
+            }
         }
     }
-
-    for i in 0..sent.len() {
-        if !sent[i]
-            && let Some(tx) = senders[i].take()
-        {
-            let _ =
-                tx.send(Err(RariError::timeout(format!("Promise timed out for '{}'", names[i]))));
-        }
-    }
-
-    let _ = deno_runtime.execute_script(
-            "cleanup_concurrent",
-            r#"(function(){Object.keys(globalThis).forEach(function(k){if(/^__rari_concurrent_\d+__$/.test(k))delete globalThis[k];});delete globalThis['~rari_concurrent'];})()"#.to_string(),
-        );
-
-    false
 }
 
 fn extract_component_id_from_specifier(specifier: &str) -> String {
@@ -894,10 +923,6 @@ impl JsRuntimeInterface for DenoRuntime {
         chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
         let request_sender = self.request_sender.clone();
-        let stream_id = format!(
-            "stream_{}",
-            std::time::SystemTime::now().elapsed().unwrap_or_default().as_millis()
-        );
 
         Box::pin(async move {
             let (response_sender, response_receiver) = oneshot::channel();
@@ -906,7 +931,6 @@ impl JsRuntimeInterface for DenoRuntime {
                 .send(JsRequest::ExecuteScriptForStreaming {
                     script_name,
                     script_code,
-                    stream_id,
                     result_tx: response_sender,
                     chunk_sender,
                 })
@@ -1100,6 +1124,35 @@ impl JsRuntimeInterface for DenoRuntime {
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
                     "JS executor failed to respond (clear_request_context)".to_string(),
+                )
+            })?
+        })
+    }
+
+    fn clear_request_context_if_matches(
+        &self,
+        expected_context: std::sync::Arc<
+            crate::server::middleware::request_context::RequestContext,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let request_sender = self.request_sender.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+            request_sender
+                .send(JsRequest::ClearRequestContextIfMatches {
+                    expected_context,
+                    result_tx: response_sender,
+                })
+                .await
+                .map_err(|_| {
+                    RariError::js_runtime(
+                        "JS executor channel closed (clear_request_context_if_matches)".to_string(),
+                    )
+                })?;
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (clear_request_context_if_matches)".to_string(),
                 )
             })?
         })

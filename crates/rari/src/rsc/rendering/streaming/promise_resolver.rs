@@ -34,26 +34,38 @@ fn collect_client_components(
             if arr.len() >= 4
                 && arr[0].as_str() == Some("$")
                 && let Some(type_str) = arr[1].as_str()
-                && (type_str.contains('/') || type_str.contains('#'))
+                && (type_str.contains('/') || type_str.contains('\\') || type_str.contains('#'))
                 && !type_str.starts_with("$L")
-                && !component_map.contains_key(type_str)
             {
-                *row_counter += 1;
-                let module_ref = format!("$L{}", row_counter);
+                let normalized_type_str = type_str.cow_replace('\\', "/");
+                let type_str_normalized = normalized_type_str.as_ref();
 
-                let (file_path, export_name) = if let Some(idx) = type_str.find('#') {
-                    (&type_str[..idx], &type_str[idx + 1..])
-                } else {
-                    (type_str, "default")
-                };
+                if !component_map.contains_key(type_str)
+                    && !component_map.contains_key(type_str_normalized)
+                {
+                    *row_counter += 1;
+                    let module_ref = format!("$L{:x}", row_counter);
 
-                #[allow(clippy::disallowed_methods)]
-                let import_data = serde_json::json!([file_path, ["default"], export_name]);
-                let import_row = RscWireFormatTag::ModuleImport
-                    .format_row(*row_counter, &import_data.to_string());
-                import_rows.push(import_row.trim_end().to_string());
+                    let (file_path, export_name) = if let Some(idx) = type_str_normalized.find('#')
+                    {
+                        (&type_str_normalized[..idx], &type_str_normalized[idx + 1..])
+                    } else {
+                        (type_str_normalized, "default")
+                    };
 
-                component_map.insert(type_str.to_string(), module_ref);
+                    #[allow(clippy::disallowed_methods)]
+                    let import_data = serde_json::json!({
+                        "id": file_path,
+                        "chunks": [],
+                        "name": export_name
+                    });
+                    let import_row = RscWireFormatTag::ModuleImport
+                        .format_row(*row_counter, &import_data.to_string());
+                    import_rows.push(import_row.trim_end().to_string());
+
+                    component_map.insert(type_str.to_string(), module_ref.clone());
+                    component_map.insert(type_str_normalized.to_string(), module_ref);
+                }
             }
 
             for item in arr {
@@ -78,9 +90,15 @@ fn replace_client_component_paths(
             if arr.len() >= 4
                 && arr[0].as_str() == Some("$")
                 && let Some(type_str) = arr[1].as_str()
-                && let Some(module_ref) = component_map.get(type_str)
             {
-                arr[1] = serde_json::Value::String(module_ref.clone());
+                let module_ref = component_map.get(type_str).or_else(|| {
+                    let normalized = type_str.cow_replace('\\', "/");
+                    component_map.get(normalized.as_ref())
+                });
+
+                if let Some(module_ref) = module_ref {
+                    arr[1] = serde_json::Value::String(module_ref.clone());
+                }
             }
 
             for item in arr {
@@ -154,6 +172,7 @@ impl BackgroundPromiseResolver {
                         .cow_replace("{promise_id}", &p.id)
                         .cow_replace("{boundary_id}", &p.boundary_id)
                         .cow_replace("{component_path}", &p.component_path)
+                        .cow_replace("{render_generation}", &p.render_generation.to_string())
                         .into_owned();
                     (format!("<promise_resolution_{}>", p.id), script)
                 })
@@ -181,6 +200,14 @@ impl BackgroundPromiseResolver {
                                 let result_string = result_val.to_string();
                                 match serde_json::from_str::<serde_json::Value>(&result_string) {
                                     Ok(result_data) => {
+                                        if result_data
+                                            .get("stale")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false)
+                                        {
+                                            continue;
+                                        }
+
                                         if result_data["success"].as_bool().unwrap_or(false) {
                                             let mut content = result_data["content"].clone();
                                             let row_id = {

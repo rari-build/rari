@@ -1,4 +1,3 @@
-/* eslint-disable e18e/prefer-static-regex */
 (function () {
   const NON_ALPHANUMERIC_REGEX = /[^a-z0-9]/gi
   try {

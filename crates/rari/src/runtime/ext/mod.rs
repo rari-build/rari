@@ -92,7 +92,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
         .extend(webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot));
     extensions.extend(websocket::extensions(options.web.clone(), is_snapshot));
     extensions.extend(http::extensions((), is_snapshot));
-    extensions.extend(fetch::extensions(is_snapshot));
+    extensions.extend(fetch::extensions(is_snapshot, None));
     extensions.extend(ffi::extensions(is_snapshot));
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
     extensions.extend(webgpu::extensions(is_snapshot));

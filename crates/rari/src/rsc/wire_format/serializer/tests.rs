@@ -367,6 +367,41 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_element_regular_hex_reference() {
+        use crate::rsc::types::elements::ReactElement as LoadingReactElement;
+
+        let mut serializer = RscSerializer::new();
+
+        for _ in 0..10 {
+            serializer.get_next_row_id();
+        }
+
+        let mut props = FxHashMap::default();
+        props.insert("children".to_string(), json!("Test Content"));
+
+        let element = LoadingReactElement::with_props("span", props);
+
+        let result = serializer.serialize_element(&element).unwrap();
+
+        assert_eq!(result, "$La", "Reference should use hexadecimal format");
+
+        let output = serializer.output_lines.join("\n");
+        assert!(output.contains("a:["), "Wire format row should use hex ID 'a'");
+        assert!(output.contains("Test Content"), "Should contain the element content");
+
+        let element2 = LoadingReactElement::with_props("div", FxHashMap::default());
+        let result2 = serializer.serialize_element(&element2).unwrap();
+        assert_eq!(result2, "$Lb", "Next reference should be $Lb");
+
+        for _ in 0..4 {
+            serializer.get_next_row_id();
+        }
+        let element3 = LoadingReactElement::with_props("p", FxHashMap::default());
+        let result3 = serializer.serialize_element(&element3).unwrap();
+        assert_eq!(result3, "$L10", "Reference for ID 16 should be $L10 in hex");
+    }
+
+    #[test]
     fn test_emit_suspense_boundary_with_refs() {
         let mut serializer = RscSerializer::new();
 
@@ -1069,5 +1104,44 @@ mod tests {
         assert!(result.contains("$NaN"), "Should contain NaN marker");
         assert!(result.contains("$D"), "Should contain Date marker");
         assert!(result.contains(":o"), "Should contain TypedArray tag");
+    }
+
+    #[test]
+    fn test_row_id_collision_check() {
+        let mut serializer = RscSerializer::new();
+
+        let mut props = FxHashMap::default();
+        props.insert(
+            "data".to_string(),
+            json!({
+                "map": {"$map": [["key1", "value1"], ["key2", "value2"]]},
+                "set": {"$set": ["a", "b", "c"]},
+                "promise": {"$promise": {"status": "pending", "value": null}}
+            }),
+        );
+        props.insert("className".to_string(), json!("container"));
+
+        let parent_element = SerializedReactElement::create_html_element("div", Some(props));
+
+        let result = serializer.serialize_to_rsc_format(&parent_element);
+
+        let mut row_ids = rustc_hash::FxHashSet::default();
+
+        for line in result.lines() {
+            if let Some(colon_pos) = line.find(':') {
+                let row_id = line[..colon_pos].to_string();
+                assert!(
+                    row_ids.insert(row_id.clone()),
+                    "Row ID collision detected: '{}' appears multiple times in output",
+                    row_id
+                );
+            }
+        }
+
+        assert!(
+            row_ids.len() >= 3,
+            "Expected multiple unique row IDs for outlined payload, got {}",
+            row_ids.len()
+        );
     }
 }

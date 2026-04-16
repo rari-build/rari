@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+/* eslint-disable no-undef, react/error-boundaries, react/purity  */
 (function () {
   if (typeof React === 'undefined') {
     try {

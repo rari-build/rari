@@ -53,8 +53,7 @@ impl RscWireFormatParser {
         let (id_str, data_str) = line.split_at(colon_pos);
         let data_str = &data_str[1..];
 
-        let row_id = id_str
-            .parse::<u32>()
+        let row_id = u32::from_str_radix(id_str, 16)
             .map_err(|e| RariError::internal(format!("Invalid row ID '{}': {}", id_str, e)))?;
 
         if data_str.starts_with('I') {
@@ -247,7 +246,7 @@ impl RscWireFormatParser {
                 let promise_ref = PromiseRef {
                     promise_id: promise_id.clone(),
                     boundary_id: String::new(),
-                    element_ref: format!("$L{}", row_id),
+                    element_ref: format!("$L{:x}", row_id),
                 };
 
                 promises.push(promise_ref);

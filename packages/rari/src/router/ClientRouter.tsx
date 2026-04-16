@@ -2,13 +2,12 @@
 
 import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
-import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
 import { deregisterNavigate, registerNavigate } from './navigate'
 import { NavigationErrorHandler } from './navigation-error-handler'
-import { extractPathname, isExternalUrl, matchRouteParams, normalizePath } from './navigation-utils'
+import { extractPathname, isExternalUrl, normalizePath } from './navigation-utils'
 import { NavigationErrorOverlay } from './NavigationErrorOverlay'
 import { routeInfoCache } from './route-info-client'
 import { StatePreserver } from './StatePreserver'
@@ -390,10 +389,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const getRouteInfo = async (route: string): Promise<RouteInfoResponse> => {
-    return routeInfoCache.get(route)
-  }
-
   const processNavigationQueueRef = useRef<(() => Promise<void>) | null>(null)
 
   const handleSameRouteNavigation = (targetPath: string, hash: string) => {
@@ -421,91 +416,16 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     }
   }
 
-  const handleStreamingResponse = async (
-    response: Response,
-    abortController: AbortController,
-    pendingPath: string,
+  const handleNonStreamingResponse = (
+    responsePromise: Promise<Response>,
+    fromRoute: string,
     actualTargetPath: string,
     navigationId: number,
-    fromRoute: string,
     options: NavigationOptions,
-    routeInfo: RouteInfoResponse | undefined,
-    extractedParams: Record<string, string | string[]>,
+    abortController: AbortController,
   ) => {
-    if (!response.body)
+    if (navigationIdCounterRef.current !== navigationId)
       return
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-
-        if (done)
-          break
-
-        if (abortController.signal.aborted) {
-          await reader.cancel()
-          cleanupAbortedNavigation(pendingPath, navigationId)
-          return
-        }
-
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.trim()) {
-            window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-              detail: { rscRow: line, navigationId },
-            }))
-          }
-        }
-      }
-
-      buffer += decoder.decode()
-
-      if (buffer.trim()) {
-        window.dispatchEvent(new CustomEvent('rari:rsc-row', {
-          detail: { rscRow: buffer, navigationId },
-        }))
-      }
-
-      window.dispatchEvent(new CustomEvent('rari:navigate', {
-        detail: {
-          from: fromRoute,
-          to: actualTargetPath,
-          navigationId,
-          options,
-          routeInfo: {
-            ...routeInfo,
-            extractedParams,
-          },
-          abortSignal: abortController.signal,
-          isStreaming: true,
-        },
-      }))
-    }
-    catch (streamError) {
-      console.error('[rari] Router: Streaming error:', streamError)
-      throw streamError
-    }
-  }
-
-  const handleNonStreamingResponse = async (
-    response: Response,
-    fromRoute: string,
-    actualTargetPath: string,
-    navigationId: number,
-    options: NavigationOptions,
-    routeInfo: RouteInfoResponse | undefined,
-    extractedParams: Record<string, string | string[]>,
-    abortController: AbortController,
-  ) => {
-    const rscWireFormat = await response.text()
 
     window.dispatchEvent(new CustomEvent('rari:navigate', {
       detail: {
@@ -513,12 +433,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         to: actualTargetPath,
         navigationId,
         options,
-        routeInfo: {
-          ...routeInfo,
-          extractedParams,
-        },
         abortSignal: abortController.signal,
-        rscWireFormat,
+        rscResponsePromise: responsePromise,
       },
     }))
   }
@@ -587,6 +503,11 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         ...prev,
         error: navError,
       }))
+      window.history.replaceState(
+        window.history.state,
+        '',
+        fromRoute,
+      )
     }
 
     pendingNavigationsRef.current.delete(targetPath)
@@ -604,10 +525,8 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
   }
 
   const navigate = async (href: string, options: NavigationOptions = {}) => {
-    if (!href || typeof href !== 'string') {
-      console.error('[rari] Router: Invalid navigation target:', href)
+    if (!href || typeof href !== 'string')
       return
-    }
 
     const [pathWithoutHash, hash] = href.includes('#') ? href.split('#') : [href, '']
     const targetPath = normalizePath(pathWithoutHash)
@@ -620,8 +539,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     const existingPending = pendingNavigationsRef.current.get(targetPath)
     if (existingPending)
       return existingPending.promise
-
-    const routeInfo = await getRouteInfo(targetPath)
 
     cancelAllPendingNavigations()
     cancelNavigation()
@@ -646,25 +563,9 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
 
         const fetchUrl = window.location.origin + targetPath
 
-        const response = await fetch(fetchUrl, {
-          headers: { Accept: 'text/x-component' },
-          signal: abortController.signal,
-        })
-
-        if (!response.ok && response.status !== 404)
-          throw new Error(`Failed to fetch: ${response.status}`)
-
-        const finalUrl = new URL(response.url)
-        const actualTargetPath = finalUrl.pathname
-
-        if (abortController.signal.aborted) {
-          cleanupAbortedNavigation(targetPath, navigationId)
-          return
-        }
-
-        const urlWithHash = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
+        const urlWithHash = hash ? `${targetPath}#${hash}` : targetPath
         const historyState: HistoryState = {
-          route: actualTargetPath,
+          route: targetPath,
           navigationId,
           scrollPosition: { x: window.scrollX, y: window.scrollY },
           timestamp: Date.now(),
@@ -676,40 +577,52 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         else
           window.history.pushState(historyState, '', urlWithHash)
 
+        const fetchPromise = fetch(fetchUrl, {
+          headers: { Accept: 'text/x-component' },
+          signal: abortController.signal,
+        })
+
+        const rscFetchPromise = fetchPromise.then((response) => {
+          if (!response.ok && response.status !== 404)
+            throw new Error(`Failed to fetch: ${response.status}`)
+
+          return response
+        })
+
+        const response = await rscFetchPromise
+
+        if (abortController.signal.aborted) {
+          cleanupAbortedNavigation(targetPath, navigationId)
+          return
+        }
+
+        const finalUrl = new URL(response.url)
+        const actualTargetPath = finalUrl.pathname
+
+        if (abortController.signal.aborted) {
+          cleanupAbortedNavigation(targetPath, navigationId)
+          return
+        }
+
+        if (actualTargetPath !== targetPath) {
+          const redirectUrl = hash ? `${actualTargetPath}#${hash}` : actualTargetPath
+          window.history.replaceState(
+            { ...historyState, route: actualTargetPath },
+            '',
+            redirectUrl,
+          )
+        }
+
+        handleNonStreamingResponse(
+          Promise.resolve(response),
+          fromRoute,
+          actualTargetPath,
+          navigationId,
+          options,
+          abortController,
+        )
+
         processMetadata(response)
-
-        const renderMode = response.headers.get('x-render-mode')
-        const isStreaming = renderMode === 'streaming'
-
-        const extractedParams = routeInfo?.segments
-          ? matchRouteParams('', routeInfo.segments, actualTargetPath) || {}
-          : {}
-
-        if (isStreaming && response.body) {
-          await handleStreamingResponse(
-            response,
-            abortController,
-            targetPath,
-            actualTargetPath,
-            navigationId,
-            fromRoute,
-            options,
-            routeInfo,
-            extractedParams,
-          )
-        }
-        else {
-          await handleNonStreamingResponse(
-            response,
-            fromRoute,
-            actualTargetPath,
-            navigationId,
-            options,
-            routeInfo,
-            extractedParams,
-            abortController,
-          )
-        }
 
         if (abortController.signal.aborted) {
           cleanupAbortedNavigation(targetPath, navigationId)
@@ -770,7 +683,7 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
       },
       NAVIGATION_DEBOUNCE_MS,
       {
-        leading: false,
+        leading: true,
         trailing: true,
         maxWait: NAVIGATION_MAX_WAIT_MS,
       },

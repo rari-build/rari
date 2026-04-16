@@ -15,7 +15,7 @@ crossterm = "0.29.0"
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-semver = "1.0.27"
+semver = "1.0.28"
 anyhow = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }

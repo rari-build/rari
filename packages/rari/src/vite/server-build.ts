@@ -651,7 +651,7 @@ const ${importName} = (props) => {
               if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
                 if (self.isClientComponent(pathWithExt)) {
                   const relativePath = path.relative(self.projectRoot, pathWithExt)
-                  const componentId = relativePath.startsWith('..') ? pathWithExt : relativePath
+                  const componentId = (relativePath.startsWith('..') ? pathWithExt : relativePath).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
                   clientComponentRefs.set(pathWithExt, componentId)
                   return { id: `\0client-ref:${pathWithExt}` }
                 }
@@ -680,7 +680,7 @@ const ${importName} = (props) => {
           if (id.startsWith('\0client-ref:')) {
             const filePath = id.slice('\0client-ref:'.length)
             const relativePath = path.relative(self.projectRoot, filePath)
-            const componentId = clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)
+            const componentId = (clientComponentRefs.get(filePath) || (relativePath.startsWith('..') ? filePath : relativePath)).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
 
             return {
               code: `
@@ -1408,7 +1408,7 @@ if (!globalThis["${componentId}"]) {
         const resolvedPath = this.resolveImportPath(importPath, inputPath)
         if (this.isClientComponent(resolvedPath)) {
           isClientComponent = true
-          componentId = path.relative(this.projectRoot, resolvedPath)
+          componentId = path.relative(this.projectRoot, resolvedPath).replace(PATH_SEPARATOR_NORMALIZE_REGEX, '/')
         }
       }
 

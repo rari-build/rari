@@ -332,6 +332,33 @@ impl JsRuntimeInterface for LazyRuntime {
             }
         })
     }
+
+    fn clear_request_context_if_matches(
+        &self,
+        expected_context: std::sync::Arc<
+            crate::server::middleware::request_context::RequestContext,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let inner = self.inner.clone();
+        let env_vars = self.env_vars.clone();
+
+        Box::pin(async move {
+            let initialized_result = {
+                let this = LazyRuntime::new(inner.clone(), env_vars);
+                this.ensure_initialized().await
+            };
+
+            initialized_result?;
+
+            let runtime = inner.lock().await;
+
+            if let Some(runtime) = &*runtime {
+                runtime.clear_request_context_if_matches(expected_context).await
+            } else {
+                Err(RariError::js_execution("Runtime not initialized".to_string()))
+            }
+        })
+    }
 }
 
 pub fn create_lazy_runtime() -> Box<dyn JsRuntimeInterface> {

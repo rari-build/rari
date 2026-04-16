@@ -167,24 +167,28 @@ impl RscSerializer {
     ) {
         let chunk_name = "main".to_string();
 
+        let normalized_component_id = component_id.cow_replace('\\', "/").into_owned();
+        let normalized_file_path = file_path.cow_replace('\\', "/").into_owned();
+
         let module_ref = ModuleReference::new(
-            component_id.to_string(),
-            file_path.to_string(),
+            normalized_component_id.clone(),
+            normalized_file_path,
             ModuleReferenceType::ClientComponent,
         )
         .with_export(export_name.to_string())
         .with_metadata("chunk", &chunk_name);
 
-        if !self.module_map.contains_key(component_id) {
-            self.module_registration_order.push(component_id.to_string());
+        if !self.module_map.contains_key(&normalized_component_id) {
+            self.module_registration_order.push(normalized_component_id.clone());
         }
 
-        self.module_map.insert(component_id.to_string(), module_ref);
+        self.module_map.insert(normalized_component_id, module_ref);
     }
 
     pub fn is_client_component_registered(&self, component_id: &str) -> bool {
+        let normalized_component_id = component_id.cow_replace('\\', "/");
         self.module_map
-            .get(component_id)
+            .get(normalized_component_id.as_ref())
             .map(|module_ref| module_ref.reference_type == ModuleReferenceType::ClientComponent)
             .unwrap_or(false)
     }
@@ -193,12 +197,17 @@ impl RscSerializer {
         self.output_lines.clear();
         self.serialized_modules.clear();
 
+        let _reserved_row_0 = self.get_next_row_id();
+
         self.add_module_import_lines();
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_element_to_standard_format(element);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        let root_ref = format!("0:\"${:x}\"", element_id);
+        self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
     }
@@ -208,13 +217,18 @@ impl RscSerializer {
         self.serialized_modules.clear();
         self.module_registration_order.clear();
 
+        let _reserved_row_0 = self.get_next_row_id();
+
         self.collect_client_components_from_rsc_tree(tree);
         self.add_module_import_lines();
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(tree);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        let root_ref = format!("0:\"${:x}\"", element_id);
+        self.output_lines.insert(0, root_ref);
 
         self.output_lines.join("\n")
     }
@@ -231,6 +245,8 @@ impl RscSerializer {
         self.output_lines.clear();
 
         if !is_lazy_resolution {
+            let _reserved_row_0 = self.get_next_row_id();
+
             self.serialized_modules.clear();
             self.module_registration_order.clear();
         }
@@ -239,7 +255,7 @@ impl RscSerializer {
 
         let suspense_symbol_row_id = if has_suspense {
             let row_id = self.get_next_row_id();
-            let symbol_line = format!("{}:\"$Sreact.suspense\"", row_id);
+            let symbol_line = format!("{:x}:\"$Sreact.suspense\"", row_id);
             self.output_lines.push(symbol_line);
             self.suspense_symbol_row_id = Some(row_id);
             Some(row_id)
@@ -251,14 +267,24 @@ impl RscSerializer {
 
         let element_id = self.get_next_row_id();
         let element_data = self.serialize_rsc_tree_to_format(&rsc_tree);
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
+
+        if !is_lazy_resolution {
+            let root_ref = format!("0:\"${:x}\"", element_id);
+            self.output_lines.insert(0, root_ref);
+        }
 
         if let Some(row_id) = suspense_symbol_row_id {
             let searches = vec!["\"$Sreact.suspense\"", "\"react.suspense\""];
-            let replace = format!("\"${}\"", row_id);
+            let replace = format!("\"${:x}\"", row_id);
+            let symbol_declaration = format!("{:x}:\"$Sreact.suspense\"", row_id);
 
             for i in 1..self.output_lines.len() {
+                if self.output_lines[i] == symbol_declaration {
+                    continue;
+                }
+
                 for search in &searches {
                     if self.output_lines[i].contains(search) {
                         self.output_lines[i] =
@@ -301,6 +327,9 @@ impl RscSerializer {
             RSCTree::ClientReference { id, .. }
                 if id.contains('#') && !self.is_client_component_registered(id) =>
             {
+                let normalized_id = id.cow_replace('\\', "/");
+                let id = normalized_id.as_ref();
+
                 let parts: Vec<&str> = id.split('#').collect();
                 if parts.len() == 2 {
                     let file_path = parts[0];
@@ -355,6 +384,9 @@ impl RscSerializer {
         key: Option<&str>,
         props: &FxHashMap<String, Value>,
     ) -> String {
+        let normalized_id = id.cow_replace('\\', "/");
+        let id = normalized_id.as_ref();
+
         let create_error_placeholder =
             |id: &str, key: Option<&str>, props: &FxHashMap<String, Value>| {
                 let key_json = key
@@ -450,6 +482,9 @@ impl RscSerializer {
     }
 
     fn parse_and_register_component(&mut self, id: &str) -> Option<String> {
+        let normalized_id = id.cow_replace('\\', "/");
+        let id = normalized_id.as_ref();
+
         if !id.contains('#') {
             return None;
         }
@@ -463,11 +498,11 @@ impl RscSerializer {
             return None;
         }
 
-        let file_path = parts[0];
+        let file_path = parts[0].cow_replace('\\', "/");
         let export_name = parts[1];
 
         if !self.is_client_component_registered(id) {
-            self.register_client_component(id, file_path, export_name);
+            self.register_client_component(id, &file_path, export_name);
         }
 
         if !self.serialized_modules.contains_key(id)
@@ -501,7 +536,7 @@ impl RscSerializer {
                         {
                             element_props.insert(
                                 "children".to_string(),
-                                Value::String(format!("$L{}", original.lazy_row_id)),
+                                Value::String(format!("${:x}", original.lazy_row_id)),
                             );
                         } else {
                             element_props.insert("children".to_string(), Value::Null);
@@ -520,7 +555,7 @@ impl RscSerializer {
 
                         element_props.insert(
                             "children".to_string(),
-                            Value::String(format!("$L{}", lazy_row_id)),
+                            Value::String(format!("${:x}", lazy_row_id)),
                         );
                     }
                 } else {
@@ -619,16 +654,19 @@ impl RscSerializer {
     fn emit_module_import_line(&mut self, component_id: &str, module_ref: &ModuleReference) {
         let module_id = self.get_next_row_id();
 
-        let chunk_name = module_ref.metadata.get("chunk").map(|s| s.as_str()).unwrap_or("default");
         let export_name = module_ref.exports.first().map(|s| s.as_str()).unwrap_or("default");
 
-        let module_data = serde_json::json!([module_ref.path, [chunk_name], export_name]);
+        let module_data = serde_json::json!({
+            "id": module_ref.path,
+            "chunks": [],
+            "name": export_name
+        });
 
         let import_line =
             RscWireFormatTag::ModuleImport.format_row(module_id, &module_data.to_string());
         self.output_lines.push(import_line.trim_end().to_string());
 
-        self.serialized_modules.insert(component_id.to_string(), format!("$L{module_id}"));
+        self.serialized_modules.insert(component_id.to_string(), format!("$L{:x}", module_id));
     }
 
     fn serialize_element_to_standard_format(&mut self, element: &SerializedReactElement) -> String {
@@ -725,7 +763,11 @@ impl RscSerializer {
         component_id: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
-        if let Some(module_reference) = self.serialized_modules.get(component_id).cloned() {
+        let normalized_component_id = component_id.cow_replace('\\', "/");
+
+        if let Some(module_reference) =
+            self.serialized_modules.get(normalized_component_id.as_ref()).cloned()
+        {
             let element = self.create_react_element_json(&module_reference, props, None);
             self.serialize_react_element_to_string(
                 &element,
@@ -982,7 +1024,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$Q{:x}", chunk_id))
@@ -995,7 +1037,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$W{:x}", chunk_id))
@@ -1008,7 +1050,7 @@ impl RscSerializer {
 
         let entries_json =
             serde_json::to_string(&processed_entries).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, entries_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, entries_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$K{:x}", chunk_id))
@@ -1021,7 +1063,7 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$@{:x}", chunk_id))
@@ -1033,7 +1075,7 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(function_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "{}".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$F{:x}", chunk_id))
@@ -1046,7 +1088,7 @@ impl RscSerializer {
 
         let data_json =
             serde_json::to_string(&processed_data).unwrap_or_else(|_| "null".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$Y{:x}", chunk_id))
@@ -1058,7 +1100,7 @@ impl RscSerializer {
         let processed_data = self.process_special_values_with_outlining(iterator_data);
 
         let data_json = serde_json::to_string(&processed_data).unwrap_or_else(|_| "[]".to_string());
-        let chunk_line = format!("{}:{}", chunk_id, data_json);
+        let chunk_line = format!("{:x}:{}", chunk_id, data_json);
         self.output_lines.push(chunk_line);
 
         Value::String(format!("$i{:x}", chunk_id))
@@ -1094,7 +1136,7 @@ impl RscSerializer {
                 data_array.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect();
 
             let base64_data = base64_encode(&bytes);
-            let chunk_line = format!("{}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
+            let chunk_line = format!("{:x}:{}{:x},{}", chunk_id, tag, bytes.len(), base64_data);
             self.output_lines.push(chunk_line);
 
             Value::String(format!("${:x}", chunk_id))
@@ -1119,7 +1161,7 @@ impl RscSerializer {
             let base64_data = base64_encode(&bytes);
             let blob_model = serde_json::json!([blob_type, base64_data]);
             let blob_json = serde_json::to_string(&blob_model).unwrap_or_else(|_| "[]".to_string());
-            let chunk_line = format!("{}:{}", chunk_id, blob_json);
+            let chunk_line = format!("{:x}:{}", chunk_id, blob_json);
             self.output_lines.push(chunk_line);
 
             Value::String(format!("$B{:x}", chunk_id))
@@ -1286,7 +1328,7 @@ impl RscSerializer {
             }
         ]);
 
-        let boundary_line = format!("{boundary_row_id}:{boundary_data}");
+        let boundary_line = format!("{:x}:{}", boundary_row_id, boundary_data);
         self.output_lines.push(boundary_line);
 
         boundary_id.to_string()
@@ -1356,10 +1398,10 @@ impl RscSerializer {
 
         let element_data = format!(r#"["$","{}",{},{}]"#, element.tag, key_json, props_json);
 
-        let element_line = format!("{element_id}:{element_data}");
+        let element_line = format!("{:x}:{}", element_id, element_data);
         self.output_lines.push(element_line);
 
-        Ok(format!("$L{}", element_id))
+        Ok(format!("$L{:x}", element_id))
     }
 
     pub fn emit_suspense_boundary_with_refs(
@@ -1383,7 +1425,7 @@ impl RscSerializer {
         ]);
 
         let boundary_line = format!(
-            "{}:{}",
+            "{:x}:{}",
             boundary_row_id,
             serde_json::to_string(&boundary_data).map_err(|e| RariError::internal(format!(
                 "Failed to serialize Suspense boundary: {}",
@@ -1393,7 +1435,7 @@ impl RscSerializer {
 
         self.output_lines.push(boundary_line);
 
-        Ok(format!("$L{}", boundary_row_id))
+        Ok(format!("$L{:x}", boundary_row_id))
     }
 }
 
