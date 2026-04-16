@@ -1809,9 +1809,7 @@ const ${componentName} = registerClientReference(
           const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
             ? normalizedPath
             : `/${normalizedPath}`
-          const importStatement = hasNamedExport
-            ? `import(${JSON.stringify(importPath)}).then(m => m.${namedExportName} || m.default || m)`
-            : `import(${JSON.stringify(importPath)}).then(m => m.default || m)`
+          const importStatement = `import(${JSON.stringify(importPath)})`
 
           return `  "${registrationPath}": {
     id: "${componentId}",
@@ -1826,13 +1824,11 @@ const ${componentName} = registerClientReference(
         }).join(',\n')
 
         const externalImports = externalClientComponents.map((ext, index) => {
-          const componentNames = ext.exports.map(exp => `${exp} as External${index}_${exp}`).join(', ')
-          return `import { ${componentNames} } from '${ext.path}';`
+          return `import * as ExternalModule${index} from '${ext.path}';`
         }).join('\n')
 
         const externalRegistrations = externalClientComponents.flatMap((ext, index) => {
           return ext.exports.map((exportName) => {
-            const componentName = `External${index}_${exportName}`
             const fullId = `${ext.path}#${exportName}`
             return `
 globalThis['~clientComponents'] = globalThis['~clientComponents'] || {};
@@ -1840,11 +1836,11 @@ globalThis['~clientComponents']["${fullId}"] = {
   id: "${exportName}",
   path: "${ext.path}",
   type: "client",
-  component: ${componentName},
+  component: ExternalModule${index},
   registered: true
 };
 globalThis['~clientComponents']["${ext.path}"] = globalThis['~clientComponents']["${ext.path}"] || {};
-globalThis['~clientComponents']["${ext.path}"].component = ${componentName};
+globalThis['~clientComponents']["${ext.path}"].component = ExternalModule${index};
 globalThis['~clientComponentPaths'] = globalThis['~clientComponentPaths'] || {};
 globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
           })

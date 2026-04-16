@@ -119,12 +119,19 @@ export function requireModule<T>(moduleReference: ClientReference<T>): T {
   }
 
   if (componentInfo.component) {
-    const component = componentInfo.component
-    if (typeof component === 'function')
-      return component
+    const module = componentInfo.component
 
-    const result = moduleReference.name === 'default' ? component : component?.[moduleReference.name]
-    return result
+    if (moduleReference.name === 'default') {
+      return module.default ?? module
+    }
+
+    if (module[moduleReference.name] !== undefined)
+      return module[moduleReference.name]
+
+    if (module.default?.[moduleReference.name] !== undefined)
+      return module.default[moduleReference.name]
+
+    return module
   }
 
   if (componentInfo.loadPromise)
