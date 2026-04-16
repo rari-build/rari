@@ -1,3 +1,9 @@
+## [rari@0.12.1] - 2026-04-16
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Improve client component resolution and simplify external imports
+- *(rsc)* Simplify default export resolution in React Flight client config
 ## [rari@0.12.0] - 2026-04-16
 
 ### 🚀 Features
@@ -25,6 +31,10 @@
 - *(rsc)* Normalize path separators in component registry operations
 - *(rsc)* Improve component registry cleanup and streaming initialization
 - *(rsc)* Improve component registry cleanup and streaming initialization
+
+### 💼 Other
+
+- Rari@0.12.0
 
 ### 🚜 Refactor
 
