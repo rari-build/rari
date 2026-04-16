@@ -15,11 +15,11 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.9.0
-    posthog-js: ^1.369.0
+    posthog-js: ^1.369.1
   build:
-    rolldown: ^1.0.0-rc.15
+    rolldown: ^1.0.0-rc.16
     vite: ^8.0.8
-    vite-plus: ^0.1.16
+    vite-plus: ^0.1.18
   cli:
     '@clack/prompts': ^1.2.0
   default:
@@ -42,7 +42,7 @@ catalogs:
     '@shikijs/types': ^3.23.0
     remark-gfm: ^4.0.1
   monitoring:
-    '@sentry/react': ^10.48.0
+    '@sentry/react': ^10.49.0
   react:
     '@types/react': ^19.2.14
     '@types/react-dom': ^19.2.3
@@ -56,7 +56,7 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.4
   typescript:
     '@types/node': ^25.6.0
-    '@typescript/native-preview': ^7.0.0-dev.20260414.1
+    '@typescript/native-preview': ^7.0.0-dev.20260416.2
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
