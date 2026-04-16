@@ -36,32 +36,36 @@ fn collect_client_components(
                 && let Some(type_str) = arr[1].as_str()
                 && (type_str.contains('/') || type_str.contains('#'))
                 && !type_str.starts_with("$L")
-                && !component_map.contains_key(type_str)
             {
-                *row_counter += 1;
-                let module_ref = format!("$L{:x}", row_counter);
-
                 let normalized_type_str = type_str.cow_replace('\\', "/");
                 let type_str_normalized = normalized_type_str.as_ref();
 
-                let (file_path, export_name) = if let Some(idx) = type_str_normalized.find('#') {
-                    (&type_str_normalized[..idx], &type_str_normalized[idx + 1..])
-                } else {
-                    (type_str_normalized, "default")
-                };
+                if !component_map.contains_key(type_str)
+                    && !component_map.contains_key(type_str_normalized)
+                {
+                    *row_counter += 1;
+                    let module_ref = format!("$L{:x}", row_counter);
 
-                #[allow(clippy::disallowed_methods)]
-                let import_data = serde_json::json!({
-                    "id": file_path,
-                    "chunks": [],
-                    "name": export_name
-                });
-                let import_row = RscWireFormatTag::ModuleImport
-                    .format_row(*row_counter, &import_data.to_string());
-                import_rows.push(import_row.trim_end().to_string());
+                    let (file_path, export_name) = if let Some(idx) = type_str_normalized.find('#')
+                    {
+                        (&type_str_normalized[..idx], &type_str_normalized[idx + 1..])
+                    } else {
+                        (type_str_normalized, "default")
+                    };
 
-                component_map.insert(type_str.to_string(), module_ref.clone());
-                component_map.insert(type_str_normalized.to_string(), module_ref);
+                    #[allow(clippy::disallowed_methods)]
+                    let import_data = serde_json::json!({
+                        "id": file_path,
+                        "chunks": [],
+                        "name": export_name
+                    });
+                    let import_row = RscWireFormatTag::ModuleImport
+                        .format_row(*row_counter, &import_data.to_string());
+                    import_rows.push(import_row.trim_end().to_string());
+
+                    component_map.insert(type_str.to_string(), module_ref.clone());
+                    component_map.insert(type_str_normalized.to_string(), module_ref);
+                }
             }
 
             for item in arr {
@@ -86,9 +90,15 @@ fn replace_client_component_paths(
             if arr.len() >= 4
                 && arr[0].as_str() == Some("$")
                 && let Some(type_str) = arr[1].as_str()
-                && let Some(module_ref) = component_map.get(type_str)
             {
-                arr[1] = serde_json::Value::String(module_ref.clone());
+                let module_ref = component_map.get(type_str).or_else(|| {
+                    let normalized = type_str.cow_replace('\\', "/");
+                    component_map.get(normalized.as_ref())
+                });
+
+                if let Some(module_ref) = module_ref {
+                    arr[1] = serde_json::Value::String(module_ref.clone());
+                }
             }
 
             for item in arr {

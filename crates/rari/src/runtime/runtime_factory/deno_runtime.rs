@@ -542,6 +542,9 @@ async fn setup_concurrent_batch(
         );
         if let Err(e) = deno_runtime.execute_script(format!("setup_concurrent_{i}"), setup) {
             eprintln!("[rari] Failed to setup concurrent tracking for slot {i}: {e}");
+            let cleanup = format!("delete globalThis['{}']", slot_key);
+            let _ = deno_runtime.execute_script(format!("cleanup_setup_{i}"), cleanup);
+
             *sent_item = true;
 
             remaining = remaining.saturating_sub(1);

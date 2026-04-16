@@ -107,10 +107,14 @@ function setupPartialHydration(): void {
                 const normalizedClientKey = clientKey.replace(/\\/g, '/')
                 const normalizedModId = mod.id.replace(/\\/g, '/')
                 let clientComponent = null
+
+                const isDefaultExport = !mod.name || mod.name === 'default'
                 const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
-                  || getGlobalThis()['~clientComponents'][normalizedModId]
                   || getGlobalThis()['~clientComponents'][clientKey]
-                  || getGlobalThis()['~clientComponents'][mod.id]
+                  || (isDefaultExport && (
+                    getGlobalThis()['~clientComponents'][normalizedModId]
+                    || getGlobalThis()['~clientComponents'][mod.id]
+                  ))
 
                 if (componentInfo) {
                   if (componentInfo.component) {
@@ -649,10 +653,15 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
           const clientKey = `${moduleInfo.id}#${moduleInfo.name || 'default'}`
           const normalizedClientKey = clientKey.replace(/\\/g, '/')
           const normalizedModuleId = moduleInfo.id.replace(/\\/g, '/')
+
+          const isDefaultExport = !moduleInfo.name || moduleInfo.name === 'default'
           const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
-            || getGlobalThis()['~clientComponents'][normalizedModuleId]
             || getGlobalThis()['~clientComponents'][clientKey]
-            || getGlobalThis()['~clientComponents'][moduleInfo.id]
+            || (isDefaultExport && (
+              getGlobalThis()['~clientComponents'][normalizedModuleId]
+              || getGlobalThis()['~clientComponents'][moduleInfo.id]
+            ))
+
           if (componentInfo) {
             if (componentInfo.component) {
               const Component = componentInfo.component

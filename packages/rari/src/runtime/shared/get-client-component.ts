@@ -12,11 +12,10 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
   componentInfo.loading = true
   componentInfo.loadPromise = componentInfo.loader!()
     .then((module: any) => {
-      const component = module.default || module
-      componentInfo.component = component
+      componentInfo.component = module
       componentInfo.registered = true
       componentInfo.loading = false
-      return component
+      return module
     })
     .catch((error: Error) => {
       console.error(`[rari] Failed to load component ${componentInfo.id}:`, error)
@@ -29,35 +28,20 @@ function executeLoader(componentInfo: LazyComponentInfo): Promise<any> {
 
 async function ensureComponentLoaded(componentInfo: LazyComponentInfo, exportName?: string): Promise<any> {
   if (componentInfo.component != null) {
-    if (exportName && exportName !== 'default') {
-      const namedExport = componentInfo.component[exportName]
-      return namedExport !== undefined ? namedExport : null
-    }
-
-    return componentInfo.component
+    return getComponentFromInfo(componentInfo, exportName)
   }
 
   if (componentInfo.loadPromise) {
     await componentInfo.loadPromise
-    if (exportName && exportName !== 'default') {
-      const namedExport = componentInfo.component?.[exportName]
-      return namedExport !== undefined ? namedExport : null
-    }
-
-    return componentInfo.component ?? null
+    return getComponentFromInfo(componentInfo, exportName)
   }
 
   if (componentInfo.loader) {
-    const loadedComponent = await executeLoader(componentInfo)
-    if (loadedComponent == null)
+    const loadedModule = await executeLoader(componentInfo)
+    if (loadedModule == null)
       return null
 
-    if (exportName && exportName !== 'default') {
-      const namedExport = loadedComponent[exportName]
-      return namedExport !== undefined ? namedExport : null
-    }
-
-    return loadedComponent
+    return getComponentFromInfo(componentInfo, exportName)
   }
 
   return null
@@ -78,10 +62,10 @@ export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: 
   if (componentInfo.loader && !componentInfo.loading) {
     componentInfo.loading = true
     componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-      componentInfo.component = module.default || module
+      componentInfo.component = module
       componentInfo.registered = true
       componentInfo.loading = false
-      return componentInfo.component
+      return module
     }).catch((error: Error) => {
       componentInfo.loading = false
       componentInfo.loadPromise = undefined
@@ -96,10 +80,12 @@ function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: str
   if (componentInfo.component == null)
     return null
 
-  if (!exportName || exportName === 'default')
-    return componentInfo.component
+  const module = componentInfo.component
 
-  return componentInfo.component[exportName]
+  if (!exportName || exportName === 'default')
+    return module.default ?? module
+
+  return module[exportName] ?? module.default?.[exportName] ?? module.default ?? module
 }
 
 function tryLoadComponent(componentInfo: LazyComponentInfo): void {
@@ -121,12 +107,7 @@ function resolveById(id: string, clientComponents: Record<string, ComponentInfo>
     return null
 
   if (componentInfo.component != null) {
-    if (exportName && exportName !== 'default') {
-      const namedExport = componentInfo.component[exportName]
-      return namedExport !== undefined ? namedExport : null
-    }
-
-    return componentInfo.component
+    return getComponentFromInfo(componentInfo, exportName)
   }
 
   tryLoadComponent(componentInfo)

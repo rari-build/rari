@@ -381,7 +381,7 @@ impl StreamingRenderer {
                                  }
 
                                  let update_str = format!(
-                                     "{}:{}\n",
+                                     "{:x}:{}\n",
                                      update.row_id,
                                      serde_json::to_string(&update.content).unwrap_or_else(|_| "null".to_string())
                                  );
@@ -415,7 +415,7 @@ impl StreamingRenderer {
                                  })).unwrap_or_else(|_| "{}".to_string());
 
                                  let error_str = format!(
-                                     "{}:E{}\n",
+                                     "{:x}:E{}\n",
                                      error.row_id,
                 error_json
                                  );

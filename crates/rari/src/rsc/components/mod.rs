@@ -107,35 +107,41 @@ impl ComponentRegistry {
     }
 
     pub fn mark_component_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_loaded = true;
         }
     }
 
     pub fn mark_component_not_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_loaded = false;
         }
     }
 
     pub fn mark_component_initially_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.initially_loaded = true;
         }
     }
 
     pub fn mark_component_not_initially_loaded(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.initially_loaded = false;
         }
     }
 
     pub fn has_been_initially_loaded(&self, id: &str) -> bool {
-        self.components.get(id).is_some_and(|c| c.initially_loaded)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.initially_loaded)
     }
 
     pub fn is_component_loaded(&self, id: &str) -> bool {
-        self.components.get(id).is_some_and(|c| c.is_loaded)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).is_some_and(|c| c.is_loaded)
     }
 
     pub fn get_component(&self, id: &str) -> Option<&TransformedComponent> {
@@ -144,7 +150,8 @@ impl ComponentRegistry {
     }
 
     pub fn get_component_mut(&mut self, id: &str) -> Option<&mut TransformedComponent> {
-        self.components.get_mut(id)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get_mut(normalized_id.as_ref())
     }
 
     pub fn get_all_components(&self) -> &FxHashMap<String, TransformedComponent> {
@@ -229,28 +236,32 @@ impl ComponentRegistry {
     }
 
     pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.module_id = Some(module_id);
             component.module_specifier = Some(specifier.clone());
             component.is_loaded = true;
 
-            self.specifier_to_id.insert(specifier, id.to_string());
+            self.specifier_to_id.insert(specifier, normalized_id.into_owned());
         }
     }
 
     pub fn has_module_info(&self, id: &str) -> bool {
+        let normalized_id = id.cow_replace('\\', "/");
         self.components
-            .get(id)
+            .get(normalized_id.as_ref())
             .map(|c| c.module_id.is_some() && c.module_specifier.is_some())
             .unwrap_or(false)
     }
 
     pub fn get_module_id(&self, id: &str) -> Option<usize> {
-        self.components.get(id).and_then(|c| c.module_id)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_id)
     }
 
     pub fn get_module_specifier(&self, id: &str) -> Option<&str> {
-        self.components.get(id).and_then(|c| c.module_specifier.as_deref())
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.module_specifier.as_deref())
     }
 
     pub fn get_by_specifier(&self, specifier: &str) -> Option<TransformedComponent> {
@@ -271,13 +282,15 @@ impl ComponentRegistry {
     }
 
     pub fn mark_module_stale(&mut self, id: &str) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.is_stale = true;
         }
     }
 
     pub fn is_module_stale(&self, id: &str) -> bool {
-        self.components.get(id).map(|c| c.is_stale).unwrap_or(false)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).map(|c| c.is_stale).unwrap_or(false)
     }
 
     pub fn get_stale_modules(&self) -> Vec<String> {
@@ -289,7 +302,8 @@ impl ComponentRegistry {
     }
 
     pub fn update_module_reload_timestamp(&mut self, id: &str, timestamp: Instant) {
-        if let Some(component) = self.components.get_mut(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
             component.last_reload_timestamp = Some(timestamp);
             component.is_stale = false;
             component.reload_attempt_count += 1;
@@ -297,7 +311,8 @@ impl ComponentRegistry {
     }
 
     pub fn get_module_reload_timestamp(&self, id: &str) -> Option<Instant> {
-        self.components.get(id).and_then(|c| c.last_reload_timestamp)
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).and_then(|c| c.last_reload_timestamp)
     }
 
     pub fn register_client_reference(&mut self, id: &str, file_path: &str, export_name: &str) {
@@ -331,17 +346,19 @@ impl ComponentRegistry {
     }
 
     pub fn find_dependency_code(&self, id: &str) -> Option<String> {
-        if let Some(component) = self.components.get(id) {
+        let normalized_id = id.cow_replace('\\', "/");
+
+        if let Some(component) = self.components.get(normalized_id.as_ref()) {
             return Some(component.source.clone());
         }
 
-        let normalized_id = self.normalize_component_id(id);
-        if let Some(component) = self.components.get(&normalized_id) {
+        let further_normalized_id = self.normalize_component_id(normalized_id.as_ref());
+        if let Some(component) = self.components.get(&further_normalized_id) {
             return Some(component.source.clone());
         }
 
         for (component_id, component) in &self.components {
-            if component_id.ends_with(&normalized_id) {
+            if component_id.ends_with(&further_normalized_id) {
                 return Some(component.source.clone());
             }
         }
@@ -350,10 +367,11 @@ impl ComponentRegistry {
     }
 
     pub fn remove_component(&mut self, id: &str) {
-        if let Some(component) = self.components.remove(id) {
-            self.dependency_graph.remove(id);
+        let normalized_id = id.cow_replace('\\', "/");
+        if let Some(component) = self.components.remove(normalized_id.as_ref()) {
+            self.dependency_graph.remove(normalized_id.as_ref());
             for (_, dependents) in self.reverse_dependency_graph.iter_mut() {
-                dependents.remove(id);
+                dependents.remove(normalized_id.as_ref());
             }
             if let Some(specifier) = &component.module_specifier {
                 self.specifier_to_id.remove(specifier);

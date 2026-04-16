@@ -708,7 +708,11 @@ impl LayoutRenderer {
                                     || content_trimmed.starts_with("\"$S")
                                     || content_trimmed.starts_with("\"react.suspense");
 
-                                if is_import_or_symbol || remapped_root_row {
+                                let is_reference = content_trimmed.starts_with("\"$")
+                                    && content_trimmed.len() > 2
+                                    && !content_trimmed.starts_with("\"$S");
+
+                                if is_import_or_symbol || is_reference || remapped_root_row {
                                     line.to_string()
                                 } else {
                                     remapped_root_row = true;
