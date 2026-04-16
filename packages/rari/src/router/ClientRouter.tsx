@@ -2,7 +2,6 @@
 
 import type { NavigationError } from './navigation-error-handler'
 import type { NavigationOptions } from './navigation-types'
-import type { RouteInfoResponse } from './route-info-types'
 import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { debounce } from './debounce'
@@ -423,8 +422,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
     actualTargetPath: string,
     navigationId: number,
     options: NavigationOptions,
-    routeInfo: RouteInfoResponse | undefined,
-    extractedParams: Record<string, string | string[]>,
     abortController: AbortController,
   ) => {
     if (navigationIdCounterRef.current !== navigationId)
@@ -436,10 +433,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         to: actualTargetPath,
         navigationId,
         options,
-        routeInfo: {
-          ...routeInfo,
-          extractedParams,
-        },
         abortSignal: abortController.signal,
         rscResponsePromise: responsePromise,
       },
@@ -510,6 +503,11 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
         ...prev,
         error: navError,
       }))
+      window.history.replaceState(
+        window.history.state,
+        '',
+        fromRoute,
+      )
     }
 
     pendingNavigationsRef.current.delete(targetPath)
@@ -598,17 +596,6 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
           return
         }
 
-        handleNonStreamingResponse(
-          Promise.resolve(response),
-          fromRoute,
-          targetPath,
-          navigationId,
-          options,
-          undefined,
-          {},
-          abortController,
-        )
-
         const finalUrl = new URL(response.url)
         const actualTargetPath = finalUrl.pathname
 
@@ -625,6 +612,15 @@ export function ClientRouter({ children, initialRoute, staleWindowMs = 30_000 }:
             redirectUrl,
           )
         }
+
+        handleNonStreamingResponse(
+          Promise.resolve(response),
+          fromRoute,
+          actualTargetPath,
+          navigationId,
+          options,
+          abortController,
+        )
 
         processMetadata(response)
 

@@ -42,13 +42,7 @@ export function RouterProvider({ children, initialPathname }: RouterProviderProp
       if (detail?.to) {
         setPathname(detail.to)
         setSearchParams(new URLSearchParams(window.location.search))
-
-        if (detail?.routeInfo?.extractedParams) {
-          setParams(detail.routeInfo.extractedParams)
-        }
-        else {
-          setParams({})
-        }
+        setParams({})
       }
     }
     window.addEventListener('rari:navigate', handleNavigate)
