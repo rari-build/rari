@@ -115,3 +115,6 @@ globalThis['~suspense'].safeSerializeElement = function (element) {
     return { type: 'div', props: { children: null }, key: null }
   }
 }
+
+// oxlint-disable no-unused-expressions
+globalThis['~rsc'].renderGeneration

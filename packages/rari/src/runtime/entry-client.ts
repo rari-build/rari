@@ -13,7 +13,7 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 // @ts-expect-error - virtual module resolved by Vite
 import { createFromReadableStream } from 'virtual:react-flight-client'
 import { NUMERIC_REGEX } from '../shared/regex-constants'
-import { getClientComponent, getClientComponentAsync } from './shared/get-client-component'
+import { getClientComponent, getClientComponentAsync, getComponentFromInfo } from './shared/get-client-component'
 import { preloadModulesFromWireFormat } from './shared/preload-modules'
 // eslint-disable-next-line ts/ban-ts-comment
 // @ts-ignore - virtual module resolved by Vite
@@ -118,15 +118,15 @@ function setupPartialHydration(): void {
 
                 if (componentInfo) {
                   if (componentInfo.component) {
-                    clientComponent = componentInfo.component
+                    clientComponent = getComponentFromInfo(componentInfo, mod.name)
                   }
                   else if (componentInfo.loader && !componentInfo.loading) {
                     componentInfo.loading = true
                     componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-                      componentInfo.component = module.default || module
+                      componentInfo.component = module
                       componentInfo.registered = true
                       componentInfo.loading = false
-                      return componentInfo.component
+                      return module
                     }).catch((error: Error) => {
                       componentInfo.loading = false
                       componentInfo.loadPromise = undefined
@@ -664,7 +664,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
 
           if (componentInfo) {
             if (componentInfo.component) {
-              const Component = componentInfo.component
+              const Component = getComponentFromInfo(componentInfo, moduleInfo.name)
               const childProps = props !== null && typeof props === 'object'
                 ? {
                     ...props,
@@ -676,7 +676,7 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
             else if (componentInfo.loader && !componentInfo.loading) {
               componentInfo.loading = true
               componentInfo.loadPromise = componentInfo.loader().then((module: any) => {
-                componentInfo.component = module.default || module
+                componentInfo.component = module
                 componentInfo.registered = true
                 componentInfo.loading = false
               }).catch((error: Error) => {

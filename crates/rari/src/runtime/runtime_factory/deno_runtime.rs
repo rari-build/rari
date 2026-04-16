@@ -78,6 +78,11 @@ enum JsRequest {
     ClearRequestContext {
         result_tx: oneshot::Sender<Result<(), RariError>>,
     },
+    ClearRequestContextIfMatches {
+        expected_context:
+            std::sync::Arc<crate::server::middleware::request_context::RequestContext>,
+        result_tx: oneshot::Sender<Result<(), RariError>>,
+    },
 }
 
 pub struct DenoRuntime {
@@ -457,6 +462,22 @@ async fn handle_js_request(
             deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
             let _ = result_tx.send(Ok(()));
         }
+        JsRequest::ClearRequestContextIfMatches { expected_context, result_tx } => {
+            let should_clear = {
+                let op_state = deno_runtime.op_state();
+                let borrowed = op_state.borrow();
+                if let Some(current_context) = borrowed.try_borrow::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>() {
+                    std::sync::Arc::ptr_eq(current_context, &expected_context)
+                } else {
+                    false
+                }
+            };
+
+            if should_clear {
+                deno_runtime.op_state().borrow_mut().try_take::<std::sync::Arc<crate::server::middleware::request_context::RequestContext>>();
+            }
+            let _ = result_tx.send(Ok(()));
+        }
     }
     Ok(())
 }
@@ -593,6 +614,19 @@ fn check_pending_batches(
             let check_result = deno_runtime.execute_script(format!("check_slot_{i}"), check);
 
             if let Err(e) = check_result {
+                let cleanup = format!(
+                    r#"(function() {{
+                        if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                            delete globalThis['~rari_concurrent']['{}'];
+                        }}
+                        if (globalThis['{}']) {{
+                            delete globalThis['{}'];
+                        }}
+                    }})()"#,
+                    slot_key, slot_key, slot_key, slot_key
+                );
+                let _ = deno_runtime.execute_script(format!("cleanup_check_error_{i}"), cleanup);
+
                 if let Some(tx) = batch.senders[i].take() {
                     let _ = tx.send(Err(RariError::js_execution(format!(
                         "Failed to check status for '{}': {}",
@@ -624,37 +658,83 @@ fn check_pending_batches(
                     }})()"#,
                     slot_key, slot_key, slot_key
                 );
-                let result =
-                    match deno_runtime.execute_script(format!("extract_concurrent_{i}"), extract) {
-                        Ok(extracted) => {
-                            let json_result = with_scope!(deno_runtime, |scope| {
-                                let local = deno_core::v8::Local::new(scope, extracted);
-                                v8_to_json(scope, local)
-                            });
-                            match json_result {
-                                Ok(JsonValue::Object(obj)) => {
-                                    if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
-                                        Err(RariError::js_execution(
-                                            obj.get("error")
-                                                .and_then(JsonValue::as_str)
-                                                .unwrap_or("Unknown concurrent error")
-                                                .to_string(),
-                                        ))
-                                    } else {
-                                        Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
-                                    }
+                let result = match deno_runtime
+                    .execute_script(format!("extract_concurrent_{i}"), extract)
+                {
+                    Ok(extracted) => {
+                        let json_result = with_scope!(deno_runtime, |scope| {
+                            let local = deno_core::v8::Local::new(scope, extracted);
+                            v8_to_json(scope, local)
+                        });
+                        match json_result {
+                            Ok(JsonValue::Object(obj)) => {
+                                if matches!(obj.get("ok"), Some(JsonValue::Bool(false))) {
+                                    Err(RariError::js_execution(
+                                        obj.get("error")
+                                            .and_then(JsonValue::as_str)
+                                            .unwrap_or("Unknown concurrent error")
+                                            .to_string(),
+                                    ))
+                                } else {
+                                    Ok(obj.get("value").cloned().unwrap_or(JsonValue::Null))
                                 }
-                                Ok(_) => Err(RariError::internal(
+                            }
+                            Ok(_) => {
+                                let cleanup = format!(
+                                    r#"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                                delete globalThis['~rari_concurrent']['{}'];
+                                            }}
+                                            if (globalThis['{}']) {{
+                                                delete globalThis['{}'];
+                                            }}
+                                        }})()"#,
+                                    slot_key, slot_key, slot_key, slot_key
+                                );
+                                let _ = deno_runtime
+                                    .execute_script(format!("cleanup_extract_shape_{i}"), cleanup);
+                                Err(RariError::internal(
                                     "Concurrent extraction wrapper was not an object".to_string(),
-                                )),
-                                Err(e) => Err(e),
+                                ))
+                            }
+                            Err(e) => {
+                                let cleanup = format!(
+                                    r#"(function() {{
+                                            if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                                delete globalThis['~rari_concurrent']['{}'];
+                                            }}
+                                            if (globalThis['{}']) {{
+                                                delete globalThis['{}'];
+                                            }}
+                                        }})()"#,
+                                    slot_key, slot_key, slot_key, slot_key
+                                );
+                                let _ = deno_runtime
+                                    .execute_script(format!("cleanup_extract_json_{i}"), cleanup);
+                                Err(e)
                             }
                         }
-                        Err(e) => Err(RariError::js_execution(format!(
+                    }
+                    Err(e) => {
+                        let cleanup = format!(
+                            r#"(function() {{
+                                    if (globalThis['~rari_concurrent'] && globalThis['~rari_concurrent']['{}']) {{
+                                        delete globalThis['~rari_concurrent']['{}'];
+                                    }}
+                                    if (globalThis['{}']) {{
+                                        delete globalThis['{}'];
+                                    }}
+                                }})()"#,
+                            slot_key, slot_key, slot_key, slot_key
+                        );
+                        let _ = deno_runtime
+                            .execute_script(format!("cleanup_extract_error_{i}"), cleanup);
+                        Err(RariError::js_execution(format!(
                             "Failed to extract result for '{}': {}",
                             batch.names[i], e
-                        ))),
-                    };
+                        )))
+                    }
+                };
 
                 if let Some(tx) = batch.senders[i].take() {
                     let _ = tx.send(result);
@@ -1044,6 +1124,35 @@ impl JsRuntimeInterface for DenoRuntime {
             response_receiver.await.map_err(|_| {
                 RariError::js_runtime(
                     "JS executor failed to respond (clear_request_context)".to_string(),
+                )
+            })?
+        })
+    }
+
+    fn clear_request_context_if_matches(
+        &self,
+        expected_context: std::sync::Arc<
+            crate::server::middleware::request_context::RequestContext,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>> {
+        let request_sender = self.request_sender.clone();
+
+        Box::pin(async move {
+            let (response_sender, response_receiver) = oneshot::channel();
+            request_sender
+                .send(JsRequest::ClearRequestContextIfMatches {
+                    expected_context,
+                    result_tx: response_sender,
+                })
+                .await
+                .map_err(|_| {
+                    RariError::js_runtime(
+                        "JS executor channel closed (clear_request_context_if_matches)".to_string(),
+                    )
+                })?;
+            response_receiver.await.map_err(|_| {
+                RariError::js_runtime(
+                    "JS executor failed to respond (clear_request_context_if_matches)".to_string(),
                 )
             })?
         })

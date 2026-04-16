@@ -42,22 +42,6 @@ impl StreamingRenderer {
         }
     }
 
-    async fn get_render_generation(&self) -> Result<u32, RariError> {
-        let value = self
-            .runtime
-            .execute_script(
-                "<get_render_generation>".to_string(),
-                "(function() { return globalThis['~rsc']?.renderGeneration; })()".to_string(),
-            )
-            .await
-            .map_err(|e| RariError::internal(format!("Failed to read render generation: {e}")))?;
-
-        value
-            .as_u64()
-            .map(|v| v as u32)
-            .ok_or_else(|| RariError::internal("Render generation was not initialized".to_string()))
-    }
-
     pub async fn start_streaming_with_composition(
         &mut self,
         composition_script: String,
@@ -309,10 +293,17 @@ impl StreamingRenderer {
         &mut self,
         rsc_wire_format: String,
     ) -> Result<RscStream, RariError> {
-        self.runtime
+        let render_generation = self
+            .runtime
             .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
-            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
+            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?
+            .as_u64()
+            .ok_or_else(|| {
+                RariError::internal(
+                    "Render generation was not returned from streaming init".to_string(),
+                )
+            })? as u32;
 
         let (update_sender, update_receiver) = mpsc::unbounded_channel::<BoundaryUpdate>();
         let (error_sender, error_receiver) = mpsc::unbounded_channel::<BoundaryError>();
@@ -326,7 +317,8 @@ impl StreamingRenderer {
             Arc::clone(&self.promise_to_row),
         )));
 
-        let partial_result = self.parse_rsc_wire_format(&rsc_wire_format).await?;
+        let partial_result =
+            self.parse_rsc_wire_format(&rsc_wire_format, render_generation).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
 
@@ -555,12 +547,17 @@ impl StreamingRenderer {
             return Err(RariError::internal("Failed to check React initialization"));
         }
 
-        self.runtime
+        let render_generation = self
+            .runtime
             .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
-            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?;
-
-        let render_generation = self.get_render_generation().await?;
+            .map_err(|e| RariError::internal(format!("Streaming init failed: {e}")))?
+            .as_u64()
+            .ok_or_else(|| {
+                RariError::internal(
+                    "Render generation was not returned from streaming init".to_string(),
+                )
+            })? as u32;
 
         let setup_script = COMPONENT_RENDER_SETUP_SCRIPT
             .cow_replace("{component_id}", component_id)
@@ -821,7 +818,8 @@ impl StreamingRenderer {
             ));
         }
 
-        self.runtime
+        let render_generation = self
+            .runtime
             .execute_script("<streaming_init>".to_string(), STREAMING_INIT_SCRIPT.to_string())
             .await
             .map_err(|e| {
@@ -830,9 +828,13 @@ impl StreamingRenderer {
                     "Failed to initialize streaming globals and helpers: {}",
                     e
                 ))
-            })?;
-
-        let render_generation = self.get_render_generation().await?;
+            })?
+            .as_u64()
+            .ok_or_else(|| {
+                RariError::internal(
+                    "Render generation was not returned from streaming init".to_string(),
+                )
+            })? as u32;
 
         let wrapped_script = COMPOSITION_WRAPPER_SCRIPT
             .cow_replace("{composition_script}", &composition_script)
@@ -969,6 +971,7 @@ impl StreamingRenderer {
     async fn parse_rsc_wire_format(
         &mut self,
         rsc_wire_format: &str,
+        render_generation: u32,
     ) -> Result<PartialRenderResult, RariError> {
         let mut parser = crate::rsc::wire_format::parser::RscWireFormatParser::new(rsc_wire_format);
 
@@ -976,8 +979,6 @@ impl StreamingRenderer {
             error!("Failed to parse RSC wire format: {}", e);
             RariError::internal(format!("RSC parsing failed: {}", e))
         })?;
-
-        let render_generation = self.get_render_generation().await?;
 
         let boundaries = parser.find_suspense_boundaries();
         let promises = parser.find_promises();

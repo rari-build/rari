@@ -76,7 +76,7 @@ export function loadClientComponent(componentInfo: LazyComponentInfo, moduleId: 
   return null
 }
 
-function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: string): any {
+export function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: string): any {
   if (componentInfo.component == null)
     return null
 
@@ -85,7 +85,13 @@ function getComponentFromInfo(componentInfo: LazyComponentInfo, exportName?: str
   if (!exportName || exportName === 'default')
     return module.default ?? module
 
-  return module[exportName] ?? module.default?.[exportName] ?? module.default ?? module
+  if (module[exportName] !== undefined)
+    return module[exportName]
+
+  if (module.default?.[exportName] !== undefined)
+    return module.default[exportName]
+
+  return null
 }
 
 function tryLoadComponent(componentInfo: LazyComponentInfo): void {

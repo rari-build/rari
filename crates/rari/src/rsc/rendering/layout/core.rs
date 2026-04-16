@@ -445,11 +445,14 @@ impl LayoutRenderer {
             match result {
                 Ok(RenderResult::Streaming(stream)) => {
                     let runtime_for_cleanup = Arc::clone(&runtime);
+                    let ctx_clone = Arc::clone(&ctx);
                     let stream_with_context = stream
                         .with_request_context(ctx)
                         .with_cleanup(move || {
+                            let runtime = Arc::clone(&runtime_for_cleanup);
+                            let ctx = Arc::clone(&ctx_clone);
                             tokio::spawn(async move {
-                                if let Err(e) = runtime_for_cleanup.clear_request_context().await {
+                                if let Err(e) = runtime.clear_request_context_if_matches(ctx).await {
                                     tracing::error!(
                                         "Failed to clear request context after streaming completion: {}",
                                         e
