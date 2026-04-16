@@ -122,8 +122,7 @@ export function requireModule<T>(moduleReference: ClientReference<T>): T {
     const module = componentInfo.component
 
     if (moduleReference.name === 'default') {
-      const resolved = module.default ?? module
-      return typeof resolved === 'function' ? resolved : module
+      return module.default ?? module
     }
 
     if (module[moduleReference.name] !== undefined)
