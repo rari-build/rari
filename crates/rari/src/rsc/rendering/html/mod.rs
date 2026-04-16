@@ -688,6 +688,14 @@ impl RscHtmlRenderer {
                         return self.render_row(row_id, row_map, row_cache).await;
                     }
 
+                    if text.starts_with('$')
+                        && text.len() > 1
+                        && text[1..].chars().all(|c| c.is_ascii_hexdigit())
+                        && let Ok(row_id) = u32::from_str_radix(&text[1..], 16)
+                    {
+                        return self.render_row(row_id, row_map, row_cache).await;
+                    }
+
                     if text.starts_with("I[") || text.starts_with("S[") || text.starts_with("E[") {
                         return Ok(String::new());
                     }
@@ -714,6 +722,13 @@ impl RscHtmlRenderer {
                 RscElement::Reference(ref_str) => {
                     if (ref_str.starts_with("$L") || ref_str.starts_with("$@"))
                         && let Ok(row_id) = Self::parse_reference(ref_str)
+                    {
+                        return self.render_row(row_id, row_map, row_cache).await;
+                    }
+                    if ref_str.starts_with('$')
+                        && ref_str.len() > 1
+                        && ref_str[1..].chars().all(|c| c.is_ascii_hexdigit())
+                        && let Ok(row_id) = u32::from_str_radix(&ref_str[1..], 16)
                     {
                         return self.render_row(row_id, row_map, row_cache).await;
                     }
@@ -1238,7 +1253,7 @@ impl RscToHtmlConverter {
         let mut rsc_payload =
             rows_with_ids.iter().map(|(_, row)| format!("{}\n", row)).collect::<Vec<_>>().join("");
 
-        let has_row_0 = rows_with_ids.iter().any(|(id, row)| *id == 0 && row.starts_with("0:"));
+        let has_row_0 = rows_with_ids.iter().any(|(id, _)| *id == 0);
 
         if !has_row_0
             && let Some((max_id, _)) =

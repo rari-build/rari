@@ -78,6 +78,12 @@ impl ComponentRegistry {
             dependencies.into_iter().map(|dep| Self::normalize_id(&dep).into_owned()).collect();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
+        if let Some(existing) = self.components.get(&component_id)
+            && let Some(old_specifier) = &existing.module_specifier
+        {
+            self.specifier_to_id.remove(old_specifier);
+        }
+
         if let Some(old_deps) = self.dependency_graph.get(&component_id) {
             let removed_deps: FxHashSet<_> = old_deps.difference(&deps_set).cloned().collect();
             for dep in removed_deps {
@@ -382,7 +388,9 @@ impl ComponentRegistry {
         }
 
         for (component_id, component) in &self.components {
-            if component_id.ends_with(&further_normalized_id) {
+            if component_id.ends_with(&format!("/{further_normalized_id}"))
+                || component_id == &further_normalized_id
+            {
                 return Some(component.source.clone());
             }
         }
