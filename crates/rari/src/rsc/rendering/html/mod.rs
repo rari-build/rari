@@ -775,7 +775,7 @@ impl RscHtmlRenderer {
 
             let is_suspense_symbol = tag.starts_with('$')
                 && tag.len() > 1
-                && tag[1..].chars().all(|c| c.is_ascii_digit());
+                && tag[1..].chars().all(|c| c.is_ascii_hexdigit());
             if tag == "$Sreact.suspense" || tag == "react.suspense" || is_suspense_symbol {
                 if let Some(props_obj) = props.as_object() {
                     let children = props_obj.get("children");
@@ -1363,7 +1363,7 @@ if (typeof window !== 'undefined') {{
                 }
 
                 if let Some(colon_pos) = s.find(':')
-                    && s[..colon_pos].chars().all(|c| c.is_ascii_digit())
+                    && s[..colon_pos].chars().all(|c| c.is_ascii_hexdigit())
                 {
                     let after_colon = &s[colon_pos + 1..];
                     if !after_colon.is_empty()
@@ -1384,7 +1384,7 @@ if (typeof window !== 'undefined') {{
 
                     let is_suspense_symbol = element_type.starts_with('$')
                         && element_type.len() > 1
-                        && element_type[1..].chars().all(|c| c.is_ascii_digit());
+                        && element_type[1..].chars().all(|c| c.is_ascii_hexdigit());
 
                     let is_client_component = element_type.starts_with("$L")
                         || element_type.contains('#')

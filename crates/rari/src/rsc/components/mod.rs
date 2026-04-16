@@ -240,11 +240,15 @@ impl ComponentRegistry {
     }
 
     pub fn get_dependencies(&self, component_id: &str) -> Option<ComponentDependencies> {
-        self.dependency_graph.get(component_id).map(|deps| deps.iter().cloned().collect())
+        let normalized_id = component_id.cow_replace('\\', "/");
+        self.dependency_graph.get(normalized_id.as_ref()).map(|deps| deps.iter().cloned().collect())
     }
 
     pub fn get_dependents(&self, component_id: &str) -> Option<ComponentDependencies> {
-        self.reverse_dependency_graph.get(component_id).map(|deps| deps.iter().cloned().collect())
+        let normalized_id = component_id.cow_replace('\\', "/");
+        self.reverse_dependency_graph
+            .get(normalized_id.as_ref())
+            .map(|deps| deps.iter().cloned().collect())
     }
 
     pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
