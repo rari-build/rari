@@ -1803,6 +1803,8 @@ const ${componentName} = registerClientReference(
             }
           }
 
+          const componentName = hasNamedExport ? namedExportName : path.basename(componentPath, path.extname(componentPath))
+
           const normalizedPath = registrationPath.replace(BACKSLASH_REGEX, '/')
           const importPath = normalizedPath.startsWith('/') || WINDOWS_PATH_REGEX.test(normalizedPath)
             ? normalizedPath
@@ -1814,6 +1816,7 @@ const ${componentName} = registerClientReference(
           return `  "${registrationPath}": {
     id: "${componentId}",
     path: "${registrationPath}",
+    exportName: "${componentName}",
     type: "client",
     loader: () => ${importStatement},
     component: null,
@@ -1855,6 +1858,8 @@ ${lazyLoaderRegistry}
 for (const [path, config] of Object.entries(lazyComponentRegistry)) {
   globalThis['~clientComponents'][path] = config;
   globalThis['~clientComponents'][config.id] = config;
+  const fullId = path + '#' + config.exportName;
+  globalThis['~clientComponents'][fullId] = config;
   globalThis['~clientComponentPaths'][path] = config.id;
 }
 `
