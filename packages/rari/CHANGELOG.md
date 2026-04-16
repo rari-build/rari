@@ -1,3 +1,46 @@
+## [rari@0.12.0] - 2026-04-16
+
+### 🚀 Features
+
+- *(rsc)* Optimize boundary update streaming with progressive HTML rendering
+- *(rsc)* Refactor streaming and RSC rendering with React Flight client integration
+- *(rsc)* Implement hexadecimal row ID encoding for wire format
+- *(rsc)* Implement hexadecimal row reference parsing and streaming bridge
+- *(rsc)* Refactor wire format encoding and streaming bridge initialization
+- *(rsc)* Implement streaming bridge and hexadecimal chunk encoding
+- *(rsc)* Improve wire format validation and streaming cleanup
+- *(rsc)* Add export name tracking to component registry
+- *(rsc)* Enhance client component registration and reference parsing
+- *(rsc)* Improve client component resolution and error handling
+- *(rsc)* Add export name tracking to client component loader
+- *(rsc)* Improve client reference detection and navigation abort handling
+- *(router)* Simplify navigation handler and fix response URL handling
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Normalize path separators in client component resolution
+- *(rsc)* Add fallback resolution for non-normalized component IDs
+- *(rsc)* Normalize path separators in server build component ID resolution
+- *(rsc)* Normalize path separators in component resolution and improve error handling
+- *(rsc)* Normalize path separators in component registry operations
+- *(rsc)* Improve component registry cleanup and streaming initialization
+- *(rsc)* Improve component registry cleanup and streaming initialization
+
+### 🚜 Refactor
+
+- *(rsc)* Extract render generation retrieval and import row parsing
+
+### 🧪 Testing
+
+- *(rsc)* Add comprehensive path normalization tests for component registry
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump optional dependencies to 0.12.0
+
+### ◀️ Revert
+
+- Back to working state at 55be557f
 ## [rari@0.11.0] - 2026-04-03
 
 ### 🚀 Features
@@ -44,6 +87,10 @@
 ### 🐛 Bug Fixes
 
 - *(rsc)* Update element array length validation for RSC protocol
+
+### 💼 Other
+
+- Rari@0.11.0
 
 ### 🚜 Refactor
 
