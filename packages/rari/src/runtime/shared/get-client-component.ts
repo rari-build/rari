@@ -183,6 +183,26 @@ function resolveByName(
   return null
 }
 
+function resolveExact(
+  id: string,
+  clientComponents: Record<string, ComponentInfo>,
+): any {
+  const componentInfo = clientComponents[id] as LazyComponentInfo
+  if (!componentInfo)
+    return null
+
+  const hashIndex = id.indexOf('#')
+  const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+  const component = getComponentFromInfo(componentInfo, exportName)
+    ?? (hashIndex !== -1 ? getComponentFromInfo(componentInfo) : null)
+
+  if (component !== null && component !== undefined)
+    return component
+
+  tryLoadComponent(componentInfo)
+  return null
+}
+
 export function resolveClientComponent(
   id: string,
   globalAccessor: GlobalAccessor,
@@ -192,6 +212,10 @@ export function resolveClientComponent(
   const clientComponentNames = globalAccessor['~clientComponentNames'] || {}
 
   const normalizedId = id.replace(/\\/g, '/')
+  const exactResult = resolveExact(normalizedId, clientComponents)
+    || (normalizedId !== id ? resolveExact(id, clientComponents) : null)
+  if (exactResult !== null)
+    return exactResult
 
   const directResult = resolveById(normalizedId, clientComponents)
     || (normalizedId !== id ? resolveById(id, clientComponents) : null)
@@ -222,11 +246,27 @@ export async function getClientComponentAsync(id: string): Promise<any> {
 
   const normalizedId = id.replace(/\\/g, '/')
 
+  let componentInfo = clientComponents[normalizedId] as LazyComponentInfo
+  if (componentInfo) {
+    const hashIndex = normalizedId.indexOf('#')
+    const exportName = hashIndex === -1 ? undefined : normalizedId.slice(hashIndex + 1)
+    return await ensureComponentLoaded(componentInfo, exportName)
+  }
+
+  if (normalizedId !== id) {
+    componentInfo = clientComponents[id] as LazyComponentInfo
+    if (componentInfo) {
+      const hashIndex = id.indexOf('#')
+      const exportName = hashIndex === -1 ? undefined : id.slice(hashIndex + 1)
+      return await ensureComponentLoaded(componentInfo, exportName)
+    }
+  }
+
   const hashIndex = normalizedId.indexOf('#')
   const baseId = hashIndex === -1 ? normalizedId : normalizedId.slice(0, hashIndex)
   const exportName = hashIndex === -1 ? undefined : normalizedId.slice(hashIndex + 1)
 
-  let componentInfo = clientComponents[baseId] as LazyComponentInfo
+  componentInfo = clientComponents[baseId] as LazyComponentInfo
   if (componentInfo)
     return await ensureComponentLoaded(componentInfo, exportName)
 

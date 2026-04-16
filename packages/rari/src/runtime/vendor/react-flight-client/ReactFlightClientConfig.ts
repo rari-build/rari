@@ -84,7 +84,7 @@ export function preloadModule<T>(
     componentInfo.loading = true
     componentInfo.loadPromise = componentInfo.loader()
       .then((module: any) => {
-        componentInfo.component = module.default || module
+        componentInfo.component = module
         componentInfo.registered = true
         componentInfo.loading = false
         return module
@@ -134,7 +134,7 @@ export function requireModule<T>(moduleReference: ClientReference<T>): T {
     componentInfo.loading = true
     componentInfo.loadPromise = componentInfo.loader()
       .then((module: any) => {
-        componentInfo.component = module.default || module
+        componentInfo.component = module
         componentInfo.registered = true
         componentInfo.loading = false
         return module

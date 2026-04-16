@@ -22,7 +22,7 @@ export async function preloadComponentsFromModules(modules: Map<string, ModuleDa
         componentInfo.loading = true
         componentInfo.loadPromise = componentInfo.loader()
           .then((module: any) => {
-            componentInfo.component = module.default || module
+            componentInfo.component = module
             componentInfo.registered = true
             componentInfo.loading = false
           })

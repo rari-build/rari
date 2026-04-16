@@ -1759,7 +1759,7 @@ if (typeof window !== 'undefined') {{
                 escape_html(&error_message)
             );
 
-            let content_id = format!("S:{}", react_boundary_id.trim_start_matches("B:"));
+            let content_id = format!("E:{}", react_boundary_id.trim_start_matches("B:"));
 
             let error_update = format!(
                 r#"<div hidden id="{}">{}</div><script>$RC=window.$RC||function(b,c){{const t=document.getElementById(b);const s=document.getElementById(c);if(t&&s){{const p=t.parentNode;Array.from(s.childNodes).forEach(n=>p.insertBefore(n,t));t.remove();s.remove();}}}};$RC("{}","{}");</script>"#,

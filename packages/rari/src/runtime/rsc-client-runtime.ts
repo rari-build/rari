@@ -67,9 +67,31 @@ function parseImportRow(content: string): ParsedImportRow | null {
   try {
     const importData = JSON.parse(content.substring(1))
     if (typeof importData === 'object' && importData !== null && !Array.isArray(importData)) {
+      if (typeof importData.id !== 'string') {
+        console.error('[rari] Invalid import data: id must be a string:', importData)
+        return null
+      }
+
+      let chunks: string[]
+      if (typeof importData.chunks === 'string') {
+        chunks = [importData.chunks]
+      }
+      else if (Array.isArray(importData.chunks)) {
+        chunks = importData.chunks.filter((chunk: any) => typeof chunk === 'string')
+      }
+      else {
+        console.error('[rari] Invalid import data: chunks must be a string or array:', importData)
+        return null
+      }
+
+      if (chunks.length === 0) {
+        console.error('[rari] Invalid import data: chunks array is empty:', importData)
+        return null
+      }
+
       return {
         id: importData.id,
-        chunks: Array.isArray(importData.chunks) ? importData.chunks : [importData.chunks],
+        chunks,
         name: importData.name || 'default',
       }
     }
