@@ -41,11 +41,13 @@ export async function preloadModulesFromWireFormat(
     await Promise.all(Array.from(moduleIds, async (id) => {
       try {
         const component = await getClientComponentAsync(id)
-        if (!component)
-          console.warn(`[rari] Failed to preload component: ${id}`)
 
-        if (preloadedModuleIds)
-          preloadedModuleIds.add(id)
+        if (!component) {
+          console.warn(`[rari] Failed to preload component: ${id}`)
+          return
+        }
+
+        preloadedModuleIds?.add(id)
       }
       catch (error) {
         console.error(`[rari] Error preloading component ${id}:`, error)

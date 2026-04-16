@@ -70,6 +70,8 @@ impl ComponentRegistry {
         dependencies: ComponentDependencies,
     ) -> Result<(), String> {
         let component_id = id.cow_replace('\\', "/").into_owned();
+        let dependencies: ComponentDependencies =
+            dependencies.into_iter().map(|dep| dep.cow_replace('\\', "/").into_owned()).collect();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
         self.components.insert(
@@ -315,7 +317,8 @@ impl ComponentRegistry {
     }
 
     pub fn get_client_reference_info(&self, id: &str) -> Option<(String, String)> {
-        self.components.get(id).and_then(|c| {
+        let normalized_id = id.cow_replace('\\', "/");
+        self.components.get(normalized_id.as_ref()).and_then(|c| {
             if c.is_client_reference {
                 c.client_reference_path
                     .as_ref()

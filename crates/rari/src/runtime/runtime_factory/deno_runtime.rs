@@ -587,15 +587,25 @@ fn check_pending_batches(
                 slot_key
             );
 
-            let is_done = match deno_runtime.execute_script(format!("check_slot_{i}"), check) {
-                Ok(result) => {
-                    with_scope!(deno_runtime, |scope| {
-                        let local = deno_core::v8::Local::new(scope, result);
-                        !local.is_null_or_undefined()
-                    })
+            let check_result = deno_runtime.execute_script(format!("check_slot_{i}"), check);
+
+            if let Err(e) = check_result {
+                if let Some(tx) = batch.senders[i].take() {
+                    let _ = tx.send(Err(RariError::js_execution(format!(
+                        "Failed to check status for '{}': {}",
+                        batch.names[i], e
+                    ))));
                 }
-                Err(_) => false,
-            };
+                batch.sent[i] = true;
+                batch.remaining -= 1;
+                continue;
+            }
+
+            let check_value = check_result.expect("check_result is Ok after error check");
+            let is_done = with_scope!(deno_runtime, |scope| {
+                let local = deno_core::v8::Local::new(scope, check_value);
+                !local.is_null_or_undefined()
+            });
 
             if is_done {
                 let extract = format!(

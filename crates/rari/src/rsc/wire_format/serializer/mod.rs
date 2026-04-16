@@ -763,7 +763,11 @@ impl RscSerializer {
         component_id: &str,
         props: Option<&FxHashMap<String, Value>>,
     ) -> String {
-        if let Some(module_reference) = self.serialized_modules.get(component_id).cloned() {
+        let normalized_component_id = component_id.cow_replace('\\', "/");
+
+        if let Some(module_reference) =
+            self.serialized_modules.get(normalized_component_id.as_ref()).cloned()
+        {
             let element = self.create_react_element_json(&module_reference, props, None);
             self.serialize_react_element_to_string(
                 &element,

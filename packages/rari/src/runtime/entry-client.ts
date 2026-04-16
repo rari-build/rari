@@ -646,7 +646,13 @@ function rscToReact(rsc: any, modules: Map<string, any>, symbols: Map<string, an
       if (typeof type === 'string' && type.startsWith('$') && MODULE_REF_REGEX_ENTRY.test(type)) {
         const moduleInfo = getModuleByRef(modules, type)
         if (moduleInfo) {
-          const componentInfo = getGlobalThis()['~clientComponents'][moduleInfo.id]
+          const clientKey = `${moduleInfo.id}#${moduleInfo.name || 'default'}`
+          const normalizedClientKey = clientKey.replace(/\\/g, '/')
+          const normalizedModuleId = moduleInfo.id.replace(/\\/g, '/')
+          const componentInfo = getGlobalThis()['~clientComponents'][normalizedClientKey]
+            || getGlobalThis()['~clientComponents'][normalizedModuleId]
+            || getGlobalThis()['~clientComponents'][clientKey]
+            || getGlobalThis()['~clientComponents'][moduleInfo.id]
           if (componentInfo) {
             if (componentInfo.component) {
               const Component = componentInfo.component

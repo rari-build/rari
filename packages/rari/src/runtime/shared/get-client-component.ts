@@ -251,21 +251,26 @@ export async function getClientComponentAsync(id: string): Promise<any> {
       return await ensureComponentLoaded(componentInfo, exportName)
   }
 
-  const variants = getPathVariants(baseId)
-  for (const variant of variants) {
-    const componentId = clientComponentPaths[variant]
+  const candidateBaseIds = normalizedId !== id
+    ? [baseId, !id.includes('#') ? id : id.slice(0, id.indexOf('#'))]
+    : [baseId]
+
+  for (const candidateBaseId of candidateBaseIds) {
+    for (const variant of getPathVariants(candidateBaseId)) {
+      const componentId = clientComponentPaths[variant]
+      if (componentId) {
+        componentInfo = clientComponents[componentId] as LazyComponentInfo
+        if (componentInfo)
+          return await ensureComponentLoaded(componentInfo, exportName)
+      }
+    }
+
+    const componentId = clientComponentNames[candidateBaseId]
     if (componentId) {
       componentInfo = clientComponents[componentId] as LazyComponentInfo
       if (componentInfo)
         return await ensureComponentLoaded(componentInfo, exportName)
     }
-  }
-
-  const componentId = clientComponentNames[baseId]
-  if (componentId) {
-    componentInfo = clientComponents[componentId] as LazyComponentInfo
-    if (componentInfo)
-      return await ensureComponentLoaded(componentInfo, exportName)
   }
 
   return null

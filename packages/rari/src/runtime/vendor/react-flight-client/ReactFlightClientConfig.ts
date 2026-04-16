@@ -65,8 +65,10 @@ export function preloadModule<T>(
   const key = `${moduleReference.specifier}#${moduleReference.name}`
   const normalizedKey = key.replace(/\\/g, '/')
   const normalizedSpecifier = moduleReference.specifier.replace(/\\/g, '/')
-  const componentInfo = clientComponents[normalizedKey] || clientComponents[normalizedSpecifier]
-    || clientComponents[key] || clientComponents[moduleReference.specifier]
+  const componentInfo = clientComponents[normalizedKey] || clientComponents[key]
+    || (moduleReference.name === 'default'
+      ? clientComponents[normalizedSpecifier] || clientComponents[moduleReference.specifier]
+      : undefined)
 
   if (!componentInfo) {
     return null
@@ -107,8 +109,10 @@ export function requireModule<T>(moduleReference: ClientReference<T>): T {
   const key = `${moduleReference.specifier}#${moduleReference.name}`
   const normalizedKey = key.replace(/\\/g, '/')
   const normalizedSpecifier = moduleReference.specifier.replace(/\\/g, '/')
-  const componentInfo = clientComponents[normalizedKey] || clientComponents[normalizedSpecifier]
-    || clientComponents[key] || clientComponents[moduleReference.specifier]
+  const componentInfo = clientComponents[normalizedKey] || clientComponents[key]
+    || (moduleReference.name === 'default'
+      ? clientComponents[normalizedSpecifier] || clientComponents[moduleReference.specifier]
+      : undefined)
 
   if (!componentInfo) {
     throw new Error(`[rari] Component not registered: ${key}`)

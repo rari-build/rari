@@ -60,6 +60,7 @@ fn collect_client_components(
                     .format_row(*row_counter, &import_data.to_string());
                 import_rows.push(import_row.trim_end().to_string());
 
+                component_map.insert(type_str.to_string(), module_ref.clone());
                 component_map.insert(type_str_normalized.to_string(), module_ref);
             }
 

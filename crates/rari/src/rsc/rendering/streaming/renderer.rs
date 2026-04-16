@@ -114,6 +114,7 @@ impl StreamingRenderer {
         let boundary_positions_clone = Arc::clone(&boundary_positions);
         let rendered_skeleton_ids = Arc::clone(&self.rendered_skeleton_ids);
         let resolved_boundary_ids = Arc::clone(&self.resolved_boundary_ids);
+        let root_row_id = Arc::clone(&self.root_row_id);
 
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
@@ -167,15 +168,12 @@ impl StreamingRenderer {
 
             let _ = rendered_skeleton_ids.lock().await;
 
-            let final_chunk = RscStreamChunk {
-                data: b"STREAM_COMPLETE\n".to_vec(),
-                chunk_type: RscChunkType::StreamComplete,
-                row_id: u32::MAX,
-                is_final: true,
-                boundary_id: None,
+            let root_id = {
+                let root = root_row_id.lock().await;
+                *root
             };
 
-            let _ = chunk_sender_clone.send(final_chunk).await;
+            Self::send_row_0_and_complete(&chunk_sender_clone, root_id).await;
         });
 
         Ok(RscStream::new(chunk_receiver))
@@ -253,6 +251,7 @@ impl StreamingRenderer {
         let boundary_positions_clone = Arc::clone(&boundary_positions);
         let rendered_skeleton_ids = Arc::clone(&self.rendered_skeleton_ids);
         let resolved_boundary_ids = Arc::clone(&self.resolved_boundary_ids);
+        let root_row_id = Arc::clone(&self.root_row_id);
 
         tokio::spawn(async move {
             let mut update_receiver = update_receiver;
@@ -295,15 +294,12 @@ impl StreamingRenderer {
                 }
             }
 
-            let final_chunk = RscStreamChunk {
-                data: b"STREAM_COMPLETE\n".to_vec(),
-                chunk_type: RscChunkType::StreamComplete,
-                row_id: u32::MAX,
-                is_final: true,
-                boundary_id: None,
+            let root_id = {
+                let root = root_row_id.lock().await;
+                *root
             };
 
-            let _ = chunk_sender_clone.send(final_chunk).await;
+            Self::send_row_0_and_complete(&chunk_sender_clone, root_id).await;
         });
 
         Ok(RscStream::new(chunk_receiver))
