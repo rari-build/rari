@@ -66,4 +66,11 @@ pub trait JsRuntimeInterface: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 
     fn clear_request_context(&self) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
+
+    fn clear_request_context_if_matches(
+        &self,
+        expected_context: std::sync::Arc<
+            crate::server::middleware::request_context::RequestContext,
+        >,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>;
 }

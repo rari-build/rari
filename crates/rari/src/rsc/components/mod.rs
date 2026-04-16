@@ -74,6 +74,18 @@ impl ComponentRegistry {
             dependencies.into_iter().map(|dep| dep.cow_replace('\\', "/").into_owned()).collect();
         let deps_set: FxHashSet<String> = dependencies.iter().cloned().collect();
 
+        if let Some(old_deps) = self.dependency_graph.get(&component_id) {
+            let removed_deps: FxHashSet<_> = old_deps.difference(&deps_set).cloned().collect();
+            for dep in removed_deps {
+                if let Some(dependents) = self.reverse_dependency_graph.get_mut(&dep) {
+                    dependents.remove(&component_id);
+                    if dependents.is_empty() {
+                        self.reverse_dependency_graph.remove(&dep);
+                    }
+                }
+            }
+        }
+
         self.components.insert(
             component_id.clone(),
             TransformedComponent {
@@ -238,6 +250,10 @@ impl ComponentRegistry {
     pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
         let normalized_id = id.cow_replace('\\', "/");
         if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
+            if let Some(old_specifier) = &component.module_specifier {
+                self.specifier_to_id.remove(old_specifier);
+            }
+
             component.module_id = Some(module_id);
             component.module_specifier = Some(specifier.clone());
             component.is_loaded = true;
