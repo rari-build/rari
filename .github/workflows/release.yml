@@ -104,14 +104,14 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --bin rari
 
       - name: Prepare binary (Unix)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         run: |
           mkdir -p binaries
           cp target/${{ matrix.target }}/release/rari binaries/${{ matrix.name }}
           chmod +x binaries/${{ matrix.name }}
 
       - name: Prepare binary (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         run: |
           mkdir binaries
           copy target\${{ matrix.target }}\release\rari.exe binaries\${{ matrix.name }}
