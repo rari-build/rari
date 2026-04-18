@@ -1,9 +1,18 @@
+## [rari@0.12.2] - 2026-04-18
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Mark Image component as client reference on server
 ## [rari@0.12.1] - 2026-04-16
 
 ### 🐛 Bug Fixes
 
 - *(rsc)* Improve client component resolution and simplify external imports
 - *(rsc)* Simplify default export resolution in React Flight client config
+
+### 💼 Other
+
+- Rari@0.12.1
 ## [rari@0.12.0] - 2026-04-16
 
 ### 🚀 Features
