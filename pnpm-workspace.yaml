@@ -15,7 +15,7 @@ packages:
 catalogs:
   analytics:
     '@posthog/react': ^1.9.0
-    posthog-js: ^1.369.1
+    posthog-js: ^1.369.3
   build:
     rolldown: ^1.0.0-rc.16
     vite: ^8.0.8
@@ -28,7 +28,7 @@ catalogs:
     '@antfu/eslint-config': ^8.2.0
     '@eslint-react/eslint-plugin': ^3.0.0
     '@typescript-eslint/utils': ^8.58.2
-    eslint: ^10.2.0
+    eslint: ^10.2.1
     eslint-plugin-de-morgan: ^2.1.1
     eslint-plugin-oxlint: ^1.60.0
     eslint-plugin-react-refresh: ^0.5.2
@@ -56,7 +56,7 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.4
   typescript:
     '@types/node': ^25.6.0
-    '@typescript/native-preview': ^7.0.0-dev.20260416.2
+    '@typescript/native-preview': ^7.0.0-dev.20260417.1
   utils:
     unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
