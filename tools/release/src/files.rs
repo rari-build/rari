@@ -192,7 +192,7 @@ rari automatically downloads the correct binary for your platform. Supported pla
 
 - macOS (Intel and Apple Silicon)
 - Linux (x64 and ARM64)
-- Windows (x64)
+- Windows (x64 and ARM64)
 
 If the binary download fails, check your internet connection and firewall settings.
 

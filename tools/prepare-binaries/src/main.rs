@@ -58,6 +58,12 @@ const TARGETS: &[Target] = &[
         binary_name: "rari.exe",
         package_dir: "packages/rari-win32-x64",
     },
+    Target {
+        target: "aarch64-pc-windows-msvc",
+        platform: "win32-arm64",
+        binary_name: "rari.exe",
+        package_dir: "packages/rari-win32-arm64",
+    },
 ];
 
 fn log(message: &str) {
@@ -198,7 +204,7 @@ fn copy_binary_to_platform_package(
     fs::copy(&source_path, &dest_path).context("Failed to copy binary")?;
 
     #[cfg(unix)]
-    if target_info.platform != "win32-x64" {
+    if !target_info.platform.starts_with("win32") {
         let mut perms = fs::metadata(&dest_path)?.permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&dest_path, perms)?;
@@ -252,7 +258,7 @@ fn validate_binary(target_info: &Target, project_root: &Path, dev_mode: bool) ->
     }
 
     #[cfg(unix)]
-    if target_info.platform != "win32-x64" {
+    if !target_info.platform.starts_with("win32") {
         let metadata = fs::metadata(&binary_path)?;
         let permissions = metadata.permissions();
         if permissions.mode() & 0o111 == 0 {
@@ -314,7 +320,7 @@ async fn main() -> Result<()> {
         TARGETS.iter().collect()
     } else {
         let current_target = get_current_platform_target().context(
-            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64)",
+            "Unable to determine current platform target. Supported platforms: macOS (x64/ARM64), Linux (x64/ARM64), Windows (x64/ARM64)",
         )?;
         log(&format!("Building for current platform only: {}", current_target.platform.cyan()));
         println!(

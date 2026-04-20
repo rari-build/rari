@@ -15,6 +15,7 @@ const SUPPORTED_PLATFORMS = {
   'linux-arm64': 'rari-linux-arm64',
   'darwin-x64': 'rari-darwin-x64',
   'darwin-arm64': 'rari-darwin-arm64',
+  'win32-arm64': 'rari-win32-arm64',
   'win32-x64': 'rari-win32-x64',
 } as const
 

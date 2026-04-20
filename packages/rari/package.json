@@ -121,6 +121,7 @@
     "rari-darwin-x64": "0.12.2",
     "rari-linux-arm64": "0.12.2",
     "rari-linux-x64": "0.12.2",
+    "rari-win32-arm64": "0.12.2",
     "rari-win32-x64": "0.12.2"
   },
   "devDependencies": {
