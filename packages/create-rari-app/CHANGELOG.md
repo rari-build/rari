@@ -1,3 +1,13 @@
+## [create-rari-app@0.5.3] - 2026-04-21
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies in pnpm-workspace.yaml
+## [create-rari-app@0.5.2] - 2026-04-18
+
+### 💼 Other
+
+- Create-rari-app@0.5.2
 ## [create-rari-app@0.5.1] - 2026-04-16
 
 ### 💼 Other
