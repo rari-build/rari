@@ -1,8 +1,21 @@
+## [rari@0.13.0] - 2026-04-21
+
+### 🚀 Features
+
+- *(build, ci)* Add rari-win32-arm64
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies in pnpm-workspace.yaml
 ## [rari@0.12.2] - 2026-04-18
 
 ### 🐛 Bug Fixes
 
 - *(rsc)* Mark Image component as client reference on server
+
+### 💼 Other
+
+- Rari@0.12.2
 ## [rari@0.12.1] - 2026-04-16
 
 ### 🐛 Bug Fixes
