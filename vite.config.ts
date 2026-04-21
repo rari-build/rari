@@ -245,6 +245,14 @@ export default defineConfig({
       'no-useless-return': 'error',
       'no-var': 'error',
       'no-with': 'error',
+      'object-shorthand': [
+        'error',
+        'always',
+        {
+          avoidQuotes: true,
+          ignoreConstructors: false,
+        },
+      ],
       'prefer-const': [
         'error',
         {
@@ -310,6 +318,10 @@ export default defineConfig({
           '**/*.?([cm])[jt]s?(x)',
         ],
         rules: {
+          'node/handle-callback-err': [
+            'error',
+            '^(err|error)$',
+          ],
           'node/no-exports-assign': 'error',
           'node/no-new-require': 'error',
           'node/no-path-concat': 'error',
@@ -466,15 +478,13 @@ export default defineConfig({
           '**/*.?([cm])[jt]s?(x)',
         ],
         rules: {
+          'react/exhaustive-deps': 'warn',
           'react/jsx-no-comment-textnodes': 'warn',
-          'react/jsx-no-duplicate-props': 'warn',
           'react/no-array-index-key': 'warn',
           'react/no-clone-element': 'warn',
           'react/no-direct-mutation-state': 'error',
           'react/no-redundant-should-component-update': 'error',
-          'react/no-string-refs': 'error',
-          'react-hooks/rules-of-hooks': 'error',
-          'react-hooks/exhaustive-deps': 'warn',
+          'react/rules-of-hooks': 'error',
           'react/only-export-components': [
             'error',
             {
@@ -482,19 +492,6 @@ export default defineConfig({
               allowExportNames: [],
             },
           ],
-        },
-        plugins: [
-          'react',
-        ],
-      },
-      {
-        files: [
-          '**/*.?([cm])ts',
-          '**/*.?([cm])tsx',
-        ],
-        rules: {
-          'react/jsx-no-duplicate-props': 'off',
-          'react/jsx-no-undef': 'off',
         },
         plugins: [
           'react',
