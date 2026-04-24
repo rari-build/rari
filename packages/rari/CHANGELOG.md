@@ -1,8 +1,17 @@
+## [rari@0.13.1] - 2026-04-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Update optionalDependencies to version 0.13.1
 ## [rari@0.13.0] - 2026-04-21
 
 ### 🚀 Features
 
 - *(build, ci)* Add rari-win32-arm64
+
+### 💼 Other
+
+- Rari@0.13.0
 
 ### ⚙️ Miscellaneous Tasks
 
