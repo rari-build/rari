@@ -115,10 +115,6 @@ catalogs:
     '@typescript/native-preview':
       specifier: ^7.0.0-dev.20260424.2
       version: 7.0.0-dev.20260424.2
-  utils:
-    unist-util-visit:
-      specifier: ^5.1.0
-      version: 5.1.0
 
 importers:
 
@@ -359,9 +355,6 @@ importers:
       remark-gfm:
         specifier: catalog:mdx
         version: 4.0.1
-      unist-util-visit:
-        specifier: catalog:utils
-        version: 5.1.0
     devDependencies:
       '@tailwindcss/vite':
         specifier: catalog:tailwind

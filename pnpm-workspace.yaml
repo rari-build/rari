@@ -58,8 +58,6 @@ catalogs:
   typescript:
     '@types/node': ^25.6.0
     '@typescript/native-preview': ^7.0.0-dev.20260424.2
-  utils:
-    unist-util-visit: ^5.1.0
 onlyBuiltDependencies:
   - esbuild
   - oxlint

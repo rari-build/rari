@@ -1,4 +1,4 @@
-import { visit } from 'unist-util-visit'
+import { visit } from './visit'
 
 const BACKTICK_REGEX = /`([\s\S]*)`/
 const ESCAPED_BACKTICK_REGEX = /\\\\\\`/g
