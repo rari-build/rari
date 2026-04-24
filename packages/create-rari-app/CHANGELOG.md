@@ -1,4 +1,13 @@
+## [create-rari-app@0.5.4] - 2026-04-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies and standardize health check endpoint
 ## [create-rari-app@0.5.3] - 2026-04-21
+
+### 💼 Other
+
+- Create-rari-app@0.5.3
 
 ### ⚙️ Miscellaneous Tasks
 
