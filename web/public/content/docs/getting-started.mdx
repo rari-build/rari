@@ -1,9 +1,9 @@
 export const title = 'Getting Started'
-export const description = 'Create your first rari application — a React Server Components framework running on a Rust runtime with embedded V8.'
+export const description = 'Create your first rari application, a React Server Components framework running on a Rust runtime with embedded V8.'
 
 <PageHeader title="Getting Started with rari" />
 
-This guide walks you through creating your first rari application. rari has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-powered Vite bundling, tsgo type checking). You write standard React — the runtime underneath is Rust instead of Node.
+This guide walks you through creating your first rari application. rari has three layers: a Rust runtime (HTTP server, RSC renderer, and router with embedded V8), a React framework (app router, server actions, streaming/Suspense), and a build toolchain (Rolldown-powered Vite bundling, tsgo type checking). You write standard React, the runtime underneath is Rust instead of Node.
 
 ## Prerequisites
 
@@ -152,7 +152,7 @@ export default function Counter() {
 
 ## Using NPM Packages
 
-The Rust runtime handles standard `node_modules` resolution — you can `import` from any npm package the same way you would in Node. Unlike most Rust-based JS runtimes, there are no URL imports or special npm specifiers. Your existing `package.json` workflow just works.
+The Rust runtime handles standard `node_modules` resolution. You can `import` from any npm package the same way you would in Node. Unlike most Rust-based JS runtimes, there are no URL imports or special npm specifiers. Your existing `package.json` workflow just works.
 
 <PackageManagerTabs
   commands={{
@@ -376,8 +376,8 @@ export default function UserForm() {
 
 ## Next Steps
 
-- [Routing](/docs/getting-started/routing) — File conventions, dynamic routes, layouts, loading states, error boundaries, and API routes
-- [Deploying](/docs/getting-started/deploying) — Build and deploy to Railway, Render, or any Node.js host
-- [Metadata](/docs/getting-started/metadata) — Page titles, descriptions, Open Graph, and Twitter cards
-- [Image Component](/docs/api-reference/components/image) — Automatic image optimization
-- [ImageResponse](/docs/api-reference/components/image-response) — Dynamic Open Graph image generation
+- [Routing](/docs/getting-started/routing): File conventions, dynamic routes, layouts, loading states, error boundaries, and API routes
+- [Deploying](/docs/getting-started/deploying): Build and deploy to Railway, Render, or any Node.js host
+- [Metadata](/docs/getting-started/metadata): Page titles, descriptions, Open Graph, and Twitter cards
+- [Image Component](/docs/api-reference/components/image): Automatic image optimization
+- [ImageResponse](/docs/api-reference/components/image-response): Dynamic Open Graph image generation

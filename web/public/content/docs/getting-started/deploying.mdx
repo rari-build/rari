@@ -109,7 +109,7 @@ This creates a `render.yaml` in your project root and updates your `package.json
         value: info
 `}</CodeBlock>
 
-The same `package.json` changes apply as with Railway — `scripts.start`, `engines.node`, and the `rari` dependency.
+The same `package.json` changes apply as with Railway: `scripts.start`, `engines.node`, and the `rari` dependency.
 
 ### Deploying to Render
 
@@ -123,7 +123,7 @@ Render is auto-detected via the `RENDER` environment variable, and the server bi
 
 ### System Dependencies
 
-The Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency — so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
+The Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency, so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
 
 ## Self-Hosting
 
@@ -172,5 +172,5 @@ The server binds to `0.0.0.0` automatically on Railway and Render, but defaults 
 
 ## Related
 
-- [Getting Started](/docs/getting-started) — Create your first rari app
-- [Routing](/docs/getting-started/routing) — File-based routing, layouts, and API routes
+- [Getting Started](/docs/getting-started): Create your first rari app
+- [Routing](/docs/getting-started/routing): File-based routing, layouts, and API routes

@@ -3,7 +3,7 @@ export const description = 'Learn how navigation works in rari using standard HT
 
 <PageHeader title="Links and Navigation" />
 
-Use standard HTML `<a>` tags for navigation. The client router automatically intercepts link clicks and performs client-side navigation — giving you the benefits of a single-page application without needing a special `<Link>` component or API overhead.
+Use standard HTML `<a>` tags for navigation. The client router automatically intercepts link clicks and performs client-side navigation, giving you the benefits of a single-page application without needing a special `<Link>` component or API overhead.
 
 ## Basic Usage
 
@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
 }
 `}</CodeBlock>
 
-Navigating between `/dashboard/analytics` and `/dashboard/settings` only swaps the page content — the sidebar stays mounted with `sidebarOpen` intact.
+Navigating between `/dashboard/analytics` and `/dashboard/settings` only swaps the page content. The sidebar stays mounted with `sidebarOpen` intact.
 
 ### Streaming Updates
 
@@ -82,7 +82,7 @@ The router includes built-in optimizations:
 
 ## Styling Links
 
-Since links are just `<a>` tags, style them however you want — CSS, Tailwind, CSS modules, styled-components, anything:
+Since links are just `<a>` tags, style them however you want. CSS, Tailwind, CSS modules, styled-components, anything:
 
 <CodeBlock filename="src/app/components/Navigation.tsx" language="tsx">{`export default function Navigation() {
   return (
@@ -149,7 +149,7 @@ For more complex active state logic, you can check if the pathname starts with a
 
 ## External Links
 
-External links work exactly as you'd expect — they're not intercepted and perform normal browser navigation:
+External links work exactly as you'd expect. They're not intercepted and perform normal browser navigation:
 
 <CodeBlock language="tsx">{`export default function Footer() {
   return (
@@ -195,9 +195,9 @@ Links with the `download` attribute are not intercepted:
 
 Links clicked with modifier keys (Ctrl, Cmd, Shift, Alt) are not intercepted, allowing users to open links in new tabs or windows as expected:
 
-- `Cmd/Ctrl + Click` — Opens in new tab
-- `Shift + Click` — Opens in new window
-- `Alt + Click` — Downloads the link
+- `Cmd/Ctrl + Click`: Opens in new tab
+- `Shift + Click`: Opens in new window
+- `Alt + Click`: Downloads the link
 
 ### Target Attribute
 
@@ -210,7 +210,7 @@ Links with `target` attributes other than `_self` are not intercepted:
 
 ## Programmatic Navigation
 
-Sometimes you need to navigate in response to events, form submissions, or conditional logic — not just link clicks. rari provides two ways to do this.
+Sometimes you need to navigate in response to events, form submissions, or conditional logic, not just link clicks. rari provides two ways to do this.
 
 ### The `navigate` Function
 
@@ -314,9 +314,9 @@ function FilteredList() {
 
 ### When to Use What
 
-- **`<a>` tags** — the default. Use for all standard navigation.
-- **`navigate()`** — for navigation outside React components, or when you don't need reactive route state.
-- **`useRouter()`** — for components that need to navigate *and* read route state.
+- **`<a>` tags**: the default. Use for all standard navigation.
+- **`navigate()`**: for navigation outside React components, or when you don't need reactive route state.
+- **`useRouter()`**: for components that need to navigate *and* read route state.
 
 ## Prefetching
 
@@ -353,5 +353,5 @@ The client router handles all the complexity behind the scenes, giving you SPA-l
 
 ## Related
 
-- [Routing](/docs/getting-started/routing) — Learn about file-based routing and route conventions
-- [Layouts](/docs/getting-started/routing#layouts) — Understand layout persistence during navigation
+- [Routing](/docs/getting-started/routing): Learn about file-based routing and route conventions
+- [Layouts](/docs/getting-started/routing#layouts): Understand layout persistence during navigation

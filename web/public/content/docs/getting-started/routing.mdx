@@ -1,5 +1,5 @@
 export const title = 'Routing'
-export const description = 'Learn how file-based routing works in rari — pages, layouts, dynamic segments, loading states, error boundaries, and not-found handling.'
+export const description = 'Learn how file-based routing works in rari. Pages, layouts, dynamic segments, loading states, error boundaries, and not-found handling.'
 
 <PageHeader title="Routing" />
 
@@ -11,7 +11,7 @@ Each directory in `src/app/` can contain these special files:
 
 | File | Purpose |
 |---|---|
-| `page.tsx` | The UI for a route — makes the directory publicly accessible |
+| `page.tsx` | The UI for a route. Makes the directory publicly accessible |
 | `layout.tsx` | Shared UI that wraps child routes and persists across navigation |
 | `loading.tsx` | Loading UI shown while the page is streaming (wraps the page in a Suspense boundary) |
 | `error.tsx` | Error UI shown when a page or layout throws (wraps the page in an error boundary) |
@@ -58,7 +58,7 @@ Pages are React Server Components by default. They can be `async` and fetch data
 
 ## Layouts
 
-A `layout.tsx` wraps all pages in its directory and below. Layouts persist across navigation — they don't re-render when you navigate between sibling routes.
+A `layout.tsx` wraps all pages in its directory and below. Layouts persist across navigation and don't re-render when you navigate between sibling routes.
 
 <CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
 
@@ -120,7 +120,7 @@ When you visit `/dashboard/analytics`, the rendering tree is:
 </RootLayout>
 `}</CodeBlock>
 
-Navigating from `/dashboard/analytics` to `/dashboard/settings` only re-renders the page — both layouts stay mounted.
+Navigating from `/dashboard/analytics` to `/dashboard/settings` only re-renders the page. Both layouts stay mounted.
 
 ### Layout Props
 
@@ -181,7 +181,7 @@ export default function DocsPage({ params }: PageProps<{ slug: string[] }>) {
 }
 `}</CodeBlock>
 
-Catch-all segments require at least one segment — `/docs` alone would not match.
+Catch-all segments require at least one segment. `/docs` alone would not match.
 
 ### Optional Catch-All Segments
 
@@ -208,10 +208,10 @@ export default function DocsPage({ params }: PageProps<{ slug?: string[] }>) {
 
 When multiple routes could match a path, rari uses this priority order:
 
-1. Static routes (`/about`) — exact matches first
-2. Dynamic routes (`/[id]`) — single-segment params
-3. Catch-all routes (`/[...slug]`) — greedy matches
-4. Optional catch-all routes (`/[[...slug]]`) — lowest priority
+1. Static routes (`/about`), exact matches first
+2. Dynamic routes (`/[id]`), single-segment params
+3. Catch-all routes (`/[...slug]`), greedy matches
+4. Optional catch-all routes (`/[[...slug]]`), lowest priority
 
 ## Loading States
 
@@ -232,7 +232,7 @@ A `loading.tsx` file creates a loading UI that's shown immediately while the pag
 `}</CodeBlock>
 
 <CodeBlock filename="src/app/dashboard/page.tsx" language="tsx">{`export default async function DashboardPage() {
-  // This fetch might take a moment — loading.tsx is shown in the meantime
+  // This fetch might take a moment. loading.tsx is shown in the meantime
   const stats = await fetch('https://api.example.com/stats').then(r => r.json())
 
   return (
@@ -307,7 +307,7 @@ You can also place `not-found.tsx` in subdirectories for more specific 404 pages
 
 ## Navigation
 
-Use standard `<a>` tags for navigation. rari's client router intercepts link clicks and performs client-side navigation automatically — no special `<Link>` component needed:
+Use standard `<a>` tags for navigation. rari's client router intercepts link clicks and performs client-side navigation automatically. No special `<Link>` component needed:
 
 <CodeBlock language="tsx">{`export default function Navigation() {
   return (
@@ -412,7 +412,7 @@ A typical app showing all the file conventions together:
 
 ## Related
 
-- [Getting Started](/docs/getting-started) — Create your first rari app
-- [Metadata](/docs/getting-started/metadata) — Configure page titles, descriptions, and social cards
-- [Image Component](/docs/api-reference/components/image) — Optimize images
-- [ImageResponse](/docs/api-reference/components/image-response) — Generate dynamic Open Graph images
+- [Getting Started](/docs/getting-started): Create your first rari app
+- [Metadata](/docs/getting-started/metadata): Configure page titles, descriptions, and social cards
+- [Image Component](/docs/api-reference/components/image): Optimize images
+- [ImageResponse](/docs/api-reference/components/image-response): Generate dynamic Open Graph images

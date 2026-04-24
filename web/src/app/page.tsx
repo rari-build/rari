@@ -56,7 +56,7 @@ export default async function HomePage() {
               <span className="text-transparent bg-clip-text bg-linear-to-r from-[#fd7e14] to-[#e8590c]">one framework</span>
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto text-balance">
-              A Rust runtime, a React Server Components framework, and a Rust-native build toolchain — working together so you just write React
+              A Rust runtime, a React Server Components framework, and a Rust-native build toolchain, working together so you just write React
             </p>
           </div>
 
@@ -77,13 +77,13 @@ export default async function HomePage() {
               {
                 id: 'rolldown',
                 title: 'Rolldown + Vite',
-                description: 'Bundled by Rolldown-powered Vite with zero config needed — just add the plugin to your vite.config.ts and go',
+                description: 'Bundled by Rolldown-powered Vite with zero config needed. Just add the plugin to your vite.config.ts and go',
                 icon: 'vite',
               },
               {
                 id: 'node-modules',
                 title: 'node_modules Support',
-                description: 'Unlike most Rust-based JS runtimes, rari resolves packages from node_modules directly — no import maps or URL specifiers needed',
+                description: 'Unlike most Rust-based JS runtimes, rari resolves packages from node_modules directly. No import maps or URL specifiers needed',
                 icon: 'npm',
               },
               {
