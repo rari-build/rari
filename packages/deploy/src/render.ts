@@ -34,7 +34,7 @@ function createRenderYaml(cwd: string) {
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /_rari/health
     envVars:
       - key: NODE_ENV
         value: production

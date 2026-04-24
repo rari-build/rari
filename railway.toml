@@ -4,7 +4,7 @@ buildCommand = "pnpm --filter @rari/web build"
 
 [deploy]
 startCommand = "cd web && pnpm start"
-healthcheckPath = "/"
+healthcheckPath = "/_rari/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

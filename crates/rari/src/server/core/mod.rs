@@ -252,6 +252,7 @@ impl Server {
             )));
 
         let mut router = Router::new()
+            .route("/_rari/health", get(health_check))
             .route("/_rari/stream", post(stream_component))
             .route("/_rari/stream", axum::routing::options(cors_preflight_ok))
             .layer(medium_body_limit)
@@ -280,7 +281,6 @@ impl Server {
             let large_body_limit = DefaultBodyLimit::max(50 * 1024 * 1024);
 
             router = router
-                .route("/_rari/health", get(health_check))
                 .route("/_rari/register", post(register_component))
                 .route("/_rari/register-client", post(register_client_component))
                 .layer(large_body_limit)

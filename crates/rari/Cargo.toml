@@ -37,57 +37,57 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.398.0"
+deno_core = "0.399.0"
 deno_error = "=0.7.1"
-deno_features = "0.42.0"
-deno_bundle_runtime = "0.32.0"
-deno_runtime = "0.253.0"
-deno_permissions = "0.104.0"
-deno_process = "0.60.0"
+deno_features = "0.43.0"
+deno_bundle_runtime = "0.33.0"
+deno_runtime = "0.254.0"
+deno_permissions = "0.105.0"
+deno_process = "0.61.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.178.0"
-deno_crypto = "0.259.0"
-deno_fetch = "0.269.0"
-deno_web = "0.276.0"
-deno_webidl = "0.245.0"
-deno_webstorage = "0.240.0"
+deno_cache = "0.179.0"
+deno_crypto = "0.260.0"
+deno_fetch = "0.270.0"
+deno_web = "0.277.0"
+deno_webidl = "0.246.0"
+deno_webstorage = "0.241.0"
 
 # === Network & HTTP ===
-deno_http = "0.243.0"
-deno_net = "0.237.0"
-deno_tls = "0.232.0"
-deno_websocket = "0.250.0"
+deno_http = "0.244.0"
+deno_net = "0.238.0"
+deno_tls = "0.233.0"
+deno_websocket = "0.251.0"
 
 # === File System & I/O ===
-deno_fs = "0.155.0"
-deno_io = "0.155.0"
+deno_fs = "0.156.0"
+deno_io = "0.156.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.67.0"
+deno_telemetry = "0.68.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.212.0"
-deno_kv = "0.153.0"
-deno_cron = "0.125.0"
+deno_webgpu = "0.213.0"
+deno_kv = "0.154.0"
+deno_cron = "0.126.0"
 
 # === Node.js Integration ===
-deno_node = "0.183.0"
-deno_node_crypto = "0.15.0"
-deno_node_sqlite = "0.15.0"
-deno_resolver = "0.76.0"
-node_resolver = "0.83.0"
+deno_node = "0.184.0"
+deno_node_crypto = "0.16.0"
+deno_node_sqlite = "0.16.0"
+deno_resolver = "0.77.0"
+node_resolver = "0.84.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.232.0"
-deno_napi = "0.176.0"
+deno_ffi = "0.233.0"
+deno_napi = "0.177.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = "0.3.32"
 futures-util = "0.3.32"
-tokio = { version = "1.52.0", features = [
+tokio = { version = "1.52.1", features = [
   "rt-multi-thread",
   "macros",
   "sync",
@@ -96,7 +96,7 @@ tokio = { version = "1.52.0", features = [
   "net",
   "io-util",
 ] }
-async-compression = { version = "0.4.41", features = [
+async-compression = { version = "0.4.42", features = [
   "tokio",
   "zstd",
   "brotli",
@@ -107,7 +107,7 @@ async-compression = { version = "0.4.41", features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = "0.22.1"
-rkyv = "0.8.15"
+rkyv = "0.8.16"
 
 # === HTTP Client & Server ===
 http = "1.4.0"
@@ -142,7 +142,7 @@ smallvec = "1.15.1"
 regex = { workspace = true }
 rustc-hash = "2.1.2"
 lru = "0.17.0"
-uuid = { version = "1.23.0", features = [ "v4" ] }
+uuid = { version = "1.23.1", features = [ "v4" ] }
 thiserror = "2.0.18"
 
 # === Image Processing & Layout ===
@@ -157,10 +157,10 @@ webp = "0.3.1"
 
 # Layout and text rendering
 taffy = "0.10.1"
-parley = "0.8.0"
+parley = "0.9.0"
 swash = "0.2.7"
 zeno = "0.3.3"
-wuff = "0.2.3"
+wuff = "0.2.4"
 resvg = "0.47.0"
 
 # === System Integration ===
@@ -176,7 +176,7 @@ sysinfo = "0.38.4"
 # === Development Tools ===
 rustyline = "=17.0.0"
 deno_ast = { version = "=0.53.1", features = [ "transpiling" ] }
-deno_package_json = { version = "0.47.0", default-features = false }
+deno_package_json = { version = "0.48.0", default-features = false }
 deno_semver = "=0.9.1"
 
 # === Platform-specific Dependencies ===
