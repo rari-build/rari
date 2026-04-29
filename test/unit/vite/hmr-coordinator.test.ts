@@ -23,6 +23,8 @@ describe('HMRCoordinator', () => {
 
     mockBuilder = {
       rebuildComponent: vi.fn(),
+      getImportGraph: vi.fn(() => new Map()),
+      invalidateBuildCacheFor: vi.fn(),
     }
 
     mockServer = {
