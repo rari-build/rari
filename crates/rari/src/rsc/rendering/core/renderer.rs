@@ -242,10 +242,6 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         component_code: &str,
     ) -> Result<(), RariError> {
-        if cfg!(debug_assertions) || std::env::var("NODE_ENV").as_deref() != Ok("production") {
-            self.clear_component_module_cache(component_id).await?;
-        }
-
         let init_registry_script = RscJsLoader::create_global_init();
         self.runtime
             .execute_script("ensure_global_registries.js".to_string(), init_registry_script)
@@ -1278,6 +1274,50 @@ globalThis['~errors'].batch.push({{
         };
         if is_loaded && !force_reload {
             return Ok(());
+        }
+
+        let is_registered = {
+            let registry = self.component_registry.lock();
+            registry.is_component_registered(component_id)
+        };
+
+        if !is_registered {
+            let component_path = component_id.strip_prefix("app/").unwrap_or(component_id);
+            let dist_path =
+                std::path::Path::new("dist/server").join(format!("{}.js", component_path));
+
+            if dist_path.exists() {
+                let component_code = tokio::fs::read_to_string(&dist_path).await.map_err(|e| {
+                    RariError::io(format!(
+                        "Failed to read component file {}: {}",
+                        dist_path.display(),
+                        e
+                    ))
+                })?;
+
+                let dependencies =
+                    crate::rsc::utils::dependency_utils::extract_dependencies(&component_code);
+
+                {
+                    let mut registry = self.component_registry.lock();
+                    registry
+                        .register_component(
+                            component_id,
+                            &component_code,
+                            component_code.clone(),
+                            dependencies.into_iter().collect(),
+                        )
+                        .map_err(|e| {
+                            RariError::internal(format!("Failed to register component: {}", e))
+                        })?;
+                }
+            } else {
+                tracing::error!("Component file not found: {}", dist_path.display());
+                return Err(RariError::not_found(format!(
+                    "Component not registered and file not found: {}",
+                    component_id
+                )));
+            }
         }
 
         let (transformed_source, dependencies) = {

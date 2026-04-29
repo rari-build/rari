@@ -493,7 +493,7 @@ impl JsExecutionRuntime {
                     RariError::js_execution(error_msg)
                 })?;
 
-            let module_id = self.load_es_module(&hmr_specifier).await.map_err(|e| {
+            let module_id = self.load_es_module(component_id).await.map_err(|e| {
                 let error_msg = format!("Failed to load ES module for {}: {}", component_id, e);
                 tracing::error!("{}", error_msg);
                 RariError::js_execution(error_msg)

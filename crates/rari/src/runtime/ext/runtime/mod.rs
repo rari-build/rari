@@ -250,6 +250,8 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
                 has_node_modules_dir: node_resolver.has_node_modules_dir(),
                 argv0: None,
                 node_debug: None,
+                node_cluster_unique_id: None,
+                node_cluster_sched_policy: None,
                 node_ipc_init: None,
                 mode: WorkerExecutionMode::Worker,
                 serve_port: None,
