@@ -91,8 +91,13 @@ export class HMRCoordinator {
       if (filesToProcess.length === 0)
         return
 
+      const dependentPages = this.collectDependentPageComponents(filesToProcess)
+      for (const dep of dependentPages)
+        this.serverComponentBuilder.invalidateBuildCacheFor(dep)
+      const allFilesToRebuild = [...filesToProcess, ...dependentPages]
+
       const results = await Promise.allSettled(
-        filesToProcess.map(async (file) => {
+        allFilesToRebuild.map(async (file) => {
           const relativePath = path.relative(process.cwd(), file)
 
           try {
@@ -253,6 +258,35 @@ export class HMRCoordinator {
       console.error(`[rari] HMR: Failed to notify Rust server:`, error)
       throw error
     }
+  }
+
+  private collectDependentPageComponents(changedFiles: string[]): string[] {
+    const importGraph = this.serverComponentBuilder.getImportGraph()
+    const dependentPages = new Set<string>()
+    const visited = new Set<string>()
+
+    const findPageImporters = (filePath: string) => {
+      if (visited.has(filePath))
+        return
+      visited.add(filePath)
+
+      const importers = importGraph.get(filePath)
+      if (!importers)
+        return
+
+      for (const importer of importers) {
+        const isAppFile = importer.includes('/app/') || importer.includes('\\app\\')
+        if (isAppFile && !changedFiles.includes(importer)) {
+          dependentPages.add(importer)
+        }
+        findPageImporters(importer)
+      }
+    }
+
+    for (const file of changedFiles)
+      findPageImporters(file)
+
+    return [...dependentPages]
   }
 
   detectComponentType(filePath: string): 'client' | 'server' | 'unknown' {

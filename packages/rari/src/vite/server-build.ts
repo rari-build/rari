@@ -1686,6 +1686,10 @@ function registerClientReference(clientReference, id, exportName) {
     this.manifestCache = null
   }
 
+  invalidateBuildCacheFor(filePath: string): void {
+    this.buildCache.delete(filePath)
+  }
+
   async getTransformedComponentCode(filePath: string): Promise<string> {
     return await this.buildComponentCodeOnly(filePath)
   }
