@@ -1,4 +1,17 @@
+## [rari@0.13.2] - 2026-04-29
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Improve component registration and HMR handling
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Bump rari-binaries to 0.13.2
 ## [rari@0.13.1] - 2026-04-24
+
+### 💼 Other
+
+- Rari@0.13.1
 
 ### ⚙️ Miscellaneous Tasks
 
