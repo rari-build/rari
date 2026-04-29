@@ -5,8 +5,8 @@ export default async function EnterprisePage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="relative overflow-hidden w-full min-h-[70vh] flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent"></div>
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none"></div>
+        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
           <div className="text-center mb-12">
@@ -62,7 +62,7 @@ export default async function EnterprisePage() {
       <div className="w-full py-16 lg:py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
+            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
             <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
               <div className="grid md:grid-cols-3 gap-8">
                 <div className="text-center">
@@ -131,7 +131,7 @@ export default async function EnterprisePage() {
             ].map(feature => (
               <div key={feature.id} className="relative group h-full overflow-hidden rounded-xl p-px">
                 <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
-                  <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
+                  <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
                   <div className="relative z-10">
                     <h3 className="relative text-xl font-semibold mb-3">
                       <span className="text-[#f0f6fc]">{feature.title}</span>
@@ -201,7 +201,7 @@ export default async function EnterprisePage() {
       <div className="w-full py-16 lg:py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
+            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
             <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12 text-center">
               <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc] mb-4">
                 Ready to accelerate your development?

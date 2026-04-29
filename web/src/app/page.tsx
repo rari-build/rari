@@ -12,11 +12,11 @@ export default async function HomePage() {
       <div className="w-full py-16 lg:py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
+            <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
 
             <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12">
               <div className="flex items-center gap-3 mb-8">
-                <div className="w-1 h-8 bg-linear-to-b from-[#fd7e14] to-[#e8590c] rounded-full"></div>
+                <div className="w-1 h-8 bg-linear-to-b from-[#fd7e14] to-[#e8590c] rounded-full" />
                 <h2 className="text-3xl lg:text-4xl font-bold text-[#f0f6fc]">
                   Quick Start
                 </h2>

@@ -512,7 +512,7 @@ export default function Sidebar({ version }: SidebarProps) {
 
         <div className="p-6">
           <div className="flex flex-row items-center lg:justify-between mb-8 pb-4 border-b border-[#30363d]/50 relative gap-3">
-            <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
+            <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent" />
             <a
               href="/"
               className="hover:opacity-80 transition-opacity"
@@ -547,7 +547,7 @@ export default function Sidebar({ version }: SidebarProps) {
           </ul>
 
           <div className="mt-8 pt-6 border-t border-[#30363d]/50 relative">
-            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent"></div>
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#fd7e14]/30 to-transparent" />
             <ul className="space-y-3">
               <li className="flex items-center justify-center gap-3">
                 <a

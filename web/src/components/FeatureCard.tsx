@@ -28,7 +28,7 @@ export default function FeatureCard({ title, description, icon }: FeatureCardPro
   return (
     <div className="relative group h-full overflow-hidden rounded-xl p-px">
       <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
-        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
+        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10">
           <div className="text-4xl mb-4 transform group-hover:scale-110 transition-transform duration-300">{renderedIcon}</div>
           <h3 className="relative text-xl font-semibold mb-3">

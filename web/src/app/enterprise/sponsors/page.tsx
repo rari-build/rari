@@ -202,10 +202,10 @@ function TierCard({ tier }: { tier: Tier }) {
       className={`relative group h-full overflow-hidden rounded-xl p-px block ${tier.highlight ? 'md:scale-105' : ''}`}
     >
       {tier.highlight && (
-        <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-xl blur opacity-30 group-hover:opacity-40 transition-opacity"></div>
+        <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-xl blur opacity-30 group-hover:opacity-40 transition-opacity" />
       )}
       <div className={`relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border ${tier.highlight ? 'border-[#fd7e14]' : 'border-[#30363d]'} rounded-xl p-6 flex flex-col transition-all duration-300 group-hover:border-transparent`}>
-        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
+        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10 flex flex-col h-full">
           <div className="mb-4">
             <h3 className="text-2xl font-bold text-[#f0f6fc] mb-2">{tier.name}</h3>
@@ -246,7 +246,7 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
       className="relative group h-full overflow-hidden rounded-xl p-px block"
     >
       <div className="relative z-10 h-full bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-xl p-6 transition-all duration-300 group-hover:border-transparent">
-        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
+        <div className="absolute inset-0 bg-linear-to-br from-[#fd7e14]/10 via-[#e8590c]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex-1">
             <h3 className="text-xl font-bold text-[#f0f6fc] mb-2">{tier.name}</h3>
@@ -276,8 +276,8 @@ export default async function SponsorsPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="relative overflow-hidden w-full flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent"></div>
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none"></div>
+        <div className="absolute inset-0 bg-linear-to-b from-[#161b22]/30 via-transparent to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-[#0d1117] to-transparent pointer-events-none" />
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
           <div className="text-center">
@@ -442,7 +442,7 @@ export default async function SponsorsPage() {
             </div>
 
             <div className="relative">
-              <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20"></div>
+              <div className="absolute -inset-0.5 bg-linear-to-r from-[#fd7e14] to-[#e8590c] rounded-2xl blur opacity-20" />
               <div className="relative bg-linear-to-br from-[#161b22] to-[#0d1117] border border-[#30363d] rounded-2xl p-8 lg:p-12 text-center">
                 <p className="text-xl text-gray-400 mb-8">
                   Join Neon in supporting rari!
