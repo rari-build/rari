@@ -18,15 +18,15 @@
   },
   "dependencies": {
     "rari": "latest",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260429.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260507.1",
     "tailwindcss": "^4.2.4",
     "vite-plus": "^0.1.20"
   }

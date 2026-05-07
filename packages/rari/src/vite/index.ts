@@ -835,9 +835,30 @@ if (import.meta.hot) {
           if (typeof output.codeSplitting === 'object') {
             output.codeSplitting.groups = output.codeSplitting.groups || []
 
+            const userGroups = output.codeSplitting.groups
+
             output.codeSplitting.groups.push({
               name(moduleId: string) {
                 if (moduleId.includes('node_modules')) {
+                  for (const group of userGroups) {
+                    if (group.test) {
+                      let testResult = false
+                      if (typeof group.test === 'function') {
+                        testResult = Boolean(group.test(moduleId))
+                      }
+                      else if (group.test instanceof RegExp) {
+                        testResult = group.test.test(moduleId)
+                      }
+                      else if (typeof group.test === 'string') {
+                        testResult = moduleId.includes(group.test)
+                      }
+
+                      if (testResult) {
+                        return null
+                      }
+                    }
+                  }
+
                   if (moduleId.includes('node_modules/react-dom'))
                     return 'react-dom'
                   if (moduleId.includes('node_modules/react'))
