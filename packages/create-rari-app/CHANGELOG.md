@@ -1,5 +1,9 @@
 ## [create-rari-app@0.5.5] - 2026-04-29
 
+### 💼 Other
+
+- Create-rari-app@0.5.5
+
 ### ⚙️ Miscellaneous Tasks
 
 - Update dependencies to latest versions
