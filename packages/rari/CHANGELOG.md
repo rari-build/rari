@@ -1,7 +1,13 @@
 ## [rari@0.13.3] - 2026-05-07
 
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* Downgrade version to 0.13.2
+## [rari@0.13.3] - 2026-05-07
+
 ### 💼 Other
 
+- Rari@0.13.3
 - Rari@0.13.3
 ## [rari@0.13.2] - 2026-04-29
 
