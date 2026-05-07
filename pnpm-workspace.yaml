@@ -62,3 +62,6 @@ onlyBuiltDependencies:
   - esbuild
   - oxlint
   - '@shikijs/engine-oniguruma'
+allowBuilds:
+  core-js: true
+  protobufjs: true
