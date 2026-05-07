@@ -1,4 +1,8 @@
-## [rari@0.13.3] - 2026-05-07
+## [rari@0.13.4] - 2026-05-07
+
+### 💼 Other
+
+- Rari@0.13.3
 
 ### ⚙️ Miscellaneous Tasks
 
