@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <script type="module">
+      import "/src/app/globals.css";
+
       if (import.meta.env.VITE_SENTRY_DSN) {
         const loadSentry = () => {
           import("/src/lib/sentry-init.ts");
@@ -15,8 +17,6 @@
         document.addEventListener('keydown', loadSentry, { once: true, passive: true });
         setTimeout(loadSentry, 5000);
       }
-
-      import "/src/app/globals.css";
     </script>
   </head>
 
