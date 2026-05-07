@@ -1,3 +1,8 @@
+## [create-rari-app@0.5.7] - 2026-05-07
+
+### 💼 Other
+
+- Create-rari-app@0.5.6
 ## [create-rari-app@0.5.5] - 2026-04-29
 
 ### 💼 Other
