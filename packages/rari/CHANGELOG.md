@@ -4,6 +4,10 @@
 
 - *(rsc)* Improve component registration and HMR handling
 
+### 💼 Other
+
+- Rari@0.13.2
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(rari)* Bump rari-binaries to 0.13.2
