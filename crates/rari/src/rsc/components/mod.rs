@@ -402,7 +402,7 @@ impl ComponentRegistry {
         let normalized_id = Self::normalize_id(id);
         if let Some(component) = self.components.remove(normalized_id.as_ref()) {
             self.dependency_graph.remove(normalized_id.as_ref());
-            for (_, dependents) in self.reverse_dependency_graph.iter_mut() {
+            for dependents in self.reverse_dependency_graph.values_mut() {
                 dependents.remove(normalized_id.as_ref());
             }
             if let Some(specifier) = &component.module_specifier {

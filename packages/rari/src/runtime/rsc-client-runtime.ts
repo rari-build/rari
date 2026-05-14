@@ -794,7 +794,7 @@ class RscClient {
       }
     }
 
-    // eslint-disable-next-line react/component-hook-factories
+    // oxlint-disable-next-line react/component-hook-factories
     const StreamingWrapper = (): any => {
       // eslint-disable-next-line react/use-state
       const [, setRenderTrigger] = useState(0)
@@ -1226,7 +1226,7 @@ function createServerComponentWrapper(componentName: string): (props: any) => an
     globalRefreshCounter = windowWithRari['~rari'].hmr!.refreshCounters[componentName]!
   }
 
-  // eslint-disable-next-line react/component-hook-factories
+  // oxlint-disable-next-line react/component-hook-factories
   const ServerComponent = (props: any): any => {
     const [mountKey, setMountKey] = useState(globalRefreshCounter)
 
