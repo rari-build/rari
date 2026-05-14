@@ -57,6 +57,8 @@ pub async fn revalidate_by_path(
                 }
             }
 
+            state.layout_html_cache.clear();
+
             #[allow(clippy::disallowed_methods)]
             Ok(Json(RevalidateResponse {
                 revalidated: true,

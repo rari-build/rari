@@ -20,12 +20,27 @@ pub struct CachedResponse {
     pub body: Bytes,
     pub headers: HeaderMap,
     pub metadata: CacheMetadata,
+    pub compressed_zstd: Option<Bytes>,
+    pub compressed_br: Option<Bytes>,
+    pub compressed_gzip: Option<Bytes>,
 }
 
 impl CachedResponse {
     pub fn is_valid(&self) -> bool {
         let elapsed = self.metadata.cached_at.elapsed().as_secs();
         elapsed < self.metadata.ttl
+    }
+
+    pub fn get_compressed(
+        &self,
+        encoding: &crate::server::compression::CompressionEncoding,
+    ) -> Option<&Bytes> {
+        match encoding {
+            crate::server::compression::CompressionEncoding::Zstd => self.compressed_zstd.as_ref(),
+            crate::server::compression::CompressionEncoding::Brotli => self.compressed_br.as_ref(),
+            crate::server::compression::CompressionEncoding::Gzip => self.compressed_gzip.as_ref(),
+            crate::server::compression::CompressionEncoding::Identity => None,
+        }
     }
 }
 
@@ -245,6 +260,12 @@ impl ResponseCache {
         self.update_entry_count();
     }
 
+    pub async fn update_in_place(&self, key: &str, response: CachedResponse) {
+        if self.cache.contains_key(key) {
+            self.cache.insert(key.to_string(), response);
+        }
+    }
+
     pub async fn invalidate(&self, key: &str) {
         if let Some((_, response)) = self.cache.remove(key) {
             for tag in &response.metadata.tags {
@@ -383,6 +404,9 @@ mod tests {
                 etag: Some("test-etag".to_string()),
                 tags: vec!["test-tag".to_string()],
             },
+            compressed_zstd: None,
+            compressed_br: None,
+            compressed_gzip: None,
         }
     }
 

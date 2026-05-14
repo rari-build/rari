@@ -13,12 +13,18 @@ use tracing::error;
 
 use super::{constants::*, error_messages, types::*, utils};
 
-struct LayoutHtmlCache {
+pub struct LayoutHtmlCache {
     cache: DashMap<u64, String>,
 }
 
+impl Default for LayoutHtmlCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LayoutHtmlCache {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { cache: DashMap::new() }
     }
 
@@ -28,6 +34,10 @@ impl LayoutHtmlCache {
 
     fn insert(&self, key: u64, html: String) {
         self.cache.insert(key, html);
+    }
+
+    pub fn clear(&self) {
+        self.cache.clear();
     }
 }
 
@@ -39,6 +49,17 @@ pub struct LayoutRenderer {
 impl LayoutRenderer {
     pub fn new(renderer: Arc<tokio::sync::Mutex<RscRenderer>>) -> Self {
         Self { renderer, html_cache: Arc::new(LayoutHtmlCache::new()) }
+    }
+
+    pub fn with_shared_cache(
+        renderer: Arc<tokio::sync::Mutex<RscRenderer>>,
+        html_cache: Arc<LayoutHtmlCache>,
+    ) -> Self {
+        Self { renderer, html_cache }
+    }
+
+    pub fn create_shared_cache() -> Arc<LayoutHtmlCache> {
+        Arc::new(LayoutHtmlCache::new())
     }
 
     async fn enable_streaming_and_inject_lazy_resolver(
@@ -300,13 +321,9 @@ impl LayoutRenderer {
         >,
         return_rsc_on_fallback: bool,
     ) -> Result<RenderResult, RariError> {
-        let can_use_html_cache = request_context.is_none();
         let cache_key = utils::generate_cache_key(route_match, context);
 
-        if can_use_html_cache
-            && !return_rsc_on_fallback
-            && let Some(cached_html) = self.html_cache.get(cache_key)
-        {
+        if !return_rsc_on_fallback && let Some(cached_html) = self.html_cache.get(cache_key) {
             return Ok(RenderResult::Static(cached_html));
         }
 
@@ -323,6 +340,31 @@ impl LayoutRenderer {
             None
         };
 
+        let needs_streaming = loading_component_id.is_some();
+
+        if !needs_streaming {
+            let rsc_wire_format = self.render_route(route_match, context, request_context).await?;
+
+            if return_rsc_on_fallback {
+                return Ok(RenderResult::Static(rsc_wire_format));
+            }
+
+            let runtime = {
+                let renderer = self.renderer.lock().await;
+                Arc::clone(&renderer.runtime)
+            };
+            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(runtime);
+            let config =
+                Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
+            let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+
+            if route_match.not_found.is_none() {
+                self.html_cache.insert(cache_key, html.clone());
+            }
+
+            return Ok(RenderResult::Static(html));
+        }
+
         let composition_script = self.build_composition_script(
             route_match,
             context,
@@ -336,6 +378,8 @@ impl LayoutRenderer {
             loading_component_id.as_deref(),
             false,
         )?;
+
+        let can_use_html_cache = true;
 
         if let Some(ctx) = request_context {
             let renderer_guard = self.renderer.lock().await;
