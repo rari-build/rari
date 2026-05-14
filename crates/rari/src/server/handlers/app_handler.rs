@@ -269,7 +269,8 @@ pub async fn render_with_fallback(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let layout_renderer =
+        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
 
     match render_streaming_with_layout(
         state.clone(),
@@ -294,7 +295,8 @@ pub async fn render_rsc_navigation_streaming(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let layout_renderer =
+        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
     let is_not_found = route_match.not_found.is_some();
 
     let request_context =
@@ -416,7 +418,8 @@ pub async fn render_synchronous(
     context: crate::rsc::rendering::layout::LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let layout_renderer =
+        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
     let request_context =
         std::sync::Arc::new(crate::server::middleware::request_context::RequestContext::new(
             route_match.route.path.clone(),
@@ -628,6 +631,8 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
+            use crate::server::compression::{CompressionEncoding, compress_body};
+
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
                 Err(e) => {
@@ -641,13 +646,21 @@ pub async fn render_streaming_with_layout(
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
-            return Ok(Response::builder()
+            let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+            let (body_bytes, actual_encoding) =
+                compress_body(bytes::Bytes::from(final_html), encoding).await;
+
+            let mut response_builder = Response::builder()
                 .status(status_code)
                 .header("content-type", "text/html; charset=utf-8")
                 .header("x-render-mode", "static")
-                .header("vary", "Accept")
-                .body(Body::from(final_html))
-                .expect("Valid HTML response"));
+                .header("vary", "Accept, Accept-Encoding");
+
+            if let Some(encoding_header) = actual_encoding.as_header_value() {
+                response_builder = response_builder.header("content-encoding", encoding_header);
+            }
+
+            return Ok(response_builder.body(Body::from(body_bytes)).expect("Valid HTML response"));
         }
     };
 
@@ -864,7 +877,8 @@ pub async fn handle_app_route(
         route_match.pathname.clone(),
     );
 
-    let layout_renderer = LayoutRenderer::new(state.renderer.clone());
+    let layout_renderer =
+        LayoutRenderer::with_shared_cache(state.renderer.clone(), state.layout_html_cache.clone());
 
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
         match layout_renderer.check_page_not_found(&route_match, &context).await {
@@ -978,6 +992,9 @@ pub async fn handle_app_route(
                                 etag: None,
                                 tags: cache_policy.tags,
                             },
+                            compressed_zstd: None,
+                            compressed_br: None,
+                            compressed_gzip: None,
                         };
 
                         state.response_cache.set(cache_key, cached_response).await;
@@ -1027,11 +1044,45 @@ pub async fn handle_app_route(
 
                 let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
+                use crate::server::compression::{CompressionEncoding, compress_body};
+                let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+
+                let (body_bytes, actual_encoding) =
+                    if let Some(pre_compressed) = cached.get_compressed(&encoding) {
+                        (pre_compressed.clone(), encoding)
+                    } else if matches!(encoding, CompressionEncoding::Identity) {
+                        (cached.body.clone(), CompressionEncoding::Identity)
+                    } else {
+                        let (compressed, actual_enc) =
+                            compress_body(cached.body.clone(), encoding).await;
+                        if !matches!(actual_enc, CompressionEncoding::Identity) {
+                            let mut updated = cached.clone();
+                            match actual_enc {
+                                CompressionEncoding::Zstd => {
+                                    updated.compressed_zstd = Some(compressed.clone())
+                                }
+                                CompressionEncoding::Brotli => {
+                                    updated.compressed_br = Some(compressed.clone())
+                                }
+                                CompressionEncoding::Gzip => {
+                                    updated.compressed_gzip = Some(compressed.clone())
+                                }
+                                CompressionEncoding::Identity => {}
+                            }
+                            state.response_cache.update_in_place(&cache_key, updated).await;
+                        }
+                        (compressed, actual_enc)
+                    };
+
                 let mut response_builder = Response::builder()
                     .status(status_code)
                     .header("content-type", "text/html; charset=utf-8")
                     .header("vary", merged_vary)
                     .header("x-cache", "HIT");
+
+                if let Some(encoding_header) = actual_encoding.as_header_value() {
+                    response_builder = response_builder.header("content-encoding", encoding_header);
+                }
 
                 if let Some(etag) = &cached.metadata.etag {
                     response_builder = response_builder.header("etag", etag);
@@ -1044,7 +1095,7 @@ pub async fn handle_app_route(
                 }
 
                 return Ok(response_builder
-                    .body(Body::from(cached.body))
+                    .body(Body::from(body_bytes))
                     .expect("Valid cached response"));
             }
 
@@ -1101,6 +1152,9 @@ pub async fn handle_app_route(
                                 etag: Some(etag.clone()),
                                 tags: cache_policy.tags,
                             },
+                            compressed_zstd: None,
+                            compressed_br: None,
+                            compressed_gzip: None,
                         };
 
                         state.response_cache.set(cache_key.clone(), cached_response).await;
@@ -1285,6 +1339,9 @@ pub async fn handle_app_route(
                         etag: Some(etag),
                         tags: cache_policy.tags,
                     },
+                    compressed_zstd: None,
+                    compressed_br: None,
+                    compressed_gzip: None,
                 };
 
                 state.response_cache.set(cache_key, cached_response).await;

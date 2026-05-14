@@ -9,7 +9,7 @@ mod utils;
 pub mod tests;
 
 pub use constants::*;
-pub use core::LayoutRenderer;
+pub use core::{LayoutHtmlCache, LayoutRenderer};
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
 pub use utils::create_layout_context;

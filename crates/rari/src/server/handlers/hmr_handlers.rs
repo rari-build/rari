@@ -226,6 +226,8 @@ async fn handle_register(state: ServerState, file_path: String) -> Result<Json<V
             }
         }
 
+        state.layout_html_cache.clear();
+
         serde_json::json!({
             "success": true,
             "file_path": file_path,

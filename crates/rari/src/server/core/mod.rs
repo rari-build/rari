@@ -187,6 +187,7 @@ impl Server {
             api_route_handler,
             module_reload_manager,
             html_cache: Arc::new(dashmap::DashMap::new()),
+            layout_html_cache: crate::rsc::rendering::layout::LayoutRenderer::create_shared_cache(),
             response_cache,
             og_generator,
             project_root,
