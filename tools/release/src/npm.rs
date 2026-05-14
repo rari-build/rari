@@ -46,25 +46,10 @@ pub async fn publish_package(
         args.push(otp_code);
     }
 
-    let output = Command::new("pnpm").args(&args).current_dir(package_path).output().await?;
+    let status = Command::new("pnpm").args(&args).current_dir(package_path).status().await?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        if stderr.contains("EOTP") {
-            if otp_value.is_some() {
-                anyhow::bail!(
-                    "npm publish failed: OTP code is invalid or expired.\nPlease restart with a fresh OTP code."
-                );
-            } else {
-                anyhow::bail!(
-                    "npm publish requires a one-time password.\nPlease provide an OTP code."
-                );
-            }
-        }
-
-        anyhow::bail!("Failed to publish package:\nstdout: {}\nstderr: {}", stdout, stderr);
+    if !status.success() {
+        anyhow::bail!("Failed to publish package");
     }
 
     Ok(())

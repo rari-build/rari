@@ -3,6 +3,7 @@
 ### 💼 Other
 
 - Rari@0.13.3
+- Rari@0.13.4
 
 ### ⚙️ Miscellaneous Tasks
 
