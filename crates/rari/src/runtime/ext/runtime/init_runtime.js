@@ -1,21 +1,22 @@
 // oxlint-disable no-unused-vars
-/* eslint-disable unused-imports/no-unused-imports */
+/* eslint-disable unused-imports/no-unused-imports, unused-imports/no-unused-vars */
 import { core } from 'ext:core/mod.js'
-import * as os from 'ext:deno_os/30_os.js'
-import * as signals from 'ext:deno_os/40_signals.js'
-import * as process from 'ext:deno_process/40_process.js'
-import * as _console from 'ext:deno_web/01_console.js'
 import { applyToDeno, getterOnly, nonEnumerable, readOnly } from 'ext:rari/rari.js'
-import * as errors from 'ext:runtime/01_errors.js'
-import * as version from 'ext:runtime/01_version.ts'
-import * as util from 'ext:runtime/06_util.js'
-import * as permissions from 'ext:runtime/10_permissions.js'
-import * as workers from 'ext:runtime/11_workers.js'
-import * as tty from 'ext:runtime/40_tty.js'
-import * as prompt from 'ext:runtime/41_prompt.js'
 import * as scope from 'ext:runtime/98_global_scope_shared.js'
 import * as scopeWindow from 'ext:runtime/98_global_scope_window.js'
 import * as scopeWorker from 'ext:runtime/98_global_scope_worker.js'
+
+const os = core.loadExtScript('ext:deno_os/30_os.js')
+const signals = core.loadExtScript('ext:deno_os/40_signals.js')
+const process = core.loadExtScript('ext:deno_process/40_process.js')
+const _console = core.loadExtScript('ext:deno_web/01_console.js')
+const errors = core.loadExtScript('ext:runtime/01_errors.js')
+const version = core.loadExtScript('ext:runtime/01_version.ts')
+const util = core.loadExtScript('ext:runtime/06_util.js')
+const permissions = core.loadExtScript('ext:runtime/10_permissions.js')
+const workers = core.loadExtScript('ext:runtime/11_workers.js')
+const tty = core.loadExtScript('ext:runtime/40_tty.js')
+const prompt = core.loadExtScript('ext:runtime/41_prompt.js')
 
 const opArgs = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_args())
 const opPid = scopeWindow.memoizeLazy(() => core.ops.op_bootstrap_pid())

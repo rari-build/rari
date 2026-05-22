@@ -96,7 +96,12 @@ impl ExtensionTrait<WebOptions> for init_web {
 
 impl ExtensionTrait<WebOptions> for deno_web::deno_web {
     fn init(options: WebOptions) -> Extension {
-        deno_web::deno_web::init(options.blob_store, options.base_url, options.broadcast_channel)
+        deno_web::deno_web::init(
+            options.blob_store,
+            options.base_url,
+            false,
+            options.broadcast_channel,
+        )
     }
 }
 

@@ -15,7 +15,7 @@ impl ExtensionTrait<()> for init_cron {
 }
 impl ExtensionTrait<()> for deno_cron::deno_cron {
     fn init((): ()) -> Extension {
-        deno_cron::deno_cron::init(LocalCronHandler::new())
+        deno_cron::deno_cron::init(Box::new(LocalCronHandler::new()))
     }
 }
 

@@ -278,6 +278,8 @@ fn create_web_worker_callback(options: WebWorkerCallbackOptions) -> Arc<CreateWe
             create_params: None,
             enable_stack_trace_arg_in_ops: false,
             enable_raw_imports: false,
+            residual_lazy_js_sources: &[],
+            residual_lazy_esm_sources: &[],
         };
         WebWorker::bootstrap_from_options(services, options)
     })

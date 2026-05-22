@@ -96,6 +96,7 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(ffi::extensions(is_snapshot));
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
     extensions.extend(webgpu::extensions(is_snapshot));
+    extensions.push(deno_runtime::deno_canvas::deno_canvas::init());
     extensions.extend(cron::extensions(is_snapshot));
     extensions.extend(napi::extensions(is_snapshot));
     extensions.extend(node_crypto::extensions(is_snapshot));

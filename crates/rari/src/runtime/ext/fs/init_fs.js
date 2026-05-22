@@ -1,4 +1,6 @@
-import * as fs from 'ext:deno_fs/30_fs.js'
+import { core } from 'ext:core/mod.js'
+
+const fs = core.loadExtScript('ext:deno_fs/30_fs.js')
 
 globalThis.Deno.writeFileSync = fs.writeFileSync
 globalThis.Deno.writeFile = fs.writeFile

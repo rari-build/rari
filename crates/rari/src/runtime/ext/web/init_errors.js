@@ -3,15 +3,16 @@
 // oxlint-disable no-use-before-define
 import { core, internals, primordials } from 'ext:core/mod.js'
 import { op_set_format_exception_callback } from 'ext:core/ops'
-import {
+
+const {
   getDefaultInspectOptions,
   getStderrNoColor,
   inspectArgs,
   quoteString,
-} from 'ext:deno_web/01_console.js'
-import { DOMException } from 'ext:deno_web/01_dom_exception.js'
-import * as event from 'ext:deno_web/02_event.js'
-import { DedicatedWorkerGlobalScope } from 'ext:deno_web/04_global_interfaces.js'
+} = core.loadExtScript('ext:deno_web/01_console.js')
+const { DOMException } = core.loadExtScript('ext:deno_web/01_dom_exception.js')
+const event = core.loadExtScript('ext:deno_web/02_event.js')
+const { DedicatedWorkerGlobalScope } = core.loadExtScript('ext:deno_web/04_global_interfaces.js')
 
 const { BadResource, Interrupted, NotCapable } = core
 

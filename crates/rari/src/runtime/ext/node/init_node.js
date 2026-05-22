@@ -1,5 +1,7 @@
 /* eslint-disable no-undef, node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process  */
-import { initializeDebugEnv } from 'ext:deno_node/internal/util/debuglog.ts'
+import { core } from 'ext:core/mod.js'
+
+const { initializeDebugEnv } = core.loadExtScript('ext:deno_node/internal/util/debuglog.ts')
 
 const PATH_TRAILING_SLASH_REGEX = /\/$/
 const MULTIPLE_SLASHES_REGEX = /\/{2,}/g
