@@ -1,3 +1,17 @@
+## [create-rari-app@0.5.9] - 2026-05-23
+
+### 🚜 Refactor
+
+- *(runtime)* Remove client reference bridge registration
+
+### 🎨 Styling
+
+- Normalize gitignore patterns and update lint config
+## [create-rari-app@0.5.8] - 2026-05-14
+
+### 💼 Other
+
+- Create-rari-app@0.5.8
 ## [create-rari-app@0.5.7] - 2026-05-07
 
 ### 💼 Other
