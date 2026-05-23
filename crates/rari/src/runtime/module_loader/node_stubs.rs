@@ -1363,12 +1363,25 @@ export async function stat(path) {
   }
 }
 
-export async function readdir(path) {
+export async function readdir(path, options) {
   try {
     if (globalThis.Deno?.readDir) {
       const entries = [];
       for await (const entry of globalThis.Deno.readDir(path)) {
-        entries.push(entry.name);
+        if (options && options.withFileTypes) {
+          entries.push({
+            name: entry.name,
+            isFile: () => entry.isFile,
+            isDirectory: () => entry.isDirectory,
+            isSymbolicLink: () => entry.isSymlink || false,
+            isBlockDevice: () => false,
+            isCharacterDevice: () => false,
+            isFIFO: () => false,
+            isSocket: () => false,
+          });
+        } else {
+          entries.push(entry.name);
+        }
       }
       return entries;
     }
