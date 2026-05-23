@@ -1,3 +1,21 @@
+## [rari@0.13.7] - 2026-05-23
+
+### 🐛 Bug Fixes
+
+- Remove non-streaming rendering path from layout core renderer
+
+### 💼 Other
+
+- Rari-binaries@0.13.7
+
+### 🚜 Refactor
+
+- *(runtime)* Remove client reference bridge registration
+## [rari@0.13.6] - 2026-05-15
+
+### 💼 Other
+
+- Rari@0.13.6
 ## [rari@0.13.5] - 2026-05-14
 
 ### 💼 Other
