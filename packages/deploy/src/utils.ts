@@ -237,11 +237,10 @@ export function updateGitignoreForProvider(cwd: string, providerName: string, pr
   }
   else {
     const defaultGitignore = `# Dependencies
-node_modules/
-.pnpm-store/
+node_modules
 
 # Build outputs
-dist/
+dist
 
 # Environment variables
 .env
@@ -249,7 +248,7 @@ dist/
 .env.production
 
 # ${providerName}
-${providerFolder}/
+${providerFolder}
 
 # Logs
 *.log
@@ -261,15 +260,15 @@ pnpm-debug.log*
 Thumbs.db
 
 # IDE files
-.vscode/
-.idea/
+.vscode
+.idea
 *.swp
 *.swo
 *~
 
 # Temporary files
-.tmp/
-tmp/
+.tmp
+tmp
 `
     writeFileSync(gitignorePath, defaultGitignore)
     logSuccess(`Created .gitignore with ${providerName} entries`)

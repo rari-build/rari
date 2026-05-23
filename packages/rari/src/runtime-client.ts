@@ -315,6 +315,7 @@ function LoadingBoundaryWrapper({ children, fallback }: { children: ReactNode, f
 }
 
 export function createLoadingBoundary(fallback: ReactElement) {
+  // eslint-disable-next-line react/jsx-no-children-prop
   return ({ children }: { children: ReactNode }) => React.createElement(LoadingBoundaryWrapper, { fallback, children })
 }
 
@@ -381,6 +382,7 @@ function ErrorBoundaryWrapperComponent({ children, fallback }: { children: React
 }
 
 export function createErrorBoundary(fallback?: (error: Error, reset: () => void) => ReactElement) {
+  // eslint-disable-next-line react/jsx-no-children-prop
   return ({ children }: { children: ReactNode }) => React.createElement(ErrorBoundaryWrapperComponent, { fallback, children })
 }
 

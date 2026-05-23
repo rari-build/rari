@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.13.6"
+version = "0.13.7"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -37,50 +37,50 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.400.0"
+deno_core = "0.401.0"
 deno_error = "=0.7.1"
-deno_features = "0.44.0"
-deno_bundle_runtime = "0.34.0"
-deno_runtime = "0.255.0"
-deno_permissions = "0.106.0"
-deno_process = "0.62.0"
+deno_features = "0.45.0"
+deno_bundle_runtime = "0.35.0"
+deno_runtime = "0.256.0"
+deno_permissions = "0.107.0"
+deno_process = "0.63.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.180.0"
-deno_crypto = "0.261.0"
-deno_fetch = "0.271.0"
-deno_web = "0.278.0"
-deno_webidl = "0.247.0"
-deno_webstorage = "0.242.0"
+deno_cache = "0.181.0"
+deno_crypto = "0.262.0"
+deno_fetch = "0.272.0"
+deno_web = "0.279.0"
+deno_webidl = "0.248.0"
+deno_webstorage = "0.243.0"
 
 # === Network & HTTP ===
-deno_http = "0.245.0"
-deno_net = "0.239.0"
-deno_tls = "0.234.0"
-deno_websocket = "0.252.0"
+deno_http = "0.246.0"
+deno_net = "0.240.0"
+deno_tls = "0.235.0"
+deno_websocket = "0.253.0"
 
 # === File System & I/O ===
-deno_fs = "0.157.0"
-deno_io = "0.157.0"
+deno_fs = "0.158.0"
+deno_io = "0.158.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.69.0"
+deno_telemetry = "0.70.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.214.0"
-deno_kv = "0.155.0"
-deno_cron = "0.127.0"
+deno_webgpu = "0.215.0"
+deno_kv = "0.156.0"
+deno_cron = "0.128.0"
 
 # === Node.js Integration ===
-deno_node = "0.185.0"
-deno_node_crypto = "0.17.0"
-deno_node_sqlite = "0.17.0"
-deno_resolver = "0.78.0"
-node_resolver = "0.85.0"
+deno_node = "0.186.0"
+deno_node_crypto = "0.18.0"
+deno_node_sqlite = "0.18.0"
+deno_resolver = "0.79.0"
+node_resolver = "0.86.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.234.0"
-deno_napi = "0.178.0"
+deno_ffi = "0.235.0"
+deno_napi = "0.179.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -170,14 +170,14 @@ hyper-util = { version = "0.1.20", features = [
 ] }
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
-sys_traits = "=0.1.27"
+sys_traits = "=0.1.28"
 sysinfo = "0.39.1"
 
 # === Development Tools ===
 rustyline = "=17.0.0"
-deno_ast = { version = "=0.53.1", features = [ "transpiling" ] }
-deno_package_json = { version = "0.49.0", default-features = false }
-deno_semver = "=0.9.1"
+deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
+deno_package_json = { version = "0.50.0", default-features = false }
+deno_semver = "=0.10.0"
 
 # === Platform-specific Dependencies ===
 winapi = { version = "0.3.9", features = [
@@ -199,7 +199,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = [ "env-filter" ] }
 
 # === TLS & Crypto ===
-rustls = { version = "=0.23.28", default-features = false, features = [
+rustls = { version = "=0.23.40", default-features = false, features = [
   "std",
   "aws_lc_rs",
 ] }

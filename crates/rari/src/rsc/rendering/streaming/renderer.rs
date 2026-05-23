@@ -1257,7 +1257,7 @@ impl StreamingRenderer {
             };
 
             if let Err(e) = sender.send(import_chunk).await {
-                error!("Failed to send import row chunk: {}", e);
+                tracing::debug!("Failed to send import row chunk (client disconnected): {}", e);
             }
         }
 
@@ -1274,9 +1274,11 @@ impl StreamingRenderer {
         match sender.send(chunk).await {
             Ok(_) => {}
             Err(e) => {
-                error!(
-                    "Failed to send boundary update chunk, boundary_id={}, row_id={}, error={}",
-                    update.boundary_id, update.row_id, e
+                tracing::debug!(
+                    "Failed to send boundary update chunk (client disconnected), boundary_id={}, row_id={}, error={}",
+                    update.boundary_id,
+                    update.row_id,
+                    e
                 );
             }
         }

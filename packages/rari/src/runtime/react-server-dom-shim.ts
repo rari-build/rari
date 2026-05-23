@@ -1,5 +1,3 @@
-import type { GlobalWithRari } from './shared/types'
-
 interface ClientReferenceData {
   id: string
   exportName: string
@@ -14,18 +12,8 @@ interface ServerReferenceData {
   bound: boolean
 }
 
-interface RustBridge {
-  registerClientReference?: (key: string, id: string, exportName: string) => void
-  registerServerReference?: (key: string, id: string, exportName: string) => void
-}
-
 const clientReferenceRegistry = new Map<string, ClientReferenceData>()
 const serverReferenceRegistry = new Map<string, ServerReferenceData>()
-
-let rustBridge: RustBridge | null = null
-
-if (typeof (globalThis as unknown as GlobalWithRari)['~rari']?.bridge !== 'undefined')
-  rustBridge = (globalThis as unknown as GlobalWithRari)['~rari']!.bridge
 
 export function registerClientReference(clientReference: any, id: string, exportName: string): any {
   const key = `${id}#${exportName}`
@@ -51,14 +39,6 @@ export function registerClientReference(clientReference: any, id: string, export
     value: false,
     enumerable: false,
   })
-
-  try {
-    if (rustBridge && typeof rustBridge.registerClientReference === 'function')
-      rustBridge.registerClientReference(key, id, exportName)
-  }
-  catch (error) {
-    console.error(error)
-  }
 
   return clientReference
 }
@@ -96,14 +76,6 @@ export function registerServerReference(serverReference: any, id: string, export
     value: false,
     enumerable: false,
   })
-
-  try {
-    if (rustBridge && typeof rustBridge.registerServerReference === 'function')
-      rustBridge.registerServerReference(key, id, exportName)
-  }
-  catch (error) {
-    console.error(error)
-  }
 
   return serverReference
 }

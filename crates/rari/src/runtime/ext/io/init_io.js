@@ -1,4 +1,6 @@
-import * as io from 'ext:deno_io/12_io.js'
+import { core } from 'ext:core/mod.js'
+
+const io = core.loadExtScript('ext:deno_io/12_io.js')
 
 globalThis.Deno.SeekMode = io.SeekMode
 globalThis.Deno.stdin = io.stdin

@@ -699,14 +699,6 @@ function registerClientReference(clientReference, id, exportName) {
     value: false,
     enumerable: false
   });
-  try {
-    if (typeof globalThis['~rari']?.bridge !== 'undefined' &&
-        typeof globalThis['~rari'].bridge.registerClientReference === 'function') {
-      globalThis['~rari'].bridge.registerClientReference(key, id, exportName);
-    }
-  } catch (error) {
-    console.error('[rari] Build: Failed to register client reference:', error);
-  }
   return clientProxy;
 }
 

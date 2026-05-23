@@ -504,6 +504,7 @@ export async function renderApp(): Promise<void> {
       contentToRender,
     )
 
+    /* eslint-disable react/jsx-no-children-prop */
     wrappedContent = React.createElement(
       ClientRouter,
       { initialRoute: window.location.pathname, children: wrappedContent },
@@ -513,6 +514,7 @@ export async function renderApp(): Promise<void> {
       RouterProvider,
       { initialPathname: window.location.pathname, children: wrappedContent },
     )
+    /* eslint-enable react/jsx-no-children-prop */
 
     const root = createRoot(rootElement)
     root.render(wrappedContent)

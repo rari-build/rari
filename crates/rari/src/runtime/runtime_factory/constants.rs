@@ -4,9 +4,6 @@ use serde_json::Value as JsonValue;
 pub const CHANNEL_CAPACITY: usize = 32;
 pub const RUNTIME_RESTART_DELAY_MS: u64 = 1000;
 pub const RUNTIME_QUICK_RESTART_DELAY_MS: u64 = 100;
-pub const COMPONENT_PREFIX: &str = "component_";
-pub const VERIFY_REGISTRATION_PREFIX: &str = "verify_registration_";
-pub const RARI_REGISTER_FUNCTION: &str = "~rari_register";
 
 pub const MODULE_ALREADY_EVALUATED_ERROR: &str = "Module already evaluated";
 pub const JS_EXECUTOR_FAILED_ERROR: &str = "JS executor failed to respond";
@@ -131,25 +128,4 @@ pub fn create_already_loaded_response(component_name: &str) -> JsonValue {
         "status": "already_loaded",
         "component": component_name
     })
-}
-
-pub fn create_registration_script(specifier_str: &str, script_name: &str) -> String {
-    format!(
-        r#"
-        (async function() {{
-            try {{
-                const module = await import("{specifier_str}");
-                if (typeof module.{RARI_REGISTER_FUNCTION} === 'function') {{
-                    const result = module.{RARI_REGISTER_FUNCTION}.call(module);
-                    return {{ success: true, result }};
-                }} else {{
-                    return {{ success: false, error: 'No {RARI_REGISTER_FUNCTION} function found' }};
-                }}
-            }} catch (e) {{
-                console.error("[rari] Failed to call {RARI_REGISTER_FUNCTION} for '{script_name}': " + e.message);
-                return {{ success: false, error: e.message }};
-            }}
-        }})()
-        "#
-    )
 }

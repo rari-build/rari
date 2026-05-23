@@ -379,21 +379,6 @@ async function traverseReactElement(element, clientComponents, depth = 0) {
     const componentId = getClientComponentId(type, clientComponents)
 
     if (componentId && componentId !== null) {
-      if (componentId.includes('#')) {
-        const [filePath, exportName] = componentId.split('#')
-        if (
-          typeof globalThis['~rari']?.bridge !== 'undefined'
-          && typeof globalThis['~rari'].bridge.registerClientReference === 'function'
-        ) {
-          try {
-            globalThis['~rari'].bridge.registerClientReference(componentId, filePath, exportName)
-          }
-          catch (error) {
-            console.error('Failed to register client reference:', error)
-          }
-        }
-      }
-
       const processedProps = {}
       if (props) {
         for (const [key, value] of Object.entries(props)) {

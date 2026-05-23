@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { antfu } from '@antfu/eslint-config'
 import deMorgan from 'eslint-plugin-de-morgan'
 import oxlint from 'eslint-plugin-oxlint'
@@ -24,5 +25,5 @@ export default antfu(
     },
   },
   deMorgan.configs.recommended,
-  ...oxlint.buildFromOxlintConfigFile(`${import.meta.dirname}/vite.config.ts`),
+  ...oxlint.buildFromOxlintConfigFile(join(import.meta.dirname, 'vite.config.ts')),
 )
