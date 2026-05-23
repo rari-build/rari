@@ -34,7 +34,6 @@ type ExtensionTranspilerFn = dyn Fn(FastString, FastString) -> ExtensionTranspil
 
 const NODE_MODULES_PATH: &str = "/node_modules/";
 const RARI_COMPONENT_PATH: &str = "/rari_component/";
-const NODE_BUILTIN_PATH: &str = "/node_builtin/";
 const REACT_STUB_PATH: &str = "/react_stub/";
 const FILE_PROTOCOL: &str = "file://";
 const NODE_PREFIX: &str = "node:";
@@ -529,7 +528,6 @@ export default {{}};
 
             if clean_referrer_str.contains("/rari_component/")
                 || clean_referrer_str.contains("/rari_internal/")
-                || clean_referrer_str.contains("/node_builtin/")
             {
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
             } else {
@@ -1008,7 +1006,7 @@ export {{ __exportProxy__ as __cjsExports__, __keys__ }};
         specifier_str: &str,
         module_specifier: &ModuleSpecifier,
     ) -> Option<ModuleLoadResponse> {
-        if specifier_str.starts_with(FILE_PROTOCOL) && !specifier_str.contains(NODE_BUILTIN_PATH) {
+        if specifier_str.starts_with(FILE_PROTOCOL) {
             let file_path = match module_specifier.to_file_path() {
                 Ok(path) => path,
                 Err(_) => return None,
