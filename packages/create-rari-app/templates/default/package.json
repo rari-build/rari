@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.2.2",
   "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
     "node": ">=22.12.0"

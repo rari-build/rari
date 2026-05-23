@@ -1,14 +1,13 @@
 # Dependencies
-node_modules/
-.pnpm-store/
+node_modules
 
 # Production builds
-bin/
-dist/
-build/
+bin
+dist
+build
 
 # Cache
-.cache/
+.cache
 
 # Environment variables
 .env
@@ -43,7 +42,7 @@ Thumbs.db
 
 
 # Railway
-.railway/
+.railway
 
 # Render
-.render/
+.render
