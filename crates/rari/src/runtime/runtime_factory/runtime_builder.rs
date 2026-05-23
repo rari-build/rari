@@ -11,6 +11,8 @@ use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
 
+include!(concat!(env!("OUT_DIR"), "/deno_node_lazy_sources.rs"));
+
 pub fn create_deno_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
@@ -42,6 +44,8 @@ pub fn create_deno_runtime(
         module_loader: Some(module_loader.clone()),
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),
+        residual_lazy_esm_sources: DENO_NODE_LAZY_ESM_SOURCES,
+        residual_lazy_js_sources: DENO_NODE_LAZY_JS_SOURCES,
         ..Default::default()
     };
 

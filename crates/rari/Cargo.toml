@@ -206,6 +206,14 @@ rustls = { version = "=0.23.40", default-features = false, features = [
 sha2 = "0.11.0"
 hex = "0.4.3"
 
+[build-dependencies]
+deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
+deno_node = "0.186.0"
+deno_semver = "=0.10.0"
+node_resolver = "0.86.0"
+sys_traits = "=0.1.28"
+url = "2.5.8"
+
 [dev-dependencies]
 tracing-test = "0.2.6"
 tempfile = "3.27.0"

@@ -35,7 +35,9 @@ impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
 }
 
 pub fn extensions(resolver: Arc<Resolver>, is_snapshot: bool) -> Vec<Extension> {
-    let node_ext = deno_node::deno_node::build(resolver.clone(), true);
+    let mut node_ext = deno_node::deno_node::build(resolver.clone(), false);
+    node_ext.lazy_loaded_esm_files = std::borrow::Cow::Borrowed(&[]);
+    node_ext.lazy_loaded_js_files = std::borrow::Cow::Borrowed(&[]);
 
     let init_ext = init_node::build((), is_snapshot);
 
