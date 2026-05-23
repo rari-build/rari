@@ -241,6 +241,10 @@ if (typeof globalThis['~serverFunctions'].all === 'undefined') {
   globalThis['~serverFunctions'].all = {}
 }
 
+if (typeof globalThis['~rsc'] === 'undefined') {
+    globalThis['~rsc'] = {};
+}
+
 if (typeof globalThis['~rsc'].modules === 'undefined') {
     globalThis['~rsc'].modules = {};
 }
@@ -277,6 +281,10 @@ if (!globalThis['~serverFunctions']) {
 }
 if (typeof globalThis['~serverFunctions'].all === 'undefined') {
   globalThis['~serverFunctions'].all = {}
+}
+
+if (typeof globalThis['~rsc'] === 'undefined') {
+    globalThis['~rsc'] = {};
 }
 
 if (typeof globalThis['~rsc'].modules === 'undefined') {
