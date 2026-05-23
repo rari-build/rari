@@ -87,14 +87,11 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
-      - name: Build snapshot tool
-        run: cargo build --release --manifest-path tools/snapshot/Cargo.toml
+      - name: Create snapshot placeholder
+        run: mkdir -p crates/rari/snapshots && touch crates/rari/snapshots/RARI_SNAPSHOT.bin
 
       - name: Generate V8 snapshot
-        run: |
-          mkdir -p crates/rari/snapshots
-          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
-          cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
 
       - name: Upload snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
