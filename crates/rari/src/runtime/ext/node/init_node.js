@@ -1,4 +1,4 @@
-/* eslint-disable node/prefer-global/buffer, unused-imports/no-unused-vars, node/prefer-global/process */
+/* eslint-disable node/prefer-global/buffer, node/prefer-global/process */
 import { core } from 'ext:core/mod.js'
 
 const { initializeDebugEnv } = core.loadExtScript('ext:deno_node/internal/util/debuglog.ts')
@@ -110,10 +110,41 @@ if (!globalThis.Buffer) {
       return { type: 'Buffer', data: Array.from(this) }
     }
 
-    static from(arg, encoding) {
+    static from(arg, encoding = 'utf8') {
       if (typeof arg === 'string') {
-        const encoded = new TextEncoder().encode(arg)
-        const buffer = new Uint8Array(encoded)
+        let bytes
+
+        const enc = encoding.toLowerCase().replace(/[-_]/g, '')
+
+        switch (enc) {
+          case 'base64': {
+            const binaryString = atob(arg)
+            bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            break
+          }
+          case 'hex': {
+            const hexStr = arg.replace(/\s/g, '')
+            if (hexStr.length % 2 !== 0) {
+              throw new Error('Invalid hex string')
+            }
+            bytes = new Uint8Array(hexStr.length / 2)
+            for (let i = 0; i < hexStr.length; i += 2) {
+              bytes[i / 2] = Number.parseInt(hexStr.slice(i, i + 2), 16)
+            }
+            break
+          }
+          case 'utf8':
+          case 'utf-8':
+          default: {
+            bytes = new TextEncoder().encode(arg)
+            break
+          }
+        }
+
+        const buffer = new Uint8Array(bytes)
         Object.setPrototypeOf(buffer, Buffer.prototype)
         return buffer
       }
