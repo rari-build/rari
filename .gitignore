@@ -7,3 +7,4 @@ coverage
 test-results
 playwright-report
 playwright/.cache
+crates/rari/snapshots/*.bin

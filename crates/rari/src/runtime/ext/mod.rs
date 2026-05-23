@@ -73,7 +73,7 @@ impl Default for ExtensionOptions {
     }
 }
 
-pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extension> {
+pub fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<Extension> {
     let mut extensions = Vec::new();
 
     extensions.extend(rari::extensions(is_snapshot));
@@ -96,13 +96,29 @@ pub(crate) fn extensions(options: &ExtensionOptions, is_snapshot: bool) -> Vec<E
     extensions.extend(ffi::extensions(is_snapshot));
     extensions.extend(kv::extensions(options.kv_store.clone(), is_snapshot));
     extensions.extend(webgpu::extensions(is_snapshot));
-    extensions.push(deno_runtime::deno_canvas::deno_canvas::init());
+    {
+        let mut canvas_ext = deno_runtime::deno_canvas::deno_canvas::init();
+        if is_snapshot {
+            canvas_ext.js_files = std::borrow::Cow::Borrowed(&[]);
+            canvas_ext.esm_files = std::borrow::Cow::Borrowed(&[]);
+            canvas_ext.esm_entry_point = None;
+        }
+        extensions.push(canvas_ext);
+    }
     extensions.extend(cron::extensions(is_snapshot));
     extensions.extend(napi::extensions(is_snapshot));
     extensions.extend(node_crypto::extensions(is_snapshot));
     extensions.extend(node_sqlite::extensions(is_snapshot));
     extensions.extend(node::extensions(options.node_resolver.clone(), is_snapshot));
-    extensions.push(deno_bundle_runtime::deno_bundle_runtime::init(None));
+    {
+        let mut bundle_ext = deno_bundle_runtime::deno_bundle_runtime::init(None);
+        if is_snapshot {
+            bundle_ext.js_files = std::borrow::Cow::Borrowed(&[]);
+            bundle_ext.esm_files = std::borrow::Cow::Borrowed(&[]);
+            bundle_ext.esm_entry_point = None;
+        }
+        extensions.push(bundle_ext);
+    }
     extensions.extend(runtime::extensions(options, None, is_snapshot));
 
     extensions

@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
 
-include!(concat!(env!("OUT_DIR"), "/deno_node_lazy_sources.rs"));
+static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
 
 pub fn create_deno_runtime(
     env_vars: Option<FxHashMap<String, String>>,
@@ -21,7 +21,7 @@ pub fn create_deno_runtime(
     let streaming_ops = get_streaming_ops();
 
     let ext_options = crate::runtime::ext::ExtensionOptions::default();
-    let mut extensions = crate::runtime::ext::extensions(&ext_options, false);
+    let mut extensions = crate::runtime::ext::extensions(&ext_options, true);
 
     extensions.push(Extension {
         name: "rari:streaming",
@@ -44,8 +44,7 @@ pub fn create_deno_runtime(
         module_loader: Some(module_loader.clone()),
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),
-        residual_lazy_esm_sources: DENO_NODE_LAZY_ESM_SOURCES,
-        residual_lazy_js_sources: DENO_NODE_LAZY_JS_SOURCES,
+        startup_snapshot: Some(RUNTIME_SNAPSHOT),
         ..Default::default()
     };
 

@@ -37,8 +37,8 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.401.0"
-deno_error = "=0.7.1"
+deno_core = { workspace = true }
+deno_error = { workspace = true }
 deno_features = "0.45.0"
 deno_bundle_runtime = "0.35.0"
 deno_runtime = "0.256.0"
@@ -205,10 +205,6 @@ rustls = { version = "=0.23.40", default-features = false, features = [
 ] }
 sha2 = "0.11.0"
 hex = "0.4.3"
-
-[build-dependencies]
-deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
-url = "2.5.8"
 
 [dev-dependencies]
 tracing-test = "0.2.6"

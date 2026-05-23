@@ -7615,6 +7615,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rari-snapshot"
+version = "0.1.0"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "rari",
+]
+
+[[package]]
 name = "ratatui"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
