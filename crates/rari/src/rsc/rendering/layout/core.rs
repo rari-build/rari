@@ -340,31 +340,6 @@ impl LayoutRenderer {
             None
         };
 
-        let needs_streaming = loading_component_id.is_some();
-
-        if !needs_streaming {
-            let rsc_wire_format = self.render_route(route_match, context, request_context).await?;
-
-            if return_rsc_on_fallback {
-                return Ok(RenderResult::Static(rsc_wire_format));
-            }
-
-            let runtime = {
-                let renderer = self.renderer.lock().await;
-                Arc::clone(&renderer.runtime)
-            };
-            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(runtime);
-            let config =
-                Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
-            let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
-
-            if route_match.not_found.is_none() {
-                self.html_cache.insert(cache_key, html.clone());
-            }
-
-            return Ok(RenderResult::Static(html));
-        }
-
         let composition_script = self.build_composition_script(
             route_match,
             context,
