@@ -47,9 +47,6 @@ pub async fn execute_script(
 
     let script_code_string = script_code.to_string();
 
-    let is_registrable_module = script_name.starts_with(COMPONENT_PREFIX)
-        && !script_name.starts_with(VERIFY_REGISTRATION_PREFIX);
-
     if module_loader.is_already_evaluated(script_name) {
         return Ok(create_already_evaluated_response(script_name));
     }
@@ -58,15 +55,8 @@ pub async fn execute_script(
         || script_code.contains("\"use module\"")
         || has_export_statement(script_code);
 
-    if is_registrable_module || has_actual_module_syntax {
-        return execute_as_module(
-            runtime,
-            module_loader,
-            script_name,
-            &script_code_string,
-            is_registrable_module,
-        )
-        .await;
+    if has_actual_module_syntax {
+        return execute_as_module(runtime, module_loader, script_name, &script_code_string).await;
     }
 
     execute_as_script(runtime, module_loader, script_name, &script_code_string).await
@@ -77,7 +67,6 @@ async fn execute_as_module(
     module_loader: &Rc<RariModuleLoader>,
     script_name: &str,
     script_code: &str,
-    is_registrable_module: bool,
 ) -> Result<JsonValue, RariError> {
     let specifier_str = module_loader.create_specifier(script_name, "rari_internal");
 
@@ -142,63 +131,9 @@ async fn execute_as_module(
         }
     }
 
-    if is_registrable_module {
-        handle_component_registration(runtime, module_loader, script_name, &specifier_str).await?;
-    }
-
     module_loader.mark_module_evaluated(script_name);
 
     Ok(JsonValue::Null)
-}
-
-async fn handle_component_registration(
-    runtime: &mut JsRuntime,
-    _module_loader: &Rc<RariModuleLoader>,
-    script_name: &str,
-    specifier_str: &str,
-) -> Result<(), RariError> {
-    let registration_script = create_registration_script(specifier_str, script_name);
-
-    let reg_result = match runtime.execute_script("registration_script", registration_script) {
-        Ok(result) => result,
-        Err(err) => {
-            let error_str = err.to_string();
-            if error_str.contains(MODULE_ALREADY_EVALUATED_ERROR) || error_str.contains("assertion")
-            {
-                return Err(RariError::js_runtime(format!(
-                    "Runtime error during registration: {err}"
-                )));
-            }
-
-            return Err(RariError::js_execution(format!(
-                "Failed to execute registration script for '{script_name}': {err}"
-            )));
-        }
-    };
-
-    run_event_loop_with_error_handling(
-        runtime,
-        &format!("component registration for '{script_name}'"),
-    )
-    .await?;
-
-    let json_result = with_scope!(runtime, |scope| {
-        let local_result = deno_core::v8::Local::new(scope, reg_result);
-        v8_to_json(scope, local_result)
-    })?;
-
-    if let JsonValue::Object(result_obj) = &json_result
-        && let Some(JsonValue::Bool(success)) = result_obj.get("success")
-        && !success
-        && let Some(JsonValue::String(error)) = result_obj.get("error")
-    {
-        println!("[rari] Registration failed: {error}");
-        return Err(RariError::js_execution(format!(
-            "Failed to register component '{script_name}': {error}"
-        )));
-    }
-
-    Ok(())
 }
 
 async fn execute_as_script(

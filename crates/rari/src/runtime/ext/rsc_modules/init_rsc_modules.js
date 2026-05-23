@@ -226,31 +226,14 @@
     return promise
   }
 
-  globalThis.createDependencyStub = function (moduleName, originalPath) {
-    return `
-// Stub module for ${moduleName} (dependency of ${originalPath})
-
-export const ~isStub = true;
-export const ~stubFor = "${moduleName}";
-export const ~dependencyOf = "${originalPath}";
-
-export default {};
-`
-  }
-
   globalThis.createLoaderStub = function (componentId) {
     return `
 // Auto-generated loader stub for ${componentId}
 
-// Generic module loader - no hardcoded functions
-// The actual functions should be registered via the module registration system
-
-// Register empty module structure - actual functions will be added when real module loads
 if (typeof globalThis.registerModule === 'function') {
     globalThis.registerModule({}, '${componentId}');
 }
 
-// Initialize registries if they don't exist
 if (!globalThis['~serverFunctions']) {
   globalThis['~serverFunctions'] = {}
 }
@@ -262,33 +245,16 @@ if (typeof globalThis['~rsc'].modules === 'undefined') {
     globalThis['~rsc'].modules = {};
 }
 
-// Reserve module slot
 globalThis['~rsc'].modules['${componentId}'] = {
-    ~isLoaderStub: true,
-    ~awaitingRegistration: true
+    '~isLoaderStub': true,
+    '~awaitingRegistration': true
 };
-
-// Export default
-export default {
-    ~isLoaderStub: true,
-    ~componentId: "${componentId}",
-    ~awaitingRegistration: true
-};
-`
-  }
-
-  globalThis.createInternalModuleStub = function (moduleName) {
-    return `
-// Auto-generated stub for internal module: ${moduleName}
 
 export default {
-    name: "${moduleName}",
-    isStub: true,
-    isInternalModule: true
+    '~isLoaderStub': true,
+    '~componentId': "${componentId}",
+    '~awaitingRegistration': true
 };
-
-export const ~isStub = true;
-export const ~moduleName = "${moduleName}";
 `
   }
 
@@ -296,40 +262,29 @@ export const ~moduleName = "${moduleName}";
     return `
 // Auto-generated stub for component: ${componentName}
 
-// Generic component stub - no hardcoded functions
-// This stub provides the module structure but does not contain any specific business logic
-// Actual server functions should be provided via the real module registration
-
-// Initialize module structure
 const moduleExports = {
-    ~isStub: true,
-    ~componentName: "${componentName}",
-    ~awaitingRegistration: true
+    '~isStub': true,
+    '~componentName': "${componentName}",
+    '~awaitingRegistration': true
 };
 
-// Register the component structure if needed
-export function ~rari_register() {
-    if (typeof globalThis.registerModule === 'function') {
-        globalThis.registerModule(moduleExports, '${componentName}');
-    }
-
-    // Initialize registries if they don't exist
-    if (!globalThis['~serverFunctions']) {
-      globalThis['~serverFunctions'] = {}
-    }
-    if (typeof globalThis['~serverFunctions'].all === 'undefined') {
-      globalThis['~serverFunctions'].all = {}
-    }
-
-    if (typeof globalThis['~rsc'].modules === 'undefined') {
-        globalThis['~rsc'].modules = {};
-    }
-
-    // Reserve module slot
-    globalThis['~rsc'].modules['${componentName}'] = moduleExports;
+if (typeof globalThis.registerModule === 'function') {
+    globalThis.registerModule(moduleExports, '${componentName}');
 }
 
-// Export the module structure
+if (!globalThis['~serverFunctions']) {
+  globalThis['~serverFunctions'] = {}
+}
+if (typeof globalThis['~serverFunctions'].all === 'undefined') {
+  globalThis['~serverFunctions'].all = {}
+}
+
+if (typeof globalThis['~rsc'].modules === 'undefined') {
+    globalThis['~rsc'].modules = {};
+}
+
+globalThis['~rsc'].modules['${componentName}'] = moduleExports;
+
 export default moduleExports;
 `
   }
@@ -340,9 +295,7 @@ export default moduleExports;
     createPromise: globalThis.createServerFunctionPromise,
     discoverExports: globalThis.discoverModuleExports,
     stubs: {
-      dependency: globalThis.createDependencyStub,
       loader: globalThis.createLoaderStub,
-      internal: globalThis.createInternalModuleStub,
       component: globalThis.createComponentStub,
     },
   }

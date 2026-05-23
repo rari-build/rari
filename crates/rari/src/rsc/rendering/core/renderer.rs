@@ -1427,10 +1427,6 @@ globalThis['~errors'].batch.push({{
 
             transformed_source_safe = transformed_source_safe
                 .cow_replace(&format!("export const ~rari_main_export = {component_id};"), "")
-                .cow_replace(
-                    "export function ~rari_register() { /* Compatibility stub */ return true; }",
-                    "",
-                )
                 .cow_replace("export const metadata =", "const metadata =")
                 .cow_replace("export const ", "const ")
                 .cow_replace("export function ", "function ")
