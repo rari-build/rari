@@ -112,14 +112,27 @@ if (!globalThis.Buffer) {
 
     static from(arg, encoding) {
       if (typeof arg === 'string') {
-        return Buffer.from(new TextEncoder().encode(arg))
+        const encoded = new TextEncoder().encode(arg)
+        const buffer = new Uint8Array(encoded)
+        Object.setPrototypeOf(buffer, Buffer.prototype)
+        return buffer
       }
 
-      return Buffer.from(arg)
+      if (arg instanceof Uint8Array || Array.isArray(arg)) {
+        const buffer = new Uint8Array(arg)
+        Object.setPrototypeOf(buffer, Buffer.prototype)
+        return buffer
+      }
+
+      const buffer = new Uint8Array(arg)
+      Object.setPrototypeOf(buffer, Buffer.prototype)
+      return buffer
     }
 
     static alloc(size) {
-      return Buffer.alloc(size)
+      const buffer = new Uint8Array(size)
+      Object.setPrototypeOf(buffer, Buffer.prototype)
+      return buffer
     }
 
     static isBuffer(obj) {
