@@ -280,6 +280,56 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  binary-runtime-check:
+    name: Binary runtime init (Linux)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Build binary
+        run: cargo build --release --bin rari
+
+      - name: Verify JsRuntime initializes without cargo registry
+        run: |
+          # Copy binary to an isolated location
+          cp target/release/rari /tmp/rari-test
+          # Remove cargo registry to simulate deployment environment
+          rm -rf ~/.cargo/registry/src
+          # Run from /tmp - if JsRuntime can't find extension files, it panics
+          # We expect a graceful config/missing-files error, NOT a V8 panic
+          cd /tmp && timeout 5 ./rari-test start 2>&1 | tee /tmp/rari-output.txt || true
+          # Fail if we see the specific V8 initialization panic
+          if grep -q "Failed to initialize a JsRuntime" /tmp/rari-output.txt; then
+            echo "ERROR: JsRuntime failed to initialize - extension files not embedded in binary"
+            exit 1
+          fi
+          echo "OK: JsRuntime initialized successfully (binary is self-contained)"
+
+      - name: Cancel workflow on failure
+        if: failure() && github.event_name == 'merge_group'
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   ci-ok:
     if: always()
     runs-on: ubuntu-latest
@@ -289,6 +339,7 @@ jobs:
       - build
       - lint-and-test
       - test-e2e
+      - binary-runtime-check
     steps:
       - name: Check required jobs
         run: |
@@ -299,6 +350,7 @@ jobs:
             "${{ needs.build.result }}"
             "${{ needs.lint-and-test.result }}"
             "${{ needs.test-e2e.result }}"
+            "${{ needs.binary-runtime-check.result }}"
           )
           for result in "${results[@]}"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
