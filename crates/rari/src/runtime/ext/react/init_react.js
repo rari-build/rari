@@ -1,4 +1,4 @@
-/* eslint-disable no-undef , react/no-unnecessary-use-prefix */
+/* eslint-disable no-undef, react/no-unnecessary-use-prefix */
 if (typeof globalThis.React === 'undefined') {
   globalThis.React = {
     createElement(type, props, ...children) {

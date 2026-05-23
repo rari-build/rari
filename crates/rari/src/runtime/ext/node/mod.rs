@@ -35,16 +35,7 @@ impl ExtensionTrait<Arc<Resolver>> for deno_node::deno_node {
 }
 
 pub fn extensions(resolver: Arc<Resolver>, is_snapshot: bool) -> Vec<Extension> {
-    let mut node_ext = deno_node::deno_node::build(resolver.clone(), is_snapshot);
-
-    // Clear synthetic_esm_modules from deno_node. In deno_core 0.401.0,
-    // synthetic_esm modules (node:url, node:util, node:worker_threads, node:zlib)
-    // are resolved on-the-fly during module instantiation via resolve_callback.
-    // This triggers a nested `instantiate_module` call that removes the V8 isolate
-    // slot, causing a panic when the outer instantiation continues resolving imports.
-    // Since we provide our own node module stubs via init_node.js, we don't need
-    // deno_node's synthetic_esm dispatch. Clearing this avoids the slot conflict.
-    node_ext.synthetic_esm_modules = std::borrow::Cow::Borrowed(&[]);
+    let node_ext = deno_node::deno_node::build(resolver.clone(), is_snapshot);
 
     let init_ext = init_node::build((), is_snapshot);
 

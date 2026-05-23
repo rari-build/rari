@@ -4,7 +4,8 @@ use crate::runtime::module_loader::{
     cache::ModuleCaching,
     config::{InternerStats, PerformanceStats, ResourceStats, RuntimeConfig, RuntimeMetrics},
     interner::get_string_interner,
-    node_stubs::*,
+    loader_stubs::*,
+    react_stubs::*,
     resolver::ModuleResolver,
     storage::OrderedStorage,
     transpiler::*,
@@ -36,23 +37,8 @@ const RARI_COMPONENT_PATH: &str = "/rari_component/";
 const NODE_BUILTIN_PATH: &str = "/node_builtin/";
 const REACT_STUB_PATH: &str = "/react_stub/";
 const FILE_PROTOCOL: &str = "file://";
-const NODE_PROTOCOL: &str = "node";
 const NODE_PREFIX: &str = "node:";
-
-const PATH_MODULE: &str = "path";
-const PROCESS_MODULE: &str = "process";
-const FS_MODULE: &str = "fs";
-const FS_PROMISES_MODULE: &str = "fs/promises";
-const URL_MODULE: &str = "url";
-const STREAM_MODULE: &str = "stream";
-const BUFFER_MODULE: &str = "buffer";
-const OS_MODULE: &str = "os";
-const EVENTS_MODULE: &str = "events";
-const CHILD_PROCESS_MODULE: &str = "child_process";
-const MODULE_MODULE: &str = "module";
-const REACT_MODULE: &str = "react";
 const FUNCTIONS_MODULE: &str = "functions";
-
 const VERSION_QUERY_PARAM: &str = "?v=";
 const RELATIVE_CURRENT_PATH: &str = "./";
 const RELATIVE_UP_PATH: &str = "../";
@@ -754,58 +740,6 @@ export default {{}};
                 ))));
             }
         }
-        None
-    }
-
-    fn handle_node_builtin_modules(
-        &self,
-        specifier_str: &str,
-        module_specifier: &ModuleSpecifier,
-    ) -> Option<ModuleLoadResponse> {
-        if specifier_str.contains(NODE_BUILTIN_PATH) || module_specifier.scheme() == NODE_PROTOCOL {
-            let module_name = if specifier_str.contains(NODE_BUILTIN_PATH) {
-                specifier_str
-                    .split(NODE_BUILTIN_PATH)
-                    .nth(1)
-                    .unwrap_or("unknown")
-                    .cow_replace(".js", "")
-            } else {
-                module_specifier.path().trim_start_matches('/').cow_replace(".js", "")
-            };
-
-            let stub_code = match module_name.as_ref() {
-                PATH_MODULE => NODE_PATH_STUB.to_string(),
-                PROCESS_MODULE => NODE_PROCESS_STUB.to_string(),
-                FS_MODULE => NODE_FS_STUB.to_string(),
-                FS_PROMISES_MODULE => NODE_FS_PROMISES_STUB.to_string(),
-                URL_MODULE => NODE_URL_STUB.to_string(),
-                STREAM_MODULE => NODE_STREAM_STUB.to_string(),
-                BUFFER_MODULE => NODE_BUFFER_STUB.to_string(),
-                OS_MODULE => NODE_OS_STUB.to_string(),
-                EVENTS_MODULE => NODE_EVENTS_STUB.to_string(),
-                CHILD_PROCESS_MODULE => NODE_CHILD_PROCESS_STUB.to_string(),
-                MODULE_MODULE => NODE_MODULE_STUB.to_string(),
-                REACT_MODULE => REACT_STUB.to_string(),
-                _ => format!(
-                    r#"
-// ESM-compatible stub for node:{module_name}
-export default {{
-  name: '{module_name}',
-  isStub: true
-}};
-export const __esModule = true;
-"#
-                ),
-            };
-
-            return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                ModuleType::JavaScript,
-                ModuleSourceCode::String(stub_code.into()),
-                module_specifier,
-                None,
-            ))));
-        }
-
         None
     }
 
@@ -1699,89 +1633,6 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if specifier.starts_with(NODE_PREFIX) {
-            let node_module_name = specifier.cow_replace(NODE_PREFIX, "");
-
-            let known_node_modules = [
-                "path",
-                "path/posix",
-                "path/win32",
-                "fs",
-                "fs/promises",
-                "os",
-                "util",
-                "util/types",
-                "buffer",
-                "events",
-                "stream",
-                "stream/consumers",
-                "stream/promises",
-                "stream/web",
-                "url",
-                "http",
-                "https",
-                "net",
-                "dns",
-                "dns/promises",
-                "crypto",
-                "querystring",
-                "child_process",
-                "readline",
-                "readline/promises",
-                "zlib",
-                "assert",
-                "assert/strict",
-                "console",
-                "process",
-                "timers",
-                "timers/promises",
-                "tty",
-                "module",
-                "constants",
-                "diagnostics_channel",
-                "async_hooks",
-                "perf_hooks",
-                "string_decoder",
-                "punycode",
-                "domain",
-                "vm",
-                "v8",
-                "tls",
-                "dgram",
-                "cluster",
-                "inspector",
-                "inspector/promises",
-                "http2",
-                "wasi",
-                "worker_threads",
-                "trace_events",
-                "test",
-                "sqlite",
-                "_http_common",
-                "_http_agent",
-                "_http_client",
-                "_http_incoming",
-                "_http_outgoing",
-                "_http_server",
-                "_stream_duplex",
-                "_stream_passthrough",
-                "_stream_readable",
-                "_stream_transform",
-                "_stream_writable",
-                "_tls_common",
-                "_tls_wrap",
-                "sys",
-                "repl",
-            ];
-
-            if known_node_modules.contains(&node_module_name.as_ref()) {
-                let result = ModuleSpecifier::parse(&format!(
-                    "file://{NODE_BUILTIN_PATH}{node_module_name}.js"
-                ))
-                .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
-
-                return Ok(result);
-            }
-
             let result = ModuleSpecifier::parse(specifier)
                 .map_err(|err| JsErrorBox::generic(format!("Invalid URL: {err}")))?;
 
@@ -1848,13 +1699,6 @@ impl ModuleLoader for RariModuleLoader {
         }
 
         if let Some(response) = self.handle_version_query(&specifier_str, module_specifier) {
-            let load_duration = load_start.elapsed().as_millis() as u64;
-            self.record_module_load(load_duration);
-            self.record_operation();
-            return response;
-        }
-
-        if let Some(response) = self.handle_node_builtin_modules(&specifier_str, module_specifier) {
             let load_duration = load_start.elapsed().as_millis() as u64;
             self.record_module_load(load_duration);
             self.record_operation();
