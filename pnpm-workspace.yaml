@@ -7,6 +7,12 @@ minimumReleaseAgeExclude:
   - rari-win32-arm64@0.13.7
   - rari-win32-x64@0.13.7
   - rari@0.13.7
+  - rari-darwin-arm64@0.13.8
+  - rari-darwin-x64@0.13.8
+  - rari-linux-arm64@0.13.8
+  - rari-linux-x64@0.13.8
+  - rari-win32-arm64@0.13.8
+  - rari-win32-x64@0.13.8
 shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
