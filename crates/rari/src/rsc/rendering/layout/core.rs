@@ -340,6 +340,58 @@ impl LayoutRenderer {
             None
         };
 
+        let needs_streaming = loading_component_id.is_some();
+
+        if !needs_streaming {
+            let rsc_wire_format = self.render_route(route_match, context, request_context).await?;
+
+            if return_rsc_on_fallback {
+                return Ok(RenderResult::Static(rsc_wire_format));
+            }
+
+            let runtime = {
+                let renderer = self.renderer.lock().await;
+                Arc::clone(&renderer.runtime)
+            };
+            let html_renderer = crate::rsc::rendering::html::RscHtmlRenderer::new(runtime);
+            let config =
+                Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
+            let html = html_renderer.render_to_html(&rsc_wire_format, config).await?;
+
+            let rsc_payload = if rsc_wire_format.ends_with('\n') {
+                rsc_wire_format.clone()
+            } else {
+                format!("{}\n", rsc_wire_format)
+            };
+            let escaped_payload = rsc_payload.cow_replace("</", "<\\/");
+            let payload_script = format!(
+                r#"<script id="__RARI_RSC_PAYLOAD__" type="text/x-component">{}</script>"#,
+                escaped_payload
+            );
+            let completion_script = r#"<script>
+if (typeof window !== 'undefined') {
+    if (!window['~rari']) window['~rari'] = {};
+    if (!window['~rari'].streaming) window['~rari'].streaming = {};
+    window['~rari'].streaming.complete = true;
+}
+</script>"#;
+
+            let html = if let Some(body_end) = html.rfind("</body>") {
+                let mut result = html;
+                result
+                    .insert_str(body_end, &format!("{}\n{}\n", payload_script, completion_script));
+                result
+            } else {
+                format!("{}{}\n{}", html, payload_script, completion_script)
+            };
+
+            if route_match.not_found.is_none() {
+                self.html_cache.insert(cache_key, html.clone());
+            }
+
+            return Ok(RenderResult::Static(html));
+        }
+
         let composition_script = self.build_composition_script(
             route_match,
             context,

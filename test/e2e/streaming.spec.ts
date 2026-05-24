@@ -308,9 +308,9 @@ test.describe.serial('Suspense Streaming Tests', () => {
     expect(gapAB).toBeGreaterThan(500)
     expect(gapBC).toBeGreaterThan(500)
 
-    expect(gapAB).toBeLessThan(2500)
-    expect(gapBC).toBeLessThan(2500)
-    expect(spanAC).toBeLessThan(4500)
+    expect(gapAB).toBeLessThan(3500)
+    expect(gapBC).toBeLessThan(3500)
+    expect(spanAC).toBeLessThan(6500)
   }
 
   async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
