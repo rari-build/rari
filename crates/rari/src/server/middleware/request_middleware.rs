@@ -27,7 +27,7 @@ const FRAME_DENY: &str = "DENY";
 const XSS_PROTECTION: &str = "1; mode=block";
 const HSTS_HEADER: &str = "max-age=31536000; includeSubDomains";
 const CROSS_DOMAIN_POLICIES_NONE: &str = "none";
-const COEP_REQUIRE_CORP: &str = "require-corp";
+const COEP_CREDENTIALLESS: &str = "credentialless";
 const COOP_SAME_ORIGIN: &str = "same-origin";
 const CORP_SAME_ORIGIN: &str = "same-origin";
 const REFERRER_STRICT_ORIGIN: &str = "strict-origin-when-cross-origin";
@@ -100,7 +100,7 @@ fn add_security_headers(headers: &mut axum::http::HeaderMap) {
         (X_XSS_PROTECTION, XSS_PROTECTION),
         (STRICT_TRANSPORT_SECURITY, HSTS_HEADER),
         (X_PERMITTED_CROSS_DOMAIN_POLICIES, CROSS_DOMAIN_POLICIES_NONE),
-        (CROSS_ORIGIN_EMBEDDER_POLICY, COEP_REQUIRE_CORP),
+        (CROSS_ORIGIN_EMBEDDER_POLICY, COEP_CREDENTIALLESS),
         (CROSS_ORIGIN_OPENER_POLICY, COOP_SAME_ORIGIN),
         (CROSS_ORIGIN_RESOURCE_POLICY, CORP_SAME_ORIGIN),
         (REFERRER_POLICY, REFERRER_STRICT_ORIGIN),
