@@ -12,6 +12,7 @@ use std::borrow::Cow;
 use std::rc::Rc;
 
 static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
+include!("../../../snapshots/residual_lazy_sources.rs");
 
 pub fn create_deno_runtime(
     env_vars: Option<FxHashMap<String, String>>,
@@ -45,6 +46,8 @@ pub fn create_deno_runtime(
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),
         startup_snapshot: Some(RUNTIME_SNAPSHOT),
+        residual_lazy_esm_sources: RESIDUAL_LAZY_ESM_SOURCES,
+        residual_lazy_js_sources: RESIDUAL_LAZY_JS_SOURCES,
         ..Default::default()
     };
 

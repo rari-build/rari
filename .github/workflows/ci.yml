@@ -88,16 +88,22 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
       - name: Create snapshot placeholder
-        run: mkdir -p crates/rari/snapshots && touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+        run: |
+          mkdir -p crates/rari/snapshots
+          touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+          echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs
+          echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs
 
       - name: Generate V8 snapshot
-        run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
+        run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
 
       - name: Upload snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: v8-snapshot
-          path: crates/rari/snapshots/RARI_SNAPSHOT.bin
+          path: |
+            crates/rari/snapshots/RARI_SNAPSHOT.bin
+            crates/rari/snapshots/residual_lazy_sources.rs
           if-no-files-found: error
           retention-days: 1
 

@@ -10,6 +10,9 @@ name = "build-snapshot"
 path = "src/main.rs"
 
 [dependencies]
+deno_ast = { workspace = true }
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 rari = { path = "../../crates/rari" }
+rustc-hash = { workspace = true }
+url = { workspace = true }

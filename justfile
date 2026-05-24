@@ -36,7 +36,11 @@ build: build-snapshot build-rust build-node
 build-snapshot:
     @if [ ! -s crates/rari/snapshots/RARI_SNAPSHOT.bin ]; then \
         echo "Generating V8 snapshot..."; \
-        cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin; \
+        mkdir -p crates/rari/snapshots; \
+        touch crates/rari/snapshots/RARI_SNAPSHOT.bin; \
+        echo 'pub static RESIDUAL_LAZY_ESM_SOURCES: &[(&str, &str)] = &[];' > crates/rari/snapshots/residual_lazy_sources.rs; \
+        echo 'pub static RESIDUAL_LAZY_JS_SOURCES: &[(&str, &str)] = &[];' >> crates/rari/snapshots/residual_lazy_sources.rs; \
+        cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots; \
     fi
 
 # Build Rust crates

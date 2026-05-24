@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.13.8"
+version = "0.13.9"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -128,7 +128,7 @@ tower-http = { version = "0.6.10", features = [
 tower_governor = "0.8.0"
 governor = "0.10.4"
 colored = { workspace = true }
-url = "2.5.8"
+url = { workspace = true }
 urlencoding = "2.1.3"
 tokio-tungstenite = "0.29.0"
 tungstenite = "0.29.0"
@@ -140,7 +140,7 @@ dashmap = "6.1.0"
 parking_lot = "0.12.5"
 smallvec = "1.15.1"
 regex = { workspace = true }
-rustc-hash = "2.1.2"
+rustc-hash = { workspace = true }
 lru = "0.18.0"
 uuid = { version = "1.23.1", features = [ "v4" ] }
 thiserror = "2.0.18"
@@ -175,7 +175,7 @@ sysinfo = "0.39.1"
 
 # === Development Tools ===
 rustyline = "=17.0.0"
-deno_ast = { version = "=0.53.2", features = [ "transpiling" ] }
+deno_ast = { workspace = true }
 deno_package_json = { version = "0.50.0", default-features = false }
 deno_semver = "=0.10.0"
 
