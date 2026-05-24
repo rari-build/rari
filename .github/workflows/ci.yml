@@ -67,7 +67,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: read
@@ -91,7 +91,7 @@ jobs:
         run: mkdir -p crates/rari/snapshots && touch crates/rari/snapshots/RARI_SNAPSHOT.bin
 
       - name: Generate V8 snapshot
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
+        run: cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
 
       - name: Upload snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
