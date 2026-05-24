@@ -11,6 +11,8 @@ use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::rc::Rc;
 
+static RUNTIME_SNAPSHOT: &[u8] = include_bytes!("../../../snapshots/RARI_SNAPSHOT.bin");
+
 pub fn create_deno_runtime(
     env_vars: Option<FxHashMap<String, String>>,
 ) -> Result<(JsRuntime, Rc<RariModuleLoader>), RariError> {
@@ -19,7 +21,7 @@ pub fn create_deno_runtime(
     let streaming_ops = get_streaming_ops();
 
     let ext_options = crate::runtime::ext::ExtensionOptions::default();
-    let mut extensions = crate::runtime::ext::extensions(&ext_options, false);
+    let mut extensions = crate::runtime::ext::extensions(&ext_options, true);
 
     extensions.push(Extension {
         name: "rari:streaming",
@@ -42,6 +44,7 @@ pub fn create_deno_runtime(
         module_loader: Some(module_loader.clone()),
         extensions,
         extension_transpiler: Some(module_loader.as_extension_transpiler()),
+        startup_snapshot: Some(RUNTIME_SNAPSHOT),
         ..Default::default()
     };
 

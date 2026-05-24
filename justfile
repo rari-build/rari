@@ -30,10 +30,17 @@ check-prerequisites:
 # --- Build commands ---
 
 # Build everything (Rust + all Node.js packages)
-build: build-rust build-node
+build: build-snapshot build-rust build-node
+
+# Generate V8 startup snapshot (required before building rari)
+build-snapshot:
+    @if [ ! -s crates/rari/snapshots/RARI_SNAPSHOT.bin ]; then \
+        echo "Generating V8 snapshot..."; \
+        cargo run --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin; \
+    fi
 
 # Build Rust crates
-build-rust:
+build-rust: build-snapshot
     cargo build --workspace
 
 # Build Rust crates in release mode

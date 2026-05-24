@@ -1,0 +1,15 @@
+[package]
+name = "rari-snapshot"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Generates the V8 startup snapshot for the rari runtime"
+
+[[bin]]
+name = "build-snapshot"
+path = "src/main.rs"
+
+[dependencies]
+deno_core = { workspace = true }
+deno_error = { workspace = true }
+rari = { path = "../../crates/rari" }

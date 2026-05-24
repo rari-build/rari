@@ -10,8 +10,43 @@ permissions:
   contents: write
 
 jobs:
+  build-snapshot:
+    name: Build V8 snapshot
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: nightly
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Create snapshot placeholder
+        run: mkdir -p crates/rari/snapshots && touch crates/rari/snapshots/RARI_SNAPSHOT.bin
+
+      - name: Generate V8 snapshot
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots/RARI_SNAPSHOT.bin
+
+      - name: Upload snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: v8-snapshot
+          path: crates/rari/snapshots/RARI_SNAPSHOT.bin
+          if-no-files-found: error
+          retention-days: 1
+
   build-binaries:
     name: Build ${{ matrix.target }}
+    needs: build-snapshot
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -40,6 +75,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download snapshot
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: v8-snapshot
+          path: crates/rari/snapshots
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1

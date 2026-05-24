@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.13.7"
+version = "0.13.8"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -37,8 +37,8 @@ path = "src/bin/rari.rs"
 
 [dependencies]
 # === Core Runtime Dependencies ===
-deno_core = "0.401.0"
-deno_error = "=0.7.1"
+deno_core = { workspace = true }
+deno_error = { workspace = true }
 deno_features = "0.45.0"
 deno_bundle_runtime = "0.35.0"
 deno_runtime = "0.256.0"
