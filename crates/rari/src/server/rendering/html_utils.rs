@@ -432,29 +432,6 @@ fn extract_inline_scripts_with_location(html: &str) -> Vec<(String, bool)> {
     scripts
 }
 
-pub fn inject_rsc_payload(html: &str, rsc_payload: &str) -> String {
-    let escaped_payload = rsc_payload.cow_replace("</script>", "<\\/script>");
-
-    let script_tag = format!(
-        r#"<script id="__RARI_RSC_PAYLOAD__" type="application/json">{}</script>"#,
-        escaped_payload
-    );
-
-    if let Some(body_end) = html.rfind("</body>") {
-        let mut result = html.to_string();
-        result.insert_str(body_end, &script_tag);
-        return result;
-    }
-
-    if let Some(html_end) = html.rfind("</html>") {
-        let mut result = html.to_string();
-        result.insert_str(html_end, &script_tag);
-        return result;
-    }
-
-    format!("{}{}", html, script_tag)
-}
-
 async fn inject_content_into_template(
     content: &str,
     config: &Config,
