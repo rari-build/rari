@@ -7,6 +7,7 @@
 ### 💼 Other
 
 - Rari-binaries@0.13.7
+- Rari@0.13.7
 
 ### 🚜 Refactor
 
