@@ -1,12 +1,5 @@
 catalogMode: prefer
 minimumReleaseAgeExclude:
-  - rari-darwin-arm64@0.13.7
-  - rari-darwin-x64@0.13.7
-  - rari-linux-arm64@0.13.7
-  - rari-linux-x64@0.13.7
-  - rari-win32-arm64@0.13.7
-  - rari-win32-x64@0.13.7
-  - rari@0.13.7
   - rari-darwin-arm64@0.13.8
   - rari-darwin-x64@0.13.8
   - rari-linux-arm64@0.13.8
@@ -38,7 +31,7 @@ catalogs:
   cli:
     '@clack/prompts': ^1.4.0
   default:
-    rari: ^0.13.7
+    rari: 0.13.6
   eslint:
     '@antfu/eslint-config': ^9.0.0
     '@eslint-react/eslint-plugin': ^5.8.4
