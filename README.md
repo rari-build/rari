@@ -82,7 +82,7 @@ rari delivers exceptional performance that significantly outperforms traditional
 | **Build Time** | **1.75s** | 4.42s | **2.5x faster** |
 | **Bundle Size** | 285 KB | 634 KB | **55% smaller** |
 
-All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and scripts.
+All benchmarks are reproducible. See [benchmarks/](https://github.com/rari-build/benchmarks) for methodology and tools.
 
 ## Contributing
 
