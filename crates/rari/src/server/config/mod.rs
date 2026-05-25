@@ -740,6 +740,8 @@ impl Config {
                 format!("http://{}:{}", self.server.host, self.server.port),
                 format!("http://localhost:{}", self.server.port),
                 format!("http://127.0.0.1:{}", self.server.port),
+                format!("http://{}:{}", self.vite.host, self.vite.port),
+                format!("http://localhost:{}", self.vite.port),
             ]
         } else if let Some(origin) = &self.server.origin {
             vec![origin.clone()]

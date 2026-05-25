@@ -1736,6 +1736,7 @@ export function createServerBuildPlugin(
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
   let isDev = false
+  let resolvedAliases: Record<string, string> = {}
 
   return {
     name: 'rari-server-build',
@@ -1761,6 +1762,7 @@ export function createServerBuildPlugin(
         }
       }
 
+      resolvedAliases = alias
       builder = new ServerComponentBuilder(projectRoot, { ...options, alias })
     },
 
@@ -1814,6 +1816,7 @@ export function createServerBuildPlugin(
             appDir: path.join(projectRoot, 'src', 'app'),
             outDir: path.join(projectRoot, 'dist'),
             extensions: ['.ts', '.tsx', '.js', '.jsx'],
+            aliases: resolvedAliases,
           })
         }
         catch (error) {

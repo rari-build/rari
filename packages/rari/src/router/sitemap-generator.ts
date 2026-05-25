@@ -1,6 +1,6 @@
 import type { Sitemap, SitemapImage, SitemapVideo } from '../types/metadata-route'
 import { Buffer } from 'node:buffer'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import {
   XML_AMPERSAND_REGEX,
@@ -9,6 +9,7 @@ import {
   XML_LT_REGEX,
   XML_QUOTE_REGEX,
 } from '../shared/regex-constants'
+import { resolveAlias } from '../vite/alias-resolver'
 
 const SANITIZE_ID_REGEX = /[^\w-]/g
 const VIRTUAL_SITEMAP_ID = '\0virtual:sitemap'
@@ -17,6 +18,7 @@ export interface SitemapGeneratorOptions {
   appDir: string
   outDir: string
   extensions?: string[]
+  aliases?: Record<string, string>
 }
 
 export interface SitemapFile {
@@ -247,22 +249,64 @@ function determineModuleType(ext: string): 'js' | 'jsx' | 'ts' | 'tsx' | 'json' 
   }
 }
 
-function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string) {
+function createSitemapPlugin(sitemapFile: SitemapFile, sourceCode: string, aliases: Record<string, string> = {}, projectRoot: string) {
   return {
     name: 'virtual-sitemap',
     resolveId(id: string, importer?: string) {
       if (id === VIRTUAL_SITEMAP_ID)
         return id
-      if (id.startsWith('.'))
-        return path.resolve(path.dirname(importer ?? sitemapFile.path), id)
+
+      if (Object.keys(aliases).length > 0) {
+        const resolved = resolveAlias(id, aliases, projectRoot)
+        if (resolved) {
+          const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+          for (const ext of extensions) {
+            const withExt = resolved + ext
+            try {
+              if (existsSync(withExt))
+                return withExt
+            }
+            catch {}
+          }
+
+          return resolved
+        }
+      }
+
+      if (id.startsWith('.')) {
+        const resolved = path.resolve(path.dirname(importer ?? sitemapFile.path), id)
+        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+        for (const ext of extensions) {
+          const withExt = resolved + ext
+          try {
+            if (existsSync(withExt))
+              return withExt
+          }
+          catch {}
+        }
+
+        return resolved
+      }
 
       return null
     },
-    load(loadId: string) {
+    async load(loadId: string) {
       if (loadId === VIRTUAL_SITEMAP_ID) {
         const ext = path.extname(sitemapFile.path).slice(1)
         const moduleType = determineModuleType(ext)
         return { code: sourceCode, moduleType }
+      }
+
+      if (loadId && !loadId.startsWith('\0')) {
+        try {
+          const code = await fs.readFile(loadId, 'utf-8')
+          const ext = path.extname(loadId).slice(1)
+          const moduleType = determineModuleType(ext)
+          return { code, moduleType }
+        }
+        catch {
+          return null
+        }
       }
 
       return null
@@ -283,7 +327,7 @@ function extractChunkCode(result: any): string {
   return entryChunk.code
 }
 
-async function buildSitemapModule(sitemapFile: SitemapFile, sourceCode: string) {
+async function buildSitemapModule(sitemapFile: SitemapFile, sourceCode: string, aliases: Record<string, string> = {}, projectRoot: string) {
   const { build } = await import('rolldown')
 
   const result = await build({
@@ -292,7 +336,7 @@ async function buildSitemapModule(sitemapFile: SitemapFile, sourceCode: string) 
     platform: 'node',
     write: false,
     output: { format: 'esm', codeSplitting: false },
-    plugins: [createSitemapPlugin(sitemapFile, sourceCode)],
+    plugins: [createSitemapPlugin(sitemapFile, sourceCode, aliases, projectRoot)],
   })
 
   const code = extractChunkCode(result)
@@ -348,7 +392,7 @@ async function generateSingleSitemap(module: any, outDir: string): Promise<void>
 
 /* v8 ignore start - file system operations and dynamic imports, better tested in integration/e2e */
 export async function generateSitemapFiles(options: SitemapGeneratorOptions): Promise<boolean> {
-  const { appDir, extensions, outDir } = options
+  const { appDir, extensions, outDir, aliases = {} } = options
   const sitemapFiles = await findSitemapFiles(appDir, extensions)
 
   if (sitemapFiles.length === 0)
@@ -366,7 +410,8 @@ export async function generateSitemapFiles(options: SitemapGeneratorOptions): Pr
 
   try {
     const sourceCode = await fs.readFile(sitemapFile.path, 'utf-8')
-    const module = await buildSitemapModule(sitemapFile, sourceCode)
+    const projectRoot = path.dirname(path.dirname(appDir))
+    const module = await buildSitemapModule(sitemapFile, sourceCode, aliases, projectRoot)
 
     if (typeof module.generateSitemaps === 'function')
       await generateMultipleSitemaps(module, outDir)
