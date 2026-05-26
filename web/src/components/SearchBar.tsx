@@ -118,12 +118,12 @@ export default function SearchBar() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="w-full flex items-center gap-2 pl-3 pr-3 py-1.5 bg-[#161b22] border border-[#30363d] rounded-md text-sm text-gray-500 hover:border-[#fd7e14]/50 hover:text-gray-400 transition-all group"
+        className="w-full flex items-center gap-2 pl-3 pr-3 py-1.5 bg-[#161b22] border border-[#30363d] rounded-md text-sm text-gray-400 hover:border-[#fd7e14]/50 hover:text-gray-300 transition-all group"
         aria-label="Open search"
       >
         <Search className="w-4 h-4" />
         <span className="flex-1 text-left">Search</span>
-        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#0d1117] border border-[#30363d] rounded text-xs text-gray-400 font-mono">
+        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#0d1117] border border-[#30363d] rounded text-xs text-gray-300 font-mono">
           ⌘ K
         </kbd>
       </button>
