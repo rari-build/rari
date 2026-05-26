@@ -144,6 +144,7 @@ impl RscSerializer {
         self
     }
 
+    #[cfg(test)]
     pub fn set_server_component_executor(&mut self, executor: Box<dyn ServerComponentExecutor>) {
         self.server_component_executor = Some(executor);
     }
@@ -1440,6 +1441,7 @@ impl RscSerializer {
 }
 
 impl SerializedReactElement {
+    #[cfg(test)]
     pub fn create_html_element(
         tag: &str,
         props: Option<FxHashMap<String, Value>>,
@@ -1464,6 +1466,7 @@ impl SerializedReactElement {
         }
     }
 
+    #[cfg(test)]
     pub fn create_server_component(
         component_name: &str,
         props: Option<FxHashMap<String, Value>>,
@@ -1476,6 +1479,7 @@ impl SerializedReactElement {
         }
     }
 
+    #[cfg(test)]
     pub fn create_text_element(text: &str) -> SerializedReactElement {
         SerializedReactElement {
             element_type: ElementType::Text(text.to_string()),
@@ -1485,6 +1489,7 @@ impl SerializedReactElement {
         }
     }
 
+    #[cfg(test)]
     pub fn create_fragment(children: Option<Vec<Value>>) -> SerializedReactElement {
         let mut props = FxHashMap::default();
         if let Some(children_vec) = children {

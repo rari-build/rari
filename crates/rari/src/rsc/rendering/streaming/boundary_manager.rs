@@ -6,7 +6,6 @@ use super::types::SuspenseBoundaryInfo;
 
 pub struct SuspenseBoundaryManager {
     boundaries: Arc<Mutex<FxHashMap<String, SuspenseBoundaryInfo>>>,
-    boundary_stack: Vec<String>,
     resolved_boundaries: Arc<Mutex<FxHashMap<String, serde_json::Value>>>,
     rendered_skeleton_ids: Arc<Mutex<FxHashSet<String>>>,
 }
@@ -21,12 +20,12 @@ impl SuspenseBoundaryManager {
     pub fn new() -> Self {
         Self {
             boundaries: Arc::new(Mutex::new(FxHashMap::default())),
-            boundary_stack: Vec::new(),
             resolved_boundaries: Arc::new(Mutex::new(FxHashMap::default())),
             rendered_skeleton_ids: Arc::new(Mutex::new(FxHashSet::default())),
         }
     }
 
+    #[cfg(test)]
     pub async fn register_boundary(&mut self, mut boundary: SuspenseBoundaryInfo) {
         let boundary_id = boundary.id.clone();
 
@@ -37,7 +36,6 @@ impl SuspenseBoundaryManager {
             let mut boundaries = self.boundaries.lock().await;
             boundaries.insert(boundary_id.clone(), boundary);
         }
-        self.boundary_stack.push(boundary_id);
     }
 
     pub async fn mark_skeleton_rendered(&self, boundary_id: &str) -> bool {
@@ -74,6 +72,7 @@ impl SuspenseBoundaryManager {
         }
     }
 
+    #[cfg(test)]
     pub async fn get_pending_boundaries(&self) -> Vec<SuspenseBoundaryInfo> {
         let boundaries = self.boundaries.lock().await;
         let resolved = self.resolved_boundaries.lock().await;

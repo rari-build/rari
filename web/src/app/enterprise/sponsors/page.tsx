@@ -272,7 +272,7 @@ function OneTimeTierCard({ tier }: { tier: Tier }) {
   )
 }
 
-export default async function SponsorsPage() {
+export default function SponsorsPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <div className="relative overflow-hidden w-full flex items-center">

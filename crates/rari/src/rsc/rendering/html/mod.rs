@@ -465,8 +465,12 @@ impl RscHtmlRenderer {
     fn parse_rsc_element(&self, value: &JsonValue) -> Result<RscElement, RariError> {
         match value {
             JsonValue::String(s) => {
-                if s.starts_with('$') {
-                    Ok(RscElement::Reference(s.clone()))
+                if let Some(stripped) = s.strip_prefix('$') {
+                    if s.starts_with("$$") {
+                        Ok(RscElement::Text(stripped.to_string()))
+                    } else {
+                        Ok(RscElement::Reference(s.clone()))
+                    }
                 } else {
                     Ok(RscElement::Text(s.clone()))
                 }
@@ -913,6 +917,10 @@ impl RscHtmlRenderer {
                     && let Ok(row_id) = u32::from_str_radix(&s[1..], 16)
                 {
                     return self.render_row(row_id, row_map, row_cache).await;
+                }
+
+                if s.starts_with("$$") {
+                    return Ok(escape_html(&s[1..]));
                 }
 
                 return Ok(escape_html(s));

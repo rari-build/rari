@@ -15,19 +15,23 @@ impl ReactElement {
         Self { tag: tag.into(), props: FxHashMap::default(), key: None }
     }
 
+    #[cfg(test)]
     pub fn with_props(tag: impl Into<String>, props: FxHashMap<String, serde_json::Value>) -> Self {
         Self { tag: tag.into(), props, key: None }
     }
 
+    #[cfg(test)]
     pub fn with_key(mut self, key: impl Into<String>) -> Self {
         self.key = Some(key.into());
         self
     }
 
+    #[cfg(test)]
     pub fn add_prop(&mut self, name: impl Into<String>, value: serde_json::Value) {
         self.props.insert(name.into(), value);
     }
 
+    #[cfg(test)]
     pub fn get_prop(&self, name: &str) -> Option<&serde_json::Value> {
         self.props.get(name)
     }

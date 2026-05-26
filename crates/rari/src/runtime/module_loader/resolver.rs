@@ -20,6 +20,7 @@ impl ModuleResolver {
         self.resolved_packages.get(package_name).map(|entry| entry.value().clone())
     }
 
+    #[cfg(test)]
     pub fn clear_cache(&self) {
         self.resolved_packages.clear();
         self.package_type_cache.clear();

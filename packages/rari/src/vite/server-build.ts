@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite-plus'
-import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig, ServerRateLimitConfig, ServerSpamBlockerConfig } from '../types/server-config'
+import type { ServerCacheControlConfig, ServerConfig, ServerCSPConfig } from '../types/server-config'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -65,8 +65,6 @@ export interface ServerBuildOptions {
   alias?: Record<string, string>
   define?: Record<string, string>
   csp?: ServerCSPConfig
-  rateLimit?: ServerRateLimitConfig
-  spamBlocker?: ServerSpamBlockerConfig
   cacheControl?: ServerCacheControlConfig
 }
 
@@ -77,11 +75,9 @@ export interface ComponentRebuildResult {
   error?: string
 }
 
-type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'rateLimit' | 'spamBlocker' | 'cacheControl' | 'define' | 'serverConfigPath'>> & {
+type ResolvedServerBuildOptions = Required<Omit<ServerBuildOptions, 'csp' | 'cacheControl' | 'define' | 'serverConfigPath'>> & {
   serverConfigPath: string
   csp?: ServerBuildOptions['csp']
-  rateLimit?: ServerBuildOptions['rateLimit']
-  spamBlocker?: ServerBuildOptions['spamBlocker']
   cacheControl?: ServerBuildOptions['cacheControl']
   define?: ServerBuildOptions['define']
 }
@@ -148,8 +144,6 @@ export class ServerComponentBuilder {
       alias: options.alias || {},
       define: options.define,
       csp: options.csp,
-      rateLimit: options.rateLimit,
-      spamBlocker: options.spamBlocker,
       cacheControl: options.cacheControl,
     }
 
@@ -1088,10 +1082,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
     const serverConfig: ServerConfig = {}
     if (this.options.csp)
       serverConfig.csp = this.options.csp
-    if (this.options.rateLimit)
-      serverConfig.rateLimit = this.options.rateLimit
-    if (this.options.spamBlocker)
-      serverConfig.spamBlocker = this.options.spamBlocker
     if (this.options.cacheControl)
       serverConfig.cacheControl = this.options.cacheControl
 

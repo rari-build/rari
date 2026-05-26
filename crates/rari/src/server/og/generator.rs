@@ -410,6 +410,7 @@ impl OgImageGenerator {
         Ok(webp.to_vec())
     }
 
+    #[cfg(test)]
     pub fn clear_cache(&self) {
         self.cache.clear();
     }

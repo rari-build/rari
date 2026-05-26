@@ -169,6 +169,7 @@ pub async fn op_send_chunk_to_rust(
 }
 
 #[allow(clippy::disallowed_methods)]
+#[cfg(test)]
 pub fn create_module_operation(
     row_id: &str,
     module_id: &str,
@@ -187,6 +188,7 @@ pub fn create_module_operation(
 }
 
 #[allow(clippy::disallowed_methods)]
+#[cfg(test)]
 pub fn create_element_operation(row_id: &str, element: &serde_json::Value) -> String {
     serde_json::json!({
         "type": "element",
@@ -197,6 +199,7 @@ pub fn create_element_operation(row_id: &str, element: &serde_json::Value) -> St
 }
 
 #[allow(clippy::disallowed_methods)]
+#[cfg(test)]
 pub fn create_symbol_operation(row_id: &str, symbol_ref: &str) -> String {
     serde_json::json!({
         "type": "symbol",
@@ -207,6 +210,7 @@ pub fn create_symbol_operation(row_id: &str, symbol_ref: &str) -> String {
 }
 
 #[allow(clippy::disallowed_methods)]
+#[cfg(test)]
 pub fn create_error_operation(
     row_id: &str,
     message: &str,

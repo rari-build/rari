@@ -82,8 +82,6 @@ export type { Robots, RobotsRule, Sitemap, SitemapEntry, SitemapImage, SitemapVi
 export type {
   ServerConfig,
   ServerCSPConfig,
-  ServerRateLimitConfig,
-  ServerSpamBlockerConfig,
 } from './types/server-config'
 
 export { defineRariConfig, defineRariOptions } from './vite/index'

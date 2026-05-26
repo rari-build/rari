@@ -1,29 +1,41 @@
-use crate::utils::path_url::path_to_file_url;
-use cow_utils::CowUtils;
 use std::path::{Path, PathBuf};
+
+#[cfg(test)]
+use crate::utils::path_url::path_to_file_url;
+#[cfg(test)]
+use cow_utils::CowUtils;
 
 pub struct DistPathResolver {
     project_root: PathBuf,
     dist_dir: PathBuf,
+    #[cfg(test)]
     server_dir: String,
 }
 
 impl DistPathResolver {
     pub fn new(project_root: PathBuf) -> Self {
         let dist_dir = project_root.join("dist");
-        Self { project_root, dist_dir, server_dir: "server".to_string() }
+        Self {
+            project_root,
+            dist_dir,
+            #[cfg(test)]
+            server_dir: "server".to_string(),
+        }
     }
 
-    pub fn get_dist_path(&self, component_id: &str) -> PathBuf {
+    #[cfg(test)]
+    fn get_dist_path(&self, component_id: &str) -> PathBuf {
         let filename = format!("{}.js", component_id);
         self.dist_dir.join(&self.server_dir).join(filename)
     }
 
+    #[cfg(test)]
     pub fn get_dist_url(&self, component_id: &str) -> String {
         let path = self.get_dist_path(component_id);
         path_to_file_url(&path)
     }
 
+    #[cfg(test)]
     pub fn file_path_to_component_id(&self, file_path: &Path) -> String {
         let relative_path = if file_path.is_absolute() {
             file_path.strip_prefix(&self.project_root).unwrap_or(file_path).to_path_buf()
@@ -42,36 +54,6 @@ impl DistPathResolver {
             .cow_replace(|c: char| !c.is_alphanumeric() && c != '/' && c != '-', "_")
             .trim_start_matches("src/")
             .to_string()
-    }
-
-    pub fn dist_file_exists(&self, component_id: &str) -> bool {
-        let path = self.get_dist_path(component_id);
-        path.exists()
-    }
-
-    pub fn get_dist_file_mtime(&self, component_id: &str) -> Option<std::time::SystemTime> {
-        let path = self.get_dist_path(component_id);
-        std::fs::metadata(&path).ok().and_then(|metadata| metadata.modified().ok())
-    }
-
-    pub fn is_dist_newer_than_source(&self, component_id: &str, source_path: &Path) -> bool {
-        let dist_mtime = match self.get_dist_file_mtime(component_id) {
-            Some(time) => time,
-            None => {
-                return false;
-            }
-        };
-
-        let source_mtime =
-            match std::fs::metadata(source_path).ok().and_then(|metadata| metadata.modified().ok())
-            {
-                Some(time) => time,
-                None => {
-                    return false;
-                }
-            };
-
-        dist_mtime > source_mtime
     }
 
     pub fn project_root(&self) -> &Path {

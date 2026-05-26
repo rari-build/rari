@@ -101,41 +101,6 @@ impl Default for CspConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RateLimitConfig {
-    pub enabled: bool,
-    pub requests_per_second: u32,
-    pub burst_size: u32,
-    #[serde(default = "default_revalidate_rpm")]
-    pub revalidate_requests_per_minute: u32,
-}
-
-fn default_revalidate_rpm() -> u32 {
-    10
-}
-
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            requests_per_second: 100,
-            burst_size: 200,
-            revalidate_requests_per_minute: 10,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SpamBlockerConfig {
-    pub enabled: bool,
-}
-
-impl Default for SpamBlockerConfig {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViteConfig {
     pub host: String,
     pub port: u16,
@@ -348,10 +313,6 @@ pub struct Config {
     pub action: ActionConfig,
     #[serde(default)]
     pub csp: CspConfig,
-    #[serde(default)]
-    pub rate_limit: RateLimitConfig,
-    #[serde(default)]
-    pub spam_blocker: SpamBlockerConfig,
     #[serde(default)]
     pub images: crate::server::image::ImageConfig,
 }
@@ -584,43 +545,6 @@ impl Config {
                         .filter_map(|v| v.as_str().map(|s| s.to_string()))
                         .collect();
                 }
-            }
-
-            if let Some(rate_limit_data) = config_data.get("rateLimit") {
-                if let Some(enabled) = rate_limit_data.get("enabled").and_then(|v| v.as_bool()) {
-                    config.rate_limit.enabled = enabled;
-                }
-                if let Some(rps) = rate_limit_data.get("requestsPerSecond").and_then(|v| v.as_u64())
-                {
-                    config.rate_limit.requests_per_second = rps.try_into().unwrap_or_else(|_| {
-                        tracing::warn!(
-                            "requestsPerSecond value {} exceeds u32::MAX, using default",
-                            rps
-                        );
-                        100
-                    });
-                }
-                if let Some(burst) = rate_limit_data.get("burstSize").and_then(|v| v.as_u64()) {
-                    config.rate_limit.burst_size = burst.try_into().unwrap_or_else(|_| {
-                        tracing::warn!("burstSize value {} exceeds u32::MAX, using default", burst);
-                        200
-                    });
-                }
-                if let Some(revalidate_rpm) =
-                    rate_limit_data.get("revalidateRequestsPerMinute").and_then(|v| v.as_u64())
-                {
-                    config.rate_limit.revalidate_requests_per_minute = revalidate_rpm.try_into().unwrap_or_else(|_| {
-                        let default_value = default_revalidate_rpm();
-                        tracing::warn!("revalidateRequestsPerMinute value {} exceeds u32::MAX, using default {}", revalidate_rpm, default_value);
-                        default_value
-                    });
-                }
-            }
-
-            if let Some(spam_blocker_data) = config_data.get("spamBlocker")
-                && let Some(enabled) = spam_blocker_data.get("enabled").and_then(|v| v.as_bool())
-            {
-                config.spam_blocker.enabled = enabled;
             }
 
             if let Some(action_data) = config_data.get("action")

@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.13.12"
+version = "0.14.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -110,8 +110,8 @@ base64 = "0.22.1"
 rkyv = "0.8.16"
 
 # === HTTP Client & Server ===
-http = "1.4.0"
-reqwest = { version = "0.13.3", default-features = false, features = [
+http = "1.4.1"
+reqwest = { version = "0.13.4", default-features = false, features = [
   "stream",
   "rustls",
   "blocking",
@@ -121,12 +121,10 @@ axum = { version = "0.8.9", features = [
   "macros"
 ] }
 tower = { version = "0.5.3", default-features = false, features = [ "util" ] }
-tower-http = { version = "0.6.10", features = [
+tower-http = { version = "0.6.11", features = [
   "fs",
   "compression-full"
 ] }
-tower_governor = "0.8.0"
-governor = "0.10.4"
 colored = { workspace = true }
 url = { workspace = true }
 urlencoding = "2.1.3"
@@ -136,7 +134,7 @@ tungstenite = "0.29.0"
 # === Utilities ===
 bytes = "1.11.1"
 cow-utils = "0.1.3"
-dashmap = "6.1.0"
+dashmap = "6.2.1"
 parking_lot = "0.12.5"
 smallvec = "1.15.1"
 regex = { workspace = true }
@@ -171,7 +169,6 @@ hyper-util = { version = "0.1.20", features = [
 libc = "0.2.182"
 nix = { version = "=0.30.1", features = [ "term" ] }
 sys_traits = "=0.1.28"
-sysinfo = "0.39.1"
 
 # === Development Tools ===
 rustyline = "=17.0.0"

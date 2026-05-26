@@ -11,7 +11,6 @@ use crate::server::cache::response_cache;
 use crate::server::config;
 use crate::server::og::OgImageGenerator;
 use crate::server::routing;
-use crate::server::security::ip_rate_limiter::EndpointRateLimiters;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -31,7 +30,6 @@ pub struct ServerState {
     pub response_cache: Arc<response_cache::ResponseCache>,
     pub og_generator: Option<Arc<OgImageGenerator>>,
     pub project_root: PathBuf,
-    pub endpoint_rate_limiters: EndpointRateLimiters,
     pub image_optimizer: Option<Arc<crate::server::image::ImageOptimizer>>,
 }
 

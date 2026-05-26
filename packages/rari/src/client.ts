@@ -63,6 +63,4 @@ export type { RuntimeClient } from './runtime-client'
 export type {
   ServerConfig,
   ServerCSPConfig,
-  ServerRateLimitConfig,
-  ServerSpamBlockerConfig,
 } from './types/server-config'

@@ -88,6 +88,7 @@ impl ApiRouteHandler {
         &self.runtime
     }
 
+    #[cfg(test)]
     pub fn clear_cache(&self) {
         self.handler_cache.clear();
     }

@@ -557,7 +557,7 @@ pub async fn handle_form_action(
     }
 }
 
-pub(crate) fn validate_redirect_url(
+pub fn validate_redirect_url(
     url: &str,
     config: &crate::server::config::RedirectConfig,
 ) -> Result<String, RariError> {
@@ -672,7 +672,7 @@ fn percent_decode(input: &str) -> Result<String, RariError> {
         .map_err(|_| RariError::bad_request("Invalid UTF-8 in percent-decoded data"))
 }
 
-pub(crate) fn validate_and_sanitize_args(
+pub fn validate_and_sanitize_args(
     args: &[JsonValue],
     config: &ValidationConfig,
 ) -> Result<Vec<JsonValue>, RariError> {
@@ -781,7 +781,7 @@ fn validate_and_sanitize_value(
     }
 }
 
-pub(crate) fn is_dangerous_property(key: &str) -> bool {
+pub fn is_dangerous_property(key: &str) -> bool {
     matches!(
         key,
         "__proto__"
@@ -794,7 +794,7 @@ pub(crate) fn is_dangerous_property(key: &str) -> bool {
     )
 }
 
-pub(crate) fn is_reserved_export_name(name: &str) -> bool {
+pub fn is_reserved_export_name(name: &str) -> bool {
     matches!(
         name,
         "then"
@@ -831,38 +831,38 @@ fn append_pending_cookies(
                     );
                 }
             },
-            Err(()) => {
-                tracing::warn!("Skipped invalid cookie '{}': failed validation", cookie.name);
+            Err(e) => {
+                tracing::warn!("Skipped invalid cookie '{}': {}", cookie.name, e);
             }
         }
     }
 }
 
-pub(crate) fn is_valid_cookie_name(s: &str) -> bool {
+pub fn is_valid_cookie_name(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| b > 32 && b < 127 && !b"()<>@,;:\\\"/[]?={} \t".contains(&b))
 }
 
-pub(crate) fn is_valid_cookie_value(s: &str) -> bool {
+pub fn is_valid_cookie_value(s: &str) -> bool {
     s.bytes().all(|b| matches!(b, 0x21 | 0x23..=0x2B | 0x2D..=0x3A | 0x3C..=0x5B | 0x5D..=0x7E))
 }
 
-pub(crate) fn is_valid_attr_value(s: &str) -> bool {
+pub fn is_valid_attr_value(s: &str) -> bool {
     !s.is_empty() && s.is_ascii() && s.bytes().all(|b| b >= 32 && b != b';' && b != 127)
 }
 
-pub(crate) fn build_set_cookie_header(
+pub fn build_set_cookie_header(
     cookie: &crate::server::middleware::request_context::PendingCookie,
-) -> Result<String, ()> {
+) -> Result<String, String> {
     if !is_valid_cookie_name(&cookie.name) {
-        return Err(());
+        return Err(format!("invalid cookie name: {}", cookie.name));
     }
     if !is_valid_cookie_value(&cookie.value) {
-        return Err(());
+        return Err(format!("invalid cookie value for: {}", cookie.name));
     }
 
     let path = cookie.path.as_deref().unwrap_or("/");
     if !is_valid_attr_value(path) {
-        return Err(());
+        return Err(format!("invalid cookie path: {}", path));
     }
 
     let mut header = format!("{}={}", cookie.name, cookie.value);
@@ -870,13 +870,13 @@ pub(crate) fn build_set_cookie_header(
 
     if let Some(domain) = &cookie.domain {
         if !is_valid_attr_value(domain) {
-            return Err(());
+            return Err(format!("invalid cookie domain: {}", domain));
         }
         header.push_str(&format!("; Domain={}", domain));
     }
     if let Some(expires) = &cookie.expires {
         if !is_valid_attr_value(expires) {
-            return Err(());
+            return Err(format!("invalid cookie expires: {}", expires));
         }
         header.push_str(&format!("; Expires={}", expires));
     }
@@ -886,10 +886,10 @@ pub(crate) fn build_set_cookie_header(
     let normalized_same_site =
         cookie.same_site.as_deref().map(|value| value.cow_to_ascii_lowercase());
     if normalized_same_site.as_deref() == Some("none") && !cookie.secure {
-        return Err(());
+        return Err("SameSite=None requires Secure".to_string());
     }
     if cookie.partitioned && !cookie.secure {
-        return Err(());
+        return Err("Partitioned requires Secure".to_string());
     }
     if cookie.http_only {
         header.push_str("; HttpOnly");
@@ -902,7 +902,7 @@ pub(crate) fn build_set_cookie_header(
             "strict" => "Strict",
             "lax" => "Lax",
             "none" => "None",
-            _ => return Err(()),
+            _ => return Err(format!("invalid SameSite value: {}", same_site)),
         };
         header.push_str(&format!("; SameSite={}", serialized_same_site));
     }
@@ -911,7 +911,7 @@ pub(crate) fn build_set_cookie_header(
             "low" => header.push_str("; Priority=Low"),
             "medium" => header.push_str("; Priority=Medium"),
             "high" => header.push_str("; Priority=High"),
-            _ => return Err(()),
+            _ => return Err(format!("invalid Priority value: {}", priority)),
         }
     }
     if cookie.partitioned {

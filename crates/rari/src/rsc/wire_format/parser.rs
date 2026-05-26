@@ -71,8 +71,10 @@ impl RscWireFormatParser {
     fn parse_json_element(&self, value: &JsonValue) -> Result<RscElement, RariError> {
         match value {
             JsonValue::String(s) => {
-                if s.starts_with('$') {
-                    if s == "$undefined" {
+                if let Some(stripped) = s.strip_prefix('$') {
+                    if s.starts_with("$$") {
+                        return Ok(RscElement::Text(stripped.to_string()));
+                    } else if s == "$undefined" {
                         return Ok(RscElement::Text(String::new()));
                     } else if s == "$NaN" {
                         return Ok(RscElement::Text("NaN".to_string()));

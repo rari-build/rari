@@ -18,11 +18,7 @@ use crate::server::handlers::static_handlers::{
 use crate::server::loaders::cache_loader::CacheLoader;
 use crate::server::loaders::component_loader::ComponentLoader;
 use crate::server::middleware::proxy_middleware::ProxyLayer;
-use crate::server::middleware::rate_limit::{
-    create_rate_limit_layer, create_strict_rate_limit_layer, rate_limit_logger,
-};
 use crate::server::middleware::request_middleware::{cors_middleware, security_headers_middleware};
-use crate::server::middleware::spam_blocker::{SpamBlocker, spam_blocker_middleware};
 use crate::server::routing::{api_routes, app_router};
 use crate::server::types::ServerState;
 use crate::server::vite::proxy::{
@@ -169,12 +165,6 @@ impl Server {
             Some(generator)
         };
 
-        let endpoint_rate_limiters =
-            crate::server::security::ip_rate_limiter::EndpointRateLimiters::for_environment(
-                config.is_production(),
-            );
-        endpoint_rate_limiters.start_cleanup_tasks();
-
         let state = ServerState {
             renderer: renderer_arc,
             ssr_renderer,
@@ -191,7 +181,6 @@ impl Server {
             response_cache,
             og_generator,
             project_root,
-            endpoint_rate_limiters,
             image_optimizer: None,
         };
 
@@ -240,17 +229,11 @@ impl Server {
 
         state.image_optimizer = Some(Arc::clone(&image_optimizer));
 
-        let image_state = crate::server::image::ImageState {
-            optimizer: image_optimizer,
-            rate_limiters: state.endpoint_rate_limiters.clone(),
-        };
+        let image_state = crate::server::image::ImageState { optimizer: image_optimizer };
 
         let revalidation_router = Router::new()
             .route("/_rari/revalidate", post(revalidate_by_path))
-            .layer(small_body_limit)
-            .layer(create_strict_rate_limit_layer(Some(
-                config.rate_limit.revalidate_requests_per_minute,
-            )));
+            .layer(small_body_limit);
 
         let mut router = Router::new()
             .route("/_rari/health", get(health_check))
@@ -329,21 +312,10 @@ impl Server {
         let compression_layer = CompressionLayer::new().compress_when(NotStreamingResponse);
         router = router.layer(compression_layer);
 
-        if config.spam_blocker.enabled {
-            let spam_blocker = SpamBlocker::new();
-            spam_blocker.clone().start_cleanup_task();
-            router = router.layer(middleware::from_fn(spam_blocker_middleware));
-            router = router.layer(axum::Extension(spam_blocker));
-        }
-
         if config.is_development() {
             router = router.layer(middleware::from_fn(cors_middleware));
         } else {
             router = router.layer(middleware::from_fn(security_headers_middleware));
-        }
-
-        if let Some(rate_limit_layer) = create_rate_limit_layer(config) {
-            router = router.layer(rate_limit_layer).layer(middleware::from_fn(rate_limit_logger));
         }
 
         let mut router = router.with_state(state.clone());
