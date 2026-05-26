@@ -59,6 +59,7 @@ function formatDate(dateString: string): string {
 
 export default function BlogIndexPage() {
   const posts = getBlogPosts()
+  const validPosts = posts.filter(post => isValidSlug(post.slug))
 
   return (
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
@@ -72,10 +73,10 @@ export default function BlogIndexPage() {
           </p>
         </div>
 
-        {posts.length > 0
+        {validPosts.length > 0
           ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {posts.filter(post => isValidSlug(post.slug)).map(post => (
+                {validPosts.map(post => (
                   <a
                     key={post.slug}
                     href={`/blog/${encodeURIComponent(post.slug)}`}

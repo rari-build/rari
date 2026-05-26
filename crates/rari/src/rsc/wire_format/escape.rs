@@ -131,6 +131,8 @@ mod tests {
         assert_eq!(escape_rsc_string("$a"), "$$a");
         assert_eq!(escape_rsc_string("$1f"), "$1f");
         assert_eq!(escape_rsc_string("$ff"), "$ff");
+        assert_eq!(escape_rsc_string("$$foo"), "$$foo");
+        assert_eq!(escape_rsc_string("$$5"), "$$5");
     }
 
     #[test]

@@ -919,6 +919,10 @@ impl RscHtmlRenderer {
                     return self.render_row(row_id, row_map, row_cache).await;
                 }
 
+                if s.starts_with("$$") {
+                    return Ok(escape_html(&s[1..]));
+                }
+
                 return Ok(escape_html(s));
             }
 

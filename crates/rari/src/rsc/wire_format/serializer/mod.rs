@@ -407,9 +407,8 @@ impl RscSerializer {
                 let props_value = Value::Object(
                     error_props.into_iter().collect::<serde_json::Map<String, Value>>(),
                 );
-                let escaped_props = escape_rsc_value(&props_value);
                 let props_json =
-                    serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
+                    serde_json::to_string(&props_value).unwrap_or_else(|_| "{}".to_string());
                 format!(r#"["$","div",{key_json},{props_json}]"#)
             };
 
@@ -451,8 +450,7 @@ impl RscSerializer {
 
         let props_value =
             Value::Object(processed_props.into_iter().collect::<serde_json::Map<String, Value>>());
-        let escaped_props = escape_rsc_value(&props_value);
-        let props_json = serde_json::to_string(&escaped_props).unwrap_or_else(|_| "{}".to_string());
+        let props_json = serde_json::to_string(&props_value).unwrap_or_else(|_| "{}".to_string());
 
         format!(r#"["$","{module_ref}",{key_json},{props_json}]"#)
     }
