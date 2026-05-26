@@ -1,5 +1,5 @@
 import type { PageProps } from 'rari'
-import { access, readFile } from 'node:fs/promises'
+import { accessSync, readFileSync } from 'node:fs'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import {
@@ -13,7 +13,7 @@ const DEFAULT_METADATA = {
   description: 'Complete documentation for rari framework.',
 }
 
-export default async function DocPage({ params }: PageProps) {
+export default function DocPage({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlugArray(slug))
@@ -29,14 +29,14 @@ export default async function DocPage({ params }: PageProps) {
   )
 }
 
-export async function getData({ params }: PageProps) {
+export function getData({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlugArray(slug))
     return { notFound: true }
 
   try {
-    await access(getDocsFilePath(slug))
+    accessSync(getDocsFilePath(slug))
     return { props: {} }
   }
   catch {
@@ -44,14 +44,14 @@ export async function getData({ params }: PageProps) {
   }
 }
 
-export async function generateMetadata({ params }: PageProps) {
+export function generateMetadata({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlugArray(slug))
     return DEFAULT_METADATA
 
   try {
-    const content = await readFile(getDocsFilePath(slug), 'utf-8')
+    const content = readFileSync(getDocsFilePath(slug), 'utf-8')
     const titleMatch = content.match(TITLE_EXPORT_REGEX)
     const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 

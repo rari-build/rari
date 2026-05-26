@@ -1,5 +1,5 @@
 import type { PageProps } from 'rari'
-import { access, readFile } from 'node:fs/promises'
+import { accessSync, readFileSync } from 'node:fs'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getBlogFilePath, isValidSlug } from '@/lib/content'
 import {
@@ -13,7 +13,7 @@ const DEFAULT_METADATA = {
   description: 'Latest news and updates from the rari team.',
 }
 
-export default async function BlogPage({ params }: PageProps) {
+export default function BlogPage({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlug(slug))
@@ -26,14 +26,14 @@ export default async function BlogPage({ params }: PageProps) {
   )
 }
 
-export async function getData({ params }: PageProps) {
+export function getData({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlug(slug))
     return { notFound: true }
 
   try {
-    await access(getBlogFilePath(slug))
+    accessSync(getBlogFilePath(slug))
     return { props: {} }
   }
   catch {
@@ -41,14 +41,14 @@ export async function getData({ params }: PageProps) {
   }
 }
 
-export async function generateMetadata({ params }: PageProps) {
+export function generateMetadata({ params }: PageProps) {
   const slug = params?.slug
 
   if (!isValidSlug(slug))
     return DEFAULT_METADATA
 
   try {
-    const content = await readFile(getBlogFilePath(slug), 'utf-8')
+    const content = readFileSync(getBlogFilePath(slug), 'utf-8')
     const titleMatch = content.match(TITLE_EXPORT_REGEX)
     const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
 

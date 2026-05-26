@@ -1,5 +1,5 @@
 import type { Metadata } from 'rari'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import News from '@/components/icons/News'
@@ -18,31 +18,29 @@ interface BlogPost {
   author?: string
 }
 
-async function getBlogPosts(): Promise<BlogPost[]> {
+function getBlogPosts(): BlogPost[] {
   try {
     const blogDir = join(process.cwd(), 'public', 'content', 'blog')
-    const files = await readdir(blogDir)
+    const files = readdirSync(blogDir)
     const mdxFiles = files.filter(file => file.endsWith('.mdx'))
 
-    const posts = await Promise.all(
-      mdxFiles.map(async (file) => {
-        const slug = file.replace('.mdx', '')
-        const content = await readFile(join(blogDir, file), 'utf-8')
+    const posts = mdxFiles.map((file) => {
+      const slug = file.replace('.mdx', '')
+      const content = readFileSync(join(blogDir, file), 'utf-8')
 
-        const titleMatch = content.match(TITLE_EXPORT_REGEX)
-        const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
-        const dateMatch = content.match(DATE_EXPORT_REGEX)
-        const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
+      const titleMatch = content.match(TITLE_EXPORT_REGEX)
+      const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
+      const dateMatch = content.match(DATE_EXPORT_REGEX)
+      const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
 
-        return {
-          slug,
-          title: titleMatch?.[2] || 'Untitled',
-          description: descriptionMatch?.[2] || '',
-          date: dateMatch?.[2] || '',
-          author: authorMatch?.[2],
-        }
-      }),
-    )
+      return {
+        slug,
+        title: titleMatch?.[2] || 'Untitled',
+        description: descriptionMatch?.[2] || '',
+        date: dateMatch?.[2] || '',
+        author: authorMatch?.[2],
+      }
+    })
 
     return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }
@@ -58,8 +56,8 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-export default async function BlogIndexPage() {
-  const posts = await getBlogPosts()
+export default function BlogIndexPage() {
+  const posts = getBlogPosts()
 
   return (
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">

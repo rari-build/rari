@@ -335,6 +335,12 @@ pub async fn render_rsc_navigation_streaming(
 
             let sorted_wire_format = sort_rsc_rows(&rsc_wire_format);
 
+            let final_payload = if sorted_wire_format.ends_with('\n') {
+                sorted_wire_format
+            } else {
+                format!("{}\n", sorted_wire_format)
+            };
+
             let mut response_builder = Response::builder()
                 .status(status_code)
                 .header("content-type", "text/x-component")
@@ -348,7 +354,7 @@ pub async fn render_rsc_navigation_streaming(
                     response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
             }
 
-            Ok(response_builder.body(Body::from(sorted_wire_format)).expect("Valid RSC response"))
+            Ok(response_builder.body(Body::from(final_payload)).expect("Valid RSC response"))
         }
     }
 }

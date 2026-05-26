@@ -92,15 +92,6 @@ interface RariOptions {
     defaultSrc?: string[]
     workerSrc?: string[]
   }
-  rateLimit?: {
-    enabled?: boolean
-    requestsPerSecond?: number
-    burstSize?: number
-    revalidateRequestsPerMinute?: number
-  }
-  spamBlocker?: {
-    enabled?: boolean
-  }
   cacheControl?: {
     routes: Record<string, string>
   }
@@ -1181,8 +1172,6 @@ const ${componentName} = registerClientReference(
             serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
-            rateLimit: options.rateLimit,
-            spamBlocker: options.spamBlocker,
             cacheControl: options.cacheControl,
           })
 
@@ -1437,8 +1426,6 @@ const ${componentName} = registerClientReference(
             serverConfigPath: 'server/config.json',
             alias: resolvedAlias,
             csp: options.csp,
-            rateLimit: options.rateLimit,
-            spamBlocker: options.spamBlocker,
             cacheControl: options.cacheControl,
           })
 
@@ -2175,8 +2162,6 @@ export class ErrorBoundaryWrapper extends React.Component {
   const serverBuildPlugin = createServerBuildPlugin({
     ...options.serverBuild,
     csp: options.csp,
-    rateLimit: options.rateLimit,
-    spamBlocker: options.spamBlocker,
     cacheControl: options.cacheControl,
   })
 

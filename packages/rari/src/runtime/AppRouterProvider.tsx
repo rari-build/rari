@@ -103,41 +103,6 @@ interface HMRFailure {
   filePath?: string
 }
 
-function GlobalLoadingFallback() {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-      }}
-    >
-      <div
-        style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid rgba(0, 0, 0, 0.1)',
-          borderTopColor: '#3b82f6',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-        }}
-      />
-      <style>
-        {`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}
-      </style>
-    </div>
-  )
-}
-
 interface LazyContentProps {
   contentRef: string
   rowsDataRef: React.RefObject<Map<string, RSCData>>
@@ -1181,7 +1146,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
         </div>
       )}
 
-      <Suspense fallback={<GlobalLoadingFallback />}>
+      <Suspense fallback={null}>
         {contentToRender}
       </Suspense>
     </>

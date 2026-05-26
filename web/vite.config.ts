@@ -6,9 +6,6 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   plugins: [
     rari({
-      spamBlocker: {
-        enabled: true,
-      },
       csp: {
         scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://t.rari.build', 'https://js.sentry-cdn.com'],
         connectSrc: ['\'self\'', 'ws:', 'wss:', 'https://t.rari.build', 'https://*.ingest.us.sentry.io'],

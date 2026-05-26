@@ -8,41 +8,21 @@ pub use optimizer::{ImageOptimizer, PreloadImage};
 pub use types::{ImageFormat, OptimizeParams, OptimizedImage};
 
 use axum::{
-    extract::{ConnectInfo, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    extract::{Query, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
-
-use crate::server::security::ip_rate_limiter::EndpointRateLimiters;
-use crate::server::utils::ip_extractor::extract_client_ip;
 
 #[derive(Clone)]
 pub struct ImageState {
     pub optimizer: Arc<ImageOptimizer>,
-    pub rate_limiters: EndpointRateLimiters,
 }
 
 pub async fn handle_image_request(
     State(state): State<ImageState>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
     Query(params): Query<OptimizeParams>,
 ) -> Result<Response, ImageError> {
-    let ip = extract_client_ip(&headers, &addr);
-    if let Err(retry_after) = state.rate_limiters.image_optimization.check(&ip) {
-        return Ok((
-            StatusCode::TOO_MANY_REQUESTS,
-            [
-                (header::RETRY_AFTER, retry_after.to_string()),
-                (header::CONTENT_TYPE, "text/plain".to_string()),
-            ],
-            "Rate limit exceeded for image optimization. Please try again later.",
-        )
-            .into_response());
-    }
-
     let (optimized, cache_hit) = state.optimizer.optimize(params).await?;
 
     let content_type = match optimized.format {

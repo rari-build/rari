@@ -1,57 +1,36 @@
 import type { LayoutProps, Metadata } from 'rari'
-import { Suspense } from 'react'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { cwd } from 'node:process'
 import Footer from '@/components/Footer'
-import FooterSkeleton from '@/components/FooterSkeleton'
 import { PostHogPageView } from '@/components/PostHogPageView'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
-import SidebarSkeleton from '@/components/SidebarSkeleton'
 
-interface NpmPackageInfo {
-  'dist-tags': {
-    latest: string
-  }
-}
-
-async function fetchRariVersion(): Promise<string> {
+function getRariVersion(): string {
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 2000)
-
-    const response = await fetch('https://registry.npmjs.org/rari', {
-      signal: controller.signal,
-      rari: { revalidate: 3600 },
-    })
-    clearTimeout(timeoutId)
-
-    if (!response.ok)
-      throw new Error(`Failed to fetch version: ${response.status}`)
-    const data: NpmPackageInfo = await response.json()
-    return data['dist-tags'].latest
+    const pkgPath = join(cwd(), 'node_modules', 'rari', 'package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    return pkg.version || '0.0.0'
   }
-  catch (error) {
-    console.error('Error fetching rari version:', error)
+  catch {
     return '0.0.0'
   }
 }
 
-export default async function RootLayout({ children, pathname }: LayoutProps) {
-  const version = await fetchRariVersion()
+export default function RootLayout({ children, pathname }: LayoutProps) {
+  const version = getRariVersion()
   return (
     <Providers>
       <PostHogPageView pathname={pathname} />
       <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
         <div className="flex min-h-screen">
-          <Suspense fallback={<SidebarSkeleton />}>
-            <Sidebar version={version} />
-          </Suspense>
+          <Sidebar version={version} />
           <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
             <main className="flex-1 min-w-0 bg-[#0d1117] rounded-b-md overflow-hidden">
               {children}
             </main>
-            <Suspense fallback={<FooterSkeleton />}>
-              <Footer />
-            </Suspense>
+            <Footer />
           </div>
         </div>
       </div>

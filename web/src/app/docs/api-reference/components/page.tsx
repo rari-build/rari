@@ -3,7 +3,7 @@ import Breadcrumbs from '@/components/Breadcrumbs'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PageHeader from '@/components/PageHeader'
 
-export default async function ComponentsPage() {
+export default function ComponentsPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-4 lg:py-8 pt-16 lg:pt-8 w-full">
       <div className="prose prose-invert max-w-none">

@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.13.12"
+version = "0.14.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -125,8 +125,6 @@ tower-http = { version = "0.6.10", features = [
   "fs",
   "compression-full"
 ] }
-tower_governor = "0.8.0"
-governor = "0.10.4"
 colored = { workspace = true }
 url = { workspace = true }
 urlencoding = "2.1.3"
