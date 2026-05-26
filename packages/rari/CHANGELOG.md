@@ -1,8 +1,17 @@
+## [rari@0.14.0] - 2026-05-26
+
+### 🚀 Features
+
+- *(server)* Remove rate limiting and spam blocking middleware
 ## [rari@0.13.12] - 2026-05-26
 
 ### 🚀 Features
 
 - *(sitemap)* Add alias resolution and Vite dev server CORS support
+
+### 💼 Other
+
+- Rari@0.13.12
 ## [rari@0.13.11] - 2026-05-24
 
 ### 💼 Other

@@ -1,8 +1,10 @@
 # {{PROJECT_NAME}}
 
-A high-performance React Server Components application powered by [rari](https://rari.dev).
+> Runtime Accelerated Rendering Infrastructure
 
-## 🚀 Getting Started
+A React Server Components application powered by [rari](https://rari.build).
+
+## Getting Started
 
 ```bash
 # Install dependencies
@@ -14,33 +16,41 @@ A high-performance React Server Components application powered by [rari](https:/
 
 Visit [http://localhost:5173](http://localhost:5173) to see your app.
 
-## 🚀 Deploy to the Cloud
+## Features
+
+- **App Router** — File-based routing with layouts, loading states, and error boundaries
+- **React Server Components** — Server components by default, client components when you need them
+- **Rust-powered Runtime** — HTTP server, RSC renderer, and routing written in Rust with embedded V8
+- **Streaming SSR** — Progressive rendering with Suspense boundaries
+- **Hot Module Reloading** — Instant feedback during development
+- **TypeScript-first** — Full type safety across the server/client boundary
+- **Zero Configuration** — Works out of the box with pre-built binaries
+- **Cross-platform** — Supports macOS, Linux, and Windows
+
+## Deploy to the Cloud
 
 This rari application is pre-configured for cloud deployment.
 
-### 🚂 Railway
+### Railway
 
-### Quick Deploy
+1. Push to GitHub:
+```bash
+git add .
+git commit -m "Initial commit"
+git push origin main
+```
 
-1. **Push to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Initial commit"
-   git push origin main
-   ```
-
-2. **Deploy to Railway**:
+2. Deploy to Railway:
    - Go to [railway.app](https://railway.app)
    - Create new project → "Deploy from GitHub repo"
    - Select your repository
    - Click "Deploy Now"
 
-3. **Generate Domain**:
+3. Generate a domain:
    - In Railway dashboard → Settings → Networking
    - Click "Generate Domain"
-   - Your app will be live! 🎉
 
-### Alternative: Setup Railway from CLI
+**CLI Setup**
 
 ```bash
 # Configure Railway deployment files
@@ -49,23 +59,23 @@ This rari application is pre-configured for cloud deployment.
 # Follow the instructions to deploy
 ```
 
-### 🎨 Render
+### Render
 
-1. **Push to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Initial commit"
-   git push origin main
-   ```
+1. Push to GitHub:
+```bash
+git add .
+git commit -m "Initial commit"
+git push origin main
+```
 
-2. **Deploy to Render**:
+2. Deploy to Render:
    - Go to [render.com](https://render.com)
-   - Create new "Web Service"
+   - Create a new "Web Service"
    - Connect your GitHub repository
    - Render auto-detects Node.js and uses `render.yaml`
    - Click "Create Web Service"
 
-### Alternative: Setup Render from CLI
+**CLI Setup**
 
 ```bash
 # Configure Render deployment files
@@ -74,49 +84,31 @@ This rari application is pre-configured for cloud deployment.
 # Follow the instructions to deploy
 ```
 
-## 📜 Available Scripts
+## Available Scripts
 
 ```bash
 # Development
-{{PACKAGE_MANAGER}} run dev          # Start development server
-{{PACKAGE_MANAGER}} run build        # Build for production
+{{PACKAGE_MANAGER}} run dev             # Start development server
+{{PACKAGE_MANAGER}} run build           # Build for production
 
 # Production
-{{PACKAGE_MANAGER}} start            # Start production server
-{{PACKAGE_MANAGER}} run start:local  # Start local production server
+{{PACKAGE_MANAGER}} start               # Start production server
 
 # Deployment
-{{PACKAGE_MANAGER}} run deploy:railway  # Setup Railway deployment
-{{PACKAGE_MANAGER}} run deploy:render   # Setup Render deployment
+{{PACKAGE_MANAGER}} run deploy:railway  # Set up Railway deployment
+{{PACKAGE_MANAGER}} run deploy:render   # Set up Render deployment
 
 # Code Quality
-{{PACKAGE_MANAGER}} run lint         # Run linters
-{{PACKAGE_MANAGER}} run typecheck    # Run TypeScript checks
+{{PACKAGE_MANAGER}} run typecheck       # Run TypeScript checks
 ```
 
-## 🌍 Environment Variables
+## Learn More
 
-Cloud platforms automatically provide:
-- `PORT` - Server port (platform assigns this)
-- `NODE_ENV=production` - Production mode
-
-Optional variables you can set:
-- `RUST_LOG=debug` - Rust logging level
-
-## 🏗️ Architecture
-
-- **⚡ Rust Runtime**: Native performance with zero-cost abstractions
-- **🚀 React Server Components**: True server-side rendering
-- **📁 File-based Routing**: Automatic route generation
-- **🎯 Zero Configuration**: Works out of the box
-
-## 📚 Learn More
-
-- [rari Documentation](https://rari.dev)
+- [rari Documentation](https://rari.build/docs)
 - [Railway Documentation](https://docs.railway.app)
 - [Render Documentation](https://render.com/docs)
 - [React Server Components](https://react.dev/reference/react/use-server)
 
 ---
 
-Built with ❤️ using [rari](https://rari.dev)
+Built with [rari](https://rari.build)
