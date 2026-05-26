@@ -1,7 +1,7 @@
 import type { PageProps } from 'rari'
 import { access, readFile } from 'node:fs/promises'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getBlogFilePath, isValidSlug } from '@/lib/content-utils'
+import { getBlogFilePath, isValidSlug } from '@/lib/content'
 import {
   DESCRIPTION_EXPORT_REGEX,
   HEADING_REGEX,

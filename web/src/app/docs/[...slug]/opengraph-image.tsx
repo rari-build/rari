@@ -1,8 +1,7 @@
 import type { PageProps } from 'rari'
 import { readFile } from 'node:fs/promises'
-import { ImageResponse } from 'rari/og'
-import Rari from '@/components/icons/Rari'
-import { getDocsFilePath, isValidSlugArray } from '@/lib/content-utils'
+import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
+import { generateOGImage } from '@/lib/og-image'
 import { DESCRIPTION_EXPORT_REGEX, TITLE_EXPORT_REGEX } from '@/lib/regex-constants'
 
 export default async function Image({ params }: PageProps) {
@@ -24,81 +23,9 @@ export default async function Image({ params }: PageProps) {
     catch {}
   }
 
-  return new ImageResponse(
-    <div
-      style={{
-        display: 'flex',
-        width: '100%',
-        height: '100%',
-        background: '#0d1117',
-        padding: '80px',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: '100%',
-          height: '100%',
-          border: '2px solid #30363d',
-          borderRadius: '24px',
-          padding: '60px',
-          background: 'linear-gradient(to bottom right, #161b22, #0d1117)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '40px',
-          }}
-        >
-          <Rari
-            width={120}
-            height={40}
-            style={{ marginRight: '20px' }}
-          />
-          <div
-            style={{
-              fontSize: 36,
-              color: '#8b949e',
-            }}
-          >
-            / docs
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 56,
-              fontWeight: 'bold',
-              color: '#f0f6fc',
-              marginBottom: '30px',
-              lineHeight: 1.2,
-            }}
-          >
-            {title}
-          </div>
-
-          <div
-            style={{
-              fontSize: 32,
-              color: '#8b949e',
-              lineHeight: 1.4,
-            }}
-          >
-            {description}
-          </div>
-        </div>
-      </div>
-    </div>,
-  )
+  return generateOGImage({
+    title,
+    description,
+    section: 'docs',
+  })
 }
