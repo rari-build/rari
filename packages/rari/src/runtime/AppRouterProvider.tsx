@@ -660,13 +660,37 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       let parsedPayload: any = null
       let parseError: Error | null = null
+      let isStreamingResponse = false
 
       try {
         if (detail.rscResponsePromise) {
-          parsedPayload = parseRscResponseRef.current!(detail.rscResponsePromise)
+          const response = await detail.rscResponsePromise
+          if (currentNavigationIdRef.current !== detail.navigationId)
+            return
+          isStreamingResponse = response.headers.get('x-render-mode') === 'streaming'
+          const { element } = parseRscResponseRef.current!(Promise.resolve(response))
+          if (isStreamingResponse) {
+            parsedPayload = { element }
+          }
+          else {
+            const resolvedElement = await element
+            if (currentNavigationIdRef.current !== detail.navigationId)
+              return
+            parsedPayload = { element: resolvedElement }
+          }
         }
         else if (detail.rscResponse) {
-          parsedPayload = parseRscResponseRef.current!(Promise.resolve(detail.rscResponse))
+          isStreamingResponse = detail.rscResponse.headers.get('x-render-mode') === 'streaming'
+          const { element } = parseRscResponseRef.current!(Promise.resolve(detail.rscResponse))
+          if (isStreamingResponse) {
+            parsedPayload = { element }
+          }
+          else {
+            const resolvedElement = await element
+            if (currentNavigationIdRef.current !== detail.navigationId)
+              return
+            parsedPayload = { element: resolvedElement }
+          }
         }
         else if (detail.rscWireFormat) {
           parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat)
@@ -709,13 +733,22 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
-        setRscPayload(parsedPayload)
+        if (isStreamingResponse) {
+          setRscPayload(parsedPayload)
+          setRenderKey(prev => prev + 1)
+          setHmrError(null)
+        }
+        else {
+          React.startTransition(() => {
+            setRscPayload(parsedPayload)
+            setRenderKey(prev => prev + 1)
+            setHmrError(null)
+          })
+        }
         if (detail.rscWireFormat)
           lastSuccessfulPayloadRef.current = detail.rscWireFormat
 
         resetFailureTracking()
-        setRenderKey(prev => prev + 1)
-        setHmrError(null)
 
         if (onNavigateRef.current)
           onNavigateRef.current(detail)
