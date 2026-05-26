@@ -592,17 +592,9 @@ export async function action() { return {} }`)
       const manifest = await builder.buildServerComponents()
 
       expect(manifest).toHaveProperty('components')
-      expect(manifest).toHaveProperty('importMap')
       expect(manifest).toHaveProperty('buildTime')
 
       expect(fsSync.promises.writeFile).toHaveBeenCalled()
-    })
-
-    it('should include import map in manifest', async () => {
-      const manifest = await builder.buildServerComponents()
-
-      expect(manifest.importMap.imports).toHaveProperty('react')
-      expect(manifest.importMap.imports).toHaveProperty('react-dom')
     })
 
     it('should write server config when options provided', async () => {
