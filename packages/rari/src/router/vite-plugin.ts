@@ -426,6 +426,44 @@ export function rariRouter(options: RariRouterPluginOptions = {}): Plugin {
         clearTimeout(timer)
 
       pendingHMRUpdates.clear()
+
+      const root = viteRoot || process.cwd()
+      const serverDir = path.resolve(root, opts.outDir, 'server')
+      const routesPath = path.join(serverDir, 'routes.json')
+
+      try {
+        const content = await fs.readFile(routesPath, 'utf-8')
+        const manifest = JSON.parse(content)
+        let updated = false
+
+        for (const route of manifest.routes) {
+          if (!route.isDynamic)
+            continue
+
+          const sanitizedFilePath = route.filePath
+            .replace(/\[\.\.\.([^\]]+)\]/g, '____$1_')
+            .replace(/\[([^\]]+)\]/g, '_$1_')
+            .replace(/\.tsx?$/, '.js')
+
+          const compiledPath = path.resolve(root, 'dist', 'server', 'app', sanitizedFilePath)
+
+          try {
+            const module = await import(/* @vite-ignore */ compiledPath)
+            if (typeof module.generateStaticParams === 'function') {
+              const params = await module.generateStaticParams()
+              if (Array.isArray(params) && params.length > 0) {
+                route.staticParams = params
+                updated = true
+              }
+            }
+          }
+          catch {}
+        }
+
+        if (updated)
+          await fs.writeFile(routesPath, JSON.stringify(manifest, null, 2), 'utf-8')
+      }
+      catch {}
     },
   }
 }

@@ -19,6 +19,7 @@ export interface AppRouteEntry {
   params: string[]
   isDynamic: boolean
   metadata?: RouteMetadata
+  staticParams?: Array<Record<string, string | string[]>>
 }
 
 export interface LayoutEntry {

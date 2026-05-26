@@ -1,5 +1,7 @@
 import type { PageProps } from 'rari'
-import { accessSync, readFileSync } from 'node:fs'
+import { accessSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import {
@@ -85,4 +87,31 @@ export function generateMetadata({ params }: PageProps) {
   catch {}
 
   return DEFAULT_METADATA
+}
+
+export function generateStaticParams() {
+  const contentDir = join(process.cwd(), 'public', 'content', 'docs')
+  const params: Array<{ slug: string[] }> = []
+
+  function scanDir(dir: string, segments: string[]) {
+    try {
+      const entries = readdirSync(dir)
+      for (const entry of entries) {
+        const fullPath = join(dir, entry)
+        const stat = statSync(fullPath)
+
+        if (stat.isDirectory()) {
+          scanDir(fullPath, [...segments, entry])
+        }
+        else if (entry.endsWith('.mdx') || entry.endsWith('.md')) {
+          const name = entry.replace(/\.mdx?$/, '')
+          params.push({ slug: [...segments, name] })
+        }
+      }
+    }
+    catch {}
+  }
+
+  scanDir(contentDir, [])
+  return params
 }

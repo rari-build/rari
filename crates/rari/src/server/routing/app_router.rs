@@ -23,6 +23,8 @@ pub struct AppRouteEntry {
     pub params: Vec<String>,
     #[serde(rename = "isDynamic")]
     pub is_dynamic: bool,
+    #[serde(rename = "staticParams", default, skip_serializing_if = "Option::is_none")]
+    pub static_params: Option<Vec<FxHashMap<String, serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +142,7 @@ impl AppRouter {
             segments: vec![],
             params: vec![],
             is_dynamic: false,
+            static_params: None,
         };
 
         Some(AppRouteMatch {
@@ -299,6 +302,92 @@ impl AppRouter {
     pub fn manifest(&self) -> &AppRouteManifest {
         &self.manifest
     }
+
+    pub fn warmup_paths(&self) -> Vec<String> {
+        let mut paths = Vec::new();
+
+        for route in &self.manifest.routes {
+            if !route.is_dynamic {
+                paths.push(route.path.clone());
+            } else if let Some(ref static_params) = route.static_params {
+                for params in static_params {
+                    let concrete_path = self.expand_route_path(&route.path, params);
+                    if let Some(p) = concrete_path {
+                        paths.push(p);
+                    }
+                }
+            }
+        }
+
+        paths
+    }
+
+    fn expand_route_path(
+        &self,
+        route_path: &str,
+        params: &FxHashMap<String, serde_json::Value>,
+    ) -> Option<String> {
+        let segments: Vec<&str> = route_path.split('/').collect();
+        let mut result_segments: Vec<String> = Vec::new();
+
+        for segment in &segments {
+            if segment.is_empty() {
+                continue;
+            }
+
+            if segment.starts_with("[[...") && segment.ends_with("]]") {
+                let param_name = &segment[5..segment.len() - 2];
+                if let Some(value) = params.get(param_name) {
+                    match value {
+                        serde_json::Value::Array(arr) => {
+                            for item in arr {
+                                if let Some(s) = item.as_str() {
+                                    result_segments.push(s.to_string());
+                                }
+                            }
+                        }
+                        serde_json::Value::String(s) => {
+                            result_segments.push(s.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            } else if segment.starts_with("[...") && segment.ends_with(']') {
+                let param_name = &segment[4..segment.len() - 1];
+                let value = params.get(param_name)?;
+                match value {
+                    serde_json::Value::Array(arr) => {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                result_segments.push(s.to_string());
+                            }
+                        }
+                    }
+                    serde_json::Value::String(s) => {
+                        result_segments.push(s.clone());
+                    }
+                    _ => return None,
+                }
+            } else if segment.starts_with('[') && segment.ends_with(']') {
+                let param_name = &segment[1..segment.len() - 1];
+                let value = params.get(param_name)?;
+                match value {
+                    serde_json::Value::String(s) => {
+                        result_segments.push(s.clone());
+                    }
+                    _ => return None,
+                }
+            } else {
+                result_segments.push(segment.to_string());
+            }
+        }
+
+        if result_segments.is_empty() {
+            Some("/".to_string())
+        } else {
+            Some(format!("/{}", result_segments.join("/")))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -315,6 +404,7 @@ mod tests {
                     segments: vec![],
                     params: vec![],
                     is_dynamic: false,
+                    static_params: None,
                 },
                 AppRouteEntry {
                     path: "/about".to_string(),
@@ -326,6 +416,7 @@ mod tests {
                     }],
                     params: vec![],
                     is_dynamic: false,
+                    static_params: None,
                 },
                 AppRouteEntry {
                     path: "/blog/[slug]".to_string(),
@@ -344,6 +435,7 @@ mod tests {
                     ],
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
+                    static_params: None,
                 },
                 AppRouteEntry {
                     path: "/docs/[...slug]".to_string(),
@@ -362,6 +454,7 @@ mod tests {
                     ],
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
+                    static_params: None,
                 },
             ],
             layouts: vec![
@@ -487,6 +580,7 @@ mod tests {
                     segments: vec![],
                     params: vec![],
                     is_dynamic: false,
+                    static_params: None,
                 },
                 AppRouteEntry {
                     path: "/[slug]".to_string(),
@@ -498,6 +592,7 @@ mod tests {
                     }],
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
+                    static_params: None,
                 },
             ],
             layouts: vec![],

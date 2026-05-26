@@ -1,5 +1,7 @@
 import type { PageProps } from 'rari'
-import { accessSync, readFileSync } from 'node:fs'
+import { accessSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import process from 'node:process'
 import MdxRenderer from '@/components/MdxRenderer'
 import { getBlogFilePath, isValidSlug } from '@/lib/content'
 import {
@@ -70,4 +72,18 @@ export function generateMetadata({ params }: PageProps) {
   catch {}
 
   return DEFAULT_METADATA
+}
+
+export function generateStaticParams() {
+  const contentDir = join(process.cwd(), 'public', 'content', 'blog')
+
+  try {
+    const entries = readdirSync(contentDir)
+    return entries
+      .filter(entry => entry.endsWith('.mdx') || entry.endsWith('.md'))
+      .map(entry => ({ slug: entry.replace(/\.mdx?$/, '') }))
+  }
+  catch {
+    return []
+  }
 }
