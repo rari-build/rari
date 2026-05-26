@@ -78,7 +78,7 @@ export default function BlogIndexPage() {
                 {posts.filter(post => isValidSlug(post.slug)).map(post => (
                   <a
                     key={post.slug}
-                    href={`/blog/${post.slug}`}
+                    href={`/blog/${encodeURIComponent(post.slug)}`}
                     className="group block p-6 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-[#fd7e14] hover:shadow-lg hover:shadow-[#fd7e14]/10 transition-all duration-200"
                   >
                     <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
