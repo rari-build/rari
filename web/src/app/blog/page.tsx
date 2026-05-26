@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import News from '@/components/icons/News'
+import { isValidSlug } from '@/lib/content'
 import {
   AUTHOR_EXPORT_REGEX,
   DATE_EXPORT_REGEX,
@@ -74,7 +75,7 @@ export default function BlogIndexPage() {
         {posts.length > 0
           ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {posts.map(post => (
+                {posts.filter(post => isValidSlug(post.slug)).map(post => (
                   <a
                     key={post.slug}
                     href={`/blog/${post.slug}`}

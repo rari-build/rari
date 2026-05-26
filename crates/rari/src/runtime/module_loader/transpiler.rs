@@ -11,6 +11,7 @@ pub fn needs_jsx_transpilation(specifier: &str) -> bool {
     specifier.ends_with(JSX_EXTENSION)
 }
 
+#[cfg(test)]
 pub fn needs_transpilation(specifier: &str) -> bool {
     needs_typescript_transpilation(specifier) || needs_jsx_transpilation(specifier)
 }

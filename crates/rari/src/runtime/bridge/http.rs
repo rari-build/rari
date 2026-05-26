@@ -92,10 +92,12 @@ impl RequestBridge {
         headers.get("content-type").and_then(|v| v.to_str().ok()).map(|s| s.to_string())
     }
 
+    #[cfg(test)]
     pub fn is_json_content_type(headers: &HeaderMap) -> bool {
         Self::get_content_type(headers).map(|ct| ct.contains("application/json")).unwrap_or(false)
     }
 
+    #[cfg(test)]
     pub fn is_form_content_type(headers: &HeaderMap) -> bool {
         Self::get_content_type(headers)
             .map(|ct| {

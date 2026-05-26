@@ -156,6 +156,7 @@ impl ComponentRegistry {
         }
     }
 
+    #[cfg(test)]
     pub fn has_been_initially_loaded(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
         self.components.get(normalized_id.as_ref()).is_some_and(|c| c.initially_loaded)
@@ -249,11 +250,13 @@ impl ComponentRegistry {
         }
     }
 
+    #[cfg(test)]
     pub fn get_dependencies(&self, component_id: &str) -> Option<ComponentDependencies> {
         let normalized_id = Self::normalize_id(component_id);
         self.dependency_graph.get(normalized_id.as_ref()).map(|deps| deps.iter().cloned().collect())
     }
 
+    #[cfg(test)]
     pub fn get_dependents(&self, component_id: &str) -> Option<ComponentDependencies> {
         let normalized_id = Self::normalize_id(component_id);
         self.reverse_dependency_graph
@@ -261,6 +264,7 @@ impl ComponentRegistry {
             .map(|deps| deps.iter().cloned().collect())
     }
 
+    #[cfg(test)]
     pub fn set_module_info(&mut self, id: &str, specifier: String, module_id: usize) {
         let normalized_id = Self::normalize_id(id);
         if let Some(component) = self.components.get_mut(normalized_id.as_ref()) {
@@ -276,6 +280,7 @@ impl ComponentRegistry {
         }
     }
 
+    #[cfg(test)]
     pub fn has_module_info(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
         self.components
@@ -284,11 +289,13 @@ impl ComponentRegistry {
             .unwrap_or(false)
     }
 
+    #[cfg(test)]
     pub fn get_module_id(&self, id: &str) -> Option<usize> {
         let normalized_id = Self::normalize_id(id);
         self.components.get(normalized_id.as_ref()).and_then(|c| c.module_id)
     }
 
+    #[cfg(test)]
     pub fn get_module_specifier(&self, id: &str) -> Option<&str> {
         let normalized_id = Self::normalize_id(id);
         self.components.get(normalized_id.as_ref()).and_then(|c| c.module_specifier.as_deref())
@@ -318,6 +325,7 @@ impl ComponentRegistry {
         }
     }
 
+    #[cfg(test)]
     pub fn is_module_stale(&self, id: &str) -> bool {
         let normalized_id = Self::normalize_id(id);
         self.components.get(normalized_id.as_ref()).map(|c| c.is_stale).unwrap_or(false)
@@ -361,6 +369,7 @@ impl ComponentRegistry {
         self.components.get(normalized_id.as_ref()).map(|c| c.is_client_reference).unwrap_or(false)
     }
 
+    #[cfg(test)]
     pub fn get_client_reference_info(&self, id: &str) -> Option<(String, String)> {
         let normalized_id = Self::normalize_id(id);
         self.components.get(normalized_id.as_ref()).and_then(|c| {

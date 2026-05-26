@@ -446,6 +446,7 @@ impl RariError {
         Self::Timeout(message.into(), None)
     }
 
+    #[cfg(test)]
     pub fn server_error(message: impl Into<String>) -> Self {
         Self::ServerError(message.into(), None)
     }

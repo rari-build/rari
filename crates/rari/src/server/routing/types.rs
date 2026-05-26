@@ -36,6 +36,7 @@ impl fmt::Display for ParamValue {
 }
 
 impl ParamValue {
+    #[cfg(test)]
     pub fn as_string(&self) -> Option<&String> {
         match self {
             ParamValue::Single(s) => Some(s),
@@ -43,6 +44,7 @@ impl ParamValue {
         }
     }
 
+    #[cfg(test)]
     pub fn as_vec(&self) -> Option<&Vec<String>> {
         match self {
             ParamValue::Single(_) => None,

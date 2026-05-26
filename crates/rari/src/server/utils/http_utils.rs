@@ -1,7 +1,6 @@
 use axum::http::HeaderValue;
 use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
-use sysinfo::{Pid, System};
 
 pub fn extract_search_params(
     query_params: FxHashMap<String, String>,
@@ -66,19 +65,6 @@ pub fn get_content_type(path: &str) -> &'static str {
     } else {
         "application/octet-stream"
     }
-}
-
-pub fn get_memory_usage() -> Option<u64> {
-    let mut sys = System::new_all();
-    sys.refresh_memory();
-
-    let pid = Pid::from(std::process::id() as usize);
-
-    if let Some(process) = sys.process(pid) {
-        return Some(process.memory());
-    }
-
-    Some(sys.used_memory() * 1024)
 }
 
 pub fn is_origin_allowed(origin: &str, allowed_origins: &[String]) -> bool {

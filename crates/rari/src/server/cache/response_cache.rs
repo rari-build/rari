@@ -309,6 +309,7 @@ impl ResponseCache {
         metrics.memory_usage_bytes = 0;
     }
 
+    #[cfg(test)]
     pub async fn clear_percentage(&self, percentage: f64) {
         let percentage = percentage.clamp(0.0, 1.0);
         let current_size = self.cache.len();
@@ -333,6 +334,7 @@ impl ResponseCache {
         self.update_entry_count();
     }
 
+    #[cfg(test)]
     pub fn should_clear_on_memory_pressure(&self) -> bool {
         let current_size = self.cache.len();
         let threshold = (self.config.max_entries as f64 * 0.9) as usize;

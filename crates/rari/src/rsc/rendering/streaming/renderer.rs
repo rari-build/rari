@@ -1505,7 +1505,7 @@ impl StreamingRenderer {
         }
     }
 
-    pub(crate) fn create_symbol_reference_chunk(
+    pub fn create_symbol_reference_chunk(
         &self,
         row_id: u32,
         symbol_name: &str,

@@ -31,10 +31,12 @@ pub enum RSCTree {
 }
 
 impl RSCTree {
+    #[cfg(test)]
     pub fn client_reference(id: &str, key: Option<&str>, props: FxHashMap<String, Value>) -> Self {
         RSCTree::ClientReference { id: id.to_string(), key: key.map(|k| k.to_string()), props }
     }
 
+    #[cfg(test)]
     pub fn server_element(
         tag: &str,
         props: Option<FxHashMap<String, Value>>,

@@ -465,8 +465,12 @@ impl RscHtmlRenderer {
     fn parse_rsc_element(&self, value: &JsonValue) -> Result<RscElement, RariError> {
         match value {
             JsonValue::String(s) => {
-                if s.starts_with('$') {
-                    Ok(RscElement::Reference(s.clone()))
+                if let Some(stripped) = s.strip_prefix('$') {
+                    if s.starts_with("$$") {
+                        Ok(RscElement::Text(stripped.to_string()))
+                    } else {
+                        Ok(RscElement::Reference(s.clone()))
+                    }
                 } else {
                     Ok(RscElement::Text(s.clone()))
                 }

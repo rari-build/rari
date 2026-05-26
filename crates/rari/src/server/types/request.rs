@@ -20,6 +20,7 @@ impl RequestTypeDetector {
         RenderMode::Ssr
     }
 
+    #[cfg(test)]
     pub fn needs_rsc_wire_format(mode: RenderMode) -> bool {
         matches!(mode, RenderMode::RscNavigation)
     }

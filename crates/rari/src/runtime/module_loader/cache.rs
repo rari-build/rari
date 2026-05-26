@@ -165,6 +165,7 @@ impl ModuleCaching {
         self.cache.insert(key, value)
     }
 
+    #[cfg(test)]
     pub fn set_component_source_path(&self, component_id: String, path: String) {
         self.component_source_paths.insert(component_id, path);
     }

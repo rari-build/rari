@@ -6,6 +6,10 @@ pub fn escape_rsc_string(value: &str) -> String {
     }
 
     if value.len() >= 2 && value.starts_with('$') {
+        if value.starts_with("$$") {
+            return value.to_string();
+        }
+
         let prefix = &value[0..2];
         let rest = &value[2..];
         let is_numeric_prefixed_ref =
@@ -26,8 +30,9 @@ pub fn escape_rsc_string(value: &str) -> String {
 
         let is_scalar_marker = is_date_marker || is_bigint_marker || is_special_scalar;
 
-        let is_plain_hex_ref =
-            !matches!(prefix, "$D" | "$n") && value[1..].chars().all(|c| c.is_ascii_hexdigit());
+        let is_plain_hex_ref = !matches!(prefix, "$D" | "$n")
+            && value[1..].len() >= 2
+            && value[1..].chars().all(|c| c.is_ascii_hexdigit());
 
         if is_numeric_prefixed_ref
             || is_symbolic_prefixed_ref
@@ -122,6 +127,10 @@ mod tests {
         assert_eq!(escape_rsc_string("$already"), "$$already");
         assert_eq!(escape_rsc_string(""), "");
         assert_eq!(escape_rsc_string("no dollar"), "no dollar");
+        assert_eq!(escape_rsc_string("$5"), "$$5");
+        assert_eq!(escape_rsc_string("$a"), "$$a");
+        assert_eq!(escape_rsc_string("$1f"), "$1f");
+        assert_eq!(escape_rsc_string("$ff"), "$ff");
     }
 
     #[test]
@@ -140,7 +149,7 @@ mod tests {
     #[test]
     fn test_escape_unescape_roundtrip() {
         let test_cases =
-            vec!["hello", "$L999", "$La", "$1f", "$double", "$$triple", "", "no dollar", "$"];
+            vec!["hello", "$L999", "$La", "$1f", "$double", "$triple", "", "no dollar", "$"];
 
         for case in test_cases {
             let escaped = escape_rsc_string(case);

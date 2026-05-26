@@ -211,7 +211,7 @@ pub async fn inject_assets_into_html(html: &str, config: &Config) -> Result<Stri
     result
 }
 
-pub fn is_complete_html_document(html: &str) -> bool {
+fn is_complete_html_document(html: &str) -> bool {
     let trimmed = html.trim_start();
     let trimmed_lower = trimmed.cow_to_lowercase();
     let has_doctype_or_html =
