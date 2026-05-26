@@ -663,10 +663,18 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
 
       try {
         if (detail.rscResponsePromise) {
-          parsedPayload = parseRscResponseRef.current!(detail.rscResponsePromise)
+          const { element } = parseRscResponseRef.current!(detail.rscResponsePromise)
+          const resolvedElement = await element
+          if (currentNavigationIdRef.current !== detail.navigationId)
+            return
+          parsedPayload = { element: resolvedElement }
         }
         else if (detail.rscResponse) {
-          parsedPayload = parseRscResponseRef.current!(Promise.resolve(detail.rscResponse))
+          const { element } = parseRscResponseRef.current!(Promise.resolve(detail.rscResponse))
+          const resolvedElement = await element
+          if (currentNavigationIdRef.current !== detail.navigationId)
+            return
+          parsedPayload = { element: resolvedElement }
         }
         else if (detail.rscWireFormat) {
           parsedPayload = await parseRscWireFormatRef.current!(detail.rscWireFormat)
@@ -709,13 +717,15 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
-        setRscPayload(parsedPayload)
+        React.startTransition(() => {
+          setRscPayload(parsedPayload)
+          setRenderKey(prev => prev + 1)
+          setHmrError(null)
+        })
         if (detail.rscWireFormat)
           lastSuccessfulPayloadRef.current = detail.rscWireFormat
 
         resetFailureTracking()
-        setRenderKey(prev => prev + 1)
-        setHmrError(null)
 
         if (onNavigateRef.current)
           onNavigateRef.current(detail)
