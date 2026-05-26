@@ -1,8 +1,26 @@
+## [rari@0.14.1] - 2026-05-26
+
+### 🚀 Features
+
+- *(rsc)* Add cache warmup for static routes and update route matching
+
+### 🐛 Bug Fixes
+
+- *(rsc)* Await element resolution and wrap state updates in transition
+- *(rsc)* Handle streaming responses without transition wrapping
+
+### 🚜 Refactor
+
+- *(rsc)* Remove unused export regex patterns and simplify manifest
 ## [rari@0.14.0] - 2026-05-26
 
 ### 🚀 Features
 
 - *(server)* Remove rate limiting and spam blocking middleware
+
+### 💼 Other
+
+- Rari@0.14.0
 ## [rari@0.13.12] - 2026-05-26
 
 ### 🚀 Features
