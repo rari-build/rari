@@ -7,11 +7,6 @@ import { pathToFileURL } from 'node:url'
 import { build } from 'rolldown'
 import {
   COMPONENT_ID_REGEX as COMPONENT_ID_SANITIZE_REGEX,
-  EXPORT_DEFAULT_AS_REGEX,
-  EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX,
-  EXPORT_DEFAULT_FUNCTION_REGEX,
-  EXPORT_DEFAULT_NAME_REGEX,
-  EXPORT_FUNCTION_REGEX,
   FILE_PROTOCOL_REGEX,
   SRC_PREFIX_REGEX,
   TSX_EXT_REGEX,
@@ -30,8 +25,6 @@ const COMPONENT_PATH_BACKSLASH_REGEX = /\\/g
 const TS_JS_EXTENSION_REGEX = /\.(tsx?|jsx?)$/
 const COMPONENTS_PATH_REGEX = /\/components\/(\w+)(?:\.tsx?|\.jsx?)?$/
 const COMPONENTS_PATH_ALT_REGEX = /[/\\]components[/\\](\w+)(?:\.tsx?|\.jsx?)?$/
-const EXPORT_LIST_REGEX = /^export\s*\{([^}]+)\};?\s*$/gm
-const EXPORT_VAR_REGEX = /^export\s+(const|let|var)\s+(\w+)/gm
 const SPECIAL_FILE_REGEX = /^(?:robots|sitemap)\.(?:tsx?|jsx?)$/
 const NODE_PROTOCOL_REGEX = /^node:/
 const PATH_SEPARATOR_NORMALIZE_REGEX = /\\/g
@@ -49,10 +42,6 @@ interface ServerComponentManifest {
       hasNodeImports: boolean
     }
   >
-  importMap: {
-    imports: Record<string, string>
-  }
-  version: string
   buildTime: string
 }
 
@@ -957,37 +946,8 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     await fs.promises.mkdir(serverOutDir, { recursive: true })
 
-    const importMapImports: Record<string, string> = {
-      'react': 'npm:react@19',
-      'react-dom': 'npm:react-dom@19',
-      'react/jsx-runtime': 'npm:react@19/jsx-runtime',
-      'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
-    }
-
-    const aliases = this.options.alias || {}
-    for (const [alias, replacement] of Object.entries(aliases)) {
-      const aliasTargetPath = path.isAbsolute(replacement)
-        ? replacement
-        : path.resolve(this.projectRoot, replacement)
-      const srcDir = path.join(this.projectRoot, 'src')
-      const relativeFromSrc = path.relative(srcDir, aliasTargetPath)
-
-      if (relativeFromSrc.startsWith('..'))
-        continue
-
-      const outputPath = path.join(this.options.outDir, this.options.rscDir, relativeFromSrc)
-      const absoluteOutputPath = path.resolve(this.projectRoot, outputPath)
-
-      if (!importMapImports[alias])
-        importMapImports[`${alias}/`] = `${pathToFileURL(absoluteOutputPath).href}/`
-    }
-
     const manifest: ServerComponentManifest = {
       components: {},
-      importMap: {
-        imports: importMapImports,
-      },
-      version: '1.0.0',
       buildTime: new Date().toISOString(),
     }
 
@@ -1193,173 +1153,6 @@ export default registerClientReference(null, ${JSON.stringify(componentId)}, "de
 
     if (returnCode)
       return code
-  }
-
-  private createSelfRegisteringModule(
-    code: string,
-    componentId: string,
-  ): string {
-    if (code.includes('Self-registering Production Component'))
-      return code
-
-    let transformedCode = code
-
-    let defaultExportName: string | null = null
-    const namedExports: string[] = []
-
-    transformedCode = transformedCode.replace(
-      EXPORT_DEFAULT_FUNCTION_REGEX,
-      (match, name) => {
-        defaultExportName = name
-        return `function ${name}`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_DEFAULT_ASYNC_FUNCTION_REGEX,
-      (match, name) => {
-        defaultExportName = name
-        return `async function ${name}`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_DEFAULT_NAME_REGEX,
-      (match, name) => {
-        defaultExportName = name
-        return `// Default export: ${name}`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_DEFAULT_AS_REGEX,
-      (match, name) => {
-        defaultExportName = name
-        return `// Default export: ${name}`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_LIST_REGEX,
-      (match, exports) => {
-        const exportList = exports.split(',').map((exp: string) => exp.trim())
-        const exportNames: string[] = []
-        exportList.forEach((exp: string) => {
-          if (exp.includes('as default')) {
-            const actualName = exp.replace('as default', '').trim()
-            defaultExportName = actualName
-            exportNames.push(`${actualName} (default)`)
-          }
-          else if (exp === 'default') {
-            const possibleDefault = `${componentId}_default`
-            if (transformedCode.includes(`var ${possibleDefault}`))
-              defaultExportName = possibleDefault
-
-            exportNames.push('default')
-          }
-          else {
-            namedExports.push(exp)
-            exportNames.push(exp)
-          }
-        })
-        return `// Exports: ${exportNames.join(', ')}`
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_FUNCTION_REGEX,
-      (match, name) => {
-        namedExports.push(name)
-        return match.replace('export ', '')
-      },
-    )
-
-    transformedCode = transformedCode.replace(
-      EXPORT_VAR_REGEX,
-      (match, keyword, name) => {
-        namedExports.push(name)
-        return `${keyword} ${name}`
-      },
-    )
-
-    if (!defaultExportName) {
-      const possibleDefault = `${componentId}_default`
-      if (transformedCode.includes(`var ${possibleDefault}`))
-        defaultExportName = possibleDefault
-    }
-
-    const selfRegisteringCode = `// Self-registering Production Component: ${componentId}
-
-if (!globalThis["${componentId}"]) {
-    ${transformedCode}
-
-        try {
-            const moduleKey = "${componentId}";
-            let mainExport = null;
-            const exportedFunctions = {};
-
-            if (!globalThis['~serverFunctions']) globalThis['~serverFunctions'] = {};
-            if (!globalThis['~serverFunctions'].all) globalThis['~serverFunctions'].all = {};
-
-            ${namedExports
-              .map(
-                name => `if (typeof ${name} !== 'undefined') {
-                globalThis.${name} = ${name};
-                globalThis['~serverFunctions'].all['${componentId}:${name}'] = ${name};
-                exportedFunctions['${name}'] = ${name};
-            }`,
-              )
-              .join('\n            ')}
-
-            ${defaultExportName
-              ? `if (typeof ${defaultExportName} !== 'undefined') {
-                mainExport = ${defaultExportName};
-            }`
-              : ''}
-
-            if (mainExport === null && Object.keys(exportedFunctions).length > 0) {
-                if (Object.keys(exportedFunctions).length === 1) {
-                    mainExport = exportedFunctions[Object.keys(exportedFunctions)[0]];
-                } else {
-                    let componentFunction = null;
-                    let firstFunction = null;
-
-                    for (const [name, value] of Object.entries(exportedFunctions)) {
-                        if (typeof value === 'function') {
-                            if (!firstFunction) firstFunction = value;
-                            if (/^[A-Z]/.test(name)) {
-                                componentFunction = value;
-                                break;
-                            }
-                        }
-                    }
-
-                    mainExport = componentFunction || firstFunction;
-                }
-            }
-
-            if (mainExport !== null) {
-                if (!globalThis[moduleKey]) {
-                    globalThis[moduleKey] = mainExport;
-                }
-
-                if (!globalThis['~clientComponents']) globalThis['~clientComponents'] = {};
-                globalThis['~clientComponents'][moduleKey] = {
-                    component: mainExport,
-                    id: moduleKey,
-                    registered: true
-                };
-
-                if (typeof globalThis.RscModuleManager !== 'undefined' && globalThis.RscModuleManager.register) {
-                    globalThis.RscModuleManager.register(moduleKey, mainExport, exportedFunctions);
-                }
-            }
-        } catch (error) {
-            console.error('[rari] Build: Error in self-registration for ${componentId}:', error);
-        }
-}`
-
-    return selfRegisteringCode
   }
 
   private transformClientImports(code: string, inputPath: string): string {
@@ -1599,15 +1392,6 @@ function registerClientReference(clientReference, id, exportName) {
     else {
       manifest = {
         components: {},
-        importMap: {
-          imports: {
-            'react': 'npm:react@19',
-            'react-dom': 'npm:react-dom@19',
-            'react/jsx-runtime': 'npm:react@19/jsx-runtime',
-            'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
-          },
-        },
-        version: '1.0.0',
         buildTime: new Date().toISOString(),
       }
       this.manifestCache = manifest
@@ -1638,17 +1422,6 @@ function registerClientReference(clientReference, id, exportName) {
         moduleSpecifier,
         dependencies: componentData.dependencies,
         hasNodeImports: componentData.hasNodeImports,
-      }
-    }
-
-    if (!manifest.importMap) {
-      manifest.importMap = {
-        imports: {
-          'react': 'npm:react@19',
-          'react-dom': 'npm:react-dom@19',
-          'react/jsx-runtime': 'npm:react@19/jsx-runtime',
-          'react/jsx-dev-runtime': 'npm:react@19/jsx-dev-runtime',
-        },
       }
     }
 

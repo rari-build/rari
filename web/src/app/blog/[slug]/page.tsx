@@ -80,8 +80,8 @@ export function generateStaticParams() {
   try {
     const entries = readdirSync(contentDir)
     return entries
-      .filter(entry => entry.endsWith('.mdx') || entry.endsWith('.md'))
-      .map(entry => ({ slug: entry.replace(/\.mdx?$/, '') }))
+      .filter(entry => entry.endsWith('.mdx'))
+      .map(entry => ({ slug: entry.replace(/\.mdx$/, '') }))
   }
   catch {
     return []

@@ -103,7 +103,7 @@ export function generateStaticParams() {
         if (stat.isDirectory()) {
           scanDir(fullPath, [...segments, entry])
         }
-        else if (entry.endsWith('.mdx') || entry.endsWith('.md')) {
+        else if (entry.endsWith('.mdx')) {
           const name = entry.replace(/\.mdx?$/, '')
           params.push({ slug: [...segments, name] })
         }

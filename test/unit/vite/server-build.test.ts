@@ -36,7 +36,6 @@ describe('ServerComponentBuilder', () => {
       components: {},
       actions: {},
       importMap: { imports: {} },
-      version: '1.0.0',
       buildTime: new Date().toISOString(),
     })
 
@@ -256,7 +255,6 @@ export default function WithDeps() {
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -293,7 +291,6 @@ export default function NodeImports() {
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -433,7 +430,6 @@ export async function action() { return {} }`)
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -474,7 +470,6 @@ export async function action() { return {} }`)
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -511,7 +506,6 @@ export async function action() { return {} }`)
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -542,7 +536,6 @@ export async function action() { return {} }`)
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -587,7 +580,6 @@ export async function action() { return {} }`)
             components: {},
             actions: {},
             importMap: { imports: {} },
-            version: '1.0.0',
             buildTime: new Date().toISOString(),
           })
         }
@@ -601,7 +593,6 @@ export async function action() { return {} }`)
 
       expect(manifest).toHaveProperty('components')
       expect(manifest).toHaveProperty('importMap')
-      expect(manifest).toHaveProperty('version')
       expect(manifest).toHaveProperty('buildTime')
 
       expect(fsSync.promises.writeFile).toHaveBeenCalled()
