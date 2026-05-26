@@ -28,7 +28,7 @@ catalogs:
       version: 1.4.0
   default:
     rari:
-      specifier: ^0.13.11
+      specifier: ^0.13.6
       version: 0.13.11
   eslint:
     '@antfu/eslint-config':
@@ -263,23 +263,23 @@ importers:
         version: 0.1.22(@opentelemetry/api@1.9.0)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.7)(jiti@2.7.0)(typescript@5.9.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
       rari-darwin-x64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
       rari-linux-arm64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
       rari-linux-x64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
       rari-win32-arm64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
       rari-win32-x64:
-        specifier: 0.13.11
-        version: 0.13.11
+        specifier: 0.13.12
+        version: 0.13.12
 
   packages/rari-darwin-arm64: {}
 
@@ -3231,8 +3231,22 @@ packages:
     os: [darwin]
     hasBin: true
 
+  rari-darwin-arm64@0.13.12:
+    resolution: {integrity: sha512-WAliTSS8mxxVPjT8DOJ+MXTvQ7BZfwxKGIO0O+sMewlwo/O8/Js/VVBAF6LcZ4M9o+HQclkyvQCowUO81BUoQA==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
   rari-darwin-x64@0.13.11:
     resolution: {integrity: sha512-PLDtbqkicmcJrTVqk0DkabEOKPByZVwGAM02+EhyYcTT3B0skQKLtzDlq/+NLolsSOYTG+k09dZRXimy76LzIw==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  rari-darwin-x64@0.13.12:
+    resolution: {integrity: sha512-mw5sSDwulbrK3O1deAC8vNCsnvX5mC7h/Zl7MARYWkfIM6VP+jHNQ+uDvocVBhV/JWbfixT3Jnz0DxkexJZiTw==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [darwin]
@@ -3245,8 +3259,22 @@ packages:
     os: [linux]
     hasBin: true
 
+  rari-linux-arm64@0.13.12:
+    resolution: {integrity: sha512-tUDuY1tJ83umg9PnAPFwjQf0TEMv5Aa7sydxsXlJ9VsYi21lhIMNFY8xxmP+ttRTgc8cQXk0ecveVbWU9YyCtg==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
   rari-linux-x64@0.13.11:
     resolution: {integrity: sha512-5sdLesQwiJ+CQJDGgxjzD46cTfZ9cCH309lMjQBVReJcPbUSoxV7DOwREQuUZPFRJT/qU0VeGmh4+M3lh/pUUw==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  rari-linux-x64@0.13.12:
+    resolution: {integrity: sha512-mlRPEzthAgT32sfg6NEIub9EqYKReHrgsCwBHhKWUmPgakU8/rzYiiBwngFORPn9wpu/Nsn9E0HIQapnuWj3vw==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [linux]
@@ -3259,8 +3287,22 @@ packages:
     os: [win32]
     hasBin: true
 
+  rari-win32-arm64@0.13.12:
+    resolution: {integrity: sha512-f9DfjkmAUlYvgRwm8MVlmFcRZx84ilZ9aqX0sHqa2879zhQuSCKUn4DlBEvVCZS0QkhqEUdZlgRIAhSoYsmgFQ==}
+    engines: {node: '>=22.12.0'}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
   rari-win32-x64@0.13.11:
     resolution: {integrity: sha512-xCNOdL6mjwI6GbBY7ICunolTR+K2YNEVzieoI0N5EmsqXFkstTBA3ZBKUsCE6gkfqm0Enz7gn92bCR4v/jr10Q==}
+    engines: {node: '>=22.12.0'}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  rari-win32-x64@0.13.12:
+    resolution: {integrity: sha512-B8zhIexS2E84Rwd6EeS1zlFrV4tirAiY2j+a+eq4QV8SWQsVW78tkYJvh1Blv7rkxZCZioUfkvgohs8VHJcQCg==}
     engines: {node: '>=22.12.0'}
     cpu: [x64]
     os: [win32]
@@ -6776,19 +6818,37 @@ snapshots:
   rari-darwin-arm64@0.13.11:
     optional: true
 
+  rari-darwin-arm64@0.13.12:
+    optional: true
+
   rari-darwin-x64@0.13.11:
+    optional: true
+
+  rari-darwin-x64@0.13.12:
     optional: true
 
   rari-linux-arm64@0.13.11:
     optional: true
 
+  rari-linux-arm64@0.13.12:
+    optional: true
+
   rari-linux-x64@0.13.11:
+    optional: true
+
+  rari-linux-x64@0.13.12:
     optional: true
 
   rari-win32-arm64@0.13.11:
     optional: true
 
+  rari-win32-arm64@0.13.12:
+    optional: true
+
   rari-win32-x64@0.13.11:
+    optional: true
+
+  rari-win32-x64@0.13.12:
     optional: true
 
   rari@0.13.11(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
