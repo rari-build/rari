@@ -1,46 +1,53 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { PostHogProvider as PHProvider } from '@posthog/react'
-import posthog from 'posthog-js'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { PostHogPageView } from '@/components/PostHogPageView'
 
-export function PostHogProvider({ children }: { children: ReactNode }) {
+export function PostHogProvider({ children, pathname }: { children: ReactNode, pathname?: string }) {
+  const [client, setClient] = useState<any>(null)
+
   useEffect(() => {
     const key = import.meta.env.VITE_POSTHOG_KEY
     const host = import.meta.env.VITE_POSTHOG_HOST
-
     if (!key || !host)
       return
 
-    const initOnInteraction = () => {
-      if (!posthog.__loaded) {
-        posthog.init(key, {
-          api_host: host,
-          person_profiles: 'always',
-          capture_pageview: false,
-          capture_pageleave: true,
-          defaults: '2026-01-30',
-          __preview_disable_beacon: true,
-        })
-      }
-      document.removeEventListener('click', initOnInteraction)
-      document.removeEventListener('scroll', initOnInteraction)
-      document.removeEventListener('keydown', initOnInteraction)
+    const load = async () => {
+      const { default: posthog } = await import('posthog-js')
+      if (posthog.__loaded)
+        return
+      posthog.init(key, {
+        api_host: host,
+        person_profiles: 'always',
+        capture_pageview: false,
+        capture_pageleave: true,
+        defaults: '2026-01-30',
+        __preview_disable_beacon: true,
+      })
+      setClient(posthog)
     }
 
-    document.addEventListener('click', initOnInteraction, { once: true, passive: true })
-    document.addEventListener('scroll', initOnInteraction, { once: true, passive: true })
-    document.addEventListener('keydown', initOnInteraction, { once: true, passive: true })
-    const timer = setTimeout(initOnInteraction, 3000)
+    document.addEventListener('click', load, { once: true, passive: true })
+    document.addEventListener('scroll', load, { once: true, passive: true })
+    document.addEventListener('keydown', load, { once: true, passive: true })
+    const timer = setTimeout(load, 3000)
 
     return () => {
       clearTimeout(timer)
-      document.removeEventListener('click', initOnInteraction)
-      document.removeEventListener('scroll', initOnInteraction)
-      document.removeEventListener('keydown', initOnInteraction)
+      document.removeEventListener('click', load)
+      document.removeEventListener('scroll', load)
+      document.removeEventListener('keydown', load)
     }
   }, [])
 
-  return <PHProvider client={posthog}>{children}</PHProvider>
+  if (!client)
+    return <>{children}</>
+
+  return (
+    <>
+      <PostHogPageView pathname={pathname} posthog={client} />
+      {children}
+    </>
+  )
 }

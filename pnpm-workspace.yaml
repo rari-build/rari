@@ -23,7 +23,6 @@ packages:
   - web
 catalogs:
   analytics:
-    '@posthog/react': ^1.9.1
     posthog-js: ^1.376.0
   build:
     rolldown: ^1.0.2

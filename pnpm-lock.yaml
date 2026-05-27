@@ -6,9 +6,6 @@ settings:
 
 catalogs:
   analytics:
-    '@posthog/react':
-      specifier: ^1.9.1
-      version: 1.9.1
     posthog-js:
       specifier: ^1.376.0
       version: 1.376.0
@@ -319,9 +316,6 @@ importers:
       '@mdx-js/mdx':
         specifier: catalog:mdx
         version: 3.1.1
-      '@posthog/react':
-        specifier: catalog:analytics
-        version: 1.9.1(@types/react@19.2.15)(posthog-js@1.376.0)(react@19.2.6)
       '@sentry/react':
         specifier: catalog:monitoring
         version: 10.53.1(react@19.2.6)
@@ -1272,16 +1266,6 @@ packages:
 
   '@posthog/core@1.29.9':
     resolution: {integrity: sha512-DjvuIyBZ2Z/gBhtZlITlM2D8PlnMsHSQ1D78dbUYoVsgGguvanpJTobZObjLlFkybyvfZFYkpoJkFNI/2Pw4IQ==}
-
-  '@posthog/react@1.9.1':
-    resolution: {integrity: sha512-tIGjs8WzKPrHQmSyM/2a3GoedQkttkxgmCsdn0kgy+6mIiSNk36FAFGKbWFJ7/Kln5bHwcM/MQhiGYbwQG8bQQ==}
-    peerDependencies:
-      '@types/react': '>=16.8.0'
-      posthog-js: '>=1.257.2'
-      react: '>=16.8.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
 
   '@posthog/types@1.376.0':
     resolution: {integrity: sha512-gbFfxCuZDs/D4QZMwdE+smD1jsuqgGpS6yKGHZZ19foxMy8RYHsU1E47iG1b88n/uN02fAabLibVwuxLtq8juw==}
@@ -4416,13 +4400,6 @@ snapshots:
   '@posthog/core@1.29.9':
     dependencies:
       '@posthog/types': 1.376.0
-
-  '@posthog/react@1.9.1(@types/react@19.2.15)(posthog-js@1.376.0)(react@19.2.6)':
-    dependencies:
-      posthog-js: 1.376.0
-      react: 19.2.6
-    optionalDependencies:
-      '@types/react': 19.2.15
 
   '@posthog/types@1.376.0': {}
 

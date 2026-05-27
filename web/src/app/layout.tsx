@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cwd } from 'node:process'
 import Footer from '@/components/Footer'
-import { PostHogPageView } from '@/components/PostHogPageView'
 import { Providers } from '@/components/Providers'
 import Sidebar from '@/components/Sidebar'
 
@@ -22,8 +21,7 @@ const RARI_VERSION = getRariVersion()
 
 export default function RootLayout({ children, pathname }: LayoutProps) {
   return (
-    <Providers>
-      <PostHogPageView pathname={pathname} />
+    <Providers pathname={pathname}>
       <div className="min-h-screen bg-[#30363d] text-gray-200 font-sans overflow-x-hidden" style={{ '--sidebar-width': 'calc(8rem)' } as React.CSSProperties}>
         <div className="flex min-h-screen">
           <Sidebar version={RARI_VERSION} />

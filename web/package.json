@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "catalog:mdx",
-    "@posthog/react": "catalog:analytics",
     "@sentry/react": "catalog:monitoring",
     "@shikijs/core": "catalog:mdx",
     "@shikijs/engine-oniguruma": "catalog:mdx",

@@ -24,13 +24,6 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
-  optimizeDeps: {
-    include: [
-      'posthog-js',
-      '@posthog/react',
-      '@sentry/react',
-    ],
-  },
   build: {
     rolldownOptions: {
       output: {
@@ -43,6 +36,8 @@ export default defineConfig({
                     return 'posthog'
                   if (moduleId.includes('@sentry'))
                     return 'sentry'
+                  if (moduleId.includes('react-dom'))
+                    return 'react-dom'
                 }
 
                 return null
