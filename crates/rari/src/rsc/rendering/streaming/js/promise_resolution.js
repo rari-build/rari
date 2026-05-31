@@ -97,18 +97,39 @@
       }
 
       let rscData
+      let nestedPendingPromises = []
       try {
         if (globalThis['~suspense']) {
-          globalThis['~suspense'].pendingPromises = []
-          globalThis['~suspense'].discoveredBoundaries = []
-          globalThis['~suspense'].promises = {}
-          globalThis['~suspense'].currentBoundaryId = null
+          const suspense = globalThis['~suspense']
+          suspense.pendingPromises = []
+          suspense.pendingPromisesByBoundary ??= {}
+          suspense.pendingPromisesByBoundary[boundaryId] = []
+          suspense.discoveredBoundaries = []
+          suspense.promises = {}
+          suspense.currentBoundaryId = boundaryId
         }
 
         if (globalThis.renderToRsc)
           rscData = await globalThis.renderToRsc(resolvedElement, globalThis['~clientComponents'] || {}, boundaryId)
         else
           rscData = resolvedElement
+
+        const suspense = globalThis['~suspense']
+        const pb = suspense?.pendingPromisesByBoundary
+        const allIds = [boundaryId, ...(suspense?.discoveredBoundaries || []).map(b => b.id)]
+        nestedPendingPromises = []
+        for (const id of allIds) {
+          for (const p of (pb?.[id] || [])) {
+            nestedPendingPromises.push({
+              id: p.id,
+              boundaryId: p.boundaryId,
+              componentPath: p.componentPath || 'AsyncComponent',
+            })
+          }
+          if (pb) {
+            delete pb[id]
+          }
+        }
       }
       catch (rscError) {
         return safeSerializeError(rscError, 'rsc_conversion')
@@ -118,6 +139,7 @@
         success: true,
         boundary_id: boundaryId,
         content: rscData,
+        pending_promises: nestedPendingPromises,
         needsClientComponentProcessing: true,
       }
     }).catch((awaitError) => {
