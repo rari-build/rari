@@ -29,6 +29,8 @@ pub struct ServerConfig {
     pub port: u16,
     pub origin: Option<String>,
     pub enable_logging: bool,
+    #[serde(default)]
+    pub enable_internal_routes: bool,
     pub timeout_seconds: u64,
 }
 
@@ -39,6 +41,7 @@ impl Default for ServerConfig {
             port: 3000,
             origin: None,
             enable_logging: true,
+            enable_internal_routes: false,
             timeout_seconds: 30,
         }
     }
@@ -375,6 +378,13 @@ impl Config {
             config.server.origin = Some(origin);
         }
 
+        if let Ok(enable_internal_routes) = std::env::var("RARI_ENABLE_INTERNAL_ROUTES") {
+            config.server.enable_internal_routes = enable_internal_routes.cow_to_lowercase()
+                == "true"
+                || enable_internal_routes == "1"
+                || enable_internal_routes.cow_to_lowercase() == "yes";
+        }
+
         if let Ok(vite_host) = std::env::var("RARI_VITE_HOST") {
             config.vite.host = vite_host;
         }
@@ -622,6 +632,10 @@ impl Config {
         self.mode == Mode::Production
     }
 
+    pub fn internal_routes_enabled(&self) -> bool {
+        self.is_development() || self.server.enable_internal_routes
+    }
+
     pub fn hmr_reload_enabled(&self) -> bool {
         self.is_development() && self.rsc.hmr_reload_enabled
     }
@@ -818,6 +832,18 @@ mod tests {
         let config = Config::new(Mode::Production);
         assert_eq!(config.mode, Mode::Production);
         assert!(!config.rsc.enable_hot_reload);
+    }
+
+    #[test]
+    fn test_internal_routes_enabled_only_for_dev_or_explicit_flag() {
+        let dev_config = Config::new(Mode::Development);
+        assert!(dev_config.internal_routes_enabled());
+
+        let mut prod_config = Config::new(Mode::Production);
+        assert!(!prod_config.internal_routes_enabled());
+
+        prod_config.server.enable_internal_routes = true;
+        assert!(prod_config.internal_routes_enabled());
     }
 
     #[test]

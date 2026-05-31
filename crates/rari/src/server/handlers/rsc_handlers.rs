@@ -11,9 +11,14 @@ use axum::{
 };
 use cow_utils::CowUtils;
 use serde_json::Value;
-use tracing::error;
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::mpsc;
+use tracing::{error, info, warn};
 
 const RSC_CONTENT_TYPE: &str = "text/x-component";
+const STREAMING_CONTRACT_DEMO_SCRIPT: &str =
+    include_str!("../../rsc/rendering/streaming/js/streaming_contract_demo.js");
+static STREAMING_CONTRACT_REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
 #[axum::debug_handler]
 pub async fn stream_component(
@@ -83,6 +88,89 @@ pub async fn stream_component(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+#[axum::debug_handler]
+pub async fn streaming_contract(State(state): State<ServerState>) -> Result<Response, StatusCode> {
+    let (chunk_sender, mut chunk_receiver) = mpsc::channel::<Result<Vec<u8>, String>>(32);
+
+    let runtime = {
+        let renderer = state.renderer.lock().await;
+        renderer.runtime.clone()
+    };
+    let request_id = STREAMING_CONTRACT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+
+    tokio::spawn(async move {
+        let error_sender = chunk_sender.clone();
+
+        info!(
+            target: "rari::streaming",
+            route = "/_rari/streaming-contract",
+            "stream.created"
+        );
+
+        let execution_result = runtime
+            .execute_script_for_streaming(
+                format!("streaming_contract_demo_{request_id}.js"),
+                STREAMING_CONTRACT_DEMO_SCRIPT.to_string(),
+                chunk_sender,
+            )
+            .await;
+
+        if let Err(e) = execution_result {
+            warn!(
+                target: "rari::streaming",
+                route = "/_rari/streaming-contract",
+                error = %e,
+                "stream.execution_error"
+            );
+            let _ = error_sender.send(Err(e.to_string())).await;
+        } else {
+            info!(
+                target: "rari::streaming",
+                route = "/_rari/streaming-contract",
+                "stream.complete"
+            );
+        }
+    });
+
+    let started_at = std::time::Instant::now();
+    let mut chunk_index = 0usize;
+
+    let byte_stream = async_stream::stream! {
+        while let Some(chunk) = chunk_receiver.recv().await {
+            match chunk {
+                Ok(bytes) => {
+                    chunk_index += 1;
+                    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+
+                    info!(
+                        target: "rari::streaming",
+                        route = "/_rari/streaming-contract",
+                        chunk_index,
+                        bytes = bytes.len(),
+                        elapsed_ms,
+                        "stream.chunk"
+                    );
+
+                    yield Ok::<_, std::io::Error>(bytes::Bytes::from(bytes));
+                }
+                Err(e) => {
+                    yield Err(std::io::Error::other(e));
+                    break;
+                }
+            }
+        }
+    };
+
+    Ok(Response::builder()
+        .header("content-type", RSC_CONTENT_TYPE)
+        .header("cache-control", "no-cache")
+        .header("transfer-encoding", "chunked")
+        .header("x-render-mode", "streaming-contract")
+        .header("x-content-type-options", "nosniff")
+        .body(Body::from_stream(byte_stream))
+        .expect("Valid streaming contract response"))
 }
 
 #[axum::debug_handler]

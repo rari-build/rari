@@ -11,6 +11,7 @@ use crate::server::handlers::revalidate_handlers::revalidate_by_path;
 use crate::server::handlers::route_info_handler::get_route_info;
 use crate::server::handlers::rsc_handlers::{
     health_check, register_client_component, register_component, stream_component,
+    streaming_contract,
 };
 use crate::server::handlers::static_handlers::{
     cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
@@ -247,6 +248,12 @@ impl Server {
             .route("/_rari/form-action", post(handle_form_action))
             .layer(medium_body_limit)
             .merge(revalidation_router);
+
+        if config.internal_routes_enabled() {
+            router = router
+                .route("/_rari/streaming-contract", post(streaming_contract))
+                .route("/_rari/streaming-contract", axum::routing::options(cors_preflight_ok));
+        }
 
         let image_router = Router::new()
             .route("/_rari/image", get(crate::server::image::handle_image_request))

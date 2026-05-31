@@ -319,27 +319,18 @@ impl JsExecutionRuntime {
         script_code: String,
         chunk_sender: mpsc::Sender<Result<Vec<u8>, String>>,
     ) -> Result<(), RariError> {
-        let callback_setup = r#"
-            (function() {
-                return { success: true };
-            })();
-        "#;
-
-        let combined_script = format!("{callback_setup}\n\n{script_code}");
-
         let runtime = self.runtime.clone();
-        let script_name_clone = script_name.clone();
+        let timeout_ms = self.timeout_ms;
 
         match tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            runtime.execute_script_for_streaming(script_name_clone, combined_script, chunk_sender),
+            Duration::from_millis(timeout_ms),
+            runtime.execute_script_for_streaming(script_name, script_code, chunk_sender),
         )
         .await
         {
             Ok(result) => result,
             Err(_) => Err(RariError::timeout(format!(
-                "Streaming script execution timed out after {} ms for {}",
-                self.timeout_ms, script_name
+                "Streaming script execution timed out after {timeout_ms} ms"
             ))),
         }
     }

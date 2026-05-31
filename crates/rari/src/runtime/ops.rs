@@ -169,6 +169,33 @@ pub async fn op_send_chunk_to_rust(
 }
 
 #[allow(clippy::disallowed_methods)]
+#[op2]
+pub async fn op_send_raw_chunk_to_rust(
+    state: Rc<RefCell<OpState>>,
+    #[string] chunk: String,
+) -> Result<(), JsErrorBox> {
+    let sender_option = {
+        let mut op_state_ref = state.borrow_mut();
+        let stream_op_state = match op_state_ref.try_borrow_mut::<StreamOpState>() {
+            Some(sos) => sos,
+            None => return Err(JsErrorBox::generic("StreamOpState not found.")),
+        };
+
+        stream_op_state.chunk_sender.as_ref().cloned()
+    };
+
+    let Some(sender) = sender_option else {
+        return Err(JsErrorBox::generic("No chunk sender available"));
+    };
+
+    if sender.send(Ok(chunk.into_bytes())).await.is_err() {
+        error!("op_send_raw_chunk_to_rust: receiver dropped for raw chunk.");
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::disallowed_methods)]
 #[cfg(test)]
 pub fn create_module_operation(
     row_id: &str,
@@ -232,6 +259,7 @@ pub fn create_error_operation(
 pub fn get_streaming_ops() -> Vec<OpDecl> {
     vec![
         op_send_chunk_to_rust(),
+        op_send_raw_chunk_to_rust(),
         op_internal_log(),
         op_sanitize_html(),
         op_get_cookies(),
