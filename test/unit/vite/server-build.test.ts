@@ -336,7 +336,7 @@ export default function A() { return <B /> }`)
       builder.buildImportGraph(srcDir)
 
       const graph = builder.getImportGraph()
-      const bPath = path.join(srcDir, 'B.tsx')
+      const bPath = path.resolve(srcDir, 'B.tsx')
       const aPath = path.join(srcDir, 'A.tsx')
 
       expect(graph.has(bPath)).toBe(true)

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import fs from 'node:fs/promises'
 import { scanForImageUsage } from '@rari/vite/image-scanner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
@@ -97,9 +98,9 @@ export default function MyComponent() {
 
       expect(fs.readdir).toHaveBeenCalledTimes(2)
       expect(fs.readdir).toHaveBeenCalledWith(mockSrcDir, { withFileTypes: true })
-      expect(fs.readdir).toHaveBeenCalledWith(`${mockSrcDir}/src`, { withFileTypes: true })
-      expect(fs.readdir).not.toHaveBeenCalledWith(`${mockSrcDir}/node_modules`, expect.anything())
-      expect(fs.readdir).not.toHaveBeenCalledWith(`${mockSrcDir}/dist`, expect.anything())
+      expect(fs.readdir).toHaveBeenCalledWith(path.join(mockSrcDir, 'src'), { withFileTypes: true })
+      expect(fs.readdir).not.toHaveBeenCalledWith(path.join(mockSrcDir, 'node_modules'), expect.anything())
+      expect(fs.readdir).not.toHaveBeenCalledWith(path.join(mockSrcDir, 'dist'), expect.anything())
     })
 
     it('should handle multiple image components in same file', async () => {
