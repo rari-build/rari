@@ -2,7 +2,7 @@ use cow_utils::CowUtils;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::error::RariError;
 use crate::runtime::JsExecutionRuntime;
@@ -79,7 +79,6 @@ impl StreamingRenderer {
         ));
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
-
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -210,7 +209,6 @@ impl StreamingRenderer {
         };
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
-
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -321,7 +319,6 @@ impl StreamingRenderer {
             self.parse_rsc_wire_format(&rsc_wire_format, render_generation).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
-
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -466,7 +463,6 @@ impl StreamingRenderer {
         let partial_result = self.render_partial(component_id, props).await?;
 
         self.send_initial_shell(&chunk_sender, &partial_result).await?;
-
         {
             let mut shared_counter = self.shared_row_counter.lock().await;
             *shared_counter = self.row_counter;
@@ -1431,12 +1427,18 @@ impl StreamingRenderer {
         }
 
         if let Some(obj) = json.as_object() {
-            if obj.get("~rari_lazy").and_then(|v| v.as_bool()).unwrap_or(false) {
-                if let Some(promise_id) = obj.get("~rari_promise_id").and_then(|v| v.as_str())
-                    && let Some(&promise_row_id) = boundary_lazy_refs.get(promise_id)
-                {
+            let is_lazy = obj.get("~rari_lazy").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if is_lazy {
+                let Some(promise_id) = obj.get("~rari_promise_id").and_then(|v| v.as_str()) else {
+                    return Ok(serde_json::Value::Null);
+                };
+
+                if let Some(&promise_row_id) = boundary_lazy_refs.get(promise_id) {
                     return Ok(serde_json::Value::String(format!("${:x}", promise_row_id)));
                 }
+
+                warn!("Lazy marker missing from boundary_lazy_refs: {}", promise_id);
                 return Ok(serde_json::Value::Null);
             }
 
