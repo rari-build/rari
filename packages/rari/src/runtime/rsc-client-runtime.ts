@@ -614,7 +614,7 @@ class RscClient {
         if (element.length >= 4 && element[0] === '$') {
           const [, type, key, props] = element
 
-          if (type === 'react.suspense' || type === 'suspense') {
+          if (type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense') {
             const suspenseProps = {
               fallback: convertRscToReact(props?.fallback) || null,
             }
@@ -979,7 +979,7 @@ class RscClient {
       if (Array.isArray(element) && element.length >= 2 && element[0] === '$') {
         const [, type, , props] = element
         const boundaryId = props?.['~boundaryId']
-        if (type === 'react.suspense' && props && boundaryId)
+        if ((type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense') && props && boundaryId)
           continue
 
         rootElement = element
@@ -1066,6 +1066,9 @@ class RscClient {
         }
 
         const processedProps = props ? this.processPropsRecursively(props, modules) : {}
+
+        if (type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense')
+          return createElement(Suspense, { key, ...processedProps })
 
         return createElement(actualType, { key, ...processedProps })
       }

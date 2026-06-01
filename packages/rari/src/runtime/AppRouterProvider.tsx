@@ -348,7 +348,7 @@ export function AppRouterProvider({ children, initialPayload, onNavigate }: AppR
           }
         }
 
-        if (resolvedType === 'Suspense' || type === 'Suspense') {
+        if (resolvedType === 'Suspense' || type === 'Suspense' || type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense') {
           const processedProps = processProps(props, modules, layoutPath, symbols, rows)
           return React.createElement(React.Suspense, serverKey ? { ...processedProps, key: serverKey } : processedProps)
         }

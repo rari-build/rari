@@ -469,6 +469,8 @@ function createElement(
   props: any,
 ): React.ReactElement {
   props ??= {}
+  if (type === '$Sreact.suspense' || type === 'react.suspense' || type === 'suspense')
+    type = Symbol.for('react.suspense')
 
   const element: any = {
     $$typeof: REACT_ELEMENT_TYPE,

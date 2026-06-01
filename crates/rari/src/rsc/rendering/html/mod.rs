@@ -1123,13 +1123,50 @@ impl RscToHtmlConverter {
                 }
             }
 
-            RscChunkType::BoundaryError => match self.generate_error_replacement(&chunk).await {
-                Ok(html) => Ok(html),
-                Err(e) => {
-                    error!("Error generating error replacement: {}", e);
-                    Ok(self.generate_fallback_error_html())
+            RscChunkType::BoundaryError => {
+                let mut html = Vec::new();
+
+                if !self.payload_embedding_disabled {
+                    let rsc_line = String::from_utf8_lossy(&chunk.data);
+                    let parts: Vec<&str> = rsc_line.trim().splitn(2, ':').collect();
+                    let error_msg = if parts.len() == 2 {
+                        let json_part = parts[1].strip_prefix('E').unwrap_or(parts[1]);
+                        serde_json::from_str::<serde_json::Value>(json_part)
+                            .ok()
+                            .and_then(|error_data| {
+                                error_data["error"].as_str().map(ToString::to_string)
+                            })
+                            .unwrap_or_else(|| "Error loading content".to_string())
+                    } else {
+                        "Error loading content".to_string()
+                    };
+
+                    #[allow(clippy::disallowed_methods)]
+                    let placeholder_payload = serde_json::json!([
+                        "$",
+                        "div",
+                        null,
+                        {
+                            "className": "rari-error",
+                            "children": ["Error loading content: ", error_msg],
+                        }
+                    ]);
+                    let placeholder_row = format!("{:x}:{}\n", chunk.row_id, placeholder_payload);
+                    self.rsc_wire_format.push(placeholder_row.trim().to_string());
                 }
-            },
+
+                match self.generate_error_replacement(&chunk).await {
+                    Ok(error_html) => {
+                        html.extend(error_html);
+                        Ok(html)
+                    }
+                    Err(e) => {
+                        error!("Error generating error replacement: {}", e);
+                        html.extend(self.generate_fallback_error_html());
+                        Ok(html)
+                    }
+                }
+            }
 
             RscChunkType::StreamComplete => {
                 let mut html = Vec::new();
@@ -1563,6 +1600,10 @@ if (typeof window !== 'undefined') {{
         tag: &str,
         props: Option<&serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RariError> {
+        if tag == "$Sreact.suspense" || tag == "react.suspense" || tag == "suspense" {
+            return self.render_suspense_boundary(tag, props).await;
+        }
+
         if !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
             return Err(RariError::internal(format!("Invalid tag name: {}", tag)));
         }

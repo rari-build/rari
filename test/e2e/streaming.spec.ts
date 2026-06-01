@@ -2,6 +2,7 @@ import type { Page, Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { URL_PATTERNS } from './shared/constants'
 import { hasClientRouter, hasRariRuntime, hasRouteCache, waitForRariRuntime } from './shared/helpers'
+import { gotoWithRetry } from './shared/streaming-helpers'
 
 test.describe('RSC Streaming Infrastructure Tests', () => {
   test('should load pages without RSC parsing errors', async ({ page }) => {
@@ -311,23 +312,6 @@ test.describe.serial('Suspense Streaming Tests', () => {
     expect(gapAB).toBeLessThan(3500)
     expect(gapBC).toBeLessThan(3500)
     expect(spanAC).toBeLessThan(6500)
-  }
-
-  async function gotoWithRetry(page: Page, url: string, maxRetries = 5) {
-    let lastError: Error | undefined
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        await page.goto(url, { waitUntil: 'domcontentloaded' })
-        await page.waitForSelector('#root > *', { timeout: 5000 })
-        return
-      }
-      catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
-        if (attempt < maxRetries - 1)
-          await page.waitForTimeout(1000)
-      }
-    }
-    throw new Error(`gotoWithRetry failed after ${maxRetries} attempts for ${url}: ${lastError?.message}`)
   }
 
   test('should stream Suspense boundaries progressively and independently', async ({ page }) => {
