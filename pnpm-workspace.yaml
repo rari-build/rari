@@ -23,22 +23,22 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.376.0
+    posthog-js: ^1.376.4
   build:
-    rolldown: ^1.0.2
+    rolldown: ^1.0.3
     vite: ^8.0.14
-    vite-plus: ^0.1.22
+    vite-plus: ^0.1.23
   cli:
-    '@clack/prompts': ^1.4.0
+    '@clack/prompts': ^1.5.0
   default:
     rari: ^0.14.1
   eslint:
     '@antfu/eslint-config': ^9.0.0
-    '@eslint-react/eslint-plugin': ^5.8.5
-    '@typescript-eslint/utils': ^8.59.4
-    eslint: ^10.4.0
+    '@eslint-react/eslint-plugin': ^5.8.7
+    '@typescript-eslint/utils': ^8.60.0
+    eslint: ^10.4.1
     eslint-plugin-de-morgan: ^2.1.2
-    eslint-plugin-oxlint: ^1.66.0
+    eslint-plugin-oxlint: ^1.67.0
     eslint-plugin-react-refresh: ^0.5.2
     knip: ^6.14.2
   mdx:
@@ -50,7 +50,7 @@ catalogs:
     '@shikijs/types': ^3.23.0
     remark-gfm: ^4.0.1
   monitoring:
-    '@sentry/react': ^10.53.1
+    '@sentry/react': ^10.55.0
   react:
     '@types/react': ^19.2.15
     '@types/react-dom': ^19.2.3
@@ -64,7 +64,7 @@ catalogs:
     '@vitest/coverage-v8': ^4.1.7
   typescript:
     '@types/node': ^25.9.1
-    '@typescript/native-preview': ^7.0.0-dev.20260525.1
+    '@typescript/native-preview': ^7.0.0-dev.20260527.2
 onlyBuiltDependencies:
   - esbuild
   - oxlint

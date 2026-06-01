@@ -3,6 +3,7 @@ use crate::rsc::rendering::layout::types::PageMetadata;
 use crate::rsc::rendering::layout::{LayoutRenderContext, LayoutRenderer};
 use crate::server::ServerState;
 use crate::server::cache::response_cache;
+use crate::server::compression::CompressionEncoding;
 use crate::server::config::Config;
 use crate::server::rendering::html_utils::{
     extract_asset_links_from_index_html, inject_assets_into_html, inject_vite_client,
@@ -23,6 +24,42 @@ use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::error;
+
+async fn decompress_bytes(
+    data: &bytes::Bytes,
+    encoding: CompressionEncoding,
+) -> Result<bytes::Bytes, std::io::Error> {
+    use tokio::io::AsyncReadExt;
+
+    let data = data.clone();
+    match encoding {
+        CompressionEncoding::Gzip => {
+            let mut decoder = async_compression::tokio::bufread::GzipDecoder::new(
+                std::io::Cursor::new(&data[..]),
+            );
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).await?;
+            Ok(bytes::Bytes::from(decompressed))
+        }
+        CompressionEncoding::Brotli => {
+            let mut decoder = async_compression::tokio::bufread::BrotliDecoder::new(
+                std::io::Cursor::new(&data[..]),
+            );
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).await?;
+            Ok(bytes::Bytes::from(decompressed))
+        }
+        CompressionEncoding::Zstd => {
+            let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(
+                std::io::Cursor::new(&data[..]),
+            );
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).await?;
+            Ok(bytes::Bytes::from(decompressed))
+        }
+        CompressionEncoding::Identity => Ok(data),
+    }
+}
 
 fn sort_rsc_rows(wire_format: &str) -> String {
     let mut rows_with_ids: Vec<(u32, String)> = Vec::new();
@@ -367,7 +404,7 @@ async fn render_rsc_streaming_response(
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::compression::{CompressionEncoding, compress_stream};
+    use crate::server::compression::compress_stream;
 
     let should_continue = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_continue_clone = should_continue.clone();
@@ -488,7 +525,7 @@ async fn render_streaming_response(
     is_not_found: bool,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
-    use crate::server::compression::{CompressionEncoding, compress_stream};
+    use crate::server::compression::compress_stream;
     use crate::server::rendering::html_utils::extract_body_scripts_from_index_html;
 
     let asset_links = extract_asset_links_from_index_html().await;
@@ -637,7 +674,7 @@ pub async fn render_streaming_with_layout(
     let rsc_stream = match render_result {
         crate::rsc::rendering::layout::RenderResult::Streaming(stream) => stream,
         crate::rsc::rendering::layout::RenderResult::Static(html) => {
-            use crate::server::compression::{CompressionEncoding, compress_body};
+            use crate::server::compression::compress_body;
 
             let html_with_assets = match inject_assets_into_html(&html, &state.config).await {
                 Ok(html) => html,
@@ -1050,7 +1087,7 @@ pub async fn handle_app_route(
 
                 let merged_vary = merge_vary_with_accept(cached.headers.get("vary"));
 
-                use crate::server::compression::{CompressionEncoding, compress_body};
+                use crate::server::compression::compress_body;
                 let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
 
                 let (body_bytes, actual_encoding) =
@@ -1095,7 +1132,12 @@ pub async fn handle_app_route(
                 }
 
                 for (key, value) in cached.headers.iter() {
-                    if key.as_str() != "vary" {
+                    if key.as_str() != "vary"
+                        && key.as_str() != "content-encoding"
+                        && key.as_str() != "content-length"
+                        && key.as_str() != "content-type"
+                        && key.as_str() != "etag"
+                    {
                         response_builder = response_builder.header(key, value);
                     }
                 }
@@ -1143,14 +1185,57 @@ pub async fn handle_app_route(
                     };
 
                     if cache_policy.enabled && state.response_cache.config.enabled {
-                        let etag = response_cache::ResponseCache::generate_etag(&body_bytes);
+                        let response_encoding = parts
+                            .headers
+                            .get("content-encoding")
+                            .and_then(|v| v.to_str().ok())
+                            .map(|enc| match enc {
+                                "gzip" => CompressionEncoding::Gzip,
+                                "br" => CompressionEncoding::Brotli,
+                                "zstd" => CompressionEncoding::Zstd,
+                                _ => CompressionEncoding::Identity,
+                            })
+                            .unwrap_or(CompressionEncoding::Identity);
+
+                        let (raw_body, compressed_gzip, compressed_br, compressed_zstd) =
+                            if matches!(response_encoding, CompressionEncoding::Identity) {
+                                (body_bytes.clone(), None, None, None)
+                            } else {
+                                let decompressed =
+                                    decompress_bytes(&body_bytes, response_encoding).await;
+                                match decompressed {
+                                    Ok(raw) => {
+                                        let compressed_variant = body_bytes.clone();
+                                        let (gzip, br, zstd) = match response_encoding {
+                                            CompressionEncoding::Gzip => {
+                                                (Some(compressed_variant), None, None)
+                                            }
+                                            CompressionEncoding::Brotli => {
+                                                (None, Some(compressed_variant), None)
+                                            }
+                                            CompressionEncoding::Zstd => {
+                                                (None, None, Some(compressed_variant))
+                                            }
+                                            CompressionEncoding::Identity => (None, None, None),
+                                        };
+                                        (raw, gzip, br, zstd)
+                                    }
+                                    Err(_) => (body_bytes.clone(), None, None, None),
+                                }
+                            };
+
+                        let etag = response_cache::ResponseCache::generate_etag(&raw_body);
                         let mut response_headers = axum::http::HeaderMap::new();
                         for (key, value) in parts.headers.iter() {
-                            response_headers.insert(key.clone(), value.clone());
+                            if key.as_str() != "content-encoding"
+                                && key.as_str() != "content-length"
+                            {
+                                response_headers.insert(key.clone(), value.clone());
+                            }
                         }
 
                         let cached_response = response_cache::CachedResponse {
-                            body: body_bytes.clone(),
+                            body: raw_body,
                             headers: response_headers,
                             metadata: response_cache::CacheMetadata {
                                 cached_at: std::time::Instant::now(),
@@ -1158,9 +1243,9 @@ pub async fn handle_app_route(
                                 etag: Some(etag.clone()),
                                 tags: cache_policy.tags,
                             },
-                            compressed_zstd: None,
-                            compressed_br: None,
-                            compressed_gzip: None,
+                            compressed_zstd,
+                            compressed_br,
+                            compressed_gzip,
                         };
 
                         state.response_cache.set(cache_key.clone(), cached_response).await;

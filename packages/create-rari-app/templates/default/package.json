@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.3.0",
+  "packageManager": "pnpm@11.5.0",
   "description": "A Runtime Accelerated Rendering Infrastructure (rari) application",
   "engines": {
     "node": ">=22.12.0"
@@ -27,8 +27,8 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "^7.0.0-dev.20260525.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260527.2",
     "tailwindcss": "^4.3.0",
-    "vite-plus": "^0.1.22"
+    "vite-plus": "^0.1.23"
   }
 }

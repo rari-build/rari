@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.14.1"
+version = "0.14.2"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -39,48 +39,48 @@ path = "src/bin/rari.rs"
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
-deno_features = "0.45.0"
-deno_bundle_runtime = "0.35.0"
-deno_runtime = "0.256.0"
-deno_permissions = "0.107.0"
-deno_process = "0.63.0"
+deno_features = "0.46.0"
+deno_bundle_runtime = "0.36.0"
+deno_runtime = "0.257.0"
+deno_permissions = "0.108.0"
+deno_process = "0.64.0"
 
 # === Essential Web APIs ===
-deno_cache = "0.181.0"
-deno_crypto = "0.262.0"
-deno_fetch = "0.272.0"
-deno_web = "0.279.0"
-deno_webidl = "0.248.0"
-deno_webstorage = "0.243.0"
+deno_cache = "0.182.0"
+deno_crypto = "0.263.0"
+deno_fetch = "0.273.0"
+deno_web = "0.280.0"
+deno_webidl = "0.249.0"
+deno_webstorage = "0.244.0"
 
 # === Network & HTTP ===
-deno_http = "0.246.0"
-deno_net = "0.240.0"
-deno_tls = "0.235.0"
-deno_websocket = "0.253.0"
+deno_http = "0.247.0"
+deno_net = "0.241.0"
+deno_tls = "0.236.0"
+deno_websocket = "0.254.0"
 
 # === File System & I/O ===
-deno_fs = "0.158.0"
-deno_io = "0.158.0"
+deno_fs = "0.159.0"
+deno_io = "0.159.0"
 
 # === Advanced Features ===
-deno_telemetry = "0.70.0"
+deno_telemetry = "0.71.0"
 deno_terminal = "=0.2.3"
-deno_webgpu = "0.215.0"
-deno_kv = "0.156.0"
-deno_cron = "0.128.0"
+deno_webgpu = "0.216.0"
+deno_kv = "0.157.0"
+deno_cron = "0.129.0"
 
 # === Node.js Integration ===
-deno_node = "0.186.0"
-deno_node_crypto = "0.18.0"
-deno_node_sqlite = "0.18.0"
-deno_resolver = "0.79.0"
-node_resolver = "0.86.0"
+deno_node = "0.187.0"
+deno_node_crypto = "0.19.0"
+deno_node_sqlite = "0.19.0"
+deno_resolver = "0.80.0"
+node_resolver = "0.87.0"
 num-bigint-dig = "=0.8.2"
 
 # === FFI & NAPI ===
-deno_ffi = "0.235.0"
-deno_napi = "0.179.0"
+deno_ffi = "0.236.0"
+deno_napi = "0.180.0"
 
 # === Async & Concurrency ===
 async-stream = "0.3.6"
@@ -173,7 +173,7 @@ sys_traits = "=0.1.28"
 # === Development Tools ===
 rustyline = "=17.0.0"
 deno_ast = { workspace = true }
-deno_package_json = { version = "0.50.0", default-features = false }
+deno_package_json = { version = "0.51.0", default-features = false }
 deno_semver = "=0.10.0"
 
 # === Platform-specific Dependencies ===
