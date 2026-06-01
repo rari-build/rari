@@ -37,10 +37,8 @@ impl DistPathResolver {
 
     #[cfg(test)]
     pub fn file_path_to_component_id(&self, file_path: &Path) -> String {
-        let relative_path = file_path
-            .strip_prefix(&self.project_root)
-            .unwrap_or(file_path)
-            .to_path_buf();
+        let relative_path =
+            file_path.strip_prefix(&self.project_root).unwrap_or(file_path).to_path_buf();
 
         let path_str = relative_path.to_string_lossy();
 
