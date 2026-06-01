@@ -3,11 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 describe('actions', () => {
   const originalFetch = globalThis.fetch
+  const TEST_PORT = Number(process.env.PORT || 3000)
 
   beforeEach(() => {
     globalThis.window = {
       location: {
-        href: 'http://localhost:3000/page',
+        href: `http://localhost:${TEST_PORT}/page`,
       },
     } as any
     globalThis.document = {
@@ -113,7 +114,7 @@ describe('actions', () => {
       const result = await serverAction('arg')
 
       expect(result).toEqual({ redirect: '/new-page' })
-      expect(window.location.href).toBe('http://localhost:3000/new-page')
+      expect(window.location.href).toBe(`http://localhost:${TEST_PORT}/new-page`)
     })
 
     it('should not redirect to same page', async () => {
