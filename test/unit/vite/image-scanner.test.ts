@@ -1,5 +1,5 @@
-import path from 'node:path'
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { scanForImageUsage } from '@rari/vite/image-scanner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
