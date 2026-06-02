@@ -1,0 +1,292 @@
+export const title = 'Building rari with rari: Dogfooding to 67x Faster Performance'
+export const description = "I built rari.build using rari itself. The result: 0.12ms server-side processing, sub-500MB memory, and a server that handled the Hacker News front page without scaling up."
+export const date = '2026-06-02T00:00:00-05:00'
+export const author = 'Ryan Skinner'
+export const authorUrl = 'https://ryanskinner.com'
+
+<PageHeader title="Building rari with rari: Dogfooding to 67x Faster Performance" />
+
+Two months before launch, I decided to build rari.build with rari itself, even though the framework wasn't finished. If it couldn't handle my own marketing site, how could I ask others to trust it with theirs?
+
+The results: 0.12ms average server-side processing time under warm-cache conditions, ~119-164ms full page loads from the cached path in production, sub-500MB memory, and a server that handled the Hacker News front page without scaling up.
+
+## Why I built on an unfinished framework
+
+Building rari.build with rari from the start carried real risk. Bugs appeared in production, features I needed didn't exist yet, and every deployment doubled as a QA pass.
+
+The feedback loop justified the risk. Every bug I hit, my users would eventually hit too, so fixing it once fixed it for everyone. And if I couldn't ship a fast site with my own framework, the pitch falls apart.
+
+Missing features forced me to prioritize what users needed, and live traffic exposed edge cases I'd never have found in testing.
+
+## The numbers
+
+You can verify these yourself:
+
+<CodeBlock language="bash">{`# Homepage
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build
+# Best: 0.119s | 6.2 KB
+
+# Blog listing
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/blog
+# Best: 0.122s | 3.9 KB
+
+# Documentation page
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/docs/getting-started
+# Best: 0.164s | 12.0 KB
+
+# Enterprise page
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/enterprise
+# Best: 0.122s | 6.6 KB
+`}</CodeBlock>
+
+Average across all routes: ~153ms response time. These are production numbers, not synthetic benchmarks. The internet-facing timings include network latency, TLS, and transfer time.
+
+All pages use the pre-compressed response cache: after the first request, rari serves pre-compressed bytes from memory without re-rendering. The sub-millisecond benchmark numbers later in this post measure server-side processing under warm-cache conditions on a local machine.
+
+### Page weight breakdown
+
+The heaviest page is the Getting Started docs, which includes syntax highlighting, PostHog analytics, and Sentry error tracking with session replay. Like all pages on rari.build, it uses the pre-compressed response cache: the first request renders and caches, every subsequent request serves pre-compressed bytes from memory.
+
+**Total Page Weight (First Load):**
+- **345 KB transferred** (compressed via zstd/brotli/gzip)
+- **1.0 MB uncompressed** (28 requests)
+
+**Breakdown (compressed transfer sizes):**
+- Initial HTML (server-rendered): 13.5 KB
+- Critical JavaScript: ~124 KB
+  - React + main bundle: ~90 KB
+  - Component chunks: ~34 KB
+- CSS: 10.5 KB
+- PostHog analytics: ~98 KB
+- Sentry error tracking: ~92 KB (includes session replay)
+
+A complete production page with full observability for 345 KB on first load. The HTML itself is only 13.5 KB. Many Next.js apps ship more JavaScript than our entire page weight, before any content.
+
+### vs Next.js 15
+
+**Response Time (Single Request):**
+| Metric | rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Average** | **0.12ms** | 2.17ms | **18.1x faster** |
+| **P95** | 0.16ms | 2.37ms | **14.8x faster** |
+
+**Throughput Under Load (50 concurrent connections, 30s):**
+| Metric | rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Requests/sec** | **97,826** | 1,452 | **67.4x higher** |
+| **Avg Latency** | **0.51ms** | 34.46ms | **67.6x faster** |
+| **P95 Latency** | **0.82ms** | 43.41ms | **52.9x faster** |
+
+**Build Performance:**
+| Metric | rari | Next.js | Improvement |
+|--------|------|---------|-------------|
+| **Build Time** | **1.75s** | 4.42s | **2.5x faster** |
+| **Bundle Size** | 285 KB | 634 KB | **55% smaller** |
+
+All benchmarks are reproducible. See our <a href="https://github.com/rari-build/benchmarks" target="_blank" rel="noopener noreferrer">benchmarks repository</a> for methodology and tools.
+
+### How these were measured
+
+Both frameworks render the same page: a single homepage route with 8 components (`Counter`, `TestComponent`, `ShoppingList`, `WhatsHot`, `EnvTestComponent`, `FetchExample`, `ServerWithClient`, `Markdown`), Tailwind CSS, and a mix of server and client components. Only `Counter` is a client component; the other 7 are server components. Identical implementations in both apps.
+
+Both tests send `Accept-Encoding: zstd, br, gzip`. The load test uses <a href="https://github.com/hatoo/oha" target="_blank" rel="noopener noreferrer">oha</a> with 50 concurrent connections for 30 seconds.
+
+The benchmark test page does not have a `loading.tsx` file, so rari uses its pre-compressed response cache. After the first request, rari serves pre-compressed bytes from its in-memory cache. The production rari.build site also uses the cached path: all pages are synchronous server components with no `loading.tsx` files, so every route caches after the first render and serves from the <a href="https://github.com/xacrimon/dashmap" target="_blank" rel="noopener noreferrer">`DashMap`</a> on subsequent requests.
+
+The Next.js benchmark app uses `revalidate = false`, which enables its full route cache. Both frameworks are caching. The difference is implementation: rari stores pre-compressed response bytes in an in-memory `DashMap` and serves them directly from Rust's HTTP threads. Next.js serves cached responses through Node.js. The 67x gap comes from the layers between cache and socket: rari's path is a hash lookup and a `memcpy`, while Next.js still routes through its Node.js server to serve cached content.
+
+The benchmark measures both frameworks in their best cached configuration, with no external CDN or edge layer. This is a comparison of runtime cache architecture, not cache vs no-cache.
+
+Warm-cache performance is where rari shows the largest gains: the 67x throughput advantage comes from serving pre-compressed responses without re-rendering. Pages without `loading.tsx` files use this cached path. Pages with `loading.tsx` files use streaming SSR instead, performing real rendering on each request. Cold renders and streaming pages are closer to 2-3ms server-side processing time. The 67x number represents the best case (cached responses), not every case.
+
+### PageSpeed Insights Results
+
+Server benchmarks don't tell you what users experience. PageSpeed Insights does.
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-4 my-6">
+<div>
+
+**Desktop (100/100/100/100):**
+| Metric | Score |
+|--------|-------|
+| First Contentful Paint | **0.3s** |
+| Largest Contentful Paint | **0.4s** |
+| Total Blocking Time | **0ms** |
+| Cumulative Layout Shift | **0** |
+| Speed Index | **0.4s** |
+
+</div>
+<div>
+
+**Mobile (100/100/100/100):**
+| Metric | Score |
+|--------|-------|
+| First Contentful Paint | **1.5s** |
+| Largest Contentful Paint | **1.5s** |
+| Total Blocking Time | **0ms** |
+| Cumulative Layout Shift | **0** |
+| Speed Index | **1.5s** |
+
+</div>
+</div>
+
+Perfect 100 on Performance, Accessibility, Best Practices, and SEO on both desktop and mobile. Zero layout shift, zero blocking time across all devices, and consistently fast load times, all while shipping PostHog analytics and Sentry with session replay.
+
+## The Hacker News spike
+
+In February 2026, rari hit the Hacker News front page. Memory held steady under thousands of concurrent visitors, no spike above the normal baseline. Traffic surged and the server kept serving requests. Today, the server runs under 500MB.
+
+Large SSR React applications with full observability tooling commonly idle in the 1-2GB range. rari.build runs a production site with PostHog analytics and Sentry error tracking (with session replay) on less memory than a Chrome tab. If you're running 10 instances, the difference between 500MB and 2GB baseline is 15GB of wasted memory.
+
+I found this by running my own site on rari. When the HN traffic hit, I pulled up the metrics dashboard expecting to see memory climbing. It held at the same baseline. Response times didn't move, and I didn't touch a single config.
+
+## How I got from 4x to 67x
+
+The first version of rari was 4x faster than Next.js. The current version is 67x faster.
+
+The architecture had gaps. No app router, no true server-side rendering, and the `'use client'` / `'use server'` directive semantics weren't quite right.
+
+I went back and built the missing pieces. With app router support, correct RSC semantics, and a pre-compressed response cache, performance jumped from 4x to 67x. Rust helped, but most of the gain came from architectural changes: proper SSR, response caching, and correct RSC semantics.
+
+### V8 without Node.js
+
+rari's runtime has two layers that operate independently. The HTTP server is <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">axum</a>, handling requests across multiple OS threads. The JavaScript runtime is a <a href="https://github.com/denoland/deno/tree/main/libs/core" target="_blank" rel="noopener noreferrer">`deno_core::JsRuntime`</a> wrapping V8, running on its own dedicated thread with a separate single-threaded tokio runtime. The two sides communicate through a message channel.
+
+A message channel between the HTTP server and a single JS thread sounds like a bottleneck. It isn't. The channel is only used on cache misses. Once a route is rendered and cached, the HTTP threads serve responses without sending a message. The JS thread could be stalled and cached routes would still serve at full speed.
+
+When a request arrives, axum checks the response cache first. Hit? Served from memory on the HTTP thread. V8 doesn't wake up. Under load, most requests follow this path, which means throughput scales with the HTTP layer's capacity rather than JavaScript's execution speed.
+
+V8 only runs when there's rendering to do. In practice that means the first request for a route. That sends a message to the JS thread, which runs the composition script, renders the tree, and hands back the RSC wire format. That result gets converted to HTML, compressed with <a href="https://github.com/facebook/zstd" target="_blank" rel="noopener noreferrer">zstd</a>, and cached. From that point forward, the JS thread is idle for that route.
+
+The usual Node API surface (fetch, fs, crypto) works because we're using Deno's extension crates under the hood. Module resolution from `node_modules` happens at runtime when V8 first imports a package, but results are cached and most server code is pre-bundled by Vite.
+
+V8 does have an event loop for resolving promises and handling async component rendering, but it runs on the JS thread only. The HTTP server's multi-threaded tokio runtime is separate.
+
+After warmup, the server is a Rust HTTP server with an in-memory cache. V8 sits idle until a cache miss or invalidation forces a re-render. Under warm-cache conditions, this is how rari hits 97,000+ requests per second on a single machine while doing correct SSR.
+
+### Where the 67x comes from
+
+Most of the throughput gain comes from the response cache. The full lifecycle of a request looks like this:
+
+On the first request for a route, the HTTP thread sees a cache miss and sends the composition script to the JS thread. V8 renders the component tree, produces RSC wire format, and sends it back. The HTTP thread converts that to HTML, compresses it with zstd, stores both the raw HTML and the compressed bytes in a `DashMap`, and serves the compressed response to the client.
+
+On every subsequent request for that route, the HTTP thread finds the pre-compressed bytes in the `DashMap` and writes them to the socket. No JSON parsing, no HTML conversion, no compression, no V8. The response path is a hash lookup and a `memcpy`.
+
+A two-level cache sits underneath. The first level stores rendered HTML keyed by a hash of the route and context. The second level stores the final compressed response bytes with `etag`, headers, and pre-compressed variants for zstd, brotli, and gzip. When a client sends `Accept-Encoding: zstd`, the server returns the pre-compressed bytes without touching a compressor.
+
+HMR, `revalidatePath`, and server actions all clear both cache levels. The next request triggers a fresh render.
+
+### Streaming SSR at the Rust level
+
+When a page has Suspense boundaries (via a `loading.tsx` file), rari switches from the cached static path to streaming. The server sends HTML progressively: the shell and synchronous content arrive first, and async components fill in as they resolve.
+
+The flow starts when the `StreamingRenderer` executes the composition script in V8. This produces a partial render result: the initial RSC tree (everything that rendered synchronously), a list of Suspense boundaries with their fallback content, and pending promises for async components that haven't resolved yet.
+
+rari converts the initial tree to HTML and sends it as the first chunk. The browser starts painting while the server is still working. Behind the scenes, a background promise resolver spawns a tokio task that sends all pending promises to V8 as a batch. When a promise resolves, it sends a boundary update through a channel.
+
+A listener task sits in a `tokio::select!` loop receiving these updates. When one arrives, it deduplicates, attaches DOM position hints, and forwards it as a stream chunk. On the HTTP side, the converter emits a hidden `<div>` with the rendered content plus an inline `<script>` that swaps it into the correct DOM position using the same `$RC` pattern React uses internally.
+
+One chunked HTTP connection carries it all. Shell arrives, browser paints, boundary updates trickle in, content swaps happen without re-renders. When everything resolves, the server closes the stream. The RSC payload gets embedded in a `<script>` tag at the end for hydration.
+
+<MermaidChart>{`
+graph TB
+    subgraph Client["Browser / Client"]
+        HTML["HTML<br/>(13.5 KB)"]
+        JS["JavaScript Bundles<br/>(345 KB total)"]
+        Hydration["React Hydration<br/>(Client Components Only)"]
+    end
+
+    subgraph Orchestration["Orchestration Layer"]
+        PackageManager["npm/pnpm/bun/yarn<br/>(Build & Start)"]
+        NodeCLI["Node.js CLI<br/>(rari command)"]
+    end
+
+    subgraph Runtime["Rust Runtime Layer"]
+        HTTP["HTTP Server<br/>(Rust)"]
+        V8["Embedded V8 Engine<br/>(Without Node.js)"]
+        ZSTD["zstd Compression<br/>(62.5% ratio)"]
+        Router["App Router"]
+    end
+
+    subgraph Build["Build Layer (Node.js)"]
+        Vite8["Vite 8"]
+        CodeSplit["Automatic Code Splitting"]
+        TreeShake["Tree Shaking"]
+        RSCTransform["RSC-Aware Transforms"]
+    end
+
+    subgraph React["React Layer"]
+        RSC["React Server Components<br/>(Server Only)"]
+        ClientComp["Client Components<br/>('use client')"]
+        ServerActions["Server Actions<br/>('use server')"]
+        SSR["Streaming SSR"]
+    end
+
+    PackageManager -->|"npm run build"| Vite8
+    PackageManager -->|"npm start"| NodeCLI
+    NodeCLI -->|"spawns Rust binary"| HTTP
+
+    Request["HTTP Request"] --> HTTP
+    HTTP --> Router
+    Router --> V8
+    V8 --> RSC
+    RSC --> SSR
+    SSR --> ZSTD
+    ZSTD --> HTML
+
+    Vite8 --> CodeSplit
+    CodeSplit --> TreeShake
+    TreeShake --> RSCTransform
+    RSCTransform --> ClientComp
+    ClientComp --> JS
+
+    HTML --> Hydration
+    JS --> Hydration
+
+    ServerActions -.->|"Executed in V8"| V8
+
+    style Orchestration fill:#1f2937,stroke:#f59e0b,stroke-width:2px
+    style Runtime fill:#1f2937,stroke:#3b82f6,stroke-width:2px
+    style Build fill:#1f2937,stroke:#10b981,stroke-width:2px
+    style React fill:#1f2937,stroke:#8b5cf6,stroke-width:2px
+    style Client fill:#1f2937,stroke:#f97316,stroke-width:2px
+`}</MermaidChart>
+
+### The CLI and build toolchain
+
+rari requires Node.js ≥ 22.12.0, but not for the runtime. Node.js powers the orchestration layer: the `rari` CLI and the build toolchain. When you run `npm start`, the Node.js CLI spawns the Rust binary and exits. The Rust binary handles all HTTP requests with its embedded V8 engine.
+
+You need npm/pnpm/bun/yarn to get started, but the production runtime is pure Rust + V8.
+
+### Infrastructure
+
+Your React code runs in V8, but the server infrastructure around it is pure Rust. No Node.js runtime layer sits between your components and the network, and the host runtime doesn't have garbage collection pauses. We use zstd compression throughout (<a href="https://blog.cloudflare.com/new-standards/" target="_blank" rel="noopener noreferrer">42% faster than Brotli at similar compression levels</a>), built into the runtime rather than bolted on as middleware.
+
+On the build side, Vite 8 handles code splitting, tree shaking, and vendor chunks. 285KB client bundle vs Next.js's 634KB. Most of that difference comes from server components staying on the server and the build pipeline eliminating code that doesn't execute on the client.
+
+I didn't touch build configs while building rari.build. No webpack tuning, no bundle size profiling, no optimization rabbit holes. The defaults are fast because I use them myself.
+
+## What I got wrong at first
+
+When I first shipped rari, the numbers were good but not great. I'd inverted React's directive model: components were client-side by default, and you'd mark them `'use server'` to opt into server rendering. I was experimenting, trying something different to see if an inverted model could work. It seemed intuitive: declare what runs on the server.
+
+As I progressed, I realized the established patterns existed for good reason. Every component without a directive shipped to the client bundle, including ones with zero interactivity. I kept trying to optimize the bundler when the problem was that the default was backwards. The standard model (server by default, opt into client) produces better performance. Diverging from it created problems that no amount of tooling could fix.
+
+Once aligned with the correct patterns, server components by default, `'use client'` to opt in to interactivity, bundle sizes dropped without touching a single component. The app router let the framework understand application structure, which enabled proper code splitting, and correct RSC semantics simplified everything downstream.
+
+Memory was a bigger surprise. Every megabyte of baseline memory multiplies by your instance count. Running under 500MB instead of 2GB means you can run more instances on the same hardware, handle traffic spikes without scaling, and avoid surprise bills when a post goes viral. I wasn't targeting memory specifically, but removing the Node.js runtime layer had that effect.
+
+---
+
+Streaming cache support and better cold-render performance are the biggest gaps remaining, but I use it in production every day so I notice problems before my users do. I'm talking about the architecture decisions at <a href="https://reactsummit.com" target="_blank" rel="noopener noreferrer">React Summit Amsterdam next week</a> if you'd like to go deeper.
+
+<div className="not-prose mt-12 pt-8 border-t border-[#30363d]">
+  <p className="text-sm text-gray-400 mb-6">
+    Previously: <a href="https://ryanskinner.com/posts/how-i-built-a-full-stack-react-framework-4x-faster-than-nextjs-with-4x-more-throughput" target="_blank" rel="noopener noreferrer" className="text-[#fd7e14] hover:text-[#e8590c] hover:underline">How I Built a Full-Stack React Framework 4x Faster Than Next.js</a> and <a href="https://ryanskinner.com/posts/the-rari-ssr-breakthrough-12x-faster-10x-higher-throughput-than-nextjs" target="_blank" rel="noopener noreferrer" className="text-[#fd7e14] hover:text-[#e8590c] hover:underline">The rari SSR Breakthrough: 12x Faster, 10x Higher Throughput</a>.
+  </p>
+  <div className="flex flex-wrap items-center gap-3">
+    <a href="/docs/getting-started" className="inline-flex items-center px-4 py-2 bg-[#fd7e14] !text-gray-900 text-sm font-medium rounded-md hover:bg-[#e8590c] transition-colors">Get Started</a>
+    <a href="https://github.com/rari-build/rari" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-[#161b22] border border-[#30363d] !text-gray-300 text-sm font-medium rounded-md hover:border-[#fd7e14] hover:!text-[#f0f6fc] transition-colors">GitHub</a>
+    <a href="https://discord.gg/GSh2Ak3b8Q" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-[#161b22] border border-[#30363d] !text-gray-300 text-sm font-medium rounded-md hover:border-[#fd7e14] hover:!text-[#f0f6fc] transition-colors">Discord</a>
+  </div>
+</div>
